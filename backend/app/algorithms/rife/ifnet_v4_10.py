@@ -1,0 +1,178 @@
+"""RIFE v4.10 模型定义。
+
+特点：LeakyReLU 激活、ResConv 残差卷积、nn.Sequential Head(3→32→8)、
+4 级 IFBlock、PixelShuffle 上采样、支持 ensemble。
+
+v4.10 相比 v4.9 的变化：Head 编码器改为 3→32→8（encode_channel 从 4 变为 8），
+block0 输入从 7+8 变为 7+16。
+
+参考 vs-rife 的 IFNet_HDv3_v4_10.py 实现。
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from .warplayer import warp
+
+
+def conv(
+    in_planes: int,
+    out_planes: int,
+    kernel_size: int = 3,
+    stride: int = 1,
+    padding: int = 1,
+    dilation: int = 1,
+) -> nn.Sequential:
+    """带 LeakyReLU 激活的卷积层。"""
+    return nn.Sequential(
+        nn.Conv2d(
+            in_planes,
+            out_planes,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            bias=True,
+        ),
+        nn.LeakyReLU(0.2, True),
+    )
+
+
+class ResConv(nn.Module):
+    """可学习缩放的残差卷积块。"""
+
+    def __init__(self, c: int, dilation: int = 1):
+        super(ResConv, self).__init__()
+        self.conv = nn.Conv2d(c, c, 3, 1, dilation, dilation=dilation, groups=1)
+        self.beta = nn.Parameter(torch.ones((1, c, 1, 1)), requires_grad=True)
+        self.relu = nn.LeakyReLU(0.2, True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.relu(self.conv(x) * self.beta + x)
+
+
+class IFBlock(nn.Module):
+    """中间帧估计块。"""
+
+    def __init__(self, in_planes: int, c: int = 64):
+        super(IFBlock, self).__init__()
+        self.conv0 = nn.Sequential(
+            conv(in_planes, c // 2, 3, 2, 1),
+            conv(c // 2, c, 3, 2, 1),
+        )
+        self.convblock = nn.Sequential(
+            ResConv(c),
+            ResConv(c),
+            ResConv(c),
+            ResConv(c),
+            ResConv(c),
+            ResConv(c),
+            ResConv(c),
+            ResConv(c),
+        )
+        self.lastconv = nn.Sequential(
+            nn.ConvTranspose2d(c, 4 * 6, 4, 2, 1),
+            nn.PixelShuffle(2),
+        )
+
+    def forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1) -> tuple:
+        x = F.interpolate(x, scale_factor=1.0 / scale, mode="bilinear")
+        if flow is not None:
+            flow = F.interpolate(flow, scale_factor=1.0 / scale, mode="bilinear") / scale
+            x = torch.cat((x, flow), 1)
+        feat = self.conv0(x)
+        feat = self.convblock(feat)
+        tmp = self.lastconv(feat)
+        tmp = F.interpolate(tmp, scale_factor=scale, mode="bilinear")
+        flow = tmp[:, :4] * scale
+        mask = tmp[:, 4:5]
+        return flow, mask
+
+
+class IFNet(nn.Module):
+    """RIFE v4.10 主网络。
+
+    4 级 IFBlock，nn.Sequential Head 编码器（3→32→8），支持 ensemble。
+    block0 输入 7+16=23 通道（img0+img1+f0+f1+timestep）。
+    """
+
+    def __init__(self, scale: float = 1, ensemble: bool = False):
+        super(IFNet, self).__init__()
+        self.block0 = IFBlock(7 + 16, c=192)
+        self.block1 = IFBlock(8 + 4 + 16, c=128)
+        self.block2 = IFBlock(8 + 4 + 16, c=96)
+        self.block3 = IFBlock(8 + 4 + 16, c=64)
+        self.encode = nn.Sequential(
+            nn.Conv2d(3, 32, 3, 2, 1),
+            nn.LeakyReLU(0.2, True),
+            nn.Conv2d(32, 32, 3, 1, 1),
+            nn.LeakyReLU(0.2, True),
+            nn.Conv2d(32, 32, 3, 1, 1),
+            nn.LeakyReLU(0.2, True),
+            nn.ConvTranspose2d(32, 8, 4, 2, 1),
+        )
+        self.scale_list = [8 / scale, 4 / scale, 2 / scale, 1 / scale]
+        self.ensemble = ensemble
+
+    def forward(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: torch.Tensor,
+        tenFlow_div: torch.Tensor,
+        backwarp_tenGrid: torch.Tensor,
+        f0: torch.Tensor,
+        f1: torch.Tensor,
+    ) -> torch.Tensor:
+        img0 = img0.clamp(0.0, 1.0)
+        img1 = img1.clamp(0.0, 1.0)
+        flow_list = []
+        merged = []
+        mask_list = []
+        warped_img0 = img0
+        warped_img1 = img1
+        flow = None
+        mask = None
+        block = [self.block0, self.block1, self.block2, self.block3]
+        for i in range(4):
+            if flow is None:
+                flow, mask = block[i](
+                    torch.cat((img0, img1, f0, f1, timestep), 1),
+                    None,
+                    scale=self.scale_list[i],
+                )
+                if self.ensemble:
+                    f_, m_ = block[i](
+                        torch.cat((img1, img0, f1, f0, 1 - timestep), 1),
+                        None,
+                        scale=self.scale_list[i],
+                    )
+                    flow = (flow + torch.cat((f_[:, 2:4], f_[:, :2]), 1)) / 2
+                    mask = (mask + (-m_)) / 2
+            else:
+                wf0 = warp(f0, flow[:, :2], tenFlow_div, backwarp_tenGrid)
+                wf1 = warp(f1, flow[:, 2:4], tenFlow_div, backwarp_tenGrid)
+                fd, m0 = block[i](
+                    torch.cat((warped_img0, warped_img1, wf0, wf1, timestep, mask), 1),
+                    flow,
+                    scale=self.scale_list[i],
+                )
+                if self.ensemble:
+                    f_, m_ = block[i](
+                        torch.cat((warped_img1, warped_img0, wf1, wf0, 1 - timestep, -mask), 1),
+                        torch.cat((flow[:, 2:4], flow[:, :2]), 1),
+                        scale=self.scale_list[i],
+                    )
+                    fd = (fd + torch.cat((f_[:, 2:4], f_[:, :2]), 1)) / 2
+                    mask = (m0 + (-m_)) / 2
+                else:
+                    mask = m0
+                flow = flow + fd
+            mask_list.append(mask)
+            flow_list.append(flow)
+            warped_img0 = warp(img0, flow[:, :2], tenFlow_div, backwarp_tenGrid)
+            warped_img1 = warp(img1, flow[:, 2:4], tenFlow_div, backwarp_tenGrid)
+            merged.append((warped_img0, warped_img1))
+        mask = torch.sigmoid(mask)
+        return warped_img0 * mask + warped_img1 * (1 - mask)
