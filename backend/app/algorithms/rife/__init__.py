@@ -1,0 +1,235 @@
+"""RIFE 模型子包 — 提供 RIFESolver 统一推理接口。
+
+RIFESolver 封装了模型加载、帧对推理、padding/裁剪等细节，
+外部只需调用 interpolate(img0, img1, timestep) 即可获取中间帧。
+
+支持全部 36 个 RIFE 模型版本（v4.0 ~ v4.26.heavy），自动根据
+Head 类型选择推理路径：
+- 无 Head（v4.0~v4.6）: IFNet(img0, img1, t, flow_div, grid)
+- 有 Head（v4.7+）: IFNet(img0, img1, t, flow_div, grid, f0, f1)
+"""
+
+from app.utils.logger import get_logger
+from typing import Optional
+
+import torch
+
+from .model_loader import (
+    HEAD_NONE,
+    load_rife_model,
+    create_backwarp_grid,
+    create_flow_div,
+    pad_frame,
+    unpad_frame,
+)
+
+logger = get_logger(__name__)
+
+
+class RIFESolver:
+    """
+    RIFE 推理求解器 — 封装模型加载和帧对插值推理。
+
+    用法:
+        solver = RIFESolver(model_version="4.25", scale=1.0, fp16=False)
+        mid_frame = solver.interpolate(frame0_tensor, frame1_tensor, timestep=0.5)
+
+    其中 frame0_tensor/frame1_tensor 为形状 (1, 3, H, W)、值域 [0,1] 的 float32 张量。
+    """
+
+    def __init__(
+        self,
+        model_version: str = "4.25",
+        scale: float = 1.0,
+        device: Optional[str] = None,
+        fp16: bool = False,
+        model_dir: Optional[str] = None,
+    ):
+        """
+        参数:
+            model_version: 模型版本（默认 "4.25"）
+            scale: 处理分辨率缩放（1.0 原始，0.5 适用于 4K）
+            device: 推理设备（默认自动选择）
+            fp16: 是否使用半精度推理
+            model_dir: 模型权重目录
+        """
+        self._model_version = model_version
+        self._scale = scale
+        self._fp16 = fp16
+
+        # 加载模型
+        self._flownet, self._encode, self._config = load_rife_model(
+            model_version=model_version,
+            scale=scale,
+            device=device,
+            fp16=fp16,
+            model_dir=model_dir,
+        )
+
+        self._device = next(self._flownet.parameters()).device
+        self._dtype = next(self._flownet.parameters()).dtype
+        self._modulo = self._config["modulo"]
+        self._encode_channel = self._config["encode_channel"]
+        self._has_head = self._config["head_type"] != HEAD_NONE
+
+        # 缓存（同尺寸帧复用）
+        self._cached_size = None
+        self._backwarp_grid = None
+        self._flow_div = None
+        self._padding = None
+        self._orig_h = None
+        self._orig_w = None
+
+        # Head 编码缓存（避免重复计算同一帧的编码）
+        self._encode_cache = {}
+
+        logger.info(
+            f"RIFESolver 初始化完成: v{model_version}, "
+            f"device={self._device}, dtype={self._dtype}, scale={scale}, "
+            f"has_head={self._has_head}"
+        )
+
+    @property
+    def device(self) -> torch.device:
+        """当前推理设备。"""
+        return self._device
+
+    @property
+    def dtype(self) -> torch.dtype:
+        """当前推理数据类型。"""
+        return self._dtype
+
+    @property
+    def modulo(self) -> int:
+        """padding 模数。"""
+        return self._modulo
+
+    @property
+    def has_head(self) -> bool:
+        """是否使用 Head 编码器。"""
+        return self._has_head
+
+    def _ensure_grid_cache(self, height: int, width: int):
+        """确保采样网格和归一化除数已缓存（同尺寸帧复用）。"""
+        if self._cached_size == (height, width):
+            return
+        self._backwarp_grid = create_backwarp_grid(height, width, self._device)
+        self._flow_div = create_flow_div(height, width, self._device)
+        self._cached_size = (height, width)
+
+    def _encode_frame(self, img: torch.Tensor) -> torch.Tensor:
+        """
+        对帧进行 Head 编码。
+
+        参数:
+            img: 原始图像张量 (1, 3, H, W)
+
+        返回:
+            编码特征 (1, encode_channel, H, W)
+        """
+        return self._encode(img)
+
+    @torch.inference_mode()
+    def interpolate(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: float = 0.5,
+    ) -> torch.Tensor:
+        """
+        对两帧进行插值，生成中间帧。
+
+        根据 Head 类型自动选择推理路径：
+        - 无 Head: flownet(img0, img1, t, flow_div, grid)
+        - 有 Head: flownet(img0, img1, t, flow_div, grid, f0, f1)
+
+        参数:
+            img0: 前一帧，形状 (1, 3, H, W)，值域 [0, 1]，float32
+            img1: 后一帧，形状 (1, 3, H, W)，值域 [0, 1]，float32
+            timestep: 插值时间步，0.0=img0, 1.0=img1，默认 0.5
+
+        返回:
+            中间帧，形状 (1, 3, H, W)，值域 [0, 1]，float32
+        """
+        # 确保张量在正确设备和数据类型上
+        img0 = img0.to(self._device, self._dtype)
+        img1 = img1.to(self._device, self._dtype)
+
+        _, _, orig_h, orig_w = img0.shape
+
+        # Padding 到 modulo 的倍数
+        img0_padded, padding = pad_frame(img0, self._modulo)
+        img1_padded, _ = pad_frame(img1, self._modulo)
+
+        _, _, padded_h, padded_w = img0_padded.shape
+
+        # 确保网格缓存
+        self._ensure_grid_cache(padded_h, padded_w)
+
+        # 构造 timestep 张量
+        t = torch.full(
+            [1, 1, padded_h, padded_w],
+            timestep,
+            dtype=self._dtype,
+            device=self._device,
+        )
+
+        # IFNet 推理（根据 Head 类型选择路径）
+        if self._has_head:
+            # 有 Head 编码器：先编码，再传 f0/f1
+            f0 = self._encode_frame(img0_padded)
+            f1 = self._encode_frame(img1_padded)
+            output = self._flownet(
+                img0_padded,
+                img1_padded,
+                t,
+                self._flow_div,
+                self._backwarp_grid,
+                f0,
+                f1,
+            )
+        else:
+            # 无 Head 编码器：直接推理
+            output = self._flownet(
+                img0_padded,
+                img1_padded,
+                t,
+                self._flow_div,
+                self._backwarp_grid,
+            )
+
+        # 去除 padding
+        output = unpad_frame(output, padding, orig_h, orig_w)
+
+        # 转回 float32 输出
+        return output.float().clamp(0.0, 1.0)
+
+    @torch.inference_mode()
+    def interpolate_multi(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        multi: int = 2,
+    ) -> list[torch.Tensor]:
+        """
+        对两帧进行多倍插值，生成 (multi-1) 个中间帧。
+
+        参数:
+            img0: 前一帧，形状 (1, 3, H, W)
+            img1: 后一帧，形状 (1, 3, H, W)
+            multi: 插值倍率（2x 生成 1 个中间帧，4x 生成 3 个中间帧）
+
+        返回:
+            中间帧列表，长度为 (multi-1)，按时间顺序排列
+        """
+        results = []
+        for j in range(1, multi):
+            t = j / multi
+            mid = self.interpolate(img0, img1, timestep=t)
+            results.append(mid)
+        return results
+
+    def clear_cache(self):
+        """清除编码缓存。"""
+        self._encode_cache.clear()
+        self._cached_size = None

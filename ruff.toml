@@ -1,0 +1,21 @@
+# Squirrel-RIFE ruff 配置
+
+line-length = 120
+target-version = "py312"
+
+[lint]
+# pycodestyle 核心 + pyflakes
+select = ["E4", "E7", "E9", "F"]
+
+# cli.py: sys.path.insert 后的 E402 是合理的
+# frame_processor.py: "torch.Tensor" 字符串注解导致 F821
+per-file-ignores."backend/app/cli.py" = ["E402"]
+per-file-ignores."backend/app/processing/frame_processor.py" = ["F821"]
+
+# 测试文件允许 E402（sys.path.insert）和 F401（import for availability check）
+per-file-ignores."backend/tests/**" = ["E402", "F401"]
+per-file-ignores."backend/tests/test_algorithms/test_rife_all_models.py" = ["F841"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
