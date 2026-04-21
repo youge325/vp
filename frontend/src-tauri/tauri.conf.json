@@ -1,0 +1,38 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "VP Workbench",
+  "version": "0.1.0",
+  "identifier": "com.lenovo.vp.workbench",
+  "build": {
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "VP Workbench",
+        "width": 1680,
+        "height": 1040,
+        "minWidth": 1220,
+        "minHeight": 820,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "withGlobalTauri": false
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": [
+      "../../backend/app",
+      "../../backend/models",
+      "../../backend/requirements.txt",
+      "./resources"
+    ]
+  }
+}
