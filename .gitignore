@@ -38,6 +38,16 @@ backend/vp_data.db
 # 项目特定 - 前端 / 通用
 # ============================
 
+node_modules/
+.tmp/
+.vendor/
+target/
+dist/
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+__pycache__/
+
 # 测试结果
 _test_result.txt
 
