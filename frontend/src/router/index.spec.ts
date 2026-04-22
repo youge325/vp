@@ -7,11 +7,12 @@ describe('workflow routes', () => {
     await router.push('/home')
   })
 
-  it('exposes five workbench modules', () => {
-    expect(WORKBENCH_MODULES).toHaveLength(5)
+  it('exposes six workbench modules', () => {
+    expect(WORKBENCH_MODULES).toHaveLength(6)
     expect(WORKBENCH_MODULES.map((module) => module.title)).toEqual([
       '主页',
       '输入',
+      '解码',
       '增强',
       '编码',
       '渲染',
@@ -22,6 +23,7 @@ describe('workflow routes', () => {
     expect(WORKBENCH_MODULES.map((module) => module.path)).toEqual([
       '/home',
       '/input',
+      '/decode',
       '/enhance',
       '/encode',
       '/render',

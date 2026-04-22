@@ -3,6 +3,7 @@ import {
   BookOutline,
   ColorFillOutline,
   ConstructOutline,
+  HardwareChipOutline,
   SendOutline,
 } from '@vicons/ionicons5'
 import type { ProcessOrder, RateControlMode, WorkbenchModuleDefinition, WorkflowMode } from '@/types'
@@ -31,8 +32,15 @@ export const WORKBENCH_MODULES: WorkbenchModuleDefinition[] = [
     key: 'input',
     title: '输入',
     path: '/input',
-    description: '批量导入与解码设置',
+    description: '批量导入与素材管理',
     icon: AddCircleOutline,
+  },
+  {
+    key: 'decode',
+    title: '解码',
+    path: '/decode',
+    description: '解码方案与硬件解码',
+    icon: HardwareChipOutline,
   },
   {
     key: 'enhance',
