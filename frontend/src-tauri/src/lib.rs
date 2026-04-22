@@ -150,3 +150,21 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running VP Workbench");
 }
+
+#[cfg(test)]
+mod tests {
+    const DEFAULT_PERMISSIONS: &str = include_str!("../permissions/default.toml");
+    const ACL_MANIFESTS: &str = include_str!("../gen/schemas/acl-manifests.json");
+
+    #[test]
+    fn default_permissions_include_batch_dialog_commands() {
+        assert!(DEFAULT_PERMISSIONS.contains("allow-pick-inputs"));
+        assert!(DEFAULT_PERMISSIONS.contains("allow-pick-output-directory"));
+    }
+
+    #[test]
+    fn generated_acl_manifest_tracks_batch_dialog_permissions() {
+        assert!(ACL_MANIFESTS.contains("allow-pick-inputs"));
+        assert!(ACL_MANIFESTS.contains("allow-pick-output-directory"));
+    }
+}

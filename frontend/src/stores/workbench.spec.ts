@@ -166,6 +166,41 @@ describe('workbench store', () => {
     expect(store.env.checkResult?.gpu.adapters[0]?.deviceType).toBe('discrete')
   })
 
+  it('imports files without polluting env issues', async () => {
+    const store = useWorkbenchStore()
+    await store.bootstrap()
+    mockPickInputs.mockResolvedValueOnce(['D:/input/a.mp4'])
+
+    await store.pickInputs()
+
+    expect(store.mediaItems).toHaveLength(1)
+    expect(store.env.issue).toBeNull()
+    expect(store.operationIssue).toBeNull()
+  })
+
+  it('stores pickInputs failures as input operation issues', async () => {
+    const store = useWorkbenchStore()
+    await store.bootstrap()
+    mockPickInputs.mockRejectedValueOnce(new Error('pick_inputs not allowed'))
+
+    await store.pickInputs()
+
+    expect(store.env.issue).toBeNull()
+    expect(store.operationIssue?.scope).toBe('input')
+    expect(store.operationIssue?.error.code).toBe('pick_inputs_failed')
+    expect(store.operationIssue?.error.message).toContain('pick_inputs')
+  })
+
+  it('keeps environment failures in env.issue', async () => {
+    const store = useWorkbenchStore()
+    mockCheckEnvironment.mockRejectedValueOnce(new Error('ffmpeg missing'))
+
+    await store.recheckEnvironment()
+
+    expect(store.env.issue?.code).toBe('check_failed')
+    expect(store.operationIssue).toBeNull()
+  })
+
   it('applies workflow edits only to active item and selected items', async () => {
     const store = useWorkbenchStore()
     await store.bootstrap()

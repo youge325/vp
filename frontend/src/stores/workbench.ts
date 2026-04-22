@@ -47,6 +47,8 @@ import type {
   EnvironmentCheckResult,
   GpuAdapter,
   MediaItem,
+  OperationIssue,
+  OperationIssueScope,
   OutputConfig,
   TaskCompletedPayload,
   TaskError,
@@ -197,6 +199,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const mediaItems = ref<MediaItem[]>([])
   const activeItemId = ref<string | null>(null)
   const batch = reactive<BatchState>(createInitialBatch())
+  const operationIssue = ref<OperationIssue | null>(null)
 
   let detachListenersHandle: UnlistenFn | null = null
 
@@ -302,6 +305,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return null
     }
     return mediaItems.value.find((item) => item.id === id) ?? null
+  }
+
+  function setOperationIssue(scope: OperationIssueScope, error: TaskError): void {
+    operationIssue.value = {
+      scope,
+      error,
+    }
+  }
+
+  function clearOperationIssue(scope?: OperationIssueScope): void {
+    if (!scope || operationIssue.value?.scope === scope) {
+      operationIssue.value = null
+    }
   }
 
   function normalizeItemProfiles(item: MediaItem, preferDefaults = false): void {
@@ -559,15 +575,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
     mediaItems.value.push(...freshItems)
     activeItemId.value = freshItems[0]?.id ?? activeItemId.value
+    clearOperationIssue('input')
     await inspectItems(freshItems.map((item) => item.id))
   }
 
   async function pickInputs(): Promise<void> {
     try {
       const paths = await invokePickInputs()
+      clearOperationIssue('input')
       await addMediaPaths(paths)
     } catch (error) {
-      env.issue = normalizeTaskError(error, 'pick_inputs_failed')
+      setOperationIssue('input', normalizeTaskError(error, 'pick_inputs_failed'))
     }
   }
 
@@ -768,14 +786,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     try {
       await cancelTask()
+      clearOperationIssue('task')
     } catch (error) {
-      env.issue = normalizeTaskError(error, 'cancel_failed')
+      setOperationIssue('task', normalizeTaskError(error, 'cancel_failed'))
     }
   }
 
   async function pickOutputDirectory(): Promise<void> {
     try {
       const outputDir = await invokePickOutputDirectory()
+      clearOperationIssue('encode')
       if (!outputDir) {
         return
       }
@@ -783,7 +803,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         config.outputDir = outputDir
       })
     } catch (error) {
-      env.issue = normalizeTaskError(error, 'pick_output_dir_failed')
+      setOperationIssue('encode', normalizeTaskError(error, 'pick_output_dir_failed'))
     }
   }
 
@@ -799,8 +819,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     try {
       await invokeOpenOutputLocation(target)
+      clearOperationIssue('preview')
     } catch (error) {
-      env.issue = normalizeTaskError(error, 'open_output_failed')
+      setOperationIssue('preview', normalizeTaskError(error, 'open_output_failed'))
     }
   }
 
@@ -810,8 +831,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     try {
       await invokeOpenFileOrDirectory(path)
+      clearOperationIssue('preview')
     } catch (error) {
-      env.issue = normalizeTaskError(error, 'open_path_failed')
+      setOperationIssue('preview', normalizeTaskError(error, 'open_path_failed'))
     }
   }
 
@@ -839,6 +861,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     mediaItems,
     activeItemId,
     batch,
+    operationIssue,
     selectedIds,
     selectedItems,
     activeItem,
@@ -857,6 +880,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     globalTaskStatus,
     bootstrap,
     recheckEnvironment,
+    clearOperationIssue,
     attachTaskListeners,
     detachTaskListeners,
     addMediaPaths,

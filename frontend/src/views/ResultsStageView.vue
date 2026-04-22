@@ -5,6 +5,9 @@ import { useWorkbenchStore } from '@/stores/workbench'
 
 const store = useWorkbenchStore()
 
+const taskOperationIssue = computed(() =>
+  store.operationIssue?.scope === 'task' ? store.operationIssue.error : null,
+)
 const runStats = computed(() => [
   { label: '待处理', value: `${store.selectedIds.length}` },
   { label: '已完成', value: `${store.batch.completedIds.length}` },
@@ -37,6 +40,11 @@ const queueItems = computed(() =>
           </button>
           <button v-else class="danger-button" @click="store.cancelCurrentTask()">取消当前项</button>
         </div>
+      </div>
+
+      <div v-if="taskOperationIssue" class="info-banner info-banner-danger">
+        <strong>任务操作失败</strong>
+        <p>{{ taskOperationIssue.message }}</p>
       </div>
 
       <div class="stats-grid stats-grid-4">
