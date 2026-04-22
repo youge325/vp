@@ -13,10 +13,10 @@
       {
         "label": "main",
         "title": "VP Workbench",
-        "width": 1680,
-        "height": 1040,
-        "minWidth": 1220,
-        "minHeight": 820,
+        "width": 1280,
+        "height": 860,
+        "minWidth": 1040,
+        "minHeight": 760,
         "center": true
       }
     ],

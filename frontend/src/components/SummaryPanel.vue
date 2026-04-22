@@ -1,58 +1,64 @@
 <script setup lang="ts">
-import TaskConsole from '@/components/TaskConsole.vue'
+import { computed } from 'vue'
 import { useWorkbenchStore } from '@/stores/workbench'
 
 const store = useWorkbenchStore()
+
+const pipelineLabel = computed(() => {
+  const enabled = [
+    store.workflow.enableInterpolation ? '补帧' : null,
+    store.workflow.enableSuperResolution ? '超分' : null,
+    store.anime.enabled ? '动漫' : null,
+  ].filter(Boolean)
+
+  return enabled.length > 0 ? enabled.join(' / ') : '纯转码'
+})
 </script>
 
 <template>
   <aside class="summary-panel surface-panel">
-    <div class="summary-header">
+    <div class="summary-topbar">
       <div>
-        <p class="eyebrow">固定摘要</p>
-        <h2>任务侧栏</h2>
+        <p class="topbar-label">Status</p>
+        <h2>侧栏</h2>
       </div>
 
       <button
-        class="ghost-button"
+        class="ghost-button compact-button"
         :disabled="!store.task.outputPath && !store.output.outputPath"
         @click="store.openOutputLocation()"
       >
-        打开输出目录
+        打开目录
       </button>
     </div>
 
     <section class="summary-grid">
-      <article v-for="section in store.summarySections" :key="section.title" class="summary-card">
-        <p class="summary-title">{{ section.title }}</p>
-        <p v-for="line in section.lines" :key="line" class="summary-line">{{ line }}</p>
+      <article class="summary-card">
+        <span>环境</span>
+        <strong>{{ store.env.checkResult ? 'Ready' : 'Idle' }}</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>输入</span>
+        <strong>{{ store.source.inputPath ? 'Ready' : 'Idle' }}</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>增强</span>
+        <strong>{{ pipelineLabel }}</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>任务</span>
+        <strong>{{ store.task.status }}</strong>
       </article>
     </section>
 
-    <section class="summary-card summary-runtime">
-      <p class="summary-title">环境回显</p>
-      <p class="summary-line">
-        FFmpeg:
-        {{ store.env.checkResult?.ffmpeg?.available ? '可用' : '未确认' }}
-      </p>
-      <p class="summary-line">
-        GPU:
-        {{
-          store.env.checkResult?.gpu?.available
-            ? store.env.checkResult?.gpu?.devices?.join(', ')
-            : '未检测'
-        }}
-      </p>
-      <p class="summary-line">
-        Runtime:
-        {{ store.env.checkResult?.runtime?.mode ?? 'workspace/system' }}
-      </p>
-      <p class="summary-line">
-        Model:
-        {{ store.env.checkResult?.rife_model?.available ? '默认模型就绪' : '未确认模型' }}
-      </p>
+    <section class="summary-stack">
+      <article v-for="section in store.summarySections" :key="section.title" class="summary-block">
+        <p class="summary-block-title">{{ section.title }}</p>
+        <p v-for="line in section.lines" :key="line" class="summary-line">{{ line }}</p>
+      </article>
     </section>
-
-    <TaskConsole compact />
   </aside>
 </template>

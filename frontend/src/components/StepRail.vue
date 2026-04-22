@@ -1,65 +1,73 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { WORKFLOW_STEPS } from '@/lib/workflow'
+import { WORKBENCH_STAGES } from '@/lib/workflow'
 import { useWorkbenchStore } from '@/stores/workbench'
+import type { StageDefinition, StageKey } from '@/types'
 
 const route = useRoute()
 const store = useWorkbenchStore()
 
-const primaryModeLabel = computed(() => {
-  switch (store.workflow.primaryMode) {
-    case 'frame_interpolation':
-      return '补帧主流程'
-    case 'super_resolution':
-      return '超分主流程'
-    case 'anime_optimization':
-      return '动漫优化主流程'
-    default:
-      return '格式转换主流程'
-  }
+const activeStageKey = computed<StageKey | undefined>(() => {
+  const stage = route.meta.stage as StageDefinition | undefined
+  return stage?.key
 })
+
+const stageStates = computed<Record<StageKey, string>>(() => ({
+  prepare: store.env.checkResult || store.source.inputPath ? 'ready' : 'idle',
+  enhance:
+    store.workflow.enableInterpolation || store.workflow.enableSuperResolution || store.anime.enabled
+      ? 'ready'
+      : 'idle',
+  deliver: store.source.inputPath ? 'ready' : 'idle',
+  results: store.task.status === 'completed' ? 'done' : store.task.status === 'running' ? 'ready' : 'idle',
+}))
+
+const footerStats = computed(() => [
+  {
+    label: '环境',
+    value: store.env.checkResult ? 'Ready' : 'Idle',
+  },
+  {
+    label: '输入',
+    value: store.source.inputPath ? 'Ready' : 'Idle',
+  },
+  {
+    label: '任务',
+    value: store.task.status,
+  },
+])
 </script>
 
 <template>
-  <aside class="step-rail surface-panel">
-    <div class="rail-hero">
-      <p class="eyebrow">硬替换重构</p>
-      <h2>深色工作台</h2>
-      <p class="subtle">
-        左侧步骤、中央编辑、右侧摘要固定。当前：{{ primaryModeLabel }}
-      </p>
+  <aside class="rail-column surface-panel">
+    <div class="rail-brand">
+      <p class="topbar-label">Desktop</p>
+      <h2>VP</h2>
     </div>
 
-    <nav class="step-list">
+    <nav class="rail-nav">
       <RouterLink
-        v-for="step in WORKFLOW_STEPS"
-        :key="step.key"
-        :to="step.path"
-        class="step-link"
-        :class="{ active: route.path === step.path }"
+        v-for="stage in WORKBENCH_STAGES"
+        :key="stage.key"
+        :to="stage.path"
+        class="rail-link"
+        :class="{ active: activeStageKey === stage.key }"
       >
-        <span class="step-index">{{ step.index.toString().padStart(2, '0') }}</span>
-        <span>
-          <strong>{{ step.title }}</strong>
-          <small>{{ step.subtitle }}</small>
+        <span class="rail-link-index">{{ stage.index.toString().padStart(2, '0') }}</span>
+        <span class="rail-link-copy">
+          <strong>{{ stage.title }}</strong>
+          <small>{{ stage.path.replace('/', '').toUpperCase() }}</small>
         </span>
+        <span class="rail-state-dot" :data-state="stageStates[stage.key]" />
       </RouterLink>
     </nav>
 
     <section class="rail-footer">
-      <div class="metric-card">
-        <span>素材</span>
-        <strong>{{ store.source.inputPath ? '已导入' : '待导入' }}</strong>
-      </div>
-      <div class="metric-card">
-        <span>环境</span>
-        <strong>{{ store.env.checkResult ? '已检查' : '未检查' }}</strong>
-      </div>
-      <div class="metric-card">
-        <span>输出</span>
-        <strong>{{ store.output.outputPath || '自动生成' }}</strong>
-      </div>
+      <article v-for="item in footerStats" :key="item.label" class="rail-mini-card">
+        <span>{{ item.label }}</span>
+        <strong>{{ item.value }}</strong>
+      </article>
     </section>
   </aside>
 </template>

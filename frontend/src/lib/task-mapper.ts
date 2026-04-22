@@ -1,7 +1,4 @@
-import {
-  PROCESS_ORDER_LABELS,
-  WORKFLOW_LABELS,
-} from '@/lib/workflow'
+import { PROCESS_ORDER_LABELS, WORKFLOW_LABELS } from '@/lib/workflow'
 import type {
   ProcessOrder,
   TaskRequest,
@@ -9,22 +6,24 @@ import type {
   WorkflowMode,
 } from '@/types'
 
-export function supportsCombinedProcessing(mode: WorkflowMode): boolean {
-  return mode === 'frame_interpolation' || mode === 'super_resolution'
-}
-
-export function resolveAlgorithm(snapshot: WorkbenchStateSnapshot): WorkflowMode {
-  const { workflow } = snapshot
-
-  if (!supportsCombinedProcessing(workflow.primaryMode)) {
-    return workflow.primaryMode
-  }
-
-  if (workflow.enableInterpolation) {
+export function resolvePrimaryMode(snapshot: WorkbenchStateSnapshot): WorkflowMode {
+  if (snapshot.workflow.enableInterpolation) {
     return 'frame_interpolation'
   }
 
-  return 'super_resolution'
+  if (snapshot.workflow.enableSuperResolution) {
+    return 'super_resolution'
+  }
+
+  if (snapshot.anime.enabled) {
+    return 'anime_optimization'
+  }
+
+  return 'format_conversion'
+}
+
+export function supportsCombinedProcessing(mode: WorkflowMode): boolean {
+  return mode === 'frame_interpolation' || mode === 'super_resolution'
 }
 
 export function normalizeProcessOrder(order: ProcessOrder): string {
@@ -32,10 +31,14 @@ export function normalizeProcessOrder(order: ProcessOrder): string {
 }
 
 export function buildTaskRequest(snapshot: WorkbenchStateSnapshot): TaskRequest {
-  const algorithm = resolveAlgorithm(snapshot)
-  const combined = supportsCombinedProcessing(snapshot.workflow.primaryMode)
-  const enableInterpolation = combined && snapshot.workflow.enableInterpolation
-  const enableSuperResolution = combined && snapshot.workflow.enableSuperResolution
+  const algorithm = resolvePrimaryMode(snapshot)
+  const enableInterpolation = snapshot.workflow.enableInterpolation
+  const enableSuperResolution = snapshot.workflow.enableSuperResolution
+  const outputFps = enableInterpolation
+    ? snapshot.workflow.fpsMode === 'target'
+      ? snapshot.interpolation.targetFps
+      : snapshot.interpolation.multi * (snapshot.source.info?.fps ?? 30)
+    : snapshot.source.info?.fps ?? snapshot.interpolation.targetFps
 
   return {
     inputPath: snapshot.source.inputPath.trim(),
@@ -43,13 +46,12 @@ export function buildTaskRequest(snapshot: WorkbenchStateSnapshot): TaskRequest 
     outputPath: snapshot.output.outputPath.trim() || undefined,
     outputDir: snapshot.output.outputDir.trim() || undefined,
     tempDir: snapshot.output.tempDir.trim() || undefined,
-    fps:
-      snapshot.workflow.fpsMode === 'target'
-        ? snapshot.interpolation.targetFps
-        : snapshot.interpolation.multi * (snapshot.source.info?.fps ?? 30),
+    fps: outputFps,
     fpsMode: snapshot.workflow.fpsMode,
     targetFps:
-      snapshot.workflow.fpsMode === 'target' ? snapshot.interpolation.targetFps : undefined,
+      enableInterpolation && snapshot.workflow.fpsMode === 'target'
+        ? snapshot.interpolation.targetFps
+        : undefined,
     codec: snapshot.encode.codec,
     crf: snapshot.encode.crf,
     preset: snapshot.encode.preset,
@@ -73,70 +75,63 @@ export interface SummarySection {
 
 export function buildSummarySections(snapshot: WorkbenchStateSnapshot): SummarySection[] {
   const sourceInfo = snapshot.source.info
-  const workflowName = WORKFLOW_LABELS[snapshot.workflow.primaryMode]
-  const strategyLines = [workflowName]
+  const primaryMode = resolvePrimaryMode(snapshot)
+  const runtimeMode = snapshot.env.checkResult?.runtime?.mode ?? '未检查'
+  const gpuLabel = snapshot.env.checkResult?.gpu?.devices?.[0] ?? '未检测'
+  const taskLabel =
+    snapshot.task.status === 'running'
+      ? `${snapshot.task.percent.toFixed(1)}%`
+      : WORKFLOW_LABELS[primaryMode]
 
-  if (supportsCombinedProcessing(snapshot.workflow.primaryMode)) {
-    strategyLines.push(
-      snapshot.workflow.enableInterpolation ? '补帧已启用' : '补帧未启用',
-      snapshot.workflow.enableSuperResolution ? '超分已启用' : '超分未启用',
-      normalizeProcessOrder(snapshot.workflow.processOrder),
-    )
+  const enhanceLines = [
+    snapshot.workflow.enableInterpolation ? '补帧 On' : '补帧 Off',
+    snapshot.workflow.enableSuperResolution ? '超分 On' : '超分 Off',
+    snapshot.anime.enabled ? '动漫 On' : '动漫 Off',
+  ]
+
+  if (snapshot.workflow.enableInterpolation && snapshot.workflow.enableSuperResolution) {
+    enhanceLines.push(normalizeProcessOrder(snapshot.workflow.processOrder))
   }
 
   return [
     {
       title: '素材',
       lines: [
-        snapshot.source.inputPath || '未选择输入素材',
+        snapshot.source.inputPath || '未选择',
         sourceInfo
-          ? `${sourceInfo.width}x${sourceInfo.height} / ${formatNumber(sourceInfo.fps)} fps / ${formatDuration(sourceInfo.duration)}`
-          : '等待读取素材信息',
+          ? `${sourceInfo.width}×${sourceInfo.height} · ${formatNumber(sourceInfo.fps)} FPS`
+          : '未读取',
       ],
     },
     {
-      title: '策略',
-      lines: strategyLines,
-    },
-    {
-      title: '运行时',
+      title: '环境',
       lines: [
-        snapshot.interpolation.tensorBackend,
-        `RIFE ${snapshot.interpolation.model} / ${snapshot.workflow.fpsMode === 'target' ? `目标 ${snapshot.interpolation.targetFps} fps` : `${snapshot.interpolation.multi}x 倍率`}`,
-        `Scale ${snapshot.interpolation.scale.toFixed(1)} / ${snapshot.interpolation.fp16 ? 'FP16' : 'FP32'}`,
+        runtimeMode,
+        snapshot.env.checkResult?.ffmpeg?.available ? 'FFmpeg Ready' : 'FFmpeg Idle',
+        gpuLabel,
       ],
+    },
+    {
+      title: '增强',
+      lines: enhanceLines,
     },
     {
       title: '编码',
       lines: [
+        snapshot.format.container.toUpperCase(),
         snapshot.encode.codec,
-        `CRF ${snapshot.encode.crf}`,
-        snapshot.encode.preset,
+        `CRF ${snapshot.encode.crf} · ${snapshot.encode.preset}`,
       ],
     },
     {
-      title: '输出',
+      title: '任务',
       lines: [
-        snapshot.output.outputPath || '自动生成输出文件名',
-        snapshot.output.outputDir || '默认输出目录',
-        snapshot.output.tempDir || '默认缓存目录',
+        snapshot.task.status,
+        taskLabel,
+        snapshot.task.stage || '等待启动',
       ],
     },
   ]
-}
-
-export function formatDuration(durationSeconds: number): string {
-  const safe = Number.isFinite(durationSeconds) ? Math.max(durationSeconds, 0) : 0
-  const total = Math.round(safe)
-  const hours = Math.floor(total / 3600)
-  const minutes = Math.floor((total % 3600) / 60)
-  const seconds = total % 60
-
-  if (hours > 0) {
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-  }
-
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
 }
 
 export function formatNumber(value: number): string {

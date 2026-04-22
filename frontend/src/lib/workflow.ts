@@ -1,10 +1,16 @@
-import type { ProcessOrder, StepDefinition, WorkflowMode } from '@/types'
+import type {
+  ProcessOrder,
+  StageDefinition,
+  StageTabDefinition,
+  StepDefinition,
+  WorkflowMode,
+} from '@/types'
 
 export const WORKFLOW_LABELS: Record<WorkflowMode, string> = {
-  frame_interpolation: '视频补帧',
-  super_resolution: '超分辨率',
-  anime_optimization: '动漫优化',
-  format_conversion: '格式转换',
+  frame_interpolation: '补帧',
+  super_resolution: '超分',
+  anime_optimization: '动漫',
+  format_conversion: '转码',
 }
 
 export const PROCESS_ORDER_LABELS: Record<ProcessOrder, string> = {
@@ -12,62 +18,90 @@ export const PROCESS_ORDER_LABELS: Record<ProcessOrder, string> = {
   frame_interpolation_then_super_resolution: '先补帧后超分',
 }
 
+export const WORKBENCH_STAGES: StageDefinition[] = [
+  { key: 'prepare', index: 1, title: '准备', path: '/prepare' },
+  { key: 'enhance', index: 2, title: '增强', path: '/enhance' },
+  { key: 'deliver', index: 3, title: '交付', path: '/deliver' },
+  { key: 'results', index: 4, title: '结果', path: '/results' },
+]
+
+export const PREPARE_TABS: StageTabDefinition[] = [
+  { key: 'environment', label: '环境' },
+  { key: 'input', label: '输入' },
+]
+
 export const WORKFLOW_STEPS: StepDefinition[] = [
   {
     key: 'overview',
     index: 1,
-    title: '概览',
+    title: '环境',
     path: '/',
-    subtitle: '环境、资源与工作台总览',
+    subtitle: '环境检查',
+    stage: 'prepare',
+    tab: 'environment',
   },
   {
     key: 'source',
     index: 2,
-    title: '素材',
+    title: '输入',
     path: '/source',
-    subtitle: '导入视频并读取素材信息',
+    subtitle: '输入路径',
+    stage: 'prepare',
+    tab: 'input',
   },
   {
     key: 'interpolation',
     index: 3,
-    title: '视频补帧',
+    title: '补帧',
     path: '/interpolation',
-    subtitle: 'RIFE、倍速和目标帧率',
+    subtitle: '补帧参数',
+    stage: 'enhance',
+    tab: 'enhance',
   },
   {
     key: 'super-resolution',
     index: 4,
-    title: '超分辨率',
+    title: '超分',
     path: '/super-resolution',
-    subtitle: '超分步骤和联动顺序',
+    subtitle: '超分参数',
+    stage: 'enhance',
+    tab: 'enhance',
   },
   {
     key: 'anime',
     index: 5,
-    title: '动漫优化',
+    title: '动漫',
     path: '/anime',
-    subtitle: '针对二次元内容的预设区',
+    subtitle: '动漫参数',
+    stage: 'enhance',
+    tab: 'enhance',
   },
   {
     key: 'format',
     index: 6,
-    title: '格式转换',
+    title: '编解码',
     path: '/format',
-    subtitle: '封装、转码和交付策略',
+    subtitle: '编码设置',
+    stage: 'deliver',
+    tab: 'deliver',
   },
   {
     key: 'deliver',
     index: 7,
-    title: '输出与执行',
+    title: '运行',
     path: '/deliver',
-    subtitle: '编码、输出和任务执行',
+    subtitle: '启动流程',
+    stage: 'deliver',
+    tab: 'deliver',
   },
   {
     key: 'preview',
     index: 8,
-    title: '结果预览',
+    title: '日志',
     path: '/preview',
-    subtitle: '输出结果、日志和定位',
+    subtitle: 'CLI 输出',
+    stage: 'results',
+    tab: 'results',
   },
 ]
 
@@ -111,6 +145,7 @@ export const RIFE_MODELS = [
 ]
 
 export const CODEC_OPTIONS = ['libx264', 'libx265', 'libvpx-vp9', 'libaom-av1', 'copy']
+
 export const PRESET_OPTIONS = [
   'ultrafast',
   'superfast',

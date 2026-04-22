@@ -1,44 +1,44 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { WORKFLOW_STEPS } from '@/lib/workflow'
-import AnimeView from '@/views/AnimeView.vue'
-import FormatView from '@/views/FormatView.vue'
-import InterpolationView from '@/views/InterpolationView.vue'
-import OutputRunView from '@/views/OutputRunView.vue'
-import OverviewView from '@/views/OverviewView.vue'
-import PreviewView from '@/views/PreviewView.vue'
-import SourceView from '@/views/SourceView.vue'
-import SuperResolutionView from '@/views/SuperResolutionView.vue'
+import { WORKBENCH_STAGES } from '@/lib/workflow'
+import DeliverStageView from '@/views/DeliverStageView.vue'
+import EnhanceStageView from '@/views/EnhanceStageView.vue'
+import PrepareStageView from '@/views/PrepareStageView.vue'
+import ResultsStageView from '@/views/ResultsStageView.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    { path: '/', name: 'overview', component: OverviewView, meta: { step: WORKFLOW_STEPS[0] } },
-    { path: '/source', name: 'source', component: SourceView, meta: { step: WORKFLOW_STEPS[1] } },
+    { path: '/', redirect: '/prepare' },
+    { path: '/overview', redirect: '/prepare' },
     {
-      path: '/interpolation',
-      name: 'interpolation',
-      component: InterpolationView,
-      meta: { step: WORKFLOW_STEPS[2] },
+      path: '/prepare',
+      name: 'prepare',
+      component: PrepareStageView,
+      meta: { stage: WORKBENCH_STAGES[0] },
     },
     {
-      path: '/super-resolution',
-      name: 'super-resolution',
-      component: SuperResolutionView,
-      meta: { step: WORKFLOW_STEPS[3] },
+      path: '/enhance',
+      name: 'enhance',
+      component: EnhanceStageView,
+      meta: { stage: WORKBENCH_STAGES[1] },
     },
-    { path: '/anime', name: 'anime', component: AnimeView, meta: { step: WORKFLOW_STEPS[4] } },
-    { path: '/format', name: 'format', component: FormatView, meta: { step: WORKFLOW_STEPS[5] } },
     {
       path: '/deliver',
       name: 'deliver',
-      component: OutputRunView,
-      meta: { step: WORKFLOW_STEPS[6] },
+      component: DeliverStageView,
+      meta: { stage: WORKBENCH_STAGES[2] },
     },
     {
-      path: '/preview',
-      name: 'preview',
-      component: PreviewView,
-      meta: { step: WORKFLOW_STEPS[7] },
+      path: '/results',
+      name: 'results',
+      component: ResultsStageView,
+      meta: { stage: WORKBENCH_STAGES[3] },
     },
+    { path: '/source', redirect: { path: '/prepare', query: { tab: 'input' } } },
+    { path: '/interpolation', redirect: { path: '/enhance', query: { section: 'interpolation' } } },
+    { path: '/super-resolution', redirect: { path: '/enhance', query: { section: 'super-resolution' } } },
+    { path: '/anime', redirect: { path: '/enhance', query: { section: 'anime' } } },
+    { path: '/format', redirect: '/deliver' },
+    { path: '/preview', redirect: '/results' },
   ],
 })
