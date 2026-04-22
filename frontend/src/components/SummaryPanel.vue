@@ -10,6 +10,8 @@ const cards = computed(() => [
   { label: '已选', value: `${store.selectedIds.length}` },
   { label: '队列', value: store.batch.isRunning ? 'Running' : 'Idle' },
 ])
+
+const outputDirectory = computed(() => store.activeItem?.outputConfig.outputDir || '')
 </script>
 
 <template>
@@ -20,7 +22,7 @@ const cards = computed(() => [
         <h2>摘要</h2>
       </div>
 
-      <button class="ghost-button compact-button" :disabled="!store.resolvedOutputPath" @click="store.openOutputLocation()">
+      <button class="ghost-button compact-button" :disabled="!outputDirectory" @click="store.openOutputLocation(outputDirectory)">
         打开目录
       </button>
     </div>

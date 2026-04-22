@@ -3,7 +3,6 @@ import {
   BookOutline,
   ColorFillOutline,
   ConstructOutline,
-  GlassesOutline,
   SendOutline,
 } from '@vicons/ionicons5'
 import type { ProcessOrder, RateControlMode, WorkbenchModuleDefinition, WorkflowMode } from '@/types'
@@ -55,13 +54,6 @@ export const WORKBENCH_MODULES: WorkbenchModuleDefinition[] = [
     path: '/render',
     description: '批量队列执行',
     icon: SendOutline,
-  },
-  {
-    key: 'preview',
-    title: '预览',
-    path: '/preview',
-    description: '当前文件与最近结果',
-    icon: GlassesOutline,
   },
 ]
 

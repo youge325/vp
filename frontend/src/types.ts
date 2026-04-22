@@ -7,7 +7,7 @@ export type WorkflowMode =
   | 'format_conversion'
 
 export type StageKey = 'prepare' | 'enhance' | 'deliver' | 'results'
-export type ModuleKey = 'home' | 'input' | 'enhance' | 'encode' | 'render' | 'preview'
+export type ModuleKey = 'home' | 'input' | 'enhance' | 'encode' | 'render'
 export type ProcessOrder =
   | 'super_resolution_then_interpolation'
   | 'frame_interpolation_then_super_resolution'
@@ -110,7 +110,7 @@ export interface TaskError {
   details?: Record<string, unknown> | null
 }
 
-export type OperationIssueScope = 'input' | 'encode' | 'preview' | 'task'
+export type OperationIssueScope = 'input' | 'encode' | 'output' | 'task'
 
 export interface OperationIssue {
   scope: OperationIssueScope
@@ -230,10 +230,9 @@ export interface MediaItem {
 export interface BatchState {
   queue: string[]
   currentId: string | null
-  completedIds: string[]
-  failedIds: string[]
+  completedCount: number
+  failedCount: number
   isRunning: boolean
-  lastCompletedOutput: string
 }
 
 export interface TaskProgressPayload {
