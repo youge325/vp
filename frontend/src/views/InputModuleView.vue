@@ -11,6 +11,9 @@ const dragActive = ref(false)
 const importedCount = computed(() => store.mediaItems.length)
 const inspectedCount = computed(() => store.mediaItems.filter((item) => item.info).length)
 const decoderOptions = computed(() => store.currentDecoderProfile?.options ?? [])
+const inputOperationIssue = computed(() =>
+  store.operationIssue?.scope === 'input' ? store.operationIssue.error : null,
+)
 
 const inputStats = computed(() => [
   { label: '已导入', value: `${importedCount.value}` },
@@ -104,6 +107,11 @@ function handleDragLeave(): void {
         <p>支持多文件导入，导入后自动探测分辨率、帧率、音频与视频编码。</p>
       </div>
 
+      <div v-if="inputOperationIssue" class="info-banner info-banner-danger">
+        <strong>批量导入失败</strong>
+        <p>{{ inputOperationIssue.message }}</p>
+      </div>
+
       <div class="stats-grid stats-grid-4">
         <article v-for="item in inputStats" :key="item.label" class="stat-card">
           <span>{{ item.label }}</span>
@@ -149,7 +157,11 @@ function handleDragLeave(): void {
               @click="store.setActiveItem(item.id)"
             >
               <td @click.stop>
-                <input :checked="item.selected" type="checkbox" @change="store.setItemSelected(item.id, ($event.target as HTMLInputElement).checked)" />
+                <input
+                  :checked="item.selected"
+                  type="checkbox"
+                  @change="store.setItemSelected(item.id, ($event.target as HTMLInputElement).checked)"
+                />
               </td>
               <td>
                 <div class="table-primary">{{ item.displayName }}</div>
@@ -164,7 +176,9 @@ function handleDragLeave(): void {
                 <span class="inline-status" :data-state="item.taskState.status">{{ item.taskState.status }}</span>
               </td>
               <td @click.stop>
-                <button class="table-action" :disabled="store.batch.isRunning" @click="store.removeMediaItem(item.id)">移除</button>
+                <button class="table-action" :disabled="store.batch.isRunning" @click="store.removeMediaItem(item.id)">
+                  移除
+                </button>
               </td>
             </tr>
           </tbody>
@@ -229,7 +243,11 @@ function handleDragLeave(): void {
             :value="String(store.getOptionValue(option, store.activeItem.decodeConfig.options))"
             @change="store.setDecodeOption(option.name, coerceOptionValue(option, $event))"
           >
-            <option v-for="choice in option.choices" :key="`${option.name}-${choice.value}`" :value="String(choice.value)">
+            <option
+              v-for="choice in option.choices"
+              :key="`${option.name}-${choice.value}`"
+              :value="String(choice.value)"
+            >
               {{ choice.label }}
             </option>
           </select>

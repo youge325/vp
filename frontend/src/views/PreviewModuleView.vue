@@ -7,6 +7,9 @@ const store = useWorkbenchStore()
 
 const focusItem = computed(() => store.currentTaskItem ?? store.recentCompletedItem ?? store.activeItem)
 const resolvedOutputPath = computed(() => focusItem.value?.lastOutputPath || focusItem.value?.taskState.outputPath || '')
+const previewOperationIssue = computed(() =>
+  store.operationIssue?.scope === 'preview' ? store.operationIssue.error : null,
+)
 
 const previewStats = computed(() => [
   { label: '文件', value: focusItem.value?.displayName ?? '--' },
@@ -38,6 +41,11 @@ function openResolvedOutput(): void {
             打开目录
           </button>
         </div>
+      </div>
+
+      <div v-if="previewOperationIssue" class="info-banner info-banner-danger">
+        <strong>预览操作失败</strong>
+        <p>{{ previewOperationIssue.message }}</p>
       </div>
 
       <div class="stats-grid stats-grid-4">

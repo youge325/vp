@@ -177,10 +177,10 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-input`\n- `allow-pick-output`\n- `allow-check-environment`\n- `allow-inspect-video`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-open-output-location`\n- `allow-open-file-or-directory`\n- `allow-resolved-runtime`",
+          "description": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-input`\n- `allow-pick-inputs`\n- `allow-pick-output`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-inspect-video`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-open-output-location`\n- `allow-open-file-or-directory`\n- `allow-resolved-runtime`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-input`\n- `allow-pick-output`\n- `allow-check-environment`\n- `allow-inspect-video`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-open-output-location`\n- `allow-open-file-or-directory`\n- `allow-resolved-runtime`"
+          "markdownDescription": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-input`\n- `allow-pick-inputs`\n- `allow-pick-output`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-inspect-video`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-open-output-location`\n- `allow-open-file-or-directory`\n- `allow-resolved-runtime`"
         },
         {
           "description": "Enables the cancel_task command without any pre-configured scope.",
@@ -219,10 +219,22 @@
           "markdownDescription": "Enables the pick_input command without any pre-configured scope."
         },
         {
+          "description": "Enables the pick_inputs command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-pick-inputs",
+          "markdownDescription": "Enables the pick_inputs command without any pre-configured scope."
+        },
+        {
           "description": "Enables the pick_output command without any pre-configured scope.",
           "type": "string",
           "const": "allow-pick-output",
           "markdownDescription": "Enables the pick_output command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the pick_output_directory command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-pick-output-directory",
+          "markdownDescription": "Enables the pick_output_directory command without any pre-configured scope."
         },
         {
           "description": "Enables the resolved_runtime command without any pre-configured scope.",
@@ -273,10 +285,22 @@
           "markdownDescription": "Denies the pick_input command without any pre-configured scope."
         },
         {
+          "description": "Denies the pick_inputs command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-pick-inputs",
+          "markdownDescription": "Denies the pick_inputs command without any pre-configured scope."
+        },
+        {
           "description": "Denies the pick_output command without any pre-configured scope.",
           "type": "string",
           "const": "deny-pick-output",
           "markdownDescription": "Denies the pick_output command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the pick_output_directory command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-pick-output-directory",
+          "markdownDescription": "Denies the pick_output_directory command without any pre-configured scope."
         },
         {
           "description": "Denies the resolved_runtime command without any pre-configured scope.",

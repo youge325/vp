@@ -7,6 +7,9 @@ import type { CapabilityOptionSpec, CapabilityValue, RateControlMode } from '@/t
 const store = useWorkbenchStore()
 
 const encoderOptions = computed(() => store.currentEncoderProfile?.options ?? [])
+const encodeOperationIssue = computed(() =>
+  store.operationIssue?.scope === 'encode' ? store.operationIssue.error : null,
+)
 const encodeStats = computed(() => [
   { label: '编码器', value: store.currentEncoderProfile?.label ?? '--' },
   { label: '码率控制', value: RATE_CONTROL_LABELS[store.activeItem?.encodeConfig.rateControl.mode ?? 'crf'] },
@@ -78,6 +81,11 @@ function updateOutputDir(event: Event): void {
         </div>
       </div>
 
+      <div v-if="encodeOperationIssue" class="info-banner info-banner-danger">
+        <strong>输出目录操作失败</strong>
+        <p>{{ encodeOperationIssue.message }}</p>
+      </div>
+
       <div v-if="!store.activeItem" class="empty-state">
         <strong>还没有激活文件</strong>
         <p>请先在输入页导入并激活一个文件，编码页会显示该文件当前的编码方案。</p>
@@ -103,7 +111,12 @@ function updateOutputDir(event: Event): void {
       <div class="field-grid field-grid-2">
         <label class="field field-span-2">
           <span>输出目录</span>
-          <input :value="store.activeItem.outputConfig.outputDir" type="text" placeholder="留空则使用默认输出目录" @input="updateOutputDir" />
+          <input
+            :value="store.activeItem.outputConfig.outputDir"
+            type="text"
+            placeholder="留空则使用默认输出目录"
+            @input="updateOutputDir"
+          />
         </label>
 
         <label class="field">
@@ -117,7 +130,10 @@ function updateOutputDir(event: Event): void {
 
         <label class="field">
           <span>编码器</span>
-          <select :value="store.activeItem.encodeConfig.codec" @change="store.setEncodeProfile(($event.target as HTMLSelectElement).value)">
+          <select
+            :value="store.activeItem.encodeConfig.codec"
+            @change="store.setEncodeProfile(($event.target as HTMLSelectElement).value)"
+          >
             <option v-for="profile in store.visibleEncoderProfiles" :key="profile.name" :value="profile.name">
               {{ profile.label }}
             </option>
@@ -194,7 +210,11 @@ function updateOutputDir(event: Event): void {
             :value="String(store.getOptionValue(option, store.activeItem.encodeConfig.options))"
             @change="store.setEncodeOption(option.name, coerceOptionValue(option, $event))"
           >
-            <option v-for="choice in option.choices" :key="`${option.name}-${choice.value}`" :value="String(choice.value)">
+            <option
+              v-for="choice in option.choices"
+              :key="`${option.name}-${choice.value}`"
+              :value="String(choice.value)"
+            >
               {{ choice.label }}
             </option>
           </select>

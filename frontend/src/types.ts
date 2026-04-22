@@ -110,6 +110,13 @@ export interface TaskError {
   details?: Record<string, unknown> | null
 }
 
+export type OperationIssueScope = 'input' | 'encode' | 'preview' | 'task'
+
+export interface OperationIssue {
+  scope: OperationIssueScope
+  error: TaskError
+}
+
 export interface AppEnv {
   lastCheckedAt: string | null
   isChecking: boolean
