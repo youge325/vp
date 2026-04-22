@@ -1,73 +1,73 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { WORKBENCH_STAGES } from '@/lib/workflow'
+import { WORKBENCH_MODULES } from '@/lib/workflow'
 import { useWorkbenchStore } from '@/stores/workbench'
-import type { StageDefinition, StageKey } from '@/types'
+import type { ModuleKey, WorkbenchModuleDefinition } from '@/types'
 
 const route = useRoute()
 const store = useWorkbenchStore()
 
-const activeStageKey = computed<StageKey | undefined>(() => {
-  const stage = route.meta.stage as StageDefinition | undefined
-  return stage?.key
+const activeModuleKey = computed<ModuleKey>(() => {
+  const module = route.meta.module as WorkbenchModuleDefinition | undefined
+  return module?.key ?? WORKBENCH_MODULES[0].key
 })
 
-const stageStates = computed<Record<StageKey, string>>(() => ({
-  prepare: store.env.checkResult || store.source.inputPath ? 'ready' : 'idle',
+const moduleStates = computed<Record<ModuleKey, string>>(() => ({
+  home: store.env.checkResult || store.source.inputPath || store.task.status !== 'idle' ? 'ready' : 'idle',
+  input: store.source.inputPath ? 'ready' : 'idle',
   enhance:
     store.workflow.enableInterpolation || store.workflow.enableSuperResolution || store.anime.enabled
       ? 'ready'
       : 'idle',
-  deliver: store.source.inputPath ? 'ready' : 'idle',
-  results: store.task.status === 'completed' ? 'done' : store.task.status === 'running' ? 'ready' : 'idle',
+  encode: store.source.inputPath ? 'ready' : 'idle',
+  render: store.task.status === 'completed' ? 'done' : store.task.status === 'running' ? 'ready' : 'idle',
+  preview: store.task.logs.length > 0 || store.task.outputPath || store.output.outputPath ? 'ready' : 'idle',
 }))
 
-const footerStats = computed(() => [
-  {
-    label: '环境',
-    value: store.env.checkResult ? 'Ready' : 'Idle',
-  },
-  {
-    label: '输入',
-    value: store.source.inputPath ? 'Ready' : 'Idle',
-  },
-  {
-    label: '任务',
-    value: store.task.status,
-  },
-])
+const pipelineLabel = computed(() => {
+  const enabled = [
+    store.workflow.enableInterpolation ? '补帧' : null,
+    store.workflow.enableSuperResolution ? '超分' : null,
+    store.anime.enabled ? '动漫' : null,
+  ].filter(Boolean)
+
+  return enabled.length > 0 ? enabled.join(' / ') : '纯转码'
+})
 </script>
 
 <template>
-  <aside class="rail-column surface-panel">
+  <aside class="rail-column">
     <div class="rail-brand">
-      <p class="topbar-label">Desktop</p>
+      <p class="topbar-label">Workbench</p>
       <h2>VP</h2>
+      <p class="rail-brand-copy">统一模块壳层</p>
     </div>
 
     <nav class="rail-nav">
       <RouterLink
-        v-for="stage in WORKBENCH_STAGES"
-        :key="stage.key"
-        :to="stage.path"
+        v-for="module in WORKBENCH_MODULES"
+        :key="module.key"
+        :to="module.path"
+        :title="module.title"
         class="rail-link"
-        :class="{ active: activeStageKey === stage.key }"
+        :class="{ active: activeModuleKey === module.key }"
+        :data-state="moduleStates[module.key]"
       >
-        <span class="rail-link-index">{{ stage.index.toString().padStart(2, '0') }}</span>
-        <span class="rail-link-copy">
-          <strong>{{ stage.title }}</strong>
-          <small>{{ stage.path.replace('/', '').toUpperCase() }}</small>
+        <span class="rail-link-icon">
+          <component :is="module.icon" />
         </span>
-        <span class="rail-state-dot" :data-state="stageStates[stage.key]" />
+        <span class="rail-link-copy">
+          <strong>{{ module.title }}</strong>
+          <small>{{ module.description }}</small>
+        </span>
+        <span class="rail-state-dot" :data-state="moduleStates[module.key]" />
       </RouterLink>
     </nav>
 
     <section class="rail-footer">
-      <article v-for="item in footerStats" :key="item.label" class="rail-mini-card">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-      </article>
+      <span class="rail-footer-chip">{{ pipelineLabel }}</span>
+      <span class="rail-footer-chip" :data-state="store.task.status">任务 {{ store.task.status }}</span>
     </section>
   </aside>
 </template>

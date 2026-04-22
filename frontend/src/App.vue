@@ -2,33 +2,18 @@
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import StepRail from '@/components/StepRail.vue'
-import SummaryPanel from '@/components/SummaryPanel.vue'
-import { PREPARE_TABS } from '@/lib/workflow'
+import { WORKBENCH_MODULES } from '@/lib/workflow'
 import { useWorkbenchStore } from '@/stores/workbench'
-import type { StageDefinition } from '@/types'
+import type { WorkbenchModuleDefinition } from '@/types'
 
 const store = useWorkbenchStore()
 const route = useRoute()
 
-const activeStage = computed<StageDefinition | undefined>(() => route.meta.stage as StageDefinition)
+const activeModule = computed<WorkbenchModuleDefinition>(
+  () => (route.meta.module as WorkbenchModuleDefinition | undefined) ?? WORKBENCH_MODULES[0],
+)
 
-const stageCaption = computed(() => {
-  if (activeStage.value?.key === 'prepare') {
-    const raw = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab
-    const tab = typeof raw === 'string' ? raw : 'environment'
-    return PREPARE_TABS.find((item) => item.key === tab)?.label ?? PREPARE_TABS[0].label
-  }
-
-  if (activeStage.value?.key === 'enhance') {
-    return '单管道'
-  }
-
-  if (activeStage.value?.key === 'deliver') {
-    return '编解码'
-  }
-
-  return 'CLI'
-})
+const resolvedOutputPath = computed(() => store.task.outputPath || store.output.outputPath)
 
 onMounted(async () => {
   await store.attachTaskListeners()
@@ -45,13 +30,13 @@ onBeforeUnmount(() => {
       <StepRail />
 
       <main class="center-column">
-        <header class="topbar surface-panel">
+        <header class="topbar">
           <div class="topbar-copy">
-            <p class="topbar-label">VP Workbench</p>
+            <p class="topbar-label">VP Desktop</p>
             <div class="topbar-title-row">
-              <h1>{{ activeStage?.title ?? '工作台' }}</h1>
+              <h1>{{ activeModule.title }}</h1>
               <span class="topbar-divider" />
-              <span class="topbar-tab">{{ stageCaption }}</span>
+              <span class="topbar-tab">{{ activeModule.description }}</span>
             </div>
           </div>
 
@@ -63,16 +48,17 @@ onBeforeUnmount(() => {
             >
               {{ store.env.isChecking ? '检查中' : '检查环境' }}
             </button>
+            <button v-if="resolvedOutputPath" class="ghost-button compact-button" @click="store.openOutputLocation()">
+              打开输出
+            </button>
             <span class="status-pill" :data-state="store.task.status">{{ store.task.status }}</span>
           </div>
         </header>
 
-        <section class="content-surface surface-panel">
+        <section class="content-surface">
           <RouterView />
         </section>
       </main>
-
-      <SummaryPanel />
     </div>
   </div>
 </template>

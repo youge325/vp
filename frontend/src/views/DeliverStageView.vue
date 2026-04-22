@@ -6,10 +6,13 @@ const store = useWorkbenchStore()
 </script>
 
 <template>
-  <div class="stage-stack">
+  <div class="module-stack">
     <section class="panel-surface">
       <div class="panel-head">
-        <h2>交付</h2>
+        <div class="panel-copy">
+          <h2>编码与输出</h2>
+          <p class="panel-caption">聚合输出路径、容器与编码参数</p>
+        </div>
         <button class="ghost-button" @click="store.pickOutput()">选择输出</button>
       </div>
 

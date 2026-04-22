@@ -44,10 +44,13 @@ watch(
 </script>
 
 <template>
-  <div class="stage-stack">
+  <div class="module-stack">
     <section class="panel-surface">
       <div class="panel-head">
-        <h2>管道</h2>
+        <div class="panel-copy">
+          <h2>增强总览</h2>
+          <p class="panel-caption">保留补帧、超分、动漫三个页内分区</p>
+        </div>
         <span class="panel-badge">同一流程</span>
       </div>
 
