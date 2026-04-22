@@ -1,10 +1,12 @@
-import type {
-  ProcessOrder,
-  StageDefinition,
-  StageTabDefinition,
-  StepDefinition,
-  WorkflowMode,
-} from '@/types'
+import {
+  AddCircleOutline,
+  BookOutline,
+  ColorFillOutline,
+  ConstructOutline,
+  GlassesOutline,
+  SendOutline,
+} from '@vicons/ionicons5'
+import type { ProcessOrder, WorkbenchModuleDefinition, WorkflowMode } from '@/types'
 
 export const WORKFLOW_LABELS: Record<WorkflowMode, string> = {
   frame_interpolation: '补帧',
@@ -18,90 +20,48 @@ export const PROCESS_ORDER_LABELS: Record<ProcessOrder, string> = {
   frame_interpolation_then_super_resolution: '先补帧后超分',
 }
 
-export const WORKBENCH_STAGES: StageDefinition[] = [
-  { key: 'prepare', index: 1, title: '准备', path: '/prepare' },
-  { key: 'enhance', index: 2, title: '增强', path: '/enhance' },
-  { key: 'deliver', index: 3, title: '交付', path: '/deliver' },
-  { key: 'results', index: 4, title: '结果', path: '/results' },
-]
-
-export const PREPARE_TABS: StageTabDefinition[] = [
-  { key: 'environment', label: '环境' },
-  { key: 'input', label: '输入' },
-]
-
-export const WORKFLOW_STEPS: StepDefinition[] = [
+export const WORKBENCH_MODULES: WorkbenchModuleDefinition[] = [
   {
-    key: 'overview',
-    index: 1,
-    title: '环境',
-    path: '/',
-    subtitle: '环境检查',
-    stage: 'prepare',
-    tab: 'environment',
+    key: 'home',
+    title: '主页',
+    path: '/home',
+    description: '环境与概览',
+    icon: BookOutline,
   },
   {
-    key: 'source',
-    index: 2,
+    key: 'input',
     title: '输入',
-    path: '/source',
-    subtitle: '输入路径',
-    stage: 'prepare',
-    tab: 'input',
+    path: '/input',
+    description: '素材导入',
+    icon: AddCircleOutline,
   },
   {
-    key: 'interpolation',
-    index: 3,
-    title: '补帧',
-    path: '/interpolation',
-    subtitle: '补帧参数',
-    stage: 'enhance',
-    tab: 'enhance',
+    key: 'enhance',
+    title: '增强',
+    path: '/enhance',
+    description: '补帧 / 超分 / 动漫',
+    icon: ConstructOutline,
   },
   {
-    key: 'super-resolution',
-    index: 4,
-    title: '超分',
-    path: '/super-resolution',
-    subtitle: '超分参数',
-    stage: 'enhance',
-    tab: 'enhance',
+    key: 'encode',
+    title: '编码',
+    path: '/encode',
+    description: '输出与编码',
+    icon: ColorFillOutline,
   },
   {
-    key: 'anime',
-    index: 5,
-    title: '动漫',
-    path: '/anime',
-    subtitle: '动漫参数',
-    stage: 'enhance',
-    tab: 'enhance',
-  },
-  {
-    key: 'format',
-    index: 6,
-    title: '编解码',
-    path: '/format',
-    subtitle: '编码设置',
-    stage: 'deliver',
-    tab: 'deliver',
-  },
-  {
-    key: 'deliver',
-    index: 7,
-    title: '运行',
-    path: '/deliver',
-    subtitle: '启动流程',
-    stage: 'deliver',
-    tab: 'deliver',
+    key: 'render',
+    title: '渲染',
+    path: '/render',
+    description: '任务控制',
+    icon: SendOutline,
   },
   {
     key: 'preview',
-    index: 8,
-    title: '日志',
+    title: '预览',
     path: '/preview',
-    subtitle: 'CLI 输出',
-    stage: 'results',
-    tab: 'results',
+    description: '日志与输出',
+    icon: GlassesOutline,
   },
 ]
 

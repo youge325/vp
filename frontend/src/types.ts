@@ -1,3 +1,5 @@
+import type { Component } from 'vue'
+
 export type WorkflowMode =
   | 'frame_interpolation'
   | 'super_resolution'
@@ -5,6 +7,7 @@ export type WorkflowMode =
   | 'format_conversion'
 
 export type StageKey = 'prepare' | 'enhance' | 'deliver' | 'results'
+export type ModuleKey = 'home' | 'input' | 'enhance' | 'encode' | 'render' | 'preview'
 export type ProcessOrder =
   | 'super_resolution_then_interpolation'
   | 'frame_interpolation_then_super_resolution'
@@ -220,6 +223,14 @@ export interface StageDefinition {
   index: number
   title: string
   path: string
+}
+
+export interface WorkbenchModuleDefinition {
+  key: ModuleKey
+  title: string
+  path: string
+  description: string
+  icon: Component
 }
 
 export interface StageTabDefinition {

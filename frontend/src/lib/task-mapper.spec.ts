@@ -115,7 +115,7 @@ describe('task mapper', () => {
     expect(request.targetFps).toBe(60)
   })
 
-  it('builds summary sections for the sidebar', () => {
+  it('builds summary sections for the module overview surfaces', () => {
     const sections = buildSummarySections(makeSnapshot())
 
     expect(sections).toHaveLength(5)

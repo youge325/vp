@@ -1,45 +1,49 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { WORKBENCH_STAGES, WORKFLOW_STEPS } from '@/lib/workflow'
+import { WORKBENCH_MODULES } from '@/lib/workflow'
 import { router } from '@/router'
 
 describe('workflow routes', () => {
   beforeEach(async () => {
-    await router.push('/prepare')
+    await router.push('/home')
   })
 
-  it('groups the workbench into four primary stages', () => {
-    expect(WORKBENCH_STAGES).toHaveLength(4)
-    expect(WORKBENCH_STAGES.map((stage) => stage.title)).toEqual([
-      '准备',
-      '增强',
-      '交付',
-      '结果',
-    ])
-  })
-
-  it('keeps the legacy eight-step mapping', () => {
-    expect(WORKFLOW_STEPS).toHaveLength(8)
-    expect(WORKFLOW_STEPS.map((step) => step.title)).toEqual([
-      '环境',
+  it('exposes six VSET-style workbench modules', () => {
+    expect(WORKBENCH_MODULES).toHaveLength(6)
+    expect(WORKBENCH_MODULES.map((module) => module.title)).toEqual([
+      '主页',
       '输入',
-      '补帧',
-      '超分',
-      '动漫',
-      '编解码',
-      '运行',
-      '日志',
+      '增强',
+      '编码',
+      '渲染',
+      '预览',
     ])
   })
 
-  it('redirects legacy paths into the new stage routes', async () => {
+  it('keeps stable paths and icons for each module', () => {
+    expect(WORKBENCH_MODULES.map((module) => module.path)).toEqual([
+      '/home',
+      '/input',
+      '/enhance',
+      '/encode',
+      '/render',
+      '/preview',
+    ])
+    expect(WORKBENCH_MODULES.every((module) => Boolean(module.icon))).toBe(true)
+  })
+
+  it('redirects legacy routes into the new module layout', async () => {
     const redirects = [
-      ['/overview', '/prepare'],
-      ['/source', '/prepare?tab=input'],
+      ['/', '/home'],
+      ['/overview', '/home'],
+      ['/prepare', '/home'],
+      ['/source', '/input'],
       ['/interpolation', '/enhance?section=interpolation'],
       ['/super-resolution', '/enhance?section=super-resolution'],
       ['/anime', '/enhance?section=anime'],
-      ['/format', '/deliver'],
-      ['/preview', '/results'],
+      ['/format', '/encode'],
+      ['/deliver', '/encode'],
+      ['/results', '/render'],
+      ['/preview', '/preview'],
     ] as const
 
     for (const [from, to] of redirects) {
