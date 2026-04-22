@@ -6,12 +6,12 @@ import {
   GlassesOutline,
   SendOutline,
 } from '@vicons/ionicons5'
-import type { ProcessOrder, WorkbenchModuleDefinition, WorkflowMode } from '@/types'
+import type { ProcessOrder, RateControlMode, WorkbenchModuleDefinition, WorkflowMode } from '@/types'
 
 export const WORKFLOW_LABELS: Record<WorkflowMode, string> = {
   frame_interpolation: '补帧',
   super_resolution: '超分',
-  anime_optimization: '动漫',
+  anime_optimization: '动漫优化',
   format_conversion: '转码',
 }
 
@@ -25,14 +25,14 @@ export const WORKBENCH_MODULES: WorkbenchModuleDefinition[] = [
     key: 'home',
     title: '主页',
     path: '/home',
-    description: '环境与概览',
+    description: '启动探测与能力概览',
     icon: BookOutline,
   },
   {
     key: 'input',
     title: '输入',
     path: '/input',
-    description: '素材导入',
+    description: '批量导入与解码设置',
     icon: AddCircleOutline,
   },
   {
@@ -46,21 +46,21 @@ export const WORKBENCH_MODULES: WorkbenchModuleDefinition[] = [
     key: 'encode',
     title: '编码',
     path: '/encode',
-    description: '输出与编码',
+    description: '编码器与输出目录',
     icon: ColorFillOutline,
   },
   {
     key: 'render',
     title: '渲染',
     path: '/render',
-    description: '任务控制',
+    description: '批量队列执行',
     icon: SendOutline,
   },
   {
     key: 'preview',
     title: '预览',
     path: '/preview',
-    description: '日志与输出',
+    description: '当前文件与最近结果',
     icon: GlassesOutline,
   },
 ]
@@ -104,18 +104,13 @@ export const RIFE_MODELS = [
   '4.26.heavy',
 ]
 
-export const CODEC_OPTIONS = ['libx264', 'libx265', 'libvpx-vp9', 'libaom-av1', 'copy']
+export const VIDEO_EXTENSIONS = ['mp4', 'avi', 'mkv', 'mov', 'flv', 'webm', 'wmv', 'ts']
 
-export const PRESET_OPTIONS = [
-  'ultrafast',
-  'superfast',
-  'veryfast',
-  'faster',
-  'fast',
-  'medium',
-  'slow',
-  'slower',
-  'veryslow',
-]
+export const CONTAINER_OPTIONS = ['mp4', 'mkv', 'mov']
 
-export const VIDEO_EXTENSIONS = ['mp4', 'avi', 'mkv', 'mov', 'flv', 'webm', 'wmv']
+export const RATE_CONTROL_LABELS: Record<RateControlMode, string> = {
+  crf: 'CRF',
+  cq: 'CQ',
+  qp: 'QP',
+  bitrate: 'Bitrate',
+}

@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import TaskConsole from '@/components/TaskConsole.vue'
 import { useWorkbenchStore } from '@/stores/workbench'
 
 const store = useWorkbenchStore()
 
 const runStats = computed(() => [
-  { label: '状态', value: store.task.status },
-  { label: '进度', value: `${store.task.percent.toFixed(1)}%` },
-  { label: '阶段', value: store.task.stage || '--' },
-  { label: '帧数', value: store.task.processedFrames ? `${store.task.processedFrames}` : '--' },
+  { label: '待处理', value: `${store.selectedIds.length}` },
+  { label: '已完成', value: `${store.batch.completedIds.length}` },
+  { label: '失败/取消', value: `${store.batch.failedIds.length}` },
+  { label: '当前项', value: store.currentTaskItem?.displayName ?? '--' },
 ])
 
-const renderSections = computed(() => store.summarySections.filter((section) => section.title !== '任务'))
+const queueItems = computed(() =>
+  store.mediaItems.filter((item) => item.selected || item.id === store.batch.currentId),
+)
 </script>
 
 <template>
@@ -19,20 +22,20 @@ const renderSections = computed(() => store.summarySections.filter((section) => 
     <section class="panel-surface">
       <div class="panel-head">
         <div class="panel-copy">
-          <h2>渲染控制</h2>
-          <p class="panel-caption">在独立模块中启动、停止并观察当前处理阶段</p>
+          <h2>批处理队列</h2>
+          <p class="panel-caption">渲染页只执行当前勾选的文件。任务按固定顺序串行运行，取消当前项后会继续下一项。</p>
         </div>
 
         <div class="panel-actions">
           <button
-            v-if="store.task.status !== 'running'"
+            v-if="!store.batch.isRunning"
             class="primary-button"
-            :disabled="!store.canStartTask"
-            @click="store.startTask()"
+            :disabled="!store.canStartBatch"
+            @click="store.startBatch()"
           >
-            开始流程
+            开始队列
           </button>
-          <button v-else class="danger-button" @click="store.cancelCurrentTask()">停止流程</button>
+          <button v-else class="danger-button" @click="store.cancelCurrentTask()">取消当前项</button>
         </div>
       </div>
 
@@ -47,17 +50,40 @@ const renderSections = computed(() => store.summarySections.filter((section) => 
     <section class="panel-surface">
       <div class="panel-head">
         <div class="panel-copy">
-          <h2>执行前检查</h2>
-          <p class="panel-caption">渲染模块复用现有 store 摘要，便于开始前快速核对</p>
+          <h2>队列明细</h2>
+          <p class="panel-caption">可以在这里看到每个已选文件的执行状态、输出结果和最近阶段。</p>
         </div>
       </div>
 
-      <div class="summary-grid">
-        <article v-for="section in renderSections" :key="section.title" class="summary-block">
-          <p class="summary-block-title">{{ section.title }}</p>
-          <p v-for="line in section.lines" :key="line" class="summary-line">{{ line }}</p>
+      <div v-if="queueItems.length === 0" class="empty-state">
+        <strong>没有可执行的文件</strong>
+        <p>请先在输入页勾选需要进入批处理队列的文件。</p>
+      </div>
+
+      <div v-else class="queue-list">
+        <article
+          v-for="item in queueItems"
+          :key="item.id"
+          class="queue-card"
+          :class="{ active: item.id === store.batch.currentId }"
+        >
+          <div class="queue-card-head">
+            <div>
+              <strong>{{ item.displayName }}</strong>
+              <p class="summary-line">{{ item.taskState.stage || '等待执行' }}</p>
+            </div>
+            <span class="inline-status" :data-state="item.taskState.status">{{ item.taskState.status }}</span>
+          </div>
+
+          <div class="metric-row">
+            <span>{{ item.taskState.percent.toFixed(1) }}%</span>
+            <span>{{ item.taskState.current || 0 }}/{{ item.taskState.total || 0 }}</span>
+            <span>{{ item.lastOutputPath || '--' }}</span>
+          </div>
         </article>
       </div>
     </section>
+
+    <TaskConsole />
   </div>
 </template>

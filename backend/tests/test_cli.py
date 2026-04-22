@@ -1,29 +1,39 @@
-"""CLI 处理步骤规划测试。"""
-
-from types import SimpleNamespace
+"""CLI processing-step planning tests."""
 
 from app.cli import _resolve_processing_steps
 
 
-def _make_args(**overrides):
-    defaults = {
-        "algorithm": "frame_interpolation",
-        "enable_interpolation": False,
-        "enable_super_resolution": False,
-        "process_order": "super_resolution_then_interpolation",
-        "multi": 2,
-        "model": "4.25",
-        "scale": 1.0,
-        "fp16": False,
-        "sr_scale_factor": 2.0,
-        "sr_algorithm": "placeholder",
+def _make_workflow_config(**overrides):
+    workflow = {
+        "fpsMode": "target",
+        "processOrder": "super_resolution_then_interpolation",
+        "interpolation": {
+            "enabled": True,
+            "targetFps": 60,
+            "multi": 2,
+            "model": "4.25",
+            "scale": 1.0,
+            "fp16": False,
+            "tensorBackend": "pytorch",
+        },
+        "superResolution": {
+            "enabled": False,
+            "scaleFactor": 2.0,
+            "algorithm": "placeholder",
+        },
+        "anime": {
+            "enabled": False,
+            "profile": "clean-lines",
+            "denoise": 10,
+            "edgeBoost": 15,
+        },
     }
-    defaults.update(overrides)
-    return SimpleNamespace(**defaults)
+    workflow.update(overrides)
+    return workflow
 
 
-def test_resolve_processing_steps_legacy_algorithm_mode():
-    steps = _resolve_processing_steps(_make_args())
+def test_resolve_processing_steps_interpolation_mode():
+    steps = _resolve_processing_steps(_make_workflow_config())
 
     assert [step["algorithm_type"] for step in steps] == ["frame_interpolation"]
     assert steps[0]["algorithm_kwargs"]["multi"] == 2
@@ -32,10 +42,13 @@ def test_resolve_processing_steps_legacy_algorithm_mode():
 
 def test_resolve_processing_steps_combined_order():
     steps = _resolve_processing_steps(
-        _make_args(
-            enable_interpolation=True,
-            enable_super_resolution=True,
-            process_order="frame_interpolation_then_super_resolution",
+        _make_workflow_config(
+            processOrder="frame_interpolation_then_super_resolution",
+            superResolution={
+                "enabled": True,
+                "scaleFactor": 2.0,
+                "algorithm": "placeholder",
+            },
         )
     )
 
@@ -48,6 +61,19 @@ def test_resolve_processing_steps_combined_order():
 
 
 def test_resolve_processing_steps_format_conversion_skips_frame_filters():
-    steps = _resolve_processing_steps(_make_args(algorithm="format_conversion"))
+    steps = _resolve_processing_steps(
+        _make_workflow_config(
+            interpolation={
+                "enabled": False,
+                "targetFps": 60,
+                "multi": 2,
+                "model": "4.25",
+                "scale": 1.0,
+                "fp16": False,
+                "tensorBackend": "pytorch",
+            },
+            superResolution={"enabled": False, "scaleFactor": 2.0, "algorithm": "placeholder"},
+        )
+    )
 
     assert steps == []

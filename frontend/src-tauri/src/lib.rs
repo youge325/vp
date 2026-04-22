@@ -13,24 +13,41 @@ use crate::runtime::resolve_runtime_paths;
 #[tauri::command]
 async fn pick_input() -> Result<Option<String>, String> {
     Ok(FileDialog::new()
-        .set_title("选择输入视频")
-        .add_filter("Video", &["mp4", "avi", "mkv", "mov", "flv", "webm", "wmv"])
+        .set_title("Select Input Video")
+        .add_filter("Video", &["mp4", "avi", "mkv", "mov", "flv", "webm", "wmv", "ts"])
         .pick_file()
         .map(|path| path.display().to_string()))
 }
 
 #[tauri::command]
-async fn pick_output(file_name: Option<String>) -> Result<Option<String>, String> {
-    let mut dialog = FileDialog::new();
-    dialog = dialog.set_title("选择输出文件");
+async fn pick_inputs() -> Result<Vec<String>, String> {
+    Ok(FileDialog::new()
+        .set_title("Import Videos")
+        .add_filter("Video", &["mp4", "avi", "mkv", "mov", "flv", "webm", "wmv", "ts"])
+        .pick_files()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|path| path.display().to_string())
+        .collect())
+}
 
+#[tauri::command]
+async fn pick_output(file_name: Option<String>) -> Result<Option<String>, String> {
+    let mut dialog = FileDialog::new().set_title("Select Output File");
     if let Some(file_name) = file_name {
         dialog = dialog.set_file_name(&file_name);
     }
-
     Ok(dialog
         .add_filter("Video", &["mp4", "avi", "mkv", "mov"])
         .save_file()
+        .map(|path| path.display().to_string()))
+}
+
+#[tauri::command]
+async fn pick_output_directory() -> Result<Option<String>, String> {
+    Ok(FileDialog::new()
+        .set_title("Select Output Directory")
+        .pick_folder()
         .map(|path| path.display().to_string()))
 }
 
@@ -71,12 +88,8 @@ async fn open_output_location(path: String) -> Result<(), String> {
     let target = if path_buf.is_dir() {
         path_buf
     } else {
-        path_buf
-            .parent()
-            .map(PathBuf::from)
-            .unwrap_or(path_buf)
+        path_buf.parent().map(PathBuf::from).unwrap_or(path_buf)
     };
-
     open::that_detached(target).map_err(|error| format!("Unable to open output location: {error}"))
 }
 
@@ -123,7 +136,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             pick_input,
+            pick_inputs,
             pick_output,
+            pick_output_directory,
             check_environment,
             inspect_video,
             start_task,

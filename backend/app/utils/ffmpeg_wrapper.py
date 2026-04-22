@@ -1,38 +1,102 @@
-"""FFmpeg 命令行封装 — 适配器模式，集成 FFmpeg 功能。"""
+"""FFmpeg command wrapper and capability probing."""
+
+from __future__ import annotations
 
 import json
-from app.utils.logger import get_logger
 import os
+import re
 import shutil
 import subprocess
-from typing import Optional
+from typing import Any
 
 from app.config import settings
+from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-class FFmpegWrapper:
-    """封装 FFmpeg/FFprobe 命令行调用，提供视频处理操作。"""
+ENCODER_CANDIDATES = (
+    {"name": "libx264", "label": "CPU H.264", "family": "cpu", "codec": "h264"},
+    {"name": "libx265", "label": "CPU H.265", "family": "cpu", "codec": "hevc"},
+    {"name": "libaom-av1", "label": "CPU AV1", "family": "cpu", "codec": "av1"},
+    {"name": "libsvtav1", "label": "CPU SVT-AV1", "family": "cpu", "codec": "av1"},
+    {"name": "h264_nvenc", "label": "NVENC H.264", "family": "nvidia", "codec": "h264"},
+    {"name": "hevc_nvenc", "label": "NVENC H.265", "family": "nvidia", "codec": "hevc"},
+    {"name": "av1_nvenc", "label": "NVENC AV1", "family": "nvidia", "codec": "av1"},
+    {"name": "h264_qsv", "label": "QSV H.264", "family": "intel", "codec": "h264"},
+    {"name": "hevc_qsv", "label": "QSV H.265", "family": "intel", "codec": "hevc"},
+    {"name": "av1_qsv", "label": "QSV AV1", "family": "intel", "codec": "av1"},
+)
 
-    def __init__(
-        self,
-        ffmpeg_path: str = None,
-        ffprobe_path: str = None,
-    ):
+DECODER_CANDIDATES = (
+    {"name": "h264_cuvid", "label": "NVDEC H.264", "family": "nvidia", "codec": "h264"},
+    {"name": "hevc_cuvid", "label": "NVDEC H.265", "family": "nvidia", "codec": "hevc"},
+    {"name": "av1_cuvid", "label": "NVDEC AV1", "family": "nvidia", "codec": "av1"},
+    {"name": "h264_qsv", "label": "QSV H.264", "family": "intel", "codec": "h264"},
+    {"name": "hevc_qsv", "label": "QSV H.265", "family": "intel", "codec": "hevc"},
+    {"name": "av1_qsv", "label": "QSV AV1", "family": "intel", "codec": "av1"},
+)
+
+OPTION_LINE_RE = re.compile(
+    r"^\s{2}-(?P<name>[\w\-]+)\s+<(?P<kind>[^>]+)>\s+.*?"
+    r"(?:\(from (?P<min>[^ ]+) to (?P<max>[^)]+)\))?"
+    r"(?: \(default (?P<default>[^)]+)\))?$"
+)
+CHOICE_LINE_RE = re.compile(r"^\s{5,}(?P<value>\S+)\s+\S+\s+")
+CODEC_LIST_RE = re.compile(r"^\s*[A-Z\.]{6}\s+(?P<name>[\w\-]+)\s+")
+
+
+def _coerce_number(value: str | None) -> int | float | None:
+    if value is None:
+        return None
+    lowered = value.strip().lower()
+    if lowered in {"int_max", "auto", "unknown", "-inf", "inf"}:
+        return None
+    try:
+        if "." in lowered:
+            return float(lowered)
+        return int(lowered)
+    except ValueError:
+        return None
+
+
+def _coerce_default_value(kind: str, raw: str | None) -> Any:
+    if raw is None:
+        return None
+    text = raw.strip()
+    if kind == "boolean":
+        return text.lower() in {"1", "true", "yes", "on", "auto"}
+    if kind == "number":
+        return _coerce_number(text)
+    return text
+
+
+def _format_bitrate(value: Any) -> str:
+    text = str(value).strip()
+    if not text:
+        return "8M"
+    if text.lower().endswith(("k", "m", "g")):
+        return text.upper()
+    try:
+        numeric = float(text)
+    except ValueError:
+        return text
+    if numeric.is_integer():
+        return f"{int(numeric)}M"
+    return f"{numeric}M"
+
+
+class FFmpegWrapper:
+    """Wrap FFmpeg/FFprobe calls and normalize runtime capabilities."""
+
+    def __init__(self, ffmpeg_path: str | None = None, ffprobe_path: str | None = None):
         self._ffmpeg_path_explicit = ffmpeg_path is not None
         self._ffprobe_path_explicit = ffprobe_path is not None
         self.ffmpeg_path = ffmpeg_path or settings.FFMPEG_PATH
         self.ffprobe_path = ffprobe_path or settings.FFPROBE_PATH
-        # 自动检测：仅在未手动指定路径时，尝试从 PATH 中查找
         self._auto_detect_paths()
 
-    # ------------------------------------------------------------------
-    # 视频信息
-    # ------------------------------------------------------------------
-
-    def get_video_info(self, input_path: str) -> dict:
-        """使用 ffprobe 获取视频元数据。"""
+    def get_video_info(self, input_path: str) -> dict[str, Any]:
         cmd = [
             self.ffprobe_path,
             "-v",
@@ -50,20 +114,22 @@ class FFmpegWrapper:
             return {}
 
     def get_fps(self, input_path: str) -> float:
-        """获取视频文件的帧率。"""
         info = self.get_video_info(input_path)
         for stream in info.get("streams", []):
             if stream.get("codec_type") == "video":
-                # r_frame_rate 格式为 "30/1" 或 "24000/1001"
-                r_frame_rate = stream.get("r_frame_rate", "30/1")
-                parts = r_frame_rate.split("/")
-                if len(parts) == 2 and int(parts[1]) != 0:
-                    return round(int(parts[0]) / int(parts[1]), 3)
-                return 30.0
+                frame_rate = str(stream.get("r_frame_rate", "30/1"))
+                numerator, _, denominator = frame_rate.partition("/")
+                try:
+                    numerator_value = int(numerator)
+                    denominator_value = int(denominator or "1")
+                except ValueError:
+                    return 30.0
+                if denominator_value == 0:
+                    return 30.0
+                return round(numerator_value / denominator_value, 3)
         return 30.0
 
     def get_frame_count(self, input_path: str) -> int:
-        """获取视频文件的总帧数。"""
         cmd = [
             self.ffprobe_path,
             "-v",
@@ -85,154 +151,75 @@ class FFmpegWrapper:
                 return int(streams[0].get("nb_read_frames", 0))
         except (json.JSONDecodeError, ValueError, IndexError):
             pass
-        # 回退方案：根据时长 × 帧率估算
-        info = self.get_video_info(input_path)
-        duration = float(info.get("format", {}).get("duration", 0))
+        duration = self.get_duration(input_path)
         fps = self.get_fps(input_path)
         return int(duration * fps) if duration > 0 else 0
 
     def get_duration(self, input_path: str) -> float:
-        """获取视频文件时长（秒）。"""
         info = self.get_video_info(input_path)
         return float(info.get("format", {}).get("duration", 0))
 
     def has_audio(self, input_path: str) -> bool:
-        """检查视频文件是否包含音频流。"""
+        info = self.get_video_info(input_path)
+        return any(stream.get("codec_type") == "audio" for stream in info.get("streams", []))
+
+    def get_primary_video_codec(self, input_path: str) -> str:
         info = self.get_video_info(input_path)
         for stream in info.get("streams", []):
-            if stream.get("codec_type") == "audio":
-                return True
-        return False
-
-    # ------------------------------------------------------------------
-    # 解码（视频 → 帧序列）
-    # ------------------------------------------------------------------
+            if stream.get("codec_type") == "video":
+                return str(stream.get("codec_name") or "")
+        return ""
 
     def decode_to_frames(
         self,
         input_path: str,
         output_dir: str,
         frame_prefix: str = "frame_%06d.png",
+        decode_config: dict[str, Any] | None = None,
     ) -> str:
-        """
-        将视频文件解码为 PNG 帧序列。
-
-        返回输出目录路径。
-        """
         os.makedirs(output_dir, exist_ok=True)
         output_pattern = os.path.join(output_dir, frame_prefix)
-
-        cmd = [
-            self.ffmpeg_path,
-            "-i",
-            input_path,
-            "-qscale:v",
-            "1",
-            "-qmin",
-            "1",
-            "-qmax",
-            "1",
-            "-vsync",
-            "0",
-            output_pattern,
-            "-y",
-        ]
+        cmd = [self.ffmpeg_path]
+        cmd.extend(self.build_decode_input_args(input_path, decode_config))
+        cmd.extend(["-qscale:v", "1", "-qmin", "1", "-qmax", "1", "-vsync", "0", output_pattern, "-y"])
         self._run_command(cmd)
-        logger.info(f"已解码 {input_path} → {output_dir}")
+        logger.info("Decoded %s -> %s", input_path, output_dir)
         return output_dir
-
-    # ------------------------------------------------------------------
-    # 编码（帧序列 → 视频）
-    # ------------------------------------------------------------------
 
     def encode_from_frames(
         self,
         frame_dir: str,
         output_path: str,
         fps: float = 60.0,
-        output_fps: float = None,
+        output_fps: float | None = None,
         frame_prefix: str = "frame_%06d.png",
-        codec: str = "libx264",
-        crf: int = 18,
-        preset: str = "medium",
+        encode_config: dict[str, Any] | None = None,
     ) -> str:
-        """
-        将帧序列编码为视频文件。
+        if not os.path.isdir(frame_dir):
+            raise FileNotFoundError(f"Frames directory does not exist: {frame_dir}")
 
-        参数:
-            frame_dir: 帧目录路径
-            output_path: 输出文件路径
-            fps: 输入帧率（-framerate 参数，决定读取帧的速率）
-            output_fps: 输出帧率（-r 参数，决定最终视频帧率）。
-                        如果指定且与 fps 不同，FFmpeg 会做帧率转换（压制/丢帧）。
-                        为 None 时不设 -r 参数，输出帧率等于输入帧率。
-            frame_prefix: 帧文件名模板
-            codec: 视频编码器
-            crf: CRF 质量值
-            preset: 编码预设
-
-        返回输出文件路径。
-        """
+        encode_config = encode_config or {}
         input_pattern = os.path.join(frame_dir, frame_prefix)
-
-        cmd = [
-            self.ffmpeg_path,
-            "-framerate",
-            str(fps),
-            "-i",
-            input_pattern,
-        ]
-
-        # 如果指定了输出帧率且与输入帧率不同，添加 -r 参数做帧率转换
+        cmd = [self.ffmpeg_path, "-framerate", str(fps), "-i", input_pattern]
         if output_fps is not None and abs(output_fps - fps) > 0.01:
             cmd.extend(["-r", str(output_fps)])
-            logger.info(f"帧率压制: 输入 {fps}fps → 输出 {output_fps}fps")
-
-        cmd.extend(
-            [
-                "-c:v",
-                codec,
-                "-crf",
-                str(crf),
-                "-preset",
-                preset,
-                "-pix_fmt",
-                "yuv420p",
-                output_path,
-                "-y",
-            ]
-        )
+        cmd.extend(self.build_encode_output_args(output_path, encode_config))
         self._run_command(cmd)
-        logger.info(f"已编码 {frame_dir} → {output_path}")
+        logger.info("Encoded %s -> %s", frame_dir, output_path)
         return output_path
 
-    # ------------------------------------------------------------------
-    # 音频操作
-    # ------------------------------------------------------------------
-
-    def extract_audio(self, input_path: str, output_path: str) -> Optional[str]:
-        """从视频文件中提取音频轨道。"""
-        cmd = [
-            self.ffmpeg_path,
-            "-i",
-            input_path,
-            "-vn",  # 不含视频
-            "-acodec",
-            "copy",
-            output_path,
-            "-y",
-        ]
+    def extract_audio(self, input_path: str, output_path: str) -> str | None:
+        cmd = [self.ffmpeg_path, "-i", input_path, "-vn", "-acodec", "copy", output_path, "-y"]
         try:
             self._run_command(cmd)
-            if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
-                logger.info(f"已提取音频: {output_path}")
-                return output_path
-        except Exception as e:
-            logger.warning(f"音频提取失败: {e}")
+        except Exception as exc:  # pragma: no cover - defensive boundary
+            logger.warning("Audio extraction failed: %s", exc)
+            return None
+        if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
+            return output_path
         return None
 
     def merge_audio(self, video_path: str, audio_path: str, output_path: str) -> str:
-        """将音频轨道合并到视频文件中。"""
         cmd = [
             self.ffmpeg_path,
             "-i",
@@ -252,12 +239,7 @@ class FFmpegWrapper:
             "-y",
         ]
         self._run_command(cmd)
-        logger.info(f"已合并音频: {video_path} + {audio_path} → {output_path}")
         return output_path
-
-    # ------------------------------------------------------------------
-    # 格式转换
-    # ------------------------------------------------------------------
 
     def convert_format(
         self,
@@ -268,7 +250,6 @@ class FFmpegWrapper:
         preset: str = "medium",
         audio_codec: str = "aac",
     ) -> str:
-        """使用指定编码器转换视频格式。"""
         cmd = [
             self.ffmpeg_path,
             "-i",
@@ -285,73 +266,297 @@ class FFmpegWrapper:
             "-y",
         ]
         self._run_command(cmd)
-        logger.info(f"已转换: {input_path} → {output_path}")
         return output_path
 
-    # ------------------------------------------------------------------
-    # 工具方法
-    # ------------------------------------------------------------------
+    def list_codec_names(self, mode: str) -> list[str]:
+        if mode not in {"encoders", "decoders"}:
+            raise ValueError(f"Unsupported codec list mode: {mode}")
+        cmd = [self.ffmpeg_path, "-hide_banner", f"-{mode}"]
+        result = self._run_command(cmd, timeout=30)
+        names: list[str] = []
+        for line in result.stdout.splitlines():
+            match = CODEC_LIST_RE.match(line)
+            if match:
+                names.append(match.group("name"))
+        return names
 
-    def _run_command(self, cmd: list[str]) -> subprocess.CompletedProcess:
-        """执行命令并返回结果。"""
-        logger.debug(f"执行命令: {' '.join(cmd)}")
+    def list_hwaccels(self) -> list[str]:
+        result = self._run_command([self.ffmpeg_path, "-hide_banner", "-hwaccels"], timeout=30)
+        hwaccels: list[str] = []
+        started = False
+        for line in result.stdout.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("Hardware acceleration methods"):
+                started = True
+                continue
+            if started:
+                hwaccels.append(stripped)
+        return hwaccels
+
+    def describe_codec(self, mode: str, name: str) -> str:
+        if mode not in {"encoder", "decoder"}:
+            raise ValueError(f"Unsupported codec help mode: {mode}")
+        result = self._run_command([self.ffmpeg_path, "-hide_banner", "-h", f"{mode}={name}"], timeout=30)
+        return result.stdout
+
+    def parse_codec_profile(
+        self,
+        mode: str,
+        metadata: dict[str, Any],
+        help_text: str,
+    ) -> dict[str, Any]:
+        pixel_formats = self._parse_supported_values(help_text, "Supported pixel formats:")
+        hardware_devices = self._parse_supported_values(help_text, "Supported hardware devices:")
+        options = self.parse_avoptions(help_text)
+        if pixel_formats:
+            options.insert(
+                0,
+                {
+                    "name": "pix_fmt",
+                    "label": "Pixel Format",
+                    "type": "choice",
+                    "defaultValue": pixel_formats[0],
+                    "choices": [{"label": value, "value": value} for value in pixel_formats],
+                    "min": None,
+                    "max": None,
+                },
+            )
+        return {
+            "name": metadata["name"],
+            "label": metadata["label"],
+            "family": metadata["family"],
+            "codec": metadata["codec"],
+            "available": True,
+            "pixelFormats": pixel_formats,
+            "hardwareDevices": hardware_devices,
+            "options": options,
+        }
+
+    def parse_avoptions(self, help_text: str) -> list[dict[str, Any]]:
+        options: list[dict[str, Any]] = []
+        current: dict[str, Any] | None = None
+        for line in help_text.splitlines():
+            match = OPTION_LINE_RE.match(line.rstrip())
+            if match:
+                raw_kind = match.group("kind").strip()
+                option_type = "string"
+                if raw_kind == "boolean":
+                    option_type = "boolean"
+                elif raw_kind in {"int", "float", "double"}:
+                    option_type = "number"
+                option = {
+                    "name": match.group("name"),
+                    "label": match.group("name").replace("_", " "),
+                    "type": option_type,
+                    "defaultValue": _coerce_default_value(option_type, match.group("default")),
+                    "choices": [],
+                    "min": _coerce_number(match.group("min")),
+                    "max": _coerce_number(match.group("max")),
+                }
+                options.append(option)
+                current = option
+                continue
+
+            choice_match = CHOICE_LINE_RE.match(line.rstrip())
+            if choice_match and current is not None:
+                choice_value = choice_match.group("value")
+                current["choices"].append({"label": choice_value, "value": choice_value})
+
+        normalized: list[dict[str, Any]] = []
+        for option in options:
+            normalized_option = dict(option)
+            if normalized_option["choices"]:
+                normalized_option["type"] = "choice"
+            normalized.append(normalized_option)
+        return normalized
+
+    def discover_capabilities(self, gpu_adapters: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        adapters = gpu_adapters or []
+        available_vendors = {adapter.get("vendor") for adapter in adapters if adapter.get("device_type") != "virtual"}
+        encoder_names = set(self.list_codec_names("encoders"))
+        decoder_names = set(self.list_codec_names("decoders"))
+        hwaccels = self.list_hwaccels()
+
+        encoder_profiles: list[dict[str, Any]] = []
+        for candidate in ENCODER_CANDIDATES:
+            if candidate["name"] not in encoder_names:
+                continue
+            if candidate["family"] != "cpu" and candidate["family"] not in available_vendors:
+                continue
+            encoder_profiles.append(
+                self.parse_codec_profile("encoder", candidate, self.describe_codec("encoder", candidate["name"]))
+            )
+
+        decoder_profiles: list[dict[str, Any]] = [
+            {
+                "name": "software",
+                "label": "Software Decode",
+                "family": "software",
+                "codec": "any",
+                "available": True,
+                "pixelFormats": [],
+                "hardwareDevices": [],
+                "options": [],
+            }
+        ]
+        for candidate in DECODER_CANDIDATES:
+            if candidate["name"] not in decoder_names:
+                continue
+            if candidate["family"] not in available_vendors:
+                continue
+            decoder_profiles.append(
+                self.parse_codec_profile("decoder", candidate, self.describe_codec("decoder", candidate["name"]))
+            )
+
+        return {
+            "hwaccels": hwaccels,
+            "encoderProfiles": encoder_profiles,
+            "decoderProfiles": decoder_profiles,
+        }
+
+    def build_decode_input_args(self, input_path: str, decode_config: dict[str, Any] | None = None) -> list[str]:
+        decode_config = decode_config or {}
+        mode = decode_config.get("mode", "software")
+        args: list[str] = []
+
+        if mode == "hardware":
+            hwaccel = str(decode_config.get("hwaccel") or "").strip()
+            if hwaccel:
+                args.extend(["-hwaccel", hwaccel])
+            hwaccel_device = str(decode_config.get("hwaccelDevice") or "").strip()
+            if hwaccel_device:
+                args.extend(["-hwaccel_device", hwaccel_device])
+
+        decoder = str(decode_config.get("decoder") or "").strip()
+        if decoder and decoder != "software":
+            args.extend(["-c:v", decoder])
+
+        args.extend(self._build_option_args(decode_config.get("options", {})))
+        args.extend(["-i", input_path])
+        return args
+
+    def build_encode_output_args(self, output_path: str, encode_config: dict[str, Any] | None = None) -> list[str]:
+        encode_config = encode_config or {}
+        codec = str(encode_config.get("codec") or "libx264")
+        options = dict(encode_config.get("options", {}))
+        if "pix_fmt" not in options:
+            default_pix_fmt = self._default_pix_fmt(codec)
+            if default_pix_fmt:
+                options["pix_fmt"] = default_pix_fmt
+
+        args = ["-c:v", codec]
+        rate_control = dict(encode_config.get("rateControl", {}))
+        mode = str(rate_control.get("mode") or "").strip()
+        value = rate_control.get("value")
+
+        if mode == "crf" and value is not None:
+            args.extend(["-crf", str(value)])
+        elif mode == "cq" and value is not None:
+            args.extend(["-cq", str(value)])
+        elif mode == "qp" and value is not None:
+            args.extend(["-qp", str(value)])
+        elif mode == "bitrate" and value is not None:
+            args.extend(["-b:v", _format_bitrate(value)])
+
+        args.extend(self._build_option_args(options))
+        args.extend([output_path, "-y"])
+        return args
+
+    def is_available(self) -> bool:
+        try:
+            result = subprocess.run(
+                [self.ffmpeg_path, "-version"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
+                check=False,
+            )
+        except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+            return False
+        return result.returncode == 0
+
+    def get_version(self) -> str | None:
+        try:
+            result = subprocess.run(
+                [self.ffmpeg_path, "-version"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
+                check=False,
+            )
+        except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+            return None
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip().splitlines()[0] if result.stdout.strip() else None
+
+    def _parse_supported_values(self, text: str, prefix: str) -> list[str]:
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(prefix):
+                return stripped.removeprefix(prefix).strip().split()
+        return []
+
+    def _build_option_args(self, options: dict[str, Any]) -> list[str]:
+        args: list[str] = []
+        for key, value in options.items():
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+            args.append(f"-{key}")
+            if isinstance(value, bool):
+                args.append("1" if value else "0")
+            else:
+                args.append(str(value))
+        return args
+
+    def _default_pix_fmt(self, codec: str) -> str | None:
+        defaults = {
+            "libx264": "yuv420p",
+            "libx265": "yuv420p10le",
+            "libaom-av1": "yuv420p10le",
+            "libsvtav1": "yuv420p10le",
+            "h264_nvenc": "yuv420p",
+            "hevc_nvenc": "p010le",
+            "av1_nvenc": "p010le",
+            "h264_qsv": "nv12",
+            "hevc_qsv": "p010le",
+            "av1_qsv": "p010le",
+        }
+        return defaults.get(codec)
+
+    def _run_command(self, cmd: list[str], *, timeout: int = 3600) -> subprocess.CompletedProcess[str]:
+        logger.debug("Running FFmpeg command: %s", " ".join(cmd))
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=3600,  # 1 小时超时
+            timeout=timeout,
+            check=False,
         )
         if result.returncode != 0:
-            error_msg = result.stderr.strip() or result.stdout.strip()
-            raise RuntimeError(f"FFmpeg 命令执行失败 (退出码 {result.returncode}): {error_msg}")
+            message = result.stderr.strip() or result.stdout.strip()
+            raise RuntimeError(f"FFmpeg command failed ({result.returncode}): {message}")
         return result
 
-    def is_available(self) -> bool:
-        """检查 FFmpeg 可执行文件是否可用（通过 ffmpeg -version 检测）。"""
-        try:
-            result = subprocess.run(
-                [self.ffmpeg_path, "-version"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=10,
-            )
-            return result.returncode == 0
-        except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-            return False
-
-    def get_version(self) -> Optional[str]:
-        """获取 FFmpeg 版本信息。"""
-        try:
-            result = subprocess.run(
-                [self.ffmpeg_path, "-version"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=10,
-            )
-            if result.returncode == 0:
-                # 输出第一行通常为 "ffmpeg version 6.1.2-full_build ..."
-                first_line = result.stdout.strip().split("\n")[0]
-                return first_line
-        except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-            pass
-        return None
-
-    def _auto_detect_paths(self):
-        """仅在未手动指定路径时，从系统 PATH 中自动查找 ffmpeg/ffprobe。"""
+    def _auto_detect_paths(self) -> None:
         if not self._ffmpeg_path_explicit and not os.path.isfile(self.ffmpeg_path):
             found = shutil.which("ffmpeg")
             if found:
-                logger.info(f"配置的 FFmpeg 路径不存在，自动检测到: {found}")
+                logger.info("Auto-detected ffmpeg at %s", found)
                 self.ffmpeg_path = found
 
         if not self._ffprobe_path_explicit and not os.path.isfile(self.ffprobe_path):
             found = shutil.which("ffprobe")
             if found:
-                logger.info(f"配置的 FFprobe 路径不存在，自动检测到: {found}")
+                logger.info("Auto-detected ffprobe at %s", found)
                 self.ffprobe_path = found

@@ -1,6 +1,6 @@
 use std::process::Stdio;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use command_group::AsyncCommandGroup;
 use serde_json::Value;
@@ -39,11 +39,7 @@ pub async fn run_single_cli_command<R: Runtime>(
         if let Some(value) = parse_last_json_line(&stdout) {
             return Ok(value);
         }
-
-        return Err(format!(
-            "Backend command failed: {}",
-            stderr.trim().trim_matches('"')
-        ));
+        return Err(format!("Backend command failed: {}", stderr.trim().trim_matches('"')));
     }
 
     parse_last_json_line(&stdout).ok_or_else(|| "Backend CLI did not emit JSON output.".to_string())
@@ -62,7 +58,7 @@ pub async fn spawn_task<R: Runtime>(
     }
 
     let paths = resolve_runtime_paths(&app)?;
-    let mut command = build_process_command(&paths, &request);
+    let mut command = build_process_command(&paths, &request).map_err(|error| error.to_string())?;
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
     command.stdin(Stdio::null());
@@ -96,18 +92,14 @@ pub async fn spawn_task<R: Runtime>(
 
     spawn_stdout_reader(app.clone(), stdout, running.terminal_sent.clone());
     spawn_stderr_reader(app.clone(), stderr);
-    let _ = state;
     spawn_waiter(app, running);
-
     Ok(())
 }
 
 pub async fn cancel_running_task(state: State<'_, TaskState>) -> Result<(), String> {
     let running = {
         let guard = state.current.lock().await;
-        guard
-            .clone()
-            .ok_or_else(|| "There is no running task.".to_string())?
+        guard.clone().ok_or_else(|| "There is no running task.".to_string())?
     };
 
     running.cancelled.store(true, Ordering::SeqCst);
@@ -122,34 +114,14 @@ pub async fn cancel_running_task(state: State<'_, TaskState>) -> Result<(), Stri
 fn build_process_command(
     paths: &crate::runtime::ResolvedRuntimePaths,
     request: &TaskRequest,
-) -> Command {
+) -> Result<Command, serde_json::Error> {
     let mut command = Command::new(&paths.python_executable);
     command.args(["-m", "app", "process"]);
     command.args(["--input", &request.input_path]);
-    command.args(["--algorithm", &request.algorithm]);
-    command.args(["--fps", &request.fps.to_string()]);
-    command.args(["--fps-mode", &request.fps_mode]);
-    command.args(["--codec", &request.codec]);
-    command.args(["--crf", &request.crf.to_string()]);
-    command.args(["--preset", &request.preset]);
-    command.args(["--backend", &request.backend]);
-    command.args(["--multi", &request.multi.to_string()]);
-    command.args(["--model", &request.model]);
-    command.args(["--scale", &request.scale.to_string()]);
-    command.args(["--sr-scale-factor", &request.sr_scale_factor.to_string()]);
-    command.args(["--sr-algorithm", &request.sr_algorithm]);
 
-    if let Some(target_fps) = request.target_fps {
-        command.args(["--target-fps", &target_fps.to_string()]);
-    }
     if let Some(output_path) = &request.output_path {
         if !output_path.is_empty() {
             command.args(["--output", output_path]);
-        }
-    }
-    if let Some(output_dir) = &request.output_dir {
-        if !output_dir.is_empty() {
-            command.args(["--output-dir", output_dir]);
         }
     }
     if let Some(temp_dir) = &request.temp_dir {
@@ -157,22 +129,20 @@ fn build_process_command(
             command.args(["--temp-dir", temp_dir]);
         }
     }
-    if request.fp16 {
-        command.arg("--fp16");
-    }
-    if request.enable_interpolation {
-        command.arg("--enable-interpolation");
-    }
-    if request.enable_super_resolution {
-        command.arg("--enable-super-resolution");
-    }
-    if request.enable_interpolation && request.enable_super_resolution {
-        command.args(["--process-order", &request.process_order]);
-    }
+
+    let decode_json = serde_json::to_string(&request.decode_config)?;
+    let workflow_json = serde_json::to_string(&request.workflow_config)?;
+    let encode_json = serde_json::to_string(&request.encode_config)?;
+    let output_json = serde_json::to_string(&request.output_config)?;
+
+    command.args(["--decode-config-json", &decode_json]);
+    command.args(["--workflow-config-json", &workflow_json]);
+    command.args(["--encode-config-json", &encode_json]);
+    command.args(["--output-config-json", &output_json]);
 
     command.current_dir(&paths.backend_dir);
     command.envs(build_env_map(paths));
-    command
+    Ok(command)
 }
 
 fn spawn_stdout_reader<R: Runtime + 'static>(
@@ -200,14 +170,8 @@ fn spawn_stdout_reader<R: Runtime + 'static>(
                                 .and_then(Value::as_str)
                                 .unwrap_or_default()
                                 .to_string(),
-                            stage_index: value
-                                .get("stage_index")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(1),
-                            stage_total: value
-                                .get("stage_total")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(1),
+                            stage_index: value.get("stage_index").and_then(Value::as_u64).unwrap_or(1),
+                            stage_total: value.get("stage_total").and_then(Value::as_u64).unwrap_or(1),
                         };
                         let _ = app.emit("task-progress", payload);
                     }
@@ -287,10 +251,7 @@ fn spawn_stderr_reader<R: Runtime + 'static>(app: AppHandle<R>, stderr: tokio::p
     });
 }
 
-fn spawn_waiter<R: Runtime + 'static>(
-    app: AppHandle<R>,
-    running: RunningTask,
-) {
+fn spawn_waiter<R: Runtime + 'static>(app: AppHandle<R>, running: RunningTask) {
     tauri::async_runtime::spawn(async move {
         let status = {
             let mut child = running.child.lock().await;
@@ -318,10 +279,7 @@ fn spawn_waiter<R: Runtime + 'static>(
                         "task-error",
                         TaskErrorPayload {
                             code: "process_failed".to_string(),
-                            message: format!(
-                                "Backend process exited with status {}.",
-                                exit_status
-                            ),
+                            message: format!("Backend process exited with status {}.", exit_status),
                             details: None,
                         },
                     );

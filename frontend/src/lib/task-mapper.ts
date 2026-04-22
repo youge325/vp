@@ -1,70 +1,152 @@
-import { PROCESS_ORDER_LABELS, WORKFLOW_LABELS } from '@/lib/workflow'
+import { PROCESS_ORDER_LABELS, RATE_CONTROL_LABELS, WORKFLOW_LABELS } from '@/lib/workflow'
 import type {
-  ProcessOrder,
+  DecodeConfig,
+  DecoderProfileSpec,
+  EncodeConfig,
+  EncoderProfileSpec,
+  EnvironmentCheckResult,
+  MediaItem,
+  OutputConfig,
   TaskRequest,
-  WorkbenchStateSnapshot,
+  WorkflowConfig,
   WorkflowMode,
 } from '@/types'
 
-export function resolvePrimaryMode(snapshot: WorkbenchStateSnapshot): WorkflowMode {
-  if (snapshot.workflow.enableInterpolation) {
+const FAMILY_PRIORITY = ['nvidia', 'intel', 'cpu'] as const
+const CODEC_PRIORITY = ['hevc', 'h264', 'av1'] as const
+
+export function resolvePrimaryMode(item: Pick<MediaItem, 'workflowConfig'>): WorkflowMode {
+  const workflow = item.workflowConfig
+  if (workflow.interpolation.enabled) {
     return 'frame_interpolation'
   }
-
-  if (snapshot.workflow.enableSuperResolution) {
+  if (workflow.superResolution.enabled) {
     return 'super_resolution'
   }
-
-  if (snapshot.anime.enabled) {
+  if (workflow.anime.enabled) {
     return 'anime_optimization'
   }
-
   return 'format_conversion'
 }
 
-export function supportsCombinedProcessing(mode: WorkflowMode): boolean {
-  return mode === 'frame_interpolation' || mode === 'super_resolution'
+export function createDefaultWorkflowConfig(): WorkflowConfig {
+  return {
+    fpsMode: 'target',
+    processOrder: 'super_resolution_then_interpolation',
+    interpolation: {
+      enabled: true,
+      targetFps: 60,
+      multi: 2,
+      model: '4.25',
+      scale: 1,
+      fp16: false,
+      tensorBackend: 'pytorch',
+    },
+    superResolution: {
+      enabled: false,
+      scaleFactor: 2,
+      algorithm: 'placeholder',
+    },
+    anime: {
+      enabled: false,
+      profile: 'clean-lines',
+      denoise: 10,
+      edgeBoost: 15,
+    },
+  }
 }
 
-export function normalizeProcessOrder(order: ProcessOrder): string {
-  return PROCESS_ORDER_LABELS[order]
+export function createDefaultOutputConfig(outputDir = ''): OutputConfig {
+  return {
+    outputDir,
+    openOnComplete: true,
+  }
 }
 
-export function buildTaskRequest(snapshot: WorkbenchStateSnapshot): TaskRequest {
-  const algorithm = resolvePrimaryMode(snapshot)
-  const enableInterpolation = snapshot.workflow.enableInterpolation
-  const enableSuperResolution = snapshot.workflow.enableSuperResolution
-  const outputFps = enableInterpolation
-    ? snapshot.workflow.fpsMode === 'target'
-      ? snapshot.interpolation.targetFps
-      : snapshot.interpolation.multi * (snapshot.source.info?.fps ?? 30)
-    : snapshot.source.info?.fps ?? snapshot.interpolation.targetFps
+export function createDefaultDecodeConfig(
+  env: EnvironmentCheckResult | null,
+  videoCodec = '',
+): DecodeConfig {
+  const decoder = pickPreferredDecoderProfile(env, videoCodec)
+  if (!decoder || decoder.family === 'software') {
+    return {
+      mode: 'software',
+      hwaccel: '',
+      hwaccelDevice: '',
+      decoder: 'software',
+      options: {},
+    }
+  }
 
   return {
-    inputPath: snapshot.source.inputPath.trim(),
-    algorithm,
-    outputPath: snapshot.output.outputPath.trim() || undefined,
-    outputDir: snapshot.output.outputDir.trim() || undefined,
-    tempDir: snapshot.output.tempDir.trim() || undefined,
-    fps: outputFps,
-    fpsMode: snapshot.workflow.fpsMode,
-    targetFps:
-      enableInterpolation && snapshot.workflow.fpsMode === 'target'
-        ? snapshot.interpolation.targetFps
-        : undefined,
-    codec: snapshot.encode.codec,
-    crf: snapshot.encode.crf,
-    preset: snapshot.encode.preset,
-    backend: snapshot.interpolation.tensorBackend,
-    multi: snapshot.interpolation.multi,
-    model: snapshot.interpolation.model,
-    scale: snapshot.interpolation.scale,
-    fp16: snapshot.interpolation.fp16,
-    enableInterpolation,
-    enableSuperResolution,
-    processOrder: snapshot.workflow.processOrder,
-    srScaleFactor: snapshot.superResolution.scaleFactor,
-    srAlgorithm: snapshot.superResolution.algorithm,
+    mode: 'hardware',
+    hwaccel: decoder.family === 'nvidia' ? 'cuda' : 'qsv',
+    hwaccelDevice: '',
+    decoder: decoder.name,
+    options: {},
+  }
+}
+
+export function createDefaultEncodeConfig(env: EnvironmentCheckResult | null): EncodeConfig {
+  const profile = pickPreferredEncoderProfile(env)
+  const codec = profile?.name ?? 'libx265'
+  const family: EncodeConfig['family'] =
+    profile?.family === 'nvidia' || profile?.family === 'intel' ? profile.family : 'cpu'
+  const options: Record<string, string | number | boolean> = {}
+  const presetOption = profile?.options.find((option) => option.name === 'preset')
+  if (presetOption?.defaultValue != null) {
+    options.preset = presetOption.defaultValue
+  } else if (presetOption?.choices.length) {
+    options.preset = presetOption.choices[0]?.value ?? 'medium'
+  } else {
+    options.preset = family === 'cpu' ? 'medium' : 'p4'
+  }
+
+  return {
+    codec,
+    family,
+    container: 'mp4',
+    keepAudio: true,
+    rateControl: {
+      mode: family === 'cpu' ? 'crf' : family === 'nvidia' ? 'cq' : 'qp',
+      value: family === 'cpu' ? 18 : 23,
+    },
+    options,
+  }
+}
+
+export function getEncoderProfiles(env: EnvironmentCheckResult | null): EncoderProfileSpec[] {
+  return env?.ffmpeg.encoderProfiles ?? []
+}
+
+export function getDecoderProfiles(env: EnvironmentCheckResult | null): DecoderProfileSpec[] {
+  return env?.ffmpeg.decoderProfiles ?? []
+}
+
+export function getVisibleEncoderProfiles(env: EnvironmentCheckResult | null): EncoderProfileSpec[] {
+  return getEncoderProfiles(env).filter((profile) => profile.available)
+}
+
+export function getVisibleDecoderProfiles(
+  env: EnvironmentCheckResult | null,
+  videoCodec = '',
+): DecoderProfileSpec[] {
+  const codec = normalizeCodec(videoCodec)
+  return getDecoderProfiles(env).filter((profile) => {
+    if (!profile.available) {
+      return false
+    }
+    return profile.codec === 'any' || !codec || profile.codec === codec
+  })
+}
+
+export function buildTaskRequest(item: MediaItem): TaskRequest {
+  return {
+    inputPath: item.inputPath,
+    decodeConfig: item.decodeConfig,
+    workflowConfig: item.workflowConfig,
+    encodeConfig: item.encodeConfig,
+    outputConfig: item.outputConfig,
   }
 }
 
@@ -73,62 +155,56 @@ export interface SummarySection {
   lines: string[]
 }
 
-export function buildSummarySections(snapshot: WorkbenchStateSnapshot): SummarySection[] {
-  const sourceInfo = snapshot.source.info
-  const primaryMode = resolvePrimaryMode(snapshot)
-  const runtimeMode = snapshot.env.checkResult?.runtime?.mode ?? '未检查'
-  const gpuLabel = snapshot.env.checkResult?.gpu?.devices?.[0] ?? '未检测'
-  const taskLabel =
-    snapshot.task.status === 'running'
-      ? `${snapshot.task.percent.toFixed(1)}%`
-      : WORKFLOW_LABELS[primaryMode]
-
-  const enhanceLines = [
-    snapshot.workflow.enableInterpolation ? '补帧 On' : '补帧 Off',
-    snapshot.workflow.enableSuperResolution ? '超分 On' : '超分 Off',
-    snapshot.anime.enabled ? '动漫 On' : '动漫 Off',
-  ]
-
-  if (snapshot.workflow.enableInterpolation && snapshot.workflow.enableSuperResolution) {
-    enhanceLines.push(normalizeProcessOrder(snapshot.workflow.processOrder))
+export function buildSummarySections(
+  env: EnvironmentCheckResult | null,
+  item: MediaItem | null,
+): SummarySection[] {
+  if (!item) {
+    return [
+      {
+        title: '批量工作台',
+        lines: ['还没有导入素材。', '请前往输入页批量导入视频。'],
+      },
+    ]
   }
+
+  const primaryMode = resolvePrimaryMode(item)
+  const decodeLabel =
+    item.decodeConfig.mode === 'hardware'
+      ? `${item.decodeConfig.decoder || 'hardware'} / ${item.decodeConfig.hwaccel}`
+      : 'software'
+  const encoderLabel = `${item.encodeConfig.codec} / ${RATE_CONTROL_LABELS[item.encodeConfig.rateControl.mode]} ${item.encodeConfig.rateControl.value}`
 
   return [
     {
       title: '素材',
       lines: [
-        snapshot.source.inputPath || '未选择',
-        sourceInfo
-          ? `${sourceInfo.width}×${sourceInfo.height} · ${formatNumber(sourceInfo.fps)} FPS`
-          : '未读取',
+        item.displayName,
+        item.info ? `${item.info.width}x${item.info.height} / ${formatNumber(item.info.fps)} FPS` : '未读取素材信息',
       ],
     },
     {
       title: '环境',
       lines: [
-        runtimeMode,
-        snapshot.env.checkResult?.ffmpeg?.available ? 'FFmpeg Ready' : 'FFmpeg Idle',
-        gpuLabel,
+        env?.runtime?.mode ?? '未探测',
+        env?.ffmpeg.available ? 'FFmpeg Ready' : 'FFmpeg Missing',
+        env?.gpu.devices[0] ?? 'CPU only',
       ],
     },
     {
-      title: '增强',
-      lines: enhanceLines,
+      title: '流程',
+      lines: [
+        WORKFLOW_LABELS[primaryMode],
+        PROCESS_ORDER_LABELS[item.workflowConfig.processOrder],
+        decodeLabel,
+      ],
     },
     {
       title: '编码',
       lines: [
-        snapshot.format.container.toUpperCase(),
-        snapshot.encode.codec,
-        `CRF ${snapshot.encode.crf} · ${snapshot.encode.preset}`,
-      ],
-    },
-    {
-      title: '任务',
-      lines: [
-        snapshot.task.status,
-        taskLabel,
-        snapshot.task.stage || '等待启动',
+        item.encodeConfig.container.toUpperCase(),
+        encoderLabel,
+        item.outputConfig.outputDir || '未设置输出目录',
       ],
     },
   ]
@@ -138,6 +214,68 @@ export function formatNumber(value: number): string {
   if (Math.abs(value - Math.round(value)) < 0.01) {
     return `${Math.round(value)}`
   }
-
   return value.toFixed(2).replace(/\.?0+$/, '')
+}
+
+export function cloneWorkflowConfig(config: WorkflowConfig): WorkflowConfig {
+  return JSON.parse(JSON.stringify(config)) as WorkflowConfig
+}
+
+export function cloneEncodeConfig(config: EncodeConfig): EncodeConfig {
+  return JSON.parse(JSON.stringify(config)) as EncodeConfig
+}
+
+export function cloneDecodeConfig(config: DecodeConfig): DecodeConfig {
+  return JSON.parse(JSON.stringify(config)) as DecodeConfig
+}
+
+export function cloneOutputConfig(config: OutputConfig): OutputConfig {
+  return JSON.parse(JSON.stringify(config)) as OutputConfig
+}
+
+function pickPreferredEncoderProfile(env: EnvironmentCheckResult | null): EncoderProfileSpec | null {
+  const profiles = getVisibleEncoderProfiles(env)
+  for (const family of FAMILY_PRIORITY) {
+    const familyProfiles = profiles.filter((profile) => profile.family === family)
+    if (familyProfiles.length === 0) {
+      continue
+    }
+    for (const codec of CODEC_PRIORITY) {
+      const match = familyProfiles.find((profile) => profile.codec === codec)
+      if (match) {
+        return match
+      }
+    }
+    return familyProfiles[0] ?? null
+  }
+  return null
+}
+
+function pickPreferredDecoderProfile(
+  env: EnvironmentCheckResult | null,
+  videoCodec: string,
+): DecoderProfileSpec | null {
+  const codec = normalizeCodec(videoCodec)
+  const profiles = getVisibleDecoderProfiles(env, codec)
+  for (const family of ['nvidia', 'intel'] as const) {
+    const match = profiles.find((profile) => profile.family === family)
+    if (match) {
+      return match
+    }
+  }
+  return profiles.find((profile) => profile.family === 'software') ?? null
+}
+
+function normalizeCodec(codec: string): string {
+  const lowered = codec.toLowerCase()
+  if (lowered.includes('hevc') || lowered.includes('h265')) {
+    return 'hevc'
+  }
+  if (lowered.includes('av1')) {
+    return 'av1'
+  }
+  if (lowered.includes('h264') || lowered.includes('avc')) {
+    return 'h264'
+  }
+  return lowered
 }

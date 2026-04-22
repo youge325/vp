@@ -14,26 +14,30 @@ const activeModuleKey = computed<ModuleKey>(() => {
 })
 
 const moduleStates = computed<Record<ModuleKey, string>>(() => ({
-  home: store.env.checkResult || store.source.inputPath || store.task.status !== 'idle' ? 'ready' : 'idle',
-  input: store.source.inputPath ? 'ready' : 'idle',
-  enhance:
-    store.workflow.enableInterpolation || store.workflow.enableSuperResolution || store.anime.enabled
-      ? 'ready'
-      : 'idle',
-  encode: store.source.inputPath ? 'ready' : 'idle',
-  render: store.task.status === 'completed' ? 'done' : store.task.status === 'running' ? 'ready' : 'idle',
-  preview: store.task.logs.length > 0 || store.task.outputPath || store.output.outputPath ? 'ready' : 'idle',
+  home: store.env.checkResult || store.env.issue ? 'ready' : 'idle',
+  input: store.mediaItems.length > 0 ? 'ready' : 'idle',
+  enhance: store.activeItem ? 'ready' : 'idle',
+  encode: store.activeItem && store.visibleEncoderProfiles.length > 0 ? 'ready' : 'idle',
+  render: store.batch.isRunning ? 'ready' : store.batch.completedIds.length > 0 ? 'done' : 'idle',
+  preview: store.recentCompletedItem || store.resolvedOutputPath ? 'ready' : 'idle',
 }))
 
 const pipelineLabel = computed(() => {
+  const workflow = store.activeItem?.workflowConfig
+  if (!workflow) {
+    return '等待素材'
+  }
+
   const enabled = [
-    store.workflow.enableInterpolation ? '补帧' : null,
-    store.workflow.enableSuperResolution ? '超分' : null,
-    store.anime.enabled ? '动漫' : null,
+    workflow.interpolation.enabled ? '补帧' : null,
+    workflow.superResolution.enabled ? '超分' : null,
+    workflow.anime.enabled ? '动漫' : null,
   ].filter(Boolean)
 
-  return enabled.length > 0 ? enabled.join(' / ') : '纯转码'
+  return enabled.length > 0 ? enabled.join(' / ') : '转码'
 })
+
+const selectionLabel = computed(() => `${store.selectedIds.length}/${store.mediaItems.length} 已选`)
 </script>
 
 <template>
@@ -41,7 +45,7 @@ const pipelineLabel = computed(() => {
     <div class="rail-brand">
       <p class="topbar-label">Workbench</p>
       <h2>VP</h2>
-      <p class="rail-brand-copy">统一模块壳层</p>
+      <p class="rail-brand-copy">批量视频处理工作台</p>
     </div>
 
     <nav class="rail-nav">
@@ -67,7 +71,8 @@ const pipelineLabel = computed(() => {
 
     <section class="rail-footer">
       <span class="rail-footer-chip">{{ pipelineLabel }}</span>
-      <span class="rail-footer-chip" :data-state="store.task.status">任务 {{ store.task.status }}</span>
+      <span class="rail-footer-chip">{{ selectionLabel }}</span>
+      <span class="rail-footer-chip" :data-state="store.globalTaskStatus">任务 {{ store.globalTaskStatus }}</span>
     </section>
   </aside>
 </template>

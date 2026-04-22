@@ -1,12 +1,12 @@
 import type {
+  MediaTaskState,
   TaskCompletedPayload,
   TaskError,
   TaskLogPayload,
   TaskProgressPayload,
-  TaskRuntimeState,
 } from '@/types'
 
-export function createIdleTaskState(): TaskRuntimeState {
+export function createIdleTaskState(): MediaTaskState {
   return {
     status: 'idle',
     percent: 0,
@@ -25,17 +25,14 @@ export function createIdleTaskState(): TaskRuntimeState {
   }
 }
 
-export function appendTaskLog(state: TaskRuntimeState, payload: TaskLogPayload): TaskRuntimeState {
+export function appendTaskLog(state: MediaTaskState, payload: TaskLogPayload): MediaTaskState {
   return {
     ...state,
-    logs: [...state.logs, payload.message].slice(-200),
+    logs: [...state.logs, payload.message].slice(-300),
   }
 }
 
-export function applyTaskProgress(
-  state: TaskRuntimeState,
-  payload: TaskProgressPayload,
-): TaskRuntimeState {
+export function applyTaskProgress(state: MediaTaskState, payload: TaskProgressPayload): MediaTaskState {
   return {
     ...state,
     status: 'running',
@@ -50,10 +47,7 @@ export function applyTaskProgress(
   }
 }
 
-export function applyTaskCompleted(
-  state: TaskRuntimeState,
-  payload: TaskCompletedPayload,
-): TaskRuntimeState {
+export function applyTaskCompleted(state: MediaTaskState, payload: TaskCompletedPayload): MediaTaskState {
   return {
     ...state,
     status: 'completed',
@@ -66,7 +60,7 @@ export function applyTaskCompleted(
   }
 }
 
-export function applyTaskError(state: TaskRuntimeState, error: TaskError): TaskRuntimeState {
+export function applyTaskError(state: MediaTaskState, error: TaskError): MediaTaskState {
   return {
     ...state,
     status: 'error',
@@ -75,7 +69,7 @@ export function applyTaskError(state: TaskRuntimeState, error: TaskError): TaskR
   }
 }
 
-export function applyTaskCancelled(state: TaskRuntimeState): TaskRuntimeState {
+export function applyTaskCancelled(state: MediaTaskState): MediaTaskState {
   return {
     ...state,
     status: 'cancelled',

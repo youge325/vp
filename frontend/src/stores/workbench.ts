@@ -1,351 +1,888 @@
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
+import type { UnlistenFn } from '@tauri-apps/api/event'
 import {
+  cancelTask,
+  checkEnvironment as invokeCheckEnvironment,
+  inspectVideo as invokeInspectVideo,
+  listenTaskEvents,
+  openFileOrDirectory as invokeOpenFileOrDirectory,
+  openOutputLocation as invokeOpenOutputLocation,
+  pickInputs as invokePickInputs,
+  pickOutputDirectory as invokePickOutputDirectory,
+  startTask as invokeStartTask,
+} from '@/lib/tauri'
+import {
+  buildSummarySections,
+  buildTaskRequest,
+  cloneDecodeConfig,
+  cloneEncodeConfig,
+  cloneOutputConfig,
+  cloneWorkflowConfig,
+  createDefaultDecodeConfig,
+  createDefaultEncodeConfig,
+  createDefaultOutputConfig,
+  createDefaultWorkflowConfig,
+  getVisibleDecoderProfiles,
+  getVisibleEncoderProfiles,
+} from '@/lib/task-mapper'
+import {
+  appendTaskLog,
   applyTaskCancelled,
   applyTaskCompleted,
   applyTaskError,
   applyTaskProgress,
-  appendTaskLog,
   createIdleTaskState,
 } from '@/lib/task-events'
-import {
-  buildSummarySections,
-  buildTaskRequest,
-  resolvePrimaryMode,
-} from '@/lib/task-mapper'
-import {
-  cancelTask as cancelRuntimeTask,
-  checkEnvironment as checkRuntimeEnvironment,
-  inspectVideo as inspectRuntimeVideo,
-  listenTaskEvents,
-  openFileOrDirectory as openRuntimePath,
-  openOutputLocation as openRuntimeOutputLocation,
-  pickInput as pickRuntimeInput,
-  pickOutput as pickRuntimeOutput,
-  startTask as startRuntimeTask,
-} from '@/lib/tauri'
 import type {
   AppEnv,
-  AnimeOptimizationSettings,
-  EncodeSettings,
+  BatchState,
+  CapabilityOptionSpec,
+  CapabilityValue,
+  CodecProfileSpec,
+  DecodeConfig,
+  DecoderProfileSpec,
+  EncodeConfig,
+  EncoderProfileSpec,
   EnvironmentCheckResult,
-  FormatConversionSettings,
-  InterpolationSettings,
-  OutputSettings,
-  SourceMedia,
-  SuperResolutionSettings,
+  GpuAdapter,
+  MediaItem,
+  OutputConfig,
+  TaskCompletedPayload,
   TaskError,
-  WorkflowSelection,
-  WorkbenchStateSnapshot,
+  TaskLogPayload,
+  TaskProgressPayload,
+  VideoInfoResult,
+  WorkflowConfig,
 } from '@/types'
 
-function defaultEnv(): AppEnv {
+function createInitialEnv(): AppEnv {
   return {
     lastCheckedAt: null,
     isChecking: false,
+    isBootstrapping: false,
     checkResult: null,
     issue: null,
   }
 }
 
-function defaultSource(): SourceMedia {
+function createInitialBatch(): BatchState {
   return {
-    inputPath: '',
-    inspecting: false,
-    info: null,
+    queue: [],
+    currentId: null,
+    completedIds: [],
+    failedIds: [],
+    isRunning: false,
+    lastCompletedOutput: '',
   }
 }
 
-function defaultWorkflow(): WorkflowSelection {
+function normalizeTaskError(error: unknown, code = 'runtime_error'): TaskError {
+  if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
+    const payload = error as { code?: unknown; message?: unknown; details?: Record<string, unknown> | null }
+    return {
+      code: typeof payload.code === 'string' ? payload.code : code,
+      message: typeof payload.message === 'string' ? payload.message : '执行失败。',
+      details: payload.details ?? null,
+    }
+  }
+
+  if (error instanceof Error) {
+    return {
+      code,
+      message: error.message,
+      details: null,
+    }
+  }
+
   return {
-    primaryMode: 'frame_interpolation',
-    enableInterpolation: true,
-    enableSuperResolution: false,
-    processOrder: 'super_resolution_then_interpolation',
-    fpsMode: 'target',
+    code,
+    message: String(error),
+    details: null,
   }
 }
 
-function defaultInterpolation(): InterpolationSettings {
+function normalizeGpuAdapter(adapter: Record<string, unknown>): GpuAdapter {
   return {
-    targetFps: 60,
-    multi: 2,
-    model: '4.25',
-    scale: 1,
-    fp16: false,
-    tensorBackend: 'pytorch',
+    name: String(adapter.name || ''),
+    vendor: (adapter.vendor as GpuAdapter['vendor']) ?? 'other',
+    deviceType: (adapter.deviceType ?? adapter.device_type ?? 'other') as GpuAdapter['deviceType'],
+    adapterCompatibility: String(adapter.adapterCompatibility ?? adapter.adapter_compatibility ?? ''),
+    driverVersion: String(adapter.driverVersion ?? adapter.driver_version ?? ''),
   }
 }
 
-function defaultSuperResolution(): SuperResolutionSettings {
+function normalizeCheckResult(raw: EnvironmentCheckResult): EnvironmentCheckResult {
+  const adapters = Array.isArray(raw.gpu?.adapters)
+    ? raw.gpu.adapters.map((adapter) => normalizeGpuAdapter(adapter as unknown as Record<string, unknown>))
+    : []
+
   return {
-    enabled: false,
-    scaleFactor: 2,
-    algorithm: 'placeholder',
+    ...raw,
+    ffmpeg: {
+      ...raw.ffmpeg,
+      hwaccels: raw.ffmpeg?.hwaccels ?? [],
+      encoderProfiles: raw.ffmpeg?.encoderProfiles ?? [],
+      decoderProfiles: raw.ffmpeg?.decoderProfiles ?? [],
+    },
+    gpu: {
+      ...raw.gpu,
+      devices: raw.gpu?.devices ?? [],
+      adapters,
+    },
   }
 }
 
-function defaultAnime(): AnimeOptimizationSettings {
-  return {
-    enabled: false,
-    profile: 'clean-lines',
-    denoise: 10,
-    edgeBoost: 15,
-  }
+function createMediaId(path: string): string {
+  const suffix = Math.random().toString(36).slice(2, 8)
+  return `${Date.now()}-${path.toLowerCase()}-${suffix}`
 }
 
-function defaultFormat(): FormatConversionSettings {
-  return {
-    remuxOnly: false,
-    keepAudio: true,
-    container: 'mp4',
-  }
+function basename(path: string): string {
+  return path.split(/[/\\]/).pop() ?? path
 }
 
-function defaultEncode(): EncodeSettings {
-  return {
-    codec: 'libx264',
-    crf: 18,
-    preset: 'medium',
+function inferHwaccelForProfile(profile: DecoderProfileSpec | null): string {
+  if (!profile) {
+    return ''
   }
+  if (profile.family === 'nvidia') {
+    return 'cuda'
+  }
+  if (profile.family === 'intel') {
+    return 'qsv'
+  }
+  return ''
 }
 
-function defaultOutput(): OutputSettings {
-  return {
-    outputPath: '',
-    outputDir: '',
-    tempDir: '',
-    openOnComplete: true,
+function defaultRateControlValue(family: EncodeConfig['family']): EncodeConfig['rateControl'] {
+  if (family === 'nvidia') {
+    return { mode: 'cq', value: 23 }
   }
+  if (family === 'intel') {
+    return { mode: 'qp', value: 23 }
+  }
+  return { mode: 'crf', value: 18 }
+}
+
+function seedProfileOptions(
+  profile: CodecProfileSpec | null,
+  currentOptions: Record<string, CapabilityValue> = {},
+): Record<string, CapabilityValue> {
+  if (!profile) {
+    return {}
+  }
+
+  const next: Record<string, CapabilityValue> = {}
+  for (const option of profile.options) {
+    if (option.name in currentOptions) {
+      next[option.name] = currentOptions[option.name] as CapabilityValue
+      continue
+    }
+    if (option.defaultValue != null) {
+      next[option.name] = option.defaultValue
+      continue
+    }
+    if (option.choices.length > 0) {
+      next[option.name] = option.choices[0]?.value ?? ''
+      continue
+    }
+    next[option.name] = option.type === 'boolean' ? false : ''
+  }
+  return next
 }
 
 export const useWorkbenchStore = defineStore('workbench', () => {
-  const env = ref(defaultEnv())
-  const source = ref(defaultSource())
-  const workflow = ref(defaultWorkflow())
-  const interpolation = ref(defaultInterpolation())
-  const superResolution = ref(defaultSuperResolution())
-  const anime = ref(defaultAnime())
-  const format = ref(defaultFormat())
-  const encode = ref(defaultEncode())
-  const output = ref(defaultOutput())
-  const task = ref(createIdleTaskState())
+  const env = reactive<AppEnv>(createInitialEnv())
+  const mediaItems = ref<MediaItem[]>([])
+  const activeItemId = ref<string | null>(null)
+  const batch = reactive<BatchState>(createInitialBatch())
 
-  const listenersAttached = ref(false)
-  let teardown: (() => void) | null = null
+  let detachListenersHandle: UnlistenFn | null = null
 
-  const snapshot = computed<WorkbenchStateSnapshot>(() => ({
-    env: env.value,
-    source: source.value,
-    workflow: workflow.value,
-    interpolation: interpolation.value,
-    superResolution: superResolution.value,
-    anime: anime.value,
-    format: format.value,
-    encode: encode.value,
-    output: output.value,
-    task: task.value,
-  }))
-
-  const summarySections = computed(() => buildSummarySections(snapshot.value))
-
-  const canStartTask = computed(() => {
-    if (task.value.status === 'running') {
-      return false
+  const selectedIds = computed(() => mediaItems.value.filter((item) => item.selected).map((item) => item.id))
+  const selectedItems = computed(() => mediaItems.value.filter((item) => item.selected))
+  const activeItem = computed(() => mediaItems.value.find((item) => item.id === activeItemId.value) ?? null)
+  const currentTaskItem = computed(() => mediaItems.value.find((item) => item.id === batch.currentId) ?? null)
+  const recentCompletedItem = computed(() => {
+    for (let index = batch.completedIds.length - 1; index >= 0; index -= 1) {
+      const item = mediaItems.value.find((entry) => entry.id === batch.completedIds[index])
+      if (item) {
+        return item
+      }
     }
 
-    return Boolean(source.value.inputPath.trim())
+    const completed = mediaItems.value
+      .filter((item) => item.lastOutputPath || item.taskState.outputPath)
+      .sort((left, right) => {
+        const leftTime = left.taskState.finishedAt ?? ''
+        const rightTime = right.taskState.finishedAt ?? ''
+        return leftTime < rightTime ? 1 : -1
+      })
+    return completed[0] ?? null
+  })
+  const consoleTaskItem = computed(() => currentTaskItem.value ?? activeItem.value ?? recentCompletedItem.value)
+  const visibleEncoderProfiles = computed(() => getVisibleEncoderProfiles(env.checkResult))
+  const visibleDecoderProfiles = computed(() =>
+    getVisibleDecoderProfiles(env.checkResult, activeItem.value?.info?.video_codec ?? ''),
+  )
+  const currentEncoderProfile = computed<EncoderProfileSpec | null>(() => {
+    if (!activeItem.value) {
+      return visibleEncoderProfiles.value[0] ?? null
+    }
+    return (
+      visibleEncoderProfiles.value.find((profile) => profile.name === activeItem.value?.encodeConfig.codec) ??
+      visibleEncoderProfiles.value[0] ??
+      null
+    )
+  })
+  const currentDecoderProfile = computed<DecoderProfileSpec | null>(() => {
+    if (!activeItem.value) {
+      return visibleDecoderProfiles.value[0] ?? null
+    }
+
+    const selectedName =
+      activeItem.value.decodeConfig.mode === 'software' ? 'software' : activeItem.value.decodeConfig.decoder
+    return (
+      visibleDecoderProfiles.value.find((profile) => profile.name === selectedName) ??
+      visibleDecoderProfiles.value[0] ??
+      null
+    )
+  })
+  const summarySections = computed(() => buildSummarySections(env.checkResult, activeItem.value))
+  const allSelected = computed(
+    () => mediaItems.value.length > 0 && mediaItems.value.every((item) => item.selected),
+  )
+  const canStartBatch = computed(
+    () => !batch.isRunning && selectedItems.value.length > 0 && selectedItems.value.every((item) => Boolean(item.inputPath)),
+  )
+  const batchTotal = computed(() => selectedItems.value.length)
+  const resolvedOutputPath = computed(
+    () =>
+      currentTaskItem.value?.lastOutputPath ||
+      recentCompletedItem.value?.lastOutputPath ||
+      activeItem.value?.lastOutputPath ||
+      '',
+  )
+  const globalTaskStatus = computed(() => {
+    if (batch.isRunning) {
+      return currentTaskItem.value?.taskState.status ?? 'running'
+    }
+    if (mediaItems.value.some((item) => item.taskState.status === 'error')) {
+      return 'error'
+    }
+    if (mediaItems.value.some((item) => item.taskState.status === 'completed')) {
+      return 'completed'
+    }
+    if (mediaItems.value.some((item) => item.taskState.status === 'cancelled')) {
+      return 'cancelled'
+    }
+    return 'idle'
   })
 
-  watch(
-    [
-      () => workflow.value.enableInterpolation,
-      () => workflow.value.enableSuperResolution,
-      () => anime.value.enabled,
-      () => superResolution.value.scaleFactor,
-    ],
-    () => {
-      workflow.value.primaryMode = resolvePrimaryMode(snapshot.value)
-      superResolution.value.enabled = workflow.value.enableSuperResolution
-    },
-    { immediate: true },
-  )
-
-  function setIssue(error: TaskError) {
-    env.value.issue = error
-    task.value = applyTaskError(task.value, error)
+  function getEditableTargetIds(): Set<string> {
+    const targetIds = new Set<string>(selectedIds.value)
+    if (activeItemId.value) {
+      targetIds.add(activeItemId.value)
+    }
+    return targetIds
   }
 
-  async function attachTaskListeners() {
-    if (listenersAttached.value) {
+  function forEachEditableItem(callback: (item: MediaItem) => void): void {
+    const targetIds = getEditableTargetIds()
+    for (const item of mediaItems.value) {
+      if (targetIds.has(item.id)) {
+        callback(item)
+      }
+    }
+  }
+
+  function findItem(id: string | null): MediaItem | null {
+    if (!id) {
+      return null
+    }
+    return mediaItems.value.find((item) => item.id === id) ?? null
+  }
+
+  function normalizeItemProfiles(item: MediaItem, preferDefaults = false): void {
+    const codec = item.info?.video_codec ?? ''
+    const decoderProfiles = getVisibleDecoderProfiles(env.checkResult, codec)
+    const currentDecoderName = item.decodeConfig.mode === 'software' ? 'software' : item.decodeConfig.decoder
+    const matchedDecoder = decoderProfiles.find((profile) => profile.name === currentDecoderName) ?? null
+    if (preferDefaults || !matchedDecoder) {
+      item.decodeConfig = createDefaultDecodeConfig(env.checkResult, codec)
+    } else {
+      item.decodeConfig = {
+        ...item.decodeConfig,
+        hwaccel: item.decodeConfig.mode === 'hardware' ? item.decodeConfig.hwaccel : '',
+        hwaccelDevice: item.decodeConfig.mode === 'hardware' ? item.decodeConfig.hwaccelDevice : '',
+        decoder: item.decodeConfig.mode === 'software' ? 'software' : item.decodeConfig.decoder,
+        options: seedProfileOptions(matchedDecoder, item.decodeConfig.options),
+      }
+    }
+
+    const encoderProfiles = getVisibleEncoderProfiles(env.checkResult)
+    const matchedEncoder = encoderProfiles.find((profile) => profile.name === item.encodeConfig.codec) ?? null
+    if (preferDefaults || !matchedEncoder) {
+      const defaults = createDefaultEncodeConfig(env.checkResult)
+      item.encodeConfig = {
+        ...defaults,
+        container: item.encodeConfig.container || defaults.container,
+        keepAudio: item.encodeConfig.keepAudio,
+      }
+    } else {
+      item.encodeConfig = {
+        ...item.encodeConfig,
+        family:
+          matchedEncoder.family === 'nvidia' || matchedEncoder.family === 'intel'
+            ? matchedEncoder.family
+            : 'cpu',
+        options: seedProfileOptions(matchedEncoder, item.encodeConfig.options),
+      }
+    }
+  }
+
+  function setActiveItem(id: string): void {
+    if (findItem(id)) {
+      activeItemId.value = id
+    }
+  }
+
+  function selectAllMedia(selected: boolean): void {
+    for (const item of mediaItems.value) {
+      item.selected = selected
+    }
+  }
+
+  function setItemSelected(id: string, selected: boolean): void {
+    const item = findItem(id)
+    if (!item) {
+      return
+    }
+    item.selected = selected
+  }
+
+  function removeMediaItem(id: string): void {
+    if (batch.isRunning) {
       return
     }
 
-    teardown = await listenTaskEvents({
+    const index = mediaItems.value.findIndex((item) => item.id === id)
+    if (index < 0) {
+      return
+    }
+
+    mediaItems.value.splice(index, 1)
+    if (activeItemId.value === id) {
+      activeItemId.value = mediaItems.value[0]?.id ?? null
+    }
+  }
+
+  function patchWorkflow(mutator: (config: WorkflowConfig) => void): void {
+    forEachEditableItem((item) => {
+      const next = cloneWorkflowConfig(item.workflowConfig)
+      mutator(next)
+      item.workflowConfig = next
+    })
+  }
+
+  function patchDecode(mutator: (config: DecodeConfig) => void): void {
+    forEachEditableItem((item) => {
+      const next = cloneDecodeConfig(item.decodeConfig)
+      mutator(next)
+      item.decodeConfig = next
+    })
+  }
+
+  function patchEncode(mutator: (config: EncodeConfig) => void): void {
+    forEachEditableItem((item) => {
+      const next = cloneEncodeConfig(item.encodeConfig)
+      mutator(next)
+      item.encodeConfig = next
+    })
+  }
+
+  function patchOutput(mutator: (config: OutputConfig) => void): void {
+    forEachEditableItem((item) => {
+      const next = cloneOutputConfig(item.outputConfig)
+      mutator(next)
+      item.outputConfig = next
+    })
+  }
+
+  function setDecodeProfile(profileName: string): void {
+    const profile = visibleDecoderProfiles.value.find((entry) => entry.name === profileName) ?? null
+    patchDecode((config) => {
+      if (!profile || profile.family === 'software') {
+        config.mode = 'software'
+        config.hwaccel = ''
+        config.hwaccelDevice = ''
+        config.decoder = 'software'
+        config.options = {}
+        return
+      }
+
+      config.mode = 'hardware'
+      config.hwaccel = inferHwaccelForProfile(profile)
+      config.decoder = profile.name
+      config.options = seedProfileOptions(profile, config.options)
+    })
+  }
+
+  function setDecodeHwaccelDevice(value: string): void {
+    patchDecode((config) => {
+      config.hwaccelDevice = value
+    })
+  }
+
+  function setDecodeOption(optionName: string, value: CapabilityValue): void {
+    patchDecode((config) => {
+      config.options = {
+        ...config.options,
+        [optionName]: value,
+      }
+    })
+  }
+
+  function setEncodeProfile(profileName: string): void {
+    const profile = visibleEncoderProfiles.value.find((entry) => entry.name === profileName) ?? null
+    if (!profile) {
+      return
+    }
+
+    patchEncode((config) => {
+      config.codec = profile.name
+      config.family =
+        profile.family === 'nvidia' || profile.family === 'intel' ? profile.family : 'cpu'
+      config.rateControl = defaultRateControlValue(
+        profile.family === 'nvidia' || profile.family === 'intel' ? profile.family : 'cpu',
+      )
+      config.options = seedProfileOptions(profile, config.options)
+    })
+  }
+
+  function setEncodeRateControlMode(mode: EncodeConfig['rateControl']['mode']): void {
+    patchEncode((config) => {
+      config.rateControl = {
+        mode,
+        value: config.rateControl.value,
+      }
+    })
+  }
+
+  function setEncodeRateControlValue(value: number): void {
+    patchEncode((config) => {
+      config.rateControl = {
+        ...config.rateControl,
+        value,
+      }
+    })
+  }
+
+  function setEncodeOption(optionName: string, value: CapabilityValue): void {
+    patchEncode((config) => {
+      config.options = {
+        ...config.options,
+        [optionName]: value,
+      }
+    })
+  }
+
+  function createMediaItem(path: string): MediaItem {
+    const sourceItem = activeItem.value
+    const workflowConfig = sourceItem
+      ? cloneWorkflowConfig(sourceItem.workflowConfig)
+      : createDefaultWorkflowConfig()
+    const outputConfig = sourceItem
+      ? cloneOutputConfig(sourceItem.outputConfig)
+      : createDefaultOutputConfig()
+    const encodeConfig = sourceItem
+      ? cloneEncodeConfig(sourceItem.encodeConfig)
+      : createDefaultEncodeConfig(env.checkResult)
+    const decodeConfig = sourceItem
+      ? cloneDecodeConfig(sourceItem.decodeConfig)
+      : createDefaultDecodeConfig(env.checkResult)
+
+    const item: MediaItem = {
+      id: createMediaId(path),
+      inputPath: path,
+      displayName: basename(path),
+      selected: true,
+      inspecting: false,
+      info: null,
+      issue: null,
+      decodeConfig,
+      workflowConfig,
+      encodeConfig,
+      outputConfig,
+      taskState: createIdleTaskState(),
+      lastOutputPath: '',
+    }
+
+    normalizeItemProfiles(item)
+    return item
+  }
+
+  async function inspectMediaItem(id: string): Promise<void> {
+    const item = findItem(id)
+    if (!item || item.inspecting) {
+      return
+    }
+
+    item.inspecting = true
+    item.issue = null
+    try {
+      const info = (await invokeInspectVideo(item.inputPath)) as VideoInfoResult
+      item.info = info
+      normalizeItemProfiles(item)
+    } catch (error) {
+      item.issue = normalizeTaskError(error, 'inspect_failed')
+    } finally {
+      item.inspecting = false
+    }
+  }
+
+  async function inspectItems(ids: string[]): Promise<void> {
+    await Promise.allSettled(ids.map((id) => inspectMediaItem(id)))
+  }
+
+  async function addMediaPaths(paths: string[]): Promise<void> {
+    const normalizedPaths = paths.filter(Boolean)
+    const existing = new Set(mediaItems.value.map((item) => item.inputPath.toLowerCase()))
+    const freshItems = normalizedPaths
+      .filter((path) => !existing.has(path.toLowerCase()))
+      .map((path) => createMediaItem(path))
+
+    if (freshItems.length === 0) {
+      return
+    }
+
+    mediaItems.value.push(...freshItems)
+    activeItemId.value = freshItems[0]?.id ?? activeItemId.value
+    await inspectItems(freshItems.map((item) => item.id))
+  }
+
+  async function pickInputs(): Promise<void> {
+    try {
+      const paths = await invokePickInputs()
+      await addMediaPaths(paths)
+    } catch (error) {
+      env.issue = normalizeTaskError(error, 'pick_inputs_failed')
+    }
+  }
+
+  async function recheckEnvironment(): Promise<void> {
+    env.isChecking = true
+    env.issue = null
+    try {
+      const result = normalizeCheckResult((await invokeCheckEnvironment()) as EnvironmentCheckResult)
+      env.checkResult = result
+      env.lastCheckedAt = new Date().toISOString()
+      for (const item of mediaItems.value) {
+        normalizeItemProfiles(item)
+      }
+    } catch (error) {
+      env.issue = normalizeTaskError(error, 'check_failed')
+    } finally {
+      env.isChecking = false
+    }
+  }
+
+  async function bootstrap(): Promise<void> {
+    if (env.isBootstrapping) {
+      return
+    }
+
+    env.isBootstrapping = true
+    try {
+      await attachTaskListeners()
+      await recheckEnvironment()
+    } finally {
+      env.isBootstrapping = false
+    }
+  }
+
+  async function attachTaskListeners(): Promise<void> {
+    if (detachListenersHandle) {
+      return
+    }
+
+    detachListenersHandle = await listenTaskEvents({
       onProgress(payload) {
-        task.value = applyTaskProgress(task.value, payload)
+        applyEventToCurrentItem((item) => {
+          item.taskState = applyTaskProgress(item.taskState, payload as TaskProgressPayload)
+        })
       },
       onLog(payload) {
-        task.value = appendTaskLog(task.value, payload)
+        applyEventToCurrentItem((item) => {
+          item.taskState = appendTaskLog(item.taskState, payload as TaskLogPayload)
+        })
       },
       onCompleted(payload) {
-        task.value = applyTaskCompleted(task.value, payload)
-        if (payload.outputPath) {
-          output.value.outputPath = output.value.outputPath || payload.outputPath
-        }
+        void handleCurrentTaskCompleted(payload as TaskCompletedPayload)
       },
       onError(error) {
-        task.value = applyTaskError(task.value, error)
+        void handleCurrentTaskErrored(error)
       },
       onCancelled() {
-        task.value = applyTaskCancelled(task.value)
+        void handleCurrentTaskCancelled()
       },
     })
-    listenersAttached.value = true
   }
 
-  function detachTaskListeners() {
-    teardown?.()
-    teardown = null
-    listenersAttached.value = false
+  function detachTaskListeners(): void {
+    detachListenersHandle?.()
+    detachListenersHandle = null
   }
 
-  async function pickInput() {
-    const selected = await pickRuntimeInput()
-    if (!selected) {
+  function applyEventToCurrentItem(mutator: (item: MediaItem) => void): void {
+    const item = currentTaskItem.value ?? activeItem.value
+    if (!item) {
+      return
+    }
+    mutator(item)
+  }
+
+  function resetBatchRunState(ids: string[]): void {
+    batch.queue = [...ids]
+    batch.currentId = null
+    batch.completedIds = []
+    batch.failedIds = []
+    batch.isRunning = ids.length > 0
+    batch.lastCompletedOutput = ''
+
+    const queuedIds = new Set(ids)
+    for (const item of mediaItems.value) {
+      if (!queuedIds.has(item.id)) {
+        continue
+      }
+      item.taskState = createIdleTaskState()
+      item.issue = null
+    }
+  }
+
+  async function runNextQueuedItem(): Promise<void> {
+    const nextId = batch.queue.shift() ?? null
+    if (!nextId) {
+      batch.currentId = null
+      batch.isRunning = false
       return
     }
 
-    source.value.inputPath = selected
-    source.value.info = null
-  }
-
-  async function pickOutput() {
-    const filename = source.value.inputPath
-      ? `${source.value.inputPath.split(/[/\\\\]/).pop()?.replace(/\.[^.]+$/, '') ?? 'output'}_processed.mp4`
-      : 'output_processed.mp4'
-    const selected = await pickRuntimeOutput(filename)
-    if (selected) {
-      output.value.outputPath = selected
-    }
-  }
-
-  async function checkEnvironment() {
-    env.value.isChecking = true
-    env.value.issue = null
-
-    try {
-      const result = await checkRuntimeEnvironment()
-      env.value.checkResult = result as EnvironmentCheckResult
-      env.value.lastCheckedAt = new Date().toISOString()
-    } catch (error) {
-      setIssue({
-        code: 'missing_runtime',
-        message: error instanceof Error ? error.message : '环境检查失败',
-        details: null,
-      })
-    } finally {
-      env.value.isChecking = false
-    }
-  }
-
-  async function inspectVideo() {
-    if (!source.value.inputPath.trim()) {
-      setIssue({
-        code: 'invalid_input',
-        message: '请先选择输入视频',
-        details: null,
-      })
+    const item = findItem(nextId)
+    if (!item) {
+      batch.currentId = null
+      await runNextQueuedItem()
       return
     }
 
-    source.value.inspecting = true
-    try {
-      source.value.info = await inspectRuntimeVideo(source.value.inputPath.trim())
-    } catch (error) {
-      setIssue({
-        code: 'invalid_input',
-        message: error instanceof Error ? error.message : '素材信息读取失败',
-        details: null,
-      })
-    } finally {
-      source.value.inspecting = false
-    }
-  }
-
-  async function startTask() {
-    task.value = {
+    batch.currentId = nextId
+    activeItemId.value = nextId
+    item.taskState = {
       ...createIdleTaskState(),
       status: 'running',
       startedAt: new Date().toISOString(),
     }
-    env.value.issue = null
-    workflow.value.primaryMode = resolvePrimaryMode(snapshot.value)
-    await attachTaskListeners()
 
     try {
-      await startRuntimeTask(buildTaskRequest(snapshot.value))
+      await invokeStartTask(buildTaskRequest(item))
     } catch (error) {
-      task.value = applyTaskError(task.value, {
-        code: 'process_failed',
-        message: error instanceof Error ? error.message : '任务启动失败',
-        details: null,
-      })
+      await handleCurrentTaskErrored(normalizeTaskError(error, 'start_failed'))
     }
   }
 
-  async function cancelCurrentTask() {
-    try {
-      await cancelRuntimeTask()
-    } catch (error) {
-      task.value = applyTaskError(task.value, {
-        code: 'cancelled',
-        message: error instanceof Error ? error.message : '取消任务失败',
-        details: null,
-      })
-    }
-  }
-
-  async function openOutputLocation() {
-    const path = task.value.outputPath || output.value.outputPath
-    if (!path) {
+  async function finalizeCurrentTask(state: 'completed' | 'error' | 'cancelled'): Promise<void> {
+    const item = currentTaskItem.value
+    if (!item) {
+      batch.currentId = null
+      if (batch.queue.length > 0) {
+        await runNextQueuedItem()
+      } else {
+        batch.isRunning = false
+      }
       return
     }
 
-    await openRuntimeOutputLocation(path)
-  }
+    if (state === 'completed') {
+      if (!batch.completedIds.includes(item.id)) {
+        batch.completedIds.push(item.id)
+      }
+      batch.lastCompletedOutput = item.lastOutputPath || item.taskState.outputPath
+    } else if (!batch.failedIds.includes(item.id)) {
+      batch.failedIds.push(item.id)
+    }
 
-  async function openFileOrDirectory(path: string) {
-    if (!path) {
+    batch.currentId = null
+    if (batch.queue.length > 0) {
+      await runNextQueuedItem()
       return
     }
 
-    await openRuntimePath(path)
+    batch.isRunning = false
+    if (state === 'completed' && item.outputConfig.openOnComplete && item.lastOutputPath) {
+      try {
+        await invokeOpenOutputLocation(item.lastOutputPath)
+      } catch {
+        // Ignore shell-open failures after processing finished.
+      }
+    }
+  }
+
+  async function handleCurrentTaskCompleted(payload: TaskCompletedPayload): Promise<void> {
+    const item = currentTaskItem.value
+    if (item) {
+      item.taskState = applyTaskCompleted(item.taskState, payload)
+      item.lastOutputPath = payload.outputPath ?? item.lastOutputPath
+    }
+    await finalizeCurrentTask('completed')
+  }
+
+  async function handleCurrentTaskErrored(error: TaskError): Promise<void> {
+    const item = currentTaskItem.value
+    if (item) {
+      item.taskState = applyTaskError(item.taskState, error)
+      item.issue = error
+    }
+    await finalizeCurrentTask('error')
+  }
+
+  async function handleCurrentTaskCancelled(): Promise<void> {
+    const item = currentTaskItem.value
+    if (item) {
+      item.taskState = applyTaskCancelled(item.taskState)
+    }
+    await finalizeCurrentTask('cancelled')
+  }
+
+  async function startBatch(): Promise<void> {
+    if (!canStartBatch.value) {
+      return
+    }
+    resetBatchRunState(selectedIds.value)
+    await runNextQueuedItem()
+  }
+
+  async function cancelCurrentTask(): Promise<void> {
+    if (!batch.isRunning) {
+      return
+    }
+    try {
+      await cancelTask()
+    } catch (error) {
+      env.issue = normalizeTaskError(error, 'cancel_failed')
+    }
+  }
+
+  async function pickOutputDirectory(): Promise<void> {
+    try {
+      const outputDir = await invokePickOutputDirectory()
+      if (!outputDir) {
+        return
+      }
+      patchOutput((config) => {
+        config.outputDir = outputDir
+      })
+    } catch (error) {
+      env.issue = normalizeTaskError(error, 'pick_output_dir_failed')
+    }
+  }
+
+  async function openOutputLocation(path?: string): Promise<void> {
+    const target =
+      path ||
+      resolvedOutputPath.value ||
+      activeItem.value?.outputConfig.outputDir ||
+      recentCompletedItem.value?.outputConfig.outputDir ||
+      ''
+    if (!target) {
+      return
+    }
+    try {
+      await invokeOpenOutputLocation(target)
+    } catch (error) {
+      env.issue = normalizeTaskError(error, 'open_output_failed')
+    }
+  }
+
+  async function openFileOrDirectory(path: string): Promise<void> {
+    if (!path) {
+      return
+    }
+    try {
+      await invokeOpenFileOrDirectory(path)
+    } catch (error) {
+      env.issue = normalizeTaskError(error, 'open_path_failed')
+    }
+  }
+
+  function getOptionValue(
+    option: CapabilityOptionSpec,
+    values: Record<string, CapabilityValue>,
+  ): CapabilityValue {
+    if (option.name in values) {
+      return values[option.name] as CapabilityValue
+    }
+    if (option.defaultValue != null) {
+      return option.defaultValue
+    }
+    if (option.type === 'boolean') {
+      return false
+    }
+    if (option.choices.length > 0) {
+      return option.choices[0]?.value ?? ''
+    }
+    return ''
   }
 
   return {
     env,
-    source,
-    workflow,
-    interpolation,
-    superResolution,
-    anime,
-    format,
-    encode,
-    output,
-    task,
+    mediaItems,
+    activeItemId,
+    batch,
+    selectedIds,
+    selectedItems,
+    activeItem,
+    currentTaskItem,
+    recentCompletedItem,
+    consoleTaskItem,
+    visibleEncoderProfiles,
+    visibleDecoderProfiles,
+    currentEncoderProfile,
+    currentDecoderProfile,
     summarySections,
-    canStartTask,
-    snapshot,
+    allSelected,
+    canStartBatch,
+    batchTotal,
+    resolvedOutputPath,
+    globalTaskStatus,
+    bootstrap,
+    recheckEnvironment,
     attachTaskListeners,
     detachTaskListeners,
-    pickInput,
-    pickOutput,
-    checkEnvironment,
-    inspectVideo,
-    startTask,
+    addMediaPaths,
+    pickInputs,
+    inspectItems,
+    inspectMediaItem,
+    setActiveItem,
+    selectAllMedia,
+    setItemSelected,
+    removeMediaItem,
+    patchWorkflow,
+    patchDecode,
+    patchEncode,
+    patchOutput,
+    setDecodeProfile,
+    setDecodeHwaccelDevice,
+    setDecodeOption,
+    setEncodeProfile,
+    setEncodeRateControlMode,
+    setEncodeRateControlValue,
+    setEncodeOption,
+    startBatch,
     cancelCurrentTask,
+    pickOutputDirectory,
     openOutputLocation,
     openFileOrDirectory,
+    getOptionValue,
   }
 })
