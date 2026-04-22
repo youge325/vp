@@ -72,10 +72,9 @@ function createInitialBatch(): BatchState {
   return {
     queue: [],
     currentId: null,
-    completedIds: [],
-    failedIds: [],
+    completedCount: 0,
+    failedCount: 0,
     isRunning: false,
-    lastCompletedOutput: '',
   }
 }
 
@@ -199,6 +198,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const mediaItems = ref<MediaItem[]>([])
   const activeItemId = ref<string | null>(null)
   const batch = reactive<BatchState>(createInitialBatch())
+  const batchRuntimeIds = ref<string[]>([])
   const operationIssue = ref<OperationIssue | null>(null)
 
   let detachListenersHandle: UnlistenFn | null = null
@@ -207,24 +207,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const selectedItems = computed(() => mediaItems.value.filter((item) => item.selected))
   const activeItem = computed(() => mediaItems.value.find((item) => item.id === activeItemId.value) ?? null)
   const currentTaskItem = computed(() => mediaItems.value.find((item) => item.id === batch.currentId) ?? null)
-  const recentCompletedItem = computed(() => {
-    for (let index = batch.completedIds.length - 1; index >= 0; index -= 1) {
-      const item = mediaItems.value.find((entry) => entry.id === batch.completedIds[index])
-      if (item) {
-        return item
-      }
-    }
-
-    const completed = mediaItems.value
-      .filter((item) => item.lastOutputPath || item.taskState.outputPath)
-      .sort((left, right) => {
-        const leftTime = left.taskState.finishedAt ?? ''
-        const rightTime = right.taskState.finishedAt ?? ''
-        return leftTime < rightTime ? 1 : -1
-      })
-    return completed[0] ?? null
+  const batchItems = computed(() => {
+    const sourceIds = batchRuntimeIds.value.length > 0 ? batchRuntimeIds.value : selectedIds.value
+    const ids = new Set(sourceIds)
+    return mediaItems.value.filter((item) => ids.has(item.id))
   })
-  const consoleTaskItem = computed(() => currentTaskItem.value ?? activeItem.value ?? recentCompletedItem.value)
+  const consoleTaskItem = computed(() => currentTaskItem.value ?? activeItem.value)
   const visibleEncoderProfiles = computed(() => getVisibleEncoderProfiles(env.checkResult))
   const visibleDecoderProfiles = computed(() =>
     getVisibleDecoderProfiles(env.checkResult, activeItem.value?.info?.video_codec ?? ''),
@@ -259,26 +247,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const canStartBatch = computed(
     () => !batch.isRunning && selectedItems.value.length > 0 && selectedItems.value.every((item) => Boolean(item.inputPath)),
   )
-  const batchTotal = computed(() => selectedItems.value.length)
-  const resolvedOutputPath = computed(
-    () =>
-      currentTaskItem.value?.lastOutputPath ||
-      recentCompletedItem.value?.lastOutputPath ||
-      activeItem.value?.lastOutputPath ||
-      '',
-  )
+  const batchTotal = computed(() => batchRuntimeIds.value.length || selectedItems.value.length)
   const globalTaskStatus = computed(() => {
     if (batch.isRunning) {
       return currentTaskItem.value?.taskState.status ?? 'running'
-    }
-    if (mediaItems.value.some((item) => item.taskState.status === 'error')) {
-      return 'error'
-    }
-    if (mediaItems.value.some((item) => item.taskState.status === 'completed')) {
-      return 'completed'
-    }
-    if (mediaItems.value.some((item) => item.taskState.status === 'cancelled')) {
-      return 'cancelled'
     }
     return 'idle'
   })
@@ -661,21 +633,40 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     mutator(item)
   }
 
+  function resetItemRunState(item: MediaItem): void {
+    item.taskState = createIdleTaskState()
+    item.issue = null
+    item.lastOutputPath = ''
+  }
+
+  function clearBatchRuntimeArtifacts(): void {
+    const runtimeIds = new Set(batchRuntimeIds.value)
+    for (const item of mediaItems.value) {
+      if (!runtimeIds.has(item.id)) {
+        continue
+      }
+      resetItemRunState(item)
+    }
+  }
+
+  function resetBatchCounters(): void {
+    batch.completedCount = 0
+    batch.failedCount = 0
+  }
+
   function resetBatchRunState(ids: string[]): void {
+    batchRuntimeIds.value = [...ids]
     batch.queue = [...ids]
     batch.currentId = null
-    batch.completedIds = []
-    batch.failedIds = []
+    resetBatchCounters()
     batch.isRunning = ids.length > 0
-    batch.lastCompletedOutput = ''
 
     const queuedIds = new Set(ids)
     for (const item of mediaItems.value) {
       if (!queuedIds.has(item.id)) {
         continue
       }
-      item.taskState = createIdleTaskState()
-      item.issue = null
+      resetItemRunState(item)
     }
   }
 
@@ -717,17 +708,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         await runNextQueuedItem()
       } else {
         batch.isRunning = false
+        clearBatchRuntimeArtifacts()
+        resetBatchCounters()
+        batchRuntimeIds.value = []
       }
       return
     }
 
     if (state === 'completed') {
-      if (!batch.completedIds.includes(item.id)) {
-        batch.completedIds.push(item.id)
+      if (item.outputConfig.openOnComplete && item.lastOutputPath) {
+        try {
+          await invokeOpenOutputLocation(item.lastOutputPath)
+        } catch {
+          // Ignore shell-open failures after processing finished.
+        }
       }
-      batch.lastCompletedOutput = item.lastOutputPath || item.taskState.outputPath
-    } else if (!batch.failedIds.includes(item.id)) {
-      batch.failedIds.push(item.id)
+      batch.completedCount += 1
+    } else {
+      batch.failedCount += 1
     }
 
     batch.currentId = null
@@ -737,13 +735,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
 
     batch.isRunning = false
-    if (state === 'completed' && item.outputConfig.openOnComplete && item.lastOutputPath) {
-      try {
-        await invokeOpenOutputLocation(item.lastOutputPath)
-      } catch {
-        // Ignore shell-open failures after processing finished.
-      }
-    }
+    clearBatchRuntimeArtifacts()
+    resetBatchCounters()
+    batchRuntimeIds.value = []
   }
 
   async function handleCurrentTaskCompleted(payload: TaskCompletedPayload): Promise<void> {
@@ -776,6 +770,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!canStartBatch.value) {
       return
     }
+    clearOperationIssue('task')
+    clearOperationIssue('output')
     resetBatchRunState(selectedIds.value)
     await runNextQueuedItem()
   }
@@ -810,18 +806,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   async function openOutputLocation(path?: string): Promise<void> {
     const target =
       path ||
-      resolvedOutputPath.value ||
+      currentTaskItem.value?.lastOutputPath ||
+      currentTaskItem.value?.taskState.outputPath ||
       activeItem.value?.outputConfig.outputDir ||
-      recentCompletedItem.value?.outputConfig.outputDir ||
       ''
     if (!target) {
       return
     }
     try {
       await invokeOpenOutputLocation(target)
-      clearOperationIssue('preview')
+      clearOperationIssue('output')
     } catch (error) {
-      setOperationIssue('preview', normalizeTaskError(error, 'open_output_failed'))
+      setOperationIssue('output', normalizeTaskError(error, 'open_output_failed'))
     }
   }
 
@@ -831,9 +827,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     try {
       await invokeOpenFileOrDirectory(path)
-      clearOperationIssue('preview')
+      clearOperationIssue('output')
     } catch (error) {
-      setOperationIssue('preview', normalizeTaskError(error, 'open_path_failed'))
+      setOperationIssue('output', normalizeTaskError(error, 'open_path_failed'))
     }
   }
 
@@ -866,7 +862,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     selectedItems,
     activeItem,
     currentTaskItem,
-    recentCompletedItem,
+    batchItems,
     consoleTaskItem,
     visibleEncoderProfiles,
     visibleDecoderProfiles,
@@ -876,7 +872,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     allSelected,
     canStartBatch,
     batchTotal,
-    resolvedOutputPath,
     globalTaskStatus,
     bootstrap,
     recheckEnvironment,

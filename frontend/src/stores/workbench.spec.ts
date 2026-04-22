@@ -225,7 +225,7 @@ describe('workbench store', () => {
     expect(third.workflowConfig.anime.enabled).toBe(false)
   })
 
-  it('advances the batch queue across completed, error, and cancelled events', async () => {
+  it('advances the batch queue and clears runtime artifacts after the batch finishes', async () => {
     const store = useWorkbenchStore()
     await store.bootstrap()
     await store.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4', 'D:/input/c.mp4'])
@@ -244,7 +244,7 @@ describe('workbench store', () => {
     })
     await flush()
 
-    expect(store.batch.completedIds).toHaveLength(1)
+    expect(store.batch.completedCount).toBe(1)
     expect(store.currentTaskItem?.displayName).toBe('b.mp4')
 
     handlersRef.current?.onError({
@@ -254,14 +254,43 @@ describe('workbench store', () => {
     })
     await flush()
 
-    expect(store.batch.failedIds).toHaveLength(1)
+    expect(store.batch.failedCount).toBe(1)
     expect(store.currentTaskItem?.displayName).toBe('c.mp4')
 
     handlersRef.current?.onCancelled()
     await flush()
 
-    expect(store.batch.failedIds).toHaveLength(2)
+    expect(store.batch.completedCount).toBe(0)
+    expect(store.batch.failedCount).toBe(0)
     expect(store.batch.isRunning).toBe(false)
     expect(store.currentTaskItem).toBeNull()
+    expect(store.mediaItems.every((item) => item.taskState.status === 'idle')).toBe(true)
+    expect(store.mediaItems.every((item) => item.lastOutputPath === '')).toBe(true)
+    expect(store.mediaItems.every((item) => item.issue === null)).toBe(true)
+  })
+
+  it('opens the configured output directory without falling back to the last completed result', async () => {
+    const store = useWorkbenchStore()
+    await store.bootstrap()
+    await store.addMediaPaths(['D:/input/a.mp4'])
+    await store.attachTaskListeners()
+
+    store.patchOutput((config) => {
+      config.outputDir = 'D:/output/final'
+      config.openOnComplete = false
+    })
+
+    await store.startBatch()
+    handlersRef.current?.onCompleted({
+      outputPath: 'D:/output/final/a_processed.mp4',
+      processedFrames: 240,
+      timeSeconds: 12,
+    })
+    await flush()
+
+    await store.openOutputLocation()
+
+    expect(mockOpenOutputLocation).toHaveBeenCalledTimes(1)
+    expect(mockOpenOutputLocation).toHaveBeenCalledWith('D:/output/final')
   })
 })

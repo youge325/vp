@@ -7,15 +7,14 @@ describe('workflow routes', () => {
     await router.push('/home')
   })
 
-  it('exposes six workbench modules', () => {
-    expect(WORKBENCH_MODULES).toHaveLength(6)
+  it('exposes five workbench modules', () => {
+    expect(WORKBENCH_MODULES).toHaveLength(5)
     expect(WORKBENCH_MODULES.map((module) => module.title)).toEqual([
       '主页',
       '输入',
       '增强',
       '编码',
       '渲染',
-      '预览',
     ])
   })
 
@@ -26,7 +25,6 @@ describe('workflow routes', () => {
       '/enhance',
       '/encode',
       '/render',
-      '/preview',
     ])
     expect(WORKBENCH_MODULES.every((module) => Boolean(module.icon))).toBe(true)
   })
@@ -43,7 +41,7 @@ describe('workflow routes', () => {
       ['/format', '/encode'],
       ['/deliver', '/encode'],
       ['/results', '/render'],
-      ['/preview', '/preview'],
+      ['/preview', '/render'],
     ] as const
 
     for (const [from, to] of redirects) {

@@ -4,7 +4,6 @@ import EncodeModuleView from '@/views/DeliverStageView.vue'
 import EnhanceModuleView from '@/views/EnhanceStageView.vue'
 import InputModuleView from '@/views/InputModuleView.vue'
 import HomeModuleView from '@/views/PrepareStageView.vue'
-import PreviewModuleView from '@/views/PreviewModuleView.vue'
 import RenderModuleView from '@/views/ResultsStageView.vue'
 
 export const router = createRouter({
@@ -43,12 +42,6 @@ export const router = createRouter({
       component: RenderModuleView,
       meta: { module: WORKBENCH_MODULES[4] },
     },
-    {
-      path: '/preview',
-      name: 'preview',
-      component: PreviewModuleView,
-      meta: { module: WORKBENCH_MODULES[5] },
-    },
     { path: '/source', redirect: '/input' },
     { path: '/interpolation', redirect: { path: '/enhance', query: { section: 'interpolation' } } },
     { path: '/super-resolution', redirect: { path: '/enhance', query: { section: 'super-resolution' } } },
@@ -56,5 +49,6 @@ export const router = createRouter({
     { path: '/format', redirect: '/encode' },
     { path: '/deliver', redirect: '/encode' },
     { path: '/results', redirect: '/render' },
+    { path: '/preview', redirect: '/render' },
   ],
 })

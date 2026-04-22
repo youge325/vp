@@ -65,9 +65,9 @@ const familyCards = computed(() => {
       </div>
 
       <div class="chip-row">
-        <span class="tag">硬件加速: {{ store.env.checkResult?.ffmpeg?.hwaccels?.join(', ') || '--' }}</span>
+        <span class="tag">硬件加速 {{ store.env.checkResult?.ffmpeg?.hwaccels?.join(', ') || '--' }}</span>
         <span class="tag">GPU: {{ store.env.checkResult?.gpu?.devices?.join(' / ') || 'CPU only' }}</span>
-        <span class="tag">最近探测: {{ store.env.lastCheckedAt ? new Date(store.env.lastCheckedAt).toLocaleString() : '--' }}</span>
+        <span class="tag">最近探测 {{ store.env.lastCheckedAt ? new Date(store.env.lastCheckedAt).toLocaleString() : '--' }}</span>
       </div>
     </section>
 
@@ -75,7 +75,7 @@ const familyCards = computed(() => {
       <div class="panel-head">
         <div class="panel-copy">
           <h2>编码能力</h2>
-          <p class="panel-caption">这里展示的是已经探测到、且当前机器实际可用的编码器家族。</p>
+          <p class="panel-caption">这里只展示已经探测到、且当前机器实际可用的编码器家族。</p>
         </div>
       </div>
 
@@ -83,22 +83,6 @@ const familyCards = computed(() => {
         <article v-for="item in familyCards" :key="item.title" class="summary-block">
           <p class="summary-block-title">{{ item.title }}</p>
           <p class="summary-line">{{ item.value }}</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="panel-surface">
-      <div class="panel-head">
-        <div class="panel-copy">
-          <h2>当前激活文件</h2>
-          <p class="panel-caption">主页不再负责选材，只展示当前选中文件的流程摘要。</p>
-        </div>
-      </div>
-
-      <div class="summary-grid">
-        <article v-for="section in store.summarySections" :key="section.title" class="summary-block">
-          <p class="summary-block-title">{{ section.title }}</p>
-          <p v-for="line in section.lines" :key="line" class="summary-line">{{ line }}</p>
         </article>
       </div>
     </section>

@@ -53,13 +53,6 @@ onBeforeUnmount(() => {
             >
               重试探测
             </button>
-            <button
-              v-if="store.resolvedOutputPath"
-              class="ghost-button compact-button"
-              @click="store.openOutputLocation()"
-            >
-              打开输出
-            </button>
             <span class="status-pill" :data-state="topbarStatus">
               {{ store.env.isBootstrapping || store.env.isChecking ? 'checking' : topbarStatus }}
             </span>

@@ -18,8 +18,7 @@ const moduleStates = computed<Record<ModuleKey, string>>(() => ({
   input: store.mediaItems.length > 0 ? 'ready' : 'idle',
   enhance: store.activeItem ? 'ready' : 'idle',
   encode: store.activeItem && store.visibleEncoderProfiles.length > 0 ? 'ready' : 'idle',
-  render: store.batch.isRunning ? 'ready' : store.batch.completedIds.length > 0 ? 'done' : 'idle',
-  preview: store.recentCompletedItem || store.resolvedOutputPath ? 'ready' : 'idle',
+  render: store.batch.isRunning || store.canStartBatch ? 'ready' : 'idle',
 }))
 
 const pipelineLabel = computed(() => {
