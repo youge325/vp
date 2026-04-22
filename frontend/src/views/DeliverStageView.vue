@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { CONTAINER_OPTIONS, RATE_CONTROL_LABELS } from '@/lib/workflow'
+import { CONTAINER_OPTIONS } from '@/lib/workflow'
 import { useWorkbenchStore } from '@/stores/workbench'
 import type { CapabilityOptionSpec, CapabilityValue, RateControlMode } from '@/types'
 
@@ -10,12 +10,6 @@ const encoderOptions = computed(() => store.currentEncoderProfile?.options ?? []
 const encodeOperationIssue = computed(() =>
   store.operationIssue?.scope === 'encode' ? store.operationIssue.error : null,
 )
-const encodeStats = computed(() => [
-  { label: '编码器', value: store.currentEncoderProfile?.label ?? '--' },
-  { label: '码率控制', value: RATE_CONTROL_LABELS[store.activeItem?.encodeConfig.rateControl.mode ?? 'crf'] },
-  { label: '容器', value: store.activeItem?.encodeConfig.container?.toUpperCase() ?? '--' },
-  { label: '输出目录', value: store.activeItem?.outputConfig.outputDir || '--' },
-])
 
 function coerceOptionValue(option: CapabilityOptionSpec, event: Event): CapabilityValue {
   const target = event.target as HTMLInputElement | HTMLSelectElement
@@ -89,13 +83,6 @@ function updateOutputDir(event: Event): void {
       <div v-if="!store.activeItem" class="empty-state">
         <strong>还没有激活文件</strong>
         <p>请先在输入页导入并激活一个文件，编码页会显示该文件当前的编码方案。</p>
-      </div>
-
-      <div v-else class="stats-grid stats-grid-4">
-        <article v-for="item in encodeStats" :key="item.label" class="stat-card">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-        </article>
       </div>
     </section>
 

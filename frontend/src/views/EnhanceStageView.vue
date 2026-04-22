@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { PROCESS_ORDER_LABELS, RIFE_MODELS } from '@/lib/workflow'
+import { RIFE_MODELS } from '@/lib/workflow'
 import { useWorkbenchStore } from '@/stores/workbench'
 import type { FpsMode, ProcessOrder, TensorBackend } from '@/types'
 
@@ -151,36 +151,21 @@ const animeEdgeBoost = computed({
     })
   },
 })
-
-const enhancementStats = computed(() => [
-  { label: '补帧', value: interpolationEnabled.value ? 'On' : 'Off' },
-  { label: '超分', value: superResolutionEnabled.value ? 'On' : 'Off' },
-  { label: '动漫', value: animeEnabled.value ? 'On' : 'Off' },
-  { label: '顺序', value: PROCESS_ORDER_LABELS[processOrder.value] },
-])
 </script>
 
 <template>
   <div class="module-stack">
-    <section class="panel-surface">
+    <section v-if="!store.activeItem" class="panel-surface">
       <div class="panel-head">
         <div class="panel-copy">
           <h2>增强流程</h2>
           <p class="panel-caption">增强页始终显示激活文件的表单值，所有修改会同步到激活文件和已勾选文件。</p>
         </div>
-        <span class="panel-badge">作用于 {{ store.selectedIds.length || 1 }} 个文件</span>
       </div>
 
       <div v-if="!store.activeItem" class="empty-state">
         <strong>还没有激活文件</strong>
         <p>请先在输入页导入并选中至少一个视频。</p>
-      </div>
-
-      <div v-else class="stats-grid stats-grid-4">
-        <article v-for="item in enhancementStats" :key="item.label" class="stat-card">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-        </article>
       </div>
     </section>
 

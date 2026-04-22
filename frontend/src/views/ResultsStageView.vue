@@ -8,13 +8,6 @@ const store = useWorkbenchStore()
 const taskOperationIssue = computed(() =>
   store.operationIssue?.scope === 'task' ? store.operationIssue.error : null,
 )
-
-const runStats = computed(() => [
-  { label: '批次总数', value: `${store.batchTotal}` },
-  { label: '已完成', value: `${store.batch.completedCount}` },
-  { label: '失败/取消', value: `${store.batch.failedCount}` },
-  { label: '当前任务', value: store.currentTaskItem?.displayName ?? '--' },
-])
 </script>
 
 <template>
@@ -42,13 +35,6 @@ const runStats = computed(() => [
       <div v-if="taskOperationIssue" class="info-banner info-banner-danger">
         <strong>任务操作失败</strong>
         <p>{{ taskOperationIssue.message }}</p>
-      </div>
-
-      <div class="stats-grid stats-grid-4">
-        <article v-for="item in runStats" :key="item.label" class="stat-card">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-        </article>
       </div>
     </section>
 

@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { WORKBENCH_MODULES } from '@/lib/workflow'
+import DecodeModuleView from '@/views/DecodeModuleView.vue'
 import EncodeModuleView from '@/views/DeliverStageView.vue'
 import EnhanceModuleView from '@/views/EnhanceStageView.vue'
 import InputModuleView from '@/views/InputModuleView.vue'
@@ -25,22 +26,28 @@ export const router = createRouter({
       meta: { module: WORKBENCH_MODULES[1] },
     },
     {
+      path: '/decode',
+      name: 'decode',
+      component: DecodeModuleView,
+      meta: { module: WORKBENCH_MODULES[2] },
+    },
+    {
       path: '/enhance',
       name: 'enhance',
       component: EnhanceModuleView,
-      meta: { module: WORKBENCH_MODULES[2] },
+      meta: { module: WORKBENCH_MODULES[3] },
     },
     {
       path: '/encode',
       name: 'encode',
       component: EncodeModuleView,
-      meta: { module: WORKBENCH_MODULES[3] },
+      meta: { module: WORKBENCH_MODULES[4] },
     },
     {
       path: '/render',
       name: 'render',
       component: RenderModuleView,
-      meta: { module: WORKBENCH_MODULES[4] },
+      meta: { module: WORKBENCH_MODULES[5] },
     },
     { path: '/source', redirect: '/input' },
     { path: '/interpolation', redirect: { path: '/enhance', query: { section: 'interpolation' } } },

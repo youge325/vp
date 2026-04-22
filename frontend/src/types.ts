@@ -7,7 +7,7 @@ export type WorkflowMode =
   | 'format_conversion'
 
 export type StageKey = 'prepare' | 'enhance' | 'deliver' | 'results'
-export type ModuleKey = 'home' | 'input' | 'enhance' | 'encode' | 'render'
+export type ModuleKey = 'home' | 'input' | 'decode' | 'enhance' | 'encode' | 'render'
 export type ProcessOrder =
   | 'super_resolution_then_interpolation'
   | 'frame_interpolation_then_super_resolution'

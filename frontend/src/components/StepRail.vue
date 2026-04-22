@@ -16,6 +16,7 @@ const activeModuleKey = computed<ModuleKey>(() => {
 const moduleStates = computed<Record<ModuleKey, string>>(() => ({
   home: store.env.checkResult || store.env.issue ? 'ready' : 'idle',
   input: store.mediaItems.length > 0 ? 'ready' : 'idle',
+  decode: store.activeItem ? 'ready' : 'idle',
   enhance: store.activeItem ? 'ready' : 'idle',
   encode: store.activeItem && store.visibleEncoderProfiles.length > 0 ? 'ready' : 'idle',
   render: store.batch.isRunning || store.canStartBatch ? 'ready' : 'idle',
