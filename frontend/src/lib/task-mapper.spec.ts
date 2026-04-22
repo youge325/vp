@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTaskRequest, buildSummarySections } from '@/lib/task-mapper'
+import { buildTaskRequest, buildSummarySections, resolvePrimaryMode } from '@/lib/task-mapper'
 import type { WorkbenchStateSnapshot } from '@/types'
 
 function makeSnapshot(): WorkbenchStateSnapshot {
@@ -85,6 +85,26 @@ function makeSnapshot(): WorkbenchStateSnapshot {
 }
 
 describe('task mapper', () => {
+  it('derives the primary mode from pipeline switches', () => {
+    expect(resolvePrimaryMode(makeSnapshot())).toBe('frame_interpolation')
+
+    const srOnly = makeSnapshot()
+    srOnly.workflow.enableInterpolation = false
+    expect(resolvePrimaryMode(srOnly)).toBe('super_resolution')
+
+    const animeOnly = makeSnapshot()
+    animeOnly.workflow.enableInterpolation = false
+    animeOnly.workflow.enableSuperResolution = false
+    animeOnly.anime.enabled = true
+    expect(resolvePrimaryMode(animeOnly)).toBe('anime_optimization')
+
+    const transcodeOnly = makeSnapshot()
+    transcodeOnly.workflow.enableInterpolation = false
+    transcodeOnly.workflow.enableSuperResolution = false
+    transcodeOnly.anime.enabled = false
+    expect(resolvePrimaryMode(transcodeOnly)).toBe('format_conversion')
+  })
+
   it('builds a combined task request', () => {
     const request = buildTaskRequest(makeSnapshot())
 
@@ -97,8 +117,10 @@ describe('task mapper', () => {
 
   it('builds summary sections for the sidebar', () => {
     const sections = buildSummarySections(makeSnapshot())
+
     expect(sections).toHaveLength(5)
     expect(sections[0]?.title).toBe('素材')
-    expect(sections[1]?.lines[0]).toContain('视频补帧')
+    expect(sections[2]?.lines).toContain('补帧 On')
+    expect(sections[3]?.lines[1]).toContain('libx264')
   })
 })

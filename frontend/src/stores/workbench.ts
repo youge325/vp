@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import {
   applyTaskCancelled,
@@ -8,7 +8,11 @@ import {
   appendTaskLog,
   createIdleTaskState,
 } from '@/lib/task-events'
-import { buildSummarySections, buildTaskRequest } from '@/lib/task-mapper'
+import {
+  buildSummarySections,
+  buildTaskRequest,
+  resolvePrimaryMode,
+} from '@/lib/task-mapper'
 import {
   cancelTask as cancelRuntimeTask,
   checkEnvironment as checkRuntimeEnvironment,
@@ -150,37 +154,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
 
-    if (!source.value.inputPath.trim()) {
-      return false
-    }
-
-    if (
-      (workflow.value.primaryMode === 'frame_interpolation' ||
-        workflow.value.primaryMode === 'super_resolution') &&
-      !workflow.value.enableInterpolation &&
-      !workflow.value.enableSuperResolution
-    ) {
-      return false
-    }
-
-    return true
+    return Boolean(source.value.inputPath.trim())
   })
 
-  function setPrimaryMode(mode: WorkflowSelection['primaryMode']) {
-    workflow.value.primaryMode = mode
-
-    if (mode === 'frame_interpolation') {
-      workflow.value.enableInterpolation = true
-      workflow.value.enableSuperResolution = superResolution.value.enabled
-    } else if (mode === 'super_resolution') {
-      workflow.value.enableInterpolation = false
-      workflow.value.enableSuperResolution = true
-      superResolution.value.enabled = true
-    } else {
-      workflow.value.enableInterpolation = false
-      workflow.value.enableSuperResolution = false
-    }
-  }
+  watch(
+    [
+      () => workflow.value.enableInterpolation,
+      () => workflow.value.enableSuperResolution,
+      () => anime.value.enabled,
+      () => superResolution.value.scaleFactor,
+    ],
+    () => {
+      workflow.value.primaryMode = resolvePrimaryMode(snapshot.value)
+      superResolution.value.enabled = workflow.value.enableSuperResolution
+    },
+    { immediate: true },
+  )
 
   function setIssue(error: TaskError) {
     env.value.issue = error
@@ -252,7 +241,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     } catch (error) {
       setIssue({
         code: 'missing_runtime',
-        message: error instanceof Error ? error.message : '环境检查失败。',
+        message: error instanceof Error ? error.message : '环境检查失败',
         details: null,
       })
     } finally {
@@ -264,7 +253,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!source.value.inputPath.trim()) {
       setIssue({
         code: 'invalid_input',
-        message: '请先选择输入视频。',
+        message: '请先选择输入视频',
         details: null,
       })
       return
@@ -276,7 +265,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     } catch (error) {
       setIssue({
         code: 'invalid_input',
-        message: error instanceof Error ? error.message : '素材信息读取失败。',
+        message: error instanceof Error ? error.message : '素材信息读取失败',
         details: null,
       })
     } finally {
@@ -291,6 +280,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       startedAt: new Date().toISOString(),
     }
     env.value.issue = null
+    workflow.value.primaryMode = resolvePrimaryMode(snapshot.value)
     await attachTaskListeners()
 
     try {
@@ -298,7 +288,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     } catch (error) {
       task.value = applyTaskError(task.value, {
         code: 'process_failed',
-        message: error instanceof Error ? error.message : '任务启动失败。',
+        message: error instanceof Error ? error.message : '任务启动失败',
         details: null,
       })
     }
@@ -310,7 +300,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     } catch (error) {
       task.value = applyTaskError(task.value, {
         code: 'cancelled',
-        message: error instanceof Error ? error.message : '取消任务失败。',
+        message: error instanceof Error ? error.message : '取消任务失败',
         details: null,
       })
     }
@@ -347,7 +337,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     summarySections,
     canStartTask,
     snapshot,
-    setPrimaryMode,
     attachTaskListeners,
     detachTaskListeners,
     pickInput,

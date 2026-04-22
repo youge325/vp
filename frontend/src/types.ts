@@ -4,6 +4,7 @@ export type WorkflowMode =
   | 'anime_optimization'
   | 'format_conversion'
 
+export type StageKey = 'prepare' | 'enhance' | 'deliver' | 'results'
 export type ProcessOrder =
   | 'super_resolution_then_interpolation'
   | 'frame_interpolation_then_super_resolution'
@@ -210,4 +211,18 @@ export interface StepDefinition {
   title: string
   path: string
   subtitle: string
+  stage: StageKey
+  tab: string
+}
+
+export interface StageDefinition {
+  key: StageKey
+  index: number
+  title: string
+  path: string
+}
+
+export interface StageTabDefinition {
+  key: string
+  label: string
 }

@@ -3,13 +3,32 @@ import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import StepRail from '@/components/StepRail.vue'
 import SummaryPanel from '@/components/SummaryPanel.vue'
+import { PREPARE_TABS } from '@/lib/workflow'
 import { useWorkbenchStore } from '@/stores/workbench'
-import type { StepDefinition } from '@/types'
+import type { StageDefinition } from '@/types'
 
 const store = useWorkbenchStore()
 const route = useRoute()
 
-const activeStep = computed<StepDefinition | undefined>(() => route.meta.step as StepDefinition)
+const activeStage = computed<StageDefinition | undefined>(() => route.meta.stage as StageDefinition)
+
+const stageCaption = computed(() => {
+  if (activeStage.value?.key === 'prepare') {
+    const raw = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab
+    const tab = typeof raw === 'string' ? raw : 'environment'
+    return PREPARE_TABS.find((item) => item.key === tab)?.label ?? PREPARE_TABS[0].label
+  }
+
+  if (activeStage.value?.key === 'enhance') {
+    return '单管道'
+  }
+
+  if (activeStage.value?.key === 'deliver') {
+    return '编解码'
+  }
+
+  return 'CLI'
+})
 
 onMounted(async () => {
   await store.attachTaskListeners()
@@ -21,37 +40,39 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell">
-    <div class="app-backdrop" />
-    <StepRail />
+  <div class="app-viewport">
+    <div class="app-shell">
+      <StepRail />
 
-    <main class="workspace-shell">
-      <header class="workspace-header surface-panel">
-        <div>
-          <p class="eyebrow">VP Workbench</p>
-          <h1>{{ activeStep?.title ?? '视频处理工作台' }}</h1>
-          <p class="subtle">
-            {{ activeStep?.subtitle ?? '围绕 CLI 内核的 Tauri 多平台工作台。' }}
-          </p>
-        </div>
+      <main class="center-column">
+        <header class="topbar surface-panel">
+          <div class="topbar-copy">
+            <p class="topbar-label">VP Workbench</p>
+            <div class="topbar-title-row">
+              <h1>{{ activeStage?.title ?? '工作台' }}</h1>
+              <span class="topbar-divider" />
+              <span class="topbar-tab">{{ stageCaption }}</span>
+            </div>
+          </div>
 
-        <div class="header-actions">
-          <span class="status-pill" :data-state="store.task.status">
-            {{ store.task.status }}
-          </span>
-          <span class="status-pill" :data-state="store.env.checkResult ? 'ready' : 'pending'">
-            {{ store.env.checkResult ? 'environment-checked' : 'environment-pending' }}
-          </span>
-        </div>
-      </header>
+          <div class="topbar-actions">
+            <button
+              class="ghost-button compact-button"
+              :disabled="store.env.isChecking"
+              @click="store.checkEnvironment()"
+            >
+              {{ store.env.isChecking ? '检查中' : '检查环境' }}
+            </button>
+            <span class="status-pill" :data-state="store.task.status">{{ store.task.status }}</span>
+          </div>
+        </header>
 
-      <section class="workspace-body">
-        <div class="workspace-content surface-panel">
+        <section class="content-surface surface-panel">
           <RouterView />
-        </div>
+        </section>
+      </main>
 
-        <SummaryPanel />
-      </section>
-    </main>
+      <SummaryPanel />
+    </div>
   </div>
 </template>

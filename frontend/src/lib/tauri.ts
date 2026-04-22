@@ -11,10 +11,10 @@ import type {
 } from '@/types'
 
 const BROWSER_RUNTIME_MESSAGE =
-  '当前页面运行在浏览器模式，请使用 `npm run tauri:dev` 启动桌面壳层。'
+  '当前正在浏览器预览模式下运行，请使用 `npm run tauri:dev` 启动桌面壳。'
 
 const IPC_PERMISSION_MESSAGE =
-  '桌面壳层未授予当前 IPC 命令权限，请重启 `npm run tauri:dev` 或重新构建应用。'
+  '当前桌面壳没有授予该 IPC 命令权限，请重新启动 `npm run tauri:dev` 或重新构建应用。'
 
 export function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
