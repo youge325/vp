@@ -13,10 +13,15 @@ const activeModule = computed<WorkbenchModuleDefinition>(
   () => (route.meta.module as WorkbenchModuleDefinition | undefined) ?? WORKBENCH_MODULES[0],
 )
 
-const resolvedOutputPath = computed(() => store.task.outputPath || store.output.outputPath)
+const topbarStatus = computed(() => {
+  if (store.batch.isRunning) {
+    return 'running'
+  }
+  return store.globalTaskStatus
+})
 
-onMounted(async () => {
-  await store.attachTaskListeners()
+onMounted(() => {
+  void store.bootstrap()
 })
 
 onBeforeUnmount(() => {
@@ -42,16 +47,22 @@ onBeforeUnmount(() => {
 
           <div class="topbar-actions">
             <button
+              v-if="store.env.issue && !store.env.isChecking"
               class="ghost-button compact-button"
-              :disabled="store.env.isChecking"
-              @click="store.checkEnvironment()"
+              @click="store.recheckEnvironment()"
             >
-              {{ store.env.isChecking ? '检查中' : '检查环境' }}
+              重试探测
             </button>
-            <button v-if="resolvedOutputPath" class="ghost-button compact-button" @click="store.openOutputLocation()">
+            <button
+              v-if="store.resolvedOutputPath"
+              class="ghost-button compact-button"
+              @click="store.openOutputLocation()"
+            >
               打开输出
             </button>
-            <span class="status-pill" :data-state="store.task.status">{{ store.task.status }}</span>
+            <span class="status-pill" :data-state="topbarStatus">
+              {{ store.env.isBootstrapping || store.env.isChecking ? 'checking' : topbarStatus }}
+            </span>
           </div>
         </header>
 

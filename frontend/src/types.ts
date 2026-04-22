@@ -11,94 +11,51 @@ export type ModuleKey = 'home' | 'input' | 'enhance' | 'encode' | 'render' | 'pr
 export type ProcessOrder =
   | 'super_resolution_then_interpolation'
   | 'frame_interpolation_then_super_resolution'
-
 export type FpsMode = 'multi' | 'target'
 export type TensorBackend = 'pytorch' | 'paddle'
 export type TaskStatus = 'idle' | 'running' | 'completed' | 'error' | 'cancelled'
+export type CodecFamily = 'cpu' | 'nvidia' | 'intel' | 'software'
+export type GpuVendor = 'nvidia' | 'intel' | 'amd' | 'other'
+export type GpuDeviceType = 'integrated' | 'discrete' | 'virtual' | 'other'
+export type CapabilityValue = string | number | boolean
+export type CapabilityOptionType = 'boolean' | 'number' | 'string' | 'choice'
+export type RateControlMode = 'crf' | 'cq' | 'qp' | 'bitrate'
 
-export interface AppEnv {
-  lastCheckedAt: string | null
-  isChecking: boolean
-  checkResult: EnvironmentCheckResult | null
-  issue: TaskError | null
+export interface CapabilityChoice {
+  label: string
+  value: CapabilityValue
 }
 
-export interface SourceMedia {
-  inputPath: string
-  inspecting: boolean
-  info: VideoInfoResult | null
+export interface CapabilityOptionSpec {
+  name: string
+  label: string
+  type: CapabilityOptionType
+  defaultValue: CapabilityValue | null
+  choices: CapabilityChoice[]
+  min: number | null
+  max: number | null
 }
 
-export interface WorkflowSelection {
-  primaryMode: WorkflowMode
-  enableInterpolation: boolean
-  enableSuperResolution: boolean
-  processOrder: ProcessOrder
-  fpsMode: FpsMode
-}
-
-export interface InterpolationSettings {
-  targetFps: number
-  multi: number
-  model: string
-  scale: number
-  fp16: boolean
-  tensorBackend: TensorBackend
-}
-
-export interface SuperResolutionSettings {
-  enabled: boolean
-  scaleFactor: number
-  algorithm: string
-}
-
-export interface AnimeOptimizationSettings {
-  enabled: boolean
-  profile: string
-  denoise: number
-  edgeBoost: number
-}
-
-export interface FormatConversionSettings {
-  remuxOnly: boolean
-  keepAudio: boolean
-  container: string
-}
-
-export interface EncodeSettings {
+export interface CodecProfileSpec {
+  name: string
+  label: string
+  family: CodecFamily
   codec: string
-  crf: number
-  preset: string
+  available: boolean
+  pixelFormats: string[]
+  hardwareDevices: string[]
+  options: CapabilityOptionSpec[]
 }
 
-export interface OutputSettings {
-  outputPath: string
-  outputDir: string
-  tempDir: string
-  openOnComplete: boolean
-}
+export interface EncoderProfileSpec extends CodecProfileSpec {}
+export interface DecoderProfileSpec extends CodecProfileSpec {}
 
-export interface TaskError {
-  code: string
-  message: string
-  details?: Record<string, unknown> | null
-}
-
-export interface TaskRuntimeState {
-  status: TaskStatus
-  percent: number
-  current: number
-  total: number
-  stage: string
-  stageIndex: number
-  stageTotal: number
-  logs: string[]
-  outputPath: string
-  processedFrames: number
-  timeSeconds: number
-  error: TaskError | null
-  startedAt: string | null
-  finishedAt: string | null
+export interface GpuAdapter {
+  name: string
+  vendor: GpuVendor
+  deviceType: GpuDeviceType
+  adapterCompatibility?: string
+  driverVersion?: string
 }
 
 export interface ResourceSummary {
@@ -119,10 +76,15 @@ export interface EnvironmentCheckResult {
     version?: string
     path?: string
     ffprobe_path?: string
+    hwaccels: string[]
+    encoderProfiles: EncoderProfileSpec[]
+    decoderProfiles: DecoderProfileSpec[]
   }
   gpu: {
     available?: boolean
-    devices?: string[]
+    devices: string[]
+    adapters: GpuAdapter[]
+    cuda_available?: boolean
   }
   tensor_backends: {
     pytorch?: boolean
@@ -142,6 +104,20 @@ export interface EnvironmentCheckResult {
   resources?: ResourceSummary
 }
 
+export interface TaskError {
+  code: string
+  message: string
+  details?: Record<string, unknown> | null
+}
+
+export interface AppEnv {
+  lastCheckedAt: string | null
+  isChecking: boolean
+  isBootstrapping: boolean
+  checkResult: EnvironmentCheckResult | null
+  issue: TaskError | null
+}
+
 export interface VideoInfoResult {
   type: 'info'
   fps: number
@@ -150,6 +126,107 @@ export interface VideoInfoResult {
   width: number
   height: number
   has_audio: boolean
+  video_codec: string
+}
+
+export interface DecodeConfig {
+  mode: 'software' | 'hardware'
+  hwaccel: string
+  hwaccelDevice: string
+  decoder: string
+  options: Record<string, CapabilityValue>
+}
+
+export interface InterpolationConfig {
+  enabled: boolean
+  targetFps: number
+  multi: number
+  model: string
+  scale: number
+  fp16: boolean
+  tensorBackend: TensorBackend
+}
+
+export interface SuperResolutionConfig {
+  enabled: boolean
+  scaleFactor: number
+  algorithm: string
+}
+
+export interface AnimeConfig {
+  enabled: boolean
+  profile: string
+  denoise: number
+  edgeBoost: number
+}
+
+export interface WorkflowConfig {
+  fpsMode: FpsMode
+  processOrder: ProcessOrder
+  interpolation: InterpolationConfig
+  superResolution: SuperResolutionConfig
+  anime: AnimeConfig
+}
+
+export interface RateControlConfig {
+  mode: RateControlMode
+  value: number
+}
+
+export interface EncodeConfig {
+  codec: string
+  family: Exclude<CodecFamily, 'software'>
+  container: string
+  keepAudio: boolean
+  rateControl: RateControlConfig
+  options: Record<string, CapabilityValue>
+}
+
+export interface OutputConfig {
+  outputDir: string
+  openOnComplete: boolean
+}
+
+export interface MediaTaskState {
+  status: TaskStatus
+  percent: number
+  current: number
+  total: number
+  stage: string
+  stageIndex: number
+  stageTotal: number
+  logs: string[]
+  outputPath: string
+  processedFrames: number
+  timeSeconds: number
+  error: TaskError | null
+  startedAt: string | null
+  finishedAt: string | null
+}
+
+export interface MediaItem {
+  id: string
+  inputPath: string
+  displayName: string
+  selected: boolean
+  inspecting: boolean
+  info: VideoInfoResult | null
+  issue: TaskError | null
+  decodeConfig: DecodeConfig
+  workflowConfig: WorkflowConfig
+  encodeConfig: EncodeConfig
+  outputConfig: OutputConfig
+  taskState: MediaTaskState
+  lastOutputPath: string
+}
+
+export interface BatchState {
+  queue: string[]
+  currentId: string | null
+  completedIds: string[]
+  failedIds: string[]
+  isRunning: boolean
+  lastCompletedOutput: string
 }
 
 export interface TaskProgressPayload {
@@ -173,39 +250,12 @@ export interface TaskLogPayload {
 
 export interface TaskRequest {
   inputPath: string
-  algorithm: WorkflowMode
   outputPath?: string
-  outputDir?: string
   tempDir?: string
-  fps: number
-  fpsMode: FpsMode
-  targetFps?: number
-  codec: string
-  crf: number
-  preset: string
-  backend: TensorBackend
-  multi: number
-  model: string
-  scale: number
-  fp16: boolean
-  enableInterpolation: boolean
-  enableSuperResolution: boolean
-  processOrder: ProcessOrder
-  srScaleFactor: number
-  srAlgorithm: string
-}
-
-export interface WorkbenchStateSnapshot {
-  env: AppEnv
-  source: SourceMedia
-  workflow: WorkflowSelection
-  interpolation: InterpolationSettings
-  superResolution: SuperResolutionSettings
-  anime: AnimeOptimizationSettings
-  format: FormatConversionSettings
-  encode: EncodeSettings
-  output: OutputSettings
-  task: TaskRuntimeState
+  decodeConfig: DecodeConfig
+  workflowConfig: WorkflowConfig
+  encodeConfig: EncodeConfig
+  outputConfig: OutputConfig
 }
 
 export interface StepDefinition {
@@ -216,13 +266,6 @@ export interface StepDefinition {
   subtitle: string
   stage: StageKey
   tab: string
-}
-
-export interface StageDefinition {
-  key: StageKey
-  index: number
-  title: string
-  path: string
 }
 
 export interface WorkbenchModuleDefinition {

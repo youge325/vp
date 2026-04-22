@@ -7,7 +7,7 @@ describe('workflow routes', () => {
     await router.push('/home')
   })
 
-  it('exposes six VSET-style workbench modules', () => {
+  it('exposes six workbench modules', () => {
     expect(WORKBENCH_MODULES).toHaveLength(6)
     expect(WORKBENCH_MODULES.map((module) => module.title)).toEqual([
       '主页',

@@ -26,6 +26,7 @@ from app.processing.pipeline import Pipeline
 from app.utils.ffmpeg_wrapper import FFmpegWrapper
 from app.utils.file_utils import cleanup_dir, get_output_path, validate_input_path
 from app.utils.logger import get_logger, setup_logging
+from app.utils.system_probe import list_gpu_adapters
 
 logger = get_logger(__name__)
 
@@ -42,7 +43,7 @@ PROCESS_ORDER_MAP = {
 }
 
 PROCESS_LABEL_MAP = {
-    "frame_interpolation": "Video Interpolation",
+    "frame_interpolation": "Frame Interpolation",
     "super_resolution": "Super Resolution",
     "anime_optimization": "Anime Optimization",
     "format_conversion": "Format Conversion",
@@ -71,6 +72,28 @@ def _emit_error(
     raise SystemExit(exit_code)
 
 
+def _load_json_arg(raw_value: str | None, default: dict[str, Any]) -> dict[str, Any]:
+    if not raw_value:
+        return default
+    try:
+        payload = json.loads(raw_value)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON payload: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("JSON payload must be an object.")
+    return _deep_merge(default, payload)
+
+
+def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 def _model_path(model_version: str | None = None) -> Path:
     version = model_version or settings.RIFE_MODEL_VERSION
     return Path(settings.RIFE_MODEL_DIR) / f"flownet_v{version}.pkl"
@@ -96,44 +119,125 @@ def _infer_error_code(exc: BaseException) -> str:
     return "process_failed"
 
 
-def _build_algorithm_kwargs(args: argparse.Namespace, algorithm_type: str) -> dict[str, Any]:
-    if algorithm_type == "frame_interpolation":
-        return {
+def _default_decode_config() -> dict[str, Any]:
+    return {
+        "mode": "software",
+        "hwaccel": "",
+        "decoder": "software",
+        "options": {},
+    }
+
+
+def _default_encode_config(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "codec": args.codec,
+        "family": "cpu",
+        "container": "mp4",
+        "keepAudio": True,
+        "rateControl": {
+            "mode": "crf",
+            "value": args.crf,
+        },
+        "options": {
+            "preset": args.preset,
+        },
+    }
+
+
+def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
+    enable_interpolation = args.enable_interpolation or args.algorithm == "frame_interpolation"
+    enable_super_resolution = args.enable_super_resolution or args.algorithm == "super_resolution"
+    enable_anime = args.algorithm == "anime_optimization"
+    return {
+        "fpsMode": args.fps_mode,
+        "processOrder": args.process_order,
+        "interpolation": {
+            "enabled": enable_interpolation,
+            "targetFps": args.target_fps,
             "multi": args.multi,
-            "model_version": args.model,
+            "model": args.model,
             "scale": args.scale,
             "fp16": args.fp16,
+            "tensorBackend": args.backend,
+        },
+        "superResolution": {
+            "enabled": enable_super_resolution,
+            "scaleFactor": args.sr_scale_factor,
+            "algorithm": args.sr_algorithm,
+        },
+        "anime": {
+            "enabled": enable_anime,
+            "profile": "clean-lines",
+            "denoise": 10,
+            "edgeBoost": 15,
+        },
+    }
+
+
+def _default_output_config(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "outputDir": args.output_dir or settings.OUTPUT_DIR,
+        "openOnComplete": True,
+    }
+
+
+def _resolve_primary_algorithm(workflow_config: dict[str, Any]) -> str:
+    if workflow_config["interpolation"]["enabled"]:
+        return "frame_interpolation"
+    if workflow_config["superResolution"]["enabled"]:
+        return "super_resolution"
+    if workflow_config["anime"]["enabled"]:
+        return "anime_optimization"
+    return "format_conversion"
+
+
+def _build_algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: str) -> dict[str, Any]:
+    interpolation = workflow_config["interpolation"]
+    super_resolution = workflow_config["superResolution"]
+    if algorithm_type == "frame_interpolation":
+        return {
+            "multi": interpolation["multi"],
+            "model_version": interpolation["model"],
+            "scale": interpolation["scale"],
+            "fp16": interpolation["fp16"],
         }
     if algorithm_type == "super_resolution":
         return {
-            "scale_factor": args.sr_scale_factor,
-            "sr_algorithm": args.sr_algorithm,
+            "scale_factor": super_resolution["scaleFactor"],
+            "sr_algorithm": super_resolution["algorithm"],
         }
     return {}
 
 
-def _resolve_processing_steps(args: argparse.Namespace) -> list[dict[str, Any]]:
-    enable_interpolation = bool(args.enable_interpolation)
-    enable_super_resolution = bool(args.enable_super_resolution)
+def _resolve_processing_steps(config_or_args: dict[str, Any] | argparse.Namespace) -> list[dict[str, Any]]:
+    if isinstance(config_or_args, argparse.Namespace):
+        workflow_config = _default_workflow_config(config_or_args)
+        algorithm = config_or_args.algorithm
+    else:
+        workflow_config = config_or_args
+        algorithm = _resolve_primary_algorithm(workflow_config)
+
+    enable_interpolation = bool(workflow_config["interpolation"]["enabled"])
+    enable_super_resolution = bool(workflow_config["superResolution"]["enabled"])
 
     if enable_interpolation or enable_super_resolution:
         if enable_interpolation and enable_super_resolution:
-            algorithm_types = PROCESS_ORDER_MAP[args.process_order]
+            algorithm_types = PROCESS_ORDER_MAP[workflow_config["processOrder"]]
         elif enable_interpolation:
             algorithm_types = ["frame_interpolation"]
         else:
             algorithm_types = ["super_resolution"]
-    elif args.algorithm == "format_conversion":
+    elif algorithm == "format_conversion":
         algorithm_types = []
     else:
-        algorithm_types = [args.algorithm]
+        algorithm_types = [algorithm]
 
     steps: list[dict[str, Any]] = []
     for index, algorithm_type in enumerate(algorithm_types, start=1):
         steps.append(
             {
                 "algorithm_type": algorithm_type,
-                "algorithm_kwargs": _build_algorithm_kwargs(args, algorithm_type),
+                "algorithm_kwargs": _build_algorithm_kwargs(workflow_config, algorithm_type),
                 "stage_name": f"{index:02d}_{algorithm_type}",
             }
         )
@@ -143,11 +247,7 @@ def _resolve_processing_steps(args: argparse.Namespace) -> list[dict[str, Any]]:
 def _make_progress_callback(stage_index: int, total_stages: int, algorithm_type: str):
     def progress_callback(current: int, total: int) -> None:
         stage_fraction = (current / total) if total > 0 else 0.0
-        if total_stages > 0:
-            overall_percent = ((stage_index + stage_fraction) / total_stages) * 100
-        else:
-            overall_percent = stage_fraction * 100
-
+        overall_percent = ((stage_index + stage_fraction) / total_stages) * 100 if total_stages > 0 else 0.0
         _emit(
             {
                 "type": "progress",
@@ -164,14 +264,15 @@ def _make_progress_callback(stage_index: int, total_stages: int, algorithm_type:
 
 
 def _resolve_fps_and_multi(
-    args: argparse.Namespace,
+    workflow_config: dict[str, Any],
     ffmpeg: FFmpegWrapper,
     input_path: str,
 ) -> tuple[int, float, float | None, bool]:
-    fps_mode = getattr(args, "fps_mode", "multi")
+    interpolation = workflow_config["interpolation"]
+    fps_mode = workflow_config.get("fpsMode", "multi")
 
     if fps_mode == "target":
-        target_fps = getattr(args, "target_fps", 60.0)
+        target_fps = float(interpolation.get("targetFps") or 60.0)
         source_fps = ffmpeg.get_fps(input_path)
         multi = max(2, math.ceil(target_fps / source_fps))
         interpolated_fps = source_fps * multi
@@ -179,7 +280,10 @@ def _resolve_fps_and_multi(
         encode_fps = target_fps if need_resample else interpolated_fps
         return multi, encode_fps, interpolated_fps, need_resample
 
-    return args.multi, args.fps, None, False
+    source_fps = ffmpeg.get_fps(input_path)
+    multi = int(interpolation.get("multi") or settings.RIFE_DEFAULT_MULTI)
+    encode_fps = source_fps * multi if interpolation.get("enabled") else source_fps
+    return multi, encode_fps, None, False
 
 
 def _check_pytorch_in_subprocess() -> dict[str, Any]:
@@ -204,6 +308,7 @@ def _check_pytorch_in_subprocess() -> dict[str, Any]:
             encoding="utf-8",
             errors="replace",
             timeout=30,
+            check=False,
         )
         if proc.returncode == 0 and proc.stdout.strip():
             return json.loads(proc.stdout.strip())
@@ -231,6 +336,7 @@ def _check_paddle_in_subprocess() -> dict[str, Any]:
             encoding="utf-8",
             errors="replace",
             timeout=30,
+            check=False,
         )
         if proc.returncode == 0 and proc.stdout.strip():
             return json.loads(proc.stdout.strip())
@@ -261,66 +367,69 @@ def cmd_process(args: argparse.Namespace) -> None:
             },
         )
 
-    processing_steps = _resolve_processing_steps(args)
+    try:
+        decode_config = _load_json_arg(args.decode_config_json, _default_decode_config())
+        encode_config = _load_json_arg(args.encode_config_json, _default_encode_config(args))
+        workflow_config = _load_json_arg(args.workflow_config_json, _default_workflow_config(args))
+        output_config = _load_json_arg(args.output_config_json, _default_output_config(args))
+    except ValueError as exc:
+        _emit_error("invalid_config", str(exc))
+
+    processing_steps = _resolve_processing_steps(workflow_config)
     if _processing_needs_interpolation(processing_steps):
-        model_path = _model_path(args.model)
+        model_path = _model_path(workflow_config["interpolation"]["model"])
         if not model_path.is_file() or model_path.stat().st_size == 0:
             _emit_error(
                 "missing_model",
                 f"Default interpolation model is missing: {model_path}",
                 details={
                     "model_path": str(model_path),
-                    "model_version": args.model,
+                    "model_version": workflow_config["interpolation"]["model"],
                 },
             )
 
-    output_dir = args.output_dir or settings.OUTPUT_DIR
+    output_dir = output_config.get("outputDir") or settings.OUTPUT_DIR
     temp_dir = args.temp_dir or settings.TEMP_DIR
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     Path(temp_dir).mkdir(parents=True, exist_ok=True)
     Path(settings.RIFE_MODEL_DIR).mkdir(parents=True, exist_ok=True)
 
+    container = str(encode_config.get("container") or "mp4")
     if args.output:
         output_path = args.output
         Path(output_path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
     else:
-        output_path = get_output_path(input_path, output_dir)
+        output_path = get_output_path(input_path, output_dir, extension=f".{container}")
 
-    multi, encode_fps, _interpolated_fps, need_resample = _resolve_fps_and_multi(args, ffmpeg, input_path)
-    if getattr(args, "fps_mode", "multi") == "target":
-        args.multi = multi
+    multi, encode_fps, _interpolated_fps, need_resample = _resolve_fps_and_multi(workflow_config, ffmpeg, input_path)
+    workflow_config["interpolation"]["multi"] = multi
 
     pipeline = Pipeline(name=f"task_{uuid.uuid4().hex[:12]}")
-    pipeline.add_filter(DecodeFilter(ffmpeg_wrapper=ffmpeg))
+    pipeline.add_filter(DecodeFilter(ffmpeg_wrapper=ffmpeg, decode_config=decode_config))
+    tensor_backend_name = workflow_config["interpolation"].get("tensorBackend", args.backend)
     for stage_index, step in enumerate(processing_steps):
         pipeline.add_filter(
             FrameProcessFilter(
                 algorithm_type=step["algorithm_type"],
-                tensor_backend_name=args.backend,
+                tensor_backend_name=tensor_backend_name,
                 progress_callback=_make_progress_callback(stage_index, len(processing_steps), step["algorithm_type"]),
                 algorithm_kwargs=step["algorithm_kwargs"],
                 stage_name=step["stage_name"],
             )
         )
-    pipeline.add_filter(
-        EncodeFilter(
-            ffmpeg_wrapper=ffmpeg,
-            codec=args.codec,
-            crf=args.crf,
-            preset=args.preset,
-        )
-    )
+    pipeline.add_filter(EncodeFilter(ffmpeg_wrapper=ffmpeg, encode_config=encode_config))
 
     input_data = {
         "input_path": input_path,
         "output_path": output_path,
-        "fps": args.fps,
+        "fps": encode_fps,
     }
     context: dict[str, Any] = {
         "task_id": uuid.uuid4().hex[:12],
         "temp_dir": temp_dir,
         "output_dir": output_dir,
         "processing_steps": processing_steps,
+        "workflow_config": workflow_config,
     }
     if need_resample:
         context["target_fps"] = encode_fps
@@ -339,7 +448,10 @@ def cmd_process(args: argparse.Namespace) -> None:
         )
     except KeyboardInterrupt:
         _emit_error(
-            "cancelled", "Processing was cancelled by the user.", details={"input_path": input_path}, exit_code=130
+            "cancelled",
+            "Processing was cancelled by the user.",
+            details={"input_path": input_path},
+            exit_code=130,
         )
     except Exception as exc:  # pragma: no cover - defensive boundary
         _emit_error(
@@ -348,7 +460,7 @@ def cmd_process(args: argparse.Namespace) -> None:
             details={
                 "input_path": input_path,
                 "output_path": output_path,
-                "algorithm": args.algorithm,
+                "algorithm": _resolve_primary_algorithm(workflow_config),
                 "processing_steps": [step["algorithm_type"] for step in processing_steps],
             },
         )
@@ -384,6 +496,7 @@ def cmd_info(args: argparse.Namespace) -> None:
         frames = ffmpeg.get_frame_count(input_path)
         duration = ffmpeg.get_duration(input_path)
         has_audio = ffmpeg.has_audio(input_path)
+        video_codec = ffmpeg.get_primary_video_codec(input_path)
 
         width = 0
         height = 0
@@ -402,6 +515,7 @@ def cmd_info(args: argparse.Namespace) -> None:
                 "has_audio": has_audio,
                 "width": width,
                 "height": height,
+                "video_codec": video_codec,
             }
         )
     except Exception as exc:  # pragma: no cover - defensive boundary
@@ -419,9 +533,20 @@ def cmd_check(_args: argparse.Namespace) -> None:
 
     pytorch_result = _check_pytorch_in_subprocess()
     paddle_result = _check_paddle_in_subprocess()
+    gpu_adapters = list_gpu_adapters()
+    non_virtual_adapters = [adapter for adapter in gpu_adapters if adapter.get("device_type") != "virtual"]
 
     default_model_path = _model_path()
     default_model_available = default_model_path.is_file() and default_model_path.stat().st_size > 0
+    ffmpeg_capabilities = (
+        ffmpeg.discover_capabilities(gpu_adapters)
+        if ffmpeg_available
+        else {
+            "hwaccels": [],
+            "encoderProfiles": [],
+            "decoderProfiles": [],
+        }
+    )
 
     _emit(
         {
@@ -431,10 +556,15 @@ def cmd_check(_args: argparse.Namespace) -> None:
                 "path": ffmpeg.ffmpeg_path,
                 "ffprobe_path": ffmpeg.ffprobe_path,
                 "version": ffmpeg_version,
+                "hwaccels": ffmpeg_capabilities["hwaccels"],
+                "encoderProfiles": ffmpeg_capabilities["encoderProfiles"],
+                "decoderProfiles": ffmpeg_capabilities["decoderProfiles"],
             },
             "gpu": {
-                "available": pytorch_result["gpu_available"],
-                "devices": pytorch_result["gpu_devices"],
+                "available": bool(non_virtual_adapters),
+                "devices": [adapter["name"] for adapter in non_virtual_adapters],
+                "adapters": gpu_adapters,
+                "cuda_available": pytorch_result["gpu_available"],
             },
             "tensor_backends": {
                 "pytorch": pytorch_result["pytorch_available"],
@@ -486,22 +616,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Stage order when interpolation and super-resolution are both enabled",
     )
     process_parser.add_argument("--fps", type=float, default=60.0, help="Default output FPS")
-    process_parser.add_argument(
-        "--fps-mode",
-        default="multi",
-        choices=["multi", "target"],
-        help="FPS calculation mode",
-    )
+    process_parser.add_argument("--fps-mode", default="multi", choices=["multi", "target"], help="FPS calculation mode")
     process_parser.add_argument("--target-fps", type=float, default=60.0, help="Target FPS when using target mode")
     process_parser.add_argument("--codec", default="libx264", help="Video codec")
     process_parser.add_argument("--crf", type=int, default=18, help="CRF quality")
     process_parser.add_argument("--preset", default="medium", help="Encoding preset")
-    process_parser.add_argument(
-        "--backend",
-        default="pytorch",
-        choices=["pytorch", "paddle"],
-        help="Tensor backend",
-    )
+    process_parser.add_argument("--backend", default="pytorch", choices=["pytorch", "paddle"], help="Tensor backend")
     process_parser.add_argument("--temp-dir", default=None, help="Temporary directory override")
     process_parser.add_argument("--output-dir", default=None, help="Output directory override")
     process_parser.add_argument("--multi", type=int, default=2, help="Interpolation multiplier")
@@ -510,6 +630,10 @@ def build_parser() -> argparse.ArgumentParser:
     process_parser.add_argument("--fp16", action="store_true", help="Enable FP16 inference")
     process_parser.add_argument("--sr-scale-factor", type=float, default=2.0, help="Super-resolution scale")
     process_parser.add_argument("--sr-algorithm", default="placeholder", help="Super-resolution algorithm")
+    process_parser.add_argument("--decode-config-json", default=None, help="Nested decode config JSON")
+    process_parser.add_argument("--encode-config-json", default=None, help="Nested encode config JSON")
+    process_parser.add_argument("--workflow-config-json", default=None, help="Nested workflow config JSON")
+    process_parser.add_argument("--output-config-json", default=None, help="Nested output config JSON")
     process_parser.set_defaults(func=cmd_process)
 
     info_parser = subcommands.add_parser("info", help="Inspect an input video")

@@ -1,34 +1,99 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use command_group::AsyncGroupChild;
 use tokio::sync::Mutex;
 
-#[derive(Debug, Clone, Deserialize)]
+pub type JsonMap = BTreeMap<String, serde_json::Value>;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TaskRequest {
-    pub input_path: String,
-    pub algorithm: String,
-    pub output_path: Option<String>,
-    pub output_dir: Option<String>,
-    pub temp_dir: Option<String>,
-    pub fps: f64,
-    pub fps_mode: String,
-    pub target_fps: Option<f64>,
-    pub codec: String,
-    pub crf: u32,
-    pub preset: String,
-    pub backend: String,
+pub struct DecodeConfig {
+    pub mode: String,
+    pub hwaccel: Option<String>,
+    pub hwaccel_device: Option<String>,
+    pub decoder: Option<String>,
+    #[serde(default)]
+    pub options: JsonMap,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InterpolationConfig {
+    pub enabled: bool,
+    pub target_fps: f64,
     pub multi: u32,
     pub model: String,
     pub scale: f64,
     pub fp16: bool,
-    pub enable_interpolation: bool,
-    pub enable_super_resolution: bool,
+    pub tensor_backend: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuperResolutionConfig {
+    pub enabled: bool,
+    pub scale_factor: f64,
+    pub algorithm: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnimeConfig {
+    pub enabled: bool,
+    pub profile: String,
+    pub denoise: u32,
+    pub edge_boost: u32,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowConfig {
+    pub fps_mode: String,
     pub process_order: String,
-    pub sr_scale_factor: f64,
-    pub sr_algorithm: String,
+    pub interpolation: InterpolationConfig,
+    pub super_resolution: SuperResolutionConfig,
+    pub anime: AnimeConfig,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RateControlConfig {
+    pub mode: String,
+    pub value: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncodeConfig {
+    pub codec: String,
+    pub family: String,
+    pub container: String,
+    pub keep_audio: bool,
+    pub rate_control: RateControlConfig,
+    #[serde(default)]
+    pub options: JsonMap,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutputConfig {
+    pub output_dir: String,
+    pub open_on_complete: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRequest {
+    pub input_path: String,
+    pub output_path: Option<String>,
+    pub temp_dir: Option<String>,
+    pub decode_config: DecodeConfig,
+    pub workflow_config: WorkflowConfig,
+    pub encode_config: EncodeConfig,
+    pub output_config: OutputConfig,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -4,53 +4,31 @@ import { useWorkbenchStore } from '@/stores/workbench'
 
 const store = useWorkbenchStore()
 
-const pipelineLabel = computed(() => {
-  const enabled = [
-    store.workflow.enableInterpolation ? '补帧' : null,
-    store.workflow.enableSuperResolution ? '超分' : null,
-    store.anime.enabled ? '动漫' : null,
-  ].filter(Boolean)
-
-  return enabled.length > 0 ? enabled.join(' / ') : '纯转码'
-})
+const cards = computed(() => [
+  { label: '环境', value: store.env.checkResult ? 'Ready' : store.env.issue ? 'Error' : 'Idle' },
+  { label: '素材', value: `${store.mediaItems.length}` },
+  { label: '已选', value: `${store.selectedIds.length}` },
+  { label: '队列', value: store.batch.isRunning ? 'Running' : 'Idle' },
+])
 </script>
 
 <template>
   <aside class="summary-panel surface-panel">
     <div class="summary-topbar">
       <div>
-        <p class="topbar-label">Status</p>
-        <h2>侧栏</h2>
+        <p class="topbar-label">Overview</p>
+        <h2>摘要</h2>
       </div>
 
-      <button
-        class="ghost-button compact-button"
-        :disabled="!store.task.outputPath && !store.output.outputPath"
-        @click="store.openOutputLocation()"
-      >
+      <button class="ghost-button compact-button" :disabled="!store.resolvedOutputPath" @click="store.openOutputLocation()">
         打开目录
       </button>
     </div>
 
     <section class="summary-grid">
-      <article class="summary-card">
-        <span>环境</span>
-        <strong>{{ store.env.checkResult ? 'Ready' : 'Idle' }}</strong>
-      </article>
-
-      <article class="summary-card">
-        <span>输入</span>
-        <strong>{{ store.source.inputPath ? 'Ready' : 'Idle' }}</strong>
-      </article>
-
-      <article class="summary-card">
-        <span>增强</span>
-        <strong>{{ pipelineLabel }}</strong>
-      </article>
-
-      <article class="summary-card">
-        <span>任务</span>
-        <strong>{{ store.task.status }}</strong>
+      <article v-for="item in cards" :key="item.label" class="summary-card">
+        <span>{{ item.label }}</span>
+        <strong>{{ item.value }}</strong>
       </article>
     </section>
 
