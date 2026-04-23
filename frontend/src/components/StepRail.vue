@@ -22,7 +22,7 @@ const moduleStates = computed<Record<ModuleKey, string>>(() => ({
   render: store.batch.isRunning || store.canStartBatch ? 'ready' : 'idle',
 }))
 
-const pipelineLabel = computed(() => {
+const workflowLabel = computed(() => {
   const workflow = store.activeItem?.workflowConfig
   if (!workflow) {
     return '等待素材'
@@ -70,7 +70,7 @@ const selectionLabel = computed(() => `${store.selectedIds.length}/${store.media
     </nav>
 
     <section class="rail-footer">
-      <span class="rail-footer-chip">{{ pipelineLabel }}</span>
+      <span class="rail-footer-chip">{{ workflowLabel }}</span>
       <span class="rail-footer-chip">{{ selectionLabel }}</span>
       <span class="rail-footer-chip" :data-state="store.globalTaskStatus">任务 {{ store.globalTaskStatus }}</span>
     </section>

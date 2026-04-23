@@ -89,8 +89,6 @@ pub struct OutputConfig {
 #[serde(rename_all = "camelCase")]
 pub struct TaskRequest {
     pub input_path: String,
-    pub output_path: Option<String>,
-    pub temp_dir: Option<String>,
     pub decode_config: DecodeConfig,
     pub workflow_config: WorkflowConfig,
     pub encode_config: EncodeConfig,

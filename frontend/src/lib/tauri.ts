@@ -42,16 +42,8 @@ async function safeInvoke<T>(command: string, args?: Record<string, unknown>): P
   }
 }
 
-export function pickInput(): Promise<string | null> {
-  return safeInvoke<string | null>('pick_input')
-}
-
 export function pickInputs(): Promise<string[]> {
   return safeInvoke<string[]>('pick_inputs')
-}
-
-export function pickOutput(fileName?: string): Promise<string | null> {
-  return safeInvoke<string | null>('pick_output', { file_name: fileName })
 }
 
 export function pickOutputDirectory(): Promise<string | null> {
@@ -76,10 +68,6 @@ export function cancelTask(): Promise<void> {
 
 export function openOutputLocation(path: string): Promise<void> {
   return safeInvoke<void>('open_output_location', { path })
-}
-
-export function openFileOrDirectory(path: string): Promise<void> {
-  return safeInvoke<void>('open_file_or_directory', { path })
 }
 
 export interface TaskEventHandlers {

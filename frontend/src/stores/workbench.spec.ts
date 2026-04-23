@@ -20,7 +20,6 @@ const mockCancelTask = vi.fn<() => Promise<void>>()
 const mockPickInputs = vi.fn<() => Promise<string[]>>()
 const mockPickOutputDirectory = vi.fn<() => Promise<string | null>>()
 const mockOpenOutputLocation = vi.fn<(path: string) => Promise<void>>()
-const mockOpenFileOrDirectory = vi.fn<(path: string) => Promise<void>>()
 
 vi.mock('@/lib/tauri', () => ({
   cancelTask: () => mockCancelTask(),
@@ -32,7 +31,6 @@ vi.mock('@/lib/tauri', () => ({
       handlersRef.current = null
     }
   },
-  openFileOrDirectory: (path: string) => mockOpenFileOrDirectory(path),
   openOutputLocation: (path: string) => mockOpenOutputLocation(path),
   pickInputs: () => mockPickInputs(),
   pickOutputDirectory: () => mockPickOutputDirectory(),
@@ -145,7 +143,6 @@ describe('workbench store', () => {
     mockPickInputs.mockReset()
     mockPickOutputDirectory.mockReset()
     mockOpenOutputLocation.mockReset()
-    mockOpenFileOrDirectory.mockReset()
     mockCheckEnvironment.mockResolvedValue(makeEnv())
     mockInspectVideo.mockImplementation(async (inputPath: string) => makeVideoInfo(inputPath))
     mockStartTask.mockResolvedValue()
@@ -153,7 +150,6 @@ describe('workbench store', () => {
     mockPickInputs.mockResolvedValue([])
     mockPickOutputDirectory.mockResolvedValue(null)
     mockOpenOutputLocation.mockResolvedValue()
-    mockOpenFileOrDirectory.mockResolvedValue()
   })
 
   it('bootstraps environment probing on startup', async () => {

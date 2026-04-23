@@ -1,4 +1,3 @@
-import { PROCESS_ORDER_LABELS, RATE_CONTROL_LABELS, WORKFLOW_LABELS } from '@/lib/workflow'
 import type {
   DecodeConfig,
   DecoderProfileSpec,
@@ -149,66 +148,6 @@ export function buildTaskRequest(item: MediaItem): TaskRequest {
     encodeConfig: item.encodeConfig,
     outputConfig: item.outputConfig,
   }
-}
-
-export interface SummarySection {
-  title: string
-  lines: string[]
-}
-
-export function buildSummarySections(
-  env: EnvironmentCheckResult | null,
-  item: MediaItem | null,
-): SummarySection[] {
-  if (!item) {
-    return [
-      {
-        title: '批量工作台',
-        lines: ['还没有导入素材。', '请前往输入页批量导入视频。'],
-      },
-    ]
-  }
-
-  const primaryMode = resolvePrimaryMode(item)
-  const decodeLabel =
-    item.decodeConfig.mode === 'hardware'
-      ? `${item.decodeConfig.decoder || 'hardware'} / ${item.decodeConfig.hwaccel}`
-      : 'software'
-  const encoderLabel = `${item.encodeConfig.codec} / ${RATE_CONTROL_LABELS[item.encodeConfig.rateControl.mode]} ${item.encodeConfig.rateControl.value}`
-
-  return [
-    {
-      title: '素材',
-      lines: [
-        item.displayName,
-        item.info ? `${item.info.width}x${item.info.height} / ${formatNumber(item.info.fps)} FPS` : '未读取素材信息',
-      ],
-    },
-    {
-      title: '环境',
-      lines: [
-        env?.runtime?.mode ?? '未探测',
-        env?.ffmpeg.available ? 'FFmpeg Ready' : 'FFmpeg Missing',
-        env?.gpu.devices[0] ?? 'CPU only',
-      ],
-    },
-    {
-      title: '流程',
-      lines: [
-        WORKFLOW_LABELS[primaryMode],
-        PROCESS_ORDER_LABELS[item.workflowConfig.processOrder],
-        decodeLabel,
-      ],
-    },
-    {
-      title: '编码',
-      lines: [
-        item.encodeConfig.container.toUpperCase(),
-        encoderLabel,
-        item.outputConfig.outputDir || '未设置输出目录',
-      ],
-    },
-  ]
 }
 
 export function formatNumber(value: number): string {

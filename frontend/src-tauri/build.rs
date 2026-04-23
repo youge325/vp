@@ -1,15 +1,11 @@
 const APP_COMMANDS: &[&str] = &[
-    "pick_input",
     "pick_inputs",
-    "pick_output",
     "pick_output_directory",
     "check_environment",
     "inspect_video",
     "start_task",
     "cancel_task",
     "open_output_location",
-    "open_file_or_directory",
-    "resolved_runtime",
 ];
 
 fn main() {

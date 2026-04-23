@@ -12,9 +12,6 @@ pub struct ResolvedRuntimePaths {
     pub ffprobe_path: Option<PathBuf>,
     pub model_dir: Option<PathBuf>,
     pub output_dir: PathBuf,
-    pub temp_dir: PathBuf,
-    pub runtime_mode: String,
-    pub bundled: bool,
 }
 
 pub fn resolve_runtime_paths<R: Runtime>(app: &AppHandle<R>) -> Result<ResolvedRuntimePaths, String> {
@@ -45,13 +42,6 @@ pub fn resolve_runtime_paths<R: Runtime>(app: &AppHandle<R>) -> Result<ResolvedR
         resource_dir.as_ref().map(|path| path.join("runtime")),
         Some(frontend_dir.join("src-tauri").join("resources").join("runtime")),
     ]);
-
-    let bundled = runtime_root.is_some();
-    let runtime_mode = if bundled {
-        "bundled".to_string()
-    } else {
-        "workspace".to_string()
-    };
 
     let python_executable = first_existing_file([
         env_path("VP_PYTHON_EXECUTABLE"),
@@ -98,16 +88,9 @@ pub fn resolve_runtime_paths<R: Runtime>(app: &AppHandle<R>) -> Result<ResolvedR
         .app_local_data_dir()
         .unwrap_or_else(|_| workspace_root.join(".tmp").join("app-output"))
         .join("output");
-    let temp_dir = app
-        .path()
-        .app_cache_dir()
-        .unwrap_or_else(|_| workspace_root.join(".tmp").join("app-cache"))
-        .join("temp");
 
     std::fs::create_dir_all(&output_dir)
         .map_err(|error| format!("Unable to create output directory: {error}"))?;
-    std::fs::create_dir_all(&temp_dir)
-        .map_err(|error| format!("Unable to create temp directory: {error}"))?;
 
     Ok(ResolvedRuntimePaths {
         backend_dir,
@@ -117,9 +100,6 @@ pub fn resolve_runtime_paths<R: Runtime>(app: &AppHandle<R>) -> Result<ResolvedR
         ffprobe_path,
         model_dir,
         output_dir,
-        temp_dir,
-        runtime_mode,
-        bundled,
     })
 }
 
@@ -139,20 +119,14 @@ fn first_existing_dir<I>(items: I) -> Option<PathBuf>
 where
     I: IntoIterator<Item = Option<PathBuf>>,
 {
-    items
-        .into_iter()
-        .flatten()
-        .find(|candidate| candidate.is_dir())
+    items.into_iter().flatten().find(|candidate| candidate.is_dir())
 }
 
 fn first_existing_file<I>(items: I) -> Option<PathBuf>
 where
     I: IntoIterator<Item = Option<PathBuf>>,
 {
-    items
-        .into_iter()
-        .flatten()
-        .find(|candidate| candidate.exists())
+    items.into_iter().flatten().find(|candidate| candidate.exists())
 }
 
 pub fn platform_python_binary() -> &'static str {
@@ -182,10 +156,6 @@ pub fn build_env_map(paths: &ResolvedRuntimePaths) -> Vec<(String, String)> {
         (
             "VP_OUTPUT_DIR".to_string(),
             paths.output_dir.to_string_lossy().to_string(),
-        ),
-        (
-            "VP_TEMP_DIR".to_string(),
-            paths.temp_dir.to_string_lossy().to_string(),
         ),
     ];
 
@@ -222,7 +192,7 @@ pub fn build_env_map(paths: &ResolvedRuntimePaths) -> Vec<(String, String)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{first_existing_dir, first_existing_file};
+    use super::{ResolvedRuntimePaths, build_env_map, first_existing_dir, first_existing_file};
     use std::path::PathBuf;
 
     #[test]
@@ -237,5 +207,22 @@ mod tests {
         let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
         let selected = first_existing_file([Some(PathBuf::from("missing")), Some(manifest.clone())]);
         assert_eq!(selected, Some(manifest));
+    }
+
+    #[test]
+    fn build_env_map_excludes_legacy_temp_override() {
+        let envs = build_env_map(&ResolvedRuntimePaths {
+            backend_dir: PathBuf::from("backend"),
+            runtime_root: Some(PathBuf::from("runtime")),
+            python_executable: PathBuf::from("python"),
+            ffmpeg_path: Some(PathBuf::from("ffmpeg")),
+            ffprobe_path: Some(PathBuf::from("ffprobe")),
+            model_dir: Some(PathBuf::from("models")),
+            output_dir: PathBuf::from("output"),
+        });
+        let legacy_temp_key = ["VP", "TEMP", "DIR"].join("_");
+
+        assert!(envs.iter().any(|(key, _)| key == "VP_OUTPUT_DIR"));
+        assert!(!envs.iter().any(|(key, _)| key == &legacy_temp_key));
     }
 }

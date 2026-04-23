@@ -8,7 +8,7 @@ vi.mock('@/stores/workbench', () => ({
   useWorkbenchStore: () => storeState.current,
 }))
 
-import DeliverStageView from '@/views/DeliverStageView.vue'
+import EncodeModuleView from '@/views/EncodeModuleView.vue'
 
 function createMediaItem(): MediaItem {
   return {
@@ -135,13 +135,13 @@ function createStoreMock(overrides: Record<string, unknown> = {}) {
   }
 }
 
-describe('DeliverStageView', () => {
+describe('EncodeModuleView', () => {
   beforeEach(() => {
     storeState.current = createStoreMock()
   })
 
   it('updates output path and segment frames through patchOutput', async () => {
-    const wrapper = mount(DeliverStageView)
+    const wrapper = mount(EncodeModuleView)
 
     const textInput = wrapper.get('input[type="text"]')
     await textInput.setValue('D:/custom-output')

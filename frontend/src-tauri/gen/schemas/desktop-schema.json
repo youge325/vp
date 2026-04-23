@@ -177,10 +177,10 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-input`\n- `allow-pick-inputs`\n- `allow-pick-output`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-inspect-video`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-open-output-location`\n- `allow-open-file-or-directory`\n- `allow-resolved-runtime`",
+          "description": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-inspect-video`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-open-output-location`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-input`\n- `allow-pick-inputs`\n- `allow-pick-output`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-inspect-video`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-open-output-location`\n- `allow-open-file-or-directory`\n- `allow-resolved-runtime`"
+          "markdownDescription": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-inspect-video`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-open-output-location`"
         },
         {
           "description": "Enables the cancel_task command without any pre-configured scope.",
@@ -201,22 +201,10 @@
           "markdownDescription": "Enables the inspect_video command without any pre-configured scope."
         },
         {
-          "description": "Enables the open_file_or_directory command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-open-file-or-directory",
-          "markdownDescription": "Enables the open_file_or_directory command without any pre-configured scope."
-        },
-        {
           "description": "Enables the open_output_location command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-output-location",
           "markdownDescription": "Enables the open_output_location command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the pick_input command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-pick-input",
-          "markdownDescription": "Enables the pick_input command without any pre-configured scope."
         },
         {
           "description": "Enables the pick_inputs command without any pre-configured scope.",
@@ -225,22 +213,10 @@
           "markdownDescription": "Enables the pick_inputs command without any pre-configured scope."
         },
         {
-          "description": "Enables the pick_output command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-pick-output",
-          "markdownDescription": "Enables the pick_output command without any pre-configured scope."
-        },
-        {
           "description": "Enables the pick_output_directory command without any pre-configured scope.",
           "type": "string",
           "const": "allow-pick-output-directory",
           "markdownDescription": "Enables the pick_output_directory command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the resolved_runtime command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-resolved-runtime",
-          "markdownDescription": "Enables the resolved_runtime command without any pre-configured scope."
         },
         {
           "description": "Enables the start_task command without any pre-configured scope.",
@@ -267,22 +243,10 @@
           "markdownDescription": "Denies the inspect_video command without any pre-configured scope."
         },
         {
-          "description": "Denies the open_file_or_directory command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-open-file-or-directory",
-          "markdownDescription": "Denies the open_file_or_directory command without any pre-configured scope."
-        },
-        {
           "description": "Denies the open_output_location command without any pre-configured scope.",
           "type": "string",
           "const": "deny-open-output-location",
           "markdownDescription": "Denies the open_output_location command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the pick_input command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-pick-input",
-          "markdownDescription": "Denies the pick_input command without any pre-configured scope."
         },
         {
           "description": "Denies the pick_inputs command without any pre-configured scope.",
@@ -291,22 +255,10 @@
           "markdownDescription": "Denies the pick_inputs command without any pre-configured scope."
         },
         {
-          "description": "Denies the pick_output command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-pick-output",
-          "markdownDescription": "Denies the pick_output command without any pre-configured scope."
-        },
-        {
           "description": "Denies the pick_output_directory command without any pre-configured scope.",
           "type": "string",
           "const": "deny-pick-output-directory",
           "markdownDescription": "Denies the pick_output_directory command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the resolved_runtime command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-resolved-runtime",
-          "markdownDescription": "Denies the resolved_runtime command without any pre-configured scope."
         },
         {
           "description": "Denies the start_task command without any pre-configured scope.",

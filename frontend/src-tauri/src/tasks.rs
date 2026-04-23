@@ -119,17 +119,6 @@ fn build_process_command(
     command.args(["-m", "app", "process"]);
     command.args(["--input", &request.input_path]);
 
-    if let Some(output_path) = &request.output_path {
-        if !output_path.is_empty() {
-            command.args(["--output", output_path]);
-        }
-    }
-    if let Some(temp_dir) = &request.temp_dir {
-        if !temp_dir.is_empty() {
-            command.args(["--temp-dir", temp_dir]);
-        }
-    }
-
     let decode_json = serde_json::to_string(&request.decode_config)?;
     let workflow_json = serde_json::to_string(&request.workflow_config)?;
     let encode_json = serde_json::to_string(&request.encode_config)?;

@@ -6,14 +6,12 @@ import {
   checkEnvironment as invokeCheckEnvironment,
   inspectVideo as invokeInspectVideo,
   listenTaskEvents,
-  openFileOrDirectory as invokeOpenFileOrDirectory,
   openOutputLocation as invokeOpenOutputLocation,
   pickInputs as invokePickInputs,
   pickOutputDirectory as invokePickOutputDirectory,
   startTask as invokeStartTask,
 } from '@/lib/tauri'
 import {
-  buildSummarySections,
   buildTaskRequest,
   cloneDecodeConfig,
   cloneEncodeConfig,
@@ -240,7 +238,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       null
     )
   })
-  const summarySections = computed(() => buildSummarySections(env.checkResult, activeItem.value))
   const allSelected = computed(
     () => mediaItems.value.length > 0 && mediaItems.value.every((item) => item.selected),
   )
@@ -821,18 +818,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   }
 
-  async function openFileOrDirectory(path: string): Promise<void> {
-    if (!path) {
-      return
-    }
-    try {
-      await invokeOpenFileOrDirectory(path)
-      clearOperationIssue('output')
-    } catch (error) {
-      setOperationIssue('output', normalizeTaskError(error, 'open_path_failed'))
-    }
-  }
-
   function getOptionValue(
     option: CapabilityOptionSpec,
     values: Record<string, CapabilityValue>,
@@ -868,7 +853,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     visibleDecoderProfiles,
     currentEncoderProfile,
     currentDecoderProfile,
-    summarySections,
     allSelected,
     canStartBatch,
     batchTotal,
@@ -901,7 +885,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     cancelCurrentTask,
     pickOutputDirectory,
     openOutputLocation,
-    openFileOrDirectory,
     getOptionValue,
   }
 })

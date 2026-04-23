@@ -73,7 +73,6 @@ class Settings(BaseSettings):
     FFMPEG_PATH: str = ""
     FFPROBE_PATH: str = ""
 
-    TEMP_DIR: str = ""
     OUTPUT_DIR: str = ""
     MAX_CONCURRENT_TASKS: int = 1
 
@@ -101,7 +100,6 @@ class Settings(BaseSettings):
         if runtime_root is None:
             runtime_root = _first_existing_path(_candidate_runtime_roots(app_root, backend_root))
 
-        temp_dir = _resolve_path(self.TEMP_DIR) or (backend_root / "temp")
         output_dir = _resolve_path(self.OUTPUT_DIR) or (backend_root / "output")
         log_dir = _resolve_path(self.LOG_DIR) or (backend_root / "logs")
 
@@ -133,7 +131,6 @@ class Settings(BaseSettings):
         object.__setattr__(self, "PYTHON_EXECUTABLE", python_value)
         object.__setattr__(self, "FFMPEG_PATH", ffmpeg_value)
         object.__setattr__(self, "FFPROBE_PATH", ffprobe_value)
-        object.__setattr__(self, "TEMP_DIR", str(temp_dir))
         object.__setattr__(self, "OUTPUT_DIR", str(output_dir))
         object.__setattr__(self, "LOG_DIR", str(log_dir))
         object.__setattr__(self, "RIFE_MODEL_DIR", str(model_dir))
@@ -175,7 +172,6 @@ class Settings(BaseSettings):
             "python_executable": self.PYTHON_EXECUTABLE,
             "ffmpeg_path": self.FFMPEG_PATH,
             "ffprobe_path": self.FFPROBE_PATH,
-            "temp_dir": self.TEMP_DIR,
             "output_dir": self.OUTPUT_DIR,
             "log_dir": self.LOG_DIR,
             "model_dir": self.RIFE_MODEL_DIR,

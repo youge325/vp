@@ -31,24 +31,18 @@ describe('workflow routes', () => {
     expect(WORKBENCH_MODULES.every((module) => Boolean(module.icon))).toBe(true)
   })
 
-  it('redirects legacy routes into the new module layout', async () => {
-    const redirects = [
-      ['/', '/home'],
-      ['/overview', '/home'],
-      ['/prepare', '/home'],
-      ['/source', '/input'],
-      ['/interpolation', '/enhance?section=interpolation'],
-      ['/super-resolution', '/enhance?section=super-resolution'],
-      ['/anime', '/enhance?section=anime'],
-      ['/format', '/encode'],
-      ['/deliver', '/encode'],
-      ['/results', '/render'],
-      ['/preview', '/render'],
-    ] as const
+  it('keeps only the root redirect plus the six formal module routes', async () => {
+    const routePaths = router
+      .getRoutes()
+      .map((route) => route.path)
+      .filter((path) =>
+        ['/', '/home', '/input', '/decode', '/enhance', '/encode', '/render'].includes(path),
+      )
+      .sort()
 
-    for (const [from, to] of redirects) {
-      await router.push(from)
-      expect(router.currentRoute.value.fullPath).toBe(to)
-    }
+    expect(routePaths).toEqual(['/', '/decode', '/encode', '/enhance', '/home', '/input', '/render'])
+
+    await router.push('/')
+    expect(router.currentRoute.value.fullPath).toBe('/home')
   })
 })
