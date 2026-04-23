@@ -1,6 +1,6 @@
 # 参数传递架构图
 
-该图描述前端配置如何经由 Tauri 与 Rust Runtime 传递给 Python CLI，并最终生成 ffmpeg 命令。
+这张图描述当前流式处理链路中，前端配置如何经过 Tauri 和 Python CLI，最终驱动 `decoder -> processor -> encoder` 的内存管道与分段输出。
 
 ```mermaid
 graph TD
@@ -24,19 +24,27 @@ graph TD
 
   subgraph PY[Python CLI]
     PYParser[argparse process 子命令]
-    PYLoad[_load_json_arg 与 _deep_merge]
-    PYPipeline[Pipeline execute]
+    PYLoad[_load_json_arg 和默认配置合并]
+    PYPlan[_resolve_processing_steps]
+    PYExec[process_video_streaming 或 transcode_video]
   end
 
-  subgraph PF[Processing Filters]
-    PFDecode[DecodeFilter]
-    PFFrame[FrameProcessFilter]
-    PFEncode[EncodeFilter]
+  subgraph Stream[Streaming Executor]
+    SDecode[rawvideo decoder]
+    SQueue1[decode queue maxsize=8]
+    SProcess[pre stages + interpolation + post stages]
+    SQueue2[encode queue maxsize=8]
+    SEncode[rawvideo encoder]
+    SSegment[segment manifest 和 sidecar]
+    SFinalize[concat segments + merge audio]
   end
 
   subgraph FF[FFmpeg Wrapper]
-    FFDecode[build_decode_input_args]
-    FFEncode[build_encode_output_args]
+    FFDecode[build_rawvideo_decode_command]
+    FFEncode[build_rawvideo_encode_command]
+    FFConcat[concat_videos]
+    FFAudio[extract_audio / merge_audio]
+    FFDirect[transcode_video]
     FFRun[_run_command]
   end
 
@@ -44,31 +52,30 @@ graph TD
   CFG[Settings env_prefix VP_]
   BIN[(ffmpeg / ffprobe)]
 
-  FEView --> FEStore
-  FEStore --> FEReq
-  FEReq -->|TaskRequest camelCase| FEInvoke
-  FEInvoke --> RSCommand
-  RSCommand --> RSModel
-  RSModel --> RSBuild
-  RSBuild -->|decode workflow encode output JSON| RSPython
-  RSPython --> PYParser
-  PYParser --> PYLoad
-  PYLoad --> PYPipeline
+  FEView --> FEStore --> FEReq --> FEInvoke
+  FEInvoke --> RSCommand --> RSModel --> RSBuild --> RSPython
 
-  PYPipeline --> PFDecode
-  PYPipeline --> PFFrame
-  PYPipeline --> PFEncode
+  RSPython --> PYParser --> PYLoad --> PYPlan --> PYExec
 
-  PFDecode --> FFDecode
-  PFEncode --> FFEncode
-  FFDecode --> FFRun
-  FFEncode --> FFRun
-  FFRun --> BIN
+  PYExec -->|有处理阶段| SDecode
+  SDecode --> SQueue1 --> SProcess --> SQueue2 --> SEncode --> SSegment --> SFinalize
+  PYExec -->|纯转码| FFDirect
 
-  RSEnv -. inject VP_* .-> RSPython
+  SDecode --> FFDecode --> FFRun
+  SEncode --> FFEncode --> FFRun
+  SFinalize --> FFConcat --> FFRun
+  SFinalize --> FFAudio --> FFRun
+  FFDirect --> FFRun --> BIN
+
+  RSEnv -. 注入 VP_* .-> RSPython
   ENV -. runtime resolve .-> RSEnv
-  RSPython -. read env .-> CFG
-  CFG -. set FFMPEG_PATH FFPROBE_PATH .-> FFRun
+  RSPython -. 读取环境变量 .-> CFG
+  CFG -. 设置 FFMPEG_PATH / FFPROBE_PATH .-> FFRun
 ```
 
-说明：实线表示主数据流，虚线表示运行时环境变量注入链路。
+说明：
+
+- 有帧处理阶段的任务统一走流式执行器，不再经过临时帧目录。
+- 解码和编码都通过 FFmpeg `rawvideo` 管道完成，中间只保留有界队列中的少量帧。
+- `segmentFrames` 控制分段输出，分段仅作为恢复缓存；任务最终完成后会拼接成单个成片。
+- 纯 `format_conversion` 不走补帧流式处理，直接走 FFmpeg 转码/封装。

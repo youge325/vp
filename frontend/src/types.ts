@@ -192,6 +192,7 @@ export interface EncodeConfig {
 export interface OutputConfig {
   outputDir: string
   openOnComplete: boolean
+  segmentFrames: number
 }
 
 export interface MediaTaskState {

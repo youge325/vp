@@ -9,7 +9,6 @@ import os
 import subprocess
 import sys
 import time
-import uuid
 from pathlib import Path
 from typing import Any
 
@@ -19,12 +18,9 @@ if str(_BACKEND_DIR) not in sys.path:
 
 from app.algorithms.factory import register_default_algorithms
 from app.config import settings
-from app.processing.decoder import DecodeFilter
-from app.processing.encoder import EncodeFilter
-from app.processing.frame_processor import FrameProcessFilter
-from app.processing.pipeline import Pipeline
+from app.processing.streaming import process_video_streaming
 from app.utils.ffmpeg_wrapper import FFmpegWrapper
-from app.utils.file_utils import cleanup_dir, get_output_path, validate_input_path
+from app.utils.file_utils import get_output_path, validate_input_path
 from app.utils.logger import get_logger, setup_logging
 from app.utils.system_probe import list_gpu_adapters
 
@@ -178,6 +174,7 @@ def _default_output_config(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "outputDir": args.output_dir or settings.OUTPUT_DIR,
         "openOnComplete": True,
+        "segmentFrames": 1000,
     }
 
 
@@ -389,9 +386,7 @@ def cmd_process(args: argparse.Namespace) -> None:
             )
 
     output_dir = output_config.get("outputDir") or settings.OUTPUT_DIR
-    temp_dir = args.temp_dir or settings.TEMP_DIR
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    Path(temp_dir).mkdir(parents=True, exist_ok=True)
     Path(settings.RIFE_MODEL_DIR).mkdir(parents=True, exist_ok=True)
 
     container = str(encode_config.get("container") or "mp4")
@@ -404,39 +399,40 @@ def cmd_process(args: argparse.Namespace) -> None:
     multi, encode_fps, _interpolated_fps, need_resample = _resolve_fps_and_multi(workflow_config, ffmpeg, input_path)
     workflow_config["interpolation"]["multi"] = multi
 
-    pipeline = Pipeline(name=f"task_{uuid.uuid4().hex[:12]}")
-    pipeline.add_filter(DecodeFilter(ffmpeg_wrapper=ffmpeg, decode_config=decode_config))
     tensor_backend_name = workflow_config["interpolation"].get("tensorBackend", args.backend)
-    for stage_index, step in enumerate(processing_steps):
-        pipeline.add_filter(
-            FrameProcessFilter(
-                algorithm_type=step["algorithm_type"],
-                tensor_backend_name=tensor_backend_name,
-                progress_callback=_make_progress_callback(stage_index, len(processing_steps), step["algorithm_type"]),
-                algorithm_kwargs=step["algorithm_kwargs"],
-                stage_name=step["stage_name"],
-            )
-        )
-    pipeline.add_filter(EncodeFilter(ffmpeg_wrapper=ffmpeg, encode_config=encode_config))
-
-    input_data = {
-        "input_path": input_path,
-        "output_path": output_path,
-        "fps": encode_fps,
-    }
-    context: dict[str, Any] = {
-        "task_id": uuid.uuid4().hex[:12],
-        "temp_dir": temp_dir,
-        "output_dir": output_dir,
-        "processing_steps": processing_steps,
-        "workflow_config": workflow_config,
-    }
-    if need_resample:
-        context["target_fps"] = encode_fps
-
+    progress_callbacks = [
+        _make_progress_callback(stage_index, len(processing_steps), step["algorithm_type"])
+        for stage_index, step in enumerate(processing_steps)
+    ]
     start_time = time.time()
     try:
-        result = pipeline.execute(input_data, context)
+        if processing_steps:
+            result = process_video_streaming(
+                ffmpeg=ffmpeg,
+                input_path=input_path,
+                output_path=output_path,
+                decode_config=decode_config,
+                encode_config=encode_config,
+                workflow_config=workflow_config,
+                output_config=output_config,
+                processing_steps=processing_steps,
+                tensor_backend_name=tensor_backend_name,
+                progress_callbacks=progress_callbacks,
+                output_fps=encode_fps if need_resample else None,
+            )
+        else:
+            ffmpeg.transcode_video(
+                input_path=input_path,
+                output_path=output_path,
+                decode_config=decode_config,
+                encode_config=encode_config,
+            )
+            result = {
+                "output_path": output_path,
+                "processed_frames": ffmpeg.get_frame_count(input_path),
+                "audio_merged": bool(encode_config.get("keepAudio", True)),
+            }
+
         elapsed = round(time.time() - start_time, 2)
         _emit(
             {
@@ -464,10 +460,6 @@ def cmd_process(args: argparse.Namespace) -> None:
                 "processing_steps": [step["algorithm_type"] for step in processing_steps],
             },
         )
-    finally:
-        frame_dir = context.get("frame_dir")
-        if frame_dir and os.path.isdir(frame_dir):
-            cleanup_dir(os.path.dirname(frame_dir))
 
 
 def cmd_info(args: argparse.Namespace) -> None:

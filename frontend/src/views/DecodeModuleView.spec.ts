@@ -105,6 +105,7 @@ function createMediaItem(): MediaItem {
     outputConfig: {
       outputDir: '',
       openOnComplete: true,
+      segmentFrames: 1000,
     },
     taskState: {
       status: 'idle',

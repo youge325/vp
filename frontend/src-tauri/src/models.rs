@@ -82,6 +82,7 @@ pub struct EncodeConfig {
 pub struct OutputConfig {
     pub output_dir: String,
     pub open_on_complete: bool,
+    pub segment_frames: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]

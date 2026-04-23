@@ -57,6 +57,13 @@ function updateOutputDir(event: Event): void {
     config.outputDir = value
   })
 }
+
+function updateSegmentFrames(event: Event): void {
+  const value = Number((event.target as HTMLInputElement).value)
+  store.patchOutput((config) => {
+    config.segmentFrames = Number.isFinite(value) && value > 0 ? Math.round(value) : 1000
+  })
+}
 </script>
 
 <template>
@@ -113,6 +120,17 @@ function updateOutputDir(event: Event): void {
               {{ container.toUpperCase() }}
             </option>
           </select>
+        </label>
+
+        <label class="field">
+          <span>分段帧数</span>
+          <input
+            :value="Number(store.activeItem.outputConfig.segmentFrames)"
+            type="number"
+            min="1"
+            step="1"
+            @input="updateSegmentFrames"
+          />
         </label>
 
         <label class="field">
