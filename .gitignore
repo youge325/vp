@@ -31,9 +31,6 @@ backend/output/
 # 模型权重（36 个 pkl，体积大，不从 GitHub Release 下载到仓库）
 backend/models/*.pkl
 
-# 数据库
-backend/vp_data.db
-
 # ============================
 # 项目特定 - 前端 / 通用
 # ============================
