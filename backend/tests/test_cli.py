@@ -1,6 +1,8 @@
 """CLI processing-step planning tests."""
 
-from app.cli import _resolve_processing_steps
+import argparse
+
+from app.cli import _default_output_config, _load_json_arg, _resolve_processing_steps
 
 
 def _make_workflow_config(**overrides):
@@ -77,3 +79,12 @@ def test_resolve_processing_steps_format_conversion_skips_frame_filters():
     )
 
     assert steps == []
+
+
+def test_default_output_config_includes_segment_frames_and_json_override():
+    args = argparse.Namespace(output_dir="D:/output")
+    config = _default_output_config(args)
+    merged = _load_json_arg('{"segmentFrames": 240}', config)
+
+    assert config["segmentFrames"] == 1000
+    assert merged["segmentFrames"] == 240

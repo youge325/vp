@@ -7,7 +7,11 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
+import threading
 from typing import Any
+
+import numpy as np
 
 from app.config import settings
 from app.utils.logger import get_logger
@@ -170,43 +174,104 @@ class FFmpegWrapper:
                 return str(stream.get("codec_name") or "")
         return ""
 
-    def decode_to_frames(
+    def build_rawvideo_decode_command(
         self,
         input_path: str,
-        output_dir: str,
-        frame_prefix: str = "frame_%06d.png",
+        *,
+        width: int,
+        height: int,
         decode_config: dict[str, Any] | None = None,
-    ) -> str:
-        os.makedirs(output_dir, exist_ok=True)
-        output_pattern = os.path.join(output_dir, frame_prefix)
-        cmd = [self.ffmpeg_path]
+        start_frame: int = 0,
+    ) -> list[str]:
+        if width <= 0 or height <= 0:
+            raise ValueError("width and height must be positive for rawvideo decode.")
+        cmd = [self.ffmpeg_path, "-hide_banner", "-loglevel", "error"]
         cmd.extend(self.build_decode_input_args(input_path, decode_config))
-        cmd.extend(["-qscale:v", "1", "-qmin", "1", "-qmax", "1", "-vsync", "0", output_pattern, "-y"])
-        self._run_command(cmd)
-        logger.info("Decoded %s -> %s", input_path, output_dir)
-        return output_dir
+        if start_frame > 0:
+            cmd.extend(["-vf", f"select=gte(n\\,{start_frame})"])
+        cmd.extend(["-map", "0:v:0", "-pix_fmt", "rgb24", "-f", "rawvideo", "-vsync", "0", "-"])
+        return cmd
 
-    def encode_from_frames(
+    def build_rawvideo_encode_command(
         self,
-        frame_dir: str,
         output_path: str,
-        fps: float = 60.0,
+        *,
+        width: int,
+        height: int,
+        fps: float,
         output_fps: float | None = None,
-        frame_prefix: str = "frame_%06d.png",
         encode_config: dict[str, Any] | None = None,
-    ) -> str:
-        if not os.path.isdir(frame_dir):
-            raise FileNotFoundError(f"Frames directory does not exist: {frame_dir}")
-
-        encode_config = encode_config or {}
-        input_pattern = os.path.join(frame_dir, frame_prefix)
-        cmd = [self.ffmpeg_path, "-framerate", str(fps), "-i", input_pattern]
+    ) -> list[str]:
+        cmd = [
+            self.ffmpeg_path,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-s",
+            f"{width}x{height}",
+            "-framerate",
+            str(fps),
+            "-i",
+            "-",
+        ]
         if output_fps is not None and abs(output_fps - fps) > 0.01:
             cmd.extend(["-r", str(output_fps)])
         cmd.extend(self.build_encode_output_args(output_path, encode_config))
-        self._run_command(cmd)
-        logger.info("Encoded %s -> %s", frame_dir, output_path)
-        return output_path
+        return cmd
+
+    def open_rawvideo_decoder(
+        self,
+        *,
+        input_path: str,
+        width: int,
+        height: int,
+        decode_config: dict[str, Any] | None = None,
+        start_frame: int = 0,
+    ) -> "RawVideoReader":
+        cmd = self.build_rawvideo_decode_command(
+            input_path,
+            width=width,
+            height=height,
+            decode_config=decode_config,
+            start_frame=start_frame,
+        )
+        process = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return RawVideoReader(process=process, width=width, height=height)
+
+    def open_rawvideo_encoder(
+        self,
+        *,
+        output_path: str,
+        width: int,
+        height: int,
+        fps: float,
+        output_fps: float | None = None,
+        encode_config: dict[str, Any] | None = None,
+    ) -> "RawVideoWriter":
+        cmd = self.build_rawvideo_encode_command(
+            output_path,
+            width=width,
+            height=height,
+            fps=fps,
+            output_fps=output_fps,
+            encode_config=encode_config,
+        )
+        process = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        return RawVideoWriter(process=process, width=width, height=height)
 
     def extract_audio(self, input_path: str, output_path: str) -> str | None:
         cmd = [self.ffmpeg_path, "-i", input_path, "-vn", "-acodec", "copy", output_path, "-y"]
@@ -238,6 +303,72 @@ class FFmpegWrapper:
             output_path,
             "-y",
         ]
+        self._run_command(cmd)
+        return output_path
+
+    def concat_videos(self, segment_paths: list[str], output_path: str) -> str:
+        if not segment_paths:
+            raise ValueError("segment_paths must not be empty")
+
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        list_file_path = ""
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                suffix=".concat.txt",
+                dir=os.path.dirname(output_path) or ".",
+                delete=False,
+            ) as handle:
+                list_file_path = handle.name
+                for path in segment_paths:
+                    normalized = path.replace("\\", "/").replace("'", "'\\''")
+                    handle.write(f"file '{normalized}'\n")
+
+            cmd = [
+                self.ffmpeg_path,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                list_file_path,
+                "-c",
+                "copy",
+                output_path,
+                "-y",
+            ]
+            self._run_command(cmd)
+            return output_path
+        finally:
+            if list_file_path and os.path.isfile(list_file_path):
+                os.remove(list_file_path)
+
+    def transcode_video(
+        self,
+        *,
+        input_path: str,
+        output_path: str,
+        decode_config: dict[str, Any] | None = None,
+        encode_config: dict[str, Any] | None = None,
+        output_fps: float | None = None,
+    ) -> str:
+        encode_config = encode_config or {}
+        keep_audio = bool(encode_config.get("keepAudio", True))
+
+        cmd = [self.ffmpeg_path, "-hide_banner", "-loglevel", "error"]
+        cmd.extend(self.build_decode_input_args(input_path, decode_config))
+        cmd.extend(["-map", "0:v:0"])
+        if keep_audio:
+            cmd.extend(["-map", "0:a?", "-c:a", "aac"])
+        else:
+            cmd.append("-an")
+        if output_fps is not None:
+            cmd.extend(["-r", str(output_fps)])
+        cmd.extend(self.build_encode_output_args(output_path, encode_config))
         self._run_command(cmd)
         return output_path
 
@@ -437,7 +568,7 @@ class FFmpegWrapper:
         args.extend(["-i", input_path])
         return args
 
-    def build_encode_output_args(self, output_path: str, encode_config: dict[str, Any] | None = None) -> list[str]:
+    def build_encode_video_args(self, encode_config: dict[str, Any] | None = None) -> list[str]:
         encode_config = encode_config or {}
         codec = str(encode_config.get("codec") or "libx264")
         options = dict(encode_config.get("options", {}))
@@ -461,6 +592,10 @@ class FFmpegWrapper:
             args.extend(["-b:v", _format_bitrate(value)])
 
         args.extend(self._build_option_args(options))
+        return args
+
+    def build_encode_output_args(self, output_path: str, encode_config: dict[str, Any] | None = None) -> list[str]:
+        args = self.build_encode_video_args(encode_config)
         args.extend([output_path, "-y"])
         return args
 
@@ -560,3 +695,88 @@ class FFmpegWrapper:
             if found:
                 logger.info("Auto-detected ffprobe at %s", found)
                 self.ffprobe_path = found
+
+
+class _FFmpegPipeBase:
+    """Common lifecycle handling for FFmpeg pipe processes."""
+
+    def __init__(self, process: subprocess.Popen[bytes]):
+        self._process = process
+        self._stderr_lines: list[str] = []
+        self._stderr_thread = threading.Thread(target=self._collect_stderr, daemon=True)
+        self._stderr_thread.start()
+
+    def _collect_stderr(self) -> None:
+        if self._process.stderr is None:
+            return
+        for raw_line in iter(self._process.stderr.readline, b""):
+            text = raw_line.decode("utf-8", errors="replace").strip()
+            if text:
+                self._stderr_lines.append(text)
+
+    def _wait_for_process(self) -> None:
+        return_code = self._process.wait()
+        self._stderr_thread.join(timeout=1)
+        if return_code != 0:
+            message = "\n".join(self._stderr_lines[-20:]) or f"FFmpeg exited with code {return_code}"
+            raise RuntimeError(f"FFmpeg pipe command failed ({return_code}): {message}")
+
+
+class RawVideoReader(_FFmpegPipeBase):
+    """Read `rgb24` rawvideo frames from an FFmpeg stdout pipe."""
+
+    def __init__(self, *, process: subprocess.Popen[bytes], width: int, height: int):
+        super().__init__(process)
+        self._width = width
+        self._height = height
+        self._frame_bytes = width * height * 3
+
+    def read_frame(self) -> np.ndarray | None:
+        if self._process.stdout is None:
+            raise RuntimeError("FFmpeg stdout pipe is not available.")
+
+        chunks: list[bytes] = []
+        remaining = self._frame_bytes
+        while remaining > 0:
+            chunk = self._process.stdout.read(remaining)
+            if not chunk:
+                if not chunks:
+                    return None
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+
+        if remaining != 0:
+            self._wait_for_process()
+            raise RuntimeError("FFmpeg rawvideo decoder produced a partial frame.")
+
+        frame = np.frombuffer(b"".join(chunks), dtype=np.uint8)
+        return frame.reshape((self._height, self._width, 3))
+
+    def close(self) -> None:
+        if self._process.stdout is not None:
+            self._process.stdout.close()
+        self._wait_for_process()
+
+
+class RawVideoWriter(_FFmpegPipeBase):
+    """Write `rgb24` rawvideo frames into an FFmpeg stdin pipe."""
+
+    def __init__(self, *, process: subprocess.Popen[bytes], width: int, height: int):
+        super().__init__(process)
+        self._width = width
+        self._height = height
+
+    def write_frame(self, frame: np.ndarray) -> None:
+        if self._process.stdin is None:
+            raise RuntimeError("FFmpeg stdin pipe is not available.")
+        if frame.shape != (self._height, self._width, 3):
+            raise ValueError(f"Frame shape mismatch: expected {(self._height, self._width, 3)}, got {frame.shape}")
+        if frame.dtype != np.uint8:
+            frame = frame.astype(np.uint8)
+        self._process.stdin.write(np.ascontiguousarray(frame).tobytes())
+
+    def close(self) -> None:
+        if self._process.stdin is not None:
+            self._process.stdin.close()
+        self._wait_for_process()

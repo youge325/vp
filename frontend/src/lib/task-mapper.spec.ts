@@ -143,6 +143,7 @@ function makeItem(env = makeEnv()): MediaItem {
     outputConfig: {
       outputDir: 'D:/output',
       openOnComplete: true,
+      segmentFrames: 1000,
     },
     taskState: createIdleTaskState(),
     lastOutputPath: '',
@@ -174,6 +175,7 @@ describe('task mapper', () => {
     expect(request.workflowConfig.interpolation.targetFps).toBe(60)
     expect(request.encodeConfig.codec).toBe('hevc_nvenc')
     expect(request.outputConfig.outputDir).toBe('D:/output')
+    expect(request.outputConfig.segmentFrames).toBe(1000)
   })
 
   it('creates readable summary sections for the active file', () => {

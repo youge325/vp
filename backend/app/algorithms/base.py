@@ -40,7 +40,7 @@ class IAlgorithm(ABC):
         是否需要帧对处理模式。
 
         返回 True 表示该算法需要输入相邻两帧来生成中间帧，
-        FrameProcessFilter 将自动切换为帧对插值模式。
+        流式处理器将切换为帧对插值模式。
         默认返回 False（逐帧处理）。
         """
         return False

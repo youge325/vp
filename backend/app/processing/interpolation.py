@@ -25,7 +25,7 @@ class FrameInterpolationAlgorithm(IAlgorithm):
     3. 支持可配置的插值倍率（2x, 4x 等）
 
     使用方式：
-    - needs_frame_pairs() 返回 True，通知 FrameProcessFilter 使用帧对处理模式
+    - needs_frame_pairs() 返回 True，通知流式处理器使用帧对处理模式
     - process_frame_pair() 实现帧对插值推理
     - process_frame() 保留兼容但标记为不支持（补帧需要帧对）
     """
@@ -81,8 +81,8 @@ class FrameInterpolationAlgorithm(IAlgorithm):
         """
         单帧处理（补帧算法不适用，直接返回原帧）。
 
-        补帧需要帧对输入，单帧处理模式由 FrameProcessFilter
-        在逐帧模式下回退调用，仅原样返回。
+        补帧需要帧对输入；如果流式处理链在单帧回退路径上调用这里，
+        则仅原样返回输入帧。
         """
         return frame
 

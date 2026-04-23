@@ -1,6 +1,6 @@
 # 字段级映射图
 
-该图聚焦关键字段如何从前端对象映射到后端解析结果，以及最终 ffmpeg 参数落点。
+这张图聚焦关键字段如何从前端对象映射到后端执行参数，以及它们在流式执行和分段输出中的落点。
 
 ```mermaid
 graph LR
@@ -9,7 +9,7 @@ graph LR
     FEDecode[decodeConfig mode hwaccel hwaccelDevice decoder options]
     FEWorkflow[workflowConfig fpsMode processOrder interpolation targetFps multi]
     FEEncode[encodeConfig codec container keepAudio rateControl options]
-    FEOutput[outputConfig outputDir openOnComplete]
+    FEOutput[outputConfig outputDir openOnComplete segmentFrames]
   end
 
   subgraph RS[Rust 构建 CLI]
@@ -20,19 +20,20 @@ graph LR
     RSO[--output-config-json]
   end
 
-  subgraph PY[Python 解析与处理]
+  subgraph PY[Python 解析与执行]
     PYIn[args.input]
     PYD[_load_json_arg -> decode_config]
     PYW[_load_json_arg -> workflow_config]
     PYE[_load_json_arg -> encode_config]
     PYO[_load_json_arg -> output_config]
+    PYExec[streaming executor 或 transcode_video]
   end
 
   subgraph FF[FFmpeg 参数落点]
     FFD[-hwaccel -hwaccel_device -c:v -key value]
-    FFW[fps multi target_fps 影响输出帧率]
+    FFW[source_fps target_fps multi output_fps]
     FFE[-c:v -crf cq qp b:v -key value]
-    FFO[output_path container keep_audio audio merge]
+    FFO[output_path segmentFrames keep_audio concat merge]
   end
 
   FEInput --> RSIn --> PYIn
@@ -41,12 +42,16 @@ graph LR
   FEEncode --> RSE --> PYE --> FFE
   FEOutput --> RSO --> PYO --> FFO
 
-  PYW --> PYE
+  PYW --> PYExec
+  PYE --> PYExec
+  PYO --> PYExec
 ```
 
-关键示例：
+关键映射示例：
 
-- decodeConfig.hwaccelDevice -> decode_config hwaccelDevice -> -hwaccel_device
-- encodeConfig.rateControl.mode value -> rateControl -> -crf 或 -cq 或 -qp 或 -b:v
-- decodeConfig.options 与 encodeConfig.options -> options -> -key value
-- workflowConfig.interpolation.targetFps multi -> 流程内部计算 -> encode_from_frames fps output_fps
+- `decodeConfig.hwaccelDevice` -> `decode_config.hwaccelDevice` -> `-hwaccel_device`
+- `decodeConfig.options` -> `decode_config.options` -> 解码器附加参数
+- `encodeConfig.rateControl.mode/value` -> `rateControl` -> `-crf` / `-cq` / `-qp` / `-b:v`
+- `encodeConfig.options` -> `encode_config.options` -> 编码器附加参数
+- `workflowConfig.interpolation.targetFps` 与 `workflowConfig.interpolation.multi` -> 流程内部计算 -> 流式编码 `fps/output_fps`
+- `outputConfig.segmentFrames` -> 分段 sidecar / manifest -> 分段拼接与断点恢复

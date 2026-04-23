@@ -8,7 +8,7 @@ vi.mock('@/stores/workbench', () => ({
   useWorkbenchStore: () => storeState.current,
 }))
 
-import InputModuleView from '@/views/InputModuleView.vue'
+import DeliverStageView from '@/views/DeliverStageView.vue'
 
 function createMediaItem(): MediaItem {
   return {
@@ -71,7 +71,7 @@ function createMediaItem(): MediaItem {
       options: {},
     },
     outputConfig: {
-      outputDir: '',
+      outputDir: 'D:/output',
       openOnComplete: true,
       segmentFrames: 1000,
     },
@@ -96,49 +96,60 @@ function createMediaItem(): MediaItem {
 }
 
 function createStoreMock(overrides: Record<string, unknown> = {}) {
+  const item = createMediaItem()
   return {
-    ...createStoreMockBase(),
+    activeItem: item,
+    selectedIds: [item.id],
+    operationIssue: null,
+    visibleEncoderProfiles: [
+      {
+        name: 'hevc_nvenc',
+        label: 'NVENC H.265',
+        family: 'nvidia',
+        codec: 'hevc',
+        available: true,
+        pixelFormats: ['p010le'],
+        hardwareDevices: ['cuda'],
+        options: [],
+      },
+    ],
+    currentEncoderProfile: {
+      name: 'hevc_nvenc',
+      label: 'NVENC H.265',
+      family: 'nvidia',
+      codec: 'hevc',
+      available: true,
+      pixelFormats: ['p010le'],
+      hardwareDevices: ['cuda'],
+      options: [],
+    },
+    patchEncode: vi.fn((mutator: (config: MediaItem['encodeConfig']) => void) => mutator(item.encodeConfig)),
+    patchOutput: vi.fn((mutator: (config: MediaItem['outputConfig']) => void) => mutator(item.outputConfig)),
+    setEncodeRateControlMode: vi.fn(),
+    setEncodeRateControlValue: vi.fn(),
+    setEncodeProfile: vi.fn(),
+    setEncodeOption: vi.fn(),
+    pickOutputDirectory: vi.fn(),
+    getOptionValue: vi.fn(),
     ...overrides,
   }
 }
 
-function createStoreMockBase() {
-  const item = createMediaItem()
-  return {
-    mediaItems: [item],
-    activeItem: item,
-    activeItemId: item.id,
-    selectedIds: [item.id],
-    allSelected: true,
-    batch: {
-      isRunning: false,
-    },
-    operationIssue: null,
-    inspectItems: vi.fn(),
-    addMediaPaths: vi.fn(),
-    pickInputs: vi.fn(),
-    selectAllMedia: vi.fn(),
-    setActiveItem: vi.fn(),
-    setItemSelected: vi.fn(),
-    removeMediaItem: vi.fn(),
-  }
-}
-
-describe('InputModuleView', () => {
+describe('DeliverStageView', () => {
   beforeEach(() => {
     storeState.current = createStoreMock()
   })
 
-  it('keeps import and media-management UI without rendering decode controls', () => {
-    const wrapper = mount(InputModuleView)
+  it('updates output path and segment frames through patchOutput', async () => {
+    const wrapper = mount(DeliverStageView)
 
-    expect(wrapper.text()).toContain('批量导入')
-    expect(wrapper.text()).toContain('素材列表')
-    expect(wrapper.text()).not.toContain('解码设置')
-    expect(wrapper.find('.stats-grid').exists()).toBe(false)
-    expect(wrapper.findAll('.stat-card')).toHaveLength(0)
+    const textInput = wrapper.get('input[type="text"]')
+    await textInput.setValue('D:/custom-output')
+    expect(storeState.current.patchOutput).toHaveBeenCalled()
+    expect(storeState.current.activeItem.outputConfig.outputDir).toBe('D:/custom-output')
 
-    const headers = wrapper.findAll('thead th').map((cell) => cell.text())
-    expect(headers).toEqual(['选', '文件', '分辨率', '帧率', '编码', '流程', '状态', '操作'])
+    const numberInputs = wrapper.findAll('input[type="number"]')
+    await numberInputs[0]!.setValue('240')
+    expect(storeState.current.activeItem.outputConfig.segmentFrames).toBe(240)
   })
 })

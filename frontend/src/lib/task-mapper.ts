@@ -60,6 +60,7 @@ export function createDefaultOutputConfig(outputDir = ''): OutputConfig {
   return {
     outputDir,
     openOnComplete: true,
+    segmentFrames: 1000,
   }
 }
 
