@@ -242,9 +242,7 @@ a:focus-visible {
 .topbar-title-row,
 .panel-head,
 .panel-copy,
-.panel-actions,
-.task-console-head,
-.task-console-meta {
+.panel-actions {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -751,34 +749,7 @@ a:focus-visible {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-}
-
-.task-console-head {
-  justify-content: space-between;
-}
-
-.task-console-meta {
-  justify-content: flex-end;
-  color: var(--text-muted);
-  font-size: 12px;
-  flex-wrap: wrap;
-}
-
-.progress-track {
-  position: relative;
-  overflow: hidden;
-  width: 100%;
-  height: 10px;
-  border-radius: 999px;
-  background: #0f1826;
-}
-
-.progress-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #4f88df, #2ea4f9, #56ca98);
+  gap: 0;
 }
 
 .log-panel {

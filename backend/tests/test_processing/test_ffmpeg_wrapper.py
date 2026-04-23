@@ -5,7 +5,7 @@ from types import MethodType
 import pytest
 
 from app.config import settings
-from app.utils.ffmpeg_wrapper import FFmpegWrapper
+from app.utils.ffmpeg_wrapper import FFmpegWrapper, _parse_progress_snapshot
 
 
 class TestFFmpegWrapper:
@@ -127,6 +127,8 @@ Encoder hevc_nvenc [NVIDIA NVENC hevc encoder]:
         assert decode_cmd[-1] == "-"
 
         assert encode_cmd[:3] == ["ffmpeg", "-hide_banner", "-loglevel"]
+        assert "-progress" in encode_cmd
+        assert "pipe:2" in encode_cmd
         assert "-s" in encode_cmd
         assert "1920x1080" in encode_cmd
         assert "-framerate" in encode_cmd
@@ -138,6 +140,23 @@ Encoder hevc_nvenc [NVIDIA NVENC hevc encoder]:
     def test_legacy_frame_directory_helpers_are_removed(self):
         assert not hasattr(FFmpegWrapper, "decode_to_frames")
         assert not hasattr(FFmpegWrapper, "encode_from_frames")
+
+    def test_parse_progress_snapshot_extracts_frame_fps_speed_and_time(self):
+        parsed = _parse_progress_snapshot(
+            {
+                "frame": "240",
+                "fps": "59.9",
+                "speed": "1.25x",
+                "out_time_us": "4000000",
+                "progress": "continue",
+            }
+        )
+
+        assert parsed["frame"] == 240
+        assert parsed["fps"] == 59.9
+        assert parsed["speed"] == 1.25
+        assert parsed["out_time_seconds"] == 4.0
+        assert parsed["progress"] == "continue"
 
     def test_discover_capabilities_filters_by_gpu_vendor(self):
         wrapper = FFmpegWrapper()

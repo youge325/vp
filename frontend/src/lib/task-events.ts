@@ -6,6 +6,8 @@ import type {
   TaskProgressPayload,
 } from '@/types'
 
+export const TERMINAL_PROGRESS_PREFIX = '[VP_PROGRESS]'
+
 export function createIdleTaskState(): MediaTaskState {
   return {
     status: 'idle',
@@ -26,6 +28,16 @@ export function createIdleTaskState(): MediaTaskState {
 }
 
 export function appendTaskLog(state: MediaTaskState, payload: TaskLogPayload): MediaTaskState {
+  const isProgressLine = payload.message.startsWith(TERMINAL_PROGRESS_PREFIX)
+  const lastLog = state.logs[state.logs.length - 1] ?? ''
+
+  if (isProgressLine && lastLog.startsWith(TERMINAL_PROGRESS_PREFIX)) {
+    return {
+      ...state,
+      logs: [...state.logs.slice(0, -1), payload.message].slice(-300),
+    }
+  }
+
   return {
     ...state,
     logs: [...state.logs, payload.message].slice(-300),

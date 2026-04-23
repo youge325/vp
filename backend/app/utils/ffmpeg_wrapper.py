@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -48,6 +48,74 @@ OPTION_LINE_RE = re.compile(
 )
 CHOICE_LINE_RE = re.compile(r"^\s{5,}(?P<value>\S+)\s+\S+\s+")
 CODEC_LIST_RE = re.compile(r"^\s*[A-Z\.]{6}\s+(?P<name>[\w\-]+)\s+")
+FFMPEG_PROGRESS_KEYS = {
+    "bitrate",
+    "drop_frames",
+    "dup_frames",
+    "fps",
+    "frame",
+    "out_time",
+    "out_time_ms",
+    "out_time_us",
+    "progress",
+    "speed",
+    "total_size",
+}
+
+
+def _parse_progress_float(raw_value: str | None) -> float | None:
+    if raw_value is None:
+        return None
+    text = raw_value.strip()
+    if not text or text.upper() == "N/A":
+        return None
+    if text.endswith("x"):
+        text = text[:-1]
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _parse_progress_int(raw_value: str | None) -> int | None:
+    if raw_value is None:
+        return None
+    text = raw_value.strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+def _parse_progress_out_time_seconds(snapshot: dict[str, str]) -> float | None:
+    for key in ("out_time_us", "out_time_ms"):
+        value = _parse_progress_int(snapshot.get(key))
+        if value is None:
+            continue
+        scale = 1_000_000 if key == "out_time_us" else 1_000
+        return value / scale
+
+    raw_value = snapshot.get("out_time")
+    if not raw_value:
+        return None
+
+    try:
+        hours, minutes, seconds = raw_value.strip().split(":")
+        return (int(hours) * 3600) + (int(minutes) * 60) + float(seconds)
+    except ValueError:
+        return None
+
+
+def _parse_progress_snapshot(snapshot: dict[str, str]) -> dict[str, Any]:
+    return {
+        "frame": _parse_progress_int(snapshot.get("frame")) or 0,
+        "fps": _parse_progress_float(snapshot.get("fps")),
+        "speed": _parse_progress_float(snapshot.get("speed")),
+        "out_time_seconds": _parse_progress_out_time_seconds(snapshot),
+        "progress": snapshot.get("progress", ""),
+    }
 
 
 def _coerce_number(value: str | None) -> int | float | None:
@@ -207,6 +275,9 @@ class FFmpegWrapper:
             "-hide_banner",
             "-loglevel",
             "error",
+            "-nostats",
+            "-progress",
+            "pipe:2",
             "-f",
             "rawvideo",
             "-pix_fmt",
@@ -256,6 +327,7 @@ class FFmpegWrapper:
         fps: float,
         output_fps: float | None = None,
         encode_config: dict[str, Any] | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> "RawVideoWriter":
         cmd = self.build_rawvideo_encode_command(
             output_path,
@@ -271,7 +343,12 @@ class FFmpegWrapper:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
         )
-        return RawVideoWriter(process=process, width=width, height=height)
+        return RawVideoWriter(
+            process=process,
+            width=width,
+            height=height,
+            progress_callback=progress_callback,
+        )
 
     def extract_audio(self, input_path: str, output_path: str) -> str | None:
         cmd = [self.ffmpeg_path, "-i", input_path, "-vn", "-acodec", "copy", output_path, "-y"]
@@ -355,11 +432,14 @@ class FFmpegWrapper:
         decode_config: dict[str, Any] | None = None,
         encode_config: dict[str, Any] | None = None,
         output_fps: float | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> str:
         encode_config = encode_config or {}
         keep_audio = bool(encode_config.get("keepAudio", True))
 
         cmd = [self.ffmpeg_path, "-hide_banner", "-loglevel", "error"]
+        if progress_callback is not None:
+            cmd.extend(["-nostats", "-progress", "pipe:2"])
         cmd.extend(self.build_decode_input_args(input_path, decode_config))
         cmd.extend(["-map", "0:v:0"])
         if keep_audio:
@@ -369,7 +449,18 @@ class FFmpegWrapper:
         if output_fps is not None:
             cmd.extend(["-r", str(output_fps)])
         cmd.extend(self.build_encode_output_args(output_path, encode_config))
-        self._run_command(cmd)
+        if progress_callback is None:
+            self._run_command(cmd)
+            return output_path
+
+        process = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        monitor = _FFmpegPipeBase(process, progress_callback=progress_callback)
+        monitor._wait_for_process()
         return output_path
 
     def convert_format(
@@ -700,19 +791,44 @@ class FFmpegWrapper:
 class _FFmpegPipeBase:
     """Common lifecycle handling for FFmpeg pipe processes."""
 
-    def __init__(self, process: subprocess.Popen[bytes]):
+    def __init__(
+        self,
+        process: subprocess.Popen[bytes],
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    ):
         self._process = process
+        self._progress_callback = progress_callback
         self._stderr_lines: list[str] = []
+        self._latest_progress: dict[str, Any] = {}
         self._stderr_thread = threading.Thread(target=self._collect_stderr, daemon=True)
         self._stderr_thread.start()
 
     def _collect_stderr(self) -> None:
         if self._process.stderr is None:
             return
+        progress_state: dict[str, str] = {}
         for raw_line in iter(self._process.stderr.readline, b""):
             text = raw_line.decode("utf-8", errors="replace").strip()
-            if text:
-                self._stderr_lines.append(text)
+            if not text:
+                continue
+
+            if "=" in text:
+                key, value = text.split("=", 1)
+                if key in FFMPEG_PROGRESS_KEYS:
+                    progress_state[key] = value
+                    if key == "progress":
+                        self._update_progress(progress_state)
+                        progress_state = {}
+                    continue
+
+            self._stderr_lines.append(text)
+
+    def _update_progress(self, snapshot: dict[str, str]) -> None:
+        parsed = _parse_progress_snapshot(snapshot)
+        self._latest_progress = parsed
+        if self._progress_callback is None:
+            return
+        self._progress_callback(parsed)
 
     def _wait_for_process(self) -> None:
         return_code = self._process.wait()
@@ -762,8 +878,15 @@ class RawVideoReader(_FFmpegPipeBase):
 class RawVideoWriter(_FFmpegPipeBase):
     """Write `rgb24` rawvideo frames into an FFmpeg stdin pipe."""
 
-    def __init__(self, *, process: subprocess.Popen[bytes], width: int, height: int):
-        super().__init__(process)
+    def __init__(
+        self,
+        *,
+        process: subprocess.Popen[bytes],
+        width: int,
+        height: int,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    ):
+        super().__init__(process, progress_callback=progress_callback)
         self._width = width
         self._height = height
 
@@ -780,3 +903,7 @@ class RawVideoWriter(_FFmpegPipeBase):
         if self._process.stdin is not None:
             self._process.stdin.close()
         self._wait_for_process()
+
+    @property
+    def output_frame_count(self) -> int:
+        return int(self._latest_progress.get("frame") or 0)

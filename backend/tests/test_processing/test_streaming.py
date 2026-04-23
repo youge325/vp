@@ -53,10 +53,22 @@ class _FakeReader:
 
 
 class _FakeWriter:
-    def __init__(self, wrapper: "_FakeFFmpegWrapper", output_path: str):
+    def __init__(
+        self,
+        wrapper: "_FakeFFmpegWrapper",
+        output_path: str,
+        *,
+        fps: float,
+        output_fps: float | None,
+        progress_callback=None,
+    ):
         self._wrapper = wrapper
         self._output_path = output_path
+        self._fps = fps
+        self._output_fps = output_fps or fps
+        self._progress_callback = progress_callback
         self._frames: list[np.ndarray] = []
+        self.output_frame_count = 0
 
     def write_frame(self, frame: np.ndarray) -> None:
         self._frames.append(frame.copy())
@@ -65,12 +77,41 @@ class _FakeWriter:
         output_path = Path(self._output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(b"segment")
-        self._wrapper.video_frames[str(output_path)] = [frame.copy() for frame in self._frames]
+        self.output_frame_count = self._resolve_output_frame_count()
+        self._wrapper.video_frames[str(output_path)] = self._build_output_frames()
+        if self._progress_callback is not None:
+            self._progress_callback(
+                {
+                    "frame": self.output_frame_count,
+                    "fps": 48.0,
+                    "speed": 1.0,
+                    "out_time_seconds": None,
+                    "progress": "end",
+                }
+            )
+
+    def _resolve_output_frame_count(self) -> int:
+        if not self._frames:
+            return 0
+        if abs(self._output_fps - self._fps) <= 0.01:
+            return len(self._frames)
+        return max(1, int(round(len(self._frames) * self._output_fps / self._fps)))
+
+    def _build_output_frames(self) -> list[np.ndarray]:
+        if not self._frames:
+            return []
+        if self.output_frame_count <= len(self._frames):
+            return [frame.copy() for frame in self._frames[: self.output_frame_count]]
+
+        padded_frames = [frame.copy() for frame in self._frames]
+        padded_frames.extend(self._frames[-1].copy() for _ in range(self.output_frame_count - len(self._frames)))
+        return padded_frames
 
 
 class _FakeFFmpegWrapper:
-    def __init__(self, source_frames: list[np.ndarray]):
+    def __init__(self, source_frames: list[np.ndarray], *, source_fps: float = 24.0):
         self._source_frames = [frame.copy() for frame in source_frames]
+        self._source_fps = source_fps
         self.video_frames: dict[str, list[np.ndarray]] = {}
 
     def get_video_info(self, _input_path: str):
@@ -86,10 +127,15 @@ class _FakeFFmpegWrapper:
         }
 
     def get_fps(self, _input_path: str) -> float:
-        return 24.0
+        return self._source_fps
 
-    def get_frame_count(self, _input_path: str) -> int:
+    def get_frame_count(self, input_path: str) -> int:
+        if input_path in self.video_frames:
+            return len(self.video_frames[input_path])
         return len(self._source_frames)
+
+    def get_duration(self, _input_path: str) -> float:
+        return len(self._source_frames) / self._source_fps
 
     def has_audio(self, _input_path: str) -> bool:
         return True
@@ -98,9 +144,23 @@ class _FakeFFmpegWrapper:
         del kwargs
         return _FakeReader(self._source_frames, start_frame)
 
-    def open_rawvideo_encoder(self, *, output_path: str, **kwargs):
+    def open_rawvideo_encoder(
+        self,
+        *,
+        output_path: str,
+        fps: float,
+        output_fps: float | None = None,
+        progress_callback=None,
+        **kwargs,
+    ):
         del kwargs
-        return _FakeWriter(self, output_path)
+        return _FakeWriter(
+            self,
+            output_path,
+            fps=fps,
+            output_fps=output_fps,
+            progress_callback=progress_callback,
+        )
 
     def concat_videos(self, segment_paths: list[str], output_path: str) -> str:
         frames: list[np.ndarray] = []
@@ -202,6 +262,7 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
         "height": 1,
         "source_fps": 24.0,
         "source_frames": len(source_frames),
+        "duration": len(source_frames) / 24.0,
         "has_audio": True,
     }
     signature = _build_signature(
@@ -306,6 +367,45 @@ def test_streaming_pipeline_keeps_sidecar_when_finalization_fails(monkeypatch):
     assert manifest.sidecar_dir.exists()
     assert manifest.manifest_path.is_file()
     assert any(path.suffix == ".mp4" for path in manifest.sidecar_dir.iterdir())
+
+
+def test_streaming_pipeline_reports_final_encoded_frames_when_resampling(monkeypatch):
+    source_frames = [_frame(0), _frame(100), _frame(200)]
+    wrapper = _FakeFFmpegWrapper(source_frames, source_fps=2.0)
+    workspace = _workspace("target_fps")
+    input_path = workspace / "input.mp4"
+    output_path = workspace / "output" / "demo_processed.mp4"
+    input_path.write_bytes(b"input")
+
+    workflow_config, encode_config, processing_steps, output_config = _workflow_config(segment_frames=2)
+    decode_config = {"mode": "software", "decoder": "software", "options": {}}
+
+    monkeypatch.setattr("app.processing.streaming.get_tensor_backend", lambda _name: _IdentityBackend())
+
+    def fake_create(*, algorithm_type: str, **kwargs):
+        del kwargs
+        if algorithm_type == "frame_interpolation":
+            return _MidpointInterpolationAlgorithm()
+        return _IdentityAlgorithm()
+
+    monkeypatch.setattr("app.processing.streaming.AlgorithmFactory.create", fake_create)
+
+    result = process_video_streaming(
+        ffmpeg=wrapper,
+        input_path=str(input_path),
+        output_path=str(output_path),
+        decode_config=decode_config,
+        encode_config=encode_config,
+        workflow_config=workflow_config,
+        output_config=output_config,
+        processing_steps=processing_steps,
+        tensor_backend_name="pytorch",
+        progress_callbacks=[lambda *_args: None, lambda *_args: None],
+        output_fps=3.0,
+    )
+
+    assert result["processed_frames"] == len(wrapper.video_frames[str(output_path)])
+    assert result["processed_frames"] == 5
 
 
 def test_legacy_processing_modules_are_removed():
