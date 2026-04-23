@@ -85,6 +85,7 @@ class StagePlan:
     interpolation_step: dict[str, Any] | None
     post_steps: list[dict[str, Any]]
     total_output_frames: int
+    total_encoded_frames: int
     total_pairs: int
 
 
@@ -279,10 +280,16 @@ def process_video_streaming(
     tensor_backend_name: str,
     progress_callbacks: list[Callable[[int, int], None]],
     output_fps: float | None = None,
+    encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None = None,
 ) -> dict[str, Any]:
     """Process a video without writing temporary frames to disk."""
     video_info = _resolve_video_info(ffmpeg, input_path)
-    stage_plan = _build_stage_plan(processing_steps, video_info["source_frames"])
+    stage_plan = _build_stage_plan(
+        processing_steps,
+        video_info["source_frames"],
+        source_duration=video_info["duration"],
+        output_fps=output_fps,
+    )
     signature = _build_signature(
         input_path=input_path,
         output_path=output_path,
@@ -315,6 +322,7 @@ def process_video_streaming(
             segment_frames=max(1, int(output_config.get("segmentFrames") or 1000)),
             output_path=output_path,
             output_fps=output_fps,
+            encode_progress_callback=encode_progress_callback,
         )
 
     final_output = _finalize_segmented_output(
@@ -325,13 +333,15 @@ def process_video_streaming(
         manifest=manifest,
         signature=signature,
         completed_output_frames=completed_output_frames,
-        total_output_frames=stage_plan.total_output_frames,
+        total_output_frames=stage_plan.total_encoded_frames,
+        strict_total_frames=output_fps is None,
     )
 
     manifest.cleanup()
+    processed_frames = ffmpeg.get_frame_count(final_output)
     return {
         "output_path": final_output,
-        "processed_frames": completed_output_frames,
+        "processed_frames": processed_frames or completed_output_frames,
         "audio_merged": bool(encode_config.get("keepAudio", True)),
     }
 
@@ -359,11 +369,18 @@ def _resolve_video_info(ffmpeg: FFmpegWrapper, input_path: str) -> dict[str, Any
         "height": height,
         "source_fps": source_fps,
         "source_frames": source_frames,
+        "duration": ffmpeg.get_duration(input_path),
         "has_audio": ffmpeg.has_audio(input_path),
     }
 
 
-def _build_stage_plan(processing_steps: list[dict[str, Any]], source_frames: int) -> StagePlan:
+def _build_stage_plan(
+    processing_steps: list[dict[str, Any]],
+    source_frames: int,
+    *,
+    source_duration: float,
+    output_fps: float | None,
+) -> StagePlan:
     interpolation_index = None
     for index, step in enumerate(processing_steps):
         if step["algorithm_type"] == "frame_interpolation":
@@ -371,11 +388,17 @@ def _build_stage_plan(processing_steps: list[dict[str, Any]], source_frames: int
             break
 
     if interpolation_index is None:
+        total_encoded_frames = _estimate_encoded_output_frames(
+            source_frames=source_frames,
+            source_duration=source_duration,
+            output_fps=output_fps,
+        )
         return StagePlan(
             pre_steps=processing_steps,
             interpolation_step=None,
             post_steps=[],
             total_output_frames=source_frames,
+            total_encoded_frames=total_encoded_frames,
             total_pairs=max(source_frames - 1, 0),
         )
 
@@ -387,14 +410,33 @@ def _build_stage_plan(processing_steps: list[dict[str, Any]], source_frames: int
     else:
         total_output_frames = source_frames + (source_frames - 1) * (multi - 1)
         total_pairs = source_frames - 1
+    total_encoded_frames = _estimate_encoded_output_frames(
+        source_frames=total_output_frames,
+        source_duration=source_duration,
+        output_fps=output_fps,
+    )
 
     return StagePlan(
         pre_steps=processing_steps[:interpolation_index],
         interpolation_step=interpolation_step,
         post_steps=processing_steps[interpolation_index + 1 :],
         total_output_frames=total_output_frames,
+        total_encoded_frames=total_encoded_frames,
         total_pairs=total_pairs,
     )
+
+
+def _estimate_encoded_output_frames(
+    *,
+    source_frames: int,
+    source_duration: float,
+    output_fps: float | None,
+) -> int:
+    if output_fps is None:
+        return source_frames
+    if source_duration <= 0:
+        return source_frames
+    return max(1, int(round(source_duration * output_fps)))
 
 
 def _build_signature(
@@ -448,6 +490,7 @@ def _run_streaming_pipeline(
     segment_frames: int,
     output_path: str,
     output_fps: float | None,
+    encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
 ) -> int:
     decode_queue: queue.Queue[DecodedFrame | object] = queue.Queue(maxsize=8)
     encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object] = queue.Queue(maxsize=8)
@@ -506,10 +549,20 @@ def _run_streaming_pipeline(
                 "segment_frames": segment_frames,
                 "resume_state": resume_state,
                 "output_path": output_path,
+                "encode_progress_callback": encode_progress_callback,
             },
             daemon=True,
         ),
     ]
+
+    if encode_progress_callback is not None and resume_state.completed_output_frames > 0:
+        encode_progress_callback(
+            resume_state.completed_output_frames,
+            None,
+            None,
+            None,
+            "continue",
+        )
 
     for worker in threads:
         worker.start()
@@ -638,15 +691,15 @@ def _encoder_worker(
     encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object],
     error_queue: queue.Queue[BaseException],
     stop_event: threading.Event,
+    encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
 ) -> None:
     del decode_queue
     extension = os.path.splitext(output_path)[1] or f".{encode_config.get('container') or 'mp4'}"
     writer = None
     segment_index = len(resume_state.completed_segments) + 1
     current_segment_start = resume_state.completed_output_frames
-    current_segment_frames = 0
+    current_segment_input_frames = 0
     current_segment_path = ""
-    total_output_frames = resume_state.completed_output_frames
 
     try:
         while not stop_event.is_set():
@@ -667,46 +720,61 @@ def _encoder_worker(
                         fps=fps,
                         output_fps=output_fps,
                         encode_config=encode_config,
+                        progress_callback=_make_segment_progress_callback(
+                            current_segment_start,
+                            encode_progress_callback,
+                        ),
                     )
                 writer.write_frame(item.frame)
-                current_segment_frames += 1
-                total_output_frames += 1
+                current_segment_input_frames += 1
                 continue
 
             if isinstance(item, SegmentBoundary):
                 if writer is None:
                     continue
-                if current_segment_frames < segment_frames:
+                if current_segment_input_frames < segment_frames:
                     continue
 
                 writer.close()
+                segment_output_frames = _resolve_segment_output_frame_count(
+                    ffmpeg,
+                    writer,
+                    current_segment_path,
+                    fallback_frame_count=current_segment_input_frames,
+                )
                 writer = None
                 manifest.record_segment(
                     signature,
                     index=segment_index,
                     path=current_segment_path,
                     start_output_frame=current_segment_start,
-                    end_output_frame=total_output_frames - 1,
-                    frame_count=current_segment_frames,
+                    end_output_frame=current_segment_start + segment_output_frames - 1,
+                    frame_count=segment_output_frames,
                     next_source_frame=item.next_source_frame,
                 )
                 segment_index += 1
-                current_segment_start = total_output_frames
-                current_segment_frames = 0
+                current_segment_start += segment_output_frames
+                current_segment_input_frames = 0
                 current_segment_path = ""
                 continue
 
             if isinstance(item, StreamEnd):
-                if writer is not None and current_segment_frames > 0:
+                if writer is not None and current_segment_input_frames > 0:
                     writer.close()
+                    segment_output_frames = _resolve_segment_output_frame_count(
+                        ffmpeg,
+                        writer,
+                        current_segment_path,
+                        fallback_frame_count=current_segment_input_frames,
+                    )
                     writer = None
                     manifest.record_segment(
                         signature,
                         index=segment_index,
                         path=current_segment_path,
                         start_output_frame=current_segment_start,
-                        end_output_frame=total_output_frames - 1,
-                        frame_count=current_segment_frames,
+                        end_output_frame=current_segment_start + segment_output_frames - 1,
+                        frame_count=segment_output_frames,
                         next_source_frame=item.next_source_frame,
                     )
                 break
@@ -719,6 +787,38 @@ def _encoder_worker(
                 writer.close()
             except Exception:  # pragma: no cover - cleanup best effort
                 pass
+
+
+def _make_segment_progress_callback(
+    segment_start_frame: int,
+    encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
+) -> Callable[[dict[str, Any]], None] | None:
+    if encode_progress_callback is None:
+        return None
+
+    def callback(progress: dict[str, Any]) -> None:
+        encode_progress_callback(
+            segment_start_frame + int(progress.get("frame") or 0),
+            progress.get("fps"),
+            progress.get("speed"),
+            progress.get("out_time_seconds"),
+            str(progress.get("progress") or ""),
+        )
+
+    return callback
+
+
+def _resolve_segment_output_frame_count(
+    ffmpeg: FFmpegWrapper,
+    writer: Any,
+    segment_path: str,
+    *,
+    fallback_frame_count: int,
+) -> int:
+    output_frame_count = int(getattr(writer, "output_frame_count", 0) or 0)
+    if output_frame_count > 0:
+        return output_frame_count
+    return ffmpeg.get_frame_count(segment_path) or fallback_frame_count
 
 
 def _initialize_algorithms(stage_plan: StagePlan, tensor_backend_name: str) -> dict[str, Any]:
@@ -970,11 +1070,12 @@ def _finalize_segmented_output(
     signature: str,
     completed_output_frames: int,
     total_output_frames: int,
+    strict_total_frames: bool,
 ) -> str:
     del signature
     completed_segments = manifest.read_completed_segments()
     segment_paths = [str(manifest.sidecar_dir / record.path) for record in completed_segments]
-    if completed_output_frames != total_output_frames:
+    if strict_total_frames and completed_output_frames != total_output_frames:
         raise RuntimeError(
             f"Temporary segments are incomplete: expected {total_output_frames} output frames, "
             f"got {completed_output_frames}."

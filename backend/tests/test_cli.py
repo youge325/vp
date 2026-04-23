@@ -4,8 +4,26 @@ import argparse
 
 import pytest
 
-from app.cli import _default_output_config, _load_json_arg, _resolve_processing_steps, build_parser
+from app.cli import (
+    _default_output_config,
+    _load_json_arg,
+    _resolve_expected_output_frames,
+    _resolve_processing_steps,
+    build_parser,
+)
 from app.config import settings
+
+
+class _FakeFFmpeg:
+    def __init__(self, *, frame_count: int, duration: float):
+        self._frame_count = frame_count
+        self._duration = duration
+
+    def get_frame_count(self, _input_path: str) -> int:
+        return self._frame_count
+
+    def get_duration(self, _input_path: str) -> float:
+        return self._duration
 
 
 def _make_workflow_config(**overrides):
@@ -91,6 +109,62 @@ def test_default_output_config_includes_segment_frames_and_json_override():
 
     assert config["segmentFrames"] == 1000
     assert merged["segmentFrames"] == 240
+
+
+def test_resolve_expected_output_frames_uses_input_frames_for_format_conversion():
+    workflow = _make_workflow_config(
+        interpolation={
+            "enabled": False,
+            "targetFps": 60,
+            "multi": 2,
+            "model": "4.25",
+            "scale": 1.0,
+            "fp16": False,
+            "tensorBackend": "pytorch",
+        },
+        superResolution={"enabled": False, "scaleFactor": 2.0, "algorithm": "placeholder"},
+    )
+    processing_steps = _resolve_processing_steps(workflow)
+
+    total = _resolve_expected_output_frames(
+        ffmpeg=_FakeFFmpeg(frame_count=240, duration=10.0),
+        input_path="demo.mp4",
+        workflow_config=workflow,
+        processing_steps=processing_steps,
+        final_output_fps=None,
+    )
+
+    assert total == 240
+
+
+def test_resolve_expected_output_frames_uses_interpolated_output_frames_without_resample():
+    workflow = _make_workflow_config()
+    processing_steps = _resolve_processing_steps(workflow)
+
+    total = _resolve_expected_output_frames(
+        ffmpeg=_FakeFFmpeg(frame_count=240, duration=10.0),
+        input_path="demo.mp4",
+        workflow_config=workflow,
+        processing_steps=processing_steps,
+        final_output_fps=None,
+    )
+
+    assert total == 479
+
+
+def test_resolve_expected_output_frames_uses_target_timeline_when_resampling():
+    workflow = _make_workflow_config()
+    processing_steps = _resolve_processing_steps(workflow)
+
+    total = _resolve_expected_output_frames(
+        ffmpeg=_FakeFFmpeg(frame_count=240, duration=10.0),
+        input_path="demo.mp4",
+        workflow_config=workflow,
+        processing_steps=processing_steps,
+        final_output_fps=60.0,
+    )
+
+    assert total == 600
 
 
 def test_process_parser_rejects_removed_temp_override_flag():

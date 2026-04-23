@@ -6,6 +6,7 @@ import {
   applyTaskProgress,
   appendTaskLog,
   createIdleTaskState,
+  TERMINAL_PROGRESS_PREFIX,
 } from '@/lib/task-events'
 
 describe('task event reducers', () => {
@@ -27,6 +28,16 @@ describe('task event reducers', () => {
   it('appends logs and keeps latest entries', () => {
     const state = appendTaskLog(createIdleTaskState(), { message: 'hello' })
     expect(state.logs).toEqual(['hello'])
+  })
+
+  it('replaces the active CLI progress line instead of appending duplicates', () => {
+    const initial = createIdleTaskState()
+    const first = appendTaskLog(initial, { message: `${TERMINAL_PROGRESS_PREFIX} 10%` })
+    const second = appendTaskLog(first, { message: `${TERMINAL_PROGRESS_PREFIX} 20%` })
+    const final = appendTaskLog(second, { message: 'encoder ready' })
+
+    expect(second.logs).toEqual([`${TERMINAL_PROGRESS_PREFIX} 20%`])
+    expect(final.logs).toEqual([`${TERMINAL_PROGRESS_PREFIX} 20%`, 'encoder ready'])
   })
 
   it('marks completion and errors', () => {

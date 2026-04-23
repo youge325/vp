@@ -44,10 +44,16 @@ PROCESS_LABEL_MAP = {
     "anime_optimization": "Anime Optimization",
     "format_conversion": "Format Conversion",
 }
+TERMINAL_PROGRESS_PREFIX = "[VP_PROGRESS]"
+TERMINAL_PROGRESS_BAR_WIDTH = 24
 
 
 def _emit(payload: dict[str, Any]) -> None:
     print(json.dumps(payload, ensure_ascii=False), flush=True)
+
+
+def _emit_terminal(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
 
 
 def _emit_error(
@@ -241,25 +247,6 @@ def _resolve_processing_steps(config_or_args: dict[str, Any] | argparse.Namespac
     return steps
 
 
-def _make_progress_callback(stage_index: int, total_stages: int, algorithm_type: str):
-    def progress_callback(current: int, total: int) -> None:
-        stage_fraction = (current / total) if total > 0 else 0.0
-        overall_percent = ((stage_index + stage_fraction) / total_stages) * 100 if total_stages > 0 else 0.0
-        _emit(
-            {
-                "type": "progress",
-                "current": current,
-                "total": total,
-                "percent": round(overall_percent, 1),
-                "stage": PROCESS_LABEL_MAP.get(algorithm_type, algorithm_type),
-                "stage_index": stage_index + 1,
-                "stage_total": total_stages,
-            }
-        )
-
-    return progress_callback
-
-
 def _resolve_fps_and_multi(
     workflow_config: dict[str, Any],
     ffmpeg: FFmpegWrapper,
@@ -281,6 +268,101 @@ def _resolve_fps_and_multi(
     multi = int(interpolation.get("multi") or settings.RIFE_DEFAULT_MULTI)
     encode_fps = source_fps * multi if interpolation.get("enabled") else source_fps
     return multi, encode_fps, None, False
+
+
+def _resolve_expected_output_frames(
+    *,
+    ffmpeg: FFmpegWrapper,
+    input_path: str,
+    workflow_config: dict[str, Any],
+    processing_steps: list[dict[str, Any]],
+    final_output_fps: float | None,
+) -> int:
+    source_frames = ffmpeg.get_frame_count(input_path)
+    if source_frames <= 0:
+        return 1
+    if final_output_fps is not None:
+        duration = ffmpeg.get_duration(input_path)
+        if duration > 0:
+            return max(1, int(round(duration * final_output_fps)))
+    if not _processing_needs_interpolation(processing_steps):
+        return source_frames
+
+    multi = int(workflow_config["interpolation"].get("multi") or settings.RIFE_DEFAULT_MULTI)
+    if source_frames < 2:
+        return source_frames
+    return source_frames + (source_frames - 1) * (multi - 1)
+
+
+def _format_eta(seconds: float | None) -> str:
+    if seconds is None or seconds < 0:
+        return "--:--:--"
+    rounded = int(round(seconds))
+    hours, remainder = divmod(rounded, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def _format_progress_bar(current: int, total: int) -> str:
+    if total <= 0:
+        total = 1
+    ratio = min(max(current / total, 0.0), 1.0)
+    filled = round(ratio * TERMINAL_PROGRESS_BAR_WIDTH)
+    return f"[{'#' * filled}{'-' * (TERMINAL_PROGRESS_BAR_WIDTH - filled)}]"
+
+
+class CliProgressReporter:
+    def __init__(self, total_frames: int):
+        self.total_frames = max(int(total_frames), 1)
+        self.current_frame = 0
+        self.started_at = time.time()
+
+    def update(
+        self,
+        current_frame: int,
+        fps: float | None = None,
+        speed: float | None = None,
+        _out_time_seconds: float | None = None,
+        progress_state: str = "continue",
+    ) -> None:
+        self.current_frame = max(self.current_frame, max(int(current_frame), 0))
+        display_current = min(self.current_frame, self.total_frames)
+        percent = min((display_current / self.total_frames) * 100, 100.0)
+        eta_seconds = 0.0 if progress_state == "end" else self._estimate_eta(display_current, fps)
+        fps_text = f"{fps:5.1f} fps" if fps and fps > 0 else "--.- fps"
+        speed_text = f"{speed:.2f}x" if speed and speed > 0 else "--.--x"
+        _emit_terminal(
+            f"{TERMINAL_PROGRESS_PREFIX} "
+            f"{_format_progress_bar(display_current, self.total_frames)} "
+            f"{percent:5.1f}% "
+            f"{display_current}/{self.total_frames} "
+            f"| {fps_text} "
+            f"| {speed_text} "
+            f"| ETA {_format_eta(eta_seconds)}"
+        )
+
+    def finish(self, processed_frames: int) -> None:
+        self.update(processed_frames, progress_state="end")
+
+    def _estimate_eta(self, current_frame: int, fps: float | None) -> float | None:
+        remaining_frames = max(self.total_frames - min(current_frame, self.total_frames), 0)
+        if remaining_frames == 0:
+            return 0.0
+        if fps is not None and fps > 0:
+            return remaining_frames / fps
+
+        elapsed = max(time.time() - self.started_at, 0.001)
+        observed_fps = current_frame / elapsed if current_frame > 0 else 0.0
+        if observed_fps <= 0:
+            return None
+        return remaining_frames / observed_fps
+
+
+def _resolve_processed_frame_count(ffmpeg: FFmpegWrapper, output_path: str, fallback: int) -> int:
+    try:
+        return ffmpeg.get_frame_count(output_path) or fallback
+    except Exception:  # pragma: no cover - fallback for defensive CLI reporting
+        return fallback
 
 
 def _check_pytorch_in_subprocess() -> dict[str, Any]:
@@ -398,12 +480,18 @@ def cmd_process(args: argparse.Namespace) -> None:
 
     multi, encode_fps, _interpolated_fps, need_resample = _resolve_fps_and_multi(workflow_config, ffmpeg, input_path)
     workflow_config["interpolation"]["multi"] = multi
+    final_output_fps = encode_fps if need_resample else None
+    expected_output_frames = _resolve_expected_output_frames(
+        ffmpeg=ffmpeg,
+        input_path=input_path,
+        workflow_config=workflow_config,
+        processing_steps=processing_steps,
+        final_output_fps=final_output_fps,
+    )
+    progress_reporter = CliProgressReporter(expected_output_frames)
 
     tensor_backend_name = workflow_config["interpolation"].get("tensorBackend", args.backend)
-    progress_callbacks = [
-        _make_progress_callback(stage_index, len(processing_steps), step["algorithm_type"])
-        for stage_index, step in enumerate(processing_steps)
-    ]
+    progress_callbacks = [lambda *_args: None for _ in processing_steps]
     start_time = time.time()
     try:
         if processing_steps:
@@ -418,7 +506,8 @@ def cmd_process(args: argparse.Namespace) -> None:
                 processing_steps=processing_steps,
                 tensor_backend_name=tensor_backend_name,
                 progress_callbacks=progress_callbacks,
-                output_fps=encode_fps if need_resample else None,
+                output_fps=final_output_fps,
+                encode_progress_callback=progress_reporter.update,
             )
         else:
             ffmpeg.transcode_video(
@@ -426,19 +515,32 @@ def cmd_process(args: argparse.Namespace) -> None:
                 output_path=output_path,
                 decode_config=decode_config,
                 encode_config=encode_config,
+                progress_callback=lambda progress: progress_reporter.update(
+                    int(progress.get("frame") or 0),
+                    progress.get("fps"),
+                    progress.get("speed"),
+                    progress.get("out_time_seconds"),
+                    str(progress.get("progress") or ""),
+                ),
             )
             result = {
                 "output_path": output_path,
-                "processed_frames": ffmpeg.get_frame_count(input_path),
+                "processed_frames": _resolve_processed_frame_count(ffmpeg, output_path, expected_output_frames),
                 "audio_merged": bool(encode_config.get("keepAudio", True)),
             }
 
         elapsed = round(time.time() - start_time, 2)
+        processed_frames = _resolve_processed_frame_count(
+            ffmpeg,
+            str(result.get("output_path", output_path)),
+            int(result.get("processed_frames", expected_output_frames) or expected_output_frames),
+        )
+        progress_reporter.finish(processed_frames)
         _emit(
             {
                 "type": "completed",
                 "output_path": result.get("output_path", output_path),
-                "processed_frames": result.get("processed_frames", 0),
+                "processed_frames": processed_frames,
                 "time_seconds": elapsed,
             }
         )
