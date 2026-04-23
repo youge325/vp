@@ -7,10 +7,12 @@
 - 提供 get_logger() 便捷函数，统一模块 logger 创建方式
 """
 
+from datetime import datetime
 import logging
-import os
+import re
 import sys
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # 日志格式
@@ -29,13 +31,59 @@ _FILE_DATE_FMT = "%Y-%m-%d %H:%M:%S"
 # ---------------------------------------------------------------------------
 
 _initialized = False
+_STARTUP_LOG_FILE_RE = re.compile(r"^(?P<base>app-\d{8}-\d{6}-\d{6}\.log)(?:\.\d+)?$")
+
+
+def _load_settings():
+    try:
+        from app.config import settings
+    except ImportError:
+        return None
+    return settings
+
+
+def _default_log_dir() -> str:
+    return str(Path(__file__).resolve().parents[2] / "logs")
+
+
+def _build_startup_log_file(log_dir: str | Path) -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    return Path(log_dir) / f"app-{timestamp}.log"
+
+
+def _collect_startup_log_groups(log_dir: Path) -> dict[str, list[Path]]:
+    groups: dict[str, list[Path]] = {}
+    for path in log_dir.iterdir():
+        if not path.is_file():
+            continue
+
+        match = _STARTUP_LOG_FILE_RE.match(path.name)
+        if match is None:
+            continue
+
+        groups.setdefault(match.group("base"), []).append(path)
+    return groups
+
+
+def _cleanup_old_startup_logs(log_dir: Path, keep_count: int, current_log_file: Path) -> None:
+    keep_count = max(int(keep_count), 1)
+    groups = _collect_startup_log_groups(log_dir)
+    groups.setdefault(current_log_file.name, [])
+
+    expired_group_names = sorted(groups, reverse=True)[keep_count:]
+    for group_name in expired_group_names:
+        for path in groups[group_name]:
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                continue
 
 
 def setup_logging(
     level: str | int | None = None,
     log_dir: str | None = None,
-    log_file_max_bytes: int = 10 * 1024 * 1024,
-    log_file_backup_count: int = 5,
+    log_file_max_bytes: int | None = None,
+    log_file_backup_count: int | None = None,
     force: bool = False,
 ) -> None:
     """一次性配置全局日志系统。
@@ -52,28 +100,45 @@ def setup_logging(
     if _initialized and not force:
         return
 
+    settings = _load_settings()
+
     # 确定日志级别
     if level is None:
-        try:
-            from app.config import settings
-
+        if settings is not None:
             level = logging.DEBUG if settings.DEBUG else logging.INFO
-        except ImportError:
+        else:
             level = logging.INFO
     elif isinstance(level, str):
         level = getattr(logging, level.upper(), logging.INFO)
 
     # 确定 log_dir
     if log_dir is None:
-        try:
-            from app.config import settings
-
+        if settings is not None:
             log_dir = settings.LOG_DIR
-        except (ImportError, AttributeError):
-            log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+        else:
+            log_dir = _default_log_dir()
+
+    if log_file_max_bytes is None:
+        if settings is not None:
+            log_file_max_bytes = settings.LOG_FILE_MAX_BYTES
+        else:
+            log_file_max_bytes = 10 * 1024 * 1024
+
+    if log_file_backup_count is None:
+        if settings is not None:
+            log_file_backup_count = settings.LOG_FILE_BACKUP_COUNT
+        else:
+            log_file_backup_count = 5
+
+    log_startup_file_keep_count = 30
+    if settings is not None:
+        log_startup_file_keep_count = settings.LOG_STARTUP_FILE_KEEP_COUNT
 
     # 确保日志目录存在
-    os.makedirs(log_dir, exist_ok=True)
+    log_dir_path = Path(log_dir)
+    log_dir_path.mkdir(parents=True, exist_ok=True)
+    log_file = _build_startup_log_file(log_dir_path)
+    _cleanup_old_startup_logs(log_dir_path, log_startup_file_keep_count, log_file)
 
     # 获取根 logger
     root = logging.getLogger()
@@ -89,7 +154,6 @@ def setup_logging(
     root.addHandler(console_handler)
 
     # --- Handler 2: 日志文件（轮转）---
-    log_file = os.path.join(log_dir, "app.log")
     file_handler = RotatingFileHandler(
         log_file,
         maxBytes=log_file_max_bytes,
@@ -109,7 +173,12 @@ def setup_logging(
     _initialized = True
 
     # 用 root logger 记录初始化完成
-    root.debug("日志系统初始化完成: level=%s, log_dir=%s", logging.getLevelName(level), log_dir)
+    root.debug(
+        "日志系统初始化完成: level=%s, log_dir=%s, log_file=%s",
+        logging.getLevelName(level),
+        log_dir_path,
+        log_file,
+    )
 
 
 def get_logger(name: str) -> logging.Logger:
