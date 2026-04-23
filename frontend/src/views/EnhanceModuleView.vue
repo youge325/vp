@@ -6,10 +6,19 @@ import type { FpsMode, ProcessOrder, TensorBackend } from '@/types'
 
 const store = useWorkbenchStore()
 
-const activeWorkflow = computed(() => store.activeItem?.workflowConfig ?? null)
+const workflow = computed(() => store.editor.workflowConfig)
+const isPresetMode = computed(() => store.editingScope === 'preset')
+const targetLabel = computed(() =>
+  isPresetMode.value ? '默认预设（后续导入会继承）' : `作用于 ${store.editingSelectionCount} 个文件`,
+)
+const caption = computed(() =>
+  isPresetMode.value
+    ? '增强参数可以在导入前先配置好，新导入的视频会直接继承这些默认设置。'
+    : '当前修改会同步到激活文件与所有已勾选文件，方便批量套用增强流程。',
+)
 
 const interpolationEnabled = computed({
-  get: () => activeWorkflow.value?.interpolation.enabled ?? false,
+  get: () => workflow.value.interpolation.enabled,
   set: (value: boolean) => {
     store.patchWorkflow((config) => {
       config.interpolation.enabled = value
@@ -18,7 +27,7 @@ const interpolationEnabled = computed({
 })
 
 const interpolationBackend = computed({
-  get: () => activeWorkflow.value?.interpolation.tensorBackend ?? 'pytorch',
+  get: () => workflow.value.interpolation.tensorBackend,
   set: (value: TensorBackend) => {
     store.patchWorkflow((config) => {
       config.interpolation.tensorBackend = value
@@ -27,7 +36,7 @@ const interpolationBackend = computed({
 })
 
 const interpolationModel = computed({
-  get: () => activeWorkflow.value?.interpolation.model ?? '4.25',
+  get: () => workflow.value.interpolation.model,
   set: (value: string) => {
     store.patchWorkflow((config) => {
       config.interpolation.model = value
@@ -36,7 +45,7 @@ const interpolationModel = computed({
 })
 
 const fpsMode = computed({
-  get: () => activeWorkflow.value?.fpsMode ?? 'target',
+  get: () => workflow.value.fpsMode,
   set: (value: FpsMode) => {
     store.patchWorkflow((config) => {
       config.fpsMode = value
@@ -45,7 +54,7 @@ const fpsMode = computed({
 })
 
 const targetFps = computed({
-  get: () => activeWorkflow.value?.interpolation.targetFps ?? 60,
+  get: () => workflow.value.interpolation.targetFps,
   set: (value: number) => {
     store.patchWorkflow((config) => {
       config.interpolation.targetFps = value
@@ -54,7 +63,7 @@ const targetFps = computed({
 })
 
 const interpolationMulti = computed({
-  get: () => activeWorkflow.value?.interpolation.multi ?? 2,
+  get: () => workflow.value.interpolation.multi,
   set: (value: number) => {
     store.patchWorkflow((config) => {
       config.interpolation.multi = value
@@ -63,7 +72,7 @@ const interpolationMulti = computed({
 })
 
 const interpolationScale = computed({
-  get: () => activeWorkflow.value?.interpolation.scale ?? 1,
+  get: () => workflow.value.interpolation.scale,
   set: (value: number) => {
     store.patchWorkflow((config) => {
       config.interpolation.scale = value
@@ -72,7 +81,7 @@ const interpolationScale = computed({
 })
 
 const interpolationFp16 = computed({
-  get: () => activeWorkflow.value?.interpolation.fp16 ?? false,
+  get: () => workflow.value.interpolation.fp16,
   set: (value: boolean) => {
     store.patchWorkflow((config) => {
       config.interpolation.fp16 = value
@@ -81,7 +90,7 @@ const interpolationFp16 = computed({
 })
 
 const superResolutionEnabled = computed({
-  get: () => activeWorkflow.value?.superResolution.enabled ?? false,
+  get: () => workflow.value.superResolution.enabled,
   set: (value: boolean) => {
     store.patchWorkflow((config) => {
       config.superResolution.enabled = value
@@ -90,7 +99,7 @@ const superResolutionEnabled = computed({
 })
 
 const superResolutionScale = computed({
-  get: () => activeWorkflow.value?.superResolution.scaleFactor ?? 2,
+  get: () => workflow.value.superResolution.scaleFactor,
   set: (value: number) => {
     store.patchWorkflow((config) => {
       config.superResolution.scaleFactor = value
@@ -99,7 +108,7 @@ const superResolutionScale = computed({
 })
 
 const superResolutionAlgorithm = computed({
-  get: () => activeWorkflow.value?.superResolution.algorithm ?? 'placeholder',
+  get: () => workflow.value.superResolution.algorithm,
   set: (value: string) => {
     store.patchWorkflow((config) => {
       config.superResolution.algorithm = value
@@ -108,7 +117,7 @@ const superResolutionAlgorithm = computed({
 })
 
 const processOrder = computed({
-  get: () => activeWorkflow.value?.processOrder ?? 'super_resolution_then_interpolation',
+  get: () => workflow.value.processOrder,
   set: (value: ProcessOrder) => {
     store.patchWorkflow((config) => {
       config.processOrder = value
@@ -117,7 +126,7 @@ const processOrder = computed({
 })
 
 const animeEnabled = computed({
-  get: () => activeWorkflow.value?.anime.enabled ?? false,
+  get: () => workflow.value.anime.enabled,
   set: (value: boolean) => {
     store.patchWorkflow((config) => {
       config.anime.enabled = value
@@ -126,7 +135,7 @@ const animeEnabled = computed({
 })
 
 const animeProfile = computed({
-  get: () => activeWorkflow.value?.anime.profile ?? 'clean-lines',
+  get: () => workflow.value.anime.profile,
   set: (value: string) => {
     store.patchWorkflow((config) => {
       config.anime.profile = value
@@ -135,7 +144,7 @@ const animeProfile = computed({
 })
 
 const animeDenoise = computed({
-  get: () => activeWorkflow.value?.anime.denoise ?? 10,
+  get: () => workflow.value.anime.denoise,
   set: (value: number) => {
     store.patchWorkflow((config) => {
       config.anime.denoise = value
@@ -144,7 +153,7 @@ const animeDenoise = computed({
 })
 
 const animeEdgeBoost = computed({
-  get: () => activeWorkflow.value?.anime.edgeBoost ?? 15,
+  get: () => workflow.value.anime.edgeBoost,
   set: (value: number) => {
     store.patchWorkflow((config) => {
       config.anime.edgeBoost = value
@@ -155,21 +164,17 @@ const animeEdgeBoost = computed({
 
 <template>
   <div class="module-stack">
-    <section v-if="!store.activeItem" class="panel-surface">
+    <section class="panel-surface">
       <div class="panel-head">
         <div class="panel-copy">
           <h2>增强流程</h2>
-          <p class="panel-caption">增强页始终显示激活文件的表单值，所有修改会同步到激活文件和已勾选文件。</p>
+          <p class="panel-caption">{{ caption }}</p>
         </div>
-      </div>
-
-      <div v-if="!store.activeItem" class="empty-state">
-        <strong>还没有激活文件</strong>
-        <p>请先在输入页导入并选中至少一个视频。</p>
+        <span class="panel-badge">{{ targetLabel }}</span>
       </div>
     </section>
 
-    <section v-if="store.activeItem" class="panel-surface">
+    <section class="panel-surface">
       <div class="panel-head">
         <h2>补帧</h2>
         <label class="toggle-chip">
@@ -198,7 +203,7 @@ const animeEdgeBoost = computed({
           <span>帧率模式</span>
           <select v-model="fpsMode">
             <option value="target">目标 FPS</option>
-            <option value="multi">倍数</option>
+            <option value="multi">倍率</option>
           </select>
         </label>
 
@@ -208,7 +213,7 @@ const animeEdgeBoost = computed({
         </label>
 
         <label v-else class="field">
-          <span>倍数</span>
+          <span>倍率</span>
           <select v-model.number="interpolationMulti">
             <option :value="2">2x</option>
             <option :value="4">4x</option>
@@ -230,7 +235,7 @@ const animeEdgeBoost = computed({
       </div>
     </section>
 
-    <section v-if="store.activeItem" class="panel-surface">
+    <section class="panel-surface">
       <div class="panel-head">
         <h2>超分</h2>
         <label class="toggle-chip">
@@ -266,7 +271,7 @@ const animeEdgeBoost = computed({
       </div>
     </section>
 
-    <section v-if="store.activeItem" class="panel-surface">
+    <section class="panel-surface">
       <div class="panel-head">
         <h2>动漫优化</h2>
         <label class="toggle-chip">

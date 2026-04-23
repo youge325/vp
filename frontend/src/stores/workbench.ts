@@ -6,9 +6,11 @@ import {
   checkEnvironment as invokeCheckEnvironment,
   inspectVideo as invokeInspectVideo,
   listenTaskEvents,
+  loadWorkbenchPreset as invokeLoadWorkbenchPreset,
   openOutputLocation as invokeOpenOutputLocation,
   pickInputs as invokePickInputs,
   pickOutputDirectory as invokePickOutputDirectory,
+  saveWorkbenchPreset as invokeSaveWorkbenchPreset,
   startTask as invokeStartTask,
 } from '@/lib/tauri'
 import {
@@ -16,11 +18,11 @@ import {
   cloneDecodeConfig,
   cloneEncodeConfig,
   cloneOutputConfig,
+  cloneWorkbenchPreset,
   cloneWorkflowConfig,
   createDefaultDecodeConfig,
   createDefaultEncodeConfig,
-  createDefaultOutputConfig,
-  createDefaultWorkflowConfig,
+  createDefaultWorkbenchPreset,
   getVisibleDecoderProfiles,
   getVisibleEncoderProfiles,
 } from '@/lib/task-mapper'
@@ -40,8 +42,10 @@ import type {
   CodecProfileSpec,
   DecodeConfig,
   DecoderProfileSpec,
+  EditingScope,
   EncodeConfig,
   EncoderProfileSpec,
+  EnvironmentCheckPayload,
   EnvironmentCheckResult,
   GpuAdapter,
   MediaItem,
@@ -53,12 +57,17 @@ import type {
   TaskLogPayload,
   TaskProgressPayload,
   VideoInfoResult,
+  WorkbenchPreset,
   WorkflowConfig,
 } from '@/types'
+
+const PRESET_SAVE_DEBOUNCE_MS = 300
 
 function createInitialEnv(): AppEnv {
   return {
     lastCheckedAt: null,
+    lastProbeAt: null,
+    checkSource: null,
     isChecking: false,
     isBootstrapping: false,
     checkResult: null,
@@ -81,7 +90,7 @@ function normalizeTaskError(error: unknown, code = 'runtime_error'): TaskError {
     const payload = error as { code?: unknown; message?: unknown; details?: Record<string, unknown> | null }
     return {
       code: typeof payload.code === 'string' ? payload.code : code,
-      message: typeof payload.message === 'string' ? payload.message : '执行失败。',
+      message: typeof payload.message === 'string' ? payload.message : 'Execution failed.',
       details: payload.details ?? null,
     }
   }
@@ -129,6 +138,14 @@ function normalizeCheckResult(raw: EnvironmentCheckResult): EnvironmentCheckResu
       devices: raw.gpu?.devices ?? [],
       adapters,
     },
+  }
+}
+
+function normalizeCheckPayload(raw: EnvironmentCheckPayload): EnvironmentCheckPayload {
+  return {
+    result: normalizeCheckResult(raw.result),
+    source: raw.source === 'cache' ? 'cache' : 'probe',
+    checkedAt: raw.checkedAt ?? null,
   }
 }
 
@@ -191,8 +208,23 @@ function seedProfileOptions(
   return next
 }
 
+function coercePreset(raw: WorkbenchPreset | null, env: EnvironmentCheckResult | null): WorkbenchPreset {
+  const defaults = createDefaultWorkbenchPreset(env)
+  if (!raw) {
+    return defaults
+  }
+
+  return {
+    decodeConfig: raw.decodeConfig ? cloneDecodeConfig(raw.decodeConfig) : defaults.decodeConfig,
+    workflowConfig: raw.workflowConfig ? cloneWorkflowConfig(raw.workflowConfig) : defaults.workflowConfig,
+    encodeConfig: raw.encodeConfig ? cloneEncodeConfig(raw.encodeConfig) : defaults.encodeConfig,
+    outputConfig: raw.outputConfig ? cloneOutputConfig(raw.outputConfig) : defaults.outputConfig,
+  }
+}
+
 export const useWorkbenchStore = defineStore('workbench', () => {
   const env = reactive<AppEnv>(createInitialEnv())
+  const draftPreset = reactive<WorkbenchPreset>(createDefaultWorkbenchPreset(null))
   const mediaItems = ref<MediaItem[]>([])
   const activeItemId = ref<string | null>(null)
   const batch = reactive<BatchState>(createInitialBatch())
@@ -200,6 +232,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const operationIssue = ref<OperationIssue | null>(null)
 
   let detachListenersHandle: UnlistenFn | null = null
+  let presetSaveTimer: ReturnType<typeof setTimeout> | null = null
+  let presetPersistenceReady = false
 
   const selectedIds = computed(() => mediaItems.value.filter((item) => item.selected).map((item) => item.id))
   const selectedItems = computed(() => mediaItems.value.filter((item) => item.selected))
@@ -211,27 +245,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return mediaItems.value.filter((item) => ids.has(item.id))
   })
   const consoleTaskItem = computed(() => currentTaskItem.value ?? activeItem.value)
+  const editingScope = computed<EditingScope>(() => (activeItem.value ? 'selection' : 'preset'))
+  const editingSelectionCount = computed(() => (activeItem.value ? selectedIds.value.length || 1 : 0))
+  const editor = computed<WorkbenchPreset>(() => ({
+    decodeConfig: activeItem.value?.decodeConfig ?? draftPreset.decodeConfig,
+    workflowConfig: activeItem.value?.workflowConfig ?? draftPreset.workflowConfig,
+    encodeConfig: activeItem.value?.encodeConfig ?? draftPreset.encodeConfig,
+    outputConfig: activeItem.value?.outputConfig ?? draftPreset.outputConfig,
+  }))
+  const editorVideoCodec = computed(() => activeItem.value?.info?.video_codec ?? '')
   const visibleEncoderProfiles = computed(() => getVisibleEncoderProfiles(env.checkResult))
   const visibleDecoderProfiles = computed(() =>
-    getVisibleDecoderProfiles(env.checkResult, activeItem.value?.info?.video_codec ?? ''),
+    getVisibleDecoderProfiles(env.checkResult, editorVideoCodec.value),
   )
   const currentEncoderProfile = computed<EncoderProfileSpec | null>(() => {
-    if (!activeItem.value) {
-      return visibleEncoderProfiles.value[0] ?? null
-    }
     return (
-      visibleEncoderProfiles.value.find((profile) => profile.name === activeItem.value?.encodeConfig.codec) ??
+      visibleEncoderProfiles.value.find((profile) => profile.name === editor.value.encodeConfig.codec) ??
       visibleEncoderProfiles.value[0] ??
       null
     )
   })
   const currentDecoderProfile = computed<DecoderProfileSpec | null>(() => {
-    if (!activeItem.value) {
-      return visibleDecoderProfiles.value[0] ?? null
-    }
-
     const selectedName =
-      activeItem.value.decodeConfig.mode === 'software' ? 'software' : activeItem.value.decodeConfig.decoder
+      editor.value.decodeConfig.mode === 'software' ? 'software' : editor.value.decodeConfig.decoder
     return (
       visibleDecoderProfiles.value.find((profile) => profile.name === selectedName) ??
       visibleDecoderProfiles.value[0] ??
@@ -251,6 +287,49 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     return 'idle'
   })
+
+  function replaceDraftPreset(next: WorkbenchPreset): void {
+    draftPreset.decodeConfig = cloneDecodeConfig(next.decodeConfig)
+    draftPreset.workflowConfig = cloneWorkflowConfig(next.workflowConfig)
+    draftPreset.encodeConfig = cloneEncodeConfig(next.encodeConfig)
+    draftPreset.outputConfig = cloneOutputConfig(next.outputConfig)
+  }
+
+  function schedulePresetSave(): void {
+    if (!presetPersistenceReady) {
+      return
+    }
+    if (presetSaveTimer) {
+      clearTimeout(presetSaveTimer)
+    }
+    presetSaveTimer = setTimeout(() => {
+      presetSaveTimer = null
+      void persistWorkbenchPreset()
+    }, PRESET_SAVE_DEBOUNCE_MS)
+  }
+
+  async function persistWorkbenchPreset(): Promise<void> {
+    try {
+      await invokeSaveWorkbenchPreset(cloneWorkbenchPreset(draftPreset))
+    } catch {
+      // Ignore persistence failures and keep the in-memory editor usable.
+    }
+  }
+
+  async function loadPersistedPreset(): Promise<boolean> {
+    try {
+      const preset = await invokeLoadWorkbenchPreset()
+      if (!preset) {
+        replaceDraftPreset(createDefaultWorkbenchPreset(env.checkResult))
+        return false
+      }
+      replaceDraftPreset(coercePreset(preset, env.checkResult))
+      return true
+    } catch {
+      replaceDraftPreset(createDefaultWorkbenchPreset(env.checkResult))
+      return false
+    }
+  }
 
   function getEditableTargetIds(): Set<string> {
     const targetIds = new Set<string>(selectedIds.value)
@@ -289,42 +368,104 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   }
 
-  function normalizeItemProfiles(item: MediaItem, preferDefaults = false): void {
-    const codec = item.info?.video_codec ?? ''
-    const decoderProfiles = getVisibleDecoderProfiles(env.checkResult, codec)
-    const currentDecoderName = item.decodeConfig.mode === 'software' ? 'software' : item.decodeConfig.decoder
-    const matchedDecoder = decoderProfiles.find((profile) => profile.name === currentDecoderName) ?? null
-    if (preferDefaults || !matchedDecoder) {
-      item.decodeConfig = createDefaultDecodeConfig(env.checkResult, codec)
-    } else {
-      item.decodeConfig = {
-        ...item.decodeConfig,
-        hwaccel: item.decodeConfig.mode === 'hardware' ? item.decodeConfig.hwaccel : '',
-        hwaccelDevice: item.decodeConfig.mode === 'hardware' ? item.decodeConfig.hwaccelDevice : '',
-        decoder: item.decodeConfig.mode === 'software' ? 'software' : item.decodeConfig.decoder,
-        options: seedProfileOptions(matchedDecoder, item.decodeConfig.options),
+  function normalizeDraftPresetProfiles(preferDefaults = false): void {
+    draftPreset.decodeConfig = normalizeDecodeConfig(draftPreset.decodeConfig, '', preferDefaults)
+    draftPreset.encodeConfig = normalizeEncodeConfig(draftPreset.encodeConfig, preferDefaults)
+  }
+
+  function normalizeDecodeConfig(
+    config: DecodeConfig,
+    videoCodec: string,
+    preferDefaults = false,
+  ): DecodeConfig {
+    const visibleProfiles = getVisibleDecoderProfiles(env.checkResult, videoCodec)
+    const allProfiles = getVisibleDecoderProfiles(env.checkResult, '')
+
+    if (preferDefaults) {
+      return createDefaultDecodeConfig(env.checkResult, videoCodec)
+    }
+
+    const selectedName = config.mode === 'software' ? 'software' : config.decoder
+    const matchedVisible = visibleProfiles.find((profile) => profile.name === selectedName) ?? null
+    if (matchedVisible) {
+      if (matchedVisible.family === 'software') {
+        return {
+          mode: 'software',
+          hwaccel: '',
+          hwaccelDevice: '',
+          decoder: 'software',
+          options: {},
+        }
+      }
+
+      return {
+        ...config,
+        mode: 'hardware',
+        hwaccel: inferHwaccelForProfile(matchedVisible),
+        hwaccelDevice: config.hwaccelDevice,
+        decoder: matchedVisible.name,
+        options: seedProfileOptions(matchedVisible, config.options),
       }
     }
 
-    const encoderProfiles = getVisibleEncoderProfiles(env.checkResult)
-    const matchedEncoder = encoderProfiles.find((profile) => profile.name === item.encodeConfig.codec) ?? null
-    if (preferDefaults || !matchedEncoder) {
-      const defaults = createDefaultEncodeConfig(env.checkResult)
-      item.encodeConfig = {
-        ...defaults,
-        container: item.encodeConfig.container || defaults.container,
-        keepAudio: item.encodeConfig.keepAudio,
-      }
-    } else {
-      item.encodeConfig = {
-        ...item.encodeConfig,
-        family:
-          matchedEncoder.family === 'nvidia' || matchedEncoder.family === 'intel'
-            ? matchedEncoder.family
-            : 'cpu',
-        options: seedProfileOptions(matchedEncoder, item.encodeConfig.options),
+    const currentProfile = allProfiles.find((profile) => profile.name === selectedName) ?? null
+    const remappedProfile = currentProfile
+      ? visibleProfiles.find((profile) => profile.family === currentProfile.family) ?? null
+      : null
+    if (remappedProfile && remappedProfile.family !== 'software') {
+      return {
+        ...config,
+        mode: 'hardware',
+        hwaccel: inferHwaccelForProfile(remappedProfile),
+        hwaccelDevice: config.hwaccelDevice,
+        decoder: remappedProfile.name,
+        options: seedProfileOptions(remappedProfile, config.options),
       }
     }
+
+    return createDefaultDecodeConfig(env.checkResult, videoCodec)
+  }
+
+  function normalizeEncodeConfig(config: EncodeConfig, preferDefaults = false): EncodeConfig {
+    const profiles = getVisibleEncoderProfiles(env.checkResult)
+    const matchedProfile = profiles.find((profile) => profile.name === config.codec) ?? null
+
+    if (preferDefaults || !matchedProfile) {
+      const fallbackProfile = profiles.find((profile) => profile.family === config.family) ?? null
+      const defaults = createDefaultEncodeConfig(env.checkResult)
+      const candidate = preferDefaults ? null : fallbackProfile
+      if (!candidate) {
+        return {
+          ...defaults,
+          container: config.container || defaults.container,
+          keepAudio: config.keepAudio,
+        }
+      }
+
+      const family =
+        candidate.family === 'nvidia' || candidate.family === 'intel' ? candidate.family : 'cpu'
+      return {
+        ...config,
+        codec: candidate.name,
+        family,
+        rateControl: defaultRateControlValue(family),
+        options: seedProfileOptions(candidate, config.options),
+      }
+    }
+
+    return {
+      ...config,
+      family:
+        matchedProfile.family === 'nvidia' || matchedProfile.family === 'intel'
+          ? matchedProfile.family
+          : 'cpu',
+      options: seedProfileOptions(matchedProfile, config.options),
+    }
+  }
+
+  function normalizeItemProfiles(item: MediaItem, preferDefaults = false): void {
+    item.decodeConfig = normalizeDecodeConfig(item.decodeConfig, item.info?.video_codec ?? '', preferDefaults)
+    item.encodeConfig = normalizeEncodeConfig(item.encodeConfig, preferDefaults)
   }
 
   function setActiveItem(id: string): void {
@@ -364,35 +505,61 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   function patchWorkflow(mutator: (config: WorkflowConfig) => void): void {
+    const nextDraft = cloneWorkflowConfig(draftPreset.workflowConfig)
+    mutator(nextDraft)
+    draftPreset.workflowConfig = nextDraft
+
     forEachEditableItem((item) => {
       const next = cloneWorkflowConfig(item.workflowConfig)
       mutator(next)
       item.workflowConfig = next
     })
+
+    schedulePresetSave()
   }
 
   function patchDecode(mutator: (config: DecodeConfig) => void): void {
+    const nextDraft = cloneDecodeConfig(draftPreset.decodeConfig)
+    mutator(nextDraft)
+    draftPreset.decodeConfig = nextDraft
+    normalizeDraftPresetProfiles()
+
     forEachEditableItem((item) => {
       const next = cloneDecodeConfig(item.decodeConfig)
       mutator(next)
       item.decodeConfig = next
     })
+
+    schedulePresetSave()
   }
 
   function patchEncode(mutator: (config: EncodeConfig) => void): void {
+    const nextDraft = cloneEncodeConfig(draftPreset.encodeConfig)
+    mutator(nextDraft)
+    draftPreset.encodeConfig = nextDraft
+    normalizeDraftPresetProfiles()
+
     forEachEditableItem((item) => {
       const next = cloneEncodeConfig(item.encodeConfig)
       mutator(next)
       item.encodeConfig = next
     })
+
+    schedulePresetSave()
   }
 
   function patchOutput(mutator: (config: OutputConfig) => void): void {
+    const nextDraft = cloneOutputConfig(draftPreset.outputConfig)
+    mutator(nextDraft)
+    draftPreset.outputConfig = nextDraft
+
     forEachEditableItem((item) => {
       const next = cloneOutputConfig(item.outputConfig)
       mutator(next)
       item.outputConfig = next
     })
+
+    schedulePresetSave()
   }
 
   function setDecodeProfile(profileName: string): void {
@@ -474,20 +641,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   function createMediaItem(path: string): MediaItem {
-    const sourceItem = activeItem.value
-    const workflowConfig = sourceItem
-      ? cloneWorkflowConfig(sourceItem.workflowConfig)
-      : createDefaultWorkflowConfig()
-    const outputConfig = sourceItem
-      ? cloneOutputConfig(sourceItem.outputConfig)
-      : createDefaultOutputConfig()
-    const encodeConfig = sourceItem
-      ? cloneEncodeConfig(sourceItem.encodeConfig)
-      : createDefaultEncodeConfig(env.checkResult)
-    const decodeConfig = sourceItem
-      ? cloneDecodeConfig(sourceItem.decodeConfig)
-      : createDefaultDecodeConfig(env.checkResult)
-
     const item: MediaItem = {
       id: createMediaId(path),
       inputPath: path,
@@ -496,10 +649,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       inspecting: false,
       info: null,
       issue: null,
-      decodeConfig,
-      workflowConfig,
-      encodeConfig,
-      outputConfig,
+      decodeConfig: cloneDecodeConfig(draftPreset.decodeConfig),
+      workflowConfig: cloneWorkflowConfig(draftPreset.workflowConfig),
+      encodeConfig: cloneEncodeConfig(draftPreset.encodeConfig),
+      outputConfig: cloneOutputConfig(draftPreset.outputConfig),
       taskState: createIdleTaskState(),
       lastOutputPath: '',
     }
@@ -558,16 +711,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   }
 
-  async function recheckEnvironment(): Promise<void> {
+  async function recheckEnvironment(forceRefresh = true): Promise<void> {
     env.isChecking = true
     env.issue = null
     try {
-      const result = normalizeCheckResult((await invokeCheckEnvironment()) as EnvironmentCheckResult)
-      env.checkResult = result
+      const payload = normalizeCheckPayload((await invokeCheckEnvironment(forceRefresh)) as EnvironmentCheckPayload)
+      env.checkResult = payload.result
+      env.checkSource = payload.source
       env.lastCheckedAt = new Date().toISOString()
+      env.lastProbeAt = payload.checkedAt ?? env.lastCheckedAt
+      normalizeDraftPresetProfiles()
       for (const item of mediaItems.value) {
         normalizeItemProfiles(item)
       }
+      schedulePresetSave()
     } catch (error) {
       env.issue = normalizeTaskError(error, 'check_failed')
     } finally {
@@ -583,7 +740,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     env.isBootstrapping = true
     try {
       await attachTaskListeners()
-      await recheckEnvironment()
+      const hasPersistedPreset = await loadPersistedPreset()
+      await recheckEnvironment(false)
+      if (!hasPersistedPreset && env.checkResult) {
+        replaceDraftPreset(createDefaultWorkbenchPreset(env.checkResult))
+      }
+      presetPersistenceReady = true
+      schedulePresetSave()
     } finally {
       env.isBootstrapping = false
     }
@@ -618,6 +781,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   function detachTaskListeners(): void {
+    if (presetSaveTimer) {
+      clearTimeout(presetSaveTimer)
+      presetSaveTimer = null
+    }
     detachListenersHandle?.()
     detachListenersHandle = null
   }
@@ -806,6 +973,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       currentTaskItem.value?.lastOutputPath ||
       currentTaskItem.value?.taskState.outputPath ||
       activeItem.value?.outputConfig.outputDir ||
+      draftPreset.outputConfig.outputDir ||
       ''
     if (!target) {
       return
@@ -839,6 +1007,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   return {
     env,
+    draftPreset,
     mediaItems,
     activeItemId,
     batch,
@@ -849,6 +1018,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     currentTaskItem,
     batchItems,
     consoleTaskItem,
+    editor,
+    editingScope,
+    editingSelectionCount,
     visibleEncoderProfiles,
     visibleDecoderProfiles,
     currentEncoderProfile,

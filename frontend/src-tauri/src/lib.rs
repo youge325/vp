@@ -1,4 +1,5 @@
 mod models;
+mod persistence;
 mod runtime;
 mod tasks;
 
@@ -6,6 +7,7 @@ use std::path::PathBuf;
 
 use models::TaskState;
 use rfd::FileDialog;
+use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 use crate::runtime::resolve_runtime_paths;
@@ -31,8 +33,54 @@ async fn pick_output_directory() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-async fn check_environment<R: Runtime>(app: AppHandle<R>) -> Result<serde_json::Value, String> {
-    tasks::run_single_cli_command(&app, &[String::from("check")]).await
+async fn check_environment<R: Runtime>(
+    app: AppHandle<R>,
+    force_refresh: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    let force_refresh = force_refresh.unwrap_or(false);
+    let paths = resolve_runtime_paths(&app)?;
+    let fingerprint = persistence::build_environment_fingerprint(&paths).ok();
+    let app_data_dir = persistence::app_data_dir(&app).ok();
+
+    if let (Some(data_dir), Some(fingerprint)) = (app_data_dir.as_deref(), fingerprint.as_deref()) {
+        if let Some(cached) = persistence::load_environment_cache(data_dir, fingerprint, force_refresh) {
+            return Ok(json!({
+                "result": cached.result,
+                "source": "cache",
+                "checkedAt": cached.checked_at,
+            }));
+        }
+    }
+
+    let result = tasks::run_single_cli_command(&app, &[String::from("check")]).await?;
+    let checked_at = persistence::current_timestamp()?;
+
+    if let (Some(data_dir), Some(fingerprint)) = (app_data_dir.as_deref(), fingerprint.as_deref()) {
+        let _ = persistence::save_environment_cache(data_dir, &checked_at, fingerprint, &result);
+    }
+
+    Ok(json!({
+        "result": result,
+        "source": "probe",
+        "checkedAt": checked_at,
+    }))
+}
+
+#[tauri::command]
+async fn load_workbench_preset<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<Option<models::WorkbenchPreset>, String> {
+    let data_dir = persistence::app_data_dir(&app)?;
+    Ok(persistence::load_workbench_preset(&data_dir))
+}
+
+#[tauri::command]
+async fn save_workbench_preset<R: Runtime>(
+    app: AppHandle<R>,
+    preset: models::WorkbenchPreset,
+) -> Result<(), String> {
+    let data_dir = persistence::app_data_dir(&app)?;
+    persistence::save_workbench_preset(&data_dir, &preset)
 }
 
 #[tauri::command]
@@ -94,6 +142,8 @@ pub fn run() {
             pick_inputs,
             pick_output_directory,
             check_environment,
+            load_workbench_preset,
+            save_workbench_preset,
             inspect_video,
             start_task,
             cancel_task,
@@ -112,6 +162,8 @@ mod tests {
     fn default_permissions_include_active_desktop_commands() {
         assert!(DEFAULT_PERMISSIONS.contains("allow-pick-inputs"));
         assert!(DEFAULT_PERMISSIONS.contains("allow-pick-output-directory"));
+        assert!(DEFAULT_PERMISSIONS.contains("allow-load-workbench-preset"));
+        assert!(DEFAULT_PERMISSIONS.contains("allow-save-workbench-preset"));
         assert!(DEFAULT_PERMISSIONS.contains("allow-open-output-location"));
     }
 
@@ -127,6 +179,8 @@ mod tests {
     fn generated_acl_manifest_tracks_active_commands_only() {
         assert!(ACL_MANIFESTS.contains("allow-pick-inputs"));
         assert!(ACL_MANIFESTS.contains("allow-pick-output-directory"));
+        assert!(ACL_MANIFESTS.contains("allow-load-workbench-preset"));
+        assert!(ACL_MANIFESTS.contains("allow-save-workbench-preset"));
         assert!(!ACL_MANIFESTS.contains("\"allow-pick-output\""));
         assert!(!ACL_MANIFESTS.contains("\"allow-open-file-or-directory\""));
         assert!(!ACL_MANIFESTS.contains("\"allow-resolved-runtime\""));

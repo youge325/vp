@@ -19,4 +19,5 @@ rfd = "0.15.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2.10.3", features = [] }
+time = { version = "0.3.44", features = ["formatting"] }
 tokio = { version = "1.48.0", features = ["io-util", "macros", "process", "rt-multi-thread", "sync"] }

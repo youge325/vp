@@ -7,6 +7,7 @@ import type {
   MediaItem,
   OutputConfig,
   TaskRequest,
+  WorkbenchPreset,
   WorkflowConfig,
   WorkflowMode,
 } from '@/types'
@@ -150,6 +151,15 @@ export function buildTaskRequest(item: MediaItem): TaskRequest {
   }
 }
 
+export function createDefaultWorkbenchPreset(env: EnvironmentCheckResult | null): WorkbenchPreset {
+  return {
+    decodeConfig: createDefaultDecodeConfig(env),
+    workflowConfig: createDefaultWorkflowConfig(),
+    encodeConfig: createDefaultEncodeConfig(env),
+    outputConfig: createDefaultOutputConfig(),
+  }
+}
+
 export function formatNumber(value: number): string {
   if (Math.abs(value - Math.round(value)) < 0.01) {
     return `${Math.round(value)}`
@@ -171,6 +181,10 @@ export function cloneDecodeConfig(config: DecodeConfig): DecodeConfig {
 
 export function cloneOutputConfig(config: OutputConfig): OutputConfig {
   return JSON.parse(JSON.stringify(config)) as OutputConfig
+}
+
+export function cloneWorkbenchPreset(config: WorkbenchPreset): WorkbenchPreset {
+  return JSON.parse(JSON.stringify(config)) as WorkbenchPreset
 }
 
 function pickPreferredEncoderProfile(env: EnvironmentCheckResult | null): EncoderProfileSpec | null {

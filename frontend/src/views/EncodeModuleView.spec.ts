@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MediaItem } from '@/types'
+import type { EncodeConfig, MediaItem, OutputConfig, WorkbenchPreset, WorkflowConfig } from '@/types'
 
 const storeState = vi.hoisted(() => ({ current: null as any }))
 
@@ -10,7 +10,73 @@ vi.mock('@/stores/workbench', () => ({
 
 import EncodeModuleView from '@/views/EncodeModuleView.vue'
 
+function createWorkflowConfig(): WorkflowConfig {
+  return {
+    fpsMode: 'target',
+    processOrder: 'super_resolution_then_interpolation',
+    interpolation: {
+      enabled: true,
+      targetFps: 60,
+      multi: 2,
+      model: '4.25',
+      scale: 1,
+      fp16: false,
+      tensorBackend: 'pytorch',
+    },
+    superResolution: {
+      enabled: false,
+      scaleFactor: 2,
+      algorithm: 'placeholder',
+    },
+    anime: {
+      enabled: false,
+      profile: 'clean-lines',
+      denoise: 10,
+      edgeBoost: 15,
+    },
+  }
+}
+
+function createEncodeConfig(): EncodeConfig {
+  return {
+    codec: 'hevc_nvenc',
+    family: 'nvidia',
+    container: 'mp4',
+    keepAudio: true,
+    rateControl: {
+      mode: 'cq',
+      value: 23,
+    },
+    options: {},
+  }
+}
+
+function createOutputConfig(): OutputConfig {
+  return {
+    outputDir: 'D:/output',
+    openOnComplete: true,
+    segmentFrames: 1000,
+  }
+}
+
+function createEditor(overrides: Partial<WorkbenchPreset> = {}): WorkbenchPreset {
+  return {
+    decodeConfig: {
+      mode: 'hardware',
+      hwaccel: 'cuda',
+      hwaccelDevice: '',
+      decoder: 'hevc_cuvid',
+      options: {},
+    },
+    workflowConfig: createWorkflowConfig(),
+    encodeConfig: createEncodeConfig(),
+    outputConfig: createOutputConfig(),
+    ...overrides,
+  }
+}
+
 function createMediaItem(): MediaItem {
+  const editor = createEditor()
   return {
     id: 'item-1',
     inputPath: 'D:/input/demo.mp4',
@@ -28,53 +94,10 @@ function createMediaItem(): MediaItem {
       video_codec: 'hevc',
     },
     issue: null,
-    decodeConfig: {
-      mode: 'hardware',
-      hwaccel: 'cuda',
-      hwaccelDevice: '',
-      decoder: 'hevc_cuvid',
-      options: {},
-    },
-    workflowConfig: {
-      fpsMode: 'target',
-      processOrder: 'super_resolution_then_interpolation',
-      interpolation: {
-        enabled: true,
-        targetFps: 60,
-        multi: 2,
-        model: '4.25',
-        scale: 1,
-        fp16: false,
-        tensorBackend: 'pytorch',
-      },
-      superResolution: {
-        enabled: false,
-        scaleFactor: 2,
-        algorithm: 'placeholder',
-      },
-      anime: {
-        enabled: false,
-        profile: 'clean-lines',
-        denoise: 10,
-        edgeBoost: 15,
-      },
-    },
-    encodeConfig: {
-      codec: 'hevc_nvenc',
-      family: 'nvidia',
-      container: 'mp4',
-      keepAudio: true,
-      rateControl: {
-        mode: 'cq',
-        value: 23,
-      },
-      options: {},
-    },
-    outputConfig: {
-      outputDir: 'D:/output',
-      openOnComplete: true,
-      segmentFrames: 1000,
-    },
+    decodeConfig: editor.decodeConfig,
+    workflowConfig: editor.workflowConfig,
+    encodeConfig: editor.encodeConfig,
+    outputConfig: editor.outputConfig,
     taskState: {
       status: 'idle',
       percent: 0,
@@ -96,10 +119,13 @@ function createMediaItem(): MediaItem {
 }
 
 function createStoreMock(overrides: Record<string, unknown> = {}) {
-  const item = createMediaItem()
+  const editor = createEditor()
   return {
-    activeItem: item,
-    selectedIds: [item.id],
+    activeItem: createMediaItem(),
+    selectedIds: ['item-1'],
+    editingScope: 'selection',
+    editingSelectionCount: 1,
+    editor,
     operationIssue: null,
     visibleEncoderProfiles: [
       {
@@ -123,8 +149,8 @@ function createStoreMock(overrides: Record<string, unknown> = {}) {
       hardwareDevices: ['cuda'],
       options: [],
     },
-    patchEncode: vi.fn((mutator: (config: MediaItem['encodeConfig']) => void) => mutator(item.encodeConfig)),
-    patchOutput: vi.fn((mutator: (config: MediaItem['outputConfig']) => void) => mutator(item.outputConfig)),
+    patchEncode: vi.fn((mutator: (config: EncodeConfig) => void) => mutator(editor.encodeConfig)),
+    patchOutput: vi.fn((mutator: (config: OutputConfig) => void) => mutator(editor.outputConfig)),
     setEncodeRateControlMode: vi.fn(),
     setEncodeRateControlValue: vi.fn(),
     setEncodeProfile: vi.fn(),
@@ -140,16 +166,44 @@ describe('EncodeModuleView', () => {
     storeState.current = createStoreMock()
   })
 
+  it('keeps output controls available in preset mode', () => {
+    storeState.current = createStoreMock({
+      activeItem: null,
+      selectedIds: [],
+      editingScope: 'preset',
+      editingSelectionCount: 0,
+    })
+
+    const wrapper = mount(EncodeModuleView)
+
+    expect((wrapper.get('input[type="text"]').element as HTMLInputElement).value).toBe('D:/output')
+    expect(wrapper.text()).toContain('默认预设')
+  })
+
   it('updates output path and segment frames through patchOutput', async () => {
     const wrapper = mount(EncodeModuleView)
 
     const textInput = wrapper.get('input[type="text"]')
     await textInput.setValue('D:/custom-output')
     expect(storeState.current.patchOutput).toHaveBeenCalled()
-    expect(storeState.current.activeItem.outputConfig.outputDir).toBe('D:/custom-output')
+    expect(storeState.current.editor.outputConfig.outputDir).toBe('D:/custom-output')
 
     const numberInputs = wrapper.findAll('input[type="number"]')
     await numberInputs[0]!.setValue('240')
-    expect(storeState.current.activeItem.outputConfig.segmentFrames).toBe(240)
+    expect(storeState.current.editor.outputConfig.segmentFrames).toBe(240)
+  })
+
+  it('lets the user pick an output directory before importing media', async () => {
+    storeState.current = createStoreMock({
+      activeItem: null,
+      selectedIds: [],
+      editingScope: 'preset',
+      editingSelectionCount: 0,
+    })
+
+    const wrapper = mount(EncodeModuleView)
+
+    await wrapper.get('button').trigger('click')
+    expect(storeState.current.pickOutputDirectory).toHaveBeenCalledTimes(1)
   })
 })

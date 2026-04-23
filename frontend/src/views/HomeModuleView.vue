@@ -29,6 +29,16 @@ const familyCards = computed(() => {
     },
   ]
 })
+
+const probeSourceLabel = computed(() => {
+  if (store.env.checkSource === 'cache') {
+    return '缓存'
+  }
+  if (store.env.checkSource === 'probe') {
+    return '实时探测'
+  }
+  return '--'
+})
 </script>
 
 <template>
@@ -37,18 +47,12 @@ const familyCards = computed(() => {
       <div class="panel-head">
         <div class="panel-copy">
           <h2>启动探测</h2>
-          <p class="panel-caption">应用启动后会自动检查环境，并根据 FFmpeg 与显卡能力动态提供编解码选项。</p>
+          <p class="panel-caption">应用启动后会优先读取本机缓存的能力探测；只有缓存失效或你手动重新探测时，才会再次执行真实探测。</p>
         </div>
 
         <div class="panel-actions">
           <span v-if="store.env.isBootstrapping || store.env.isChecking" class="panel-badge">探测中</span>
-          <button
-            v-else-if="store.env.issue"
-            class="ghost-button"
-            @click="store.recheckEnvironment()"
-          >
-            重试探测
-          </button>
+          <button v-else class="ghost-button" @click="store.recheckEnvironment()">重新探测</button>
         </div>
       </div>
 
@@ -65,9 +69,10 @@ const familyCards = computed(() => {
       </div>
 
       <div class="chip-row">
-        <span class="tag">硬件加速 {{ store.env.checkResult?.ffmpeg?.hwaccels?.join(', ') || '--' }}</span>
+        <span class="tag">来源: {{ probeSourceLabel }}</span>
+        <span class="tag">硬件加速: {{ store.env.checkResult?.ffmpeg?.hwaccels?.join(', ') || '--' }}</span>
         <span class="tag">GPU: {{ store.env.checkResult?.gpu?.devices?.join(' / ') || 'CPU only' }}</span>
-        <span class="tag">最近探测 {{ store.env.lastCheckedAt ? new Date(store.env.lastCheckedAt).toLocaleString() : '--' }}</span>
+        <span class="tag">最近真实探测: {{ store.env.lastProbeAt ? new Date(store.env.lastProbeAt).toLocaleString() : '--' }}</span>
       </div>
     </section>
 
@@ -75,7 +80,7 @@ const familyCards = computed(() => {
       <div class="panel-head">
         <div class="panel-copy">
           <h2>编码能力</h2>
-          <p class="panel-caption">这里只展示已经探测到、且当前机器实际可用的编码器家族。</p>
+          <p class="panel-caption">这里展示当前机器真实可用的编码器家族，解码、增强、编码页面会直接复用这些探测结果。</p>
         </div>
       </div>
 

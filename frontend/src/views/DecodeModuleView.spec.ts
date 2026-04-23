@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CapabilityOptionSpec, MediaItem } from '@/types'
+import type { CapabilityOptionSpec, DecodeConfig, MediaItem, WorkbenchPreset, WorkflowConfig, EncodeConfig, OutputConfig } from '@/types'
 
 const storeState = vi.hoisted(() => ({ current: null as any }))
 
@@ -23,7 +23,7 @@ const softwareProfile = {
 
 const booleanOption: CapabilityOptionSpec = {
   name: 'deint',
-  label: '去隔行',
+  label: 'Deinterlace',
   type: 'boolean',
   defaultValue: false,
   choices: [],
@@ -40,6 +40,65 @@ const hardwareProfile = {
   pixelFormats: [],
   hardwareDevices: ['cuda'],
   options: [booleanOption],
+}
+
+function createWorkflowConfig(): WorkflowConfig {
+  return {
+    fpsMode: 'target',
+    processOrder: 'super_resolution_then_interpolation',
+    interpolation: {
+      enabled: true,
+      targetFps: 60,
+      multi: 2,
+      model: '4.25',
+      scale: 1,
+      fp16: false,
+      tensorBackend: 'pytorch',
+    },
+    superResolution: {
+      enabled: false,
+      scaleFactor: 2,
+      algorithm: 'placeholder',
+    },
+    anime: {
+      enabled: false,
+      profile: 'clean-lines',
+      denoise: 10,
+      edgeBoost: 15,
+    },
+  }
+}
+
+function createEncodeConfig(): EncodeConfig {
+  return {
+    codec: 'hevc_nvenc',
+    family: 'nvidia',
+    container: 'mp4',
+    keepAudio: true,
+    rateControl: {
+      mode: 'cq',
+      value: 23,
+    },
+    options: {},
+  }
+}
+
+function createOutputConfig(): OutputConfig {
+  return {
+    outputDir: '',
+    openOnComplete: true,
+    segmentFrames: 1000,
+  }
+}
+
+function createDecodeConfig(): DecodeConfig {
+  return {
+    mode: 'hardware',
+    hwaccel: 'cuda',
+    hwaccelDevice: '',
+    decoder: 'hevc_cuvid',
+    options: {},
+  }
 }
 
 function createMediaItem(): MediaItem {
@@ -60,53 +119,10 @@ function createMediaItem(): MediaItem {
       video_codec: 'hevc',
     },
     issue: null,
-    decodeConfig: {
-      mode: 'hardware',
-      hwaccel: 'cuda',
-      hwaccelDevice: '',
-      decoder: 'hevc_cuvid',
-      options: {},
-    },
-    workflowConfig: {
-      fpsMode: 'target',
-      processOrder: 'super_resolution_then_interpolation',
-      interpolation: {
-        enabled: true,
-        targetFps: 60,
-        multi: 2,
-        model: '4.25',
-        scale: 1,
-        fp16: false,
-        tensorBackend: 'pytorch',
-      },
-      superResolution: {
-        enabled: false,
-        scaleFactor: 2,
-        algorithm: 'placeholder',
-      },
-      anime: {
-        enabled: false,
-        profile: 'clean-lines',
-        denoise: 10,
-        edgeBoost: 15,
-      },
-    },
-    encodeConfig: {
-      codec: 'hevc_nvenc',
-      family: 'nvidia',
-      container: 'mp4',
-      keepAudio: true,
-      rateControl: {
-        mode: 'cq',
-        value: 23,
-      },
-      options: {},
-    },
-    outputConfig: {
-      outputDir: '',
-      openOnComplete: true,
-      segmentFrames: 1000,
-    },
+    decodeConfig: createDecodeConfig(),
+    workflowConfig: createWorkflowConfig(),
+    encodeConfig: createEncodeConfig(),
+    outputConfig: createOutputConfig(),
     taskState: {
       status: 'idle',
       percent: 0,
@@ -127,18 +143,25 @@ function createMediaItem(): MediaItem {
   }
 }
 
-function createStoreMock(overrides: Record<string, unknown> = {}) {
+function createEditor(overrides: Partial<WorkbenchPreset> = {}): WorkbenchPreset {
   return {
-    ...createStoreMockBase(),
+    decodeConfig: createDecodeConfig(),
+    workflowConfig: createWorkflowConfig(),
+    encodeConfig: createEncodeConfig(),
+    outputConfig: createOutputConfig(),
     ...overrides,
   }
 }
 
-function createStoreMockBase() {
+function createStoreMock(overrides: Record<string, unknown> = {}) {
   const item = createMediaItem()
+  const editor = createEditor()
   return {
     activeItem: item,
     selectedIds: [item.id],
+    editingScope: 'selection',
+    editingSelectionCount: 1,
+    editor,
     currentDecoderProfile: hardwareProfile,
     visibleDecoderProfiles: [softwareProfile, hardwareProfile],
     setDecodeProfile: vi.fn(),
@@ -146,6 +169,7 @@ function createStoreMockBase() {
     setDecodeOption: vi.fn(),
     getOptionValue: (option: CapabilityOptionSpec, values: Record<string, string | number | boolean>) =>
       option.name in values ? values[option.name] : option.defaultValue ?? false,
+    ...overrides,
   }
 }
 
@@ -154,26 +178,34 @@ describe('DecodeModuleView', () => {
     storeState.current = createStoreMock()
   })
 
-  it('shows an empty state when there is no active item', () => {
+  it('renders preset controls even when there is no active item', () => {
     storeState.current = createStoreMock({
       activeItem: null,
       selectedIds: [],
-      currentDecoderProfile: null,
-      visibleDecoderProfiles: [],
+      editingScope: 'preset',
+      editingSelectionCount: 0,
+      editor: createEditor({
+        decodeConfig: {
+          mode: 'software',
+          hwaccel: '',
+          hwaccelDevice: '1',
+          decoder: 'software',
+          options: {},
+        },
+      }),
+      currentDecoderProfile: softwareProfile,
+      visibleDecoderProfiles: [softwareProfile],
     })
 
     const wrapper = mount(DecodeModuleView)
 
-    expect(wrapper.text()).toContain('还没有激活文件')
-    expect(wrapper.text()).not.toContain('解码参数')
+    expect(wrapper.find('select').exists()).toBe(true)
+    expect((wrapper.find('input[type="text"]').element as HTMLInputElement).value).toBe('1')
+    expect(wrapper.text()).toContain('默认预设')
   })
 
   it('renders decode controls and forwards interactions to the store', async () => {
     const wrapper = mount(DecodeModuleView)
-
-    expect(wrapper.text()).toContain('解码设置')
-    expect(wrapper.find('.stats-grid').exists()).toBe(false)
-    expect(wrapper.findAll('.stat-card')).toHaveLength(0)
 
     await wrapper.get('select').setValue('software')
     expect(storeState.current?.setDecodeProfile).toHaveBeenCalledWith('software')

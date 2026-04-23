@@ -6,6 +6,15 @@ import type { CapabilityOptionSpec, CapabilityValue } from '@/types'
 const store = useWorkbenchStore()
 
 const decoderOptions = computed(() => store.currentDecoderProfile?.options ?? [])
+const isPresetMode = computed(() => store.editingScope === 'preset')
+const targetLabel = computed(() =>
+  isPresetMode.value ? '默认预设（后续导入会继承）' : `作用于 ${store.editingSelectionCount} 个文件`,
+)
+const caption = computed(() =>
+  isPresetMode.value
+    ? '启动探测完成后即可直接设置解码策略，后续新导入的视频会继承这些默认值。'
+    : '当前修改会同步到激活文件与所有已勾选文件，解码器参数来自 FFmpeg 能力探测。',
+)
 
 function coerceOptionValue(option: CapabilityOptionSpec, event: Event): CapabilityValue {
   const target = event.target as HTMLInputElement | HTMLSelectElement
@@ -21,27 +30,13 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
 
 <template>
   <div class="module-stack">
-    <section v-if="!store.activeItem" class="panel-surface">
+    <section class="panel-surface">
       <div class="panel-head">
         <div class="panel-copy">
           <h2>解码设置</h2>
-          <p class="panel-caption">选项完全来自启动时的 FFmpeg 探测结果，会同步应用到激活文件与所有勾选文件。</p>
+          <p class="panel-caption">{{ caption }}</p>
         </div>
-      </div>
-
-      <div v-if="!store.activeItem" class="empty-state">
-        <strong>还没有激活文件</strong>
-        <p>请先在输入页导入并激活一个文件，解码页会显示该文件当前的解码方案。</p>
-      </div>
-    </section>
-
-    <section v-if="store.activeItem" class="panel-surface">
-      <div class="panel-head">
-        <div class="panel-copy">
-          <h2>解码设置</h2>
-          <p class="panel-caption">当前修改会应用到激活文件与所有勾选文件，解码器参数来自 FFmpeg 的可用能力探测。</p>
-        </div>
-        <span class="panel-badge">作用于 {{ store.selectedIds.length || 1 }} 个文件</span>
+        <span class="panel-badge">{{ targetLabel }}</span>
       </div>
 
       <div class="field-grid field-grid-2">
@@ -58,20 +53,20 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
         </label>
 
         <label class="field">
-          <span>硬件加速设备</span>
+          <span>硬件设备</span>
           <input
-            :value="store.activeItem.decodeConfig.hwaccelDevice"
+            :value="store.editor.decodeConfig.hwaccelDevice"
             type="text"
-            placeholder="留空使用默认设备"
+            placeholder="留空则使用默认设备"
             @input="store.setDecodeHwaccelDevice(($event.target as HTMLInputElement).value)"
           />
         </label>
       </div>
 
       <div class="chip-row">
-        <span class="tag">模式: {{ store.activeItem.decodeConfig.mode }}</span>
-        <span class="tag">hwaccel: {{ store.activeItem.decodeConfig.hwaccel || 'software' }}</span>
-        <span class="tag">decoder: {{ store.activeItem.decodeConfig.decoder || 'software' }}</span>
+        <span class="tag">模式: {{ store.editor.decodeConfig.mode }}</span>
+        <span class="tag">hwaccel: {{ store.editor.decodeConfig.hwaccel || 'software' }}</span>
+        <span class="tag">decoder: {{ store.editor.decodeConfig.decoder || 'software' }}</span>
       </div>
 
       <div v-if="decoderOptions.length > 0" class="field-grid field-grid-2">
@@ -80,7 +75,7 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
 
           <label v-if="option.type === 'boolean'" class="toggle-chip">
             <input
-              :checked="Boolean(store.getOptionValue(option, store.activeItem.decodeConfig.options))"
+              :checked="Boolean(store.getOptionValue(option, store.editor.decodeConfig.options))"
               type="checkbox"
               @change="store.setDecodeOption(option.name, coerceOptionValue(option, $event))"
             />
@@ -89,7 +84,7 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
 
           <select
             v-else-if="option.type === 'choice'"
-            :value="String(store.getOptionValue(option, store.activeItem.decodeConfig.options))"
+            :value="String(store.getOptionValue(option, store.editor.decodeConfig.options))"
             @change="store.setDecodeOption(option.name, coerceOptionValue(option, $event))"
           >
             <option
@@ -103,7 +98,7 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
 
           <input
             v-else-if="option.type === 'number'"
-            :value="Number(store.getOptionValue(option, store.activeItem.decodeConfig.options))"
+            :value="Number(store.getOptionValue(option, store.editor.decodeConfig.options))"
             type="number"
             :min="option.min ?? undefined"
             :max="option.max ?? undefined"
@@ -112,7 +107,7 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
 
           <input
             v-else
-            :value="String(store.getOptionValue(option, store.activeItem.decodeConfig.options))"
+            :value="String(store.getOptionValue(option, store.editor.decodeConfig.options))"
             type="text"
             @input="store.setDecodeOption(option.name, coerceOptionValue(option, $event))"
           />

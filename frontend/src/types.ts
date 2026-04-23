@@ -19,6 +19,8 @@ export type GpuDeviceType = 'integrated' | 'discrete' | 'virtual' | 'other'
 export type CapabilityValue = string | number | boolean
 export type CapabilityOptionType = 'boolean' | 'number' | 'string' | 'choice'
 export type RateControlMode = 'crf' | 'cq' | 'qp' | 'bitrate'
+export type EnvironmentCheckSource = 'cache' | 'probe'
+export type EditingScope = 'preset' | 'selection'
 
 export interface CapabilityChoice {
   label: string
@@ -103,6 +105,12 @@ export interface EnvironmentCheckResult {
   resources?: ResourceSummary
 }
 
+export interface EnvironmentCheckPayload {
+  result: EnvironmentCheckResult
+  source: EnvironmentCheckSource
+  checkedAt: string | null
+}
+
 export interface TaskError {
   code: string
   message: string
@@ -118,6 +126,8 @@ export interface OperationIssue {
 
 export interface AppEnv {
   lastCheckedAt: string | null
+  lastProbeAt: string | null
+  checkSource: EnvironmentCheckSource | null
   isChecking: boolean
   isBootstrapping: boolean
   checkResult: EnvironmentCheckResult | null
@@ -192,6 +202,13 @@ export interface OutputConfig {
   outputDir: string
   openOnComplete: boolean
   segmentFrames: number
+}
+
+export interface WorkbenchPreset {
+  decodeConfig: DecodeConfig
+  workflowConfig: WorkflowConfig
+  encodeConfig: EncodeConfig
+  outputConfig: OutputConfig
 }
 
 export interface MediaTaskState {

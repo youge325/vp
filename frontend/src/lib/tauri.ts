@@ -1,13 +1,14 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type {
-  EnvironmentCheckResult,
+  EnvironmentCheckPayload,
   TaskCompletedPayload,
   TaskError,
   TaskLogPayload,
   TaskProgressPayload,
   TaskRequest,
   VideoInfoResult,
+  WorkbenchPreset,
 } from '@/types'
 
 const BROWSER_RUNTIME_MESSAGE =
@@ -50,8 +51,22 @@ export function pickOutputDirectory(): Promise<string | null> {
   return safeInvoke<string | null>('pick_output_directory')
 }
 
-export function checkEnvironment(): Promise<EnvironmentCheckResult> {
-  return safeInvoke<EnvironmentCheckResult>('check_environment')
+export function checkEnvironment(forceRefresh = false): Promise<EnvironmentCheckPayload> {
+  return safeInvoke<EnvironmentCheckPayload>('check_environment', { force_refresh: forceRefresh })
+}
+
+export function loadWorkbenchPreset(): Promise<WorkbenchPreset | null> {
+  if (!isTauriRuntime()) {
+    return Promise.resolve(null)
+  }
+  return safeInvoke<WorkbenchPreset | null>('load_workbench_preset')
+}
+
+export function saveWorkbenchPreset(preset: WorkbenchPreset): Promise<void> {
+  if (!isTauriRuntime()) {
+    return Promise.resolve()
+  }
+  return safeInvoke<void>('save_workbench_preset', { preset })
 }
 
 export function inspectVideo(inputPath: string): Promise<VideoInfoResult> {

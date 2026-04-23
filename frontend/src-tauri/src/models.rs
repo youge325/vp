@@ -85,6 +85,15 @@ pub struct OutputConfig {
     pub segment_frames: u64,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkbenchPreset {
+    pub decode_config: DecodeConfig,
+    pub workflow_config: WorkflowConfig,
+    pub encode_config: EncodeConfig,
+    pub output_config: OutputConfig,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskRequest {
