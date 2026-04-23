@@ -6,7 +6,6 @@ export type WorkflowMode =
   | 'anime_optimization'
   | 'format_conversion'
 
-export type StageKey = 'prepare' | 'enhance' | 'deliver' | 'results'
 export type ModuleKey = 'home' | 'input' | 'decode' | 'enhance' | 'encode' | 'render'
 export type ProcessOrder =
   | 'super_resolution_then_interpolation'
@@ -257,22 +256,10 @@ export interface TaskLogPayload {
 
 export interface TaskRequest {
   inputPath: string
-  outputPath?: string
-  tempDir?: string
   decodeConfig: DecodeConfig
   workflowConfig: WorkflowConfig
   encodeConfig: EncodeConfig
   outputConfig: OutputConfig
-}
-
-export interface StepDefinition {
-  key: string
-  index: number
-  title: string
-  path: string
-  subtitle: string
-  stage: StageKey
-  tab: string
 }
 
 export interface WorkbenchModuleDefinition {
@@ -281,9 +268,4 @@ export interface WorkbenchModuleDefinition {
   path: string
   description: string
   icon: Component
-}
-
-export interface StageTabDefinition {
-  key: string
-  label: string
 }

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildSummarySections,
   buildTaskRequest,
   createDefaultDecodeConfig,
   createDefaultEncodeConfig,
@@ -166,9 +165,10 @@ describe('task mapper', () => {
     expect(resolvePrimaryMode(item)).toBe('format_conversion')
   })
 
-  it('builds nested task requests', () => {
+  it('builds nested task requests without legacy desktop-only fields', () => {
     const item = makeItem()
     const request = buildTaskRequest(item)
+    const legacyTempField = ['temp', 'Dir'].join('')
 
     expect(request.inputPath).toBe('D:/input/demo.mp4')
     expect(request.decodeConfig.decoder).toBe('hevc_cuvid')
@@ -176,16 +176,7 @@ describe('task mapper', () => {
     expect(request.encodeConfig.codec).toBe('hevc_nvenc')
     expect(request.outputConfig.outputDir).toBe('D:/output')
     expect(request.outputConfig.segmentFrames).toBe(1000)
-  })
-
-  it('creates readable summary sections for the active file', () => {
-    const env = makeEnv()
-    const sections = buildSummarySections(env, makeItem(env))
-
-    expect(sections).toHaveLength(4)
-    expect(sections[0]?.title).toBe('素材')
-    expect(sections[1]?.lines).toContain('NVIDIA GeForce RTX 3070')
-    expect(sections[2]?.lines[0]).toBe('补帧')
-    expect(sections[3]?.lines[1]).toContain('hevc_nvenc')
+    expect(request).not.toHaveProperty('outputPath')
+    expect(request).not.toHaveProperty(legacyTempField)
   })
 })

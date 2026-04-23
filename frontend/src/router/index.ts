@@ -1,18 +1,16 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { WORKBENCH_MODULES } from '@/lib/workflow'
 import DecodeModuleView from '@/views/DecodeModuleView.vue'
-import EncodeModuleView from '@/views/DeliverStageView.vue'
-import EnhanceModuleView from '@/views/EnhanceStageView.vue'
+import EncodeModuleView from '@/views/EncodeModuleView.vue'
+import EnhanceModuleView from '@/views/EnhanceModuleView.vue'
+import HomeModuleView from '@/views/HomeModuleView.vue'
 import InputModuleView from '@/views/InputModuleView.vue'
-import HomeModuleView from '@/views/PrepareStageView.vue'
-import RenderModuleView from '@/views/ResultsStageView.vue'
+import RenderModuleView from '@/views/RenderModuleView.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/', redirect: '/home' },
-    { path: '/overview', redirect: '/home' },
-    { path: '/prepare', redirect: '/home' },
     {
       path: '/home',
       name: 'home',
@@ -49,13 +47,5 @@ export const router = createRouter({
       component: RenderModuleView,
       meta: { module: WORKBENCH_MODULES[5] },
     },
-    { path: '/source', redirect: '/input' },
-    { path: '/interpolation', redirect: { path: '/enhance', query: { section: 'interpolation' } } },
-    { path: '/super-resolution', redirect: { path: '/enhance', query: { section: 'super-resolution' } } },
-    { path: '/anime', redirect: { path: '/enhance', query: { section: 'anime' } } },
-    { path: '/format', redirect: '/encode' },
-    { path: '/deliver', redirect: '/encode' },
-    { path: '/results', redirect: '/render' },
-    { path: '/preview', redirect: '/render' },
   ],
 })

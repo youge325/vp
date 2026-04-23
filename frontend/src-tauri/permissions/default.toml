@@ -1,15 +1,11 @@
 [default]
 description = "Default permissions for the VP Workbench desktop shell."
 permissions = [
-  "allow-pick-input",
   "allow-pick-inputs",
-  "allow-pick-output",
   "allow-pick-output-directory",
   "allow-check-environment",
   "allow-inspect-video",
   "allow-start-task",
   "allow-cancel-task",
   "allow-open-output-location",
-  "allow-open-file-or-directory",
-  "allow-resolved-runtime",
 ]

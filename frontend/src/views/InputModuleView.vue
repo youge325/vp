@@ -12,7 +12,7 @@ const inputOperationIssue = computed(() =>
   store.operationIssue?.scope === 'input' ? store.operationIssue.error : null,
 )
 
-function getPipelineSummary(item: MediaItem): string {
+function getWorkflowSummary(item: MediaItem): string {
   const labels = [
     item.workflowConfig.interpolation.enabled ? '补帧' : null,
     item.workflowConfig.superResolution.enabled ? '超分' : null,
@@ -134,7 +134,7 @@ function handleDragLeave(): void {
               <td>{{ item.info ? `${item.info.width}×${item.info.height}` : '--' }}</td>
               <td>{{ item.info ? `${formatNumber(item.info.fps)} FPS` : '--' }}</td>
               <td>{{ item.info?.video_codec || '--' }}</td>
-              <td>{{ getPipelineSummary(item) }}</td>
+              <td>{{ getWorkflowSummary(item) }}</td>
               <td>
                 <span class="inline-status" :data-state="item.taskState.status">{{ item.taskState.status }}</span>
               </td>

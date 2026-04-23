@@ -1,101 +1,93 @@
-# 视频补帧与超分软件 — 后端 CLI
+# Backend CLI
 
-无状态命令行工具，前端通过 `subprocess` 调用，无需启动服务器。
+后端现在只保留当前正式处理链路：
+
+- `check`：检查 FFmpeg、GPU、模型与运行时能力
+- `info`：读取输入视频元数据
+- `process`：走流式处理链或直接转码
+
+不再支持旧的临时帧落盘流程，也不再提供旧版 temp 目录参数或对应环境变量。
 
 ## 快速开始
 
 ```bash
 cd backend
 
-# 检查环境
 python -m app check
-
-# 查询视频信息
 python -m app info --input /path/to/video.mp4
-
-# 执行视频处理
-python -m app process --input /path/to/video.mp4 --algorithm frame_interpolation --fps 60
+python -m app process --input /path/to/video.mp4
 ```
 
-## CLI 子命令
+## `process` 命令
 
-### `process` — 执行视频处理管道
+`process` 支持两种输入方式：
+
+1. 使用少量基础 CLI 参数生成默认配置
+2. 通过 JSON 参数完整传入嵌套配置
+
+当前桌面工作台走的是第 2 种方式。
 
 ```bash
-python -m app process --input VIDEO [OPTIONS]
+python -m app process \
+  --input /path/to/video.mp4 \
+  --decode-config-json '{"mode":"hardware","hwaccel":"cuda","decoder":"hevc_cuvid","options":{}}' \
+  --workflow-config-json '{"fpsMode":"target","processOrder":"frame_interpolation_then_super_resolution","interpolation":{"enabled":true,"targetFps":60,"multi":2,"model":"4.25","scale":1,"fp16":false,"tensorBackend":"pytorch"},"superResolution":{"enabled":false,"scaleFactor":2,"algorithm":"placeholder"},"anime":{"enabled":false,"profile":"clean-lines","denoise":10,"edgeBoost":15}}' \
+  --encode-config-json '{"codec":"hevc_nvenc","family":"nvidia","container":"mp4","keepAudio":true,"rateControl":{"mode":"cq","value":23},"options":{"preset":"p4"}}' \
+  --output-config-json '{"outputDir":"/path/to/output","openOnComplete":false,"segmentFrames":1000}'
 ```
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--input` | (必填) | 输入视频文件路径 |
-| `--output` | 自动生成 | 输出文件路径 |
-| `--algorithm` | `frame_interpolation` | 处理算法: `frame_interpolation`, `super_resolution`, `anime_optimization`, `format_conversion` |
-| `--fps` | `60` | 目标帧率 |
-| `--codec` | `libx264` | 视频编码器 |
-| `--crf` | `18` | CRF 质量 (0-51) |
-| `--preset` | `medium` | 编码预设 |
-| `--backend` | `pytorch` | Tensor 后端: `pytorch`, `paddle` |
-| `--temp-dir` | 配置默认值 | 临时文件目录 |
-| `--output-dir` | 配置默认值 | 输出文件目录 |
+### 保留的参数
 
-### `info` — 查询视频信息
+| 参数 | 说明 |
+| --- | --- |
+| `--input` | 输入视频路径 |
+| `--output` | 可选，直接指定最终输出文件路径 |
+| `--output-dir` | 默认输出目录覆盖 |
+| `--decode-config-json` | 解码配置 JSON |
+| `--workflow-config-json` | 工作流配置 JSON |
+| `--encode-config-json` | 编码配置 JSON |
+| `--output-config-json` | 输出配置 JSON，包含 `segmentFrames` |
 
-```bash
-python -m app info --input VIDEO
+### 当前处理模型
+
+- 有处理步骤时：解码、算法处理、编码全部走内存流式链路
+- 纯 `format_conversion` 时：直接调用 FFmpeg 转码，不经过拆帧
+- 开启补帧时：按 `outputConfig.segmentFrames` 分段输出中间视频，默认每 `1000` 帧一段
+- 所有分段完成后：自动拼接视频并回封音频
+
+## 输出事件
+
+CLI 通过 stdout 逐行输出 JSON，桌面端按行消费：
+
+```json
+{"type":"progress","current":120,"total":480,"percent":25.0,"stage":"Frame Interpolation","stage_index":1,"stage_total":1}
+{"type":"completed","output_path":"D:/output/demo_processed.mp4","processed_frames":960,"time_seconds":42.7}
 ```
 
-输出 JSON：`{"type":"info","fps":30.0,"frames":900,"duration":30.0,"has_audio":true,"width":1920,"height":1080}`
+失败时会输出：
 
-### `check` — 检查环境可用性
-
-```bash
-python -m app check
+```json
+{"type":"error","code":"process_failed","message":"...","details":{}}
 ```
 
-输出 JSON：`{"type":"check","ffmpeg":{"available":true,...},"gpu":{...},"tensor_backends":{"pytorch":true,"paddle":false}}`
+## 环境变量
 
-## JSON 行协议
+支持通过 `VP_` 前缀环境变量覆盖运行时路径：
 
-CLI 通过 stdout 输出 JSON 行，前端逐行解析：
-
-```
-{"type":"progress","current":1,"total":100,"percent":1.0}
-{"type":"progress","current":50,"total":100,"percent":50.0}
-{"type":"completed","output_path":"...","processed_frames":100,"time_seconds":12.3}
-{"type":"error","message":"..."}
-```
-
-## 项目结构
-
-```
-backend/
-├── app/
-│   ├── __init__.py
-│   ├── __main__.py      # python -m app 入口
-│   ├── cli.py           # CLI 主逻辑
-│   ├── config.py        # 配置 (FFmpeg/处理参数)
-│   ├── algorithms/      # 算法 (工厂模式)
-│   ├── processing/      # 管道-过滤器 (解码→处理→编码)
-│   └── utils/           # FFmpegWrapper, 文件工具
-├── requirements.txt
-└── README.md
-```
-
-## 配置
-
-通过环境变量（前缀 `VP_`）或 `.env` 文件配置：
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `VP_FFMPEG_PATH` | `D:\Lenovo\FFmpeg\bin\ffmpeg.exe` | FFmpeg 路径 |
-| `VP_FFPROBE_PATH` | `D:\Lenovo\FFmpeg\bin\ffprobe.exe` | FFprobe 路径 |
-| `VP_TEMP_DIR` | `backend/temp` | 临时文件目录 |
-| `VP_OUTPUT_DIR` | `backend/output` | 输出文件目录 |
-| `VP_DEFAULT_TENSOR_BACKEND` | `pytorch` | 默认 Tensor 后端 |
+| 变量 | 说明 |
+| --- | --- |
+| `VP_APP_ROOT` | 应用根目录 |
+| `VP_RUNTIME_ROOT` | bundled runtime 根目录 |
+| `VP_PYTHON_EXECUTABLE` | Python 可执行文件 |
+| `VP_FFMPEG_PATH` | FFmpeg 路径 |
+| `VP_FFPROBE_PATH` | FFprobe 路径 |
+| `VP_RIFE_MODEL_DIR` | 模型目录 |
+| `VP_OUTPUT_DIR` | 默认输出目录 |
+| `VP_LOG_DIR` | 日志目录 |
 
 ## 测试
 
 ```bash
 cd backend
-python -m pytest tests/ -v
+python -m pytest tests -q
 ```

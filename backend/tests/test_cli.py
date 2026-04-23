@@ -2,7 +2,10 @@
 
 import argparse
 
-from app.cli import _default_output_config, _load_json_arg, _resolve_processing_steps
+import pytest
+
+from app.cli import _default_output_config, _load_json_arg, _resolve_processing_steps, build_parser
+from app.config import settings
 
 
 def _make_workflow_config(**overrides):
@@ -88,3 +91,16 @@ def test_default_output_config_includes_segment_frames_and_json_override():
 
     assert config["segmentFrames"] == 1000
     assert merged["segmentFrames"] == 240
+
+
+def test_process_parser_rejects_removed_temp_override_flag():
+    parser = build_parser()
+    removed_flag = "--temp" + "-dir"
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["process", "--input", "demo.mp4", removed_flag, "D:/temp"])
+
+
+def test_resource_summary_omits_legacy_temp_override_key():
+    removed_key = "_".join(["temp", "dir"])
+    assert removed_key not in settings.resource_summary()

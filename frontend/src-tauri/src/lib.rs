@@ -11,15 +11,6 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use crate::runtime::resolve_runtime_paths;
 
 #[tauri::command]
-async fn pick_input() -> Result<Option<String>, String> {
-    Ok(FileDialog::new()
-        .set_title("Select Input Video")
-        .add_filter("Video", &["mp4", "avi", "mkv", "mov", "flv", "webm", "wmv", "ts"])
-        .pick_file()
-        .map(|path| path.display().to_string()))
-}
-
-#[tauri::command]
 async fn pick_inputs() -> Result<Vec<String>, String> {
     Ok(FileDialog::new()
         .set_title("Import Videos")
@@ -29,18 +20,6 @@ async fn pick_inputs() -> Result<Vec<String>, String> {
         .into_iter()
         .map(|path| path.display().to_string())
         .collect())
-}
-
-#[tauri::command]
-async fn pick_output(file_name: Option<String>) -> Result<Option<String>, String> {
-    let mut dialog = FileDialog::new().set_title("Select Output File");
-    if let Some(file_name) = file_name {
-        dialog = dialog.set_file_name(&file_name);
-    }
-    Ok(dialog
-        .add_filter("Video", &["mp4", "avi", "mkv", "mov"])
-        .save_file()
-        .map(|path| path.display().to_string()))
 }
 
 #[tauri::command]
@@ -93,29 +72,6 @@ async fn open_output_location(path: String) -> Result<(), String> {
     open::that_detached(target).map_err(|error| format!("Unable to open output location: {error}"))
 }
 
-#[tauri::command]
-async fn open_file_or_directory(path: String) -> Result<(), String> {
-    open::that_detached(path).map_err(|error| format!("Unable to open path: {error}"))
-}
-
-#[tauri::command]
-async fn resolved_runtime<R: Runtime>(app: AppHandle<R>) -> Result<serde_json::Value, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    serde_json::to_value(serde_json::json!({
-        "backendDir": paths.backend_dir,
-        "runtimeRoot": paths.runtime_root,
-        "pythonExecutable": paths.python_executable,
-        "ffmpegPath": paths.ffmpeg_path,
-        "ffprobePath": paths.ffprobe_path,
-        "modelDir": paths.model_dir,
-        "outputDir": paths.output_dir,
-        "tempDir": paths.temp_dir,
-        "runtimeMode": paths.runtime_mode,
-        "bundled": paths.bundled
-    }))
-    .map_err(|error| format!("Unable to serialize runtime paths: {error}"))
-}
-
 pub fn run() {
     tauri::Builder::default()
         .manage(TaskState::default())
@@ -135,17 +91,13 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            pick_input,
             pick_inputs,
-            pick_output,
             pick_output_directory,
             check_environment,
             inspect_video,
             start_task,
             cancel_task,
-            open_output_location,
-            open_file_or_directory,
-            resolved_runtime
+            open_output_location
         ])
         .run(tauri::generate_context!())
         .expect("error while running VP Workbench");
@@ -157,14 +109,26 @@ mod tests {
     const ACL_MANIFESTS: &str = include_str!("../gen/schemas/acl-manifests.json");
 
     #[test]
-    fn default_permissions_include_batch_dialog_commands() {
+    fn default_permissions_include_active_desktop_commands() {
         assert!(DEFAULT_PERMISSIONS.contains("allow-pick-inputs"));
         assert!(DEFAULT_PERMISSIONS.contains("allow-pick-output-directory"));
+        assert!(DEFAULT_PERMISSIONS.contains("allow-open-output-location"));
     }
 
     #[test]
-    fn generated_acl_manifest_tracks_batch_dialog_permissions() {
+    fn default_permissions_exclude_removed_legacy_commands() {
+        assert!(!DEFAULT_PERMISSIONS.lines().any(|line| line.trim() == "\"allow-pick-input\","));
+        assert!(!DEFAULT_PERMISSIONS.lines().any(|line| line.trim() == "\"allow-pick-output\","));
+        assert!(!DEFAULT_PERMISSIONS.lines().any(|line| line.trim() == "\"allow-open-file-or-directory\","));
+        assert!(!DEFAULT_PERMISSIONS.lines().any(|line| line.trim() == "\"allow-resolved-runtime\","));
+    }
+
+    #[test]
+    fn generated_acl_manifest_tracks_active_commands_only() {
         assert!(ACL_MANIFESTS.contains("allow-pick-inputs"));
         assert!(ACL_MANIFESTS.contains("allow-pick-output-directory"));
+        assert!(!ACL_MANIFESTS.contains("\"allow-pick-output\""));
+        assert!(!ACL_MANIFESTS.contains("\"allow-open-file-or-directory\""));
+        assert!(!ACL_MANIFESTS.contains("\"allow-resolved-runtime\""));
     }
 }

@@ -30,6 +30,9 @@ repos:
       - id: check-ast
       - id: check-builtin-literals
 
+# 跳过 Tauri 生成的 schema 文件，避免 pre-commit 反复检查自动生成产物
+exclude: ^frontend/src-tauri/gen/schemas/.*\.json$
+
 # ruff 全局配置（pre-commit 和 CLI 共享）
 ci:
   autofix_commit_msg: "style: pre-commit auto-fix"
