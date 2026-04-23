@@ -2,6 +2,8 @@ const APP_COMMANDS: &[&str] = &[
     "pick_inputs",
     "pick_output_directory",
     "check_environment",
+    "load_workbench_preset",
+    "save_workbench_preset",
     "inspect_video",
     "start_task",
     "cancel_task",
