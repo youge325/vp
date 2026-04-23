@@ -4,6 +4,8 @@ permissions = [
   "allow-pick-inputs",
   "allow-pick-output-directory",
   "allow-check-environment",
+  "allow-load-workbench-preset",
+  "allow-save-workbench-preset",
   "allow-inspect-video",
   "allow-start-task",
   "allow-cancel-task",

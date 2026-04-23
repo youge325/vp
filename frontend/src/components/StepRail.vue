@@ -16,18 +16,14 @@ const activeModuleKey = computed<ModuleKey>(() => {
 const moduleStates = computed<Record<ModuleKey, string>>(() => ({
   home: store.env.checkResult || store.env.issue ? 'ready' : 'idle',
   input: store.mediaItems.length > 0 ? 'ready' : 'idle',
-  decode: store.activeItem ? 'ready' : 'idle',
-  enhance: store.activeItem ? 'ready' : 'idle',
-  encode: store.activeItem && store.visibleEncoderProfiles.length > 0 ? 'ready' : 'idle',
+  decode: store.env.checkResult ? 'ready' : 'idle',
+  enhance: store.env.checkResult ? 'ready' : 'idle',
+  encode: store.env.checkResult && store.visibleEncoderProfiles.length > 0 ? 'ready' : 'idle',
   render: store.batch.isRunning || store.canStartBatch ? 'ready' : 'idle',
 }))
 
 const workflowLabel = computed(() => {
-  const workflow = store.activeItem?.workflowConfig
-  if (!workflow) {
-    return '等待素材'
-  }
-
+  const workflow = store.editor.workflowConfig
   const enabled = [
     workflow.interpolation.enabled ? '补帧' : null,
     workflow.superResolution.enabled ? '超分' : null,
@@ -37,7 +33,11 @@ const workflowLabel = computed(() => {
   return enabled.length > 0 ? enabled.join(' / ') : '转码'
 })
 
-const selectionLabel = computed(() => `${store.selectedIds.length}/${store.mediaItems.length} 已选`)
+const selectionLabel = computed(() =>
+  store.editingScope === 'preset'
+    ? '默认预设'
+    : `${store.selectedIds.length || 1}/${store.mediaItems.length} 已选`,
+)
 </script>
 
 <template>

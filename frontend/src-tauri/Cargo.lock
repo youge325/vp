@@ -4509,6 +4509,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "time",
  "tokio",
 ]
 

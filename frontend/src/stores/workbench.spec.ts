@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useWorkbenchStore } from '@/stores/workbench'
-import type { EnvironmentCheckResult, VideoInfoResult } from '@/types'
+import type { EnvironmentCheckPayload, EnvironmentCheckResult, VideoInfoResult, WorkbenchPreset } from '@/types'
 
 interface TaskEventHandlers {
   onProgress: (payload: Record<string, unknown>) => void
@@ -13,17 +13,19 @@ interface TaskEventHandlers {
 
 const handlersRef: { current: TaskEventHandlers | null } = { current: null }
 
-const mockCheckEnvironment = vi.fn<() => Promise<EnvironmentCheckResult>>()
+const mockCheckEnvironment = vi.fn<(forceRefresh?: boolean) => Promise<EnvironmentCheckPayload>>()
 const mockInspectVideo = vi.fn<(inputPath: string) => Promise<VideoInfoResult>>()
 const mockStartTask = vi.fn<(request: unknown) => Promise<void>>()
 const mockCancelTask = vi.fn<() => Promise<void>>()
 const mockPickInputs = vi.fn<() => Promise<string[]>>()
 const mockPickOutputDirectory = vi.fn<() => Promise<string | null>>()
 const mockOpenOutputLocation = vi.fn<(path: string) => Promise<void>>()
+const mockLoadWorkbenchPreset = vi.fn<() => Promise<WorkbenchPreset | null>>()
+const mockSaveWorkbenchPreset = vi.fn<(preset: WorkbenchPreset) => Promise<void>>()
 
 vi.mock('@/lib/tauri', () => ({
   cancelTask: () => mockCancelTask(),
-  checkEnvironment: () => mockCheckEnvironment(),
+  checkEnvironment: (forceRefresh?: boolean) => mockCheckEnvironment(forceRefresh),
   inspectVideo: (inputPath: string) => mockInspectVideo(inputPath),
   listenTaskEvents: async (handlers: TaskEventHandlers) => {
     handlersRef.current = handlers
@@ -31,13 +33,15 @@ vi.mock('@/lib/tauri', () => ({
       handlersRef.current = null
     }
   },
+  loadWorkbenchPreset: () => mockLoadWorkbenchPreset(),
   openOutputLocation: (path: string) => mockOpenOutputLocation(path),
   pickInputs: () => mockPickInputs(),
   pickOutputDirectory: () => mockPickOutputDirectory(),
+  saveWorkbenchPreset: (preset: WorkbenchPreset) => mockSaveWorkbenchPreset(preset),
   startTask: (request: unknown) => mockStartTask(request),
 }))
 
-function makeEnv(): EnvironmentCheckResult {
+function makeEnvResult(): EnvironmentCheckResult {
   return {
     type: 'check',
     ffmpeg: {
@@ -79,6 +83,16 @@ function makeEnv(): EnvironmentCheckResult {
           hardwareDevices: ['cuda'],
           options: [],
         },
+        {
+          name: 'h264_cuvid',
+          label: 'NVDEC H.264',
+          family: 'nvidia',
+          codec: 'h264',
+          available: true,
+          pixelFormats: [],
+          hardwareDevices: ['cuda'],
+          options: [],
+        },
       ],
     },
     gpu: {
@@ -114,7 +128,18 @@ function makeEnv(): EnvironmentCheckResult {
   }
 }
 
-function makeVideoInfo(inputPath: string): VideoInfoResult {
+function makeEnvPayload(
+  source: EnvironmentCheckPayload['source'] = 'probe',
+  checkedAt = '2026-04-23T11:00:00Z',
+): EnvironmentCheckPayload {
+  return {
+    result: makeEnvResult(),
+    source,
+    checkedAt,
+  }
+}
+
+function makeVideoInfo(inputPath: string, videoCodec = 'hevc'): VideoInfoResult {
   return {
     type: 'info',
     fps: 24,
@@ -123,7 +148,59 @@ function makeVideoInfo(inputPath: string): VideoInfoResult {
     width: inputPath.includes('4k') ? 3840 : 1920,
     height: inputPath.includes('4k') ? 2160 : 1080,
     has_audio: true,
-    video_codec: 'hevc',
+    video_codec: videoCodec,
+  }
+}
+
+function makePreset(): WorkbenchPreset {
+  return {
+    decodeConfig: {
+      mode: 'hardware',
+      hwaccel: 'cuda',
+      hwaccelDevice: '0',
+      decoder: 'hevc_cuvid',
+      options: {},
+    },
+    workflowConfig: {
+      fpsMode: 'target',
+      processOrder: 'super_resolution_then_interpolation',
+      interpolation: {
+        enabled: false,
+        targetFps: 48,
+        multi: 2,
+        model: '4.25',
+        scale: 1,
+        fp16: false,
+        tensorBackend: 'pytorch',
+      },
+      superResolution: {
+        enabled: false,
+        scaleFactor: 2,
+        algorithm: 'placeholder',
+      },
+      anime: {
+        enabled: true,
+        profile: 'clean-lines',
+        denoise: 12,
+        edgeBoost: 16,
+      },
+    },
+    encodeConfig: {
+      codec: 'hevc_nvenc',
+      family: 'nvidia',
+      container: 'mkv',
+      keepAudio: false,
+      rateControl: {
+        mode: 'cq',
+        value: 20,
+      },
+      options: {},
+    },
+    outputConfig: {
+      outputDir: 'D:/output/preset',
+      openOnComplete: false,
+      segmentFrames: 240,
+    },
   }
 }
 
@@ -134,6 +211,7 @@ async function flush(): Promise<void> {
 
 describe('workbench store', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     setActivePinia(createPinia())
     handlersRef.current = null
     mockCheckEnvironment.mockReset()
@@ -143,13 +221,25 @@ describe('workbench store', () => {
     mockPickInputs.mockReset()
     mockPickOutputDirectory.mockReset()
     mockOpenOutputLocation.mockReset()
-    mockCheckEnvironment.mockResolvedValue(makeEnv())
-    mockInspectVideo.mockImplementation(async (inputPath: string) => makeVideoInfo(inputPath))
+    mockLoadWorkbenchPreset.mockReset()
+    mockSaveWorkbenchPreset.mockReset()
+
+    mockCheckEnvironment.mockResolvedValue(makeEnvPayload())
+    mockInspectVideo.mockImplementation(async (inputPath: string) =>
+      makeVideoInfo(inputPath, inputPath.includes('h264') ? 'h264' : 'hevc'),
+    )
     mockStartTask.mockResolvedValue()
     mockCancelTask.mockResolvedValue()
     mockPickInputs.mockResolvedValue([])
     mockPickOutputDirectory.mockResolvedValue(null)
     mockOpenOutputLocation.mockResolvedValue()
+    mockLoadWorkbenchPreset.mockResolvedValue(null)
+    mockSaveWorkbenchPreset.mockResolvedValue()
+  })
+
+  afterEach(async () => {
+    await vi.runOnlyPendingTimersAsync()
+    vi.useRealTimers()
   })
 
   it('bootstraps environment probing on startup', async () => {
@@ -157,9 +247,27 @@ describe('workbench store', () => {
 
     await store.bootstrap()
 
+    expect(mockLoadWorkbenchPreset).toHaveBeenCalledTimes(1)
     expect(mockCheckEnvironment).toHaveBeenCalledTimes(1)
+    expect(mockCheckEnvironment).toHaveBeenCalledWith(false)
     expect(store.env.checkResult?.ffmpeg.available).toBe(true)
     expect(store.env.checkResult?.gpu.adapters[0]?.deviceType).toBe('discrete')
+    expect(store.env.checkSource).toBe('probe')
+    expect(store.env.lastProbeAt).toBe('2026-04-23T11:00:00Z')
+    expect(store.editingScope).toBe('preset')
+  })
+
+  it('exposes editable draft presets before any media is imported', async () => {
+    const store = useWorkbenchStore()
+
+    await store.bootstrap()
+
+    expect(store.activeItem).toBeNull()
+    expect(store.editingScope).toBe('preset')
+    expect(store.editor.decodeConfig.mode).toBe('hardware')
+    expect(store.editor.decodeConfig.decoder).toBe('hevc_cuvid')
+    expect(store.editor.workflowConfig.interpolation.enabled).toBe(true)
+    expect(store.visibleDecoderProfiles).toHaveLength(3)
   })
 
   it('imports files without polluting env issues', async () => {
@@ -193,11 +301,12 @@ describe('workbench store', () => {
 
     await store.recheckEnvironment()
 
+    expect(mockCheckEnvironment).toHaveBeenCalledWith(true)
     expect(store.env.issue?.code).toBe('check_failed')
     expect(store.operationIssue).toBeNull()
   })
 
-  it('applies workflow edits only to active item and selected items', async () => {
+  it('updates the draft preset and selected items together when workflow settings change', async () => {
     const store = useWorkbenchStore()
     await store.bootstrap()
     await store.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4', 'D:/input/c.mp4'])
@@ -213,12 +322,71 @@ describe('workbench store', () => {
       config.anime.enabled = true
     })
 
+    expect(store.draftPreset.workflowConfig.interpolation.enabled).toBe(false)
+    expect(store.draftPreset.workflowConfig.anime.enabled).toBe(true)
     expect(first.workflowConfig.interpolation.enabled).toBe(false)
     expect(second.workflowConfig.interpolation.enabled).toBe(false)
     expect(third.workflowConfig.interpolation.enabled).toBe(true)
     expect(first.workflowConfig.anime.enabled).toBe(true)
     expect(second.workflowConfig.anime.enabled).toBe(true)
     expect(third.workflowConfig.anime.enabled).toBe(false)
+  })
+
+  it('imports new media with the persisted preset defaults', async () => {
+    const store = useWorkbenchStore()
+    mockLoadWorkbenchPreset.mockResolvedValueOnce(makePreset())
+
+    await store.bootstrap()
+    await store.addMediaPaths(['D:/input/a.mp4'])
+
+    expect(store.mediaItems).toHaveLength(1)
+    expect(store.draftPreset.outputConfig.outputDir).toBe('D:/output/preset')
+    expect(store.draftPreset.workflowConfig.interpolation.enabled).toBe(false)
+    expect(store.mediaItems[0]?.decodeConfig.hwaccelDevice).toBe('0')
+    expect(store.mediaItems[0]?.workflowConfig.anime.enabled).toBe(true)
+    expect(store.mediaItems[0]?.encodeConfig.container).toBe('mkv')
+    expect(store.mediaItems[0]?.outputConfig.outputDir).toBe('D:/output/preset')
+  })
+
+  it('remaps persisted decoders to the same hardware family when the imported codec changes', async () => {
+    const store = useWorkbenchStore()
+    mockLoadWorkbenchPreset.mockResolvedValueOnce(makePreset())
+
+    await store.bootstrap()
+    await store.addMediaPaths(['D:/input/h264-demo.mp4'])
+
+    expect(store.mediaItems[0]?.info?.video_codec).toBe('h264')
+    expect(store.mediaItems[0]?.decodeConfig.mode).toBe('hardware')
+    expect(store.mediaItems[0]?.decodeConfig.hwaccel).toBe('cuda')
+    expect(store.mediaItems[0]?.decodeConfig.hwaccelDevice).toBe('0')
+    expect(store.mediaItems[0]?.decodeConfig.decoder).toBe('h264_cuvid')
+  })
+
+  it('forces a fresh environment probe when rechecking manually', async () => {
+    const store = useWorkbenchStore()
+
+    await store.bootstrap()
+    await store.recheckEnvironment()
+
+    expect(mockCheckEnvironment).toHaveBeenNthCalledWith(1, false)
+    expect(mockCheckEnvironment).toHaveBeenNthCalledWith(2, true)
+  })
+
+  it('persists preset edits with debounce while no media is selected', async () => {
+    const store = useWorkbenchStore()
+
+    await store.bootstrap()
+    mockSaveWorkbenchPreset.mockClear()
+
+    store.patchOutput((config) => {
+      config.outputDir = 'D:/output/debounced'
+    })
+
+    expect(mockSaveWorkbenchPreset).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(mockSaveWorkbenchPreset).toHaveBeenCalledTimes(1)
+    expect(mockSaveWorkbenchPreset.mock.calls[0]?.[0].outputConfig.outputDir).toBe('D:/output/debounced')
   })
 
   it('advances the batch queue and clears runtime artifacts after the batch finishes', async () => {
