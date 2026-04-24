@@ -1,18 +1,20 @@
-use std::process::Stdio;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::{io, process::ExitStatus, process::Stdio, time::Duration};
 
-use command_group::AsyncCommandGroup;
+use command_group::{AsyncCommandGroup, AsyncGroupChild};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, oneshot};
+use tokio::time::MissedTickBehavior;
 
 use crate::models::{
-    RunningTask, TaskCompletedPayload, TaskErrorPayload, TaskLogPayload, TaskProgressPayload,
-    TaskRequest, TaskState,
+    RunningTask, TaskCompletedPayload, TaskControlKind, TaskControlMessage, TaskErrorPayload,
+    TaskLogPayload, TaskProgressPayload, TaskRequest, TaskState,
 };
+use crate::process_control;
 use crate::runtime::{build_env_map, resolve_runtime_paths};
 
 pub async fn run_single_cli_command<R: Runtime>(
@@ -39,7 +41,10 @@ pub async fn run_single_cli_command<R: Runtime>(
         if let Some(value) = parse_last_json_line(&stdout) {
             return Ok(value);
         }
-        return Err(format!("Backend command failed: {}", stderr.trim().trim_matches('"')));
+        return Err(format!(
+            "Backend command failed: {}",
+            stderr.trim().trim_matches('"')
+        ));
     }
 
     parse_last_json_line(&stdout).ok_or_else(|| "Backend CLI did not emit JSON output.".to_string())
@@ -78,37 +83,60 @@ pub async fn spawn_task<R: Runtime>(
         .take()
         .ok_or_else(|| "Unable to capture backend stderr.".to_string())?;
 
-    let child = Arc::new(Mutex::new(child));
-    let running = RunningTask {
-        child: child.clone(),
-        cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        terminal_sent: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-    };
+    let root_pid = child
+        .id()
+        .ok_or_else(|| "Unable to resolve backend process id.".to_string())?;
+    let terminal_sent = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (control_tx, control_rx) = mpsc::channel(8);
+    let running = RunningTask { control_tx };
 
     {
         let mut guard = state.current.lock().await;
         *guard = Some(running.clone());
     }
 
-    spawn_stdout_reader(app.clone(), stdout, running.terminal_sent.clone());
+    spawn_stdout_reader(app.clone(), stdout, terminal_sent.clone());
     spawn_stderr_reader(app.clone(), stderr);
-    spawn_waiter(app, running);
+    spawn_task_controller(app, child, root_pid, control_rx, terminal_sent);
     Ok(())
 }
 
 pub async fn cancel_running_task(state: State<'_, TaskState>) -> Result<(), String> {
+    send_task_control(state, TaskControlKind::Cancel).await
+}
+
+pub async fn pause_running_task(state: State<'_, TaskState>) -> Result<(), String> {
+    send_task_control(state, TaskControlKind::Pause).await
+}
+
+pub async fn resume_running_task(state: State<'_, TaskState>) -> Result<(), String> {
+    send_task_control(state, TaskControlKind::Resume).await
+}
+
+async fn send_task_control(
+    state: State<'_, TaskState>,
+    kind: TaskControlKind,
+) -> Result<(), String> {
     let running = {
         let guard = state.current.lock().await;
-        guard.clone().ok_or_else(|| "There is no running task.".to_string())?
+        guard
+            .clone()
+            .ok_or_else(|| "There is no running task.".to_string())?
     };
 
-    running.cancelled.store(true, Ordering::SeqCst);
-    let mut child = running.child.lock().await;
-    child
-        .kill()
+    let (response_tx, response_rx) = oneshot::channel();
+    running
+        .control_tx
+        .send(TaskControlMessage {
+            kind,
+            response: response_tx,
+        })
         .await
-        .map_err(|error| format!("Unable to cancel task: {error}"))?;
-    Ok(())
+        .map_err(|_| "The running task controller is unavailable.".to_string())?;
+
+    response_rx
+        .await
+        .map_err(|_| "The running task controller stopped before replying.".to_string())?
 }
 
 fn build_process_command(
@@ -148,7 +176,11 @@ fn spawn_stdout_reader<R: Runtime + 'static>(
             }
 
             if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-                match value.get("type").and_then(Value::as_str).unwrap_or_default() {
+                match value
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                {
                     "progress" => {
                         let payload = TaskProgressPayload {
                             current: value.get("current").and_then(Value::as_u64).unwrap_or(0),
@@ -159,8 +191,14 @@ fn spawn_stdout_reader<R: Runtime + 'static>(
                                 .and_then(Value::as_str)
                                 .unwrap_or_default()
                                 .to_string(),
-                            stage_index: value.get("stage_index").and_then(Value::as_u64).unwrap_or(1),
-                            stage_total: value.get("stage_total").and_then(Value::as_u64).unwrap_or(1),
+                            stage_index: value
+                                .get("stage_index")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(1),
+                            stage_total: value
+                                .get("stage_total")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(1),
                         };
                         let _ = app.emit("task-progress", payload);
                     }
@@ -221,7 +259,10 @@ fn spawn_stdout_reader<R: Runtime + 'static>(
     });
 }
 
-fn spawn_stderr_reader<R: Runtime + 'static>(app: AppHandle<R>, stderr: tokio::process::ChildStderr) {
+fn spawn_stderr_reader<R: Runtime + 'static>(
+    app: AppHandle<R>,
+    stderr: tokio::process::ChildStderr,
+) {
     tauri::async_runtime::spawn(async move {
         let mut lines = BufReader::new(stderr).lines();
         while let Ok(Some(line)) = lines.next_line().await {
@@ -240,12 +281,52 @@ fn spawn_stderr_reader<R: Runtime + 'static>(app: AppHandle<R>, stderr: tokio::p
     });
 }
 
-fn spawn_waiter<R: Runtime + 'static>(app: AppHandle<R>, running: RunningTask) {
+fn spawn_task_controller<R: Runtime + 'static>(
+    app: AppHandle<R>,
+    mut child: AsyncGroupChild,
+    root_pid: u32,
+    mut control_rx: mpsc::Receiver<TaskControlMessage>,
+    terminal_sent: Arc<std::sync::atomic::AtomicBool>,
+) {
     tauri::async_runtime::spawn(async move {
-        let status = {
-            let mut child = running.child.lock().await;
-            child.wait().await
-        };
+        let mut was_cancelled = false;
+        let mut is_paused = false;
+        let mut control_rx_closed = false;
+        let mut ticker = tokio::time::interval(Duration::from_millis(120));
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        let status: io::Result<ExitStatus>;
+
+        loop {
+            tokio::select! {
+                maybe_message = control_rx.recv(), if !control_rx_closed => {
+                    let Some(message) = maybe_message else {
+                        control_rx_closed = true;
+                        continue;
+                    };
+                    let result = handle_task_control(
+                        &mut child,
+                        root_pid,
+                        message.kind,
+                        &mut was_cancelled,
+                        &mut is_paused,
+                    );
+                    let _ = message.response.send(result);
+                }
+                _ = ticker.tick() => {
+                    match child.try_wait() {
+                        Ok(Some(exit_status)) => {
+                            status = Ok(exit_status);
+                            break;
+                        }
+                        Ok(None) => {}
+                        Err(error) => {
+                            status = Err(error);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
         {
             let state = app.state::<TaskState>();
@@ -253,8 +334,7 @@ fn spawn_waiter<R: Runtime + 'static>(app: AppHandle<R>, running: RunningTask) {
             *guard = None;
         }
 
-        let was_cancelled = running.cancelled.load(Ordering::SeqCst);
-        let terminal_sent = running.terminal_sent.load(Ordering::SeqCst);
+        let terminal_sent = terminal_sent.load(Ordering::SeqCst);
 
         match status {
             Ok(exit_status) => {
@@ -290,6 +370,51 @@ fn spawn_waiter<R: Runtime + 'static>(app: AppHandle<R>, running: RunningTask) {
             }
         }
     });
+}
+
+fn handle_task_control(
+    child: &mut AsyncGroupChild,
+    root_pid: u32,
+    kind: TaskControlKind,
+    was_cancelled: &mut bool,
+    is_paused: &mut bool,
+) -> Result<(), String> {
+    match kind {
+        TaskControlKind::Cancel => {
+            *was_cancelled = true;
+            if *is_paused {
+                let _ = process_control::resume_process_tree(root_pid);
+                *is_paused = false;
+            }
+            match child.start_kill() {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == io::ErrorKind::InvalidInput => Ok(()),
+                Err(error) => Err(format!("Unable to cancel task: {error}")),
+            }
+        }
+        TaskControlKind::Pause => {
+            if *was_cancelled {
+                return Err("The task is already being cancelled.".to_string());
+            }
+            if *is_paused {
+                return Ok(());
+            }
+            process_control::suspend_process_tree(root_pid)?;
+            *is_paused = true;
+            Ok(())
+        }
+        TaskControlKind::Resume => {
+            if *was_cancelled {
+                return Err("The task is already being cancelled.".to_string());
+            }
+            if !*is_paused {
+                return Ok(());
+            }
+            process_control::resume_process_tree(root_pid)?;
+            *is_paused = false;
+            Ok(())
+        }
+    }
 }
 
 pub fn parse_last_json_line(stdout: &str) -> Option<Value> {

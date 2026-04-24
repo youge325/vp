@@ -9,5 +9,7 @@ permissions = [
   "allow-inspect-video",
   "allow-start-task",
   "allow-cancel-task",
+  "allow-pause-task",
+  "allow-resume-task",
   "allow-open-output-location",
 ]

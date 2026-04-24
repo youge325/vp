@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyTaskCancelled,
+  applyTaskCancelling,
   applyTaskCompleted,
   applyTaskError,
+  applyTaskPaused,
   applyTaskProgress,
+  applyTaskResumed,
   appendTaskLog,
   createIdleTaskState,
   TERMINAL_PROGRESS_PREFIX,
@@ -23,6 +26,20 @@ describe('task event reducers', () => {
     expect(state.status).toBe('running')
     expect(state.current).toBe(12)
     expect(state.stage).toBe('decode')
+  })
+
+  it('tracks paused, resumed, and cancelling states', () => {
+    const running = applyTaskProgress(createIdleTaskState(), { percent: 24 })
+    const paused = applyTaskPaused(running)
+    const bufferedProgress = applyTaskProgress(paused, { percent: 25 })
+    const resumed = applyTaskResumed(paused)
+    const cancelling = applyTaskCancelling(resumed)
+
+    expect(paused.status).toBe('paused')
+    expect(bufferedProgress.status).toBe('paused')
+    expect(bufferedProgress.percent).toBe(25)
+    expect(resumed.status).toBe('running')
+    expect(cancelling.status).toBe('cancelling')
   })
 
   it('appends logs and keeps latest entries', () => {

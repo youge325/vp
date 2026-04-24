@@ -4511,6 +4511,7 @@ dependencies = [
  "tauri-build",
  "time",
  "tokio",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

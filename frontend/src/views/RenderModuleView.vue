@@ -8,6 +8,8 @@ const store = useWorkbenchStore()
 const taskOperationIssue = computed(() =>
   store.operationIssue?.scope === 'task' ? store.operationIssue.error : null,
 )
+const pauseButtonLabel = computed(() => (store.batch.isPaused ? '继续队列' : '暂停队列'))
+const interruptButtonLabel = computed(() => (store.batch.isCancelling ? '中断中...' : '中断批次'))
 </script>
 
 <template>
@@ -20,15 +22,23 @@ const taskOperationIssue = computed(() =>
         </div>
 
         <div class="panel-actions">
-          <button
-            v-if="!store.batch.isRunning"
-            class="primary-button"
-            :disabled="!store.canStartBatch"
-            @click="store.startBatch()"
-          >
+          <button class="primary-button" :disabled="!store.canStartBatch" @click="store.startBatch()">
             开始队列
           </button>
-          <button v-else class="danger-button" @click="store.cancelCurrentTask()">取消当前项</button>
+          <button
+            class="ghost-button"
+            :disabled="!store.batch.isRunning || store.batch.isCancelling"
+            @click="store.batch.isPaused ? store.resumeCurrentTask() : store.pauseCurrentTask()"
+          >
+            {{ pauseButtonLabel }}
+          </button>
+          <button
+            class="danger-button"
+            :disabled="!store.batch.isRunning || store.batch.isCancelling"
+            @click="store.interruptBatch()"
+          >
+            {{ interruptButtonLabel }}
+          </button>
         </div>
       </div>
 

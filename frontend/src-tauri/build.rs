@@ -7,6 +7,8 @@ const APP_COMMANDS: &[&str] = &[
     "inspect_video",
     "start_task",
     "cancel_task",
+    "pause_task",
+    "resume_task",
     "open_output_location",
 ];
 

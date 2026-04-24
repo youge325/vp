@@ -81,6 +81,14 @@ export function cancelTask(): Promise<void> {
   return safeInvoke<void>('cancel_task')
 }
 
+export function pauseTask(): Promise<void> {
+  return safeInvoke<void>('pause_task')
+}
+
+export function resumeTask(): Promise<void> {
+  return safeInvoke<void>('resume_task')
+}
+
 export function openOutputLocation(path: string): Promise<void> {
   return safeInvoke<void>('open_output_location', { path })
 }

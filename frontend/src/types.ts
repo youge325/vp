@@ -12,7 +12,7 @@ export type ProcessOrder =
   | 'frame_interpolation_then_super_resolution'
 export type FpsMode = 'multi' | 'target'
 export type TensorBackend = 'pytorch' | 'paddle'
-export type TaskStatus = 'idle' | 'running' | 'completed' | 'error' | 'cancelled'
+export type TaskStatus = 'idle' | 'running' | 'paused' | 'cancelling' | 'completed' | 'error' | 'cancelled'
 export type CodecFamily = 'cpu' | 'nvidia' | 'intel' | 'software'
 export type GpuVendor = 'nvidia' | 'intel' | 'amd' | 'other'
 export type GpuDeviceType = 'integrated' | 'discrete' | 'virtual' | 'other'
@@ -250,6 +250,8 @@ export interface BatchState {
   completedCount: number
   failedCount: number
   isRunning: boolean
+  isPaused: boolean
+  isCancelling: boolean
 }
 
 export interface TaskProgressPayload {

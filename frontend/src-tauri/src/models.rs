@@ -1,10 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-
-use command_group::AsyncGroupChild;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, oneshot, Mutex};
 
 pub type JsonMap = BTreeMap<String, serde_json::Value>;
 
@@ -135,11 +131,21 @@ pub struct TaskErrorPayload {
     pub details: Option<serde_json::Value>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum TaskControlKind {
+    Cancel,
+    Pause,
+    Resume,
+}
+
+pub struct TaskControlMessage {
+    pub kind: TaskControlKind,
+    pub response: oneshot::Sender<Result<(), String>>,
+}
+
 #[derive(Clone)]
 pub struct RunningTask {
-    pub child: Arc<Mutex<AsyncGroupChild>>,
-    pub cancelled: Arc<AtomicBool>,
-    pub terminal_sent: Arc<AtomicBool>,
+    pub control_tx: mpsc::Sender<TaskControlMessage>,
 }
 
 #[derive(Default)]

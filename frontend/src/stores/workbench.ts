@@ -8,8 +8,10 @@ import {
   listenTaskEvents,
   loadWorkbenchPreset as invokeLoadWorkbenchPreset,
   openOutputLocation as invokeOpenOutputLocation,
+  pauseTask,
   pickInputs as invokePickInputs,
   pickOutputDirectory as invokePickOutputDirectory,
+  resumeTask,
   saveWorkbenchPreset as invokeSaveWorkbenchPreset,
   startTask as invokeStartTask,
 } from '@/lib/tauri'
@@ -29,9 +31,12 @@ import {
 import {
   appendTaskLog,
   applyTaskCancelled,
+  applyTaskCancelling,
   applyTaskCompleted,
   applyTaskError,
+  applyTaskPaused,
   applyTaskProgress,
+  applyTaskResumed,
   createIdleTaskState,
 } from '@/lib/task-events'
 import type {
@@ -82,6 +87,8 @@ function createInitialBatch(): BatchState {
     completedCount: 0,
     failedCount: 0,
     isRunning: false,
+    isPaused: false,
+    isCancelling: false,
   }
 }
 
@@ -824,6 +831,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     batch.currentId = null
     resetBatchCounters()
     batch.isRunning = ids.length > 0
+    batch.isPaused = false
+    batch.isCancelling = false
 
     const queuedIds = new Set(ids)
     for (const item of mediaItems.value) {
@@ -839,6 +848,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!nextId) {
       batch.currentId = null
       batch.isRunning = false
+      batch.isPaused = false
+      batch.isCancelling = false
       return
     }
 
@@ -850,6 +861,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
 
     batch.currentId = nextId
+    batch.isPaused = false
+    batch.isCancelling = false
     activeItemId.value = nextId
     item.taskState = {
       ...createIdleTaskState(),
@@ -872,6 +885,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         await runNextQueuedItem()
       } else {
         batch.isRunning = false
+        batch.isPaused = false
+        batch.isCancelling = false
         clearBatchRuntimeArtifacts()
         resetBatchCounters()
         batchRuntimeIds.value = []
@@ -894,11 +909,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
     batch.currentId = null
     if (batch.queue.length > 0) {
+      batch.isPaused = false
+      batch.isCancelling = false
       await runNextQueuedItem()
       return
     }
 
     batch.isRunning = false
+    batch.isPaused = false
+    batch.isCancelling = false
     clearBatchRuntimeArtifacts()
     resetBatchCounters()
     batchRuntimeIds.value = []
@@ -940,16 +959,75 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     await runNextQueuedItem()
   }
 
-  async function cancelCurrentTask(): Promise<void> {
-    if (!batch.isRunning) {
+  async function pauseCurrentTask(): Promise<void> {
+    if (!batch.isRunning || batch.isPaused || batch.isCancelling) {
       return
     }
+
+    try {
+      await pauseTask()
+      batch.isPaused = true
+      const item = currentTaskItem.value
+      if (item) {
+        item.taskState = applyTaskPaused(item.taskState)
+      }
+      clearOperationIssue('task')
+    } catch (error) {
+      setOperationIssue('task', normalizeTaskError(error, 'pause_failed'))
+    }
+  }
+
+  async function resumeCurrentTask(): Promise<void> {
+    if (!batch.isRunning || !batch.isPaused || batch.isCancelling) {
+      return
+    }
+
+    try {
+      await resumeTask()
+      batch.isPaused = false
+      const item = currentTaskItem.value
+      if (item) {
+        item.taskState = applyTaskResumed(item.taskState)
+      }
+      clearOperationIssue('task')
+    } catch (error) {
+      setOperationIssue('task', normalizeTaskError(error, 'resume_failed'))
+    }
+  }
+
+  async function interruptBatch(): Promise<void> {
+    if (!batch.isRunning || batch.isCancelling) {
+      return
+    }
+
+    const previousQueue = [...batch.queue]
+    const wasPaused = batch.isPaused
+    const item = currentTaskItem.value
+    const previousTaskState = item?.taskState ?? null
+
+    batch.queue = []
+    batch.isPaused = false
+    batch.isCancelling = true
+    if (item) {
+      item.taskState = applyTaskCancelling(item.taskState)
+    }
+
     try {
       await cancelTask()
       clearOperationIssue('task')
     } catch (error) {
+      batch.queue = previousQueue
+      batch.isPaused = wasPaused
+      batch.isCancelling = false
+      if (item && previousTaskState) {
+        item.taskState = previousTaskState
+      }
       setOperationIssue('task', normalizeTaskError(error, 'cancel_failed'))
     }
+  }
+
+  async function cancelCurrentTask(): Promise<void> {
+    await interruptBatch()
   }
 
   async function pickOutputDirectory(): Promise<void> {
@@ -1054,6 +1132,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setEncodeRateControlValue,
     setEncodeOption,
     startBatch,
+    pauseCurrentTask,
+    resumeCurrentTask,
+    interruptBatch,
     cancelCurrentTask,
     pickOutputDirectory,
     openOutputLocation,
