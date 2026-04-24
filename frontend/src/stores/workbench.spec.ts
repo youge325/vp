@@ -17,6 +17,8 @@ const mockCheckEnvironment = vi.fn<(forceRefresh?: boolean) => Promise<Environme
 const mockInspectVideo = vi.fn<(inputPath: string) => Promise<VideoInfoResult>>()
 const mockStartTask = vi.fn<(request: unknown) => Promise<void>>()
 const mockCancelTask = vi.fn<() => Promise<void>>()
+const mockPauseTask = vi.fn<() => Promise<void>>()
+const mockResumeTask = vi.fn<() => Promise<void>>()
 const mockPickInputs = vi.fn<() => Promise<string[]>>()
 const mockPickOutputDirectory = vi.fn<() => Promise<string | null>>()
 const mockOpenOutputLocation = vi.fn<(path: string) => Promise<void>>()
@@ -35,8 +37,10 @@ vi.mock('@/lib/tauri', () => ({
   },
   loadWorkbenchPreset: () => mockLoadWorkbenchPreset(),
   openOutputLocation: (path: string) => mockOpenOutputLocation(path),
+  pauseTask: () => mockPauseTask(),
   pickInputs: () => mockPickInputs(),
   pickOutputDirectory: () => mockPickOutputDirectory(),
+  resumeTask: () => mockResumeTask(),
   saveWorkbenchPreset: (preset: WorkbenchPreset) => mockSaveWorkbenchPreset(preset),
   startTask: (request: unknown) => mockStartTask(request),
 }))
@@ -218,6 +222,8 @@ describe('workbench store', () => {
     mockInspectVideo.mockReset()
     mockStartTask.mockReset()
     mockCancelTask.mockReset()
+    mockPauseTask.mockReset()
+    mockResumeTask.mockReset()
     mockPickInputs.mockReset()
     mockPickOutputDirectory.mockReset()
     mockOpenOutputLocation.mockReset()
@@ -230,6 +236,8 @@ describe('workbench store', () => {
     )
     mockStartTask.mockResolvedValue()
     mockCancelTask.mockResolvedValue()
+    mockPauseTask.mockResolvedValue()
+    mockResumeTask.mockResolvedValue()
     mockPickInputs.mockResolvedValue([])
     mockPickOutputDirectory.mockResolvedValue(null)
     mockOpenOutputLocation.mockResolvedValue()
@@ -431,6 +439,75 @@ describe('workbench store', () => {
     expect(store.mediaItems.every((item) => item.taskState.status === 'idle')).toBe(true)
     expect(store.mediaItems.every((item) => item.lastOutputPath === '')).toBe(true)
     expect(store.mediaItems.every((item) => item.issue === null)).toBe(true)
+  })
+
+  it('pauses and resumes the current task through desktop IPC', async () => {
+    const store = useWorkbenchStore()
+    await store.bootstrap()
+    await store.addMediaPaths(['D:/input/a.mp4'])
+
+    await store.startBatch()
+    expect(store.currentTaskItem?.taskState.status).toBe('running')
+
+    await store.pauseCurrentTask()
+
+    expect(mockPauseTask).toHaveBeenCalledTimes(1)
+    expect(store.batch.isPaused).toBe(true)
+    expect(store.currentTaskItem?.taskState.status).toBe('paused')
+
+    await store.resumeCurrentTask()
+
+    expect(mockResumeTask).toHaveBeenCalledTimes(1)
+    expect(store.batch.isPaused).toBe(false)
+    expect(store.currentTaskItem?.taskState.status).toBe('running')
+  })
+
+  it('interrupts the whole batch and does not continue to queued items', async () => {
+    const store = useWorkbenchStore()
+    await store.bootstrap()
+    await store.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4'])
+    await store.attachTaskListeners()
+
+    await store.startBatch()
+    expect(store.currentTaskItem?.displayName).toBe('a.mp4')
+    expect(store.batch.queue).toHaveLength(1)
+
+    await store.interruptBatch()
+
+    expect(mockCancelTask).toHaveBeenCalledTimes(1)
+    expect(store.batch.queue).toEqual([])
+    expect(store.batch.isCancelling).toBe(true)
+    expect(store.currentTaskItem?.taskState.status).toBe('cancelling')
+
+    handlersRef.current?.onCancelled()
+    await flush()
+
+    expect(mockStartTask).toHaveBeenCalledTimes(1)
+    expect(store.batch.isRunning).toBe(false)
+    expect(store.batch.isCancelling).toBe(false)
+    expect(store.currentTaskItem).toBeNull()
+  })
+
+  it('surfaces task operation issues when pause or interrupt fails', async () => {
+    const store = useWorkbenchStore()
+    await store.bootstrap()
+    await store.addMediaPaths(['D:/input/a.mp4'])
+
+    await store.startBatch()
+    mockPauseTask.mockRejectedValueOnce(new Error('pause unsupported'))
+    await store.pauseCurrentTask()
+
+    expect(store.operationIssue?.scope).toBe('task')
+    expect(store.operationIssue?.error.code).toBe('pause_failed')
+    expect(store.currentTaskItem?.taskState.status).toBe('running')
+
+    mockCancelTask.mockRejectedValueOnce(new Error('cancel unavailable'))
+    await store.interruptBatch()
+
+    expect(store.operationIssue?.scope).toBe('task')
+    expect(store.operationIssue?.error.code).toBe('cancel_failed')
+    expect(store.batch.isCancelling).toBe(false)
+    expect(store.currentTaskItem?.taskState.status).toBe('running')
   })
 
   it('opens the configured output directory without falling back to the last completed result', async () => {

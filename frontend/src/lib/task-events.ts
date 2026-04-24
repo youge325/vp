@@ -45,9 +45,11 @@ export function appendTaskLog(state: MediaTaskState, payload: TaskLogPayload): M
 }
 
 export function applyTaskProgress(state: MediaTaskState, payload: TaskProgressPayload): MediaTaskState {
+  const status = state.status === 'paused' || state.status === 'cancelling' ? state.status : 'running'
+
   return {
     ...state,
-    status: 'running',
+    status,
     percent: payload.percent ?? state.percent,
     current: payload.current ?? state.current,
     total: payload.total ?? state.total,
@@ -56,6 +58,32 @@ export function applyTaskProgress(state: MediaTaskState, payload: TaskProgressPa
     stageTotal: payload.stageTotal ?? state.stageTotal,
     error: null,
     startedAt: state.startedAt ?? new Date().toISOString(),
+  }
+}
+
+export function applyTaskPaused(state: MediaTaskState): MediaTaskState {
+  return {
+    ...state,
+    status: 'paused',
+    error: null,
+    startedAt: state.startedAt ?? new Date().toISOString(),
+  }
+}
+
+export function applyTaskResumed(state: MediaTaskState): MediaTaskState {
+  return {
+    ...state,
+    status: 'running',
+    error: null,
+    startedAt: state.startedAt ?? new Date().toISOString(),
+  }
+}
+
+export function applyTaskCancelling(state: MediaTaskState): MediaTaskState {
+  return {
+    ...state,
+    status: 'cancelling',
+    error: null,
   }
 }
 

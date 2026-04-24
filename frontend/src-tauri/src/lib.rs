@@ -1,5 +1,6 @@
 mod models;
 mod persistence;
+mod process_control;
 mod runtime;
 mod tasks;
 
@@ -16,7 +17,10 @@ use crate::runtime::resolve_runtime_paths;
 async fn pick_inputs() -> Result<Vec<String>, String> {
     Ok(FileDialog::new()
         .set_title("Import Videos")
-        .add_filter("Video", &["mp4", "avi", "mkv", "mov", "flv", "webm", "wmv", "ts"])
+        .add_filter(
+            "Video",
+            &["mp4", "avi", "mkv", "mov", "flv", "webm", "wmv", "ts"],
+        )
         .pick_files()
         .unwrap_or_default()
         .into_iter()
@@ -43,7 +47,9 @@ async fn check_environment<R: Runtime>(
     let app_data_dir = persistence::app_data_dir(&app).ok();
 
     if let (Some(data_dir), Some(fingerprint)) = (app_data_dir.as_deref(), fingerprint.as_deref()) {
-        if let Some(cached) = persistence::load_environment_cache(data_dir, fingerprint, force_refresh) {
+        if let Some(cached) =
+            persistence::load_environment_cache(data_dir, fingerprint, force_refresh)
+        {
             return Ok(json!({
                 "result": cached.result,
                 "source": "cache",
@@ -110,6 +116,16 @@ async fn cancel_task(state: State<'_, TaskState>) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn pause_task(state: State<'_, TaskState>) -> Result<(), String> {
+    tasks::pause_running_task(state).await
+}
+
+#[tauri::command]
+async fn resume_task(state: State<'_, TaskState>) -> Result<(), String> {
+    tasks::resume_running_task(state).await
+}
+
+#[tauri::command]
 async fn open_output_location(path: String) -> Result<(), String> {
     let path_buf = PathBuf::from(path);
     let target = if path_buf.is_dir() {
@@ -147,6 +163,8 @@ pub fn run() {
             inspect_video,
             start_task,
             cancel_task,
+            pause_task,
+            resume_task,
             open_output_location
         ])
         .run(tauri::generate_context!())
@@ -164,15 +182,27 @@ mod tests {
         assert!(DEFAULT_PERMISSIONS.contains("allow-pick-output-directory"));
         assert!(DEFAULT_PERMISSIONS.contains("allow-load-workbench-preset"));
         assert!(DEFAULT_PERMISSIONS.contains("allow-save-workbench-preset"));
+        assert!(DEFAULT_PERMISSIONS.contains("allow-start-task"));
+        assert!(DEFAULT_PERMISSIONS.contains("allow-cancel-task"));
+        assert!(DEFAULT_PERMISSIONS.contains("allow-pause-task"));
+        assert!(DEFAULT_PERMISSIONS.contains("allow-resume-task"));
         assert!(DEFAULT_PERMISSIONS.contains("allow-open-output-location"));
     }
 
     #[test]
     fn default_permissions_exclude_removed_legacy_commands() {
-        assert!(!DEFAULT_PERMISSIONS.lines().any(|line| line.trim() == "\"allow-pick-input\","));
-        assert!(!DEFAULT_PERMISSIONS.lines().any(|line| line.trim() == "\"allow-pick-output\","));
-        assert!(!DEFAULT_PERMISSIONS.lines().any(|line| line.trim() == "\"allow-open-file-or-directory\","));
-        assert!(!DEFAULT_PERMISSIONS.lines().any(|line| line.trim() == "\"allow-resolved-runtime\","));
+        assert!(!DEFAULT_PERMISSIONS
+            .lines()
+            .any(|line| line.trim() == "\"allow-pick-input\","));
+        assert!(!DEFAULT_PERMISSIONS
+            .lines()
+            .any(|line| line.trim() == "\"allow-pick-output\","));
+        assert!(!DEFAULT_PERMISSIONS
+            .lines()
+            .any(|line| line.trim() == "\"allow-open-file-or-directory\","));
+        assert!(!DEFAULT_PERMISSIONS
+            .lines()
+            .any(|line| line.trim() == "\"allow-resolved-runtime\","));
     }
 
     #[test]
@@ -181,6 +211,10 @@ mod tests {
         assert!(ACL_MANIFESTS.contains("allow-pick-output-directory"));
         assert!(ACL_MANIFESTS.contains("allow-load-workbench-preset"));
         assert!(ACL_MANIFESTS.contains("allow-save-workbench-preset"));
+        assert!(ACL_MANIFESTS.contains("allow-start-task"));
+        assert!(ACL_MANIFESTS.contains("allow-cancel-task"));
+        assert!(ACL_MANIFESTS.contains("allow-pause-task"));
+        assert!(ACL_MANIFESTS.contains("allow-resume-task"));
         assert!(!ACL_MANIFESTS.contains("\"allow-pick-output\""));
         assert!(!ACL_MANIFESTS.contains("\"allow-open-file-or-directory\""));
         assert!(!ACL_MANIFESTS.contains("\"allow-resolved-runtime\""));

@@ -14,9 +14,6 @@ const activeModule = computed<WorkbenchModuleDefinition>(
 )
 
 const topbarStatus = computed(() => {
-  if (store.batch.isRunning) {
-    return 'running'
-  }
   return store.globalTaskStatus
 })
 

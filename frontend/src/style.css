@@ -424,6 +424,14 @@ a:focus-visible {
   color: #7bcbff;
 }
 
+.status-pill[data-state='paused'] {
+  color: var(--warning);
+}
+
+.status-pill[data-state='cancelling'] {
+  color: var(--danger);
+}
+
 .status-pill[data-state='completed'] {
   color: var(--success);
 }
@@ -702,6 +710,14 @@ a:focus-visible {
   color: #7bcbff;
 }
 
+.inline-status[data-state='paused'] {
+  color: var(--warning);
+}
+
+.inline-status[data-state='cancelling'] {
+  color: var(--danger);
+}
+
 .inline-status[data-state='completed'] {
   color: var(--success);
 }
@@ -884,6 +900,14 @@ a:focus-visible {
 
 .rail-footer-chip[data-state='running'] {
   color: #7bcbff;
+}
+
+.rail-footer-chip[data-state='paused'] {
+  color: var(--warning);
+}
+
+.rail-footer-chip[data-state='cancelling'] {
+  color: var(--danger);
 }
 
 .rail-footer-chip[data-state='completed'] {
