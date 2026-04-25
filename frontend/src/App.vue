@@ -3,10 +3,15 @@ import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import StepRail from '@/components/StepRail.vue'
 import { WORKBENCH_MODULES } from '@/lib/workflow'
-import { useWorkbenchStore } from '@/stores/workbench'
+import { useEnvStore } from '@/stores/env'
+import { usePresetStore } from '@/stores/preset'
+import { useTaskStore } from '@/stores/task'
+import { createDefaultWorkbenchPreset } from '@/lib/task-mapper'
 import type { WorkbenchModuleDefinition } from '@/types'
 
-const store = useWorkbenchStore()
+const envStore = useEnvStore()
+const presetStore = usePresetStore()
+const taskStore = useTaskStore()
 const route = useRoute()
 
 const activeModule = computed<WorkbenchModuleDefinition>(
@@ -14,15 +19,34 @@ const activeModule = computed<WorkbenchModuleDefinition>(
 )
 
 const topbarStatus = computed(() => {
-  return store.globalTaskStatus
+  return taskStore.globalTaskStatus
 })
 
+async function bootstrap(): Promise<void> {
+  if (envStore.env.isBootstrapping) {
+    return
+  }
+  envStore.env.isBootstrapping = true
+  try {
+    await taskStore.attachTaskListeners()
+    const hasPersistedPreset = await presetStore.loadPersistedPreset()
+    await envStore.recheckEnvironment(false)
+    if (!hasPersistedPreset && envStore.env.checkResult) {
+      presetStore.replaceDraftPreset(createDefaultWorkbenchPreset(envStore.env.checkResult))
+    }
+    presetStore.presetPersistenceReady = true
+    presetStore.schedulePresetSave()
+  } finally {
+    envStore.env.isBootstrapping = false
+  }
+}
+
 onMounted(() => {
-  void store.bootstrap()
+  void bootstrap()
 })
 
 onBeforeUnmount(() => {
-  store.detachTaskListeners()
+  taskStore.detachTaskListeners()
 })
 </script>
 
@@ -44,14 +68,14 @@ onBeforeUnmount(() => {
 
           <div class="topbar-actions">
             <button
-              v-if="store.env.issue && !store.env.isChecking"
+              v-if="envStore.env.issue && !envStore.env.isChecking"
               class="ghost-button compact-button"
-              @click="store.recheckEnvironment()"
+              @click="envStore.recheckEnvironment()"
             >
               重试探测
             </button>
             <span class="status-pill" :data-state="topbarStatus">
-              {{ store.env.isBootstrapping || store.env.isChecking ? 'checking' : topbarStatus }}
+              {{ envStore.env.isBootstrapping || envStore.env.isChecking ? 'checking' : topbarStatus }}
             </span>
           </div>
         </header>

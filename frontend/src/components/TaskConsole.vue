@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { useWorkbenchStore } from '@/stores/workbench'
+import { useTaskStore } from '@/stores/task'
 
-const store = useWorkbenchStore()
+const taskStore = useTaskStore()
 const terminalRef = ref<HTMLDivElement | null>(null)
-const logs = computed(() => store.consoleTaskItem?.taskState.logs ?? [])
+const logs = computed(() => taskStore.consoleTaskItem?.taskState.logs ?? [])
 
 watch(
   logs,

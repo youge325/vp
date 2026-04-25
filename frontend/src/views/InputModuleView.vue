@@ -2,14 +2,18 @@
 import { computed, ref } from 'vue'
 import { formatNumber, resolvePrimaryMode } from '@/lib/task-mapper'
 import { WORKFLOW_LABELS } from '@/lib/workflow'
-import { useWorkbenchStore } from '@/stores/workbench'
+import { useEnvStore } from '@/stores/env'
+import { useMediaStore } from '@/stores/media'
+import { useTaskStore } from '@/stores/task'
 import type { MediaItem } from '@/types'
 
-const store = useWorkbenchStore()
+const envStore = useEnvStore()
+const mediaStore = useMediaStore()
+const taskStore = useTaskStore()
 const dragActive = ref(false)
 
 const inputOperationIssue = computed(() =>
-  store.operationIssue?.scope === 'input' ? store.operationIssue.error : null,
+  envStore.operationIssue?.scope === 'input' ? envStore.operationIssue.error : null,
 )
 
 function getWorkflowSummary(item: MediaItem): string {
@@ -22,8 +26,8 @@ function getWorkflowSummary(item: MediaItem): string {
 }
 
 async function reinspectSelection(): Promise<void> {
-  const ids = store.selectedIds.length > 0 ? store.selectedIds : store.activeItem ? [store.activeItem.id] : []
-  await store.inspectItems(ids)
+  const ids = mediaStore.selectedIds.length > 0 ? mediaStore.selectedIds : mediaStore.activeItem ? [mediaStore.activeItem.id] : []
+  await mediaStore.inspectItems(ids)
 }
 
 async function handleDrop(event: DragEvent): Promise<void> {
@@ -34,7 +38,7 @@ async function handleDrop(event: DragEvent): Promise<void> {
     .filter((path): path is string => Boolean(path))
 
   if (paths.length > 0) {
-    await store.addMediaPaths(paths)
+    await mediaStore.addMediaPaths(paths)
   }
 }
 
@@ -58,13 +62,13 @@ function handleDragLeave(): void {
         </div>
 
         <div class="panel-actions">
-          <button class="ghost-button" @click="store.selectAllMedia(!store.allSelected)">
-            {{ store.allSelected ? '取消全选' : '全选全部' }}
+          <button class="ghost-button" @click="mediaStore.selectAllMedia(!mediaStore.allSelected)">
+            {{ mediaStore.allSelected ? '取消全选' : '全选全部' }}
           </button>
-          <button class="ghost-button" :disabled="store.mediaItems.length === 0" @click="reinspectSelection()">
+          <button class="ghost-button" :disabled="mediaStore.mediaItems.length === 0" @click="reinspectSelection()">
             重新读取
           </button>
-          <button class="primary-button" @click="store.pickInputs()">批量导入</button>
+          <button class="primary-button" @click="mediaStore.pickInputs()">批量导入</button>
         </div>
       </div>
 
@@ -93,7 +97,7 @@ function handleDragLeave(): void {
         </div>
       </div>
 
-      <div v-if="store.mediaItems.length === 0" class="empty-state">
+      <div v-if="mediaStore.mediaItems.length === 0" class="empty-state">
         <strong>还没有素材</strong>
         <p>前往上方批量导入后，这里会显示每个文件的元数据、流程摘要和任务状态。</p>
       </div>
@@ -114,17 +118,17 @@ function handleDragLeave(): void {
           </thead>
           <tbody>
             <tr
-              v-for="item in store.mediaItems"
+              v-for="item in mediaStore.mediaItems"
               :key="item.id"
               class="media-row"
-              :class="{ active: item.id === store.activeItemId }"
-              @click="store.setActiveItem(item.id)"
+              :class="{ active: item.id === mediaStore.activeItemId }"
+              @click="mediaStore.setActiveItem(item.id)"
             >
               <td @click.stop>
                 <input
                   :checked="item.selected"
                   type="checkbox"
-                  @change="store.setItemSelected(item.id, ($event.target as HTMLInputElement).checked)"
+                  @change="mediaStore.setItemSelected(item.id, ($event.target as HTMLInputElement).checked)"
                 />
               </td>
               <td>
@@ -139,7 +143,7 @@ function handleDragLeave(): void {
                 <span class="inline-status" :data-state="item.taskState.status">{{ item.taskState.status }}</span>
               </td>
               <td @click.stop>
-                <button class="table-action" :disabled="store.batch.isRunning" @click="store.removeMediaItem(item.id)">
+                <button class="table-action" :disabled="taskStore.batch.isRunning" @click="mediaStore.removeMediaItem(item.id)">
                   移除
                 </button>
               </td>

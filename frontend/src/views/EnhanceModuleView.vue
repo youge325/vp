@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RIFE_MODELS } from '@/lib/workflow'
-import { useWorkbenchStore } from '@/stores/workbench'
+import { useMediaStore } from '@/stores/media'
+import { usePresetStore } from '@/stores/preset'
 import type { FpsMode, ProcessOrder, TensorBackend } from '@/types'
 
-const store = useWorkbenchStore()
+const mediaStore = useMediaStore()
+const presetStore = usePresetStore()
 
-const workflow = computed(() => store.editor.workflowConfig)
-const isPresetMode = computed(() => store.editingScope === 'preset')
+const workflow = computed(() => mediaStore.editor.workflowConfig)
+const isPresetMode = computed(() => mediaStore.editingScope === 'preset')
 const targetLabel = computed(() =>
-  isPresetMode.value ? '默认预设（后续导入会继承）' : `作用于 ${store.editingSelectionCount} 个文件`,
+  isPresetMode.value ? '默认预设（后续导入会继承）' : `作用于 ${mediaStore.editingSelectionCount} 个文件`,
 )
 const caption = computed(() =>
   isPresetMode.value
@@ -20,7 +22,7 @@ const caption = computed(() =>
 const interpolationEnabled = computed({
   get: () => workflow.value.interpolation.enabled,
   set: (value: boolean) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.interpolation.enabled = value
     })
   },
@@ -29,7 +31,7 @@ const interpolationEnabled = computed({
 const interpolationBackend = computed({
   get: () => workflow.value.interpolation.tensorBackend,
   set: (value: TensorBackend) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.interpolation.tensorBackend = value
     })
   },
@@ -38,7 +40,7 @@ const interpolationBackend = computed({
 const interpolationModel = computed({
   get: () => workflow.value.interpolation.model,
   set: (value: string) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.interpolation.model = value
     })
   },
@@ -47,7 +49,7 @@ const interpolationModel = computed({
 const fpsMode = computed({
   get: () => workflow.value.fpsMode,
   set: (value: FpsMode) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.fpsMode = value
     })
   },
@@ -56,7 +58,7 @@ const fpsMode = computed({
 const targetFps = computed({
   get: () => workflow.value.interpolation.targetFps,
   set: (value: number) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.interpolation.targetFps = value
     })
   },
@@ -65,7 +67,7 @@ const targetFps = computed({
 const interpolationMulti = computed({
   get: () => workflow.value.interpolation.multi,
   set: (value: number) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.interpolation.multi = value
     })
   },
@@ -74,7 +76,7 @@ const interpolationMulti = computed({
 const interpolationScale = computed({
   get: () => workflow.value.interpolation.scale,
   set: (value: number) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.interpolation.scale = value
     })
   },
@@ -83,7 +85,7 @@ const interpolationScale = computed({
 const interpolationFp16 = computed({
   get: () => workflow.value.interpolation.fp16,
   set: (value: boolean) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.interpolation.fp16 = value
     })
   },
@@ -92,7 +94,7 @@ const interpolationFp16 = computed({
 const superResolutionEnabled = computed({
   get: () => workflow.value.superResolution.enabled,
   set: (value: boolean) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.superResolution.enabled = value
     })
   },
@@ -101,7 +103,7 @@ const superResolutionEnabled = computed({
 const superResolutionScale = computed({
   get: () => workflow.value.superResolution.scaleFactor,
   set: (value: number) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.superResolution.scaleFactor = value
     })
   },
@@ -110,7 +112,7 @@ const superResolutionScale = computed({
 const superResolutionAlgorithm = computed({
   get: () => workflow.value.superResolution.algorithm,
   set: (value: string) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.superResolution.algorithm = value
     })
   },
@@ -119,7 +121,7 @@ const superResolutionAlgorithm = computed({
 const processOrder = computed({
   get: () => workflow.value.processOrder,
   set: (value: ProcessOrder) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.processOrder = value
     })
   },
@@ -128,7 +130,7 @@ const processOrder = computed({
 const animeEnabled = computed({
   get: () => workflow.value.anime.enabled,
   set: (value: boolean) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.anime.enabled = value
     })
   },
@@ -137,7 +139,7 @@ const animeEnabled = computed({
 const animeProfile = computed({
   get: () => workflow.value.anime.profile,
   set: (value: string) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.anime.profile = value
     })
   },
@@ -146,7 +148,7 @@ const animeProfile = computed({
 const animeDenoise = computed({
   get: () => workflow.value.anime.denoise,
   set: (value: number) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.anime.denoise = value
     })
   },
@@ -155,7 +157,7 @@ const animeDenoise = computed({
 const animeEdgeBoost = computed({
   get: () => workflow.value.anime.edgeBoost,
   set: (value: number) => {
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.anime.edgeBoost = value
     })
   },

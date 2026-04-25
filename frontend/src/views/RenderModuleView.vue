@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import TaskConsole from '@/components/TaskConsole.vue'
-import { useWorkbenchStore } from '@/stores/workbench'
+import { useEnvStore } from '@/stores/env'
+import { useTaskStore } from '@/stores/task'
 
-const store = useWorkbenchStore()
+const envStore = useEnvStore()
+const taskStore = useTaskStore()
 
 const taskOperationIssue = computed(() =>
-  store.operationIssue?.scope === 'task' ? store.operationIssue.error : null,
+  envStore.operationIssue?.scope === 'task' ? envStore.operationIssue.error : null,
 )
-const pauseButtonLabel = computed(() => (store.batch.isPaused ? '继续队列' : '暂停队列'))
-const interruptButtonLabel = computed(() => (store.batch.isCancelling ? '中断中...' : '中断批次'))
+const pauseButtonLabel = computed(() => (taskStore.batch.isPaused ? '继续队列' : '暂停队列'))
+const interruptButtonLabel = computed(() => (taskStore.batch.isCancelling ? '中断中...' : '中断批次'))
 </script>
 
 <template>
@@ -22,20 +24,20 @@ const interruptButtonLabel = computed(() => (store.batch.isCancelling ? '中断�
         </div>
 
         <div class="panel-actions">
-          <button class="primary-button" :disabled="!store.canStartBatch" @click="store.startBatch()">
+          <button class="primary-button" :disabled="!taskStore.canStartBatch" @click="taskStore.startBatch()">
             开始队列
           </button>
           <button
             class="ghost-button"
-            :disabled="!store.batch.isRunning || store.batch.isCancelling"
-            @click="store.batch.isPaused ? store.resumeCurrentTask() : store.pauseCurrentTask()"
+            :disabled="!taskStore.batch.isRunning || taskStore.batch.isCancelling"
+            @click="taskStore.batch.isPaused ? taskStore.resumeCurrentTask() : taskStore.pauseCurrentTask()"
           >
             {{ pauseButtonLabel }}
           </button>
           <button
             class="danger-button"
-            :disabled="!store.batch.isRunning || store.batch.isCancelling"
-            @click="store.interruptBatch()"
+            :disabled="!taskStore.batch.isRunning || taskStore.batch.isCancelling"
+            @click="taskStore.interruptBatch()"
           >
             {{ interruptButtonLabel }}
           </button>

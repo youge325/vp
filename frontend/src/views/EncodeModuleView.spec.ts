@@ -1,11 +1,22 @@
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EncodeConfig, MediaItem, OutputConfig, WorkbenchPreset, WorkflowConfig } from '@/types'
 
-const storeState = vi.hoisted(() => ({ current: null as any }))
+const envStoreState = vi.hoisted(() => ({ current: null as any }))
+const mediaStoreState = vi.hoisted(() => ({ current: null as any }))
+const presetStoreState = vi.hoisted(() => ({ current: null as any }))
 
-vi.mock('@/stores/workbench', () => ({
-  useWorkbenchStore: () => storeState.current,
+vi.mock('@/stores/env', () => ({
+  useEnvStore: () => envStoreState.current,
+}))
+
+vi.mock('@/stores/media', () => ({
+  useMediaStore: () => mediaStoreState.current,
+}))
+
+vi.mock('@/stores/preset', () => ({
+  usePresetStore: () => presetStoreState.current,
 }))
 
 import EncodeModuleView from '@/views/EncodeModuleView.vue'
@@ -118,39 +129,31 @@ function createMediaItem(): MediaItem {
   }
 }
 
-function createStoreMock(overrides: Record<string, unknown> = {}) {
-  const editor = createEditor()
+const sharedEditor = createEditor()
+
+function createEnvStoreMock() {
+  return {
+    env: { checkResult: null },
+    operationIssue: null,
+  }
+}
+
+function createMediaStoreMock(overrides: Record<string, unknown> = {}) {
   return {
     activeItem: createMediaItem(),
     selectedIds: ['item-1'],
     editingScope: 'selection',
     editingSelectionCount: 1,
-    editor,
-    operationIssue: null,
-    visibleEncoderProfiles: [
-      {
-        name: 'hevc_nvenc',
-        label: 'NVENC H.265',
-        family: 'nvidia',
-        codec: 'hevc',
-        available: true,
-        pixelFormats: ['p010le'],
-        hardwareDevices: ['cuda'],
-        options: [],
-      },
-    ],
-    currentEncoderProfile: {
-      name: 'hevc_nvenc',
-      label: 'NVENC H.265',
-      family: 'nvidia',
-      codec: 'hevc',
-      available: true,
-      pixelFormats: ['p010le'],
-      hardwareDevices: ['cuda'],
-      options: [],
-    },
-    patchEncode: vi.fn((mutator: (config: EncodeConfig) => void) => mutator(editor.encodeConfig)),
-    patchOutput: vi.fn((mutator: (config: OutputConfig) => void) => mutator(editor.outputConfig)),
+    editor: sharedEditor,
+    ...overrides,
+  }
+}
+
+function createPresetStoreMock(overrides: Record<string, unknown> = {}) {
+  return {
+    draftPreset: sharedEditor,
+    patchEncode: vi.fn((mutator: (config: EncodeConfig) => void) => mutator(sharedEditor.encodeConfig)),
+    patchOutput: vi.fn((mutator: (config: OutputConfig) => void) => mutator(sharedEditor.outputConfig)),
     setEncodeRateControlMode: vi.fn(),
     setEncodeRateControlValue: vi.fn(),
     setEncodeProfile: vi.fn(),
@@ -163,11 +166,14 @@ function createStoreMock(overrides: Record<string, unknown> = {}) {
 
 describe('EncodeModuleView', () => {
   beforeEach(() => {
-    storeState.current = createStoreMock()
+    setActivePinia(createPinia())
+    envStoreState.current = createEnvStoreMock()
+    mediaStoreState.current = createMediaStoreMock()
+    presetStoreState.current = createPresetStoreMock()
   })
 
   it('keeps output controls available in preset mode', () => {
-    storeState.current = createStoreMock({
+    mediaStoreState.current = createMediaStoreMock({
       activeItem: null,
       selectedIds: [],
       editingScope: 'preset',
@@ -185,16 +191,16 @@ describe('EncodeModuleView', () => {
 
     const textInput = wrapper.get('input[type="text"]')
     await textInput.setValue('D:/custom-output')
-    expect(storeState.current.patchOutput).toHaveBeenCalled()
-    expect(storeState.current.editor.outputConfig.outputDir).toBe('D:/custom-output')
+    expect(presetStoreState.current.patchOutput).toHaveBeenCalled()
+    expect(mediaStoreState.current.editor.outputConfig.outputDir).toBe('D:/custom-output')
 
     const numberInputs = wrapper.findAll('input[type="number"]')
     await numberInputs[0]!.setValue('240')
-    expect(storeState.current.editor.outputConfig.segmentFrames).toBe(240)
+    expect(mediaStoreState.current.editor.outputConfig.segmentFrames).toBe(240)
   })
 
   it('lets the user pick an output directory before importing media', async () => {
-    storeState.current = createStoreMock({
+    mediaStoreState.current = createMediaStoreMock({
       activeItem: null,
       selectedIds: [],
       editingScope: 'preset',
@@ -204,6 +210,6 @@ describe('EncodeModuleView', () => {
     const wrapper = mount(EncodeModuleView)
 
     await wrapper.get('button').trigger('click')
-    expect(storeState.current.pickOutputDirectory).toHaveBeenCalledTimes(1)
+    expect(presetStoreState.current.pickOutputDirectory).toHaveBeenCalledTimes(1)
   })
 })

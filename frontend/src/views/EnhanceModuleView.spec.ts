@@ -1,11 +1,17 @@
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkbenchPreset, WorkflowConfig } from '@/types'
 
-const storeState = vi.hoisted(() => ({ current: null as any }))
+const mediaStoreState = vi.hoisted(() => ({ current: null as any }))
+const presetStoreState = vi.hoisted(() => ({ current: null as any }))
 
-vi.mock('@/stores/workbench', () => ({
-  useWorkbenchStore: () => storeState.current,
+vi.mock('@/stores/media', () => ({
+  useMediaStore: () => mediaStoreState.current,
+}))
+
+vi.mock('@/stores/preset', () => ({
+  usePresetStore: () => presetStoreState.current,
 }))
 
 import EnhanceModuleView from '@/views/EnhanceModuleView.vue'
@@ -67,21 +73,31 @@ function createEditor(overrides: Partial<WorkbenchPreset> = {}): WorkbenchPreset
   }
 }
 
-function createStoreMock(overrides: Record<string, unknown> = {}) {
-  const editor = createEditor()
+const sharedEditor = createEditor()
+
+function createMediaStoreMock(overrides: Record<string, unknown> = {}) {
   return {
     activeItem: null,
     editingScope: 'preset',
     editingSelectionCount: 0,
-    editor,
-    patchWorkflow: vi.fn((mutator: (config: WorkflowConfig) => void) => mutator(editor.workflowConfig)),
+    editor: sharedEditor,
+    ...overrides,
+  }
+}
+
+function createPresetStoreMock(overrides: Record<string, unknown> = {}) {
+  return {
+    draftPreset: sharedEditor,
+    patchWorkflow: vi.fn((mutator: (config: WorkflowConfig) => void) => mutator(sharedEditor.workflowConfig)),
     ...overrides,
   }
 }
 
 describe('EnhanceModuleView', () => {
   beforeEach(() => {
-    storeState.current = createStoreMock()
+    setActivePinia(createPinia())
+    mediaStoreState.current = createMediaStoreMock()
+    presetStoreState.current = createPresetStoreMock()
   })
 
   it('renders workflow controls even before media import', () => {
@@ -97,11 +113,11 @@ describe('EnhanceModuleView', () => {
 
     const selects = wrapper.findAll('select')
     await selects[0]!.setValue('paddle')
-    expect(storeState.current.patchWorkflow).toHaveBeenCalled()
-    expect(storeState.current.editor.workflowConfig.interpolation.tensorBackend).toBe('paddle')
+    expect(presetStoreState.current.patchWorkflow).toHaveBeenCalled()
+    expect(mediaStoreState.current.editor.workflowConfig.interpolation.tensorBackend).toBe('paddle')
 
     const checkboxes = wrapper.findAll('input[type="checkbox"]')
     await checkboxes[1]!.setValue(true)
-    expect(storeState.current.editor.workflowConfig.interpolation.fp16).toBe(true)
+    expect(mediaStoreState.current.editor.workflowConfig.interpolation.fp16).toBe(true)
   })
 })
