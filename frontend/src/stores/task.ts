@@ -62,19 +62,20 @@ export const useTaskStore = defineStore('task', () => {
     return 'idle'
   })
 
-  function resetItemRunState(item: { taskState: ReturnType<typeof createIdleTaskState>; issue: TaskError | null; lastOutputPath: string }): void {
-    item.taskState = createIdleTaskState()
+  function resetItemRunState(item: { taskState: ReturnType<typeof createIdleTaskState>; issue: TaskError | null; lastOutputPath: string }, preserveLogs: boolean = false): void {
+    const existingLogs = preserveLogs ? item.taskState.logs : []
+    item.taskState = { ...createIdleTaskState(), logs: existingLogs }
     item.issue = null
     item.lastOutputPath = ''
   }
 
-  function clearBatchRuntimeArtifacts(): void {
+  function clearBatchRuntimeArtifacts(preserveLogs: boolean = false): void {
     const runtimeIds = new Set(batchRuntimeIds.value)
     for (const item of mediaStore.mediaItems) {
       if (!runtimeIds.has(item.id)) {
         continue
       }
-      resetItemRunState(item)
+      resetItemRunState(item, preserveLogs)
     }
   }
 
@@ -161,6 +162,18 @@ export const useTaskStore = defineStore('task', () => {
         }
       }
       batch.completedCount += 1
+    } else if (state === 'cancelled') {
+      if (item.outputConfig.openOnComplete) {
+        const openPath = item.lastOutputPath || item.outputConfig.outputDir
+        if (openPath) {
+          try {
+            await openOutputLocation(openPath)
+          } catch {
+            // Ignore shell-open failures after processing finished.
+          }
+        }
+      }
+      batch.failedCount += 1
     } else {
       batch.failedCount += 1
     }
@@ -176,7 +189,7 @@ export const useTaskStore = defineStore('task', () => {
     batch.isRunning = false
     batch.isPaused = false
     batch.isCancelling = false
-    clearBatchRuntimeArtifacts()
+    clearBatchRuntimeArtifacts(state === 'cancelled')
     resetBatchCounters()
     batchRuntimeIds.value = []
   }
