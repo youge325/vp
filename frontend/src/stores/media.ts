@@ -1,27 +1,10 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { inspectVideo as invokeInspectVideo } from '@/lib/tauri'
-import { cloneDecodeConfig, cloneEncodeConfig, cloneOutputConfig, cloneWorkflowConfig } from '@/lib/task-mapper'
+import { inspectVideo as invokeInspectVideo, pickInputs as invokePickInputs } from '@/lib/tauri'
+import { cloneDecodeConfig, cloneEncodeConfig, cloneOutputConfig, cloneWorkflowConfig, normalizeTaskError } from '@/lib/task-mapper'
 import { useEnvStore } from '@/stores/env'
 import { usePresetStore } from '@/stores/preset'
-import type { MediaItem, TaskError, VideoInfoResult } from '@/types'
-
-function normalizeTaskError(error: unknown, code = 'runtime_error'): TaskError {
-  if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
-    const payload = error as { code?: unknown; message?: unknown; details?: Record<string, unknown> | null }
-    return {
-      code: typeof payload.code === 'string' ? payload.code : code,
-      message: typeof payload.message === 'string' ? payload.message : 'Execution failed.',
-      details: payload.details ?? null,
-    }
-  }
-
-  if (error instanceof Error) {
-    return { code, message: error.message, details: null }
-  }
-
-  return { code, message: String(error), details: null }
-}
+import type { MediaItem, VideoInfoResult } from '@/types'
 
 function createMediaId(path: string): string {
   const suffix = Math.random().toString(36).slice(2, 8)
@@ -168,8 +151,7 @@ export const useMediaStore = defineStore('media', () => {
 
   async function pickInputs(): Promise<void> {
     try {
-      const { pickInputs: tauriPickInputs } = await import('@/lib/tauri')
-      const paths = await tauriPickInputs()
+      const paths = await invokePickInputs()
       envStore.clearOperationIssue('input')
       await addMediaPaths(paths)
     } catch (error) {

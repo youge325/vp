@@ -194,6 +194,7 @@ function createPresetStoreMock(overrides: Record<string, unknown> = {}) {
     setDecodeProfile: vi.fn(),
     setDecodeHwaccelDevice: vi.fn(),
     setDecodeOption: vi.fn(),
+    getOptionValue: vi.fn((option, values) => values[option.name] ?? option.defaultValue ?? false),
     ...overrides,
   }
 }
