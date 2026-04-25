@@ -16,6 +16,8 @@ function createStoreMock(logs: string[] = []) {
         logs,
       },
     },
+    batch: { completedCount: 0 },
+    batchTotal: 0,
   }
 }
 
