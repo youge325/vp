@@ -9,7 +9,7 @@ import {
   resumeTask,
   startTask,
 } from '@/lib/tauri'
-import { buildTaskRequest } from '@/lib/task-mapper'
+import { buildTaskRequest, normalizeTaskError } from '@/lib/task-mapper'
 import {
   appendTaskLog,
   applyTaskCancelled,
@@ -35,23 +35,6 @@ function createInitialBatch(): BatchState {
     isPaused: false,
     isCancelling: false,
   }
-}
-
-function normalizeTaskError(error: unknown, code = 'runtime_error'): TaskError {
-  if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
-    const payload = error as { code?: unknown; message?: unknown; details?: Record<string, unknown> | null }
-    return {
-      code: typeof payload.code === 'string' ? payload.code : code,
-      message: typeof payload.message === 'string' ? payload.message : 'Execution failed.',
-      details: payload.details ?? null,
-    }
-  }
-
-  if (error instanceof Error) {
-    return { code, message: error.message, details: null }
-  }
-
-  return { code, message: String(error), details: null }
 }
 
 export const useTaskStore = defineStore('task', () => {

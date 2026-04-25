@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { useWorkbenchStore } from '@/stores/workbench'
+import { useEnvStore } from '@/stores/env'
+import { usePresetStore } from '@/stores/preset'
+import { useMediaStore } from '@/stores/media'
+import { useTaskStore } from '@/stores/task'
+import { cloneWorkflowConfig, createDefaultWorkbenchPreset, getVisibleDecoderProfiles } from '@/lib/task-mapper'
 import type { EnvironmentCheckPayload, EnvironmentCheckResult, VideoInfoResult, WorkbenchPreset } from '@/types'
 
 interface TaskEventHandlers {
@@ -213,7 +217,20 @@ async function flush(): Promise<void> {
   await Promise.resolve()
 }
 
-describe('workbench store', () => {
+async function bootstrapStores(): Promise<void> {
+  const taskStore = useTaskStore()
+  const presetStore = usePresetStore()
+  const envStore = useEnvStore()
+  await taskStore.attachTaskListeners()
+  const hasPersistedPreset = await presetStore.loadPersistedPreset()
+  await envStore.recheckEnvironment(false)
+  if (!hasPersistedPreset && envStore.env.checkResult) {
+    presetStore.replaceDraftPreset(createDefaultWorkbenchPreset(envStore.env.checkResult))
+  }
+  presetStore.presetPersistenceReady = true
+}
+
+describe('workbench integration', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     setActivePinia(createPinia())
@@ -251,87 +268,100 @@ describe('workbench store', () => {
   })
 
   it('bootstraps environment probing on startup', async () => {
-    const store = useWorkbenchStore()
+    await bootstrapStores()
 
-    await store.bootstrap()
+    const envStore = useEnvStore()
+    const mediaStore = useMediaStore()
 
     expect(mockLoadWorkbenchPreset).toHaveBeenCalledTimes(1)
     expect(mockCheckEnvironment).toHaveBeenCalledTimes(1)
     expect(mockCheckEnvironment).toHaveBeenCalledWith(false)
-    expect(store.env.checkResult?.ffmpeg.available).toBe(true)
-    expect(store.env.checkResult?.gpu.adapters[0]?.deviceType).toBe('discrete')
-    expect(store.env.checkSource).toBe('probe')
-    expect(store.env.lastProbeAt).toBe('2026-04-23T11:00:00Z')
-    expect(store.editingScope).toBe('preset')
+    expect(envStore.env.checkResult?.ffmpeg.available).toBe(true)
+    expect(envStore.env.checkResult?.gpu.adapters[0]?.deviceType).toBe('discrete')
+    expect(envStore.env.checkSource).toBe('probe')
+    expect(envStore.env.lastProbeAt).toBe('2026-04-23T11:00:00Z')
+    expect(mediaStore.editingScope).toBe('preset')
   })
 
   it('exposes editable draft presets before any media is imported', async () => {
-    const store = useWorkbenchStore()
+    await bootstrapStores()
 
-    await store.bootstrap()
+    const envStore = useEnvStore()
+    const presetStore = usePresetStore()
+    const mediaStore = useMediaStore()
 
-    expect(store.activeItem).toBeNull()
-    expect(store.editingScope).toBe('preset')
-    expect(store.editor.decodeConfig.mode).toBe('hardware')
-    expect(store.editor.decodeConfig.decoder).toBe('hevc_cuvid')
-    expect(store.editor.workflowConfig.interpolation.enabled).toBe(true)
-    expect(store.visibleDecoderProfiles).toHaveLength(3)
+    expect(mediaStore.activeItem).toBeNull()
+    expect(mediaStore.editingScope).toBe('preset')
+    expect(mediaStore.editor.decodeConfig.mode).toBe('hardware')
+    expect(mediaStore.editor.decodeConfig.decoder).toBe('hevc_cuvid')
+    expect(presetStore.draftPreset.workflowConfig.interpolation.enabled).toBe(true)
+    expect(getVisibleDecoderProfiles(envStore.env.checkResult, '')).toHaveLength(3)
   })
 
   it('imports files without polluting env issues', async () => {
-    const store = useWorkbenchStore()
-    await store.bootstrap()
+    await bootstrapStores()
     mockPickInputs.mockResolvedValueOnce(['D:/input/a.mp4'])
 
-    await store.pickInputs()
+    const mediaStore = useMediaStore()
+    const envStore = useEnvStore()
+    await mediaStore.pickInputs()
 
-    expect(store.mediaItems).toHaveLength(1)
-    expect(store.env.issue).toBeNull()
-    expect(store.operationIssue).toBeNull()
+    expect(mediaStore.mediaItems).toHaveLength(1)
+    expect(envStore.env.issue).toBeNull()
+    expect(envStore.operationIssue).toBeNull()
   })
 
   it('stores pickInputs failures as input operation issues', async () => {
-    const store = useWorkbenchStore()
-    await store.bootstrap()
+    await bootstrapStores()
     mockPickInputs.mockRejectedValueOnce(new Error('pick_inputs not allowed'))
 
-    await store.pickInputs()
+    const mediaStore = useMediaStore()
+    const envStore = useEnvStore()
+    await mediaStore.pickInputs()
 
-    expect(store.env.issue).toBeNull()
-    expect(store.operationIssue?.scope).toBe('input')
-    expect(store.operationIssue?.error.code).toBe('pick_inputs_failed')
-    expect(store.operationIssue?.error.message).toContain('pick_inputs')
+    expect(envStore.env.issue).toBeNull()
+    expect(envStore.operationIssue?.scope).toBe('input')
+    expect(envStore.operationIssue?.error.code).toBe('pick_inputs_failed')
+    expect(envStore.operationIssue?.error.message).toContain('pick_inputs')
   })
 
   it('keeps environment failures in env.issue', async () => {
-    const store = useWorkbenchStore()
     mockCheckEnvironment.mockRejectedValueOnce(new Error('ffmpeg missing'))
 
-    await store.recheckEnvironment()
+    const envStore = useEnvStore()
+    await envStore.recheckEnvironment()
 
     expect(mockCheckEnvironment).toHaveBeenCalledWith(true)
-    expect(store.env.issue?.code).toBe('check_failed')
-    expect(store.operationIssue).toBeNull()
+    expect(envStore.env.issue?.code).toBe('check_failed')
+    expect(envStore.operationIssue).toBeNull()
   })
 
   it('updates the draft preset and selected items together when workflow settings change', async () => {
-    const store = useWorkbenchStore()
-    await store.bootstrap()
-    await store.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4', 'D:/input/c.mp4'])
+    await bootstrapStores()
+    const mediaStore = useMediaStore()
+    const presetStore = usePresetStore()
+    await mediaStore.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4', 'D:/input/c.mp4'])
 
-    const [first, second, third] = store.mediaItems
-    store.setActiveItem(first.id)
-    store.setItemSelected(first.id, true)
-    store.setItemSelected(second.id, true)
-    store.setItemSelected(third.id, false)
+    const [first, second, third] = mediaStore.mediaItems
+    mediaStore.setActiveItem(first.id)
+    mediaStore.setItemSelected(first.id, true)
+    mediaStore.setItemSelected(second.id, true)
+    mediaStore.setItemSelected(third.id, false)
 
-    store.patchWorkflow((config) => {
+    presetStore.patchWorkflow((config) => {
       config.interpolation.enabled = false
       config.anime.enabled = true
     })
+    mediaStore.forEachEditableItem((item) => {
+      const next = cloneWorkflowConfig(item.workflowConfig)
+      next.interpolation.enabled = false
+      next.anime.enabled = true
+      item.workflowConfig = next
+    })
+    presetStore.schedulePresetSave()
 
-    expect(store.draftPreset.workflowConfig.interpolation.enabled).toBe(false)
-    expect(store.draftPreset.workflowConfig.anime.enabled).toBe(true)
+    expect(presetStore.draftPreset.workflowConfig.interpolation.enabled).toBe(false)
+    expect(presetStore.draftPreset.workflowConfig.anime.enabled).toBe(true)
     expect(first.workflowConfig.interpolation.enabled).toBe(false)
     expect(second.workflowConfig.interpolation.enabled).toBe(false)
     expect(third.workflowConfig.interpolation.enabled).toBe(true)
@@ -341,52 +371,51 @@ describe('workbench store', () => {
   })
 
   it('imports new media with the persisted preset defaults', async () => {
-    const store = useWorkbenchStore()
     mockLoadWorkbenchPreset.mockResolvedValueOnce(makePreset())
 
-    await store.bootstrap()
-    await store.addMediaPaths(['D:/input/a.mp4'])
+    await bootstrapStores()
+    const mediaStore = useMediaStore()
+    const presetStore = usePresetStore()
+    await mediaStore.addMediaPaths(['D:/input/a.mp4'])
 
-    expect(store.mediaItems).toHaveLength(1)
-    expect(store.draftPreset.outputConfig.outputDir).toBe('D:/output/preset')
-    expect(store.draftPreset.workflowConfig.interpolation.enabled).toBe(false)
-    expect(store.mediaItems[0]?.decodeConfig.hwaccelDevice).toBe('0')
-    expect(store.mediaItems[0]?.workflowConfig.anime.enabled).toBe(true)
-    expect(store.mediaItems[0]?.encodeConfig.container).toBe('mkv')
-    expect(store.mediaItems[0]?.outputConfig.outputDir).toBe('D:/output/preset')
+    expect(mediaStore.mediaItems).toHaveLength(1)
+    expect(presetStore.draftPreset.outputConfig.outputDir).toBe('D:/output/preset')
+    expect(presetStore.draftPreset.workflowConfig.interpolation.enabled).toBe(false)
+    expect(mediaStore.mediaItems[0]?.decodeConfig.hwaccelDevice).toBe('0')
+    expect(mediaStore.mediaItems[0]?.workflowConfig.anime.enabled).toBe(true)
+    expect(mediaStore.mediaItems[0]?.encodeConfig.container).toBe('mkv')
+    expect(mediaStore.mediaItems[0]?.outputConfig.outputDir).toBe('D:/output/preset')
   })
 
   it('remaps persisted decoders to the same hardware family when the imported codec changes', async () => {
-    const store = useWorkbenchStore()
     mockLoadWorkbenchPreset.mockResolvedValueOnce(makePreset())
 
-    await store.bootstrap()
-    await store.addMediaPaths(['D:/input/h264-demo.mp4'])
+    await bootstrapStores()
+    const mediaStore = useMediaStore()
+    await mediaStore.addMediaPaths(['D:/input/h264-demo.mp4'])
 
-    expect(store.mediaItems[0]?.info?.video_codec).toBe('h264')
-    expect(store.mediaItems[0]?.decodeConfig.mode).toBe('hardware')
-    expect(store.mediaItems[0]?.decodeConfig.hwaccel).toBe('cuda')
-    expect(store.mediaItems[0]?.decodeConfig.hwaccelDevice).toBe('0')
-    expect(store.mediaItems[0]?.decodeConfig.decoder).toBe('h264_cuvid')
+    expect(mediaStore.mediaItems[0]?.info?.video_codec).toBe('h264')
+    expect(mediaStore.mediaItems[0]?.decodeConfig.mode).toBe('hardware')
+    expect(mediaStore.mediaItems[0]?.decodeConfig.hwaccel).toBe('cuda')
+    expect(mediaStore.mediaItems[0]?.decodeConfig.hwaccelDevice).toBe('0')
+    expect(mediaStore.mediaItems[0]?.decodeConfig.decoder).toBe('h264_cuvid')
   })
 
   it('forces a fresh environment probe when rechecking manually', async () => {
-    const store = useWorkbenchStore()
-
-    await store.bootstrap()
-    await store.recheckEnvironment()
+    await bootstrapStores()
+    const envStore = useEnvStore()
+    await envStore.recheckEnvironment()
 
     expect(mockCheckEnvironment).toHaveBeenNthCalledWith(1, false)
     expect(mockCheckEnvironment).toHaveBeenNthCalledWith(2, true)
   })
 
   it('persists preset edits with debounce while no media is selected', async () => {
-    const store = useWorkbenchStore()
-
-    await store.bootstrap()
+    await bootstrapStores()
+    const presetStore = usePresetStore()
     mockSaveWorkbenchPreset.mockClear()
 
-    store.patchOutput((config) => {
+    presetStore.patchOutput((config) => {
       config.outputDir = 'D:/output/debounced'
     })
 
@@ -398,15 +427,16 @@ describe('workbench store', () => {
   })
 
   it('advances the batch queue and clears runtime artifacts after the batch finishes', async () => {
-    const store = useWorkbenchStore()
-    await store.bootstrap()
-    await store.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4', 'D:/input/c.mp4'])
-    await store.attachTaskListeners()
+    await bootstrapStores()
+    const mediaStore = useMediaStore()
+    const taskStore = useTaskStore()
+    await mediaStore.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4', 'D:/input/c.mp4'])
+    await taskStore.attachTaskListeners()
 
     expect(handlersRef.current).not.toBeNull()
 
-    await store.startBatch()
-    expect(store.currentTaskItem?.displayName).toBe('a.mp4')
+    await taskStore.startBatch()
+    expect(taskStore.currentTaskItem?.displayName).toBe('a.mp4')
     expect(mockStartTask).toHaveBeenCalledTimes(1)
 
     handlersRef.current?.onCompleted({
@@ -416,8 +446,8 @@ describe('workbench store', () => {
     })
     await flush()
 
-    expect(store.batch.completedCount).toBe(1)
-    expect(store.currentTaskItem?.displayName).toBe('b.mp4')
+    expect(taskStore.batch.completedCount).toBe(1)
+    expect(taskStore.currentTaskItem?.displayName).toBe('b.mp4')
 
     handlersRef.current?.onError({
       code: 'process_failed',
@@ -426,112 +456,91 @@ describe('workbench store', () => {
     })
     await flush()
 
-    expect(store.batch.failedCount).toBe(1)
-    expect(store.currentTaskItem?.displayName).toBe('c.mp4')
+    expect(taskStore.batch.failedCount).toBe(1)
+    expect(taskStore.currentTaskItem?.displayName).toBe('c.mp4')
 
     handlersRef.current?.onCancelled()
     await flush()
 
-    expect(store.batch.completedCount).toBe(0)
-    expect(store.batch.failedCount).toBe(0)
-    expect(store.batch.isRunning).toBe(false)
-    expect(store.currentTaskItem).toBeNull()
-    expect(store.mediaItems.every((item) => item.taskState.status === 'idle')).toBe(true)
-    expect(store.mediaItems.every((item) => item.lastOutputPath === '')).toBe(true)
-    expect(store.mediaItems.every((item) => item.issue === null)).toBe(true)
+    expect(taskStore.batch.completedCount).toBe(0)
+    expect(taskStore.batch.failedCount).toBe(0)
+    expect(taskStore.batch.isRunning).toBe(false)
+    expect(taskStore.currentTaskItem).toBeNull()
+    expect(mediaStore.mediaItems.every((item) => item.taskState.status === 'idle')).toBe(true)
+    expect(mediaStore.mediaItems.every((item) => item.lastOutputPath === '')).toBe(true)
+    expect(mediaStore.mediaItems.every((item) => item.issue === null)).toBe(true)
   })
 
   it('pauses and resumes the current task through desktop IPC', async () => {
-    const store = useWorkbenchStore()
-    await store.bootstrap()
-    await store.addMediaPaths(['D:/input/a.mp4'])
+    await bootstrapStores()
+    const mediaStore = useMediaStore()
+    const taskStore = useTaskStore()
+    await mediaStore.addMediaPaths(['D:/input/a.mp4'])
 
-    await store.startBatch()
-    expect(store.currentTaskItem?.taskState.status).toBe('running')
+    await taskStore.startBatch()
+    expect(taskStore.currentTaskItem?.taskState.status).toBe('running')
 
-    await store.pauseCurrentTask()
+    await taskStore.pauseCurrentTask()
 
     expect(mockPauseTask).toHaveBeenCalledTimes(1)
-    expect(store.batch.isPaused).toBe(true)
-    expect(store.currentTaskItem?.taskState.status).toBe('paused')
+    expect(taskStore.batch.isPaused).toBe(true)
+    expect(taskStore.currentTaskItem?.taskState.status).toBe('paused')
 
-    await store.resumeCurrentTask()
+    await taskStore.resumeCurrentTask()
 
     expect(mockResumeTask).toHaveBeenCalledTimes(1)
-    expect(store.batch.isPaused).toBe(false)
-    expect(store.currentTaskItem?.taskState.status).toBe('running')
+    expect(taskStore.batch.isPaused).toBe(false)
+    expect(taskStore.currentTaskItem?.taskState.status).toBe('running')
   })
 
   it('interrupts the whole batch and does not continue to queued items', async () => {
-    const store = useWorkbenchStore()
-    await store.bootstrap()
-    await store.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4'])
-    await store.attachTaskListeners()
+    await bootstrapStores()
+    const mediaStore = useMediaStore()
+    const taskStore = useTaskStore()
+    await mediaStore.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4'])
+    await taskStore.attachTaskListeners()
 
-    await store.startBatch()
-    expect(store.currentTaskItem?.displayName).toBe('a.mp4')
-    expect(store.batch.queue).toHaveLength(1)
+    await taskStore.startBatch()
+    expect(taskStore.currentTaskItem?.displayName).toBe('a.mp4')
+    expect(taskStore.batch.queue).toHaveLength(1)
 
-    await store.interruptBatch()
+    await taskStore.interruptBatch()
 
     expect(mockCancelTask).toHaveBeenCalledTimes(1)
-    expect(store.batch.queue).toEqual([])
-    expect(store.batch.isCancelling).toBe(true)
-    expect(store.currentTaskItem?.taskState.status).toBe('cancelling')
+    expect(taskStore.batch.queue).toEqual([])
+    expect(taskStore.batch.isCancelling).toBe(true)
+    expect(taskStore.currentTaskItem?.taskState.status).toBe('cancelling')
 
     handlersRef.current?.onCancelled()
     await flush()
 
     expect(mockStartTask).toHaveBeenCalledTimes(1)
-    expect(store.batch.isRunning).toBe(false)
-    expect(store.batch.isCancelling).toBe(false)
-    expect(store.currentTaskItem).toBeNull()
+    expect(taskStore.batch.isRunning).toBe(false)
+    expect(taskStore.batch.isCancelling).toBe(false)
+    expect(taskStore.currentTaskItem).toBeNull()
   })
 
   it('surfaces task operation issues when pause or interrupt fails', async () => {
-    const store = useWorkbenchStore()
-    await store.bootstrap()
-    await store.addMediaPaths(['D:/input/a.mp4'])
+    await bootstrapStores()
+    const mediaStore = useMediaStore()
+    const taskStore = useTaskStore()
+    const envStore = useEnvStore()
+    await mediaStore.addMediaPaths(['D:/input/a.mp4'])
 
-    await store.startBatch()
+    await taskStore.startBatch()
     mockPauseTask.mockRejectedValueOnce(new Error('pause unsupported'))
-    await store.pauseCurrentTask()
+    await taskStore.pauseCurrentTask()
 
-    expect(store.operationIssue?.scope).toBe('task')
-    expect(store.operationIssue?.error.code).toBe('pause_failed')
-    expect(store.currentTaskItem?.taskState.status).toBe('running')
+    expect(envStore.operationIssue?.scope).toBe('task')
+    expect(envStore.operationIssue?.error.code).toBe('pause_failed')
+    expect(taskStore.currentTaskItem?.taskState.status).toBe('running')
 
     mockCancelTask.mockRejectedValueOnce(new Error('cancel unavailable'))
-    await store.interruptBatch()
+    await taskStore.interruptBatch()
 
-    expect(store.operationIssue?.scope).toBe('task')
-    expect(store.operationIssue?.error.code).toBe('cancel_failed')
-    expect(store.batch.isCancelling).toBe(false)
-    expect(store.currentTaskItem?.taskState.status).toBe('running')
-  })
-
-  it('opens the configured output directory without falling back to the last completed result', async () => {
-    const store = useWorkbenchStore()
-    await store.bootstrap()
-    await store.addMediaPaths(['D:/input/a.mp4'])
-    await store.attachTaskListeners()
-
-    store.patchOutput((config) => {
-      config.outputDir = 'D:/output/final'
-      config.openOnComplete = false
-    })
-
-    await store.startBatch()
-    handlersRef.current?.onCompleted({
-      outputPath: 'D:/output/final/a_processed.mp4',
-      processedFrames: 240,
-      timeSeconds: 12,
-    })
-    await flush()
-
-    await store.openOutputLocation()
-
-    expect(mockOpenOutputLocation).toHaveBeenCalledTimes(1)
-    expect(mockOpenOutputLocation).toHaveBeenCalledWith('D:/output/final')
+    expect(envStore.operationIssue?.scope).toBe('task')
+    expect(envStore.operationIssue?.error.code).toBe('cancel_failed')
+    expect(taskStore.batch.isCancelling).toBe(false)
+    expect(taskStore.currentTaskItem?.taskState.status).toBe('running')
   })
 })

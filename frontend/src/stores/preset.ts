@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import {
   loadWorkbenchPreset as invokeLoadWorkbenchPreset,
   saveWorkbenchPreset as invokeSaveWorkbenchPreset,
+  pickOutputDirectory as invokePickOutputDirectory,
 } from '@/lib/tauri'
 import {
   cloneDecodeConfig,
@@ -15,6 +16,7 @@ import {
   createDefaultWorkbenchPreset,
   getVisibleDecoderProfiles,
   getVisibleEncoderProfiles,
+  normalizeTaskError,
 } from '@/lib/task-mapper'
 import { useEnvStore } from '@/stores/env'
 import type {
@@ -106,21 +108,6 @@ export const usePresetStore = defineStore('preset', () => {
       null
     )
   })
-
-function _normalizeError(error: unknown, code = 'runtime_error'): import('@/types').TaskError {
-  if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
-    const payload = error as { code?: unknown; message?: unknown; details?: Record<string, unknown> | null }
-    return {
-      code: typeof payload.code === 'string' ? payload.code : code,
-      message: typeof payload.message === 'string' ? payload.message : 'Execution failed.',
-      details: payload.details ?? null,
-    }
-  }
-  if (error instanceof Error) {
-    return { code, message: error.message, details: null }
-  }
-  return { code, message: String(error), details: null }
-}
 
   const currentDecoderProfile = computed(() => {
     const visibleProfiles = getVisibleDecoderProfiles(envStore.env.checkResult, '')
@@ -369,10 +356,6 @@ function _normalizeError(error: unknown, code = 'runtime_error'): import('@/type
   }
 
   async function pickOutputDirectory(): Promise<void> {
-    const { pickOutputDirectory: invokePickOutputDirectory } = await import('@/lib/tauri')
-    const { useEnvStore } = await import('@/stores/env')
-    const envStore = useEnvStore()
-
     try {
       const outputDir = await invokePickOutputDirectory()
       envStore.clearOperationIssue('encode')
@@ -383,7 +366,7 @@ function _normalizeError(error: unknown, code = 'runtime_error'): import('@/type
         config.outputDir = outputDir
       })
     } catch (error) {
-      envStore.setOperationIssue('encode', _normalizeError(error, 'pick_output_dir_failed'))
+      envStore.setOperationIssue('encode', normalizeTaskError(error, 'pick_output_dir_failed'))
     }
   }
 
