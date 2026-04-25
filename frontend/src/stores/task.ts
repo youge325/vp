@@ -146,7 +146,7 @@ export const useTaskStore = defineStore('task', () => {
         batch.isRunning = false
         batch.isPaused = false
         batch.isCancelling = false
-        clearBatchRuntimeArtifacts()
+        clearBatchRuntimeArtifacts(true)
         resetBatchCounters()
         batchRuntimeIds.value = []
       }
@@ -164,7 +164,8 @@ export const useTaskStore = defineStore('task', () => {
       batch.completedCount += 1
     } else if (state === 'cancelled') {
       if (item.outputConfig.openOnComplete) {
-        const openPath = item.lastOutputPath || item.outputConfig.outputDir
+        const fallbackDir = envStore.env.checkResult?.resources?.output_dir
+        const openPath = item.lastOutputPath || item.outputConfig.outputDir || (typeof fallbackDir === 'string' ? fallbackDir : '')
         if (openPath) {
           try {
             await openOutputLocation(openPath)
@@ -189,7 +190,7 @@ export const useTaskStore = defineStore('task', () => {
     batch.isRunning = false
     batch.isPaused = false
     batch.isCancelling = false
-    clearBatchRuntimeArtifacts(state === 'cancelled')
+    clearBatchRuntimeArtifacts(true)
     resetBatchCounters()
     batchRuntimeIds.value = []
   }
