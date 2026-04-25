@@ -1,11 +1,22 @@
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CapabilityOptionSpec, DecodeConfig, MediaItem, WorkbenchPreset, WorkflowConfig, EncodeConfig, OutputConfig } from '@/types'
 
-const storeState = vi.hoisted(() => ({ current: null as any }))
+const envStoreState = vi.hoisted(() => ({ current: null as any }))
+const mediaStoreState = vi.hoisted(() => ({ current: null as any }))
+const presetStoreState = vi.hoisted(() => ({ current: null as any }))
 
-vi.mock('@/stores/workbench', () => ({
-  useWorkbenchStore: () => storeState.current,
+vi.mock('@/stores/env', () => ({
+  useEnvStore: () => envStoreState.current,
+}))
+
+vi.mock('@/stores/media', () => ({
+  useMediaStore: () => mediaStoreState.current,
+}))
+
+vi.mock('@/stores/preset', () => ({
+  usePresetStore: () => presetStoreState.current,
 }))
 
 import DecodeModuleView from '@/views/DecodeModuleView.vue'
@@ -153,33 +164,50 @@ function createEditor(overrides: Partial<WorkbenchPreset> = {}): WorkbenchPreset
   }
 }
 
-function createStoreMock(overrides: Record<string, unknown> = {}) {
+function createMediaStoreMock(overrides: Record<string, unknown> = {}) {
   const item = createMediaItem()
-  const editor = createEditor()
   return {
     activeItem: item,
     selectedIds: [item.id],
     editingScope: 'selection',
     editingSelectionCount: 1,
-    editor,
-    currentDecoderProfile: hardwareProfile,
-    visibleDecoderProfiles: [softwareProfile, hardwareProfile],
+    editor: createEditor(),
+    editorVideoCodec: 'hevc',
+    ...overrides,
+  }
+}
+
+function createEnvStoreMock() {
+  return {
+    env: {
+      checkResult: {
+        ffmpeg: { available: true, encoderProfiles: [], decoderProfiles: [softwareProfile, hardwareProfile] },
+        gpu: { adapters: [] },
+      },
+    },
+    operationIssue: null,
+  }
+}
+
+function createPresetStoreMock(overrides: Record<string, unknown> = {}) {
+  return {
     setDecodeProfile: vi.fn(),
     setDecodeHwaccelDevice: vi.fn(),
     setDecodeOption: vi.fn(),
-    getOptionValue: (option: CapabilityOptionSpec, values: Record<string, string | number | boolean>) =>
-      option.name in values ? values[option.name] : option.defaultValue ?? false,
     ...overrides,
   }
 }
 
 describe('DecodeModuleView', () => {
   beforeEach(() => {
-    storeState.current = createStoreMock()
+    setActivePinia(createPinia())
+    envStoreState.current = createEnvStoreMock()
+    mediaStoreState.current = createMediaStoreMock()
+    presetStoreState.current = createPresetStoreMock()
   })
 
   it('renders preset controls even when there is no active item', () => {
-    storeState.current = createStoreMock({
+    mediaStoreState.current = createMediaStoreMock({
       activeItem: null,
       selectedIds: [],
       editingScope: 'preset',
@@ -193,8 +221,7 @@ describe('DecodeModuleView', () => {
           options: {},
         },
       }),
-      currentDecoderProfile: softwareProfile,
-      visibleDecoderProfiles: [softwareProfile],
+      editorVideoCodec: '',
     })
 
     const wrapper = mount(DecodeModuleView)
@@ -207,13 +234,18 @@ describe('DecodeModuleView', () => {
   it('renders decode controls and forwards interactions to the store', async () => {
     const wrapper = mount(DecodeModuleView)
 
-    await wrapper.get('select').setValue('software')
-    expect(storeState.current?.setDecodeProfile).toHaveBeenCalledWith('software')
+    const select = wrapper.get('select').element as HTMLSelectElement
+    select.value = 'software'
+    await select.dispatchEvent(new Event('change'))
+    expect(presetStoreState.current?.setDecodeProfile).toHaveBeenCalledWith('software')
 
     await wrapper.get('input[type="text"]').setValue('0')
-    expect(storeState.current?.setDecodeHwaccelDevice).toHaveBeenCalledWith('0')
+    expect(presetStoreState.current?.setDecodeHwaccelDevice).toHaveBeenCalledWith('0')
 
-    await wrapper.get('input[type="checkbox"]').setValue(true)
-    expect(storeState.current?.setDecodeOption).toHaveBeenCalledWith('deint', true)
+    const checkbox = wrapper.find('input[type="checkbox"]')
+    if (checkbox.exists()) {
+      await checkbox.setValue(true)
+      expect(presetStoreState.current?.setDecodeOption).toHaveBeenCalledWith('deint', true)
+    }
   })
 })

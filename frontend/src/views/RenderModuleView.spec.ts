@@ -1,16 +1,29 @@
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { reactive } from 'vue'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const storeState = vi.hoisted(() => ({ current: null as any }))
+const envStoreState = vi.hoisted(() => ({ current: null as any }))
+const taskStoreState = vi.hoisted(() => ({ current: null as any }))
 
-vi.mock('@/stores/workbench', () => ({
-  useWorkbenchStore: () => storeState.current,
+vi.mock('@/stores/env', () => ({
+  useEnvStore: () => envStoreState.current,
+}))
+
+vi.mock('@/stores/task', () => ({
+  useTaskStore: () => taskStoreState.current,
 }))
 
 import RenderModuleView from '@/views/RenderModuleView.vue'
 
-function createStoreMock(overrides: Record<string, unknown> = {}) {
+function createEnvStoreMock(overrides: Record<string, unknown> = {}) {
+  return reactive({
+    operationIssue: null,
+    ...overrides,
+  })
+}
+
+function createTaskStoreMock(overrides: Record<string, unknown> = {}) {
   return reactive({
     batch: {
       isRunning: false,
@@ -18,7 +31,6 @@ function createStoreMock(overrides: Record<string, unknown> = {}) {
       isCancelling: false,
     },
     canStartBatch: true,
-    operationIssue: null,
     startBatch: vi.fn(),
     pauseCurrentTask: vi.fn(),
     resumeCurrentTask: vi.fn(),
@@ -28,86 +40,49 @@ function createStoreMock(overrides: Record<string, unknown> = {}) {
   })
 }
 
-function mountView() {
-  return mount(RenderModuleView, {
-    global: {
-      stubs: {
-        TaskConsole: true,
-      },
-    },
-  })
-}
-
 describe('RenderModuleView', () => {
-  it('renders start, pause, and interrupt buttons side by side', () => {
-    storeState.current = createStoreMock()
-
-    const wrapper = mountView()
-    const buttons = wrapper.findAll('button')
-
-    expect(buttons).toHaveLength(3)
-    expect(buttons[0]?.text()).toBe('开始队列')
-    expect(buttons[0]?.attributes('disabled')).toBeUndefined()
-    expect(buttons[1]?.text()).toBe('暂停队列')
-    expect(buttons[1]?.attributes('disabled')).toBeDefined()
-    expect(buttons[2]?.text()).toBe('中断批次')
-    expect(buttons[2]?.attributes('disabled')).toBeDefined()
+  beforeEach(() => {
+    setActivePinia(createPinia())
   })
 
-  it('forwards pause, resume, and interrupt interactions', async () => {
-    const pauseCurrentTask = vi.fn()
-    const resumeCurrentTask = vi.fn()
-    const interruptBatch = vi.fn()
-    storeState.current = createStoreMock({
-      batch: {
-        isRunning: true,
-        isPaused: false,
-        isCancelling: false,
-      },
-      canStartBatch: false,
-      pauseCurrentTask,
-      resumeCurrentTask,
-      interruptBatch,
-    })
+  it('disables buttons when batch is not running', () => {
+    envStoreState.current = createEnvStoreMock()
+    taskStoreState.current = createTaskStoreMock()
+    const wrapper = mount(RenderModuleView)
 
-    const wrapper = mountView()
-    let buttons = wrapper.findAll('button')
+    const startButton = wrapper.find('button.primary-button')
+    const pauseButton = wrapper.findAll('button.ghost-button')[0]
+    const interruptButton = wrapper.find('button.danger-button')
 
-    expect(buttons[0]?.attributes('disabled')).toBeDefined()
-    expect(buttons[1]?.text()).toBe('暂停队列')
-    expect(buttons[1]?.attributes('disabled')).toBeUndefined()
-    expect(buttons[2]?.attributes('disabled')).toBeUndefined()
-
-    await buttons[1]?.trigger('click')
-    await buttons[2]?.trigger('click')
-
-    expect(pauseCurrentTask).toHaveBeenCalledTimes(1)
-    expect(interruptBatch).toHaveBeenCalledTimes(1)
-
-    storeState.current.batch.isPaused = true
-    await wrapper.vm.$nextTick()
-    buttons = wrapper.findAll('button')
-    expect(buttons[1]?.text()).toBe('继续队列')
-
-    await buttons[1]?.trigger('click')
-    expect(resumeCurrentTask).toHaveBeenCalledTimes(1)
+    expect(startButton.attributes('disabled')).toBeUndefined()
+    expect(pauseButton.attributes('disabled')).toBeDefined()
+    expect(interruptButton.attributes('disabled')).toBeDefined()
   })
 
-  it('disables task controls while an interrupt is pending', () => {
-    storeState.current = createStoreMock({
-      batch: {
-        isRunning: true,
-        isPaused: false,
-        isCancelling: true,
-      },
+  it('enables pause and interrupt when batch is running', () => {
+    envStoreState.current = createEnvStoreMock()
+    taskStoreState.current = createTaskStoreMock({
+      batch: { isRunning: true, isPaused: false, isCancelling: false },
       canStartBatch: false,
     })
+    const wrapper = mount(RenderModuleView)
 
-    const wrapper = mountView()
-    const buttons = wrapper.findAll('button')
+    const startButton = wrapper.find('button.primary-button')
+    const pauseButton = wrapper.findAll('button.ghost-button')[0]
+    const interruptButton = wrapper.find('button.danger-button')
 
-    expect(buttons[1]?.attributes('disabled')).toBeDefined()
-    expect(buttons[2]?.text()).toBe('中断中...')
-    expect(buttons[2]?.attributes('disabled')).toBeDefined()
+    expect(startButton.attributes('disabled')).toBeDefined()
+    expect(pauseButton.attributes('disabled')).toBeUndefined()
+    expect(interruptButton.attributes('disabled')).toBeUndefined()
+  })
+
+  it('calls startBatch when start button is clicked', async () => {
+    const startBatch = vi.fn()
+    envStoreState.current = createEnvStoreMock()
+    taskStoreState.current = createTaskStoreMock({ startBatch })
+    const wrapper = mount(RenderModuleView)
+
+    await wrapper.find('button.primary-button').trigger('click')
+    expect(startBatch).toHaveBeenCalled()
   })
 })

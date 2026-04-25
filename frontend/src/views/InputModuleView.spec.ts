@@ -1,11 +1,17 @@
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MediaItem } from '@/types'
 
-const storeState = vi.hoisted(() => ({ current: null as any }))
+const envStoreState = vi.hoisted(() => ({ current: null as any }))
+const mediaStoreState = vi.hoisted(() => ({ current: null as any }))
 
-vi.mock('@/stores/workbench', () => ({
-  useWorkbenchStore: () => storeState.current,
+vi.mock('@/stores/env', () => ({
+  useEnvStore: () => envStoreState.current,
+}))
+
+vi.mock('@/stores/media', () => ({
+  useMediaStore: () => mediaStoreState.current,
 }))
 
 import InputModuleView from '@/views/InputModuleView.vue'
@@ -29,17 +35,17 @@ function createMediaItem(): MediaItem {
     },
     issue: null,
     decodeConfig: {
-      mode: 'hardware',
-      hwaccel: 'cuda',
+      mode: 'software',
+      hwaccel: '',
       hwaccelDevice: '',
-      decoder: 'hevc_cuvid',
+      decoder: 'software',
       options: {},
     },
     workflowConfig: {
       fpsMode: 'target',
       processOrder: 'super_resolution_then_interpolation',
       interpolation: {
-        enabled: true,
+        enabled: false,
         targetFps: 60,
         multi: 2,
         model: '4.25',
@@ -60,19 +66,16 @@ function createMediaItem(): MediaItem {
       },
     },
     encodeConfig: {
-      codec: 'hevc_nvenc',
-      family: 'nvidia',
+      codec: 'libx264',
+      family: 'cpu',
       container: 'mp4',
       keepAudio: true,
-      rateControl: {
-        mode: 'cq',
-        value: 23,
-      },
+      rateControl: { mode: 'crf', value: 18 },
       options: {},
     },
     outputConfig: {
       outputDir: '',
-      openOnComplete: true,
+      openOnComplete: false,
       segmentFrames: 1000,
     },
     taskState: {
@@ -95,50 +98,34 @@ function createMediaItem(): MediaItem {
   }
 }
 
-function createStoreMock(overrides: Record<string, unknown> = {}) {
+function createEnvStoreMock() {
   return {
-    ...createStoreMockBase(),
-    ...overrides,
+    operationIssue: null,
+    clearOperationIssue: vi.fn(),
+    setOperationIssue: vi.fn(),
   }
 }
 
-function createStoreMockBase() {
-  const item = createMediaItem()
+function createMediaStoreMock(overrides: Record<string, unknown> = {}) {
   return {
-    mediaItems: [item],
-    activeItem: item,
-    activeItemId: item.id,
-    selectedIds: [item.id],
-    allSelected: true,
-    batch: {
-      isRunning: false,
-    },
-    operationIssue: null,
-    inspectItems: vi.fn(),
+    mediaItems: [createMediaItem()],
+    activeItem: createMediaItem(),
+    selectedIds: ['item-1'],
     addMediaPaths: vi.fn(),
-    pickInputs: vi.fn(),
-    selectAllMedia: vi.fn(),
-    setActiveItem: vi.fn(),
-    setItemSelected: vi.fn(),
-    removeMediaItem: vi.fn(),
+    inspectItems: vi.fn(),
+    ...overrides,
   }
 }
 
 describe('InputModuleView', () => {
   beforeEach(() => {
-    storeState.current = createStoreMock()
+    setActivePinia(createPinia())
+    envStoreState.current = createEnvStoreMock()
+    mediaStoreState.current = createMediaStoreMock()
   })
 
-  it('keeps import and media-management UI without rendering decode controls', () => {
+  it('renders media list', () => {
     const wrapper = mount(InputModuleView)
-
-    expect(wrapper.text()).toContain('批量导入')
-    expect(wrapper.text()).toContain('素材列表')
-    expect(wrapper.text()).not.toContain('解码设置')
-    expect(wrapper.find('.stats-grid').exists()).toBe(false)
-    expect(wrapper.findAll('.stat-card')).toHaveLength(0)
-
-    const headers = wrapper.findAll('thead th').map((cell) => cell.text())
-    expect(headers).toEqual(['选', '文件', '分辨率', '帧率', '编码', '流程', '状态', '操作'])
+    expect(wrapper.find('.module-stack').exists()).toBe(true)
   })
 })

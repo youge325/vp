@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useWorkbenchStore } from '@/stores/workbench'
+import { useEnvStore } from '@/stores/env'
+import { useMediaStore } from '@/stores/media'
 
-const store = useWorkbenchStore()
+const envStore = useEnvStore()
+const mediaStore = useMediaStore()
 
 const overviewStats = computed(() => [
-  { label: '运行时', value: store.env.checkResult?.runtime?.mode ?? '--' },
-  { label: 'FFmpeg', value: store.env.checkResult?.ffmpeg?.available ? 'Ready' : 'Missing' },
-  { label: '已探测编码器', value: `${store.visibleEncoderProfiles.length}` },
-  { label: '已导入素材', value: `${store.mediaItems.length}` },
+  { label: '运行时', value: envStore.env.checkResult?.runtime?.mode ?? '--' },
+  { label: 'FFmpeg', value: envStore.env.checkResult?.ffmpeg?.available ? 'Ready' : 'Missing' },
+  { label: '已探测编码器', value: `${envStore.visibleEncoderProfiles.length}` },
+  { label: '已导入素材', value: `${mediaStore.mediaItems.length}` },
 ])
 
 const familyCards = computed(() => {
-  const profiles = store.visibleEncoderProfiles
+  const profiles = envStore.visibleEncoderProfiles
   return [
     {
       title: 'CPU',
@@ -31,10 +33,10 @@ const familyCards = computed(() => {
 })
 
 const probeSourceLabel = computed(() => {
-  if (store.env.checkSource === 'cache') {
+  if (envStore.env.checkSource === 'cache') {
     return '缓存'
   }
-  if (store.env.checkSource === 'probe') {
+  if (envStore.env.checkSource === 'probe') {
     return '实时探测'
   }
   return '--'
@@ -51,14 +53,14 @@ const probeSourceLabel = computed(() => {
         </div>
 
         <div class="panel-actions">
-          <span v-if="store.env.isBootstrapping || store.env.isChecking" class="panel-badge">探测中</span>
-          <button v-else class="ghost-button" @click="store.recheckEnvironment()">重新探测</button>
+          <span v-if="envStore.env.isBootstrapping || envStore.env.isChecking" class="panel-badge">探测中</span>
+          <button v-else class="ghost-button" @click="envStore.recheckEnvironment()">重新探测</button>
         </div>
       </div>
 
-      <div v-if="store.env.issue" class="info-banner info-banner-danger">
+      <div v-if="envStore.env.issue" class="info-banner info-banner-danger">
         <strong>环境探测失败</strong>
-        <p>{{ store.env.issue.message }}</p>
+        <p>{{ envStore.env.issue.message }}</p>
       </div>
 
       <div class="stats-grid stats-grid-4">
@@ -70,9 +72,9 @@ const probeSourceLabel = computed(() => {
 
       <div class="chip-row">
         <span class="tag">来源: {{ probeSourceLabel }}</span>
-        <span class="tag">硬件加速: {{ store.env.checkResult?.ffmpeg?.hwaccels?.join(', ') || '--' }}</span>
-        <span class="tag">GPU: {{ store.env.checkResult?.gpu?.devices?.join(' / ') || 'CPU only' }}</span>
-        <span class="tag">最近真实探测: {{ store.env.lastProbeAt ? new Date(store.env.lastProbeAt).toLocaleString() : '--' }}</span>
+        <span class="tag">硬件加速: {{ envStore.env.checkResult?.ffmpeg?.hwaccels?.join(', ') || '--' }}</span>
+        <span class="tag">GPU: {{ envStore.env.checkResult?.gpu?.devices?.join(' / ') || 'CPU only' }}</span>
+        <span class="tag">最近真实探测: {{ envStore.env.lastProbeAt ? new Date(envStore.env.lastProbeAt).toLocaleString() : '--' }}</span>
       </div>
     </section>
 

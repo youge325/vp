@@ -839,11 +839,14 @@ def _initialize_algorithms(stage_plan: StagePlan, tensor_backend_name: str) -> d
         algorithms["single"].append((step, backend, algorithm))
 
     if stage_plan.interpolation_step is not None:
-        algorithms["interpolation"] = AlgorithmFactory.create(
+        backend = get_tensor_backend(tensor_backend_name)
+        algorithm = AlgorithmFactory.create(
             algorithm_type=stage_plan.interpolation_step["algorithm_type"],
+            tensor_backend=backend,
             tensor_backend_name=tensor_backend_name,
             **stage_plan.interpolation_step["algorithm_kwargs"],
         )
+        algorithms["interpolation"] = (backend, algorithm)
 
     for step in stage_plan.post_steps:
         backend = get_tensor_backend(tensor_backend_name)
@@ -942,7 +945,7 @@ def _process_interpolated_stream(
     pre_count = len(stage_plan.pre_steps)
     interpolation_callback = progress_callbacks[pre_count]
     post_callbacks = progress_callbacks[pre_count + 1 :]
-    interpolation_algorithm = algorithms["interpolation"]
+    interpolation_backend, interpolation_algorithm = algorithms["interpolation"]
     multi = int(interpolation_step["algorithm_kwargs"].get("multi") or settings.RIFE_DEFAULT_MULTI)
 
     previous: tuple[int, np.ndarray] | None = None
@@ -973,12 +976,12 @@ def _process_interpolated_stream(
         interpolation_callback(prev_source_index + 1, total_pairs)
 
         group_frames = [prev_frame]
-        prev_tensor = _numpy_to_torch(prev_frame)
-        current_tensor = _numpy_to_torch(current_frame)
+        prev_tensor = interpolation_backend.numpy_to_tensor(prev_frame)
+        current_tensor = interpolation_backend.numpy_to_tensor(current_frame)
         for mid_index in range(1, multi):
             timestep = mid_index / multi
             mid_tensor = interpolation_algorithm.process_frame_pair(prev_tensor, current_tensor, timestep=timestep)
-            group_frames.append(_torch_to_numpy(mid_tensor))
+            group_frames.append(interpolation_backend.tensor_to_numpy(mid_tensor))
 
         for frame in group_frames:
             processed_output = frame
@@ -1023,16 +1026,6 @@ def _run_single_frame_algorithm(backend: Any, algorithm: Any, frame: np.ndarray)
     tensor = backend.numpy_to_tensor(frame)
     processed = algorithm.process_frame(tensor)
     return backend.tensor_to_numpy(processed)
-
-
-def _numpy_to_torch(frame: np.ndarray):
-    import torch
-
-    return torch.from_numpy(np.transpose(frame, (2, 0, 1)).copy()).unsqueeze(0).float() / 255.0
-
-
-def _torch_to_numpy(tensor: Any) -> np.ndarray:
-    return (tensor[0] * 255.0).byte().cpu().numpy().transpose(1, 2, 0)
 
 
 def _queue_put(target_queue: queue.Queue[Any], item: Any, stop_event: threading.Event) -> None:

@@ -33,7 +33,7 @@ class _IdentityAlgorithm:
 class _MidpointInterpolationAlgorithm:
     def process_frame_pair(self, frame0, frame1, timestep=0.5, **kwargs):
         del timestep, kwargs
-        return ((frame0 + frame1) / 2).clamp(0.0, 1.0)
+        return ((frame0.astype(np.float32) + frame1.astype(np.float32)) / 2).astype(np.uint8)
 
 
 class _FakeReader:

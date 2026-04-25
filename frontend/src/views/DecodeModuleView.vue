@@ -1,14 +1,26 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useWorkbenchStore } from '@/stores/workbench'
+import { getVisibleDecoderProfiles } from '@/lib/task-mapper'
+import { useEnvStore } from '@/stores/env'
+import { useMediaStore } from '@/stores/media'
+import { usePresetStore } from '@/stores/preset'
 import type { CapabilityOptionSpec, CapabilityValue } from '@/types'
 
-const store = useWorkbenchStore()
+const envStore = useEnvStore()
+const mediaStore = useMediaStore()
+const presetStore = usePresetStore()
 
-const decoderOptions = computed(() => store.currentDecoderProfile?.options ?? [])
-const isPresetMode = computed(() => store.editingScope === 'preset')
+const visibleDecoderProfiles = computed(() =>
+  getVisibleDecoderProfiles(envStore.env.checkResult, mediaStore.editorVideoCodec),
+)
+const currentDecoderProfile = computed(() =>
+  visibleDecoderProfiles.value.find((profile) => profile.name === mediaStore.editor.decodeConfig.decoder) ?? null,
+)
+
+const decoderOptions = computed(() => currentDecoderProfile.value?.options ?? [])
+const isPresetMode = computed(() => mediaStore.editingScope === 'preset')
 const targetLabel = computed(() =>
-  isPresetMode.value ? '默认预设（后续导入会继承）' : `作用于 ${store.editingSelectionCount} 个文件`,
+  isPresetMode.value ? '默认预设（后续导入会继承）' : `作用于 ${mediaStore.editingSelectionCount} 个文件`,
 )
 const caption = computed(() =>
   isPresetMode.value
@@ -43,10 +55,10 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
         <label class="field">
           <span>解码方案</span>
           <select
-            :value="store.currentDecoderProfile?.name ?? 'software'"
-            @change="store.setDecodeProfile(($event.target as HTMLSelectElement).value)"
+            :value="currentDecoderProfile?.name ?? 'software'"
+            @change="presetStore.setDecodeProfile(($event.target as HTMLSelectElement).value)"
           >
-            <option v-for="profile in store.visibleDecoderProfiles" :key="profile.name" :value="profile.name">
+            <option v-for="profile in visibleDecoderProfiles" :key="profile.name" :value="profile.name">
               {{ profile.label }}
             </option>
           </select>
@@ -55,18 +67,18 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
         <label class="field">
           <span>硬件设备</span>
           <input
-            :value="store.editor.decodeConfig.hwaccelDevice"
+            :value="mediaStore.editor.decodeConfig.hwaccelDevice"
             type="text"
             placeholder="留空则使用默认设备"
-            @input="store.setDecodeHwaccelDevice(($event.target as HTMLInputElement).value)"
+            @input="presetStore.setDecodeHwaccelDevice(($event.target as HTMLInputElement).value)"
           />
         </label>
       </div>
 
       <div class="chip-row">
-        <span class="tag">模式: {{ store.editor.decodeConfig.mode }}</span>
-        <span class="tag">hwaccel: {{ store.editor.decodeConfig.hwaccel || 'software' }}</span>
-        <span class="tag">decoder: {{ store.editor.decodeConfig.decoder || 'software' }}</span>
+        <span class="tag">模式: {{ mediaStore.editor.decodeConfig.mode }}</span>
+        <span class="tag">hwaccel: {{ mediaStore.editor.decodeConfig.hwaccel || 'software' }}</span>
+        <span class="tag">decoder: {{ mediaStore.editor.decodeConfig.decoder || 'software' }}</span>
       </div>
 
       <div v-if="decoderOptions.length > 0" class="field-grid field-grid-2">
@@ -75,17 +87,17 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
 
           <label v-if="option.type === 'boolean'" class="toggle-chip">
             <input
-              :checked="Boolean(store.getOptionValue(option, store.editor.decodeConfig.options))"
+              :checked="Boolean(presetStore.getOptionValue(option, mediaStore.editor.decodeConfig.options))"
               type="checkbox"
-              @change="store.setDecodeOption(option.name, coerceOptionValue(option, $event))"
+              @change="presetStore.setDecodeOption(option.name, coerceOptionValue(option, $event))"
             />
             <span>启用</span>
           </label>
 
           <select
             v-else-if="option.type === 'choice'"
-            :value="String(store.getOptionValue(option, store.editor.decodeConfig.options))"
-            @change="store.setDecodeOption(option.name, coerceOptionValue(option, $event))"
+            :value="String(presetStore.getOptionValue(option, mediaStore.editor.decodeConfig.options))"
+            @change="presetStore.setDecodeOption(option.name, coerceOptionValue(option, $event))"
           >
             <option
               v-for="choice in option.choices"
@@ -98,18 +110,18 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
 
           <input
             v-else-if="option.type === 'number'"
-            :value="Number(store.getOptionValue(option, store.editor.decodeConfig.options))"
+            :value="Number(presetStore.getOptionValue(option, mediaStore.editor.decodeConfig.options))"
             type="number"
             :min="option.min ?? undefined"
             :max="option.max ?? undefined"
-            @input="store.setDecodeOption(option.name, coerceOptionValue(option, $event))"
+            @input="presetStore.setDecodeOption(option.name, coerceOptionValue(option, $event))"
           />
 
           <input
             v-else
-            :value="String(store.getOptionValue(option, store.editor.decodeConfig.options))"
+            :value="String(presetStore.getOptionValue(option, mediaStore.editor.decodeConfig.options))"
             type="text"
-            @input="store.setDecodeOption(option.name, coerceOptionValue(option, $event))"
+            @input="presetStore.setDecodeOption(option.name, coerceOptionValue(option, $event))"
           />
         </label>
       </div>

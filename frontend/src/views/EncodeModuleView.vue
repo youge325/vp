@@ -1,18 +1,28 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { CONTAINER_OPTIONS } from '@/lib/workflow'
-import { useWorkbenchStore } from '@/stores/workbench'
+import { getVisibleEncoderProfiles } from '@/lib/task-mapper'
+import { useEnvStore } from '@/stores/env'
+import { useMediaStore } from '@/stores/media'
+import { usePresetStore } from '@/stores/preset'
 import type { CapabilityOptionSpec, CapabilityValue, RateControlMode } from '@/types'
 
-const store = useWorkbenchStore()
+const envStore = useEnvStore()
+const mediaStore = useMediaStore()
+const presetStore = usePresetStore()
 
-const encoderOptions = computed(() => store.currentEncoderProfile?.options ?? [])
-const encodeOperationIssue = computed(() =>
-  store.operationIssue?.scope === 'encode' ? store.operationIssue.error : null,
+const visibleEncoderProfiles = computed(() => getVisibleEncoderProfiles(envStore.env.checkResult))
+const currentEncoderProfile = computed(() =>
+  visibleEncoderProfiles.value.find((profile) => profile.name === mediaStore.editor.encodeConfig.codec) ?? null,
 )
-const isPresetMode = computed(() => store.editingScope === 'preset')
+
+const encoderOptions = computed(() => currentEncoderProfile.value?.options ?? [])
+const encodeOperationIssue = computed(() =>
+  envStore.operationIssue?.scope === 'encode' ? envStore.operationIssue.error : null,
+)
+const isPresetMode = computed(() => mediaStore.editingScope === 'preset')
 const targetLabel = computed(() =>
-  isPresetMode.value ? '默认预设（后续导入会继承）' : `作用于 ${store.editingSelectionCount} 个文件`,
+  isPresetMode.value ? '默认预设（后续导入会继承）' : `作用于 ${mediaStore.editingSelectionCount} 个文件`,
 )
 const caption = computed(() =>
   isPresetMode.value
@@ -33,43 +43,43 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
 
 function updateContainer(event: Event): void {
   const value = (event.target as HTMLSelectElement).value
-  store.patchEncode((config) => {
+  presetStore.patchEncode((config) => {
     config.container = value
   })
 }
 
 function updateKeepAudio(event: Event): void {
   const value = (event.target as HTMLInputElement).checked
-  store.patchEncode((config) => {
+  presetStore.patchEncode((config) => {
     config.keepAudio = value
   })
 }
 
 function updateOpenOnComplete(event: Event): void {
   const value = (event.target as HTMLInputElement).checked
-  store.patchOutput((config) => {
+  presetStore.patchOutput((config) => {
     config.openOnComplete = value
   })
 }
 
 function updateRateControlMode(event: Event): void {
-  store.setEncodeRateControlMode((event.target as HTMLSelectElement).value as RateControlMode)
+  presetStore.setEncodeRateControlMode((event.target as HTMLSelectElement).value as RateControlMode)
 }
 
 function updateRateControlValue(event: Event): void {
-  store.setEncodeRateControlValue(Number((event.target as HTMLInputElement).value))
+  presetStore.setEncodeRateControlValue(Number((event.target as HTMLInputElement).value))
 }
 
 function updateOutputDir(event: Event): void {
   const value = (event.target as HTMLInputElement).value
-  store.patchOutput((config) => {
+  presetStore.patchOutput((config) => {
     config.outputDir = value
   })
 }
 
 function updateSegmentFrames(event: Event): void {
   const value = Number((event.target as HTMLInputElement).value)
-  store.patchOutput((config) => {
+  presetStore.patchOutput((config) => {
     config.segmentFrames = Number.isFinite(value) && value > 0 ? Math.round(value) : 1000
   })
 }
@@ -86,7 +96,7 @@ function updateSegmentFrames(event: Event): void {
 
         <div class="panel-actions">
           <span class="panel-badge">{{ targetLabel }}</span>
-          <button class="ghost-button" @click="store.pickOutputDirectory()">选择输出目录</button>
+          <button class="ghost-button" @click="presetStore.pickOutputDirectory()">选择输出目录</button>
         </div>
       </div>
 
@@ -108,7 +118,7 @@ function updateSegmentFrames(event: Event): void {
         <label class="field field-span-2">
           <span>输出目录</span>
           <input
-            :value="store.editor.outputConfig.outputDir"
+            :value="mediaStore.editor.outputConfig.outputDir"
             type="text"
             placeholder="留空则使用默认输出目录"
             @input="updateOutputDir"
@@ -117,7 +127,7 @@ function updateSegmentFrames(event: Event): void {
 
         <label class="field">
           <span>容器</span>
-          <select :value="store.editor.encodeConfig.container" @change="updateContainer">
+          <select :value="mediaStore.editor.encodeConfig.container" @change="updateContainer">
             <option v-for="container in CONTAINER_OPTIONS" :key="container" :value="container">
               {{ container.toUpperCase() }}
             </option>
@@ -127,7 +137,7 @@ function updateSegmentFrames(event: Event): void {
         <label class="field">
           <span>分段帧数</span>
           <input
-            :value="Number(store.editor.outputConfig.segmentFrames)"
+            :value="Number(mediaStore.editor.outputConfig.segmentFrames)"
             type="number"
             min="1"
             step="1"
@@ -138,10 +148,10 @@ function updateSegmentFrames(event: Event): void {
         <label class="field">
           <span>编码器</span>
           <select
-            :value="store.editor.encodeConfig.codec"
-            @change="store.setEncodeProfile(($event.target as HTMLSelectElement).value)"
+            :value="mediaStore.editor.encodeConfig.codec"
+            @change="presetStore.setEncodeProfile(($event.target as HTMLSelectElement).value)"
           >
-            <option v-for="profile in store.visibleEncoderProfiles" :key="profile.name" :value="profile.name">
+            <option v-for="profile in visibleEncoderProfiles" :key="profile.name" :value="profile.name">
               {{ profile.label }}
             </option>
           </select>
@@ -149,7 +159,7 @@ function updateSegmentFrames(event: Event): void {
 
         <label class="field">
           <span>码率控制模式</span>
-          <select :value="store.editor.encodeConfig.rateControl.mode" @change="updateRateControlMode">
+          <select :value="mediaStore.editor.encodeConfig.rateControl.mode" @change="updateRateControlMode">
             <option value="crf">CRF</option>
             <option value="cq">CQ</option>
             <option value="qp">QP</option>
@@ -160,7 +170,7 @@ function updateSegmentFrames(event: Event): void {
         <label class="field">
           <span>码率控制值</span>
           <input
-            :value="Number(store.editor.encodeConfig.rateControl.value)"
+            :value="Number(mediaStore.editor.encodeConfig.rateControl.value)"
             type="number"
             min="0"
             @input="updateRateControlValue"
@@ -170,7 +180,7 @@ function updateSegmentFrames(event: Event): void {
         <label class="field toggle-field">
           <span>保留音频</span>
           <label class="toggle-chip">
-            <input :checked="store.editor.encodeConfig.keepAudio" type="checkbox" @change="updateKeepAudio" />
+            <input :checked="mediaStore.editor.encodeConfig.keepAudio" type="checkbox" @change="updateKeepAudio" />
             <span>Keep Audio</span>
           </label>
         </label>
@@ -178,16 +188,16 @@ function updateSegmentFrames(event: Event): void {
         <label class="field toggle-field">
           <span>完成后打开目录</span>
           <label class="toggle-chip">
-            <input :checked="store.editor.outputConfig.openOnComplete" type="checkbox" @change="updateOpenOnComplete" />
+            <input :checked="mediaStore.editor.outputConfig.openOnComplete" type="checkbox" @change="updateOpenOnComplete" />
             <span>Open Folder</span>
           </label>
         </label>
       </div>
 
       <div class="chip-row">
-        <span class="tag">Family: {{ store.editor.encodeConfig.family }}</span>
-        <span class="tag">Codec: {{ store.editor.encodeConfig.codec }}</span>
-        <span class="tag">Container: {{ store.editor.encodeConfig.container.toUpperCase() }}</span>
+        <span class="tag">Family: {{ mediaStore.editor.encodeConfig.family }}</span>
+        <span class="tag">Codec: {{ mediaStore.editor.encodeConfig.codec }}</span>
+        <span class="tag">Container: {{ mediaStore.editor.encodeConfig.container.toUpperCase() }}</span>
       </div>
     </section>
 
@@ -205,17 +215,17 @@ function updateSegmentFrames(event: Event): void {
 
           <label v-if="option.type === 'boolean'" class="toggle-chip">
             <input
-              :checked="Boolean(store.getOptionValue(option, store.editor.encodeConfig.options))"
+              :checked="Boolean(presetStore.getOptionValue(option, mediaStore.editor.encodeConfig.options))"
               type="checkbox"
-              @change="store.setEncodeOption(option.name, coerceOptionValue(option, $event))"
+              @change="presetStore.setEncodeOption(option.name, coerceOptionValue(option, $event))"
             />
             <span>启用</span>
           </label>
 
           <select
             v-else-if="option.type === 'choice'"
-            :value="String(store.getOptionValue(option, store.editor.encodeConfig.options))"
-            @change="store.setEncodeOption(option.name, coerceOptionValue(option, $event))"
+            :value="String(presetStore.getOptionValue(option, mediaStore.editor.encodeConfig.options))"
+            @change="presetStore.setEncodeOption(option.name, coerceOptionValue(option, $event))"
           >
             <option
               v-for="choice in option.choices"
@@ -228,18 +238,18 @@ function updateSegmentFrames(event: Event): void {
 
           <input
             v-else-if="option.type === 'number'"
-            :value="Number(store.getOptionValue(option, store.editor.encodeConfig.options))"
+            :value="Number(presetStore.getOptionValue(option, mediaStore.editor.encodeConfig.options))"
             type="number"
             :min="option.min ?? undefined"
             :max="option.max ?? undefined"
-            @input="store.setEncodeOption(option.name, coerceOptionValue(option, $event))"
+            @input="presetStore.setEncodeOption(option.name, coerceOptionValue(option, $event))"
           />
 
           <input
             v-else
-            :value="String(store.getOptionValue(option, store.editor.encodeConfig.options))"
+            :value="String(presetStore.getOptionValue(option, mediaStore.editor.encodeConfig.options))"
             type="text"
-            @input="store.setEncodeOption(option.name, coerceOptionValue(option, $event))"
+            @input="presetStore.setEncodeOption(option.name, coerceOptionValue(option, $event))"
           />
         </label>
       </div>

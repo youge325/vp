@@ -127,15 +127,38 @@ class FrameInterpolationAlgorithm(IAlgorithm):
         使用 RIFE 模型对帧对进行插值，生成中间帧。
 
         参数:
-            frame0: 前一帧 Tensor，形状 (1, 3, H, W)，值域 [0, 1]
-            frame1: 后一帧 Tensor，形状 (1, 3, H, W)，值域 [0, 1]
+            frame0: 前一帧 Tensor（由当前 tensor_backend 转换）
+            frame1: 后一帧 Tensor（由当前 tensor_backend 转换）
             timestep: 插值时间步 (0.0=frame0, 1.0=frame1)
 
         返回:
-            中间帧 Tensor，形状 (1, 3, H, W)，值域 [0, 1]
+            中间帧 Tensor（由当前 tensor_backend 转换）
         """
         solver = self._ensure_solver()
-        return solver.interpolate(frame0, frame1, timestep=timestep)
+
+        # PyTorch backend: 直接传递 torch tensor（零开销）
+        if self._tensor_backend is not None and self._tensor_backend.get_name() == "pytorch":
+            return solver.interpolate(frame0, frame1, timestep=timestep)
+
+        # 非 PyTorch backend: 做 numpy 桥接（RIFE 内部仅支持 PyTorch）
+        import numpy as np
+        import torch
+
+        np0 = frame0 if self._tensor_backend is None else self._tensor_backend.tensor_to_numpy(frame0)
+        np1 = frame1 if self._tensor_backend is None else self._tensor_backend.tensor_to_numpy(frame1)
+
+        t0 = torch.from_numpy(np.transpose(np0, (2, 0, 1)).copy()).unsqueeze(0).float() / 255.0
+        t1 = torch.from_numpy(np.transpose(np1, (2, 0, 1)).copy()).unsqueeze(0).float() / 255.0
+        if torch.cuda.is_available():
+            t0 = t0.cuda()
+            t1 = t1.cuda()
+
+        result = solver.interpolate(t0, t1, timestep=timestep)
+        result_np = (result[0] * 255.0).byte().cpu().numpy().transpose(1, 2, 0)
+
+        if self._tensor_backend is not None:
+            return self._tensor_backend.numpy_to_tensor(result_np)
+        return result_np
 
     def get_interpolation_multi(self) -> int:
         """返回补帧倍率。"""

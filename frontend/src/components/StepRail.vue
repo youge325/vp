@@ -2,11 +2,16 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { WORKBENCH_MODULES } from '@/lib/workflow'
-import { useWorkbenchStore } from '@/stores/workbench'
+import { useEnvStore } from '@/stores/env'
+import { useMediaStore } from '@/stores/media'
+import { useTaskStore } from '@/stores/task'
+import { getVisibleEncoderProfiles } from '@/lib/task-mapper'
 import type { ModuleKey, WorkbenchModuleDefinition } from '@/types'
 
 const route = useRoute()
-const store = useWorkbenchStore()
+const envStore = useEnvStore()
+const mediaStore = useMediaStore()
+const taskStore = useTaskStore()
 
 const activeModuleKey = computed<ModuleKey>(() => {
   const module = route.meta.module as WorkbenchModuleDefinition | undefined
@@ -14,16 +19,16 @@ const activeModuleKey = computed<ModuleKey>(() => {
 })
 
 const moduleStates = computed<Record<ModuleKey, string>>(() => ({
-  home: store.env.checkResult || store.env.issue ? 'ready' : 'idle',
-  input: store.mediaItems.length > 0 ? 'ready' : 'idle',
-  decode: store.env.checkResult ? 'ready' : 'idle',
-  enhance: store.env.checkResult ? 'ready' : 'idle',
-  encode: store.env.checkResult && store.visibleEncoderProfiles.length > 0 ? 'ready' : 'idle',
-  render: store.batch.isRunning || store.canStartBatch ? 'ready' : 'idle',
+  home: envStore.env.checkResult || envStore.env.issue ? 'ready' : 'idle',
+  input: mediaStore.mediaItems.length > 0 ? 'ready' : 'idle',
+  decode: envStore.env.checkResult ? 'ready' : 'idle',
+  enhance: envStore.env.checkResult ? 'ready' : 'idle',
+  encode: envStore.env.checkResult && getVisibleEncoderProfiles(envStore.env.checkResult).length > 0 ? 'ready' : 'idle',
+  render: taskStore.batch.isRunning || taskStore.canStartBatch ? 'ready' : 'idle',
 }))
 
 const workflowLabel = computed(() => {
-  const workflow = store.editor.workflowConfig
+  const workflow = mediaStore.editor.workflowConfig
   const enabled = [
     workflow.interpolation.enabled ? '补帧' : null,
     workflow.superResolution.enabled ? '超分' : null,
@@ -34,9 +39,9 @@ const workflowLabel = computed(() => {
 })
 
 const selectionLabel = computed(() =>
-  store.editingScope === 'preset'
+  mediaStore.editingScope === 'preset'
     ? '默认预设'
-    : `${store.selectedIds.length || 1}/${store.mediaItems.length} 已选`,
+    : `${mediaStore.selectedIds.length || 1}/${mediaStore.mediaItems.length} 已选`,
 )
 </script>
 
@@ -72,7 +77,7 @@ const selectionLabel = computed(() =>
     <section class="rail-footer">
       <span class="rail-footer-chip">{{ workflowLabel }}</span>
       <span class="rail-footer-chip">{{ selectionLabel }}</span>
-      <span class="rail-footer-chip" :data-state="store.globalTaskStatus">任务 {{ store.globalTaskStatus }}</span>
+      <span class="rail-footer-chip" :data-state="taskStore.globalTaskStatus">任务 {{ taskStore.globalTaskStatus }}</span>
     </section>
   </aside>
 </template>
