@@ -132,7 +132,9 @@ function makeEnvResult(): EnvironmentCheckResult {
       python_executable: 'python',
       default_model_available: true,
     },
-    resources: {},
+    resources: {
+      output_dir: 'D:/default-output',
+    },
   }
 }
 
