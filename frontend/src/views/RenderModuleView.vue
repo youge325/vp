@@ -15,7 +15,7 @@ const interruptButtonLabel = computed(() => (taskStore.batch.isCancelling ? '中
 </script>
 
 <template>
-  <div class="module-stack">
+  <div class="module-stack render-stack">
     <section class="panel-surface">
       <div class="panel-head">
         <div class="panel-copy">

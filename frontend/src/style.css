@@ -203,6 +203,8 @@ a:focus-visible {
   min-height: 0;
   overflow: auto;
   padding: 24px;
+  display: flex;
+  flex-direction: column;
 }
 
 .surface-panel,
@@ -766,6 +768,7 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 0;
+  flex: 1;
 }
 
 .log-panel {
@@ -778,8 +781,8 @@ a:focus-visible {
 }
 
 .log-panel-terminal {
-  min-height: 360px;
-  max-height: 440px;
+  flex: 1;
+  min-height: 160px;
 }
 
 .log-line {
@@ -793,6 +796,42 @@ a:focus-visible {
 
 .muted-line {
   color: var(--text-soft);
+}
+
+.render-stack {
+  flex: 1;
+  min-height: 0;
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.progress-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel-muted);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  transition: width 300ms ease;
+}
+
+.progress-label {
+  min-width: 48px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .rail-brand {
