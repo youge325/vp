@@ -31,6 +31,9 @@ jobs:
 
   test-backend:
     runs-on: [self-hosted, windows]
+    env:
+      HTTP_PROXY: http://127.0.0.1:7897
+      HTTPS_PROXY: http://127.0.0.1:7897
 
     steps:
       - name: Checkout repository

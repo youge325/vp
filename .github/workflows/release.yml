@@ -8,16 +8,18 @@ on:
 jobs:
   build-and-release-windows:
     runs-on: [self-hosted, windows]
+    env:
+      HTTP_PROXY: http://127.0.0.1:7897
+      HTTPS_PROXY: http://127.0.0.1:7897
     defaults:
       run:
-        shell: powershell
+        shell: pwsh
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Verify environment
-        shell: powershell
         run: |
           node --version
           npm --version
