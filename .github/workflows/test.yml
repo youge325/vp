@@ -25,7 +25,7 @@ jobs:
         run: npm run test
         working-directory: frontend
 
-  test-backend:
+  test-backend-pytorch:
     runs-on: [self-hosted, windows]
     defaults:
       run:
@@ -35,6 +35,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run backend tests
-        run: python -m pytest tests -q
+      - name: Run PyTorch backend tests
+        run: python -m pytest tests -k "not (PaddleBackend or test_get_paddle)" -q
+        working-directory: backend
+
+  test-backend-paddle:
+    runs-on: [self-hosted, windows]
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Paddle backend tests
+        run: python -m pytest tests/test_algorithms/test_tensor_backend.py -k "PaddleBackend or test_get_paddle" -q
         working-directory: backend
