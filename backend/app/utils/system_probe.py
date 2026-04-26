@@ -7,6 +7,8 @@ import subprocess
 import sys
 from typing import Any
 
+from app.utils.subprocess_utils import hidden_subprocess_kwargs
+
 
 GPU_VENDOR_KEYWORDS = {
     "nvidia": "nvidia",
@@ -68,6 +70,7 @@ def _list_windows_gpu_adapters() -> list[dict[str, Any]]:
             errors="replace",
             timeout=20,
             check=False,
+            **hidden_subprocess_kwargs(),
         )
     except (OSError, subprocess.TimeoutExpired):
         return []

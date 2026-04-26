@@ -15,7 +15,9 @@ pub struct ResolvedRuntimePaths {
     pub log_dir: PathBuf,
 }
 
-pub fn resolve_runtime_paths<R: Runtime>(app: &AppHandle<R>) -> Result<ResolvedRuntimePaths, String> {
+pub fn resolve_runtime_paths<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<ResolvedRuntimePaths, String> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let frontend_dir = manifest_dir
         .parent()
@@ -32,21 +34,38 @@ pub fn resolve_runtime_paths<R: Runtime>(app: &AppHandle<R>) -> Result<ResolvedR
             .or_else(|| Some(path.join("backend")).filter(|p| p.is_dir()))
     });
 
+    let dev_backend_dir = if cfg!(debug_assertions) {
+        Some(workspace_root.join("backend"))
+    } else {
+        None
+    };
     let backend_dir = first_existing_dir([
         env_path("VP_BACKEND_DIR"),
         resource_backend,
-        Some(workspace_root.join("backend")),
+        dev_backend_dir,
     ])
     .ok_or_else(|| "Unable to locate backend directory.".to_string())?;
 
+    let dev_runtime_root = if cfg!(debug_assertions) {
+        Some(
+            frontend_dir
+                .join("src-tauri")
+                .join("resources")
+                .join("runtime"),
+        )
+    } else {
+        None
+    };
     let runtime_root = first_existing_dir([
         env_path("VP_RUNTIME_ROOT"),
-        resource_dir.as_ref().map(|path| path.join("resources").join("runtime")),
+        resource_dir
+            .as_ref()
+            .map(|path| path.join("resources").join("runtime")),
         resource_dir.as_ref().map(|path| path.join("runtime")),
-        Some(frontend_dir.join("src-tauri").join("resources").join("runtime")),
+        dev_runtime_root,
     ]);
 
-    let python_executable = first_existing_file([
+    let python_executable = match first_existing_file([
         env_path("VP_PYTHON_EXECUTABLE"),
         runtime_root
             .as_ref()
@@ -55,36 +74,84 @@ pub fn resolve_runtime_paths<R: Runtime>(app: &AppHandle<R>) -> Result<ResolvedR
         runtime_root
             .as_ref()
             .map(|path| path.join(platform_python_binary())),
-    ])
-    .unwrap_or_else(|| PathBuf::from(platform_python_binary()));
+    ]) {
+        Some(path) => path,
+        None if cfg!(debug_assertions) => PathBuf::from(platform_python_binary()),
+        None => {
+            return Err(
+                "Bundled Python runtime is missing. Set VP_PYTHON_EXECUTABLE or include resources/runtime/python/python.exe."
+                    .to_string(),
+            )
+        }
+    };
 
     let ffmpeg_path = first_existing_file([
         env_path("VP_FFMPEG_PATH"),
-        runtime_root
-            .as_ref()
-            .map(|path| path.join("ffmpeg").join("bin").join(platform_binary("ffmpeg"))),
-        resource_dir
-            .as_ref()
-            .map(|path| path.join("ffmpeg").join("bin").join(platform_binary("ffmpeg"))),
+        runtime_root.as_ref().map(|path| {
+            path.join("ffmpeg")
+                .join("bin")
+                .join(platform_binary("ffmpeg"))
+        }),
+        resource_dir.as_ref().map(|path| {
+            path.join("ffmpeg")
+                .join("bin")
+                .join(platform_binary("ffmpeg"))
+        }),
     ]);
 
     let ffprobe_path = first_existing_file([
         env_path("VP_FFPROBE_PATH"),
-        runtime_root
-            .as_ref()
-            .map(|path| path.join("ffmpeg").join("bin").join(platform_binary("ffprobe"))),
-        resource_dir
-            .as_ref()
-            .map(|path| path.join("ffprobe").join("bin").join(platform_binary("ffprobe"))),
+        runtime_root.as_ref().map(|path| {
+            path.join("ffmpeg")
+                .join("bin")
+                .join(platform_binary("ffprobe"))
+        }),
+        resource_dir.as_ref().map(|path| {
+            path.join("ffprobe")
+                .join("bin")
+                .join(platform_binary("ffprobe"))
+        }),
     ]);
 
+    let dev_model_dir = if cfg!(debug_assertions) {
+        Some(workspace_root.join("backend").join("models"))
+    } else {
+        None
+    };
     let model_dir = first_existing_dir([
         env_path("VP_RIFE_MODEL_DIR"),
         runtime_root.as_ref().map(|path| path.join("models")),
         resource_dir.as_ref().map(|path| path.join("models")),
-        resource_dir.as_ref().map(|path| path.join("backend").join("models")),
-        Some(workspace_root.join("backend").join("models")),
+        resource_dir
+            .as_ref()
+            .map(|path| path.join("backend").join("models")),
+        dev_model_dir,
     ]);
+
+    if !cfg!(debug_assertions) {
+        if ffmpeg_path.is_none() {
+            return Err(
+                "Bundled FFmpeg is missing. Set VP_FFMPEG_PATH or include resources/runtime/ffmpeg/bin/ffmpeg.exe."
+                    .to_string(),
+            );
+        }
+        if ffprobe_path.is_none() {
+            return Err(
+                "Bundled FFprobe is missing. Set VP_FFPROBE_PATH or include resources/runtime/ffmpeg/bin/ffprobe.exe."
+                    .to_string(),
+            );
+        }
+        let has_default_model = model_dir
+            .as_ref()
+            .map(|path| path.join(default_rife_model_file()).is_file())
+            .unwrap_or(false);
+        if !has_default_model {
+            return Err(format!(
+                "Bundled RIFE model is missing. Set VP_RIFE_MODEL_DIR or include resources/runtime/models/{}.",
+                default_rife_model_file()
+            ));
+        }
+    }
 
     let app_data_dir = app
         .path()
@@ -127,14 +194,24 @@ fn first_existing_dir<I>(items: I) -> Option<PathBuf>
 where
     I: IntoIterator<Item = Option<PathBuf>>,
 {
-    items.into_iter().flatten().find(|candidate| candidate.is_dir())
+    items
+        .into_iter()
+        .flatten()
+        .find(|candidate| candidate.is_dir())
 }
 
 fn first_existing_file<I>(items: I) -> Option<PathBuf>
 where
     I: IntoIterator<Item = Option<PathBuf>>,
 {
-    items.into_iter().flatten().find(|candidate| candidate.exists())
+    items
+        .into_iter()
+        .flatten()
+        .find(|candidate| candidate.exists())
+}
+
+fn default_rife_model_file() -> &'static str {
+    "flownet_v4.25.pkl"
 }
 
 pub fn platform_python_binary() -> &'static str {
@@ -161,6 +238,10 @@ pub fn build_env_map(paths: &ResolvedRuntimePaths) -> Vec<(String, String)> {
     let mut envs = vec![
         ("PYTHONIOENCODING".to_string(), "utf-8".to_string()),
         ("PYTHONUTF8".to_string(), "1".to_string()),
+        (
+            "VP_PYTHON_EXECUTABLE".to_string(),
+            paths.python_executable.to_string_lossy().to_string(),
+        ),
         (
             "VP_OUTPUT_DIR".to_string(),
             paths.output_dir.to_string_lossy().to_string(),
@@ -205,7 +286,7 @@ pub fn build_env_map(paths: &ResolvedRuntimePaths) -> Vec<(String, String)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ResolvedRuntimePaths, build_env_map, first_existing_dir, first_existing_file};
+    use super::{build_env_map, first_existing_dir, first_existing_file, ResolvedRuntimePaths};
     use std::path::PathBuf;
 
     #[test]
@@ -218,7 +299,8 @@ mod tests {
     #[test]
     fn selects_first_existing_file() {
         let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
-        let selected = first_existing_file([Some(PathBuf::from("missing")), Some(manifest.clone())]);
+        let selected =
+            first_existing_file([Some(PathBuf::from("missing")), Some(manifest.clone())]);
         assert_eq!(selected, Some(manifest));
     }
 
@@ -237,6 +319,9 @@ mod tests {
         let legacy_temp_key = ["VP", "TEMP", "DIR"].join("_");
 
         assert!(envs.iter().any(|(key, _)| key == "VP_OUTPUT_DIR"));
+        assert!(envs
+            .iter()
+            .any(|(key, value)| key == "VP_PYTHON_EXECUTABLE" && value == "python"));
         assert!(!envs.iter().any(|(key, _)| key == &legacy_temp_key));
     }
 }
