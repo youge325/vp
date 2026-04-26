@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, develop]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, develop]
 
 jobs:
   build-windows:
@@ -54,12 +54,12 @@ jobs:
         if: steps.collect.outputs.msi_path != ''
         uses: actions/upload-artifact@v4
         with:
-          name: windows-msi
+          name: windows-msi-${{ github.run_id }}
           path: ${{ steps.collect.outputs.msi_path }}
 
       - name: Upload NSIS artifact
         if: steps.collect.outputs.nsis_path != ''
         uses: actions/upload-artifact@v4
         with:
-          name: windows-nsis
+          name: windows-nsis-${{ github.run_id }}
           path: ${{ steps.collect.outputs.nsis_path }}
