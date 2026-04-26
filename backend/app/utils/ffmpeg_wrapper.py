@@ -15,6 +15,7 @@ import numpy as np
 
 from app.config import settings
 from app.utils.logger import get_logger
+from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
 logger = get_logger(__name__)
 
@@ -315,6 +316,7 @@ class FFmpegWrapper:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            **hidden_subprocess_kwargs(),
         )
         return RawVideoReader(process=process, width=width, height=height)
 
@@ -342,6 +344,7 @@ class FFmpegWrapper:
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
+            **hidden_subprocess_kwargs(),
         )
         return RawVideoWriter(
             process=process,
@@ -458,6 +461,7 @@ class FFmpegWrapper:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
+            **hidden_subprocess_kwargs(),
         )
         monitor = _FFmpegPipeBase(process, progress_callback=progress_callback)
         monitor._wait_for_process()
@@ -700,6 +704,7 @@ class FFmpegWrapper:
                 errors="replace",
                 timeout=10,
                 check=False,
+                **hidden_subprocess_kwargs(),
             )
         except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
             return False
@@ -715,6 +720,7 @@ class FFmpegWrapper:
                 errors="replace",
                 timeout=10,
                 check=False,
+                **hidden_subprocess_kwargs(),
             )
         except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
             return None
@@ -768,6 +774,7 @@ class FFmpegWrapper:
             errors="replace",
             timeout=timeout,
             check=False,
+            **hidden_subprocess_kwargs(),
         )
         if result.returncode != 0:
             message = result.stderr.strip() or result.stdout.strip()

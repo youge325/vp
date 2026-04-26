@@ -17,6 +17,9 @@ use crate::models::{
 use crate::process_control;
 use crate::runtime::{build_env_map, resolve_runtime_paths};
 
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+
 pub async fn run_single_cli_command<R: Runtime>(
     app: &AppHandle<R>,
     args: &[String],
@@ -28,6 +31,7 @@ pub async fn run_single_cli_command<R: Runtime>(
     command.current_dir(&paths.backend_dir);
     command.stdin(Stdio::null());
     command.envs(build_env_map(&paths));
+    apply_no_window(&mut command);
 
     let output = command
         .output()
@@ -68,8 +72,7 @@ pub async fn spawn_task<R: Runtime>(
     command.stderr(Stdio::piped());
     command.stdin(Stdio::null());
 
-    let mut child = command
-        .group_spawn()
+    let mut child = spawn_no_window_group(&mut command)
         .map_err(|error| format!("Unable to start backend process: {error}"))?;
 
     let stdout = child
@@ -160,6 +163,24 @@ fn build_process_command(
     command.current_dir(&paths.backend_dir);
     command.envs(build_env_map(paths));
     Ok(command)
+}
+
+#[cfg(windows)]
+fn apply_no_window(command: &mut Command) {
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn apply_no_window(_command: &mut Command) {}
+
+#[cfg(windows)]
+fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChild> {
+    command.group().creation_flags(CREATE_NO_WINDOW).spawn()
+}
+
+#[cfg(not(windows))]
+fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChild> {
+    command.group_spawn()
 }
 
 fn spawn_stdout_reader<R: Runtime + 'static>(

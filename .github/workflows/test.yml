@@ -27,6 +27,8 @@ jobs:
 
   test-backend-pytorch:
     runs-on: [self-hosted, windows]
+    env:
+      PYTHONIOENCODING: utf-8
     defaults:
       run:
         shell: pwsh
@@ -41,6 +43,8 @@ jobs:
 
   test-backend-paddle:
     runs-on: [self-hosted, windows]
+    env:
+      PYTHONIOENCODING: utf-8
     defaults:
       run:
         shell: pwsh

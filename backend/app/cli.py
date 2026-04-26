@@ -22,6 +22,7 @@ from app.processing.streaming import process_video_streaming
 from app.utils.ffmpeg_wrapper import FFmpegWrapper
 from app.utils.file_utils import get_output_path, validate_input_path
 from app.utils.logger import get_logger, setup_logging
+from app.utils.subprocess_utils import hidden_subprocess_kwargs
 from app.utils.system_probe import list_gpu_adapters
 
 logger = get_logger(__name__)
@@ -116,6 +117,15 @@ def _infer_error_code(exc: BaseException) -> str:
         return "missing_ffmpeg"
     if "flownet_v" in message or "model" in message:
         return "missing_model"
+    if (
+        "no module named 'torch'" in message
+        or "no module named torch" in message
+        or "pytorch" in message
+        or "no module named 'paddle'" in message
+        or "no module named paddle" in message
+        or "tensor backend" in message
+    ):
+        return "missing_tensor_backend"
     if "cancelled" in message or "canceled" in message:
         return "cancelled"
     return "process_failed"
@@ -388,6 +398,7 @@ def _check_pytorch_in_subprocess() -> dict[str, Any]:
             errors="replace",
             timeout=30,
             check=False,
+            **hidden_subprocess_kwargs(),
         )
         if proc.returncode == 0 and proc.stdout.strip():
             return json.loads(proc.stdout.strip())
@@ -416,6 +427,7 @@ def _check_paddle_in_subprocess() -> dict[str, Any]:
             errors="replace",
             timeout=30,
             check=False,
+            **hidden_subprocess_kwargs(),
         )
         if proc.returncode == 0 and proc.stdout.strip():
             return json.loads(proc.stdout.strip())
@@ -742,11 +754,20 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     setup_logging()
     parser = build_parser()
-    args = parser.parse_args()
     try:
+        args = parser.parse_args()
         args.func(args)
     except KeyboardInterrupt:
         _emit_error("cancelled", "Operation cancelled by the user.", exit_code=130)
+    except SystemExit:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive CLI boundary
+        logger.exception("Unhandled backend CLI failure")
+        _emit_error(
+            _infer_error_code(exc),
+            str(exc) or exc.__class__.__name__,
+            details={"exception": exc.__class__.__name__},
+        )
 
 
 if __name__ == "__main__":
