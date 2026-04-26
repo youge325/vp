@@ -45,6 +45,51 @@ function Add-GitHubEnv {
     }
 }
 
+function Resolve-PythonSource {
+    $candidates = @(
+        @{
+            Label = "default Python312"
+            Root = "D:\Users\Lenovo\AppData\Local\Programs\Python\Python312"
+            Exe = "D:\Users\Lenovo\AppData\Local\Programs\Python\Python312\python.exe"
+        },
+        @{
+            Label = "VP_RELEASE_PYTHON_ROOT"
+            Root = (Get-EnvValue "VP_RELEASE_PYTHON_ROOT")
+            Exe = if (-not [string]::IsNullOrWhiteSpace((Get-EnvValue "VP_RELEASE_PYTHON_ROOT"))) {
+                Join-Path (Get-EnvValue "VP_RELEASE_PYTHON_ROOT") "python.exe"
+            } else {
+                ""
+            }
+        },
+        @{
+            Label = "VP_RELEASE_PYTHON_EXE"
+            Root = if (-not [string]::IsNullOrWhiteSpace((Get-EnvValue "VP_RELEASE_PYTHON_EXE"))) {
+                Split-Path -Parent (Get-EnvValue "VP_RELEASE_PYTHON_EXE")
+            } else {
+                ""
+            }
+            Exe = (Get-EnvValue "VP_RELEASE_PYTHON_EXE")
+        }
+    )
+
+    $checked = New-Object System.Collections.Generic.List[string]
+    foreach ($candidate in $candidates) {
+        if ([string]::IsNullOrWhiteSpace($candidate.Root) -or [string]::IsNullOrWhiteSpace($candidate.Exe)) {
+            continue
+        }
+        if ((Test-Path -LiteralPath $candidate.Root -PathType Container) -and
+            (Test-Path -LiteralPath $candidate.Exe -PathType Leaf)) {
+            return @{
+                Root = (Resolve-Path -LiteralPath $candidate.Root).Path
+                Exe = (Resolve-Path -LiteralPath $candidate.Exe).Path
+            }
+        }
+        $checked.Add("$($candidate.Label): root=$($candidate.Root), exe=$($candidate.Exe)")
+    }
+
+    throw "Unable to locate the required Python 3.12 runtime. Expected D:\Users\Lenovo\AppData\Local\Programs\Python\Python312\python.exe. Checked: $($checked -join '; ')"
+}
+
 function Resolve-ModelDir {
     $candidates = @(
         @{ Label = "VP_CI_MODEL_DIR"; Path = (Get-EnvValue "VP_CI_MODEL_DIR") },
@@ -143,9 +188,12 @@ function Resolve-FfmpegSource {
     throw "Unable to locate FFmpeg/FFprobe. Set VP_RELEASE_FFMPEG_DIR or VP_FFMPEG_PATH/VP_FFPROBE_PATH on the self-hosted runner."
 }
 
+$pythonSource = Resolve-PythonSource
 $modelDir = Resolve-ModelDir
 $ffmpegSource = Resolve-FfmpegSource
 
+Add-GitHubEnv -Name "VP_RELEASE_PYTHON_ROOT" -Value $pythonSource.Root
+Add-GitHubEnv -Name "VP_RELEASE_PYTHON_EXE" -Value $pythonSource.Exe
 Add-GitHubEnv -Name "VP_RELEASE_MODEL_DIR" -Value $modelDir
 Add-GitHubEnv -Name "VP_RIFE_MODEL_DIR" -Value $modelDir
 Add-GitHubEnv -Name "VP_RELEASE_FFMPEG_DIR" -Value $ffmpegSource.Dir
@@ -153,6 +201,8 @@ Add-GitHubEnv -Name "VP_FFMPEG_PATH" -Value $ffmpegSource.Ffmpeg
 Add-GitHubEnv -Name "VP_FFPROBE_PATH" -Value $ffmpegSource.Ffprobe
 
 Write-Host "CI runtime environment resolved:"
+Write-Host "  python root:   $($pythonSource.Root)"
+Write-Host "  python exe:    $($pythonSource.Exe)"
 Write-Host "  model dir:     $modelDir"
 Write-Host "  default model: $(Join-Path $modelDir 'flownet_v4.25.pkl')"
 Write-Host "  ffmpeg dir:    $($ffmpegSource.Dir)"

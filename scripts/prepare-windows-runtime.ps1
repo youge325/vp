@@ -3,11 +3,47 @@ param(
     [string]$PythonExe = $env:VP_RELEASE_PYTHON_EXE,
     [string]$FfmpegDir = $env:VP_RELEASE_FFMPEG_DIR,
     [string]$ModelDir = $env:VP_RELEASE_MODEL_DIR,
-    [string]$OutputRoot = ""
+    [string]$OutputRoot = "",
+    [string]$PythonCopyMode = $env:VP_RELEASE_PYTHON_COPY_MODE,
+    [string]$ExtraPythonPackages = $env:VP_RELEASE_PYTHON_PACKAGES
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
+function Write-Step {
+    param([string]$Message)
+
+    $timestamp = Get-Date -Format "HH:mm:ss"
+    Write-Host "[$timestamp] $Message"
+}
+
+function Format-ByteSize {
+    param([double]$Bytes)
+
+    if ($Bytes -ge 1GB) {
+        return "{0:N2} GB" -f ($Bytes / 1GB)
+    }
+    if ($Bytes -ge 1MB) {
+        return "{0:N1} MB" -f ($Bytes / 1MB)
+    }
+    if ($Bytes -ge 1KB) {
+        return "{0:N1} KB" -f ($Bytes / 1KB)
+    }
+    return "$Bytes bytes"
+}
+
+function Get-TextTail {
+    param(
+        [string]$Text,
+        [int]$MaxChars = 4000
+    )
+
+    if ([string]::IsNullOrEmpty($Text) -or $Text.Length -le $MaxChars) {
+        return $Text
+    }
+    return "...$($Text.Substring($Text.Length - $MaxChars))"
+}
 
 function Resolve-RequiredPath {
     param(
@@ -157,6 +193,389 @@ function Assert-OutputRootIsSafe {
     }
 }
 
+function Copy-FileFast {
+    param(
+        [string]$Source,
+        [string]$Destination
+    )
+
+    $destinationDir = Split-Path -Parent $Destination
+    if (-not (Test-Path -LiteralPath $destinationDir -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $destinationDir | Out-Null
+    }
+    if (Test-Path -LiteralPath $Destination -PathType Leaf) {
+        Remove-Item -LiteralPath $Destination -Force
+    }
+
+    try {
+        New-Item -ItemType HardLink -Path $Destination -Target $Source -ErrorAction Stop | Out-Null
+        return "linked"
+    } catch {
+        Copy-Item -LiteralPath $Source -Destination $Destination -Force
+        return "copied"
+    }
+}
+
+function Copy-DirectoryTree {
+    param(
+        [string]$Source,
+        [string]$Destination,
+        [string[]]$SkipDirectoryNames = @(),
+        [string]$Label,
+        [int]$ProgressEvery = 1000
+    )
+
+    $sourceFull = (Resolve-Path -LiteralPath $Source).Path
+    $stats = [ordered]@{
+        Files = 0
+        Bytes = [int64]0
+        Linked = 0
+        Copied = 0
+    }
+    $stack = New-Object System.Collections.Stack
+    $stack.Push(@{ Source = $sourceFull; Destination = $Destination })
+
+    while ($stack.Count -gt 0) {
+        $current = $stack.Pop()
+        New-Item -ItemType Directory -Force -Path $current.Destination | Out-Null
+
+        foreach ($item in Get-ChildItem -LiteralPath $current.Source -Force) {
+            $target = Join-Path $current.Destination $item.Name
+            if ($item.PSIsContainer) {
+                if ($SkipDirectoryNames -contains $item.Name) {
+                    continue
+                }
+                $stack.Push(@{ Source = $item.FullName; Destination = $target })
+                continue
+            }
+
+            $copyResult = Copy-FileFast -Source $item.FullName -Destination $target
+            $stats.Files += 1
+            $stats.Bytes += [int64]$item.Length
+            if ($copyResult -eq "linked") {
+                $stats.Linked += 1
+            } else {
+                $stats.Copied += 1
+            }
+
+            if ($ProgressEvery -gt 0 -and ($stats.Files % $ProgressEvery) -eq 0) {
+                Write-Step "${Label}: $($stats.Files) files, $(Format-ByteSize $stats.Bytes)"
+            }
+        }
+    }
+
+    Write-Step "${Label} complete: $($stats.Files) files, $(Format-ByteSize $stats.Bytes), hardlinks=$($stats.Linked), copies=$($stats.Copied)"
+    return [pscustomobject]$stats
+}
+
+function Copy-RootFiles {
+    param(
+        [string]$PythonRoot,
+        [string]$PythonExe,
+        [string]$Destination
+    )
+
+    Write-Step "Copying Python root files"
+    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+    $stats = [ordered]@{
+        Files = 0
+        Bytes = [int64]0
+        Linked = 0
+        Copied = 0
+    }
+
+    foreach ($file in Get-ChildItem -LiteralPath $PythonRoot -Force -File) {
+        $target = Join-Path $Destination $file.Name
+        $copyResult = Copy-FileFast -Source $file.FullName -Destination $target
+        $stats.Files += 1
+        $stats.Bytes += [int64]$file.Length
+        if ($copyResult -eq "linked") {
+            $stats.Linked += 1
+        } else {
+            $stats.Copied += 1
+        }
+    }
+
+    $destPythonExe = Join-Path $Destination "python.exe"
+    if (-not (Test-Path -LiteralPath $destPythonExe -PathType Leaf)) {
+        $copyResult = Copy-FileFast -Source $PythonExe -Destination $destPythonExe
+        $stats.Files += 1
+        $stats.Bytes += [int64](Get-Item -LiteralPath $PythonExe).Length
+        if ($copyResult -eq "linked") {
+            $stats.Linked += 1
+        } else {
+            $stats.Copied += 1
+        }
+    }
+
+    $pythonw = Join-Path (Split-Path -Parent $PythonExe) "pythonw.exe"
+    if ((Test-Path -LiteralPath $pythonw -PathType Leaf) -and -not (Test-Path -LiteralPath (Join-Path $Destination "pythonw.exe") -PathType Leaf)) {
+        $copyResult = Copy-FileFast -Source $pythonw -Destination (Join-Path $Destination "pythonw.exe")
+        $stats.Files += 1
+        $stats.Bytes += [int64](Get-Item -LiteralPath $pythonw).Length
+        if ($copyResult -eq "linked") {
+            $stats.Linked += 1
+        } else {
+            $stats.Copied += 1
+        }
+    }
+
+    Write-Step "Python root files complete: $($stats.Files) files, $(Format-ByteSize $stats.Bytes), hardlinks=$($stats.Linked), copies=$($stats.Copied)"
+}
+
+function Get-PythonPackagePatterns {
+    param([string]$ExtraPatterns)
+
+    $patterns = @(
+        "annotated_types*",
+        "anyio*",
+        "astor*",
+        "certifi*",
+        "charset_normalizer*",
+        "decorator*",
+        "dotenv",
+        "filelock*",
+        "fsspec*",
+        "functorch",
+        "gast*",
+        "google",
+        "h11*",
+        "httpcore*",
+        "httpx*",
+        "idna*",
+        "isympy.py",
+        "jinja2*",
+        "markupsafe*",
+        "mpmath*",
+        "networkx*",
+        "numpy*",
+        "numpy.libs",
+        "nvidia*",
+        "opt_einsum*",
+        "optree*",
+        "packaging*",
+        "paddle*",
+        "paddlepaddle*",
+        "PIL",
+        "pillow*",
+        "protobuf*",
+        "pydantic*",
+        "pydantic_core*",
+        "pydantic_settings*",
+        "python_dotenv*",
+        "requests*",
+        "safetensors*",
+        "setuptools*",
+        "setuptools.pth",
+        "six*",
+        "sniffio*",
+        "sympy*",
+        "torch*",
+        "torchgen",
+        "triton*",
+        "typing_extensions*",
+        "typing_extensions.py",
+        "typing_inspect*",
+        "typing_inspect.py",
+        "typing_inspection*",
+        "urllib3*",
+        "wheel*",
+        "yaml",
+        "_yaml",
+        "PyYAML*"
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($ExtraPatterns)) {
+        $extra = $ExtraPatterns -split "[,;]" | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        $patterns += $extra
+    }
+
+    return $patterns | Select-Object -Unique
+}
+
+function Copy-SitePackagesSlim {
+    param(
+        [string]$PythonRoot,
+        [string]$Destination,
+        [string]$ExtraPatterns
+    )
+
+    $sitePackages = Join-Path $PythonRoot "Lib\site-packages"
+    if (-not (Test-Path -LiteralPath $sitePackages -PathType Container)) {
+        Write-Step "No source site-packages found at $sitePackages"
+        return
+    }
+
+    $destinationSitePackages = Join-Path $Destination "Lib\site-packages"
+    New-Item -ItemType Directory -Force -Path $destinationSitePackages | Out-Null
+
+    $wildcards = Get-PythonPackagePatterns -ExtraPatterns $ExtraPatterns | ForEach-Object {
+        [System.Management.Automation.WildcardPattern]::new($_, [System.Management.Automation.WildcardOptions]::IgnoreCase)
+    }
+
+    $entries = Get-ChildItem -LiteralPath $sitePackages -Force | Where-Object {
+        $entryName = $_.Name
+        $matched = $false
+        foreach ($wildcard in $wildcards) {
+            if ($wildcard.IsMatch($entryName)) {
+                $matched = $true
+                break
+            }
+        }
+        $matched
+    } | Sort-Object Name -Unique
+
+    Write-Step "Copying slim site-packages: $($entries.Count) selected entries"
+    foreach ($entry in $entries) {
+        $target = Join-Path $destinationSitePackages $entry.Name
+        if ($entry.PSIsContainer) {
+            Copy-DirectoryTree -Source $entry.FullName -Destination $target -SkipDirectoryNames @("__pycache__", "test", "tests", ".pytest_cache") -Label "site-packages\$($entry.Name)" -ProgressEvery 3000 | Out-Null
+        } else {
+            $copyResult = Copy-FileFast -Source $entry.FullName -Destination $target
+            Write-Step "site-packages\$($entry.Name) complete: 1 file, $(Format-ByteSize $entry.Length), $copyResult"
+        }
+    }
+}
+
+function Copy-PythonRuntime {
+    param(
+        [hashtable]$PythonSource,
+        [string]$Destination,
+        [string]$Mode,
+        [string]$ExtraPatterns
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Mode)) {
+        $Mode = "slim"
+    }
+    $Mode = $Mode.ToLowerInvariant()
+    if ($Mode -notin @("slim", "full")) {
+        throw "Invalid VP_RELEASE_PYTHON_COPY_MODE '$Mode'. Expected 'slim' or 'full'."
+    }
+
+    Write-Step "Copying Python runtime in $Mode mode"
+    if ($Mode -eq "full") {
+        Copy-DirectoryTree -Source $PythonSource.Root -Destination $Destination -SkipDirectoryNames @("__pycache__", ".pytest_cache") -Label "python full runtime" -ProgressEvery 3000 | Out-Null
+        $destPythonExe = Join-Path $Destination "python.exe"
+        if (-not (Test-Path -LiteralPath $destPythonExe -PathType Leaf)) {
+            Copy-FileFast -Source $PythonSource.Exe -Destination $destPythonExe | Out-Null
+        }
+        return
+    }
+
+    Copy-RootFiles -PythonRoot $PythonSource.Root -PythonExe $PythonSource.Exe -Destination $Destination
+
+    $dlls = Join-Path $PythonSource.Root "DLLs"
+    if (Test-Path -LiteralPath $dlls -PathType Container) {
+        Copy-DirectoryTree -Source $dlls -Destination (Join-Path $Destination "DLLs") -SkipDirectoryNames @("__pycache__", "test", "tests") -Label "Python DLLs" -ProgressEvery 1000 | Out-Null
+    }
+
+    $lib = Join-Path $PythonSource.Root "Lib"
+    if (-not (Test-Path -LiteralPath $lib -PathType Container)) {
+        throw "Python standard library is missing: $lib"
+    }
+
+    $libOut = Join-Path $Destination "Lib"
+    New-Item -ItemType Directory -Force -Path $libOut | Out-Null
+    foreach ($entry in Get-ChildItem -LiteralPath $lib -Force) {
+        if ($entry.Name -in @("site-packages", "test", "tests", "__pycache__")) {
+            continue
+        }
+        $target = Join-Path $libOut $entry.Name
+        if ($entry.PSIsContainer) {
+            Copy-DirectoryTree -Source $entry.FullName -Destination $target -SkipDirectoryNames @("__pycache__", "test", "tests", ".pytest_cache") -Label "stdlib\$($entry.Name)" -ProgressEvery 3000 | Out-Null
+        } else {
+            Copy-FileFast -Source $entry.FullName -Destination $target | Out-Null
+        }
+    }
+    Write-Step "Python standard library copy complete"
+
+    Copy-SitePackagesSlim -PythonRoot $PythonSource.Root -Destination $Destination -ExtraPatterns $ExtraPatterns
+}
+
+function Copy-ModelFiles {
+    param(
+        [string]$SourceDir,
+        [string]$DestinationDir
+    )
+
+    Write-Step "Copying RIFE model weights"
+    $models = Get-ChildItem -LiteralPath $SourceDir -Filter "flownet_*.pkl" -File
+    if ($models.Count -eq 0) {
+        throw "No RIFE model files found in $SourceDir"
+    }
+
+    $bytes = [int64]0
+    $linked = 0
+    $copied = 0
+    foreach ($model in $models) {
+        $result = Copy-FileFast -Source $model.FullName -Destination (Join-Path $DestinationDir $model.Name)
+        $bytes += [int64]$model.Length
+        if ($result -eq "linked") {
+            $linked += 1
+        } else {
+            $copied += 1
+        }
+        Write-Step "model $($model.Name) complete: $(Format-ByteSize $model.Length), $result"
+    }
+    Write-Step "RIFE models complete: $($models.Count) files, $(Format-ByteSize $bytes), hardlinks=$linked, copies=$copied"
+}
+
+function Invoke-CheckedProcess {
+    param(
+        [string]$Label,
+        [string]$FilePath,
+        [string[]]$Arguments,
+        [string]$WorkingDirectory = "",
+        [int]$TimeoutSeconds = 120
+    )
+
+    Write-Step "${Label}: starting with ${TimeoutSeconds}s timeout"
+    $psi = [System.Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = $FilePath
+    foreach ($argument in $Arguments) {
+        $psi.ArgumentList.Add($argument)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($WorkingDirectory)) {
+        $psi.WorkingDirectory = $WorkingDirectory
+    }
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.CreateNoWindow = $true
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $psi
+    $null = $process.Start()
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+        try {
+            $process.Kill($true)
+        } catch {
+            $process.Kill()
+        }
+        $process.WaitForExit()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        throw "$Label timed out after ${TimeoutSeconds}s.`nstdout:`n$(Get-TextTail $stdout)`nstderr:`n$(Get-TextTail $stderr)"
+    }
+
+    $stdoutText = $stdoutTask.GetAwaiter().GetResult()
+    $stderrText = $stderrTask.GetAwaiter().GetResult()
+    if (-not [string]::IsNullOrWhiteSpace($stdoutText)) {
+        Write-Host (Get-TextTail $stdoutText)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($stderrText)) {
+        Write-Host (Get-TextTail $stderrText)
+    }
+    if ($process.ExitCode -ne 0) {
+        throw "$Label failed with exit code $($process.ExitCode)."
+    }
+    Write-Step "$Label complete"
+}
+
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     $OutputRoot = Join-Path $repoRoot "frontend\src-tauri\resources\runtime"
@@ -171,12 +590,14 @@ $modelSourceDir = Resolve-ModelSource -Dir $ModelDir -RepoRoot $repoRoot
 Write-Host "Preparing Windows runtime:"
 Write-Host "  python root: $($pythonSource.Root)"
 Write-Host "  python exe:  $($pythonSource.Exe)"
+Write-Host "  python mode: $([string]::IsNullOrWhiteSpace($PythonCopyMode) ? 'slim' : $PythonCopyMode)"
 Write-Host "  ffmpeg:      $($ffmpegSource.Ffmpeg)"
 Write-Host "  ffprobe:     $($ffmpegSource.Ffprobe)"
 Write-Host "  model dir:   $modelSourceDir"
 Write-Host "  output root: $outputRootFull"
 
 if (Test-Path -LiteralPath $outputRootFull) {
+    Write-Step "Cleaning existing runtime output"
     Remove-Item -LiteralPath $outputRootFull -Recurse -Force
 }
 
@@ -185,25 +606,16 @@ $ffmpegOut = Join-Path $outputRootFull "ffmpeg\bin"
 $modelsOut = Join-Path $outputRootFull "models"
 New-Item -ItemType Directory -Force -Path $pythonOut, $ffmpegOut, $modelsOut | Out-Null
 
-Get-ChildItem -LiteralPath $pythonSource.Root -Force | ForEach-Object {
-    Copy-Item -LiteralPath $_.FullName -Destination $pythonOut -Recurse -Force
-}
+Copy-PythonRuntime -PythonSource $pythonSource -Destination $pythonOut -Mode $PythonCopyMode -ExtraPatterns $ExtraPythonPackages
+
+Write-Step "Copying FFmpeg binaries"
+Copy-FileFast -Source $ffmpegSource.Ffmpeg -Destination (Join-Path $ffmpegOut "ffmpeg.exe") | Out-Null
+Copy-FileFast -Source $ffmpegSource.Ffprobe -Destination (Join-Path $ffmpegOut "ffprobe.exe") | Out-Null
+Write-Step "FFmpeg binaries complete"
+
+Copy-ModelFiles -SourceDir $modelSourceDir -DestinationDir $modelsOut
+
 $destPythonExe = Join-Path $pythonOut "python.exe"
-if (-not (Test-Path -LiteralPath $destPythonExe -PathType Leaf)) {
-    Copy-Item -LiteralPath $pythonSource.Exe -Destination $destPythonExe -Force
-}
-
-Copy-Item -LiteralPath $ffmpegSource.Ffmpeg -Destination (Join-Path $ffmpegOut "ffmpeg.exe") -Force
-Copy-Item -LiteralPath $ffmpegSource.Ffprobe -Destination (Join-Path $ffmpegOut "ffprobe.exe") -Force
-
-$models = Get-ChildItem -LiteralPath $modelSourceDir -Filter "flownet_*.pkl" -File
-if ($models.Count -eq 0) {
-    throw "No RIFE model files found in $modelSourceDir"
-}
-foreach ($model in $models) {
-    Copy-Item -LiteralPath $model.FullName -Destination (Join-Path $modelsOut $model.Name) -Force
-}
-
 $destFfmpeg = Join-Path $ffmpegOut "ffmpeg.exe"
 $destFfprobe = Join-Path $ffmpegOut "ffprobe.exe"
 $destDefaultModel = Join-Path $modelsOut "flownet_v4.25.pkl"
@@ -221,19 +633,8 @@ $env:VP_RIFE_MODEL_DIR = $modelsOut
 $env:PYTHONNOUSERSITE = "1"
 Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
 
-& $destPythonExe -s -c "import importlib; [importlib.import_module(name) for name in ['pydantic','pydantic_settings','numpy','PIL','torch']]; print('python runtime imports ok', flush=True)"
-if ($LASTEXITCODE -ne 0) {
-    throw "Bundled Python import smoke failed."
-}
+$importSmokeScript = "import importlib; [importlib.import_module(name) for name in ['pydantic','pydantic_settings','numpy','PIL','torch']]; print('python runtime imports ok', flush=True)"
+Invoke-CheckedProcess -Label "Python runtime import smoke" -FilePath $destPythonExe -Arguments @("-s", "-c", $importSmokeScript) -TimeoutSeconds 180
+Invoke-CheckedProcess -Label "Bundled backend check" -FilePath $destPythonExe -Arguments @("-s", "-m", "app", "check") -WorkingDirectory (Join-Path $repoRoot "backend") -TimeoutSeconds 180
 
-Push-Location (Join-Path $repoRoot "backend")
-try {
-    & $destPythonExe -s -m app check
-    if ($LASTEXITCODE -ne 0) {
-        throw "Bundled backend check failed."
-    }
-} finally {
-    Pop-Location
-}
-
-Write-Host "Windows runtime prepared successfully."
+Write-Step "Windows runtime prepared successfully."
