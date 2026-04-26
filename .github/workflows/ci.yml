@@ -1,16 +1,10 @@
-name: Build and Release (Windows)
+name: CI
 
 on:
   push:
-    tags:
-      - "v*"
-  workflow_dispatch:
-    inputs:
-      upload_release:
-        description: "Upload to GitHub Release"
-        required: false
-        default: false
-        type: boolean
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
 
 jobs:
   build-windows:
@@ -64,15 +58,3 @@ jobs:
         with:
           name: windows-nsis
           path: ${{ steps.collect.outputs.nsis_path }}
-
-      - name: Upload to GitHub Release
-        if: (startsWith(github.ref, 'refs/tags/v') || inputs.upload_release) && (steps.collect.outputs.msi_path != '' || steps.collect.outputs.nsis_path != '')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            ${{ steps.collect.outputs.msi_path }}
-            ${{ steps.collect.outputs.nsis_path }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
