@@ -386,6 +386,10 @@ def _build_sequential_head(
 
 def get_model_dir() -> str:
     """获取模型权重目录。"""
+    env_model_dir = os.environ.get("VP_RIFE_MODEL_DIR")
+    if env_model_dir:
+        return os.path.abspath(os.path.expandvars(os.path.expanduser(env_model_dir)))
+
     # 相对于 backend/app/algorithms/rife/ → backend/models/
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     model_dir = os.path.join(backend_dir, "models")
