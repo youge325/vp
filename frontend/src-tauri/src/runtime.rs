@@ -12,6 +12,7 @@ pub struct ResolvedRuntimePaths {
     pub ffprobe_path: Option<PathBuf>,
     pub model_dir: Option<PathBuf>,
     pub output_dir: PathBuf,
+    pub log_dir: PathBuf,
 }
 
 pub fn resolve_runtime_paths<R: Runtime>(app: &AppHandle<R>) -> Result<ResolvedRuntimePaths, String> {
@@ -26,12 +27,14 @@ pub fn resolve_runtime_paths<R: Runtime>(app: &AppHandle<R>) -> Result<ResolvedR
         .to_path_buf();
     let resource_dir = app.path().resource_dir().ok();
 
+    let resource_backend = resource_dir.as_ref().and_then(|path| {
+        directory_if_contains(path, "app")
+            .or_else(|| Some(path.join("backend")).filter(|p| p.is_dir()))
+    });
+
     let backend_dir = first_existing_dir([
         env_path("VP_BACKEND_DIR"),
-        resource_dir
-            .as_ref()
-            .and_then(|path| directory_if_contains(path, "app")),
-        resource_dir.as_ref().map(|path| path.join("backend")),
+        resource_backend,
         Some(workspace_root.join("backend")),
     ])
     .ok_or_else(|| "Unable to locate backend directory.".to_string())?;
@@ -83,14 +86,18 @@ pub fn resolve_runtime_paths<R: Runtime>(app: &AppHandle<R>) -> Result<ResolvedR
         Some(workspace_root.join("backend").join("models")),
     ]);
 
-    let output_dir = app
+    let app_data_dir = app
         .path()
         .app_local_data_dir()
-        .unwrap_or_else(|_| workspace_root.join(".tmp").join("app-output"))
-        .join("output");
+        .unwrap_or_else(|_| workspace_root.join(".tmp").join("app-data"));
+
+    let output_dir = app_data_dir.join("output");
+    let log_dir = app_data_dir.join("logs");
 
     std::fs::create_dir_all(&output_dir)
         .map_err(|error| format!("Unable to create output directory: {error}"))?;
+    std::fs::create_dir_all(&log_dir)
+        .map_err(|error| format!("Unable to create log directory: {error}"))?;
 
     Ok(ResolvedRuntimePaths {
         backend_dir,
@@ -100,6 +107,7 @@ pub fn resolve_runtime_paths<R: Runtime>(app: &AppHandle<R>) -> Result<ResolvedR
         ffprobe_path,
         model_dir,
         output_dir,
+        log_dir,
     })
 }
 
@@ -187,6 +195,11 @@ pub fn build_env_map(paths: &ResolvedRuntimePaths) -> Vec<(String, String)> {
         ));
     }
 
+    envs.push((
+        "VP_LOG_DIR".to_string(),
+        paths.log_dir.to_string_lossy().to_string(),
+    ));
+
     envs
 }
 
@@ -219,6 +232,7 @@ mod tests {
             ffprobe_path: Some(PathBuf::from("ffprobe")),
             model_dir: Some(PathBuf::from("models")),
             output_dir: PathBuf::from("output"),
+            log_dir: PathBuf::from("logs"),
         });
         let legacy_temp_key = ["VP", "TEMP", "DIR"].join("_");
 
