@@ -11,14 +11,13 @@ jobs:
     runs-on: [self-hosted, windows]
     defaults:
       run:
-        shell: powershell
+        shell: pwsh
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Verify environment
-        shell: powershell
         run: |
           node --version
           npm --version
