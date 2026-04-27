@@ -1,4 +1,4 @@
-"""Tensor 后端策略 — 支持 PyTorch 和 PaddlePaddle。"""
+"""Tensor 后端策略 — 支持 PyTorch、PaddlePaddle 和 ONNX Runtime。"""
 
 from abc import ABC, abstractmethod
 from typing import Any
@@ -102,11 +102,47 @@ class PaddleBackend(ITensorBackend):
         return self._paddle is not None
 
 
+class OnnxBackend(ITensorBackend):
+    """ONNX Runtime Tensor 后端。
+
+    ONNX Runtime 直接接受 numpy ndarray 作为输入，
+    因此本后端的 "tensor" 实际上就是 numpy ndarray (1CHW, float32)。
+    """
+
+    def __init__(self):
+        self._ort = None
+        try:
+            import onnxruntime as ort
+
+            self._ort = ort
+        except ImportError:
+            logger.warning("onnxruntime 未安装")
+
+    def numpy_to_tensor(self, frame: np.ndarray) -> Any:
+        """将 numpy (HWC, uint8) 转换为 ONNX Tensor (1CHW, float32 [0,1])。"""
+        tensor = np.transpose(frame, (2, 0, 1)).astype(np.float32).copy()
+        tensor = np.expand_dims(tensor, 0) / 255.0
+        return tensor
+
+    def tensor_to_numpy(self, tensor: Any) -> np.ndarray:
+        """将 ONNX Tensor (1CHW, float32) 转换为 numpy (HWC, uint8)。"""
+        frame = (tensor[0] * 255.0).clip(0, 255).astype(np.uint8)
+        frame = np.transpose(frame, (1, 2, 0))
+        return frame
+
+    def get_name(self) -> str:
+        return "onnx"
+
+    def is_available(self) -> bool:
+        return self._ort is not None
+
+
 def get_tensor_backend(name: str) -> ITensorBackend:
     """根据名称获取 Tensor 后端的工厂函数。"""
     backends = {
         "pytorch": PyTorchBackend,
         "paddle": PaddleBackend,
+        "onnx": OnnxBackend,
     }
     name_lower = name.lower()
     if name_lower not in backends:

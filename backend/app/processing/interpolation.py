@@ -10,6 +10,7 @@ from typing import Any, Optional
 from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
 from app.algorithms.rife import RIFESolver
+from app.algorithms.rife.onnx_solver import RIFEONNXSolver
 from app.config import settings
 
 logger = get_logger(__name__)
@@ -57,11 +58,22 @@ class FrameInterpolationAlgorithm(IAlgorithm):
         # 延迟初始化 RIFESolver
         self._solver: Optional[RIFESolver] = None
 
-    def _ensure_solver(self) -> RIFESolver:
+    def _ensure_solver(self):
         """延迟初始化 RIFE 推理器。"""
-        if self._solver is None:
+        if self._solver is not None:
+            return self._solver
+
+        backend_name = self._tensor_backend.get_name() if self._tensor_backend is not None else "numpy"
+
+        if backend_name == "onnx":
+            logger.info(f"初始化 RIFE ONNX 推理器: v{self._model_version}")
+            self._solver = RIFEONNXSolver(
+                model_version=self._model_version,
+                model_dir=self._model_dir,
+            )
+        else:
             logger.info(
-                f"初始化 RIFE 推理器: v{self._model_version}, "
+                f"初始化 RIFE PyTorch 推理器: v{self._model_version}, "
                 f"multi={self._multi}x, scale={self._scale}, fp16={self._fp16}"
             )
             self._solver = RIFESolver(
@@ -135,12 +147,17 @@ class FrameInterpolationAlgorithm(IAlgorithm):
             中间帧 Tensor（由当前 tensor_backend 转换）
         """
         solver = self._ensure_solver()
+        backend_name = self._tensor_backend.get_name() if self._tensor_backend is not None else "numpy"
 
         # PyTorch backend: 直接传递 torch tensor（零开销）
-        if self._tensor_backend is not None and self._tensor_backend.get_name() == "pytorch":
+        if backend_name == "pytorch":
             return solver.interpolate(frame0, frame1, timestep=timestep)
 
-        # 非 PyTorch backend: 做 numpy 桥接（RIFE 内部仅支持 PyTorch）
+        # ONNX backend: 直接传递 numpy ndarray（零开销）
+        if backend_name == "onnx":
+            return solver.interpolate(frame0, frame1, timestep=timestep)
+
+        # 其他 backend: 做 numpy 桥接
         import numpy as np
         import torch
 
