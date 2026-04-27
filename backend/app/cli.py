@@ -727,7 +727,9 @@ def build_parser() -> argparse.ArgumentParser:
     process_parser.add_argument("--codec", default="libx264", help="Video codec")
     process_parser.add_argument("--crf", type=int, default=18, help="CRF quality")
     process_parser.add_argument("--preset", default="medium", help="Encoding preset")
-    process_parser.add_argument("--backend", default="pytorch", choices=["pytorch", "paddle"], help="Tensor backend")
+    process_parser.add_argument(
+        "--backend", default="pytorch", choices=["pytorch", "paddle", "onnx"], help="Tensor backend"
+    )
     process_parser.add_argument("--output-dir", default=None, help="Output directory override")
     process_parser.add_argument("--multi", type=int, default=2, help="Interpolation multiplier")
     process_parser.add_argument("--model", default="4.25", help="RIFE model version")
