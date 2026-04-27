@@ -45,44 +45,97 @@ jobs:
           HTTPS_PROXY: http://127.0.0.1:7897
 
       - name: Assemble portable package
+        id: assemble
         run: |
-          $staging = "frontend/src-tauri/target/release/portable"
-          $exeSource = "frontend/src-tauri/target/release/vp-workbench.exe"
+          $ErrorActionPreference = "Stop"
+
+          $releaseDir = "frontend/src-tauri/target/release"
+          $staging = "$releaseDir/portable"
+          $exeSource = "$releaseDir/vp-workbench.exe"
+
+          # Verify executable exists
+          if (-not (Test-Path -LiteralPath $exeSource -PathType Leaf)) {
+            throw "Executable not found: $exeSource"
+          }
+          Write-Host "Executable found: $exeSource ($(Get-Item $exeSource).Length bytes)"
 
           # Clean and recreate staging directory
-          if (Test-Path $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+          if (Test-Path -LiteralPath $staging) {
+            Remove-Item -LiteralPath $staging -Recurse -Force
+          }
           New-Item -ItemType Directory -Force -Path $staging | Out-Null
 
           # Copy executable
-          Copy-Item -LiteralPath $exeSource -Destination $staging/VP-Workbench.exe -Force
+          Copy-Item -LiteralPath $exeSource -Destination "$staging/VP-Workbench.exe" -Force
+          Write-Host "Copied executable"
 
           # Copy backend code
-          Copy-Item -Recurse -LiteralPath backend/app -Destination $staging/backend/app
-          Copy-Item -LiteralPath backend/requirements.txt -Destination $staging/requirements.txt
+          if (Test-Path -LiteralPath "backend/app" -PathType Container) {
+            New-Item -ItemType Directory -Force -Path "$staging/backend" | Out-Null
+            Copy-Item -Recurse -LiteralPath "backend/app" -Destination "$staging/backend/app"
+            Write-Host "Copied backend/app"
+          }
+          if (Test-Path -LiteralPath "backend/requirements.txt" -PathType Leaf) {
+            Copy-Item -LiteralPath "backend/requirements.txt" -Destination "$staging/requirements.txt" -Force
+            Write-Host "Copied requirements.txt"
+          }
 
           # Copy prepared runtime resources (python/ffmpeg/models)
-          Copy-Item -Recurse -LiteralPath frontend/src-tauri/resources -Destination $staging/resources
+          if (Test-Path -LiteralPath "frontend/src-tauri/resources" -PathType Container) {
+            Copy-Item -Recurse -LiteralPath "frontend/src-tauri/resources" -Destination "$staging/resources"
+            $resourceSize = (Get-ChildItem "$staging/resources" -Recurse -File | Measure-Object -Property Length -Sum).Sum
+            if ($resourceSize -ge 1GB) { $rSizeStr = "{0:N2} GB" -f ($resourceSize / 1GB) } elseif ($resourceSize -ge 1MB) { $rSizeStr = "{0:N1} MB" -f ($resourceSize / 1MB) } else { $rSizeStr = "$resourceSize bytes" }
+            Write-Host "Copied resources: $rSizeStr"
+          }
 
-          # Compress to zip
+          # Compute total staging size
+          $totalSize = (Get-ChildItem $staging -Recurse -File | Measure-Object -Property Length -Sum).Sum
+          if ($totalSize -ge 1GB) { $tSizeStr = "{0:N2} GB" -f ($totalSize / 1GB) } elseif ($totalSize -ge 1MB) { $tSizeStr = "{0:N1} MB" -f ($totalSize / 1MB) } else { $tSizeStr = "$totalSize bytes" }
+          Write-Host "Total staging size: $tSizeStr"
+
+          # Create zip using tar.exe (handles large files better than Compress-Archive)
           $version = $env:GITHUB_REF_NAME -replace '^v',''
           $zipName = "VP-Workbench-${version}-windows-x64.zip"
-          Compress-Archive -Path "$staging/*" -DestinationPath "frontend/src-tauri/target/release/$zipName" -Force
+          $zipPath = "$releaseDir/$zipName"
 
-          Write-Output "zip_path=frontend/src-tauri/target/release/$zipName" >> $env:GITHUB_OUTPUT
-          Write-Output "zip_name=$zipName" >> $env:GITHUB_OUTPUT
-        id: assemble
+          Write-Host "Creating zip: $zipPath ..."
+          # Use tar.exe with -a (auto-detect format from extension), -C to change into staging dir
+          # so zip root contains files directly without "portable/" prefix
+          & tar.exe -acf "$zipPath" -C "$staging" .
+          if ($LASTEXITCODE -ne 0) {
+            throw "tar.exe failed to create zip (exit code $LASTEXITCODE)"
+          }
+
+          $zipSize = (Get-Item -LiteralPath "$zipPath").Length
+          if ($zipSize -ge 1GB) { $zSizeStr = "{0:N2} GB" -f ($zipSize / 1GB) } elseif ($zipSize -ge 1MB) { $zSizeStr = "{0:N1} MB" -f ($zipSize / 1MB) } else { $zSizeStr = "$zipSize bytes" }
+          Write-Host "Zip created: $zipPath ($zSizeStr)"
+
+          # Output for subsequent steps
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "zip_path=$zipPath"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "zip_name=$zipName"
+
+      - name: Verify artifact exists
+        run: |
+          $zipPath = "${{ steps.assemble.outputs.zip_path }}"
+          if (-not (Test-Path -LiteralPath "$zipPath" -PathType Leaf)) {
+            throw "Zip artifact not found at: $zipPath"
+          }
+          $size = (Get-Item -LiteralPath "$zipPath").Length
+          if ($size -ge 1GB) { $vSizeStr = "{0:N2} GB" -f ($size / 1GB) } elseif ($size -ge 1MB) { $vSizeStr = "{0:N1} MB" -f ($size / 1MB) } else { $vSizeStr = "$size bytes" }
+          Write-Host "Verified artifact: $zipPath ($vSizeStr)"
 
       - name: Upload portable artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-portable
-          path: frontend/src-tauri/target/release/${{ steps.assemble.outputs.zip_name }}
+          path: ${{ steps.assemble.outputs.zip_path }}
+          if-no-files-found: error
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            frontend/src-tauri/target/release/${{ steps.assemble.outputs.zip_name }}
+            ${{ steps.assemble.outputs.zip_path }}
           draft: false
           prerelease: false
           generate_release_notes: true
