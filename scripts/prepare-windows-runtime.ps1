@@ -527,7 +527,7 @@ function Optimize-PythonRuntime {
     Write-Step "Optimizing Python runtime: removing development artifacts"
 
     $devExtensions = @(".h", ".hpp", ".c", ".cpp", ".cuh", ".lib", ".pdb", ".cmake", ".jinja", ".al", ".ld", ".mjs", ".thrift")
-    $devDirectoryNames = @("include", "csrc", "testing", "test", "tests", "__pycache__", ".pytest_cache", "docs", "doc", "examples", "demos", "benchmarks", "idlelib")
+    $devDirectoryNames = @("include", "csrc", "test", "tests", "__pycache__", ".pytest_cache", "docs", "doc", "examples", "demos", "benchmarks", "idlelib")
 
     $filesToRemove = [System.Collections.Generic.List[System.IO.FileSystemInfo]]::new()
     $dirsToRemove = [System.Collections.Generic.List[System.IO.DirectoryInfo]]::new()
