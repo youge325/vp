@@ -526,29 +526,40 @@ function Optimize-PythonRuntime {
 
     Write-Step "Optimizing Python runtime: removing development artifacts"
 
-    $devExtensions = @("*.h", "*.hpp", "*.c", "*.cpp", "*.cuh", "*.lib", "*.pdb", "*.cmake", "*.jinja", "*.al", "*.ld", "*.mjs", "*.thrift")
-    $removedFiles = 0
-    $removedBytes = [int64]0
-    foreach ($ext in $devExtensions) {
-        $files = Get-ChildItem -LiteralPath $PythonOutDir -Recurse -Filter $ext -File -ErrorAction SilentlyContinue
-        foreach ($file in $files) {
-            $removedBytes += [int64]$file.Length
-            $removedFiles += 1
-            Remove-Item -LiteralPath $file.FullName -Force
+    $devExtensions = @(".h", ".hpp", ".c", ".cpp", ".cuh", ".lib", ".pdb", ".cmake", ".jinja", ".al", ".ld", ".mjs", ".thrift")
+    $devDirectoryNames = @("include", "csrc", "testing", "test", "tests", "__pycache__", ".pytest_cache", "docs", "doc", "examples", "demos", "benchmarks", "idlelib")
+
+    $filesToRemove = [System.Collections.Generic.List[System.IO.FileSystemInfo]]::new()
+    $dirsToRemove = [System.Collections.Generic.List[System.IO.DirectoryInfo]]::new()
+
+    $items = Get-ChildItem -LiteralPath $PythonOutDir -Recurse -Force -ErrorAction SilentlyContinue
+    foreach ($item in $items) {
+        if ($item.PSIsContainer) {
+            if ($devDirectoryNames -contains $item.Name) {
+                $dirsToRemove.Add($item)
+            }
+        } else {
+            if ($devExtensions -contains $item.Extension) {
+                $filesToRemove.Add($item)
+            }
         }
     }
 
-    $devDirectories = @("include", "csrc", "testing", "test", "tests", "__pycache__", ".pytest_cache", "docs", "doc", "examples", "demos", "benchmarks", "idlelib")
-    $removedDirs = 0
-    foreach ($dirName in $devDirectories) {
-        $dirs = Get-ChildItem -LiteralPath $PythonOutDir -Recurse -Directory -Filter $dirName -ErrorAction SilentlyContinue
-        foreach ($dir in $dirs) {
-            $removedDirs += 1
+    $removedBytes = [int64]0
+    foreach ($file in $filesToRemove) {
+        $removedBytes += [int64]$file.Length
+        Remove-Item -LiteralPath $file.FullName -Force
+    }
+
+    # Sort directories by depth (descending) so children are removed before parents
+    $sortedDirs = $dirsToRemove | Sort-Object { $_.FullName.Split([System.IO.Path]::DirectorySeparatorChar).Length } -Descending
+    foreach ($dir in $sortedDirs) {
+        if (Test-Path -LiteralPath $dir.FullName) {
             Remove-Item -LiteralPath $dir.FullName -Recurse -Force
         }
     }
 
-    Write-Step "Python runtime optimized: removed $removedFiles development files ($(Format-ByteSize $removedBytes)) and $removedDirs development directories"
+    Write-Step "Python runtime optimized: removed $($filesToRemove.Count) development files ($(Format-ByteSize $removedBytes)) and $($dirsToRemove.Count) development directories"
 }
 
 function Invoke-CheckedProcess {
@@ -620,7 +631,8 @@ $modelSourceDir = Resolve-ModelSource -Dir $ModelDir -RepoRoot $repoRoot
 Write-Host "Preparing Windows runtime:"
 Write-Host "  python root: $($pythonSource.Root)"
 Write-Host "  python exe:  $($pythonSource.Exe)"
-Write-Host "  python mode: $([string]::IsNullOrWhiteSpace($PythonCopyMode) ? 'slim' : $PythonCopyMode)"
+$displayMode = if ([string]::IsNullOrWhiteSpace($PythonCopyMode)) { 'slim' } else { $PythonCopyMode }
+Write-Host "  python mode: $displayMode"
 Write-Host "  ffmpeg:      $($ffmpegSource.Ffmpeg)"
 Write-Host "  ffprobe:     $($ffmpegSource.Ffprobe)"
 Write-Host "  model dir:   $modelSourceDir"
