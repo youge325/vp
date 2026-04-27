@@ -44,6 +44,16 @@ jobs:
           HTTP_PROXY: http://127.0.0.1:7897
           HTTPS_PROXY: http://127.0.0.1:7897
 
+      - name: Install 7-Zip
+        run: |
+          if (-not (Get-Command "7z.exe" -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing 7-Zip via Chocolatey..."
+            choco install 7zip --yes --no-progress
+            $env:PATH = "$env:PATH;C:\Program Files\7-Zip"
+          } else {
+            Write-Host "7-Zip already installed."
+          }
+
       - name: Assemble portable package
         id: assemble
         run: |
@@ -93,49 +103,46 @@ jobs:
           if ($totalSize -ge 1GB) { $tSizeStr = "{0:N2} GB" -f ($totalSize / 1GB) } elseif ($totalSize -ge 1MB) { $tSizeStr = "{0:N1} MB" -f ($totalSize / 1MB) } else { $tSizeStr = "$totalSize bytes" }
           Write-Host "Total staging size: $tSizeStr"
 
-          # Create zip using tar.exe (handles large files better than Compress-Archive)
+          # Create split zip using 7-Zip (each volume < 2GB for GitHub Release limit)
           $version = $env:GITHUB_REF_NAME -replace '^v',''
-          $zipName = "VP-Workbench-${version}-windows-x64.zip"
-          $zipPath = "$releaseDir/$zipName"
+          $zipBaseName = "VP-Workbench-${version}-windows-x64"
+          $zipPath = "$releaseDir/$zipBaseName.zip"
 
-          Write-Host "Creating zip: $zipPath ..."
-          # Use tar.exe with -a (auto-detect format from extension), -C to change into staging dir
-          # so zip root contains files directly without "portable/" prefix
-          & tar.exe -acf "$zipPath" -C "$staging" .
+          Write-Host "Creating split zip: $zipPath (max 1900MB per volume)..."
+          # -v1900m = split into 1900MB volumes
+          # -tzip = zip format (compatible with Windows Explorer)
+          # Working dir must be staging so archive root matches expected layout
+          & 7z.exe a -v1900m -tzip "$zipPath" "$staging\*"
           if ($LASTEXITCODE -ne 0) {
-            throw "tar.exe failed to create zip (exit code $LASTEXITCODE)"
+            throw "7z.exe failed to create split zip (exit code $LASTEXITCODE)"
           }
 
-          $zipSize = (Get-Item -LiteralPath "$zipPath").Length
-          if ($zipSize -ge 1GB) { $zSizeStr = "{0:N2} GB" -f ($zipSize / 1GB) } elseif ($zipSize -ge 1MB) { $zSizeStr = "{0:N1} MB" -f ($zipSize / 1MB) } else { $zSizeStr = "$zipSize bytes" }
-          Write-Host "Zip created: $zipPath ($zSizeStr)"
+          $parts = Get-ChildItem -Path "$releaseDir" -Filter "$zipBaseName.zip.*" | Sort-Object Name
+          Write-Host "Created $($parts.Count) volume(s):"
+          foreach ($part in $parts) {
+            if ($part.Length -ge 1MB) { $pSizeStr = "{0:N1} MB" -f ($part.Length / 1MB) } else { $pSizeStr = "$($part.Length) bytes" }
+            Write-Host "  $($part.Name) ($pSizeStr)"
+          }
 
           # Output for subsequent steps
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "zip_path=$zipPath"
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "zip_name=$zipName"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "zip_base_name=$zipBaseName"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "release_dir=$releaseDir"
 
-      - name: Verify artifact exists
+      - name: Verify volumes exist
         run: |
-          $zipPath = "${{ steps.assemble.outputs.zip_path }}"
-          if (-not (Test-Path -LiteralPath "$zipPath" -PathType Leaf)) {
-            throw "Zip artifact not found at: $zipPath"
+          $baseName = "${{ steps.assemble.outputs.zip_base_name }}"
+          $releaseDir = "${{ steps.assemble.outputs.release_dir }}"
+          $parts = Get-ChildItem -Path "$releaseDir" -Filter "$baseName.zip.*"
+          if ($parts.Count -eq 0) {
+            throw "No zip volumes found for $baseName"
           }
-          $size = (Get-Item -LiteralPath "$zipPath").Length
-          if ($size -ge 1GB) { $vSizeStr = "{0:N2} GB" -f ($size / 1GB) } elseif ($size -ge 1MB) { $vSizeStr = "{0:N1} MB" -f ($size / 1MB) } else { $vSizeStr = "$size bytes" }
-          Write-Host "Verified artifact: $zipPath ($vSizeStr)"
-
-      - name: Upload portable artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-portable
-          path: ${{ steps.assemble.outputs.zip_path }}
-          if-no-files-found: error
+          Write-Host "Verified $($parts.Count) volume(s) ready for upload"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ${{ steps.assemble.outputs.zip_path }}
+            ${{ steps.assemble.outputs.release_dir }}/${{ steps.assemble.outputs.zip_base_name }}.zip.*
           draft: false
           prerelease: false
           generate_release_notes: true
