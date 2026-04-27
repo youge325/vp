@@ -521,6 +521,36 @@ function Copy-ModelFiles {
     Write-Step "RIFE models complete: $($models.Count) files, $(Format-ByteSize $bytes), hardlinks=$linked, copies=$copied"
 }
 
+function Optimize-PythonRuntime {
+    param([string]$PythonOutDir)
+
+    Write-Step "Optimizing Python runtime: removing development artifacts"
+
+    $devExtensions = @("*.h", "*.hpp", "*.c", "*.cpp", "*.cuh", "*.lib", "*.pdb", "*.cmake", "*.jinja", "*.al", "*.ld", "*.mjs", "*.thrift")
+    $removedFiles = 0
+    $removedBytes = [int64]0
+    foreach ($ext in $devExtensions) {
+        $files = Get-ChildItem -LiteralPath $PythonOutDir -Recurse -Filter $ext -File -ErrorAction SilentlyContinue
+        foreach ($file in $files) {
+            $removedBytes += [int64]$file.Length
+            $removedFiles += 1
+            Remove-Item -LiteralPath $file.FullName -Force
+        }
+    }
+
+    $devDirectories = @("include", "csrc", "testing", "test", "tests", "__pycache__", ".pytest_cache", "docs", "doc", "examples", "demos", "benchmarks", "idlelib")
+    $removedDirs = 0
+    foreach ($dirName in $devDirectories) {
+        $dirs = Get-ChildItem -LiteralPath $PythonOutDir -Recurse -Directory -Filter $dirName -ErrorAction SilentlyContinue
+        foreach ($dir in $dirs) {
+            $removedDirs += 1
+            Remove-Item -LiteralPath $dir.FullName -Recurse -Force
+        }
+    }
+
+    Write-Step "Python runtime optimized: removed $removedFiles development files ($(Format-ByteSize $removedBytes)) and $removedDirs development directories"
+}
+
 function Invoke-CheckedProcess {
     param(
         [string]$Label,
@@ -607,6 +637,7 @@ $modelsOut = Join-Path $outputRootFull "models"
 New-Item -ItemType Directory -Force -Path $pythonOut, $ffmpegOut, $modelsOut | Out-Null
 
 Copy-PythonRuntime -PythonSource $pythonSource -Destination $pythonOut -Mode $PythonCopyMode -ExtraPatterns $ExtraPythonPackages
+Optimize-PythonRuntime -PythonOutDir $pythonOut
 
 Write-Step "Copying FFmpeg binaries"
 Copy-FileFast -Source $ffmpegSource.Ffmpeg -Destination (Join-Path $ffmpegOut "ffmpeg.exe") | Out-Null
