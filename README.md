@@ -99,3 +99,16 @@ cargo test --quiet
 
 - `docs/architecture-parameter-flow.md`
 - `docs/field-level-mapping.md`
+
+## 参考项目
+
+**算法**
+
+- <https://github.com/hzwer/ECCV2022-RIFE>
+- <https://github.com/hzwer/Practical-RIFE>
+- <https://github.com/HolyWu/vs-rife>
+
+**框架**
+
+- <https://github.com/NangInShell/VSET>
+- <https://github.com/tauri-apps/tauri>
