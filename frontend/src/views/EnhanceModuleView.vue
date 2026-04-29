@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RIFE_MODELS } from '@/lib/workflow'
+import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
 import type { FpsMode, ProcessOrder, TensorBackend } from '@/types'
 
 const mediaStore = useMediaStore()
+const envStore = useEnvStore()
 const presetStore = usePresetStore()
 
 const workflow = computed(() => mediaStore.editor.workflowConfig)
@@ -18,6 +20,23 @@ const caption = computed(() =>
     ? '增强参数可以在导入前先配置好，新导入的视频会直接继承这些默认设置。'
     : '当前修改会同步到激活文件与所有已勾选文件，方便批量套用增强流程。',
 )
+const interpolationOnnxModels = computed(() => envStore.env.checkResult?.onnx_models?.interpolation ?? [])
+const superResolutionOnnxModels = computed(() => envStore.env.checkResult?.onnx_models?.super_resolution ?? [])
+const hasRequiredOnnxModels = computed(() => {
+  const needsInterpolation = workflow.value.interpolation.enabled
+  const needsSuperResolution = workflow.value.superResolution.enabled
+  if (!needsInterpolation && !needsSuperResolution) {
+    return interpolationOnnxModels.value.length > 0 || superResolutionOnnxModels.value.length > 0
+  }
+  return (
+    (!needsInterpolation || interpolationOnnxModels.value.length > 0) &&
+    (!needsSuperResolution || superResolutionOnnxModels.value.length > 0)
+  )
+})
+const canSelectOnnxBackend = computed(
+  () => Boolean(envStore.env.checkResult?.tensor_backends.onnx) && hasRequiredOnnxModels.value,
+)
+const isOnnxBackend = computed(() => workflow.value.interpolation.tensorBackend === 'onnx')
 
 const interpolationEnabled = computed({
   get: () => workflow.value.interpolation.enabled,
@@ -33,6 +52,10 @@ const interpolationBackend = computed({
   set: (value: TensorBackend) => {
     presetStore.patchWorkflow((config) => {
       config.interpolation.tensorBackend = value
+      if (value === 'onnx') {
+        config.interpolation.onnxModel ||= interpolationOnnxModels.value[0] ?? ''
+        config.superResolution.onnxModel ||= superResolutionOnnxModels.value[0] ?? ''
+      }
     })
   },
 })
@@ -42,6 +65,15 @@ const interpolationModel = computed({
   set: (value: string) => {
     presetStore.patchWorkflow((config) => {
       config.interpolation.model = value
+    })
+  },
+})
+
+const interpolationOnnxModel = computed({
+  get: () => workflow.value.interpolation.onnxModel ?? '',
+  set: (value: string) => {
+    presetStore.patchWorkflow((config) => {
+      config.interpolation.onnxModel = value
     })
   },
 })
@@ -114,6 +146,15 @@ const superResolutionAlgorithm = computed({
   set: (value: string) => {
     presetStore.patchWorkflow((config) => {
       config.superResolution.algorithm = value
+    })
+  },
+})
+
+const superResolutionOnnxModel = computed({
+  get: () => workflow.value.superResolution.onnxModel ?? '',
+  set: (value: string) => {
+    presetStore.patchWorkflow((config) => {
+      config.superResolution.onnxModel = value
     })
   },
 })
@@ -191,6 +232,7 @@ const animeEdgeBoost = computed({
           <select v-model="interpolationBackend">
             <option value="pytorch">PyTorch</option>
             <option value="paddle">PaddlePaddle</option>
+            <option value="onnx" :disabled="!canSelectOnnxBackend">ONNX Runtime</option>
           </select>
         </label>
 
@@ -198,6 +240,14 @@ const animeEdgeBoost = computed({
           <span>模型</span>
           <select v-model="interpolationModel">
             <option v-for="model in RIFE_MODELS" :key="model" :value="model">{{ model }}</option>
+          </select>
+        </label>
+
+        <label v-if="isOnnxBackend" class="field">
+          <span>ONNX 补帧模型</span>
+          <select v-model="interpolationOnnxModel" :disabled="interpolationOnnxModels.length === 0">
+            <option value="">未选择</option>
+            <option v-for="model in interpolationOnnxModels" :key="model" :value="model">{{ model }}</option>
           </select>
         </label>
 
@@ -260,6 +310,14 @@ const animeEdgeBoost = computed({
           <select v-model="superResolutionAlgorithm">
             <option value="placeholder">placeholder</option>
             <option value="realesrgan-plan">realesrgan-plan</option>
+          </select>
+        </label>
+
+        <label v-if="isOnnxBackend" class="field">
+          <span>ONNX 超分模型</span>
+          <select v-model="superResolutionOnnxModel" :disabled="superResolutionOnnxModels.length === 0">
+            <option value="">未选择</option>
+            <option v-for="model in superResolutionOnnxModels" :key="model" :value="model">{{ model }}</option>
           </select>
         </label>
 

@@ -11,7 +11,7 @@ export type ProcessOrder =
   | 'super_resolution_then_interpolation'
   | 'frame_interpolation_then_super_resolution'
 export type FpsMode = 'multi' | 'target'
-export type TensorBackend = 'pytorch' | 'paddle'
+export type TensorBackend = 'pytorch' | 'paddle' | 'onnx'
 export type TaskStatus = 'idle' | 'running' | 'paused' | 'cancelling' | 'completed' | 'error' | 'cancelled'
 export type CodecFamily = 'cpu' | 'nvidia' | 'intel' | 'software'
 export type GpuVendor = 'nvidia' | 'intel' | 'amd' | 'other'
@@ -90,6 +90,15 @@ export interface EnvironmentCheckResult {
   tensor_backends: {
     pytorch?: boolean
     paddle?: boolean
+    onnx?: boolean
+  }
+  onnx_runtime?: {
+    available?: boolean
+    providers: string[]
+  }
+  onnx_models?: {
+    interpolation: string[]
+    super_resolution: string[]
   }
   rife_model: {
     available?: boolean
@@ -158,6 +167,7 @@ export interface InterpolationConfig {
   targetFps: number
   multi: number
   model: string
+  onnxModel?: string
   scale: number
   fp16: boolean
   tensorBackend: TensorBackend
@@ -167,6 +177,7 @@ export interface SuperResolutionConfig {
   enabled: boolean
   scaleFactor: number
   algorithm: string
+  onnxModel?: string
 }
 
 export interface AnimeConfig {

@@ -113,6 +113,7 @@ class _FakeFFmpegWrapper:
         self._source_frames = [frame.copy() for frame in source_frames]
         self._source_fps = source_fps
         self.video_frames: dict[str, list[np.ndarray]] = {}
+        self.encoder_dimensions: list[tuple[int, int]] = []
 
     def get_video_info(self, _input_path: str):
         height, width, _channels = self._source_frames[0].shape
@@ -148,12 +149,15 @@ class _FakeFFmpegWrapper:
         self,
         *,
         output_path: str,
+        width: int,
+        height: int,
         fps: float,
         output_fps: float | None = None,
         progress_callback=None,
         **kwargs,
     ):
         del kwargs
+        self.encoder_dimensions.append((width, height))
         return _FakeWriter(
             self,
             output_path,
@@ -406,6 +410,76 @@ def test_streaming_pipeline_reports_final_encoded_frames_when_resampling(monkeyp
 
     assert result["processed_frames"] == len(wrapper.video_frames[str(output_path)])
     assert result["processed_frames"] == 5
+
+
+def test_streaming_pipeline_uses_scaled_encoder_dimensions_for_onnx_super_resolution(monkeypatch):
+    source_frames = [_frame(0), _frame(100)]
+    wrapper = _FakeFFmpegWrapper(source_frames)
+    workspace = _workspace("onnx_sr_dimensions")
+    input_path = workspace / "input.mp4"
+    output_path = workspace / "output" / "demo_processed.mp4"
+    input_path.write_bytes(b"input")
+
+    workflow_config = {
+        "fpsMode": "multi",
+        "processOrder": "super_resolution_then_interpolation",
+        "interpolation": {
+            "enabled": False,
+            "targetFps": 60,
+            "multi": 2,
+            "model": "4.25",
+            "scale": 1.0,
+            "fp16": False,
+            "tensorBackend": "onnx",
+            "onnxModel": "",
+        },
+        "superResolution": {
+            "enabled": True,
+            "scaleFactor": 2.0,
+            "algorithm": "onnx",
+            "onnxModel": "sr.onnx",
+        },
+        "anime": {
+            "enabled": False,
+            "profile": "clean-lines",
+            "denoise": 10,
+            "edgeBoost": 15,
+        },
+    }
+    encode_config = {
+        "codec": "libx264",
+        "family": "cpu",
+        "container": "mp4",
+        "keepAudio": True,
+        "rateControl": {"mode": "crf", "value": 18},
+        "options": {},
+    }
+    processing_steps = [
+        {
+            "algorithm_type": "super_resolution",
+            "algorithm_kwargs": {"scale_factor": 2.0, "sr_algorithm": "onnx", "onnx_model": "sr.onnx"},
+            "stage_name": "01_super_resolution",
+        }
+    ]
+    output_config = {"outputDir": "", "openOnComplete": False, "segmentFrames": 2}
+
+    monkeypatch.setattr("app.processing.streaming.get_tensor_backend", lambda _name: _IdentityBackend())
+    monkeypatch.setattr("app.processing.streaming.AlgorithmFactory.create", lambda **_kwargs: _IdentityAlgorithm())
+
+    process_video_streaming(
+        ffmpeg=wrapper,
+        input_path=str(input_path),
+        output_path=str(output_path),
+        decode_config={"mode": "software", "decoder": "software", "options": {}},
+        encode_config=encode_config,
+        workflow_config=workflow_config,
+        output_config=output_config,
+        processing_steps=processing_steps,
+        tensor_backend_name="onnx",
+        progress_callbacks=[lambda *_args: None],
+    )
+
+    assert wrapper.encoder_dimensions[0] == (2, 2)
 
 
 def test_legacy_processing_modules_are_removed():

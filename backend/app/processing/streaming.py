@@ -303,6 +303,11 @@ def process_video_streaming(
 
     manifest = SegmentManifest(output_path)
     resume_state = manifest.prepare(signature)
+    output_width, output_height = _resolved_output_dimensions(
+        video_info=video_info,
+        stage_plan=stage_plan,
+        tensor_backend_name=tensor_backend_name,
+    )
 
     if resume_state.start_source_frame >= video_info["source_frames"]:
         completed_output_frames = resume_state.completed_output_frames
@@ -318,6 +323,8 @@ def process_video_streaming(
             tensor_backend_name=tensor_backend_name,
             progress_callbacks=progress_callbacks,
             video_info=video_info,
+            output_width=output_width,
+            output_height=output_height,
             resume_state=resume_state,
             segment_frames=max(1, int(output_config.get("segmentFrames") or 1000)),
             output_path=output_path,
@@ -486,6 +493,8 @@ def _run_streaming_pipeline(
     tensor_backend_name: str,
     progress_callbacks: list[Callable[[int, int], None]],
     video_info: dict[str, Any],
+    output_width: int,
+    output_height: int,
     resume_state: ResumeState,
     segment_frames: int,
     output_path: str,
@@ -542,8 +551,8 @@ def _run_streaming_pipeline(
                 "encode_config": encode_config,
                 "manifest": manifest,
                 "signature": signature,
-                "width": video_info["width"],
-                "height": video_info["height"],
+                "width": output_width,
+                "height": output_height,
                 "fps": _resolved_stream_fps(video_info["source_fps"], stage_plan),
                 "output_fps": output_fps,
                 "segment_frames": segment_frames,
@@ -584,6 +593,30 @@ def _resolved_stream_fps(source_fps: float, stage_plan: StagePlan) -> float:
         return source_fps
     multi = int(interpolation_step["algorithm_kwargs"].get("multi") or settings.RIFE_DEFAULT_MULTI)
     return source_fps * multi
+
+
+def _resolved_output_dimensions(
+    *,
+    video_info: dict[str, Any],
+    stage_plan: StagePlan,
+    tensor_backend_name: str,
+) -> tuple[int, int]:
+    width = int(video_info["width"])
+    height = int(video_info["height"])
+    if tensor_backend_name != "onnx":
+        return width, height
+
+    for step in [*stage_plan.pre_steps, *stage_plan.post_steps]:
+        if step["algorithm_type"] != "super_resolution":
+            continue
+        kwargs = step["algorithm_kwargs"]
+        if not kwargs.get("onnx_model"):
+            continue
+        scale_factor = float(kwargs.get("scale_factor") or 1.0)
+        width = max(1, int(round(width * scale_factor)))
+        height = max(1, int(round(height * scale_factor)))
+
+    return width, height
 
 
 def _decoder_worker(

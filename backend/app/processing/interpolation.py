@@ -54,6 +54,7 @@ class FrameInterpolationAlgorithm(IAlgorithm):
         self._fp16 = kwargs.get("fp16", settings.RIFE_FP16)
         self._device = kwargs.get("device", None)
         self._model_dir = kwargs.get("model_dir", settings.RIFE_MODEL_DIR)
+        self._onnx_model = kwargs.get("onnx_model")
 
         # 延迟初始化 RIFESolver
         self._solver: Optional[RIFESolver] = None
@@ -70,6 +71,7 @@ class FrameInterpolationAlgorithm(IAlgorithm):
             self._solver = RIFEONNXSolver(
                 model_version=self._model_version,
                 model_dir=self._model_dir,
+                onnx_model=self._onnx_model,
             )
         else:
             logger.info(
@@ -109,6 +111,10 @@ class FrameInterpolationAlgorithm(IAlgorithm):
 
     def validate(self) -> bool:
         """验证 RIFE 模型是否可运行。"""
+        backend_name = self._tensor_backend.get_name() if self._tensor_backend is not None else "numpy"
+        if backend_name == "onnx":
+            return True
+
         try:
             import torch
 

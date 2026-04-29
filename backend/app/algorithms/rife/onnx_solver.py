@@ -9,6 +9,7 @@ from typing import Optional
 import numpy as np
 
 from app.utils.logger import get_logger
+from app.algorithms.onnx_models import resolve_onnx_model_path
 from .model_loader import get_model_dir, MODEL_CONFIGS
 
 logger = get_logger(__name__)
@@ -65,6 +66,7 @@ class RIFEONNXSolver:
         self,
         model_version: str = "4.25",
         model_dir: Optional[str] = None,
+        onnx_model: Optional[str] = None,
     ):
         import onnxruntime as ort
 
@@ -73,12 +75,19 @@ class RIFEONNXSolver:
         self._modulo = self._config["modulo"]
 
         model_dir = model_dir or get_model_dir()
-        onnx_path = os.path.join(model_dir, f"rife_v{model_version}.onnx")
-        if not os.path.isfile(onnx_path):
-            raise FileNotFoundError(
-                f"ONNX 模型文件未找到: {onnx_path}。"
-                f"请先运行 export_rife_to_onnx(model_version='{model_version}') 导出模型"
-            )
+        if onnx_model:
+            onnx_path = str(resolve_onnx_model_path("interpolation", onnx_model, model_dir))
+        else:
+            onnx_path = os.path.join(model_dir, "interpolation", f"rife_v{model_version}.onnx")
+            legacy_path = os.path.join(model_dir, f"rife_v{model_version}.onnx")
+            if not os.path.isfile(onnx_path) and os.path.isfile(legacy_path):
+                onnx_path = legacy_path
+            if not os.path.isfile(onnx_path):
+                raise FileNotFoundError(
+                    f"ONNX 模型文件未找到: {onnx_path}。"
+                    f"请将补帧 ONNX 模型放入 {os.path.join(model_dir, 'interpolation')}，"
+                    f"或运行 export_rife_to_onnx(model_version='{model_version}') 导出模型"
+                )
 
         # 优先使用 GPU EP，回退到 CPU
         providers = ort.get_available_providers()
@@ -95,7 +104,7 @@ class RIFEONNXSolver:
 
         logger.info(
             f"RIFEONNXSolver 初始化完成: v{model_version}, "
-            f"providers={self._session.get_providers()}, modulo={self._modulo}"
+            f"model={onnx_path}, providers={self._session.get_providers()}, modulo={self._modulo}"
         )
 
     def _ensure_grid_cache(self, height: int, width: int):
@@ -138,7 +147,10 @@ class RIFEONNXSolver:
             "img1": img1_padded,
             "timestep": t,
             "tenFlow_div": self._flow_div,
+            "flow_div": self._flow_div,
             "backwarp_tenGrid": self._backwarp_grid,
+            "backwarp_grid": self._backwarp_grid,
+            "grid": self._backwarp_grid,
         }
         # 仅传递模型实际需要的输入（防御性编程）
         feed = {k: v for k, v in feed.items() if k in self._input_names}

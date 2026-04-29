@@ -1,10 +1,12 @@
 """CLI processing-step planning tests."""
 
 import argparse
+import json
 
 import pytest
 
 from app.cli import (
+    cmd_check,
     _default_output_config,
     _load_json_arg,
     _resolve_expected_output_frames,
@@ -24,6 +26,20 @@ class _FakeFFmpeg:
 
     def get_duration(self, _input_path: str) -> float:
         return self._duration
+
+
+class _FakeCheckFFmpeg:
+    ffmpeg_path = "ffmpeg"
+    ffprobe_path = "ffprobe"
+
+    def is_available(self) -> bool:
+        return True
+
+    def get_version(self) -> str:
+        return "ffmpeg test"
+
+    def discover_capabilities(self, _gpu_adapters):
+        return {"hwaccels": [], "encoderProfiles": [], "decoderProfiles": []}
 
 
 def _make_workflow_config(**overrides):
@@ -178,3 +194,35 @@ def test_process_parser_rejects_removed_temp_override_flag():
 def test_resource_summary_omits_legacy_temp_override_key():
     removed_key = "_".join(["temp", "dir"])
     assert removed_key not in settings.resource_summary()
+
+
+def test_check_reports_onnx_runtime_and_model_lists(tmp_path, monkeypatch, capsys):
+    model_dir = tmp_path / "models"
+    (model_dir / "interpolation").mkdir(parents=True)
+    (model_dir / "super_resolution").mkdir()
+    (model_dir / "flownet_v4.25.pkl").write_bytes(b"model")
+    (model_dir / "interpolation" / "interp.onnx").write_bytes(b"onnx")
+    (model_dir / "super_resolution" / "sr.onnx").write_bytes(b"onnx")
+
+    monkeypatch.setattr("app.cli.FFmpegWrapper", _FakeCheckFFmpeg)
+    monkeypatch.setattr(
+        "app.cli._check_pytorch_in_subprocess",
+        lambda: {"pytorch_available": False, "gpu_available": False, "gpu_devices": []},
+    )
+    monkeypatch.setattr("app.cli._check_paddle_in_subprocess", lambda: {"paddle_available": False})
+    monkeypatch.setattr(
+        "app.cli._check_onnxruntime_in_subprocess",
+        lambda: {"onnx_available": True, "providers": ["CPUExecutionProvider"]},
+    )
+    monkeypatch.setattr("app.cli.list_gpu_adapters", lambda: [])
+    monkeypatch.setattr(settings, "RIFE_MODEL_DIR", str(model_dir))
+
+    cmd_check(argparse.Namespace())
+
+    payload = json.loads(capsys.readouterr().out.strip())
+    assert payload["tensor_backends"]["onnx"] is True
+    assert payload["onnx_runtime"]["providers"] == ["CPUExecutionProvider"]
+    assert payload["onnx_models"] == {
+        "interpolation": ["interp.onnx"],
+        "super_resolution": ["sr.onnx"],
+    }

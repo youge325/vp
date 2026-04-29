@@ -332,9 +332,11 @@ function Get-PythonPackagePatterns {
         "astor*",
         "certifi*",
         "charset_normalizer*",
+        "coloredlogs*",
         "decorator*",
         "dotenv",
         "filelock*",
+        "flatbuffers*",
         "fsspec*",
         "functorch",
         "gast*",
@@ -342,6 +344,7 @@ function Get-PythonPackagePatterns {
         "h11*",
         "httpcore*",
         "httpx*",
+        "humanfriendly*",
         "idna*",
         "isympy.py",
         "jinja2*",
@@ -353,6 +356,7 @@ function Get-PythonPackagePatterns {
         "nvidia*",
         "opt_einsum*",
         "optree*",
+        "onnxruntime*",
         "packaging*",
         "paddle*",
         "paddlepaddle*",
@@ -518,7 +522,29 @@ function Copy-ModelFiles {
         }
         Write-Step "model $($model.Name) complete: $(Format-ByteSize $model.Length), $result"
     }
-    Write-Step "RIFE models complete: $($models.Count) files, $(Format-ByteSize $bytes), hardlinks=$linked, copies=$copied"
+
+    foreach ($subdirName in @("interpolation", "super_resolution")) {
+        $sourceSubdir = Join-Path $SourceDir $subdirName
+        if (-not (Test-Path -LiteralPath $sourceSubdir -PathType Container)) {
+            continue
+        }
+
+        $destinationSubdir = Join-Path $DestinationDir $subdirName
+        New-Item -ItemType Directory -Force -Path $destinationSubdir | Out-Null
+        $onnxModels = Get-ChildItem -LiteralPath $sourceSubdir -Filter "*.onnx" -File
+        foreach ($model in $onnxModels) {
+            $result = Copy-FileFast -Source $model.FullName -Destination (Join-Path $destinationSubdir $model.Name)
+            $bytes += [int64]$model.Length
+            if ($result -eq "linked") {
+                $linked += 1
+            } else {
+                $copied += 1
+            }
+            Write-Step "model $subdirName\$($model.Name) complete: $(Format-ByteSize $model.Length), $result"
+        }
+    }
+
+    Write-Step "RIFE models complete: hardlinks=$linked, copies=$copied, total=$(Format-ByteSize $bytes)"
 }
 
 function Optimize-PythonRuntime {
@@ -676,7 +702,7 @@ $env:VP_RIFE_MODEL_DIR = $modelsOut
 $env:PYTHONNOUSERSITE = "1"
 Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
 
-$importSmokeScript = "import importlib; [importlib.import_module(name) for name in ['pydantic','pydantic_settings','numpy','PIL','torch']]; print('python runtime imports ok', flush=True)"
+$importSmokeScript = "import importlib; [importlib.import_module(name) for name in ['pydantic','pydantic_settings','numpy','PIL','torch','onnxruntime']]; print('python runtime imports ok', flush=True)"
 Invoke-CheckedProcess -Label "Python runtime import smoke" -FilePath $destPythonExe -Arguments @("-s", "-c", $importSmokeScript) -TimeoutSeconds 180
 Invoke-CheckedProcess -Label "Bundled backend check" -FilePath $destPythonExe -Arguments @("-s", "-m", "app", "check") -WorkingDirectory (Join-Path $repoRoot "backend") -TimeoutSeconds 180
 

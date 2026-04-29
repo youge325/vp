@@ -229,6 +229,7 @@ mod tests {
                     target_fps: 60.0,
                     multi: 2,
                     model: "4.25".to_string(),
+                    onnx_model: None,
                     scale: 1.0,
                     fp16: false,
                     tensor_backend: "pytorch".to_string(),
@@ -237,6 +238,7 @@ mod tests {
                     enabled: false,
                     scale_factor: 2.0,
                     algorithm: "placeholder".to_string(),
+                    onnx_model: None,
                 },
                 anime: AnimeConfig {
                     enabled: false,
