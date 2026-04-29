@@ -3,6 +3,7 @@ import {
   buildTaskRequest,
   createDefaultDecodeConfig,
   createDefaultEncodeConfig,
+  createDefaultWorkbenchPreset,
   resolvePrimaryMode,
 } from '@/lib/task-mapper'
 import { createIdleTaskState } from '@/lib/task-events'
@@ -79,6 +80,15 @@ function makeEnv(): EnvironmentCheckResult {
     tensor_backends: {
       pytorch: true,
       paddle: false,
+      onnx: true,
+    },
+    onnx_runtime: {
+      available: true,
+      providers: ['CPUExecutionProvider'],
+    },
+    onnx_models: {
+      interpolation: ['interp.onnx'],
+      super_resolution: ['sr.onnx'],
     },
     rife_model: {
       available: true,
@@ -122,6 +132,7 @@ function makeItem(env = makeEnv()): MediaItem {
         targetFps: 60,
         multi: 2,
         model: '4.25',
+        onnxModel: 'interp.onnx',
         scale: 1,
         fp16: false,
         tensorBackend: 'pytorch',
@@ -130,6 +141,7 @@ function makeItem(env = makeEnv()): MediaItem {
         enabled: true,
         scaleFactor: 2,
         algorithm: 'placeholder',
+        onnxModel: 'sr.onnx',
       },
       anime: {
         enabled: false,
@@ -173,10 +185,19 @@ describe('task mapper', () => {
     expect(request.inputPath).toBe('D:/input/demo.mp4')
     expect(request.decodeConfig.decoder).toBe('hevc_cuvid')
     expect(request.workflowConfig.interpolation.targetFps).toBe(60)
+    expect(request.workflowConfig.interpolation.onnxModel).toBe('interp.onnx')
+    expect(request.workflowConfig.superResolution.onnxModel).toBe('sr.onnx')
     expect(request.encodeConfig.codec).toBe('hevc_nvenc')
     expect(request.outputConfig.outputDir).toBe('D:/output')
     expect(request.outputConfig.segmentFrames).toBe(1000)
     expect(request).not.toHaveProperty('outputPath')
     expect(request).not.toHaveProperty(legacyTempField)
+  })
+
+  it('seeds default ONNX models from environment discovery', () => {
+    const preset = createDefaultWorkbenchPreset(makeEnv())
+
+    expect(preset.workflowConfig.interpolation.onnxModel).toBe('interp.onnx')
+    expect(preset.workflowConfig.superResolution.onnxModel).toBe('sr.onnx')
   })
 })

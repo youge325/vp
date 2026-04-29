@@ -5,6 +5,11 @@ import type { WorkbenchPreset, WorkflowConfig } from '@/types'
 
 const mediaStoreState = vi.hoisted(() => ({ current: null as any }))
 const presetStoreState = vi.hoisted(() => ({ current: null as any }))
+const envStoreState = vi.hoisted(() => ({ current: null as any }))
+
+vi.mock('@/stores/env', () => ({
+  useEnvStore: () => envStoreState.current,
+}))
 
 vi.mock('@/stores/media', () => ({
   useMediaStore: () => mediaStoreState.current,
@@ -25,6 +30,7 @@ function createWorkflowConfig(): WorkflowConfig {
       targetFps: 60,
       multi: 2,
       model: '4.25',
+      onnxModel: '',
       scale: 1,
       fp16: false,
       tensorBackend: 'pytorch',
@@ -33,6 +39,7 @@ function createWorkflowConfig(): WorkflowConfig {
       enabled: false,
       scaleFactor: 2,
       algorithm: 'placeholder',
+      onnxModel: '',
     },
     anime: {
       enabled: false,
@@ -93,11 +100,31 @@ function createPresetStoreMock(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function createEnvStoreMock(overrides: Record<string, unknown> = {}) {
+  return {
+    env: {
+      checkResult: {
+        tensor_backends: {
+          pytorch: true,
+          paddle: true,
+          onnx: true,
+        },
+        onnx_models: {
+          interpolation: ['interp.onnx'],
+          super_resolution: ['sr.onnx'],
+        },
+      },
+    },
+    ...overrides,
+  }
+}
+
 describe('EnhanceModuleView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mediaStoreState.current = createMediaStoreMock()
     presetStoreState.current = createPresetStoreMock()
+    envStoreState.current = createEnvStoreMock()
   })
 
   it('renders workflow controls even before media import', () => {
@@ -119,5 +146,36 @@ describe('EnhanceModuleView', () => {
     const checkboxes = wrapper.findAll('input[type="checkbox"]')
     await checkboxes[1]!.setValue(true)
     expect(mediaStoreState.current.editor.workflowConfig.interpolation.fp16).toBe(true)
+  })
+
+  it('shows ONNX backend and independent ONNX model selectors', async () => {
+    const wrapper = mount(EnhanceModuleView)
+
+    await wrapper.findAll('select')[0]!.setValue('onnx')
+
+    expect(mediaStoreState.current.editor.workflowConfig.interpolation.tensorBackend).toBe('onnx')
+    expect(mediaStoreState.current.editor.workflowConfig.interpolation.onnxModel).toBe('interp.onnx')
+    expect(mediaStoreState.current.editor.workflowConfig.superResolution.onnxModel).toBe('sr.onnx')
+
+    const onnxEditor = createEditor({
+      workflowConfig: {
+        ...createWorkflowConfig(),
+        interpolation: {
+          ...createWorkflowConfig().interpolation,
+          tensorBackend: 'onnx',
+          onnxModel: 'interp.onnx',
+        },
+        superResolution: {
+          ...createWorkflowConfig().superResolution,
+          onnxModel: 'sr.onnx',
+        },
+      },
+    })
+    mediaStoreState.current = createMediaStoreMock({ editor: onnxEditor })
+    presetStoreState.current = createPresetStoreMock({ draftPreset: onnxEditor })
+
+    const onnxWrapper = mount(EnhanceModuleView)
+    expect(onnxWrapper.text()).toContain('ONNX 补帧模型')
+    expect(onnxWrapper.text()).toContain('ONNX 超分模型')
   })
 })

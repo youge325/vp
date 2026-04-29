@@ -39,6 +39,7 @@ export function createDefaultWorkflowConfig(): WorkflowConfig {
       targetFps: 60,
       multi: 2,
       model: '4.25',
+      onnxModel: '',
       scale: 1,
       fp16: false,
       tensorBackend: 'pytorch',
@@ -47,6 +48,7 @@ export function createDefaultWorkflowConfig(): WorkflowConfig {
       enabled: false,
       scaleFactor: 2,
       algorithm: 'placeholder',
+      onnxModel: '',
     },
     anime: {
       enabled: false,
@@ -153,9 +155,13 @@ export function buildTaskRequest(item: MediaItem): TaskRequest {
 }
 
 export function createDefaultWorkbenchPreset(env: EnvironmentCheckResult | null): WorkbenchPreset {
+  const workflowConfig = createDefaultWorkflowConfig()
+  workflowConfig.interpolation.onnxModel = env?.onnx_models?.interpolation?.[0] ?? ''
+  workflowConfig.superResolution.onnxModel = env?.onnx_models?.super_resolution?.[0] ?? ''
+
   return {
     decodeConfig: createDefaultDecodeConfig(env),
-    workflowConfig: createDefaultWorkflowConfig(),
+    workflowConfig,
     encodeConfig: createDefaultEncodeConfig(env),
     outputConfig: createDefaultOutputConfig(),
   }

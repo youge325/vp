@@ -52,6 +52,20 @@ function normalizeCheckResult(raw: EnvironmentCheckResult): EnvironmentCheckResu
       devices: raw.gpu?.devices ?? [],
       adapters,
     },
+    tensor_backends: {
+      ...raw.tensor_backends,
+      pytorch: raw.tensor_backends?.pytorch,
+      paddle: raw.tensor_backends?.paddle,
+      onnx: raw.tensor_backends?.onnx,
+    },
+    onnx_runtime: {
+      ...(raw.onnx_runtime ?? {}),
+      providers: raw.onnx_runtime?.providers ?? [],
+    },
+    onnx_models: {
+      interpolation: raw.onnx_models?.interpolation ?? [],
+      super_resolution: raw.onnx_models?.super_resolution ?? [],
+    },
   }
 }
 

@@ -22,6 +22,8 @@ pub struct InterpolationConfig {
     pub target_fps: f64,
     pub multi: u32,
     pub model: String,
+    #[serde(default)]
+    pub onnx_model: Option<String>,
     pub scale: f64,
     pub fp16: bool,
     pub tensor_backend: String,
@@ -33,6 +35,8 @@ pub struct SuperResolutionConfig {
     pub enabled: bool,
     pub scale_factor: f64,
     pub algorithm: String,
+    #[serde(default)]
+    pub onnx_model: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

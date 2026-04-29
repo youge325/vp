@@ -163,6 +163,8 @@ class Settings(BaseSettings):
 
     def resource_summary(self) -> dict[str, object]:
         default_model_path = Path(self.RIFE_MODEL_DIR) / f"flownet_v{self.RIFE_MODEL_VERSION}.pkl"
+        onnx_interpolation_dir = Path(self.RIFE_MODEL_DIR) / "interpolation"
+        onnx_super_resolution_dir = Path(self.RIFE_MODEL_DIR) / "super_resolution"
         return {
             "app_root": self.APP_ROOT,
             "backend_root": str(self.backend_root),
@@ -175,6 +177,8 @@ class Settings(BaseSettings):
             "output_dir": self.OUTPUT_DIR,
             "log_dir": self.LOG_DIR,
             "model_dir": self.RIFE_MODEL_DIR,
+            "onnx_interpolation_model_dir": str(onnx_interpolation_dir),
+            "onnx_super_resolution_model_dir": str(onnx_super_resolution_dir),
             "default_model_path": str(default_model_path),
             "default_model_available": default_model_path.is_file() and default_model_path.stat().st_size > 0,
         }

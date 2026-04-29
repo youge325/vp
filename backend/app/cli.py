@@ -17,6 +17,7 @@ if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
 from app.algorithms.factory import register_default_algorithms
+from app.algorithms.onnx_models import resolve_onnx_model_path, scan_onnx_models
 from app.config import settings
 from app.processing.streaming import process_video_streaming
 from app.utils.ffmpeg_wrapper import FFmpegWrapper
@@ -168,6 +169,7 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
             "targetFps": args.target_fps,
             "multi": args.multi,
             "model": args.model,
+            "onnxModel": "",
             "scale": args.scale,
             "fp16": args.fp16,
             "tensorBackend": args.backend,
@@ -176,6 +178,7 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
             "enabled": enable_super_resolution,
             "scaleFactor": args.sr_scale_factor,
             "algorithm": args.sr_algorithm,
+            "onnxModel": "",
         },
         "anime": {
             "enabled": enable_anime,
@@ -213,11 +216,13 @@ def _build_algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: str
             "model_version": interpolation["model"],
             "scale": interpolation["scale"],
             "fp16": interpolation["fp16"],
+            "onnx_model": interpolation.get("onnxModel") or interpolation.get("onnx_model"),
         }
     if algorithm_type == "super_resolution":
         return {
             "scale_factor": super_resolution["scaleFactor"],
             "sr_algorithm": super_resolution["algorithm"],
+            "onnx_model": super_resolution.get("onnxModel") or super_resolution.get("onnx_model"),
         }
     return {}
 
@@ -436,6 +441,57 @@ def _check_paddle_in_subprocess() -> dict[str, Any]:
     return {"paddle_available": False}
 
 
+def _check_onnxruntime_in_subprocess() -> dict[str, Any]:
+    script = (
+        "import json\n"
+        "result = {'onnx_available': False, 'providers': []}\n"
+        "try:\n"
+        "    import onnxruntime as ort\n"
+        "    result['onnx_available'] = True\n"
+        "    result['providers'] = ort.get_available_providers()\n"
+        "except (ImportError, OSError):\n"
+        "    pass\n"
+        "print(json.dumps(result), flush=True)\n"
+    )
+    try:
+        proc = subprocess.run(
+            [settings.PYTHON_EXECUTABLE, "-c", script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+            **hidden_subprocess_kwargs(),
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            return json.loads(proc.stdout.strip())
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
+        pass
+    return {"onnx_available": False, "providers": []}
+
+
+def _validate_onnx_models_for_workflow(
+    workflow_config: dict[str, Any],
+    processing_steps: list[dict[str, Any]],
+    tensor_backend_name: str,
+) -> None:
+    if tensor_backend_name != "onnx":
+        return
+
+    for step in processing_steps:
+        if step["algorithm_type"] == "frame_interpolation":
+            model_name = _get_onnx_model_name(workflow_config["interpolation"])
+            resolve_onnx_model_path("interpolation", model_name)
+        elif step["algorithm_type"] == "super_resolution":
+            model_name = _get_onnx_model_name(workflow_config["superResolution"])
+            resolve_onnx_model_path("super_resolution", model_name)
+
+
+def _get_onnx_model_name(config: dict[str, Any]) -> str | None:
+    return config.get("onnxModel") or config.get("onnx_model")
+
+
 def cmd_process(args: argparse.Namespace) -> None:
     register_default_algorithms()
 
@@ -467,15 +523,41 @@ def cmd_process(args: argparse.Namespace) -> None:
         _emit_error("invalid_config", str(exc))
 
     processing_steps = _resolve_processing_steps(workflow_config)
+    tensor_backend_name = workflow_config["interpolation"].get("tensorBackend", args.backend)
     if _processing_needs_interpolation(processing_steps):
-        model_path = _model_path(workflow_config["interpolation"]["model"])
-        if not model_path.is_file() or model_path.stat().st_size == 0:
+        if tensor_backend_name == "onnx":
+            try:
+                _validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
+            except FileNotFoundError as exc:
+                _emit_error(
+                    "missing_model",
+                    str(exc),
+                    details={
+                        "tensor_backend": tensor_backend_name,
+                        "model_root": settings.RIFE_MODEL_DIR,
+                    },
+                )
+        else:
+            model_path = _model_path(workflow_config["interpolation"]["model"])
+            if not model_path.is_file() or model_path.stat().st_size == 0:
+                _emit_error(
+                    "missing_model",
+                    f"Default interpolation model is missing: {model_path}",
+                    details={
+                        "model_path": str(model_path),
+                        "model_version": workflow_config["interpolation"]["model"],
+                    },
+                )
+    elif tensor_backend_name == "onnx":
+        try:
+            _validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
+        except FileNotFoundError as exc:
             _emit_error(
                 "missing_model",
-                f"Default interpolation model is missing: {model_path}",
+                str(exc),
                 details={
-                    "model_path": str(model_path),
-                    "model_version": workflow_config["interpolation"]["model"],
+                    "tensor_backend": tensor_backend_name,
+                    "model_root": settings.RIFE_MODEL_DIR,
                 },
             )
 
@@ -502,7 +584,6 @@ def cmd_process(args: argparse.Namespace) -> None:
     )
     progress_reporter = CliProgressReporter(expected_output_frames)
 
-    tensor_backend_name = workflow_config["interpolation"].get("tensorBackend", args.backend)
     progress_callbacks = [lambda *_args: None for _ in processing_steps]
     start_time = time.time()
     try:
@@ -639,11 +720,13 @@ def cmd_check(_args: argparse.Namespace) -> None:
 
     pytorch_result = _check_pytorch_in_subprocess()
     paddle_result = _check_paddle_in_subprocess()
+    onnx_result = _check_onnxruntime_in_subprocess()
     gpu_adapters = list_gpu_adapters()
     non_virtual_adapters = [adapter for adapter in gpu_adapters if adapter.get("device_type") != "virtual"]
 
     default_model_path = _model_path()
     default_model_available = default_model_path.is_file() and default_model_path.stat().st_size > 0
+    onnx_models = scan_onnx_models(settings.RIFE_MODEL_DIR)
     ffmpeg_capabilities = (
         ffmpeg.discover_capabilities(gpu_adapters)
         if ffmpeg_available
@@ -675,6 +758,15 @@ def cmd_check(_args: argparse.Namespace) -> None:
             "tensor_backends": {
                 "pytorch": pytorch_result["pytorch_available"],
                 "paddle": paddle_result["paddle_available"],
+                "onnx": onnx_result["onnx_available"],
+            },
+            "onnx_runtime": {
+                "available": onnx_result["onnx_available"],
+                "providers": onnx_result["providers"],
+            },
+            "onnx_models": {
+                "interpolation": onnx_models["interpolation"],
+                "super_resolution": onnx_models["super_resolution"],
             },
             "rife_model": {
                 "available": default_model_available,
