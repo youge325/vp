@@ -8,6 +8,8 @@ on:
 jobs:
   build-and-release-windows:
     runs-on: [self-hosted, windows]
+    permissions:
+      contents: write
     env:
       HTTP_PROXY: http://127.0.0.1:7897
       HTTPS_PROXY: http://127.0.0.1:7897
