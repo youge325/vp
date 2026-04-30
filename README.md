@@ -95,6 +95,21 @@ cargo test --quiet
 3. 开发环境下的工作区源码布局
 4. 系统级 Python / FFmpeg 兜底
 
+### Python 环境配置
+
+Release 构建默认不再打包 Python 运行时。应用启动时按以下优先级查找 Python：
+
+1. `VP_PYTHON_EXECUTABLE` 环境变量（绝对路径）
+2. 打包目录中的 bundled Python（`resources/runtime/python/python.exe`）
+3. 系统 `PATH` 中的 `python.exe`（Windows）或 `python3`（Linux/macOS）
+
+若系统 PATH 中已存在兼容的 Python（3.12+），无需额外配置即可运行。
+若需指定特定 Python 环境，请设置环境变量：
+
+```powershell
+$env:VP_PYTHON_EXECUTABLE = "D:\Python312\python.exe"
+```
+
 更细的参数流转和字段映射见：
 
 - `docs/architecture-parameter-flow.md`

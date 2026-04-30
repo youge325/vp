@@ -76,13 +76,15 @@ pub fn resolve_runtime_paths<R: Runtime>(
             .map(|path| path.join(platform_python_binary())),
     ]) {
         Some(path) => path,
-        None if cfg!(debug_assertions) => PathBuf::from(platform_python_binary()),
-        None => {
-            return Err(
-                "Bundled Python runtime is missing. Set VP_PYTHON_EXECUTABLE or include resources/runtime/python/python.exe."
-                    .to_string(),
-            )
-        }
+        None => match find_in_system_path(platform_python_binary()) {
+            Some(path) => path,
+            None => {
+                return Err(
+                    "Python executable not found. Set VP_PYTHON_EXECUTABLE, install Python in your system PATH, or bundle resources/runtime/python/."
+                        .to_string(),
+                )
+            }
+        },
     };
 
     let ffmpeg_path = first_existing_file([
@@ -208,6 +210,26 @@ where
         .into_iter()
         .flatten()
         .find(|candidate| candidate.exists())
+}
+
+fn find_in_system_path(executable: &str) -> Option<PathBuf> {
+    let path_env = env::var_os("PATH")?;
+    for dir in env::split_paths(&path_env) {
+        let candidate = dir.join(executable);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        #[cfg(target_os = "windows")]
+        {
+            if !executable.ends_with(".exe") {
+                let candidate_exe = dir.join(format!("{executable}.exe"));
+                if candidate_exe.is_file() {
+                    return Some(candidate_exe);
+                }
+            }
+        }
+    }
+    None
 }
 
 fn default_rife_model_file() -> &'static str {
