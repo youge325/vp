@@ -122,14 +122,14 @@ $env:VP_PYTHON_EXECUTABLE = "D:\Python312\python.exe"
 - [RIFE](https://github.com/hzwer/ECCV2022-RIFE)
 - [Practical-RIFE](https://github.com/hzwer/Practical-RIFE)
 - [vs-rife](https://github.com/HolyWu/vs-rife)
-- [FFmpeg](https://github.com/FFmpeg/FFmpeg)
 
-**框架**
+**框架与工具**
 
 - [Tauri](https://github.com/tauri-apps/tauri)
 - [PyTorch](https://github.com/pytorch/pytorch)
 - [PaddlePaddle](https://github.com/PaddlePaddle/Paddle)
 - [ONNX Runtime](https://github.com/microsoft/onnxruntime)
+- [FFmpeg](https://github.com/FFmpeg/FFmpeg)
 
 **功能参考**
 
