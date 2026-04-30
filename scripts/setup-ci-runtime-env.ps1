@@ -107,7 +107,7 @@ function Resolve-ModelDir {
             continue
         }
 
-        $defaultModel = Join-Path $path "flownet_v4.25.pkl"
+        $defaultModel = Join-Path $path "rife_v4.25.onnx"
         if ((Test-Path -LiteralPath $path -PathType Container) -and
             (Test-Path -LiteralPath $defaultModel -PathType Leaf) -and
             ((Get-Item -LiteralPath $defaultModel).Length -gt 0)) {
@@ -117,7 +117,7 @@ function Resolve-ModelDir {
         $checked.Add("$($candidate.Label): $path")
     }
 
-    throw "Unable to locate RIFE model weights. Expected non-empty flownet_v4.25.pkl. Checked: $($checked -join '; ')"
+    throw "Unable to locate RIFE model weights. Expected non-empty rife_v4.25.onnx. Checked: $($checked -join '; ')"
 }
 
 function Find-FfmpegPairInDir {
@@ -204,7 +204,7 @@ Write-Host "CI runtime environment resolved:"
 Write-Host "  python root:   $($pythonSource.Root)"
 Write-Host "  python exe:    $($pythonSource.Exe)"
 Write-Host "  model dir:     $modelDir"
-Write-Host "  default model: $(Join-Path $modelDir 'flownet_v4.25.pkl')"
+Write-Host "  default model: $(Join-Path $modelDir 'rife_v4.25.onnx')"
 Write-Host "  ffmpeg dir:    $($ffmpegSource.Dir)"
 Write-Host "  ffmpeg:        $($ffmpegSource.Ffmpeg)"
 Write-Host "  ffprobe:       $($ffmpegSource.Ffprobe)"
