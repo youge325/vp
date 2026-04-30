@@ -691,12 +691,12 @@ Write-Step "FFmpeg binaries complete"
 
 Copy-ModelFiles -SourceDir $modelSourceDir -DestinationDir $modelsOut
 
-$destPythonExe = Join-Path $pythonOut "python.exe"
 $destFfmpeg = Join-Path $ffmpegOut "ffmpeg.exe"
 $destFfprobe = Join-Path $ffmpegOut "ffprobe.exe"
 $destDefaultModel = Join-Path $modelsOut "flownet_v4.25.pkl"
 $requiredFiles = @($destFfmpeg, $destFfprobe, $destDefaultModel)
 if (-not $SkipPython) {
+    $destPythonExe = Join-Path $pythonOut "python.exe"
     $requiredFiles = @($destPythonExe) + $requiredFiles
 }
 foreach ($required in $requiredFiles) {
