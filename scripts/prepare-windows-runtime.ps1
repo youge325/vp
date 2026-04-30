@@ -171,9 +171,9 @@ function Resolve-ModelSource {
         $resolvedDir = (Resolve-Path -LiteralPath $resolvedDir).Path
     }
 
-    $defaultModel = Join-Path $resolvedDir "flownet_v4.25.pkl"
+    $defaultModel = Join-Path $resolvedDir "rife_v4.25.onnx"
     if (-not (Test-Path -LiteralPath $defaultModel -PathType Leaf)) {
-        throw "Default model is missing: $defaultModel. Set VP_RELEASE_MODEL_DIR to a directory containing flownet_v4.25.pkl."
+        throw "Default model is missing: $defaultModel. Set VP_RELEASE_MODEL_DIR to a directory containing rife_v4.25.onnx."
     }
     if ((Get-Item -LiteralPath $defaultModel).Length -le 0) {
         throw "Default model is empty: $defaultModel"
@@ -339,7 +339,6 @@ function Get-PythonPackagePatterns {
         "filelock*",
         "flatbuffers*",
         "fsspec*",
-        "functorch",
         "gast*",
         "google",
         "h11*",
@@ -354,13 +353,9 @@ function Get-PythonPackagePatterns {
         "networkx*",
         "numpy*",
         "numpy.libs",
-        "nvidia*",
         "opt_einsum*",
-        "optree*",
         "onnxruntime*",
         "packaging*",
-        "paddle*",
-        "paddlepaddle*",
         "PIL",
         "pillow*",
         "protobuf*",
@@ -375,9 +370,6 @@ function Get-PythonPackagePatterns {
         "six*",
         "sniffio*",
         "sympy*",
-        "torch*",
-        "torchgen",
-        "triton*",
         "typing_extensions*",
         "typing_extensions.py",
         "typing_inspect*",
@@ -504,16 +496,14 @@ function Copy-ModelFiles {
         [string]$DestinationDir
     )
 
-    Write-Step "Copying RIFE model weights"
-    $models = Get-ChildItem -LiteralPath $SourceDir -Filter "flownet_*.pkl" -File
-    if ($models.Count -eq 0) {
-        throw "No RIFE model files found in $SourceDir"
-    }
-
+    Write-Step "Copying ONNX model files"
     $bytes = [int64]0
     $linked = 0
     $copied = 0
-    foreach ($model in $models) {
+
+    # Copy top-level ONNX models (legacy layout)
+    $onnxModels = Get-ChildItem -LiteralPath $SourceDir -Filter "*.onnx" -File
+    foreach ($model in $onnxModels) {
         $result = Copy-FileFast -Source $model.FullName -Destination (Join-Path $DestinationDir $model.Name)
         $bytes += [int64]$model.Length
         if ($result -eq "linked") {
@@ -545,7 +535,12 @@ function Copy-ModelFiles {
         }
     }
 
-    Write-Step "RIFE models complete: hardlinks=$linked, copies=$copied, total=$(Format-ByteSize $bytes)"
+    $totalModels = $linked + $copied
+    if ($totalModels -eq 0) {
+        throw "No ONNX model files found in $SourceDir"
+    }
+
+    Write-Step "ONNX models complete: hardlinks=$linked, copies=$copied, total=$(Format-ByteSize $bytes)"
 }
 
 function Optimize-PythonRuntime {
@@ -553,8 +548,8 @@ function Optimize-PythonRuntime {
 
     Write-Step "Optimizing Python runtime: removing development artifacts"
 
-    $devExtensions = @(".h", ".hpp", ".c", ".cpp", ".cuh", ".lib", ".pdb", ".cmake", ".jinja", ".al", ".ld", ".mjs", ".thrift")
-    $devDirectoryNames = @("include", "csrc", "test", "tests", "__pycache__", ".pytest_cache", "docs", "doc", "examples", "demos", "benchmarks", "idlelib")
+    $devExtensions = @(".h", ".hpp", ".c", ".cpp", ".cuh", ".lib", ".pdb", ".cmake", ".jinja", ".al", ".ld", ".mjs", ".thrift", ".pyi", ".typed")
+    $devDirectoryNames = @("include", "csrc", "test", "tests", "__pycache__", ".pytest_cache", "docs", "doc", "examples", "demos", "benchmarks", "idlelib", ".egg-info")
 
     $filesToRemove = [System.Collections.Generic.List[System.IO.FileSystemInfo]]::new()
     $dirsToRemove = [System.Collections.Generic.List[System.IO.DirectoryInfo]]::new()
@@ -693,7 +688,7 @@ Copy-ModelFiles -SourceDir $modelSourceDir -DestinationDir $modelsOut
 
 $destFfmpeg = Join-Path $ffmpegOut "ffmpeg.exe"
 $destFfprobe = Join-Path $ffmpegOut "ffprobe.exe"
-$destDefaultModel = Join-Path $modelsOut "flownet_v4.25.pkl"
+$destDefaultModel = Join-Path $modelsOut "rife_v4.25.onnx"
 $requiredFiles = @($destFfmpeg, $destFfprobe, $destDefaultModel)
 if (-not $SkipPython) {
     $destPythonExe = Join-Path $pythonOut "python.exe"
@@ -715,7 +710,7 @@ if (-not $SkipPython) {
     $env:PYTHONNOUSERSITE = "1"
     Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
 
-    $importSmokeScript = "import importlib; [importlib.import_module(name) for name in ['pydantic','pydantic_settings','numpy','PIL','torch','onnxruntime']]; print('python runtime imports ok', flush=True)"
+    $importSmokeScript = "import importlib; [importlib.import_module(name) for name in ['pydantic','pydantic_settings','numpy','PIL','onnxruntime']]; print('python runtime imports ok', flush=True)"
     Invoke-CheckedProcess -Label "Python runtime import smoke" -FilePath $destPythonExe -Arguments @("-s", "-c", $importSmokeScript) -TimeoutSeconds 180
     Invoke-CheckedProcess -Label "Bundled backend check" -FilePath $destPythonExe -Arguments @("-s", "-m", "app", "check") -WorkingDirectory (Join-Path $repoRoot "backend") -TimeoutSeconds 180
 } else {

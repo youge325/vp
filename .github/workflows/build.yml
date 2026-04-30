@@ -133,7 +133,7 @@ jobs:
           $size = (Get-Item -LiteralPath "$zipPath").Length
           if ($size -ge 1GB) { $vSizeStr = "{0:N2} GB" -f ($size / 1GB) } elseif ($size -ge 1MB) { $vSizeStr = "{0:N1} MB" -f ($size / 1MB) } else { $vSizeStr = "$size bytes" }
           Write-Host "Build verified: $zipPath ($vSizeStr)"
-        # Note: We do not upload the 3GB+ artifact to GitHub Actions because
+        # Note: We do not upload the large artifact to GitHub Actions because
         # upload-artifact@v4 frequently hits ECONNRESET on self-hosted runners
         # with large files, and it wastes storage quota. The build verification
         # above is sufficient for CI.

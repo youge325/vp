@@ -744,7 +744,7 @@ def cmd_check(_args: argparse.Namespace) -> None:
     gpu_adapters = list_gpu_adapters()
     non_virtual_adapters = [adapter for adapter in gpu_adapters if adapter.get("device_type") != "virtual"]
 
-    default_model_path = _model_path()
+    default_model_path = Path(settings.RIFE_MODEL_DIR) / "rife_v4.25.onnx"
     default_model_available = default_model_path.is_file() and default_model_path.stat().st_size > 0
     onnx_models = scan_onnx_models(settings.RIFE_MODEL_DIR)
     ffmpeg_capabilities = (
