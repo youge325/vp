@@ -119,16 +119,19 @@ $env:VP_PYTHON_EXECUTABLE = "D:\Python312\python.exe"
 
 **算法**
 
-- [RIFE](https://github.com/hzwer/ECCV2022-RIFE) — 原始 ECCV 2022 论文实现，核心 IFNet 架构来源（MIT）
-- [Practical-RIFE](https://github.com/hzwer/Practical-RIFE) — RIFE 实用改进版本（MIT）
-- [vs-rife](https://github.com/HolyWu/vs-rife) — VapourSynth 端口，IFNet 各版本实现与模型加载逻辑的主要参考（MIT）
-- [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) — 实用图像/视频超分算法（BSD-3-Clause）
-- [FFmpeg](https://github.com/FFmpeg/FFmpeg) — 视频编解码与流处理基础工具（LGPL-2.1+ / GPL-2.0+）
+- [RIFE](https://github.com/hzwer/ECCV2022-RIFE)
+- [Practical-RIFE](https://github.com/hzwer/Practical-RIFE)
+- [vs-rife](https://github.com/HolyWu/vs-rife)
+- [FFmpeg](https://github.com/FFmpeg/FFmpeg)
 
-**框架与引擎**
+**框架**
 
-- [SVFI](https://github.com/Justin62628/Squirrel-RIFE) — 国人开发的补帧/超分软件（GPL-3.0）
-- [VSET](https://github.com/NangInShell/VSET) — 基于 Vapoursynth 的图形化视频批量处理工具（AGPL-3.0）
-- [Tauri](https://github.com/tauri-apps/tauri) — 桌面应用外壳框架（Apache-2.0 / MIT）
-- [PyTorch](https://github.com/pytorch/pytorch) — 深度学习推理框架（BSD-3-Clause）
-- [ONNX Runtime](https://github.com/microsoft/onnxruntime) — 跨平台推理引擎（MIT）
+- [Tauri](https://github.com/tauri-apps/tauri)
+- [PyTorch](https://github.com/pytorch/pytorch)
+- [PaddlePaddle](https://github.com/PaddlePaddle/Paddle)
+- [ONNX Runtime](https://github.com/microsoft/onnxruntime)
+
+**功能参考**
+
+- [SVFI](https://github.com/Justin62628/Squirrel-RIFE)
+- [VSET](https://github.com/NangInShell/VSET)
