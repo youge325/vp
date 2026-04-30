@@ -383,13 +383,16 @@ def _resolve_processed_frame_count(ffmpeg: FFmpegWrapper, output_path: str, fall
 def _check_pytorch_in_subprocess() -> dict[str, Any]:
     script = (
         "import json\n"
-        "result = {'pytorch_available': False, 'gpu_available': False, 'gpu_devices': []}\n"
+        "result = {'pytorch_available': False, 'gpu_available': False, 'gpu_devices': [], "
+        "          'supports_cuda': False, 'supports_tensorrt': False}\n"
         "try:\n"
         "    import torch\n"
         "    result['pytorch_available'] = True\n"
         "    if torch.cuda.is_available():\n"
         "        result['gpu_available'] = True\n"
         "        result['gpu_devices'] = [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]\n"
+        "        result['supports_cuda'] = True\n"
+        "        result['supports_tensorrt'] = True\n"
         "except (ImportError, OSError):\n"
         "    pass\n"
         "print(json.dumps(result), flush=True)\n"
@@ -409,16 +412,28 @@ def _check_pytorch_in_subprocess() -> dict[str, Any]:
             return json.loads(proc.stdout.strip())
     except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
         pass
-    return {"pytorch_available": False, "gpu_available": False, "gpu_devices": []}
+    return {
+        "pytorch_available": False,
+        "gpu_available": False,
+        "gpu_devices": [],
+        "supports_cuda": False,
+        "supports_tensorrt": False,
+    }
 
 
 def _check_paddle_in_subprocess() -> dict[str, Any]:
     script = (
         "import json\n"
-        "result = {'paddle_available': False}\n"
+        "result = {'paddle_available': False, 'supports_cuda': False, "
+        "          'supports_tensorrt': False, 'supports_dcu': False}\n"
         "try:\n"
         "    import paddle\n"
         "    result['paddle_available'] = True\n"
+        "    if paddle.device.is_compiled_with_cuda():\n"
+        "        result['supports_cuda'] = True\n"
+        "        result['supports_tensorrt'] = True\n"
+        "    if paddle.device.is_compiled_with_rocm():\n"
+        "        result['supports_dcu'] = True\n"
         "except (ImportError, OSError):\n"
         "    pass\n"
         "print(json.dumps(result), flush=True)\n"
@@ -438,17 +453,22 @@ def _check_paddle_in_subprocess() -> dict[str, Any]:
             return json.loads(proc.stdout.strip())
     except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
         pass
-    return {"paddle_available": False}
+    return {"paddle_available": False, "supports_cuda": False, "supports_tensorrt": False, "supports_dcu": False}
 
 
 def _check_onnxruntime_in_subprocess() -> dict[str, Any]:
     script = (
         "import json\n"
-        "result = {'onnx_available': False, 'providers': []}\n"
+        "result = {'onnx_available': False, 'providers': [], "
+        "          'supports_cuda': False, 'supports_tensorrt': False}\n"
         "try:\n"
         "    import onnxruntime as ort\n"
         "    result['onnx_available'] = True\n"
-        "    result['providers'] = ort.get_available_providers()\n"
+        "    providers = ort.get_available_providers()\n"
+        "    result['providers'] = providers\n"
+        "    result['supports_cuda'] = 'CUDAExecutionProvider' in providers\n"
+        "    # 有 CUDA provider 说明是 NVIDIA GPU，默认同时支持 TensorRT\n"
+        "    result['supports_tensorrt'] = 'TensorrtExecutionProvider' in providers or 'CUDAExecutionProvider' in providers\n"
         "except (ImportError, OSError):\n"
         "    pass\n"
         "print(json.dumps(result), flush=True)\n"
@@ -468,7 +488,7 @@ def _check_onnxruntime_in_subprocess() -> dict[str, Any]:
             return json.loads(proc.stdout.strip())
     except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
         pass
-    return {"onnx_available": False, "providers": []}
+    return {"onnx_available": False, "providers": [], "supports_cuda": False, "supports_tensorrt": False}
 
 
 def _validate_onnx_models_for_workflow(
@@ -737,6 +757,39 @@ def cmd_check(_args: argparse.Namespace) -> None:
         }
     )
 
+    # 构建推理引擎支持信息
+    tensor_engines: dict[str, list[str]] = {}
+    if pytorch_result.get("pytorch_available"):
+        engines = []
+        if pytorch_result.get("supports_cuda"):
+            engines.append("cuda")
+        if pytorch_result.get("supports_tensorrt"):
+            engines.append("tensorrt")
+        tensor_engines["pytorch"] = engines
+    if paddle_result.get("paddle_available"):
+        engines = []
+        if paddle_result.get("supports_cuda"):
+            engines.append("cuda")
+        if paddle_result.get("supports_tensorrt"):
+            engines.append("tensorrt")
+        if paddle_result.get("supports_dcu"):
+            engines.append("dcu")
+        tensor_engines["paddle"] = engines
+    if onnx_result.get("onnx_available"):
+        engines = []
+        if onnx_result.get("supports_tensorrt"):
+            engines.append("tensorrt")
+        if onnx_result.get("supports_cuda"):
+            engines.append("cuda")
+        tensor_engines["onnx"] = engines
+
+    # 构建后端设备兼容性矩阵
+    backend_device_support: dict[str, list[str]] = {
+        "pytorch": ["nvidia", "intel", "amd"],
+        "paddle": ["nvidia", "intel", "amd", "hygon"],
+        "onnx": ["nvidia", "intel", "amd"],
+    }
+
     _emit(
         {
             "type": "check",
@@ -760,6 +813,8 @@ def cmd_check(_args: argparse.Namespace) -> None:
                 "paddle": paddle_result["paddle_available"],
                 "onnx": onnx_result["onnx_available"],
             },
+            "tensor_engines": tensor_engines,
+            "backend_device_support": backend_device_support,
             "onnx_runtime": {
                 "available": onnx_result["onnx_available"],
                 "providers": onnx_result["providers"],

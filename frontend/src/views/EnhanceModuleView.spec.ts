@@ -34,6 +34,7 @@ function createWorkflowConfig(): WorkflowConfig {
       scale: 1,
       fp16: false,
       tensorBackend: 'pytorch',
+      engine: 'cuda',
     },
     superResolution: {
       enabled: false,
@@ -104,10 +105,26 @@ function createEnvStoreMock(overrides: Record<string, unknown> = {}) {
   return {
     env: {
       checkResult: {
+        gpu: {
+          available: true,
+          devices: ['NVIDIA GeForce RTX 4090'],
+          adapters: [{ name: 'NVIDIA GeForce RTX 4090', vendor: 'nvidia', deviceType: 'discrete' }],
+          cuda_available: true,
+        },
         tensor_backends: {
           pytorch: true,
           paddle: true,
           onnx: true,
+        },
+        tensor_engines: {
+          pytorch: ['cuda', 'tensorrt'],
+          paddle: ['cuda', 'tensorrt'],
+          onnx: ['tensorrt', 'cuda'],
+        },
+        backend_device_support: {
+          pytorch: ['nvidia', 'intel', 'amd'],
+          paddle: ['nvidia', 'intel', 'amd', 'hygon'],
+          onnx: ['nvidia', 'intel', 'amd'],
         },
         onnx_models: {
           interpolation: ['interp.onnx'],
@@ -177,5 +194,47 @@ describe('EnhanceModuleView', () => {
     const onnxWrapper = mount(EnhanceModuleView)
     expect(onnxWrapper.text()).toContain('ONNX 补帧模型')
     expect(onnxWrapper.text()).toContain('ONNX 超分模型')
+  })
+
+  it('shows engine selector when backend supports multiple engines', () => {
+    const wrapper = mount(EnhanceModuleView)
+    expect(wrapper.text()).toContain('推理引擎')
+  })
+
+  it('filters backends based on GPU vendor compatibility', () => {
+    // 模拟海光 DCU 环境
+    envStoreState.current = createEnvStoreMock({
+      env: {
+        checkResult: {
+          gpu: {
+            available: true,
+            devices: ['Hygon DCU'],
+            adapters: [{ name: 'Hygon DCU', vendor: 'hygon', deviceType: 'discrete' }],
+          },
+          tensor_backends: { pytorch: true, paddle: true, onnx: true },
+          tensor_engines: {
+            pytorch: ['cuda'],
+            paddle: ['cuda', 'dcu'],
+            onnx: ['tensorrt', 'cuda'],
+          },
+          backend_device_support: {
+            pytorch: ['nvidia', 'intel', 'amd'],
+            paddle: ['nvidia', 'intel', 'amd', 'hygon'],
+            onnx: ['nvidia', 'intel', 'amd'],
+          },
+          onnx_models: { interpolation: [], super_resolution: [] },
+        },
+      },
+    })
+
+    const wrapper = mount(EnhanceModuleView)
+    const backendSelect = wrapper.findAll('select')[0]!
+    const options = backendSelect.findAll('option')
+    const optionValues = options.map((o) => o.element.getAttribute('value'))
+
+    // DCU 下只应显示 PaddlePaddle
+    expect(optionValues).toContain('paddle')
+    expect(optionValues).not.toContain('pytorch')
+    expect(optionValues).not.toContain('onnx')
   })
 })

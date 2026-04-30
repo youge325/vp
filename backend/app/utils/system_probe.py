@@ -16,6 +16,8 @@ GPU_VENDOR_KEYWORDS = {
     "amd": "amd",
     "advanced micro devices": "amd",
     "ati": "amd",
+    "hygon": "hygon",
+    "dcu": "hygon",
 }
 
 VIRTUAL_GPU_KEYWORDS = (
@@ -43,7 +45,7 @@ def classify_gpu_device_type(name: str, vendor: str) -> str:
         return "virtual"
     if vendor == "intel":
         return "integrated"
-    if vendor in {"nvidia", "amd"}:
+    if vendor in {"nvidia", "amd", "hygon"}:
         return "discrete"
     return "other"
 

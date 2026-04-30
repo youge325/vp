@@ -14,8 +14,9 @@ export type FpsMode = 'multi' | 'target'
 export type TensorBackend = 'pytorch' | 'paddle' | 'onnx'
 export type TaskStatus = 'idle' | 'running' | 'paused' | 'cancelling' | 'completed' | 'error' | 'cancelled'
 export type CodecFamily = 'cpu' | 'nvidia' | 'intel' | 'software'
-export type GpuVendor = 'nvidia' | 'intel' | 'amd' | 'other'
+export type GpuVendor = 'nvidia' | 'intel' | 'amd' | 'hygon' | 'other'
 export type GpuDeviceType = 'integrated' | 'discrete' | 'virtual' | 'other'
+export type InferenceEngine = 'cuda' | 'tensorrt' | 'dcu'
 export type CapabilityValue = string | number | boolean
 export type CapabilityOptionType = 'boolean' | 'number' | 'string' | 'choice'
 export type RateControlMode = 'crf' | 'cq' | 'qp' | 'bitrate'
@@ -91,6 +92,16 @@ export interface EnvironmentCheckResult {
     pytorch?: boolean
     paddle?: boolean
     onnx?: boolean
+  }
+  tensor_engines?: {
+    pytorch?: string[]
+    paddle?: string[]
+    onnx?: string[]
+  }
+  backend_device_support?: {
+    pytorch?: string[]
+    paddle?: string[]
+    onnx?: string[]
   }
   onnx_runtime?: {
     available?: boolean
@@ -171,6 +182,7 @@ export interface InterpolationConfig {
   scale: number
   fp16: boolean
   tensorBackend: TensorBackend
+  engine?: InferenceEngine
 }
 
 export interface SuperResolutionConfig {

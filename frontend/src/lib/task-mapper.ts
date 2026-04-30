@@ -4,6 +4,7 @@ import type {
   EncodeConfig,
   EncoderProfileSpec,
   EnvironmentCheckResult,
+  InferenceEngine,
   MediaItem,
   OutputConfig,
   TaskError,
@@ -43,6 +44,7 @@ export function createDefaultWorkflowConfig(): WorkflowConfig {
       scale: 1,
       fp16: false,
       tensorBackend: 'pytorch',
+      engine: 'cuda',
     },
     superResolution: {
       enabled: false,
@@ -158,6 +160,18 @@ export function createDefaultWorkbenchPreset(env: EnvironmentCheckResult | null)
   const workflowConfig = createDefaultWorkflowConfig()
   workflowConfig.interpolation.onnxModel = env?.onnx_models?.interpolation?.[0] ?? ''
   workflowConfig.superResolution.onnxModel = env?.onnx_models?.super_resolution?.[0] ?? ''
+
+  // 根据 GPU 类型设置默认推理引擎
+  const vendor = env?.gpu?.adapters?.[0]?.vendor
+  const backend = workflowConfig.interpolation.tensorBackend
+  const engines = env?.tensor_engines?.[backend] ?? []
+  if (vendor === 'hygon') {
+    workflowConfig.interpolation.engine = engines.includes('dcu') ? 'dcu' : (engines[0] as InferenceEngine) ?? 'cuda'
+  } else if (vendor === 'nvidia') {
+    workflowConfig.interpolation.engine = engines.includes('tensorrt') ? 'tensorrt' : (engines[0] as InferenceEngine) ?? 'cuda'
+  } else {
+    workflowConfig.interpolation.engine = (engines[0] as InferenceEngine) ?? 'cuda'
+  }
 
   return {
     decodeConfig: createDefaultDecodeConfig(env),

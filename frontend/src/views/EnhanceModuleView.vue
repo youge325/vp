@@ -4,7 +4,7 @@ import { RIFE_MODELS } from '@/lib/workflow'
 import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
-import type { FpsMode, ProcessOrder, TensorBackend } from '@/types'
+import type { FpsMode, ProcessOrder, TensorBackend, InferenceEngine } from '@/types'
 
 const mediaStore = useMediaStore()
 const envStore = useEnvStore()
@@ -22,21 +22,80 @@ const caption = computed(() =>
 )
 const interpolationOnnxModels = computed(() => envStore.env.checkResult?.onnx_models?.interpolation ?? [])
 const superResolutionOnnxModels = computed(() => envStore.env.checkResult?.onnx_models?.super_resolution ?? [])
-const hasRequiredOnnxModels = computed(() => {
-  const needsInterpolation = workflow.value.interpolation.enabled
-  const needsSuperResolution = workflow.value.superResolution.enabled
-  if (!needsInterpolation && !needsSuperResolution) {
-    return interpolationOnnxModels.value.length > 0 || superResolutionOnnxModels.value.length > 0
-  }
-  return (
-    (!needsInterpolation || interpolationOnnxModels.value.length > 0) &&
-    (!needsSuperResolution || superResolutionOnnxModels.value.length > 0)
-  )
-})
-const canSelectOnnxBackend = computed(
-  () => Boolean(envStore.env.checkResult?.tensor_backends.onnx) && hasRequiredOnnxModels.value,
-)
 const isOnnxBackend = computed(() => workflow.value.interpolation.tensorBackend === 'onnx')
+
+// 根据 GPU vendor 过滤可见后端
+const visibleBackends = computed(() => {
+  const vendor = envStore.env.checkResult?.gpu?.adapters?.[0]?.vendor
+  const support = envStore.env.checkResult?.backend_device_support
+  const all: TensorBackend[] = ['pytorch', 'paddle', 'onnx']
+  if (!vendor || vendor === 'other' || !support) {
+    return all
+  }
+  // 后端设备支持数据存在时按数据过滤
+  const filtered = all.filter((b) => {
+    const supported = (support as Record<string, string[]>)[b]
+    return supported && supported.length > 0 ? supported.includes(vendor) : true
+  })
+  if (filtered.length > 0) {
+    return filtered
+  }
+  // 后备推断：数据异常时根据 vendor 硬编码兼容矩阵
+  if (vendor === 'hygon') {
+    return ['paddle']
+  }
+  return all
+})
+
+// 当前后端支持的推理引擎
+const availableEngines = computed(() => {
+  const backend = workflow.value.interpolation.tensorBackend
+  const engines = envStore.env.checkResult?.tensor_engines?.[backend] ?? []
+  if (engines.length > 0) {
+    return engines
+  }
+
+  // 后备推断：后端未返回 tensor_engines 时根据 GPU 信息推断
+  const vendor = envStore.env.checkResult?.gpu?.adapters?.[0]?.vendor
+  const cudaAvailable = envStore.env.checkResult?.gpu?.cuda_available
+  const gpuAvailable = envStore.env.checkResult?.gpu?.available
+  const deviceNames = envStore.env.checkResult?.gpu?.devices ?? []
+  const hasNvidiaInName = deviceNames.some((name) => name.toLowerCase().includes('nvidia'))
+  // 多种方式判断 NVIDIA GPU：vendor 标签、PyTorch CUDA 检测结果、设备名称
+  const isNvidia = vendor === 'nvidia' || cudaAvailable || hasNvidiaInName || (gpuAvailable === true && vendor === undefined)
+
+  if (isNvidia) {
+    if (backend === 'pytorch') return ['cuda', 'tensorrt']
+    if (backend === 'paddle') return ['cuda', 'tensorrt']
+    if (backend === 'onnx') return ['tensorrt', 'cuda']
+  }
+  if (vendor === 'hygon' && backend === 'paddle') return ['dcu']
+  if (vendor === 'hygon') return []
+  return ['cuda']
+})
+
+// 只要有 GPU 且当前后端有可用的推理引擎，就显示引擎选择器
+const showEngineSelector = computed(() => {
+  const gpuAvailable = envStore.env.checkResult?.gpu?.available
+  return gpuAvailable === true && availableEngines.value.length > 0
+})
+
+// 后端显示名称映射
+const backendLabels: Record<string, string> = {
+  pytorch: 'PyTorch',
+  paddle: 'PaddlePaddle',
+  onnx: 'ONNX Runtime',
+}
+
+// 引擎显示名称映射
+const engineLabels: Record<string, string> = {
+  cuda: 'CUDA',
+  tensorrt: 'TensorRT',
+  dcu: 'DCU',
+  directml: 'DirectML',
+  rocm: 'ROCm',
+  cpu: 'CPU',
+}
 
 const interpolationEnabled = computed({
   get: () => workflow.value.interpolation.enabled,
@@ -52,10 +111,22 @@ const interpolationBackend = computed({
   set: (value: TensorBackend) => {
     presetStore.patchWorkflow((config) => {
       config.interpolation.tensorBackend = value
+      // 自动选择该后端的第一个可用推理引擎
+      const engines = envStore.env.checkResult?.tensor_engines?.[value] ?? []
+      config.interpolation.engine = engines[0] as InferenceEngine
       if (value === 'onnx') {
         config.interpolation.onnxModel ||= interpolationOnnxModels.value[0] ?? ''
         config.superResolution.onnxModel ||= superResolutionOnnxModels.value[0] ?? ''
       }
+    })
+  },
+})
+
+const interpolationEngine = computed({
+  get: () => workflow.value.interpolation.engine ?? availableEngines.value[0] ?? 'cuda',
+  set: (value: InferenceEngine) => {
+    presetStore.patchWorkflow((config) => {
+      config.interpolation.engine = value
     })
   },
 })
@@ -230,9 +301,18 @@ const animeEdgeBoost = computed({
         <label class="field">
           <span>后端</span>
           <select v-model="interpolationBackend">
-            <option value="pytorch">PyTorch</option>
-            <option value="paddle">PaddlePaddle</option>
-            <option value="onnx" :disabled="!canSelectOnnxBackend">ONNX Runtime</option>
+            <option v-for="b in visibleBackends" :key="b" :value="b">
+              {{ backendLabels[b] }}
+            </option>
+          </select>
+        </label>
+
+        <label v-if="showEngineSelector" class="field">
+          <span>推理引擎</span>
+          <select v-model="interpolationEngine">
+            <option v-for="engine in availableEngines" :key="engine" :value="engine">
+              {{ engineLabels[engine] || engine }}
+            </option>
           </select>
         </label>
 
