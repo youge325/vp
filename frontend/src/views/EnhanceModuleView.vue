@@ -316,7 +316,7 @@ const animeEdgeBoost = computed({
           </select>
         </label>
 
-        <label class="field">
+        <label v-if="!isOnnxBackend" class="field">
           <span>模型</span>
           <select v-model="interpolationModel">
             <option v-for="model in RIFE_MODELS" :key="model" :value="model">{{ model }}</option>
@@ -329,6 +329,7 @@ const animeEdgeBoost = computed({
             <option value="">未选择</option>
             <option v-for="model in interpolationOnnxModels" :key="model" :value="model">{{ model }}</option>
           </select>
+          <span v-if="interpolationOnnxModels.length === 0" class="field-hint">未找到 ONNX 模型，请将 .onnx 文件放入 models/interpolation 目录</span>
         </label>
 
         <label class="field">
@@ -399,6 +400,7 @@ const animeEdgeBoost = computed({
             <option value="">未选择</option>
             <option v-for="model in superResolutionOnnxModels" :key="model" :value="model">{{ model }}</option>
           </select>
+          <span v-if="superResolutionOnnxModels.length === 0" class="field-hint">未找到 ONNX 模型，请将 .onnx 文件放入 models/super_resolution 目录</span>
         </label>
 
         <label class="field field-span-2">

@@ -39,3 +39,7 @@
 desktop.ini
 Thumbs.db
 ehthumbs.db
+
+# Large ML model files
+/backend/models/**/*.onnx
+/backend/models/**/*.pkl
