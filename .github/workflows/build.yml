@@ -3,8 +3,16 @@ name: Build
 on:
   push:
     branches: [main, master, develop]
+    paths-ignore:
+      - '.github/workflows/test.yml'
+      - '.github/workflows/release.yml'
+      - 'docs/**'
   pull_request:
     branches: [main, master, develop]
+    paths-ignore:
+      - '.github/workflows/test.yml'
+      - '.github/workflows/release.yml'
+      - 'docs/**'
 
 jobs:
   build-windows:
