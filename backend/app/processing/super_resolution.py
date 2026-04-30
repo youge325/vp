@@ -27,6 +27,7 @@ class SuperResolutionAlgorithm(IAlgorithm):
         self._algorithm_name = kwargs.get("sr_algorithm", "placeholder")
         self._onnx_model = kwargs.get("onnx_model")
         self._model_dir = kwargs.get("model_dir", settings.RIFE_MODEL_DIR)
+        self._engine = kwargs.get("engine", "cuda")
         self._session = None
         self._input_name = ""
         self._output_name = ""
@@ -55,7 +56,12 @@ class SuperResolutionAlgorithm(IAlgorithm):
         import onnxruntime as ort
 
         model_path = resolve_onnx_model_path("super_resolution", self._onnx_model, self._model_dir)
-        providers = ort.get_available_providers()
+        if self._engine == "tensorrt":
+            providers = ["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"]
+        elif self._engine == "cuda":
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        else:
+            providers = ort.get_available_providers()
         session = ort.InferenceSession(str(model_path), providers=providers)
         inputs = session.get_inputs()
         outputs = session.get_outputs()

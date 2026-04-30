@@ -17,6 +17,7 @@
 """
 
 import importlib
+import importlib.util
 from app.utils.logger import get_logger
 import os
 from typing import Optional
@@ -403,6 +404,7 @@ def load_rife_model(
     device: Optional[str] = None,
     fp16: bool = False,
     model_dir: Optional[str] = None,
+    engine: str = "cuda",
 ) -> tuple[nn.Module, Optional[nn.Module], dict]:
     """
     加载 RIFE 模型（IFNet + Head 编码器）。
@@ -419,6 +421,7 @@ def load_rife_model(
         device: 推理设备（"cuda", "cuda:0", "cpu" 等，默认自动选择）
         fp16: 是否使用半精度推理
         model_dir: 模型权重目录（默认使用 backend/models/）
+        engine: 推理引擎（"cuda" 或 "tensorrt"，默认 "cuda"）
 
     返回:
         (flownet, encode, config) 元组:
@@ -500,9 +503,38 @@ def load_rife_model(
 
     # HEAD_NONE 时 encode 保持 None
 
+    # TensorRT 编译（如果请求且可用）
+    if engine == "tensorrt" and torch_device.type == "cuda":
+        if importlib.util.find_spec("torch_tensorrt") is not None:
+            logger.info(f"正在使用 torch_tensorrt 编译 RIFE v{model_version} 模型...")
+            # 使用 torch.compile 的 TensorRT 后端（PyTorch 2.x+）
+            flownet = torch.compile(
+                flownet,
+                backend="tensorrt",
+                options={
+                    "truncate_long_and_double": True,
+                    "precision": "fp16" if fp16 else "fp32",
+                },
+            )
+            if encode is not None:
+                encode = torch.compile(
+                    encode,
+                    backend="tensorrt",
+                    options={
+                        "truncate_long_and_double": True,
+                        "precision": "fp16" if fp16 else "fp32",
+                    },
+                )
+            logger.info(f"RIFE v{model_version} TensorRT 编译完成")
+        else:
+            logger.warning(
+                "请求 TensorRT 引擎但未找到 torch_tensorrt，回退到 CUDA 推理。"
+                "请安装 torch-tensorrt 以启用 TensorRT 加速。"
+            )
+
     logger.info(
         f"RIFE v{model_version} 模型加载完成 "
-        f"(device={torch_device}, dtype={dtype}, scale={scale}, "
+        f"(device={torch_device}, dtype={dtype}, scale={scale}, engine={engine}, "
         f"head_type={head_type}, encode={'有' if encode is not None else '无'})"
     )
 

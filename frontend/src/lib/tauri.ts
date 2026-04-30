@@ -52,7 +52,7 @@ export function pickOutputDirectory(): Promise<string | null> {
 }
 
 export function checkEnvironment(forceRefresh = false): Promise<EnvironmentCheckPayload> {
-  return safeInvoke<EnvironmentCheckPayload>('check_environment', { force_refresh: forceRefresh })
+  return safeInvoke<EnvironmentCheckPayload>('check_environment', { forceRefresh })
 }
 
 export function loadWorkbenchPreset(): Promise<WorkbenchPreset | null> {

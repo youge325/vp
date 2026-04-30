@@ -67,6 +67,7 @@ class RIFEONNXSolver:
         model_version: str = "4.25",
         model_dir: Optional[str] = None,
         onnx_model: Optional[str] = None,
+        engine: str = "cuda",
     ):
         import onnxruntime as ort
 
@@ -89,8 +90,13 @@ class RIFEONNXSolver:
                     f"或运行 export_rife_to_onnx(model_version='{model_version}') 导出模型"
                 )
 
-        # 优先使用 GPU EP，回退到 CPU
-        providers = ort.get_available_providers()
+        # 根据 engine 参数选择 providers
+        if engine == "tensorrt":
+            providers = ["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"]
+        elif engine == "cuda":
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        else:
+            providers = ort.get_available_providers()
         logger.info(f"ONNX Runtime 可用 providers: {providers}")
         self._session = ort.InferenceSession(onnx_path, providers=providers)
 

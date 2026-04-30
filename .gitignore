@@ -12,6 +12,7 @@
 /htmlcov/
 /_test_result.txt
 /pytest-cache-files-*/
+.claude/settings.local.json
 
 # Root-level environment files
 /.env

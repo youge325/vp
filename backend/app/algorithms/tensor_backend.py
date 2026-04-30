@@ -32,6 +32,16 @@ class ITensorBackend(ABC):
         """检查后端是否可用。"""
         pass
 
+    @abstractmethod
+    def get_supported_devices(self) -> list[str]:
+        """返回该后端支持的 GPU 设备厂商列表。"""
+        pass
+
+    @abstractmethod
+    def get_supported_engines(self) -> list[str]:
+        """返回该后端支持的推理引擎列表。"""
+        pass
+
 
 class PyTorchBackend(ITensorBackend):
     """PyTorch Tensor 后端。"""
@@ -68,6 +78,22 @@ class PyTorchBackend(ITensorBackend):
     def is_available(self) -> bool:
         return self._torch is not None
 
+    def get_supported_devices(self) -> list[str]:
+        return ["nvidia", "intel", "amd"]
+
+    def get_supported_engines(self) -> list[str]:
+        import importlib.util
+
+        engines = []
+        if self._torch is not None and self._torch.cuda.is_available():
+            engines.append("cuda")
+            if (
+                importlib.util.find_spec("torch_tensorrt") is not None
+                or importlib.util.find_spec("tensorrt") is not None
+            ):
+                engines.append("tensorrt")
+        return engines
+
 
 class PaddleBackend(ITensorBackend):
     """PaddlePaddle Tensor 后端。"""
@@ -100,6 +126,26 @@ class PaddleBackend(ITensorBackend):
 
     def is_available(self) -> bool:
         return self._paddle is not None
+
+    def get_supported_devices(self) -> list[str]:
+        return ["nvidia", "intel", "amd", "hygon"]
+
+    def get_supported_engines(self) -> list[str]:
+        engines = []
+        if self._paddle is not None:
+            if self._paddle.device.is_compiled_with_cuda():
+                engines.append("cuda")
+            if self._paddle.device.is_compiled_with_rocm():
+                engines.append("dcu")
+            try:
+                from paddle.inference import Config
+
+                c = Config()
+                if hasattr(c, "enable_tensorrt_engine"):
+                    engines.append("tensorrt")
+            except Exception:
+                pass
+        return engines
 
 
 class OnnxBackend(ITensorBackend):
@@ -135,6 +181,25 @@ class OnnxBackend(ITensorBackend):
 
     def is_available(self) -> bool:
         return self._ort is not None
+
+    def get_supported_devices(self) -> list[str]:
+        return ["nvidia", "intel", "amd"]
+
+    def get_supported_engines(self) -> list[str]:
+        engines = []
+        if self._ort is not None:
+            providers = self._ort.get_available_providers()
+            if "TensorrtExecutionProvider" in providers:
+                engines.append("tensorrt")
+            if "CUDAExecutionProvider" in providers:
+                engines.append("cuda")
+            if "DmlExecutionProvider" in providers:
+                engines.append("directml")
+            if "ROCMExecutionProvider" in providers:
+                engines.append("rocm")
+            if not engines:
+                engines.append("cpu")
+        return engines
 
 
 def get_tensor_backend(name: str) -> ITensorBackend:

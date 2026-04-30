@@ -58,6 +58,16 @@ function normalizeCheckResult(raw: EnvironmentCheckResult): EnvironmentCheckResu
       paddle: raw.tensor_backends?.paddle,
       onnx: raw.tensor_backends?.onnx,
     },
+    tensor_engines: {
+      pytorch: raw.tensor_engines?.pytorch ?? [],
+      paddle: raw.tensor_engines?.paddle ?? [],
+      onnx: raw.tensor_engines?.onnx ?? [],
+    },
+    backend_device_support: {
+      pytorch: raw.backend_device_support?.pytorch ?? [],
+      paddle: raw.backend_device_support?.paddle ?? [],
+      onnx: raw.backend_device_support?.onnx ?? [],
+    },
     onnx_runtime: {
       ...(raw.onnx_runtime ?? {}),
       providers: raw.onnx_runtime?.providers ?? [],

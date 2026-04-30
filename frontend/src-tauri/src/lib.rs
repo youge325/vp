@@ -37,18 +37,18 @@ async fn pick_output_directory() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
+#[allow(non_snake_case)]
 async fn check_environment<R: Runtime>(
     app: AppHandle<R>,
-    force_refresh: Option<bool>,
+    forceRefresh: bool,
 ) -> Result<serde_json::Value, String> {
-    let force_refresh = force_refresh.unwrap_or(false);
     let paths = resolve_runtime_paths(&app)?;
     let fingerprint = persistence::build_environment_fingerprint(&paths).ok();
     let app_data_dir = persistence::app_data_dir(&app).ok();
 
     if let (Some(data_dir), Some(fingerprint)) = (app_data_dir.as_deref(), fingerprint.as_deref()) {
         if let Some(cached) =
-            persistence::load_environment_cache(data_dir, fingerprint, force_refresh)
+            persistence::load_environment_cache(data_dir, fingerprint, forceRefresh)
         {
             return Ok(json!({
                 "result": cached.result,
