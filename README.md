@@ -119,11 +119,12 @@ $env:VP_PYTHON_EXECUTABLE = "D:\Python312\python.exe"
 
 **算法**
 
-- <https://github.com/hzwer/ECCV2022-RIFE>
-- <https://github.com/hzwer/Practical-RIFE>
-- <https://github.com/HolyWu/vs-rife>
+- [RIFE](https://github.com/hzwer/ECCV2022-RIFE)
+- [Practical-RIFE](https://github.com/hzwer/Practical-RIFE)
+- [vs-rife](https://github.com/HolyWu/vs-rife)
 
 **框架**
 
-- <https://github.com/NangInShell/VSET>
-- <https://github.com/tauri-apps/tauri>
+- [SVFI](https://github.com/Justin62628/Squirrel-RIFE)
+- [VSET](https://github.com/NangInShell/VSET)
+- [Tauri](https://github.com/tauri-apps/tauri)
