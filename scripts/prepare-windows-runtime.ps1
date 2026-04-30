@@ -5,7 +5,8 @@ param(
     [string]$ModelDir = $env:VP_RELEASE_MODEL_DIR,
     [string]$OutputRoot = "",
     [string]$PythonCopyMode = $env:VP_RELEASE_PYTHON_COPY_MODE,
-    [string]$ExtraPythonPackages = $env:VP_RELEASE_PYTHON_PACKAGES
+    [string]$ExtraPythonPackages = $env:VP_RELEASE_PYTHON_PACKAGES,
+    [switch]$SkipPython
 )
 
 $ErrorActionPreference = "Stop"
@@ -669,13 +670,19 @@ if (Test-Path -LiteralPath $outputRootFull) {
     Remove-Item -LiteralPath $outputRootFull -Recurse -Force
 }
 
-$pythonOut = Join-Path $outputRootFull "python"
 $ffmpegOut = Join-Path $outputRootFull "ffmpeg\bin"
 $modelsOut = Join-Path $outputRootFull "models"
-New-Item -ItemType Directory -Force -Path $pythonOut, $ffmpegOut, $modelsOut | Out-Null
 
-Copy-PythonRuntime -PythonSource $pythonSource -Destination $pythonOut -Mode $PythonCopyMode -ExtraPatterns $ExtraPythonPackages
-Optimize-PythonRuntime -PythonOutDir $pythonOut
+if (-not $SkipPython) {
+    $pythonOut = Join-Path $outputRootFull "python"
+    New-Item -ItemType Directory -Force -Path $pythonOut, $ffmpegOut, $modelsOut | Out-Null
+
+    Copy-PythonRuntime -PythonSource $pythonSource -Destination $pythonOut -Mode $PythonCopyMode -ExtraPatterns $ExtraPythonPackages
+    Optimize-PythonRuntime -PythonOutDir $pythonOut
+} else {
+    New-Item -ItemType Directory -Force -Path $ffmpegOut, $modelsOut | Out-Null
+    Write-Step "Skipping Python runtime copy (SkipPython switch enabled)"
+}
 
 Write-Step "Copying FFmpeg binaries"
 Copy-FileFast -Source $ffmpegSource.Ffmpeg -Destination (Join-Path $ffmpegOut "ffmpeg.exe") | Out-Null
@@ -688,22 +695,38 @@ $destPythonExe = Join-Path $pythonOut "python.exe"
 $destFfmpeg = Join-Path $ffmpegOut "ffmpeg.exe"
 $destFfprobe = Join-Path $ffmpegOut "ffprobe.exe"
 $destDefaultModel = Join-Path $modelsOut "flownet_v4.25.pkl"
-foreach ($required in @($destPythonExe, $destFfmpeg, $destFfprobe, $destDefaultModel)) {
+$requiredFiles = @($destFfmpeg, $destFfprobe, $destDefaultModel)
+if (-not $SkipPython) {
+    $requiredFiles = @($destPythonExe) + $requiredFiles
+}
+foreach ($required in $requiredFiles) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
         throw "Runtime validation failed; missing $required"
     }
 }
 
 $env:VP_RUNTIME_ROOT = $outputRootFull
-$env:VP_PYTHON_EXECUTABLE = $destPythonExe
 $env:VP_FFMPEG_PATH = $destFfmpeg
 $env:VP_FFPROBE_PATH = $destFfprobe
 $env:VP_RIFE_MODEL_DIR = $modelsOut
-$env:PYTHONNOUSERSITE = "1"
-Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
 
-$importSmokeScript = "import importlib; [importlib.import_module(name) for name in ['pydantic','pydantic_settings','numpy','PIL','torch','onnxruntime']]; print('python runtime imports ok', flush=True)"
-Invoke-CheckedProcess -Label "Python runtime import smoke" -FilePath $destPythonExe -Arguments @("-s", "-c", $importSmokeScript) -TimeoutSeconds 180
-Invoke-CheckedProcess -Label "Bundled backend check" -FilePath $destPythonExe -Arguments @("-s", "-m", "app", "check") -WorkingDirectory (Join-Path $repoRoot "backend") -TimeoutSeconds 180
+if (-not $SkipPython) {
+    $env:VP_PYTHON_EXECUTABLE = $destPythonExe
+    $env:PYTHONNOUSERSITE = "1"
+    Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+
+    $importSmokeScript = "import importlib; [importlib.import_module(name) for name in ['pydantic','pydantic_settings','numpy','PIL','torch','onnxruntime']]; print('python runtime imports ok', flush=True)"
+    Invoke-CheckedProcess -Label "Python runtime import smoke" -FilePath $destPythonExe -Arguments @("-s", "-c", $importSmokeScript) -TimeoutSeconds 180
+    Invoke-CheckedProcess -Label "Bundled backend check" -FilePath $destPythonExe -Arguments @("-s", "-m", "app", "check") -WorkingDirectory (Join-Path $repoRoot "backend") -TimeoutSeconds 180
+} else {
+    $systemPython = Get-FirstCommandPath -Names @("python.exe", "python")
+    if (-not [string]::IsNullOrWhiteSpace($systemPython)) {
+        Write-Step "Running backend check with system Python: $systemPython"
+        $env:VP_PYTHON_EXECUTABLE = $systemPython
+        Invoke-CheckedProcess -Label "System Python backend check" -FilePath $systemPython -Arguments @("-s", "-m", "app", "check") -WorkingDirectory (Join-Path $repoRoot "backend") -TimeoutSeconds 180
+    } else {
+        Write-Step "Warning: No system Python found for backend check"
+    }
+}
 
 Write-Step "Windows runtime prepared successfully."

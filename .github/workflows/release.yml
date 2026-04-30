@@ -34,7 +34,7 @@ jobs:
         run: ./scripts/setup-ci-runtime-env.ps1
 
       - name: Prepare bundled Windows runtime
-        run: ./scripts/prepare-windows-runtime.ps1
+        run: ./scripts/prepare-windows-runtime.ps1 -SkipPython
 
       - name: Build Tauri App (no installer)
         run: npm run tauri build -- --no-bundle
