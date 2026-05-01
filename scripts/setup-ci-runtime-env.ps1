@@ -97,7 +97,8 @@ function Resolve-ModelDir {
         @{ Label = "VP_RIFE_MODEL_DIR"; Path = (Get-EnvValue "VP_RIFE_MODEL_DIR") },
         @{ Label = "default local repo"; Path = "D:\Lenovo\vp\backend\models" },
         @{ Label = "runner assets"; Path = "D:\actions-runner-vp\_assets\models" },
-        @{ Label = "checkout backend models"; Path = (Join-Path $RepoRoot "backend\models") }
+        @{ Label = "checkout backend models"; Path = (Join-Path $RepoRoot "backend\models") },
+        @{ Label = "checkout backend models interpolation"; Path = (Join-Path $RepoRoot "backend\models"); ModelSubdir = "interpolation" }
     )
 
     $checked = New-Object System.Collections.Generic.List[string]
@@ -108,6 +109,9 @@ function Resolve-ModelDir {
         }
 
         $defaultModel = Join-Path $path "rife_v4.25.onnx"
+        if ($candidate.ContainsKey("ModelSubdir") -and -not [string]::IsNullOrWhiteSpace($candidate.ModelSubdir)) {
+            $defaultModel = Join-Path (Join-Path $path $candidate.ModelSubdir) "rife_v4.25.onnx"
+        }
         if ((Test-Path -LiteralPath $path -PathType Container) -and
             (Test-Path -LiteralPath $defaultModel -PathType Leaf) -and
             ((Get-Item -LiteralPath $defaultModel).Length -gt 0)) {
