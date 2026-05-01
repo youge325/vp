@@ -95,7 +95,7 @@ function Resolve-ModelDir {
         @{ Label = "VP_CI_MODEL_DIR"; Path = (Get-EnvValue "VP_CI_MODEL_DIR") },
         @{ Label = "VP_RELEASE_MODEL_DIR"; Path = (Get-EnvValue "VP_RELEASE_MODEL_DIR") },
         @{ Label = "VP_RIFE_MODEL_DIR"; Path = (Get-EnvValue "VP_RIFE_MODEL_DIR") },
-        @{ Label = "default local repo"; Path = "D:\Lenovo\vp\backend\models" },
+        @{ Label = "default local repo"; Path = "D:\Lenovo\vp\backend\models"; ModelSubdir = "interpolation" },
         @{ Label = "runner assets"; Path = "D:\actions-runner-vp\_assets\models" },
         @{ Label = "checkout backend models"; Path = (Join-Path $RepoRoot "backend\models") },
         @{ Label = "checkout backend models interpolation"; Path = (Join-Path $RepoRoot "backend\models"); ModelSubdir = "interpolation" }
