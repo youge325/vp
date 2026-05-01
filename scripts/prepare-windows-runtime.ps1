@@ -172,11 +172,14 @@ function Resolve-ModelSource {
     }
 
     $defaultModel = Join-Path $resolvedDir "rife_v4.25.onnx"
-    if (-not (Test-Path -LiteralPath $defaultModel -PathType Leaf)) {
-        throw "Default model is missing: $defaultModel. Set VP_RELEASE_MODEL_DIR to a directory containing rife_v4.25.onnx."
-    }
-    if ((Get-Item -LiteralPath $defaultModel).Length -le 0) {
-        throw "Default model is empty: $defaultModel"
+    $interpModel = Join-Path $resolvedDir "interpolation\rife_v4.25.onnx"
+    $foundModel = ""
+    if ((Test-Path -LiteralPath $defaultModel -PathType Leaf) -and (Get-Item -LiteralPath $defaultModel).Length -gt 0) {
+        $foundModel = $defaultModel
+    } elseif ((Test-Path -LiteralPath $interpModel -PathType Leaf) -and (Get-Item -LiteralPath $interpModel).Length -gt 0) {
+        $foundModel = $interpModel
+    } else {
+        throw "Default model is missing. Expected rife_v4.25.onnx in `$resolvedDir` or `$resolvedDir\interpolation`. Set VP_RELEASE_MODEL_DIR to a directory containing rife_v4.25.onnx."
     }
     return $resolvedDir
 }
