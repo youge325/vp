@@ -340,6 +340,7 @@ class CliProgressReporter:
         self.total_frames = max(int(total_frames), 1)
         self.current_frame = 0
         self.started_at = time.time()
+        self._last_reported_percent = -1.0
 
     def update(
         self,
@@ -352,7 +353,14 @@ class CliProgressReporter:
         self.current_frame = max(self.current_frame, max(int(current_frame), 0))
         display_current = min(self.current_frame, self.total_frames)
         percent = min((display_current / self.total_frames) * 100, 100.0)
-        eta_seconds = 0.0 if progress_state == "end" else self._estimate_eta(display_current, fps)
+
+        # 节流：进度变化小于 1% 且不是结束时跳过，避免每帧都刷 stdout
+        is_end = progress_state == "end"
+        if not is_end and abs(percent - self._last_reported_percent) < 1.0:
+            return
+        self._last_reported_percent = percent
+
+        eta_seconds = 0.0 if is_end else self._estimate_eta(display_current, fps)
         fps_text = f"{fps:5.1f} fps" if fps and fps > 0 else "--.- fps"
         speed_text = f"{speed:.2f}x" if speed and speed > 0 else "--.--x"
         _emit_terminal(
@@ -363,6 +371,17 @@ class CliProgressReporter:
             f"| {fps_text} "
             f"| {speed_text} "
             f"| ETA {_format_eta(eta_seconds)}"
+        )
+        _emit(
+            {
+                "type": "progress",
+                "current": display_current,
+                "total": self.total_frames,
+                "percent": round(percent, 1),
+                "stage": "Encoding",
+                "stage_index": 1,
+                "stage_total": 1,
+            }
         )
 
     def finish(self, processed_frames: int) -> None:
@@ -613,7 +632,11 @@ def cmd_process(args: argparse.Namespace) -> None:
     )
     progress_reporter = CliProgressReporter(expected_output_frames)
 
-    progress_callbacks = [lambda *_args: None for _ in processing_steps]
+    # 为每个处理步骤生成进度回调，把源帧索引透传给编码进度条。
+    # 百分比会与最终输出帧数不完全对齐，但至少能让前端看到进度在动。
+    progress_callbacks = [
+        lambda current, total, reporter=progress_reporter: reporter.update(current) for _ in processing_steps
+    ]
     start_time = time.time()
     try:
         if processing_steps:

@@ -27,6 +27,44 @@ logger = get_logger(__name__)
 _registered: set[str] = set()
 
 
+def _scan_common_tensorrt_roots() -> list[Path]:
+    """Scan typical TensorRT installation roots when VP_TENSORRT_DIR is unset."""
+    roots: list[Path] = []
+    seen: set[str] = set()
+    # Common drive letters and prefixes on Windows
+    for drive in ["C:", "D:", "E:"]:
+        for prefix in ["TensorRT", "tensorrt"]:
+            drive_path = Path(f"{drive}\\")
+            if not drive_path.exists():
+                continue
+            try:
+                for entry in drive_path.iterdir():
+                    if entry.is_dir() and entry.name.lower().startswith(prefix.lower()):
+                        bin_dir = entry / "bin"
+                        if bin_dir.is_dir():
+                            key = str(bin_dir.resolve()).lower()
+                            if key not in seen:
+                                seen.add(key)
+                                roots.append(bin_dir)
+            except (OSError, PermissionError):
+                continue
+    # Also check NVIDIA default install location
+    nvidia_path = Path("C:\\Program Files\\NVIDIA")
+    if nvidia_path.is_dir():
+        try:
+            for entry in nvidia_path.iterdir():
+                if entry.is_dir() and "tensorrt" in entry.name.lower():
+                    bin_dir = entry / "bin"
+                    if bin_dir.is_dir():
+                        key = str(bin_dir.resolve()).lower()
+                        if key not in seen:
+                            seen.add(key)
+                            roots.append(bin_dir)
+        except (OSError, PermissionError):
+            pass
+    return roots
+
+
 def _candidate_dirs() -> list[Path]:
     """Build the ordered list of directories to register, dedup'd downstream."""
     candidates: list[Path] = []
@@ -42,6 +80,12 @@ def _candidate_dirs() -> list[Path]:
                 "VP_TENSORRT_DIR=%s does not contain a 'bin' subdirectory; ignoring.",
                 tensorrt_dir,
             )
+    else:
+        # When VP_TENSORRT_DIR is unset, try common install locations
+        auto_roots = _scan_common_tensorrt_roots()
+        if auto_roots:
+            logger.info("Auto-discovered TensorRT bin directories: %s", auto_roots)
+            candidates.extend(auto_roots)
 
     cuda_path = os.environ.get("CUDA_PATH", "").strip()
     if cuda_path:

@@ -299,11 +299,17 @@ pub fn build_env_map(paths: &ResolvedRuntimePaths) -> Vec<(String, String)> {
         ));
     }
 
+    // 优先透传系统环境变量中的 VP_TENSORRT_DIR（用户可能直接设了），
+    // 即使 resolve_runtime_paths 没找到本地目录，也要让后端有机会读取。
     if let Some(tensorrt_dir) = &paths.tensorrt_dir {
         envs.push((
             "VP_TENSORRT_DIR".to_string(),
             tensorrt_dir.to_string_lossy().to_string(),
         ));
+    } else if let Ok(trt_env) = std::env::var("VP_TENSORRT_DIR") {
+        if !trt_env.is_empty() {
+            envs.push(("VP_TENSORRT_DIR".to_string(), trt_env));
+        }
     }
 
     if let Some(runtime_root) = &paths.runtime_root {
