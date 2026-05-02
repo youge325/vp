@@ -82,8 +82,8 @@ def test_log_records_are_written_to_current_startup_log(tmp_path):
     assert "startup-log-message" in log_file.read_text(encoding="utf-8")
 
 
-def test_setup_logging_keeps_latest_30_startup_log_groups(tmp_path):
-    for index in range(31):
+def test_setup_logging_keeps_latest_5_startup_log_groups(tmp_path):
+    for index in range(6):
         _make_startup_log_files(tmp_path, index)
 
     preserved_file = tmp_path / "desktop.log"
@@ -97,7 +97,7 @@ def test_setup_logging_keeps_latest_30_startup_log_groups(tmp_path):
         if path.is_file() and (match := logger_module._STARTUP_LOG_FILE_RE.match(path.name))
     }
 
-    assert len(remaining_groups) == 30
+    assert len(remaining_groups) == 5
     assert "app-20240101-000000-000000.log" not in remaining_groups
     assert "app-20240101-000001-000000.log" not in remaining_groups
     assert not (tmp_path / "app-20240101-000000-000000.log").exists()

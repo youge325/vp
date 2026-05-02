@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     LOG_DIR: str = ""
     LOG_FILE_MAX_BYTES: int = 10 * 1024 * 1024
     LOG_FILE_BACKUP_COUNT: int = 5
-    LOG_STARTUP_FILE_KEEP_COUNT: int = 30
+    LOG_STARTUP_FILE_KEEP_COUNT: int = 5
 
     RIFE_MODEL_DIR: str = ""
     RIFE_MODEL_VERSION: str = "4.25"
