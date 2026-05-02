@@ -4,6 +4,7 @@
 """
 
 import os
+import re
 from typing import Optional
 
 import numpy as np
@@ -11,6 +12,10 @@ import numpy as np
 from app.utils.logger import get_logger
 from app.algorithms.onnx_models import create_onnx_session, resolve_onnx_model_path
 from .model_loader import get_model_dir, MODEL_CONFIGS
+
+
+# ONNX 模型文件名中常见的版本标记，如 rife_v4.26.onnx -> 4.26
+_MODEL_VERSION_RE = re.compile(r"[vV](\d+\.\d+)")
 
 logger = get_logger(__name__)
 
@@ -51,6 +56,17 @@ def _np_create_flow_div(height: int, width: int) -> np.ndarray:
     return np.array([(width - 1.0) / 2.0, (height - 1.0) / 2.0], dtype=np.float32)
 
 
+def _infer_model_version_from_path(onnx_path: str) -> str | None:
+    """从 ONNX 文件名推断 RIFE 模型版本，如 rife_v4.26.onnx -> '4.26'。"""
+    name = os.path.basename(onnx_path)
+    match = _MODEL_VERSION_RE.search(name)
+    if match:
+        version = match.group(1)
+        if version in MODEL_CONFIGS:
+            return version
+    return None
+
+
 class RIFEONNXSolver:
     """RIFE ONNX Runtime 推理求解器。
 
@@ -71,13 +87,13 @@ class RIFEONNXSolver:
     ):
         import onnxruntime as ort
 
-        self._model_version = model_version
-        self._config = MODEL_CONFIGS[model_version]
-        self._modulo = self._config["modulo"]
-
         model_dir = model_dir or get_model_dir()
         if onnx_model:
             onnx_path = str(resolve_onnx_model_path("interpolation", onnx_model, model_dir))
+            inferred = _infer_model_version_from_path(onnx_path)
+            if inferred:
+                model_version = inferred
+                logger.debug("从 ONNX 文件名推断模型版本: %s", model_version)
         else:
             onnx_path = os.path.join(model_dir, "interpolation", f"rife_v{model_version}.onnx")
             legacy_path = os.path.join(model_dir, f"rife_v{model_version}.onnx")
@@ -89,6 +105,10 @@ class RIFEONNXSolver:
                     f"请将补帧 ONNX 模型放入 {os.path.join(model_dir, 'interpolation')}，"
                     f"或运行 export_rife_to_onnx(model_version='{model_version}') 导出模型"
                 )
+
+        self._model_version = model_version
+        self._config = MODEL_CONFIGS[model_version]
+        self._modulo = self._config["modulo"]
 
         # 根据 engine 参数选择 providers 并显式校验是否真的命中
         self._session = create_onnx_session(onnx_path, engine=engine, ort_module=ort)

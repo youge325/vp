@@ -27,6 +27,12 @@ pub struct InterpolationConfig {
     pub scale: f64,
     pub fp16: bool,
     pub tensor_backend: String,
+    #[serde(default = "default_engine")]
+    pub engine: String,
+}
+
+fn default_engine() -> String {
+    "cuda".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

@@ -224,12 +224,14 @@ def _build_algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: str
             "scale": interpolation["scale"],
             "fp16": interpolation["fp16"],
             "onnx_model": interpolation.get("onnxModel") or interpolation.get("onnx_model"),
+            "engine": interpolation.get("engine") or "cuda",
         }
     if algorithm_type == "super_resolution":
         return {
             "scale_factor": super_resolution["scaleFactor"],
             "sr_algorithm": super_resolution["algorithm"],
             "onnx_model": super_resolution.get("onnxModel") or super_resolution.get("onnx_model"),
+            "engine": super_resolution.get("engine") or "cuda",
         }
     return {}
 
