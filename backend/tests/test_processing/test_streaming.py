@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import shutil
 
@@ -194,6 +195,23 @@ def _frame(value: int) -> np.ndarray:
     return np.full((1, 1, 3), value, dtype=np.uint8)
 
 
+def _install_video_frames_rename_hook(monkeypatch: pytest.MonkeyPatch, wrapper: "_FakeFFmpegWrapper") -> None:
+    """Patch os.replace inside the streaming module so renames propagate to the wrapper."""
+    import app.processing.streaming as streaming_module
+
+    original_replace = streaming_module.os.replace
+
+    def tracking_replace(src, dst):
+        result = original_replace(src, dst)
+        src_str = str(src)
+        dst_str = str(dst)
+        if src_str in wrapper.video_frames:
+            wrapper.video_frames[dst_str] = wrapper.video_frames.pop(src_str)
+        return result
+
+    monkeypatch.setattr(streaming_module.os, "replace", tracking_replace)
+
+
 def _workspace(name: str) -> Path:
     root = Path("D:/Lenovo/vp/.tmp/test_streaming") / name
     if root.exists():
@@ -280,21 +298,20 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
         video_info=video_info,
     )
     manifest = SegmentManifest(str(output_path))
-    manifest.prepare(signature)
-    first_segment = manifest.segment_path(1, ".mp4")
+    decision = manifest.prepare(signature, {}, mode="auto")
+    assert decision.kind == "fresh"
+    first_segment = manifest.chunk_final_path(
+        index=1,
+        start_output_frame=0,
+        end_output_frame=1,
+        next_source_frame=1,
+        extension=".mp4",
+    )
     Path(first_segment).parent.mkdir(parents=True, exist_ok=True)
     Path(first_segment).write_bytes(b"segment-1")
     wrapper.video_frames[str(Path(first_segment))] = [_frame(0), _frame(50)]
-    manifest.record_segment(
-        signature,
-        index=1,
-        path=first_segment,
-        start_output_frame=0,
-        end_output_frame=1,
-        frame_count=2,
-        next_source_frame=1,
-    )
 
+    _install_video_frames_rename_hook(monkeypatch, wrapper)
     monkeypatch.setattr("app.processing.streaming.get_tensor_backend", lambda _name: _IdentityBackend())
 
     def fake_create(*, algorithm_type: str, **kwargs):
@@ -337,6 +354,7 @@ def test_streaming_pipeline_keeps_sidecar_when_finalization_fails(monkeypatch):
     workflow_config, encode_config, processing_steps, output_config = _workflow_config(segment_frames=2)
     decode_config = {"mode": "software", "decoder": "software", "options": {}}
 
+    _install_video_frames_rename_hook(monkeypatch, wrapper)
     monkeypatch.setattr("app.processing.streaming.get_tensor_backend", lambda _name: _IdentityBackend())
 
     def fake_create(*, algorithm_type: str, **kwargs):
@@ -384,6 +402,7 @@ def test_streaming_pipeline_reports_final_encoded_frames_when_resampling(monkeyp
     workflow_config, encode_config, processing_steps, output_config = _workflow_config(segment_frames=2)
     decode_config = {"mode": "software", "decoder": "software", "options": {}}
 
+    _install_video_frames_rename_hook(monkeypatch, wrapper)
     monkeypatch.setattr("app.processing.streaming.get_tensor_backend", lambda _name: _IdentityBackend())
 
     def fake_create(*, algorithm_type: str, **kwargs):
@@ -463,6 +482,7 @@ def test_streaming_pipeline_uses_scaled_encoder_dimensions_for_onnx_super_resolu
     ]
     output_config = {"outputDir": "", "openOnComplete": False, "segmentFrames": 2}
 
+    _install_video_frames_rename_hook(monkeypatch, wrapper)
     monkeypatch.setattr("app.processing.streaming.get_tensor_backend", lambda _name: _IdentityBackend())
     monkeypatch.setattr("app.processing.streaming.AlgorithmFactory.create", lambda **_kwargs: _IdentityAlgorithm())
 

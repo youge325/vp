@@ -5,7 +5,13 @@ import { usePresetStore } from '@/stores/preset'
 import { useMediaStore } from '@/stores/media'
 import { useTaskStore } from '@/stores/task'
 import { cloneWorkflowConfig, createDefaultWorkbenchPreset, getVisibleDecoderProfiles } from '@/lib/task-mapper'
-import type { EnvironmentCheckPayload, EnvironmentCheckResult, VideoInfoResult, WorkbenchPreset } from '@/types'
+import type {
+  EnvironmentCheckPayload,
+  EnvironmentCheckResult,
+  ResumeInspectionResult,
+  VideoInfoResult,
+  WorkbenchPreset,
+} from '@/types'
 
 interface TaskEventHandlers {
   onProgress: (payload: Record<string, unknown>) => void
@@ -13,12 +19,14 @@ interface TaskEventHandlers {
   onCompleted: (payload: Record<string, unknown>) => void
   onError: (payload: { code: string; message: string; details?: Record<string, unknown> | null }) => void
   onCancelled: () => void
+  onResumeStatus?: (payload: Record<string, unknown>) => void
 }
 
 const handlersRef: { current: TaskEventHandlers | null } = { current: null }
 
 const mockCheckEnvironment = vi.fn<(forceRefresh?: boolean) => Promise<EnvironmentCheckPayload>>()
 const mockInspectVideo = vi.fn<(inputPath: string) => Promise<VideoInfoResult>>()
+const mockCheckResumeState = vi.fn<(request: unknown) => Promise<ResumeInspectionResult>>()
 const mockStartTask = vi.fn<(request: unknown) => Promise<void>>()
 const mockCancelTask = vi.fn<() => Promise<void>>()
 const mockPauseTask = vi.fn<() => Promise<void>>()
@@ -32,6 +40,7 @@ const mockSaveWorkbenchPreset = vi.fn<(preset: WorkbenchPreset) => Promise<void>
 vi.mock('@/lib/tauri', () => ({
   cancelTask: () => mockCancelTask(),
   checkEnvironment: (forceRefresh?: boolean) => mockCheckEnvironment(forceRefresh),
+  checkResumeState: (request: unknown) => mockCheckResumeState(request),
   inspectVideo: (inputPath: string) => mockInspectVideo(inputPath),
   listenTaskEvents: async (handlers: TaskEventHandlers) => {
     handlersRef.current = handlers
@@ -239,6 +248,7 @@ describe('workbench integration', () => {
     handlersRef.current = null
     mockCheckEnvironment.mockReset()
     mockInspectVideo.mockReset()
+    mockCheckResumeState.mockReset()
     mockStartTask.mockReset()
     mockCancelTask.mockReset()
     mockPauseTask.mockReset()
@@ -253,6 +263,19 @@ describe('workbench integration', () => {
     mockInspectVideo.mockImplementation(async (inputPath: string) =>
       makeVideoInfo(inputPath, inputPath.includes('h264') ? 'h264' : 'hevc'),
     )
+    mockCheckResumeState.mockResolvedValue({
+      type: 'resume_inspection',
+      pipeline_kind: 'streaming',
+      output_path: '',
+      input_path: '',
+      final_exists: false,
+      sidecar_exists: false,
+      signature_match: false,
+      completed_chunks: 0,
+      completed_output_frames: 0,
+      next_source_frame: 0,
+      total_output_frames: 0,
+    })
     mockStartTask.mockResolvedValue()
     mockCancelTask.mockResolvedValue()
     mockPauseTask.mockResolvedValue()

@@ -11,6 +11,7 @@ pub struct ResolvedRuntimePaths {
     pub ffmpeg_path: Option<PathBuf>,
     pub ffprobe_path: Option<PathBuf>,
     pub model_dir: Option<PathBuf>,
+    pub tensorrt_dir: Option<PathBuf>,
     pub output_dir: PathBuf,
     pub log_dir: PathBuf,
 }
@@ -130,6 +131,12 @@ pub fn resolve_runtime_paths<R: Runtime>(
         dev_model_dir,
     ]);
 
+    let tensorrt_dir = first_existing_dir([
+        env_path("VP_TENSORRT_DIR"),
+        runtime_root.as_ref().map(|path| path.join("tensorrt")),
+        resource_dir.as_ref().map(|path| path.join("tensorrt")),
+    ]);
+
     if !cfg!(debug_assertions) {
         if ffmpeg_path.is_none() {
             return Err(
@@ -175,6 +182,7 @@ pub fn resolve_runtime_paths<R: Runtime>(
         ffmpeg_path,
         ffprobe_path,
         model_dir,
+        tensorrt_dir,
         output_dir,
         log_dir,
     })
@@ -291,6 +299,13 @@ pub fn build_env_map(paths: &ResolvedRuntimePaths) -> Vec<(String, String)> {
         ));
     }
 
+    if let Some(tensorrt_dir) = &paths.tensorrt_dir {
+        envs.push((
+            "VP_TENSORRT_DIR".to_string(),
+            tensorrt_dir.to_string_lossy().to_string(),
+        ));
+    }
+
     if let Some(runtime_root) = &paths.runtime_root {
         envs.push((
             "VP_RUNTIME_ROOT".to_string(),
@@ -335,6 +350,7 @@ mod tests {
             ffmpeg_path: Some(PathBuf::from("ffmpeg")),
             ffprobe_path: Some(PathBuf::from("ffprobe")),
             model_dir: Some(PathBuf::from("models")),
+            tensorrt_dir: None,
             output_dir: PathBuf::from("output"),
             log_dir: PathBuf::from("logs"),
         });
@@ -345,5 +361,24 @@ mod tests {
             .iter()
             .any(|(key, value)| key == "VP_PYTHON_EXECUTABLE" && value == "python"));
         assert!(!envs.iter().any(|(key, _)| key == &legacy_temp_key));
+        assert!(!envs.iter().any(|(key, _)| key == "VP_TENSORRT_DIR"));
+    }
+
+    #[test]
+    fn build_env_map_passes_tensorrt_dir_when_resolved() {
+        let envs = build_env_map(&ResolvedRuntimePaths {
+            backend_dir: PathBuf::from("backend"),
+            runtime_root: None,
+            python_executable: PathBuf::from("python"),
+            ffmpeg_path: None,
+            ffprobe_path: None,
+            model_dir: None,
+            tensorrt_dir: Some(PathBuf::from("D:\\TensorRT-10.14.1.48")),
+            output_dir: PathBuf::from("output"),
+            log_dir: PathBuf::from("logs"),
+        });
+        assert!(envs
+            .iter()
+            .any(|(key, value)| key == "VP_TENSORRT_DIR" && value == "D:\\TensorRT-10.14.1.48"));
     }
 }

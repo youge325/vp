@@ -31,6 +31,7 @@ function createIdleTaskState(): import('@/types').MediaTaskState {
     error: null,
     startedAt: null,
     finishedAt: null,
+    resumeStatus: null,
   }
 }
 

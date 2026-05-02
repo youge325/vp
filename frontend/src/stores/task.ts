@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import {
   cancelTask,
+  checkResumeState,
   listenTaskEvents,
   openOutputLocation,
   pauseTask,
@@ -18,12 +19,25 @@ import {
   applyTaskError,
   applyTaskPaused,
   applyTaskProgress,
+  applyTaskResumeStatus,
   applyTaskResumed,
   createIdleTaskState,
 } from '@/lib/task-events'
 import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
-import type { BatchState, TaskCompletedPayload, TaskError, TaskLogPayload, TaskProgressPayload } from '@/types'
+import type {
+  BatchState,
+  ResumeConflictAction,
+  ResumeConflictDescriptor,
+  ResumeConflictKind,
+  ResumeInspectionResult,
+  ResumeMode,
+  ResumeStatus,
+  TaskCompletedPayload,
+  TaskError,
+  TaskLogPayload,
+  TaskProgressPayload,
+} from '@/types'
 
 function createInitialBatch(): BatchState {
   return {
@@ -43,6 +57,7 @@ export const useTaskStore = defineStore('task', () => {
 
   const batch = reactive<BatchState>(createInitialBatch())
   const batchRuntimeIds = ref<string[]>([])
+  const pendingConflict = ref<ResumeConflictDescriptor | null>(null)
 
   let detachListenersHandle: UnlistenFn | null = null
 
@@ -129,11 +144,78 @@ export const useTaskStore = defineStore('task', () => {
       startedAt: new Date().toISOString(),
     }
 
+    let inspection: ResumeInspectionResult | null = null
     try {
-      await startTask(buildTaskRequest(item))
+      inspection = await checkResumeState(buildTaskRequest(item))
+    } catch (error) {
+      // Pre-flight failure: emit the error and move on to the next item.
+      await handleCurrentTaskErrored(normalizeTaskError(error, 'start_failed'))
+      return
+    }
+
+    const conflict = _classifyConflict(inspection)
+    if (conflict) {
+      pendingConflict.value = {
+        itemId: nextId,
+        kind: conflict,
+        outputPath: inspection.output_path,
+        inspection,
+      }
+      // Hold the item in 'running' state but defer the actual startTask
+      // until the user resolves the dialog via resolveConflict().
+      return
+    }
+
+    await _launchCurrentItem(item)
+  }
+
+  async function _launchCurrentItem(
+    item: ReturnType<typeof mediaStore.findItem> & {},
+    resumeMode?: ResumeMode,
+  ): Promise<void> {
+    try {
+      await startTask(buildTaskRequest(item, resumeMode))
     } catch (error) {
       await handleCurrentTaskErrored(normalizeTaskError(error, 'start_failed'))
     }
+  }
+
+  function _classifyConflict(inspection: ResumeInspectionResult): ResumeConflictKind | null {
+    if (!inspection.final_exists) {
+      return null
+    }
+    if (inspection.signature_match && inspection.completed_chunks > 0) {
+      return 'final_exists_with_resume'
+    }
+    return 'final_exists_only'
+  }
+
+  async function resolveConflict(action: ResumeConflictAction): Promise<void> {
+    const conflict = pendingConflict.value
+    pendingConflict.value = null
+    if (!conflict) {
+      return
+    }
+    const item = mediaStore.findItem(conflict.itemId)
+    if (!item) {
+      await finalizeCurrentTask('cancelled')
+      return
+    }
+
+    if (action === 'cancel') {
+      // Cancel the entire batch; the running item is not yet started.
+      batch.queue = []
+      await finalizeCurrentTask('cancelled')
+      return
+    }
+
+    if (action === 'skip') {
+      await finalizeCurrentTask('cancelled')
+      return
+    }
+
+    const mode: ResumeMode | undefined = action === 'fresh' ? 'force-fresh' : undefined
+    await _launchCurrentItem(item, mode)
   }
 
   async function finalizeCurrentTask(state: 'completed' | 'error' | 'cancelled'): Promise<void> {
@@ -272,6 +354,9 @@ export const useTaskStore = defineStore('task', () => {
       return
     }
 
+    // Drop any pending conflict modal — the user is interrupting the batch.
+    pendingConflict.value = null
+
     const previousQueue = [...batch.queue]
     const wasPaused = batch.isPaused
     const item = currentTaskItem.value
@@ -324,10 +409,45 @@ export const useTaskStore = defineStore('task', () => {
         void handleCurrentTaskCompleted(payload as TaskCompletedPayload)
       },
       onError(error) {
+        // The backend may emit a resume_conflict if the pre-flight raced with
+        // a filesystem change; surface it through the same dialog as the
+        // pre-flight detection to keep the UX consistent.
+        if (error.code === 'resume_conflict') {
+          const item = currentTaskItem.value
+          if (item) {
+            const details = (error.details ?? {}) as Record<string, unknown>
+            const inspection: ResumeInspectionResult = {
+              type: 'resume_inspection',
+              pipeline_kind: 'streaming',
+              output_path: typeof details.output_path === 'string' ? details.output_path : '',
+              input_path: typeof details.input_path === 'string' ? details.input_path : item.inputPath,
+              final_exists: true,
+              sidecar_exists: Boolean(details.sidecar_signature_match),
+              signature_match: Boolean(details.sidecar_signature_match),
+              completed_chunks: Number(details.completed_chunks ?? 0),
+              completed_output_frames: Number(details.completed_output_frames ?? 0),
+              next_source_frame: 0,
+              total_output_frames: 0,
+            }
+            pendingConflict.value = {
+              itemId: item.id,
+              kind: inspection.signature_match ? 'final_exists_with_resume' : 'final_exists_only',
+              outputPath: inspection.output_path,
+              inspection,
+            }
+            return
+          }
+        }
         void handleCurrentTaskErrored(error)
       },
       onCancelled() {
         void handleCurrentTaskCancelled()
+      },
+      onResumeStatus(payload) {
+        const item = currentTaskItem.value ?? mediaStore.activeItem
+        if (item) {
+          item.taskState = applyTaskResumeStatus(item.taskState, payload as ResumeStatus)
+        }
       },
     })
   }
@@ -340,6 +460,7 @@ export const useTaskStore = defineStore('task', () => {
   return {
     batch,
     batchRuntimeIds,
+    pendingConflict,
     selectedIds,
     selectedItems,
     currentTaskItem,
@@ -358,5 +479,6 @@ export const useTaskStore = defineStore('task', () => {
     handleCurrentTaskCompleted,
     handleCurrentTaskErrored,
     handleCurrentTaskCancelled,
+    resolveConflict,
   }
 })

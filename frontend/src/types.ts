@@ -249,7 +249,46 @@ export interface MediaTaskState {
   error: TaskError | null
   startedAt: string | null
   finishedAt: string | null
+  resumeStatus: ResumeStatus | null
 }
+
+export interface ResumeStatus {
+  resumed: boolean
+  completedChunks: number
+  completedOutputFrames: number
+  startSourceFrame: number
+  totalOutputFrames: number
+}
+
+export type ResumeMode = 'auto' | 'force-fresh' | 'force-resume'
+
+export interface ResumeInspectionResult {
+  type: 'resume_inspection'
+  pipeline_kind: 'streaming' | 'format_conversion'
+  output_path: string
+  input_path: string
+  final_exists: boolean
+  sidecar_exists: boolean
+  signature_match: boolean
+  completed_chunks: number
+  completed_output_frames: number
+  next_source_frame: number
+  total_output_frames: number
+}
+
+export type ResumeConflictKind =
+  | 'resume_available' // sidecar matches signature, prior progress >0, no final yet
+  | 'final_exists_with_resume' // both final & matching sidecar exist (rare; user picks)
+  | 'final_exists_only' // final exists but no sidecar / mismatch
+
+export interface ResumeConflictDescriptor {
+  itemId: string
+  kind: ResumeConflictKind
+  outputPath: string
+  inspection: ResumeInspectionResult
+}
+
+export type ResumeConflictAction = 'resume' | 'fresh' | 'skip' | 'cancel'
 
 export interface MediaItem {
   id: string
@@ -302,6 +341,7 @@ export interface TaskRequest {
   workflowConfig: WorkflowConfig
   encodeConfig: EncodeConfig
   outputConfig: OutputConfig
+  resumeMode?: ResumeMode
 }
 
 export interface WorkbenchModuleDefinition {

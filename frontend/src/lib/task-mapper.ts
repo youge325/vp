@@ -7,6 +7,7 @@ import type {
   InferenceEngine,
   MediaItem,
   OutputConfig,
+  ResumeMode,
   TaskError,
   TaskRequest,
   WorkbenchPreset,
@@ -146,13 +147,14 @@ export function getVisibleDecoderProfiles(
   })
 }
 
-export function buildTaskRequest(item: MediaItem): TaskRequest {
+export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): TaskRequest {
   return {
     inputPath: item.inputPath,
     decodeConfig: item.decodeConfig,
     workflowConfig: item.workflowConfig,
     encodeConfig: item.encodeConfig,
     outputConfig: item.outputConfig,
+    ...(resumeMode ? { resumeMode } : {}),
   }
 }
 

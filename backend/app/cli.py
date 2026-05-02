@@ -19,7 +19,14 @@ if str(_BACKEND_DIR) not in sys.path:
 from app.algorithms.factory import register_default_algorithms
 from app.algorithms.onnx_models import resolve_onnx_model_path, scan_onnx_models
 from app.config import settings
-from app.processing.streaming import process_video_streaming
+from app.processing.streaming import (
+    ResumeConflictError,
+    SegmentManifest,
+    _build_signature,
+    _build_stage_plan,
+    _resolve_video_info,
+    process_video_streaming,
+)
 from app.utils.ffmpeg_wrapper import FFmpegWrapper
 from app.utils.file_utils import get_output_path, validate_input_path
 from app.utils.logger import get_logger, setup_logging
@@ -621,8 +628,13 @@ def cmd_process(args: argparse.Namespace) -> None:
                 progress_callbacks=progress_callbacks,
                 output_fps=final_output_fps,
                 encode_progress_callback=progress_reporter.update,
+                resume_mode=getattr(args, "resume_mode", "auto"),
             )
         else:
+            _enforce_format_conversion_resume_mode(
+                output_path=output_path,
+                resume_mode=getattr(args, "resume_mode", "auto"),
+            )
             ffmpeg.transcode_video(
                 input_path=input_path,
                 output_path=output_path,
@@ -664,6 +676,15 @@ def cmd_process(args: argparse.Namespace) -> None:
             details={"input_path": input_path},
             exit_code=130,
         )
+    except ResumeConflictError as exc:
+        _emit_error(
+            "resume_conflict",
+            "An existing output was detected; please choose how to proceed.",
+            details={
+                "input_path": input_path,
+                **exc.to_details(),
+            },
+        )
     except Exception as exc:  # pragma: no cover - defensive boundary
         _emit_error(
             _infer_error_code(exc),
@@ -675,6 +696,122 @@ def cmd_process(args: argparse.Namespace) -> None:
                 "processing_steps": [step["algorithm_type"] for step in processing_steps],
             },
         )
+
+
+def _enforce_format_conversion_resume_mode(*, output_path: str, resume_mode: str) -> None:
+    """Apply resume_mode semantics for the format-conversion fast path.
+
+    The streaming pipeline owns its own conflict logic via ``SegmentManifest``;
+    format-only conversions skip the sidecar entirely, so they need a
+    miniature equivalent here so a stale output is not silently overwritten.
+    """
+    target = Path(output_path)
+    if not target.exists():
+        return
+    if resume_mode in {"force-fresh", "force-resume"}:
+        target.unlink(missing_ok=True)
+        return
+    raise ResumeConflictError(
+        output_path=str(target.resolve()),
+        completed_chunks=0,
+        completed_output_frames=0,
+        sidecar_signature_match=False,
+    )
+
+
+def cmd_inspect_output(args: argparse.Namespace) -> None:
+    """Probe whether a final output and resume sidecar exist for a planned run.
+
+    Pure read-only inspection. Returns a JSON payload describing whether the
+    final output already exists, whether a sidecar is present and matches the
+    planned signature, and how much progress (chunks / output frames) the
+    sidecar represents. Used by the Tauri host as a pre-flight before
+    spawning ``process``.
+    """
+    register_default_algorithms()
+
+    input_path = args.input
+    if not validate_input_path(input_path):
+        _emit_error(
+            "invalid_input",
+            f"Input file is invalid or unsupported: {input_path}",
+            details={"input_path": input_path},
+        )
+
+    ffmpeg = FFmpegWrapper()
+    if not ffmpeg.is_available():
+        _emit_error(
+            "missing_ffmpeg",
+            "FFmpeg is not available.",
+            details={
+                "ffmpeg_path": ffmpeg.ffmpeg_path,
+                "ffprobe_path": ffmpeg.ffprobe_path,
+            },
+        )
+
+    try:
+        decode_config = _load_json_arg(args.decode_config_json, _default_decode_config())
+        encode_config = _load_json_arg(args.encode_config_json, _default_encode_config(args))
+        workflow_config = _load_json_arg(args.workflow_config_json, _default_workflow_config(args))
+        output_config = _load_json_arg(args.output_config_json, _default_output_config(args))
+    except ValueError as exc:
+        _emit_error("invalid_config", str(exc))
+
+    processing_steps = _resolve_processing_steps(workflow_config)
+
+    output_dir = output_config.get("outputDir") or settings.OUTPUT_DIR
+    container = str(encode_config.get("container") or "mp4")
+    if args.output:
+        output_path = args.output
+    else:
+        output_path = get_output_path(input_path, output_dir, extension=f".{container}")
+
+    multi, encode_fps, _interpolated_fps, need_resample = _resolve_fps_and_multi(workflow_config, ffmpeg, input_path)
+    workflow_config["interpolation"]["multi"] = multi
+    final_output_fps = encode_fps if need_resample else None
+
+    video_info = _resolve_video_info(ffmpeg, input_path)
+    stage_plan = _build_stage_plan(
+        processing_steps,
+        video_info["source_frames"],
+        source_duration=video_info["duration"],
+        output_fps=final_output_fps,
+    )
+
+    if processing_steps:
+        signature = _build_signature(
+            input_path=input_path,
+            output_path=output_path,
+            decode_config=decode_config,
+            encode_config=encode_config,
+            workflow_config=workflow_config,
+            output_config=output_config,
+            processing_steps=processing_steps,
+            video_info=video_info,
+        )
+        manifest = SegmentManifest(output_path)
+        info = manifest.inspect(
+            signature,
+            total_output_frames=stage_plan.total_encoded_frames,
+        )
+    else:
+        # Format conversion path has no sidecar; only the final-file check matters.
+        resolved_output = Path(output_path).expanduser().resolve()
+        info = {
+            "output_path": str(resolved_output),
+            "final_exists": resolved_output.exists(),
+            "sidecar_exists": False,
+            "signature_match": False,
+            "completed_chunks": 0,
+            "completed_output_frames": 0,
+            "next_source_frame": 0,
+            "total_output_frames": stage_plan.total_encoded_frames,
+        }
+
+    info["type"] = "resume_inspection"
+    info["input_path"] = input_path
+    info["pipeline_kind"] = "streaming" if processing_steps else "format_conversion"
+    _emit(info)
 
 
 def cmd_info(args: argparse.Namespace) -> None:
@@ -888,11 +1025,79 @@ def build_parser() -> argparse.ArgumentParser:
     process_parser.add_argument("--encode-config-json", default=None, help="Nested encode config JSON")
     process_parser.add_argument("--workflow-config-json", default=None, help="Nested workflow config JSON")
     process_parser.add_argument("--output-config-json", default=None, help="Nested output config JSON")
+    process_parser.add_argument(
+        "--resume-mode",
+        default="auto",
+        choices=["auto", "force-fresh", "force-resume"],
+        help=(
+            "Conflict policy when an existing output is detected. 'auto' (default) "
+            "resumes on signature match, otherwise emits a resume_conflict error so "
+            "the caller can prompt the user. 'force-fresh' wipes both the sidecar "
+            "and the existing final file. 'force-resume' keeps the sidecar."
+        ),
+    )
     process_parser.set_defaults(func=cmd_process)
 
     info_parser = subcommands.add_parser("info", help="Inspect an input video")
     info_parser.add_argument("--input", required=True, help="Input video path")
     info_parser.set_defaults(func=cmd_info)
+
+    inspect_output_parser = subcommands.add_parser(
+        "inspect-output",
+        help="Probe whether a final output and resume sidecar already exist for a planned run.",
+    )
+    inspect_output_parser.add_argument("--input", required=True, help="Input video path")
+    inspect_output_parser.add_argument("--output", default=None, help="Optional explicit output file path")
+    inspect_output_parser.add_argument("--decode-config-json", default=None)
+    inspect_output_parser.add_argument("--encode-config-json", default=None)
+    inspect_output_parser.add_argument("--workflow-config-json", default=None)
+    inspect_output_parser.add_argument("--output-config-json", default=None)
+    inspect_output_parser.add_argument(
+        "--codec", default="libx264", help="Default codec used when encode JSON omits it"
+    )
+    inspect_output_parser.add_argument(
+        "--fps", type=float, default=60.0, help="Default output FPS used when no resampling info is given"
+    )
+    inspect_output_parser.add_argument(
+        "--fps-mode", default="multi", choices=["multi", "target"], help="FPS calculation mode"
+    )
+    inspect_output_parser.add_argument(
+        "--target-fps", type=float, default=60.0, help="Target FPS when using target mode"
+    )
+    inspect_output_parser.add_argument("--multi", type=int, default=2, help="Interpolation multiplier")
+    inspect_output_parser.add_argument("--model", default="4.25", help="RIFE model version")
+    inspect_output_parser.add_argument("--scale", type=float, default=1.0, help="Interpolation scale factor")
+    inspect_output_parser.add_argument("--fp16", action="store_true")
+    inspect_output_parser.add_argument("--sr-scale-factor", type=float, default=2.0)
+    inspect_output_parser.add_argument("--sr-algorithm", default="placeholder")
+    inspect_output_parser.add_argument(
+        "--algorithm",
+        default="frame_interpolation",
+        choices=[
+            "frame_interpolation",
+            "super_resolution",
+            "anime_optimization",
+            "format_conversion",
+        ],
+    )
+    inspect_output_parser.add_argument(
+        "--enable-interpolation",
+        action="store_true",
+    )
+    inspect_output_parser.add_argument(
+        "--enable-super-resolution",
+        action="store_true",
+    )
+    inspect_output_parser.add_argument(
+        "--process-order",
+        default="super_resolution_then_interpolation",
+        choices=list(PROCESS_ORDER_MAP.keys()),
+    )
+    inspect_output_parser.add_argument("--output-dir", default=None)
+    inspect_output_parser.add_argument("--backend", default="pytorch", choices=["pytorch", "paddle", "onnx"])
+    inspect_output_parser.add_argument("--preset", default="medium")
+    inspect_output_parser.add_argument("--crf", type=int, default=18)
+    inspect_output_parser.set_defaults(func=cmd_inspect_output)
 
     check_parser = subcommands.add_parser("check", help="Inspect runtime availability")
     check_parser.set_defaults(func=cmd_check)

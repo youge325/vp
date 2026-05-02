@@ -25,6 +25,10 @@ def test_super_resolution_onnx_lazily_loads_and_scales(tmp_path: Path, monkeypat
     class _Session:
         def __init__(self, path: str, providers):
             created_sessions.append((path, providers))
+            self._providers = list(providers)
+
+        def get_providers(self):
+            return list(self._providers)
 
         def get_inputs(self):
             return [_Node("input")]
@@ -49,6 +53,7 @@ def test_super_resolution_onnx_lazily_loads_and_scales(tmp_path: Path, monkeypat
         scale_factor=2,
         onnx_model="sr.onnx",
         model_dir=str(tmp_path),
+        engine="auto",
     )
 
     assert created_sessions == []

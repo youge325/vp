@@ -111,6 +111,16 @@ async fn start_task<R: Runtime>(
 }
 
 #[tauri::command]
+async fn check_resume_state<R: Runtime>(
+    app: AppHandle<R>,
+    request: models::TaskRequest,
+) -> Result<serde_json::Value, String> {
+    let args = tasks::build_inspect_output_args(&request)
+        .map_err(|error| format!("Unable to build resume inspection args: {error}"))?;
+    tasks::run_single_cli_command(&app, &args).await
+}
+
+#[tauri::command]
 async fn cancel_task(state: State<'_, TaskState>) -> Result<(), String> {
     tasks::cancel_running_task(state).await
 }
@@ -161,6 +171,7 @@ pub fn run() {
             load_workbench_preset,
             save_workbench_preset,
             inspect_video,
+            check_resume_state,
             start_task,
             cancel_task,
             pause_task,
@@ -182,6 +193,7 @@ mod tests {
         assert!(DEFAULT_PERMISSIONS.contains("allow-pick-output-directory"));
         assert!(DEFAULT_PERMISSIONS.contains("allow-load-workbench-preset"));
         assert!(DEFAULT_PERMISSIONS.contains("allow-save-workbench-preset"));
+        assert!(DEFAULT_PERMISSIONS.contains("allow-check-resume-state"));
         assert!(DEFAULT_PERMISSIONS.contains("allow-start-task"));
         assert!(DEFAULT_PERMISSIONS.contains("allow-cancel-task"));
         assert!(DEFAULT_PERMISSIONS.contains("allow-pause-task"));
@@ -211,6 +223,7 @@ mod tests {
         assert!(ACL_MANIFESTS.contains("allow-pick-output-directory"));
         assert!(ACL_MANIFESTS.contains("allow-load-workbench-preset"));
         assert!(ACL_MANIFESTS.contains("allow-save-workbench-preset"));
+        assert!(ACL_MANIFESTS.contains("allow-check-resume-state"));
         assert!(ACL_MANIFESTS.contains("allow-start-task"));
         assert!(ACL_MANIFESTS.contains("allow-cancel-task"));
         assert!(ACL_MANIFESTS.contains("allow-pause-task"));
