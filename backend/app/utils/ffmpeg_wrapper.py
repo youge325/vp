@@ -168,8 +168,22 @@ class FFmpegWrapper:
         self.ffmpeg_path = ffmpeg_path or settings.FFMPEG_PATH
         self.ffprobe_path = ffprobe_path or settings.FFPROBE_PATH
         self._auto_detect_paths()
+        # Probe caches keyed by (abspath, mtime_ns); invalidates on file mutation.
+        self._video_info_cache: dict[tuple[str, int], dict[str, Any]] = {}
+        self._frame_count_cache: dict[tuple[str, int], int] = {}
+
+    def _probe_cache_key(self, input_path: str) -> tuple[str, int] | None:
+        try:
+            stat = os.stat(input_path)
+        except OSError:
+            return None
+        return (os.path.abspath(input_path), stat.st_mtime_ns)
 
     def get_video_info(self, input_path: str) -> dict[str, Any]:
+        cache_key = self._probe_cache_key(input_path)
+        if cache_key is not None and cache_key in self._video_info_cache:
+            return self._video_info_cache[cache_key]
+
         cmd = [
             self.ffprobe_path,
             "-v",
@@ -182,9 +196,12 @@ class FFmpegWrapper:
         ]
         result = self._run_command(cmd)
         try:
-            return json.loads(result.stdout)
+            info = json.loads(result.stdout)
         except json.JSONDecodeError:
-            return {}
+            info = {}
+        if cache_key is not None:
+            self._video_info_cache[cache_key] = info
+        return info
 
     def get_fps(self, input_path: str) -> float:
         info = self.get_video_info(input_path)
@@ -203,6 +220,10 @@ class FFmpegWrapper:
         return 30.0
 
     def get_frame_count(self, input_path: str) -> int:
+        cache_key = self._probe_cache_key(input_path)
+        if cache_key is not None and cache_key in self._frame_count_cache:
+            return self._frame_count_cache[cache_key]
+
         cmd = [
             self.ffprobe_path,
             "-v",
@@ -217,16 +238,21 @@ class FFmpegWrapper:
             input_path,
         ]
         result = self._run_command(cmd)
+        frame_count = 0
         try:
             data = json.loads(result.stdout)
             streams = data.get("streams", [])
             if streams:
-                return int(streams[0].get("nb_read_frames", 0))
+                frame_count = int(streams[0].get("nb_read_frames", 0))
         except (json.JSONDecodeError, ValueError, IndexError):
             pass
-        duration = self.get_duration(input_path)
-        fps = self.get_fps(input_path)
-        return int(duration * fps) if duration > 0 else 0
+        if frame_count <= 0:
+            duration = self.get_duration(input_path)
+            fps = self.get_fps(input_path)
+            frame_count = int(duration * fps) if duration > 0 else 0
+        if cache_key is not None and frame_count > 0:
+            self._frame_count_cache[cache_key] = frame_count
+        return frame_count
 
     def get_duration(self, input_path: str) -> float:
         info = self.get_video_info(input_path)
