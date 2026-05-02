@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     RIFE_FP16: bool = False
     RIFE_DEFAULT_MULTI: int = 2
 
+    # TensorRT 安装根目录（包含 bin/、lib/、include/ 子目录）。设置后启动时
+    # 会把 <dir>/bin 加进 Windows DLL 搜索路径，让 onnxruntime-gpu 能找到
+    # nvinfer_10.dll 等运行时库。空字符串视作未配置（fallback 到系统 PATH）。
+    TENSORRT_DIR: str = ""
+
     model_config = SettingsConfigDict(env_prefix="VP_", env_file=".env", extra="ignore")
 
     def model_post_init(self, __context: object) -> None:
@@ -126,6 +131,9 @@ class Settings(BaseSettings):
         ffprobe_value = str(ffprobe_path) if ffprobe_path is not None else _system_executable("ffprobe")
         python_value = str(python_executable) if python_executable is not None else sys.executable
 
+        tensorrt_dir = _resolve_path(self.TENSORRT_DIR)
+        tensorrt_value = str(tensorrt_dir) if tensorrt_dir is not None else ""
+
         object.__setattr__(self, "APP_ROOT", str(app_root))
         object.__setattr__(self, "RUNTIME_ROOT", str(runtime_root) if runtime_root is not None else "")
         object.__setattr__(self, "PYTHON_EXECUTABLE", python_value)
@@ -134,6 +142,7 @@ class Settings(BaseSettings):
         object.__setattr__(self, "OUTPUT_DIR", str(output_dir))
         object.__setattr__(self, "LOG_DIR", str(log_dir))
         object.__setattr__(self, "RIFE_MODEL_DIR", str(model_dir))
+        object.__setattr__(self, "TENSORRT_DIR", tensorrt_value)
 
     @property
     def backend_root(self) -> Path:

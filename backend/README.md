@@ -67,6 +67,16 @@ CLI 通过 stdout 逐行输出 JSON，桌面端按行消费：
 - `VP_RIFE_MODEL_DIR`
 - `VP_OUTPUT_DIR`
 - `VP_LOG_DIR`
+- `VP_TENSORRT_DIR`：TensorRT 解压根目录（含 `bin/`、`lib/`、`include/`）。设置后启动时
+  会自动把 `<dir>/bin` 注册进 Windows DLL 搜索路径并 prepend 到 `PATH`，让
+  `onnxruntime-gpu` 的 TensorRT EP 能找到 `nvinfer_10.dll` 等运行时库。未设置则
+  回退到系统 PATH，再不行就由 `select_onnx_providers` 抛错提示用户配置。
+
+  示例（PowerShell）：
+  ```powershell
+  $env:VP_TENSORRT_DIR = "D:\TensorRT-10.14.1.48"
+  python -m app check
+  ```
 
 ## 测试
 

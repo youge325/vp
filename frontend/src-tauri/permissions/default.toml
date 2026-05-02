@@ -7,6 +7,7 @@ permissions = [
   "allow-load-workbench-preset",
   "allow-save-workbench-preset",
   "allow-inspect-video",
+  "allow-check-resume-state",
   "allow-start-task",
   "allow-cancel-task",
   "allow-pause-task",

@@ -9,7 +9,7 @@ from typing import Optional
 import numpy as np
 
 from app.utils.logger import get_logger
-from app.algorithms.onnx_models import resolve_onnx_model_path
+from app.algorithms.onnx_models import create_onnx_session, resolve_onnx_model_path
 from .model_loader import get_model_dir, MODEL_CONFIGS
 
 logger = get_logger(__name__)
@@ -90,15 +90,8 @@ class RIFEONNXSolver:
                     f"或运行 export_rife_to_onnx(model_version='{model_version}') 导出模型"
                 )
 
-        # 根据 engine 参数选择 providers
-        if engine == "tensorrt":
-            providers = ["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"]
-        elif engine == "cuda":
-            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        else:
-            providers = ort.get_available_providers()
-        logger.info(f"ONNX Runtime 可用 providers: {providers}")
-        self._session = ort.InferenceSession(onnx_path, providers=providers)
+        # 根据 engine 参数选择 providers 并显式校验是否真的命中
+        self._session = create_onnx_session(onnx_path, engine=engine, ort_module=ort)
 
         self._input_names = {inp.name for inp in self._session.get_inputs()}
         self._output_names = [out.name for out in self._session.get_outputs()]

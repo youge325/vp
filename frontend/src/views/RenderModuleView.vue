@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import ResumeConflictDialog from '@/components/ResumeConflictDialog.vue'
 import TaskConsole from '@/components/TaskConsole.vue'
 import { useEnvStore } from '@/stores/env'
 import { useTaskStore } from '@/stores/task'
+import type { ResumeConflictAction } from '@/types'
 
 const envStore = useEnvStore()
 const taskStore = useTaskStore()
@@ -12,6 +14,10 @@ const taskOperationIssue = computed(() =>
 )
 const pauseButtonLabel = computed(() => (taskStore.batch.isPaused ? '继续队列' : '暂停队列'))
 const interruptButtonLabel = computed(() => (taskStore.batch.isCancelling ? '中断中...' : '中断批次'))
+
+function handleResolveConflict(action: ResumeConflictAction): void {
+  void taskStore.resolveConflict(action)
+}
 </script>
 
 <template>
@@ -51,5 +57,11 @@ const interruptButtonLabel = computed(() => (taskStore.batch.isCancelling ? '中
     </section>
 
     <TaskConsole />
+
+    <ResumeConflictDialog
+      v-if="taskStore.pendingConflict"
+      :descriptor="taskStore.pendingConflict"
+      @resolve="handleResolveConflict"
+    />
   </div>
 </template>

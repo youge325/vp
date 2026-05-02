@@ -110,6 +110,16 @@ Release 构建默认不再打包 Python 运行时。应用启动时按以下优�
 $env:VP_PYTHON_EXECUTABLE = "D:\Python312\python.exe"
 ```
 
+### TensorRT 加速（可选）
+
+ONNX 引擎默认走 CUDA EP。若想启用 TensorRT EP 拿到额外性能，需要：
+
+1. 安装 `onnxruntime-gpu` 1.20+（自带 TRT provider DLL）
+2. 下载并解压 NVIDIA TensorRT 10.x（与 CUDA 版本匹配，例如 CUDA 13 对应 TRT 10.14）
+3. 把解压根目录设到 `VP_TENSORRT_DIR`，例如 `D:\TensorRT-10.14.1.48`
+
+桌面外壳会通过 `build_env_map` 把变量透传给 Python 子进程，后端 [`register_native_dll_paths`](backend/app/utils/dll_paths.py) 会在创建 ONNX session 前自动把 `<dir>/bin` 注册到 DLL 搜索路径，无需手动改系统 PATH。未设置变量时引擎自动降级到 CUDA EP。
+
 更细的参数流转和字段映射见：
 
 - `docs/architecture-parameter-flow.md`

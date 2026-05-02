@@ -2,6 +2,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type {
   EnvironmentCheckPayload,
+  ResumeInspectionResult,
+  ResumeStatus,
   TaskCompletedPayload,
   TaskError,
   TaskLogPayload,
@@ -77,6 +79,10 @@ export function startTask(request: TaskRequest): Promise<void> {
   return safeInvoke<void>('start_task', { request })
 }
 
+export function checkResumeState(request: TaskRequest): Promise<ResumeInspectionResult> {
+  return safeInvoke<ResumeInspectionResult>('check_resume_state', { request })
+}
+
 export function cancelTask(): Promise<void> {
   return safeInvoke<void>('cancel_task')
 }
@@ -99,6 +105,7 @@ export interface TaskEventHandlers {
   onCompleted: (payload: TaskCompletedPayload) => void
   onError: (payload: TaskError) => void
   onCancelled: () => void
+  onResumeStatus?: (payload: ResumeStatus) => void
 }
 
 export async function listenTaskEvents(handlers: TaskEventHandlers): Promise<UnlistenFn> {
@@ -114,6 +121,7 @@ export async function listenTaskEvents(handlers: TaskEventHandlers): Promise<Unl
     listen<TaskCompletedPayload>('task-completed', (event) => handlers.onCompleted(event.payload)),
     listen<TaskError>('task-error', (event) => handlers.onError(event.payload)),
     listen('task-cancelled', () => handlers.onCancelled()),
+    listen<ResumeStatus>('task-resume-status', (event) => handlers.onResumeStatus?.(event.payload)),
   ])
 
   return () => {

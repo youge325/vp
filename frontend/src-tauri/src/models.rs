@@ -102,6 +102,8 @@ pub struct TaskRequest {
     pub workflow_config: WorkflowConfig,
     pub encode_config: EncodeConfig,
     pub output_config: OutputConfig,
+    #[serde(default)]
+    pub resume_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -126,6 +128,16 @@ pub struct TaskCompletedPayload {
 #[derive(Debug, Clone, Serialize)]
 pub struct TaskLogPayload {
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResumeStatusPayload {
+    pub resumed: bool,
+    pub completed_chunks: u64,
+    pub completed_output_frames: u64,
+    pub start_source_frame: u64,
+    pub total_output_frames: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]

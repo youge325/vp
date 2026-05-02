@@ -124,6 +124,7 @@ function createMediaItem(): MediaItem {
       error: null,
       startedAt: null,
       finishedAt: null,
+      resumeStatus: null,
     },
     lastOutputPath: '',
   }

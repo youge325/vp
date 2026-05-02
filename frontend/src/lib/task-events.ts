@@ -1,5 +1,6 @@
 import type {
   MediaTaskState,
+  ResumeStatus,
   TaskCompletedPayload,
   TaskError,
   TaskLogPayload,
@@ -24,6 +25,7 @@ export function createIdleTaskState(): MediaTaskState {
     error: null,
     startedAt: null,
     finishedAt: null,
+    resumeStatus: null,
   }
 }
 
@@ -119,5 +121,12 @@ export function applyTaskCancelled(state: MediaTaskState): MediaTaskState {
       message: '任务已取消。',
       details: null,
     },
+  }
+}
+
+export function applyTaskResumeStatus(state: MediaTaskState, payload: ResumeStatus): MediaTaskState {
+  return {
+    ...state,
+    resumeStatus: { ...payload },
   }
 }

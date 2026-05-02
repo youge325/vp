@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 
 from app.algorithms.base import IAlgorithm
-from app.algorithms.onnx_models import resolve_onnx_model_path
+from app.algorithms.onnx_models import create_onnx_session, resolve_onnx_model_path
 from app.algorithms.tensor_backend import ITensorBackend
 from app.config import settings
 
@@ -56,13 +56,7 @@ class SuperResolutionAlgorithm(IAlgorithm):
         import onnxruntime as ort
 
         model_path = resolve_onnx_model_path("super_resolution", self._onnx_model, self._model_dir)
-        if self._engine == "tensorrt":
-            providers = ["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"]
-        elif self._engine == "cuda":
-            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        else:
-            providers = ort.get_available_providers()
-        session = ort.InferenceSession(str(model_path), providers=providers)
+        session = create_onnx_session(str(model_path), engine=self._engine, ort_module=ort)
         inputs = session.get_inputs()
         outputs = session.get_outputs()
         if len(inputs) != 1:

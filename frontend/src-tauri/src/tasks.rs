@@ -11,8 +11,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::MissedTickBehavior;
 
 use crate::models::{
-    RunningTask, TaskCompletedPayload, TaskControlKind, TaskControlMessage, TaskErrorPayload,
-    TaskLogPayload, TaskProgressPayload, TaskRequest, TaskState,
+    ResumeStatusPayload, RunningTask, TaskCompletedPayload, TaskControlKind, TaskControlMessage,
+    TaskErrorPayload, TaskLogPayload, TaskProgressPayload, TaskRequest, TaskState,
 };
 use crate::process_control;
 use crate::runtime::{build_env_map, resolve_runtime_paths};
@@ -160,9 +160,34 @@ fn build_process_command(
     command.args(["--encode-config-json", &encode_json]);
     command.args(["--output-config-json", &output_json]);
 
+    if let Some(mode) = request.resume_mode.as_deref() {
+        if !mode.is_empty() {
+            command.args(["--resume-mode", mode]);
+        }
+    }
+
     command.current_dir(&paths.backend_dir);
     command.envs(build_env_map(paths));
     Ok(command)
+}
+
+pub fn build_inspect_output_args(request: &TaskRequest) -> Result<Vec<String>, serde_json::Error> {
+    let mut args = vec![
+        String::from("inspect-output"),
+        String::from("--input"),
+        request.input_path.clone(),
+    ];
+
+    args.push(String::from("--decode-config-json"));
+    args.push(serde_json::to_string(&request.decode_config)?);
+    args.push(String::from("--workflow-config-json"));
+    args.push(serde_json::to_string(&request.workflow_config)?);
+    args.push(String::from("--encode-config-json"));
+    args.push(serde_json::to_string(&request.encode_config)?);
+    args.push(String::from("--output-config-json"));
+    args.push(serde_json::to_string(&request.output_config)?);
+
+    Ok(args)
 }
 
 #[cfg(windows)]
@@ -241,6 +266,31 @@ fn spawn_stdout_reader<R: Runtime + 'static>(
                                 .unwrap_or(0.0),
                         };
                         let _ = app.emit("task-completed", payload);
+                    }
+                    "resume_status" => {
+                        let payload = ResumeStatusPayload {
+                            resumed: value
+                                .get("resumed")
+                                .and_then(Value::as_bool)
+                                .unwrap_or(false),
+                            completed_chunks: value
+                                .get("completed_chunks")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(0),
+                            completed_output_frames: value
+                                .get("completed_output_frames")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(0),
+                            start_source_frame: value
+                                .get("start_source_frame")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(0),
+                            total_output_frames: value
+                                .get("total_output_frames")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(0),
+                        };
+                        let _ = app.emit("task-resume-status", payload);
                     }
                     "error" => {
                         terminal_sent.store(true, Ordering::SeqCst);

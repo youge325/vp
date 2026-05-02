@@ -177,10 +177,10 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-load-workbench-preset`\n- `allow-save-workbench-preset`\n- `allow-inspect-video`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-pause-task`\n- `allow-resume-task`\n- `allow-open-output-location`",
+          "description": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-load-workbench-preset`\n- `allow-save-workbench-preset`\n- `allow-inspect-video`\n- `allow-check-resume-state`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-pause-task`\n- `allow-resume-task`\n- `allow-open-output-location`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-load-workbench-preset`\n- `allow-save-workbench-preset`\n- `allow-inspect-video`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-pause-task`\n- `allow-resume-task`\n- `allow-open-output-location`"
+          "markdownDescription": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-load-workbench-preset`\n- `allow-save-workbench-preset`\n- `allow-inspect-video`\n- `allow-check-resume-state`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-pause-task`\n- `allow-resume-task`\n- `allow-open-output-location`"
         },
         {
           "description": "Enables the cancel_task command without any pre-configured scope.",
@@ -193,6 +193,12 @@
           "type": "string",
           "const": "allow-check-environment",
           "markdownDescription": "Enables the check_environment command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the check_resume_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-check-resume-state",
+          "markdownDescription": "Enables the check_resume_state command without any pre-configured scope."
         },
         {
           "description": "Enables the inspect_video command without any pre-configured scope.",
@@ -259,6 +265,12 @@
           "type": "string",
           "const": "deny-check-environment",
           "markdownDescription": "Denies the check_environment command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the check_resume_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-check-resume-state",
+          "markdownDescription": "Denies the check_resume_state command without any pre-configured scope."
         },
         {
           "description": "Denies the inspect_video command without any pre-configured scope.",
