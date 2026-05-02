@@ -25,10 +25,17 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 _registered: set[str] = set()
+# Module-level cache for auto-discovered TensorRT roots so repeated calls do
+# not re-scan the filesystem and spam the log.
+_scanned_tensorrt_roots: list[Path] | None = None
 
 
 def _scan_common_tensorrt_roots() -> list[Path]:
     """Scan typical TensorRT installation roots when VP_TENSORRT_DIR is unset."""
+    global _scanned_tensorrt_roots
+    if _scanned_tensorrt_roots is not None:
+        return _scanned_tensorrt_roots
+
     roots: list[Path] = []
     seen: set[str] = set()
     # Common drive letters and prefixes on Windows
@@ -62,6 +69,10 @@ def _scan_common_tensorrt_roots() -> list[Path]:
                             roots.append(bin_dir)
         except (OSError, PermissionError):
             pass
+    _scanned_tensorrt_roots = roots
+    # 仅在首次扫描成功时记录日志，后续调用直接返回缓存避免刷屏。
+    if roots:
+        logger.info("Auto-discovered TensorRT bin directories: %s", roots)
     return roots
 
 
@@ -81,11 +92,9 @@ def _candidate_dirs() -> list[Path]:
                 tensorrt_dir,
             )
     else:
-        # When VP_TENSORRT_DIR is unset, try common install locations
-        auto_roots = _scan_common_tensorrt_roots()
-        if auto_roots:
-            logger.info("Auto-discovered TensorRT bin directories: %s", auto_roots)
-            candidates.extend(auto_roots)
+        # When VP_TENSORRT_DIR is unset, try common install locations.
+        # _scan_common_tensorrt_roots() caches results and only logs on first scan.
+        candidates.extend(_scan_common_tensorrt_roots())
 
     cuda_path = os.environ.get("CUDA_PATH", "").strip()
     if cuda_path:
@@ -114,10 +123,18 @@ def register_native_dll_paths(extra: Iterable[Path] | None = None) -> list[Path]
     if not sys.platform.startswith("win"):
         return []
 
+    candidates = list(_candidate_dirs())
+    if extra:
+        candidates.extend(extra)
+
+    # 快速路径：所有候选目录都已经被注册过，跳过扫描和日志
+    if all(str(p.resolve(strict=False)).lower() in _registered for p in candidates):
+        return []
+
     add_dll_directory = getattr(os, "add_dll_directory", None)
 
     targets: list[Path] = []
-    for path in (*_candidate_dirs(), *(extra or [])):
+    for path in candidates:
         resolved = path.resolve(strict=False)
         key = str(resolved).lower()
         if key in _registered:
@@ -149,4 +166,6 @@ def _prepend_to_path(directory: str) -> None:
 
 def reset_registry_for_tests() -> None:
     """Test-only helper to forget previously-registered directories."""
+    global _scanned_tensorrt_roots
     _registered.clear()
+    _scanned_tensorrt_roots = None
