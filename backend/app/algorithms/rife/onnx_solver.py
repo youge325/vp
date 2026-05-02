@@ -85,6 +85,11 @@ class RIFEONNXSolver:
         onnx_model: Optional[str] = None,
         engine: str = "cuda",
     ):
+        # 必须在 import onnxruntime 之前注册 DLL 搜索路径，因为 TRT provider
+        # 是在 onnxruntime 导入时注册的，而不是 InferenceSession 创建时。
+        from app.utils.dll_paths import register_native_dll_paths
+
+        register_native_dll_paths()
         import onnxruntime as ort
 
         model_dir = model_dir or get_model_dir()

@@ -79,6 +79,7 @@ def test_unset_tensorrt_dir_skips_silently(monkeypatch):
 
     monkeypatch.setattr(dll_paths.settings, "TENSORRT_DIR", "")
     monkeypatch.delenv("CUDA_PATH", raising=False)
+    monkeypatch.setattr(dll_paths, "_scan_common_tensorrt_roots", lambda: [])
 
     captured: list[str] = []
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
@@ -92,6 +93,7 @@ def test_picks_up_cuda_path_when_present(tmp_path: Path, monkeypatch):
         pytest.skip("Windows-only behaviour")
 
     monkeypatch.setattr(dll_paths.settings, "TENSORRT_DIR", "")
+    monkeypatch.setattr(dll_paths, "_scan_common_tensorrt_roots", lambda: [])
     cuda_root = tmp_path / "cuda"
     cuda_bin = cuda_root / "bin"
     cuda_bin.mkdir(parents=True)
@@ -113,6 +115,7 @@ def test_extra_paths_are_registered_after_settings(tmp_path: Path, monkeypatch):
     extra_dir.mkdir()
     monkeypatch.setattr(dll_paths.settings, "TENSORRT_DIR", "")
     monkeypatch.delenv("CUDA_PATH", raising=False)
+    monkeypatch.setattr(dll_paths, "_scan_common_tensorrt_roots", lambda: [])
 
     captured: list[str] = []
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)

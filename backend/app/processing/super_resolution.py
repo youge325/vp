@@ -53,6 +53,9 @@ class SuperResolutionAlgorithm(IAlgorithm):
         if not self._onnx_model:
             raise FileNotFoundError("ONNX super-resolution model was not selected.")
 
+        from app.utils.dll_paths import register_native_dll_paths
+
+        register_native_dll_paths()
         import onnxruntime as ort
 
         model_path = resolve_onnx_model_path("super_resolution", self._onnx_model, self._model_dir)
