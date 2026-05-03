@@ -6,7 +6,7 @@ export type WorkflowMode =
   | 'anime_optimization'
   | 'format_conversion'
 
-export type ModuleKey = 'home' | 'input' | 'decode' | 'enhance' | 'encode' | 'render'
+export type ModuleKey = 'home' | 'input' | 'decode' | 'preprocess' | 'enhance' | 'postprocess' | 'encode' | 'render'
 export type ProcessOrder =
   | 'super_resolution_then_interpolation'
   | 'frame_interpolation_then_super_resolution'
@@ -199,12 +199,32 @@ export interface AnimeConfig {
   edgeBoost: number
 }
 
+export type FilterStepKind = 'scale' | 'crop' | 'pad' | 'sharpen' | 'denoise' | 'color'
+
+export interface FilterStep {
+  kind: FilterStepKind
+  enabled: boolean
+  params: Record<string, number | string | boolean>
+}
+
+export interface PreprocessConfig {
+  enabled: boolean
+  filters: FilterStep[]
+}
+
+export interface PostprocessConfig {
+  enabled: boolean
+  filters: FilterStep[]
+}
+
 export interface WorkflowConfig {
   fpsMode: FpsMode
   processOrder: ProcessOrder
   interpolation: InterpolationConfig
   superResolution: SuperResolutionConfig
   anime: AnimeConfig
+  preprocess: PreprocessConfig
+  postprocess: PostprocessConfig
 }
 
 export interface RateControlConfig {

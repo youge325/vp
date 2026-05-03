@@ -203,6 +203,14 @@ function makePreset(): WorkbenchPreset {
         denoise: 12,
         edgeBoost: 16,
       },
+      preprocess: {
+        enabled: false,
+        filters: [],
+      },
+      postprocess: {
+        enabled: false,
+        filters: [],
+      },
     },
     encodeConfig: {
       codec: 'hevc_nvenc',

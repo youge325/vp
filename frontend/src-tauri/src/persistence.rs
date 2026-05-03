@@ -233,6 +233,7 @@ mod tests {
                     scale: 1.0,
                     fp16: false,
                     tensor_backend: "pytorch".to_string(),
+                    engine: "cuda".to_string(),
                 },
                 super_resolution: crate::models::SuperResolutionConfig {
                     enabled: false,
@@ -245,6 +246,14 @@ mod tests {
                     profile: "clean-lines".to_string(),
                     denoise: 10,
                     edge_boost: 15,
+                },
+                preprocess: crate::models::PreprocessConfig {
+                    enabled: false,
+                    filters: Vec::new(),
+                },
+                postprocess: crate::models::PostprocessConfig {
+                    enabled: false,
+                    filters: Vec::new(),
                 },
             },
             encode_config: EncodeConfig {

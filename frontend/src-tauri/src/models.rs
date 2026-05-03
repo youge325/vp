@@ -56,12 +56,55 @@ pub struct AnimeConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FilterStep {
+    pub kind: String,
+    pub enabled: bool,
+    #[serde(default)]
+    pub params: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreprocessConfig {
+    pub enabled: bool,
+    #[serde(default)]
+    pub filters: Vec<FilterStep>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PostprocessConfig {
+    pub enabled: bool,
+    #[serde(default)]
+    pub filters: Vec<FilterStep>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkflowConfig {
     pub fps_mode: String,
     pub process_order: String,
     pub interpolation: InterpolationConfig,
     pub super_resolution: SuperResolutionConfig,
     pub anime: AnimeConfig,
+    #[serde(default = "default_preprocess")]
+    pub preprocess: PreprocessConfig,
+    #[serde(default = "default_postprocess")]
+    pub postprocess: PostprocessConfig,
+}
+
+fn default_preprocess() -> PreprocessConfig {
+    PreprocessConfig {
+        enabled: false,
+        filters: Vec::new(),
+    }
+}
+
+fn default_postprocess() -> PostprocessConfig {
+    PostprocessConfig {
+        enabled: false,
+        filters: Vec::new(),
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

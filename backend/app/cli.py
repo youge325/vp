@@ -52,6 +52,7 @@ PROCESS_LABEL_MAP = {
     "super_resolution": "Super Resolution",
     "anime_optimization": "Anime Optimization",
     "format_conversion": "Format Conversion",
+    "frame_filter_chain": "Frame Filter Chain",
 }
 TERMINAL_PROGRESS_PREFIX = "[VP_PROGRESS]"
 TERMINAL_PROGRESS_BAR_WIDTH = 24
@@ -193,6 +194,14 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
             "denoise": 10,
             "edgeBoost": 15,
         },
+        "preprocess": {
+            "enabled": False,
+            "filters": [],
+        },
+        "postprocess": {
+            "enabled": False,
+            "filters": [],
+        },
     }
 
 
@@ -233,6 +242,8 @@ def _build_algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: str
             "onnx_model": super_resolution.get("onnxModel") or super_resolution.get("onnx_model"),
             "engine": super_resolution.get("engine") or "cuda",
         }
+    if algorithm_type == "frame_filter_chain":
+        return {}
     return {}
 
 
@@ -260,14 +271,36 @@ def _resolve_processing_steps(config_or_args: dict[str, Any] | argparse.Namespac
         algorithm_types = [algorithm]
 
     steps: list[dict[str, Any]] = []
-    for index, algorithm_type in enumerate(algorithm_types, start=1):
+
+    # Prepend preprocess filter chain if enabled
+    if workflow_config.get("preprocess", {}).get("enabled"):
+        steps.append(
+            {
+                "algorithm_type": "frame_filter_chain",
+                "algorithm_kwargs": {"filters": workflow_config["preprocess"]["filters"]},
+                "stage_name": f"{len(steps) + 1:02d}_preprocess",
+            }
+        )
+
+    for algorithm_type in algorithm_types:
         steps.append(
             {
                 "algorithm_type": algorithm_type,
                 "algorithm_kwargs": _build_algorithm_kwargs(workflow_config, algorithm_type),
-                "stage_name": f"{index:02d}_{algorithm_type}",
+                "stage_name": f"{len(steps) + 1:02d}_{algorithm_type}",
             }
         )
+
+    # Append postprocess filter chain if enabled
+    if workflow_config.get("postprocess", {}).get("enabled"):
+        steps.append(
+            {
+                "algorithm_type": "frame_filter_chain",
+                "algorithm_kwargs": {"filters": workflow_config["postprocess"]["filters"]},
+                "stage_name": f"{len(steps) + 1:02d}_postprocess",
+            }
+        )
+
     return steps
 
 
