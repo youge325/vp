@@ -766,7 +766,7 @@ def _run_streaming_pipeline(
     output_fps: float | None,
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
 ) -> int:
-    decode_queue: queue.Queue[DecodedFrame | object] = queue.Queue(maxsize=8)
+    decode_queue: queue.Queue[DecodedFrame | object] = queue.Queue(maxsize=100)
     encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object] = queue.Queue(maxsize=8)
     error_queue: queue.Queue[BaseException] = queue.Queue()
     stop_event = threading.Event()
