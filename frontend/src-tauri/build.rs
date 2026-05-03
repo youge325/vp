@@ -5,6 +5,7 @@ const APP_COMMANDS: &[&str] = &[
     "load_workbench_preset",
     "save_workbench_preset",
     "inspect_video",
+    "check_resume_state",
     "start_task",
     "cancel_task",
     "pause_task",
