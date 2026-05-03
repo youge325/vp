@@ -143,6 +143,14 @@ function makeItem(env = makeEnv()): MediaItem {
         algorithm: 'placeholder',
         onnxModel: 'sr.onnx',
       },
+      preprocess: {
+        enabled: false,
+        filters: [],
+      },
+      postprocess: {
+        enabled: false,
+        filters: [],
+      },
       anime: {
         enabled: false,
         profile: 'clean-lines',

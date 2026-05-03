@@ -77,6 +77,14 @@ function createWorkflowConfig(): WorkflowConfig {
       denoise: 10,
       edgeBoost: 15,
     },
+    preprocess: {
+      enabled: false,
+      filters: [],
+    },
+    postprocess: {
+      enabled: false,
+      filters: [],
+    },
   }
 }
 

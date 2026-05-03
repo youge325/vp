@@ -224,35 +224,62 @@ class FFmpegWrapper:
         if cache_key is not None and cache_key in self._frame_count_cache:
             return self._frame_count_cache[cache_key]
 
-        cmd = [
-            self.ffprobe_path,
-            "-v",
-            "quiet",
-            "-count_frames",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=nb_read_frames",
-            "-print_format",
-            "json",
-            input_path,
-        ]
-        result = self._run_command(cmd)
-        frame_count = 0
-        try:
-            data = json.loads(result.stdout)
-            streams = data.get("streams", [])
-            if streams:
-                frame_count = int(streams[0].get("nb_read_frames", 0))
-        except (json.JSONDecodeError, ValueError, IndexError):
-            pass
+        # 优先使用容器/流元数据中的 nb_frames（O(1)），只有缺失/异常时才退化为
+        # -count_frames 扫描。后者在 4K HEVC 等大视频上需要几分钟软解全片。
+        frame_count = self._frame_count_from_metadata(input_path)
+
+        if frame_count <= 0:
+            cmd = [
+                self.ffprobe_path,
+                "-v",
+                "quiet",
+                "-count_frames",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=nb_read_frames",
+                "-print_format",
+                "json",
+                input_path,
+            ]
+            result = self._run_command(cmd)
+            try:
+                data = json.loads(result.stdout)
+                streams = data.get("streams", [])
+                if streams:
+                    frame_count = int(streams[0].get("nb_read_frames", 0))
+            except (json.JSONDecodeError, ValueError, IndexError):
+                pass
+
         if frame_count <= 0:
             duration = self.get_duration(input_path)
             fps = self.get_fps(input_path)
             frame_count = int(duration * fps) if duration > 0 else 0
+
         if cache_key is not None and frame_count > 0:
             self._frame_count_cache[cache_key] = frame_count
         return frame_count
+
+    def _frame_count_from_metadata(self, input_path: str) -> int:
+        """从容器/流元数据中解析帧数（不进行解码扫描）。
+
+        ffprobe 默认输出的 stream.nb_frames 由容器写入；TS/MP4 等格式通常都有，
+        损坏或恶意写入的文件会导致 0/缺失。返回 0 表示元数据不可信。
+        """
+        info = self.get_video_info(input_path)
+        for stream in info.get("streams", []):
+            if stream.get("codec_type") != "video":
+                continue
+            raw = stream.get("nb_frames")
+            if raw is None:
+                continue
+            try:
+                value = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if value > 0:
+                return value
+        return 0
 
     def get_duration(self, input_path: str) -> float:
         info = self.get_video_info(input_path)

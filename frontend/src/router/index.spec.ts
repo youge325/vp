@@ -7,13 +7,15 @@ describe('workflow routes', () => {
     await router.push('/home')
   })
 
-  it('exposes six workbench modules', () => {
-    expect(WORKBENCH_MODULES).toHaveLength(6)
+  it('exposes eight workbench modules', () => {
+    expect(WORKBENCH_MODULES).toHaveLength(8)
     expect(WORKBENCH_MODULES.map((module) => module.title)).toEqual([
       '主页',
       '输入',
       '解码',
+      '预处理',
       '增强',
+      '后处理',
       '编码',
       '渲染',
     ])
@@ -24,23 +26,25 @@ describe('workflow routes', () => {
       '/home',
       '/input',
       '/decode',
+      '/preprocess',
       '/enhance',
+      '/postprocess',
       '/encode',
       '/render',
     ])
     expect(WORKBENCH_MODULES.every((module) => Boolean(module.icon))).toBe(true)
   })
 
-  it('keeps only the root redirect plus the six formal module routes', async () => {
+  it('keeps only the root redirect plus the eight formal module routes', async () => {
     const routePaths = router
       .getRoutes()
       .map((route) => route.path)
       .filter((path) =>
-        ['/', '/home', '/input', '/decode', '/enhance', '/encode', '/render'].includes(path),
+        ['/', '/home', '/input', '/decode', '/preprocess', '/enhance', '/postprocess', '/encode', '/render'].includes(path),
       )
       .sort()
 
-    expect(routePaths).toEqual(['/', '/decode', '/encode', '/enhance', '/home', '/input', '/render'])
+    expect(routePaths).toEqual(['/', '/decode', '/encode', '/enhance', '/home', '/input', '/postprocess', '/preprocess', '/render'])
 
     await router.push('/')
     expect(router.currentRoute.value.fullPath).toBe('/home')

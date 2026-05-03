@@ -2,8 +2,10 @@ import {
   AddCircleOutline,
   BookOutline,
   ColorFillOutline,
+  ColorWandOutline,
   ConstructOutline,
   HardwareChipOutline,
+  OptionsOutline,
   SendOutline,
 } from '@vicons/ionicons5'
 import type { ProcessOrder, RateControlMode, WorkbenchModuleDefinition, WorkflowMode } from '@/types'
@@ -43,11 +45,25 @@ export const WORKBENCH_MODULES: WorkbenchModuleDefinition[] = [
     icon: HardwareChipOutline,
   },
   {
+    key: 'preprocess',
+    title: '预处理',
+    path: '/preprocess',
+    description: '解码后帧级图像处理',
+    icon: OptionsOutline,
+  },
+  {
     key: 'enhance',
     title: '增强',
     path: '/enhance',
     description: '补帧 / 超分 / 动漫',
     icon: ConstructOutline,
+  },
+  {
+    key: 'postprocess',
+    title: '后处理',
+    path: '/postprocess',
+    description: '增强后帧级图像处理',
+    icon: ColorWandOutline,
   },
   {
     key: 'encode',

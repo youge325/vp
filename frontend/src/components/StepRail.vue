@@ -22,7 +22,9 @@ const moduleStates = computed<Record<ModuleKey, string>>(() => ({
   home: envStore.env.checkResult || envStore.env.issue ? 'ready' : 'idle',
   input: mediaStore.mediaItems.length > 0 ? 'ready' : 'idle',
   decode: envStore.env.checkResult ? 'ready' : 'idle',
+  preprocess: mediaStore.editor.workflowConfig.preprocess.enabled ? 'ready' : 'idle',
   enhance: envStore.env.checkResult ? 'ready' : 'idle',
+  postprocess: mediaStore.editor.workflowConfig.postprocess.enabled ? 'ready' : 'idle',
   encode: envStore.env.checkResult && getVisibleEncoderProfiles(envStore.env.checkResult).length > 0 ? 'ready' : 'idle',
   render: taskStore.batch.isRunning || taskStore.canStartBatch ? 'ready' : 'idle',
 }))
