@@ -1,27 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
-import { groupEncoderProfilesByFamily, getProbeSourceLabel } from '@/services/format/labels'
 import { useEnvironmentChecker } from '@/composables/app/useEnvironmentChecker'
-import { useEnvStore } from '@/stores/env'
-import { useMediaStore } from '@/stores/media'
+import { useHomeDashboard } from '@/composables/selectors/useHomeDashboard'
 
-const envStore = useEnvStore()
-const mediaStore = useMediaStore()
+const dashboard = useHomeDashboard()
 const { recheckEnvironment } = useEnvironmentChecker()
-
-const visibleEncoderProfiles = computed(() => getVisibleEncoderProfiles(envStore.env.checkResult))
-
-const overviewStats = computed(() => [
-  { label: '运行时', value: envStore.env.checkResult?.runtime?.mode ?? '--' },
-  { label: 'FFmpeg', value: envStore.env.checkResult?.ffmpeg?.available ? 'Ready' : 'Missing' },
-  { label: '已探测编码器', value: `${visibleEncoderProfiles.value.length}` },
-  { label: '已导入素材', value: `${mediaStore.mediaItems.length}` },
-])
-
-const familyCards = computed(() => groupEncoderProfilesByFamily(visibleEncoderProfiles.value))
-
-const probeSourceLabel = computed(() => getProbeSourceLabel(envStore.env.checkSource))
 </script>
 
 <template>
@@ -34,28 +16,28 @@ const probeSourceLabel = computed(() => getProbeSourceLabel(envStore.env.checkSo
         </div>
 
         <div class="panel-actions">
-          <span v-if="envStore.env.isBootstrapping || envStore.env.isChecking" class="panel-badge">探测中</span>
+          <span v-if="dashboard.isBootstrapping.value || dashboard.isChecking.value" class="panel-badge">探测中</span>
           <button v-else class="ghost-button" @click="recheckEnvironment()">重新探测</button>
         </div>
       </div>
 
-      <div v-if="envStore.env.issue" class="info-banner info-banner-danger">
+      <div v-if="dashboard.issue.value" class="info-banner info-banner-danger">
         <strong>环境探测失败</strong>
-        <p>{{ envStore.env.issue.message }}</p>
+        <p>{{ dashboard.issue.value.message }}</p>
       </div>
 
       <div class="stats-grid stats-grid-4">
-        <article v-for="item in overviewStats" :key="item.label" class="stat-card stat-card-tall">
+        <article v-for="item in dashboard.overviewStats.value" :key="item.label" class="stat-card stat-card-tall">
           <span>{{ item.label }}</span>
           <strong>{{ item.value }}</strong>
         </article>
       </div>
 
       <div class="chip-row">
-        <span class="tag">来源: {{ probeSourceLabel }}</span>
-        <span class="tag">硬件加速: {{ envStore.env.checkResult?.ffmpeg?.hwaccels?.join(', ') || '--' }}</span>
-        <span class="tag">GPU: {{ envStore.env.checkResult?.gpu?.devices?.join(' / ') || 'CPU only' }}</span>
-        <span class="tag">最近真实探测: {{ envStore.env.lastProbeAt ? new Date(envStore.env.lastProbeAt).toLocaleString() : '--' }}</span>
+        <span class="tag">来源: {{ dashboard.probeSourceLabel.value }}</span>
+        <span class="tag">硬件加速: {{ dashboard.checkResult.value?.ffmpeg?.hwaccels?.join(', ') || '--' }}</span>
+        <span class="tag">GPU: {{ dashboard.checkResult.value?.gpu?.devices?.join(' / ') || 'CPU only' }}</span>
+        <span class="tag">最近真实探测: {{ dashboard.lastProbeAt.value ? new Date(dashboard.lastProbeAt.value).toLocaleString() : '--' }}</span>
       </div>
     </section>
 
@@ -68,7 +50,7 @@ const probeSourceLabel = computed(() => getProbeSourceLabel(envStore.env.checkSo
       </div>
 
       <div class="summary-grid">
-        <article v-for="item in familyCards" :key="item.title" class="summary-block">
+        <article v-for="item in dashboard.familyCards.value" :key="item.title" class="summary-block">
           <p class="summary-block-title">{{ item.title }}</p>
           <p class="summary-line">{{ item.value }}</p>
         </article>

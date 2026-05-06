@@ -1,53 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink } from 'vue-router'
 import { WORKBENCH_MODULES } from '@/views/registry'
-import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { getTaskStatusLabel } from '@/services/format/labels'
-import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
-import { useEnvStore } from '@/stores/env'
-import { useMediaStore } from '@/stores/media'
-import type { ModuleKey, WorkbenchModuleDefinition } from '@/types/view/modules'
+import { useStepRailState } from '@/composables/selectors/useStepRailState'
 
-const route = useRoute()
-const envStore = useEnvStore()
-const mediaStore = useMediaStore()
 const { batch, currentTaskItem } = useTaskOrchestrator()
-const { editorConfig, isPresetMode } = useWorkbenchEditor()
-
-const activeModuleKey = computed<ModuleKey>(() => {
-  const module = route.meta.module as WorkbenchModuleDefinition | undefined
-  return module?.key ?? WORKBENCH_MODULES[0].key
-})
-
-const moduleStates = computed<Record<ModuleKey, string>>(() => ({
-  home: envStore.env.checkResult || envStore.env.issue ? 'ready' : 'idle',
-  input: mediaStore.mediaItems.length > 0 ? 'ready' : 'idle',
-  decode: envStore.env.checkResult ? 'ready' : 'idle',
-  preprocess: editorConfig.value.workflowConfig.preprocess.enabled ? 'ready' : 'idle',
-  enhance: envStore.env.checkResult ? 'ready' : 'idle',
-  postprocess: editorConfig.value.workflowConfig.postprocess.enabled ? 'ready' : 'idle',
-  encode: envStore.env.checkResult && getVisibleEncoderProfiles(envStore.env.checkResult).length > 0 ? 'ready' : 'idle',
-  render: batch.isRunning || (mediaStore.selectedItems.length > 0 && mediaStore.selectedItems.every((item) => Boolean(item.inputPath))) ? 'ready' : 'idle',
-}))
-
-const workflowLabel = computed(() => {
-  const workflow = editorConfig.value.workflowConfig
-  const enabled = [
-    workflow.interpolation.enabled ? '补帧' : null,
-    workflow.superResolution.enabled ? '超分' : null,
-    workflow.anime.enabled ? '动漫' : null,
-  ].filter(Boolean)
-
-  return enabled.length > 0 ? enabled.join(' / ') : '转码'
-})
-
-const selectionLabel = computed(() =>
-  isPresetMode.value
-    ? '默认预设'
-    : `${mediaStore.selectedIds.length || 1}/${mediaStore.mediaItems.length} 已选`,
-)
+const { activeModuleKey, moduleStates, workflowLabel, selectionLabel } = useStepRailState()
 </script>
 
 <template>

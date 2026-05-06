@@ -1,6 +1,7 @@
 // 应用层 — 预设持久化协调:加载、保存、debounce、自动同步草稿变更。
 
 import { watch } from 'vue'
+import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { WorkbenchPreset } from '@/types/protocol'
 import { useEnvStore } from '@/stores/env'
 import { usePresetStore } from '@/stores/preset'
@@ -16,7 +17,7 @@ import { createDefaultWorkbenchPreset } from '@/services/preset/defaults'
 
 const PRESET_SAVE_DEBOUNCE_MS = 300
 
-function coercePreset(raw: WorkbenchPreset | null, env: ReturnType<typeof useEnvStore>['env']['checkResult']): WorkbenchPreset {
+function coercePreset(raw: WorkbenchPreset | null, env: EnvironmentCheckResult | null): WorkbenchPreset {
   const defaults = createDefaultWorkbenchPreset(env)
   if (!raw) {
     return defaults

@@ -3,16 +3,16 @@ import { computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import StepRail from '@/components/StepRail.vue'
 import { WORKBENCH_MODULES } from '@/views/registry'
-import { useEnvStore } from '@/stores/env'
 import { useBootstrap } from '@/composables/app/useBootstrap'
 import { useEnvironmentChecker } from '@/composables/app/useEnvironmentChecker'
+import { useAppShellStatus } from '@/composables/selectors/useAppShellStatus'
 import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { getTaskStatusLabel } from '@/services/format/labels'
 import type { WorkbenchModuleDefinition } from '@/types/view/modules'
 
-const envStore = useEnvStore()
 const route = useRoute()
 const { recheckEnvironment } = useEnvironmentChecker()
+const shell = useAppShellStatus()
 const { batch, currentTaskItem } = useTaskOrchestrator()
 
 useBootstrap()
@@ -24,6 +24,7 @@ const activeModule = computed<WorkbenchModuleDefinition>(
 const topbarStatus = computed(() =>
   getTaskStatusLabel(batch, currentTaskItem.value?.taskState.status ?? null),
 )
+const isBusy = computed(() => shell.isBootstrapping.value || shell.isChecking.value)
 </script>
 
 <template>
@@ -44,14 +45,14 @@ const topbarStatus = computed(() =>
 
           <div class="topbar-actions">
             <button
-              v-if="envStore.env.issue && !envStore.env.isChecking"
+              v-if="shell.issue.value && !shell.isChecking.value"
               class="ghost-button compact-button"
               @click="recheckEnvironment()"
             >
               重试探测
             </button>
             <span class="status-pill" :data-state="topbarStatus">
-              {{ envStore.env.isBootstrapping || envStore.env.isChecking ? 'checking' : topbarStatus }}
+              {{ isBusy ? 'checking' : topbarStatus }}
             </span>
           </div>
         </header>
