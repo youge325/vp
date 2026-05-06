@@ -14,6 +14,7 @@ import {
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import { getOptionValue, coerceOptionValue } from './usePresetEditor'
 import type { CapabilityOptionSpec, CapabilityValue } from '@/types/view/capability'
+import type { DecodeConfig } from '@/types/protocol'
 
 export function useDecodeForm() {
   const envStore = useEnvStore()
@@ -33,7 +34,7 @@ export function useDecodeForm() {
   function setDecodeProfile(profileName: string): void {
     const allProfiles = getVisibleDecoderProfiles(envStore.env.checkResult, '')
     const profile = allProfiles.find((entry) => entry.name === profileName) ?? null
-    presetStore.patchDecode((config) => {
+    presetStore.patchDecode((config: DecodeConfig) => {
       if (!profile || profile.family === 'software') {
         config.mode = 'software'
         config.hwaccel = ''
@@ -50,13 +51,13 @@ export function useDecodeForm() {
   }
 
   function setDecodeHwaccelDevice(value: string): void {
-    presetStore.patchDecode((config) => {
+    presetStore.patchDecode((config: DecodeConfig) => {
       config.hwaccelDevice = value
     })
   }
 
   function setDecodeOption(name: string, value: CapabilityValue): void {
-    presetStore.patchDecode((config) => {
+    presetStore.patchDecode((config: DecodeConfig) => {
       config.options = { ...config.options, [name]: value }
     })
   }

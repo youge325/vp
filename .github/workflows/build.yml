@@ -51,6 +51,10 @@ jobs:
       - name: Prepare bundled Windows runtime
         run: ./scripts/prepare-windows-runtime.ps1
 
+      - name: Generate TypeScript types from Rust
+        run: cargo test
+        working-directory: frontend/src-tauri
+
       - name: Build Tauri App (no installer)
         run: npm run tauri build -- --no-bundle
         working-directory: frontend

@@ -31,7 +31,7 @@ export function useEncodeForm() {
     if (!profile) {
       return
     }
-    presetStore.patchEncode((config) => {
+    presetStore.patchEncode((config: EncodeConfig) => {
       config.codec = profile.name
       config.family =
         profile.family === 'nvidia' || profile.family === 'intel' ? profile.family : 'cpu'
@@ -43,19 +43,19 @@ export function useEncodeForm() {
   }
 
   function setRateControlMode(mode: EncodeConfig['rateControl']['mode']): void {
-    presetStore.patchEncode((config) => {
+    presetStore.patchEncode((config: EncodeConfig) => {
       config.rateControl = { mode, value: config.rateControl.value }
     })
   }
 
   function setRateControlValue(value: number): void {
-    presetStore.patchEncode((config) => {
+    presetStore.patchEncode((config: EncodeConfig) => {
       config.rateControl = { ...config.rateControl, value }
     })
   }
 
   function setEncodeOption(name: string, value: CapabilityValue): void {
-    presetStore.patchEncode((config) => {
+    presetStore.patchEncode((config: EncodeConfig) => {
       config.options = { ...config.options, [name]: value }
     })
   }
@@ -65,31 +65,31 @@ export function useEncodeForm() {
   }
 
   function setContainer(value: string): void {
-    presetStore.patchEncode((config) => {
+    presetStore.patchEncode((config: EncodeConfig) => {
       config.container = value
     })
   }
 
   function setKeepAudio(value: boolean): void {
-    presetStore.patchEncode((config) => {
+    presetStore.patchEncode((config: EncodeConfig) => {
       config.keepAudio = value
     })
   }
 
   function setOutputDir(value: string): void {
-    presetStore.patchOutput((config) => {
+    presetStore.patchOutput((config: OutputConfig) => {
       config.outputDir = value
     })
   }
 
   function setOpenOnComplete(value: OutputConfig['openOnComplete']): void {
-    presetStore.patchOutput((config) => {
+    presetStore.patchOutput((config: OutputConfig) => {
       config.openOnComplete = value
     })
   }
 
   function setSegmentFrames(value: number): void {
-    presetStore.patchOutput((config) => {
+    presetStore.patchOutput((config: OutputConfig) => {
       config.segmentFrames = Number.isFinite(value) && value > 0 ? Math.round(value) : 1000
     })
   }

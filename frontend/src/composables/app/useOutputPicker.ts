@@ -4,6 +4,7 @@ import { usePresetStore } from '@/stores/preset'
 import { presetIpc } from '@/lib/ipc/endpoints/preset'
 import { normalizeTaskError } from '@/services/task/error-normalizer'
 import type { TaskError } from '@/types/domain/media'
+import type { OutputConfig } from '@/types/protocol'
 
 export function useOutputPicker() {
   const presetStore = usePresetStore()
@@ -12,7 +13,7 @@ export function useOutputPicker() {
     try {
       const outputDir = await presetIpc.pickOutputDirectory()
       if (outputDir) {
-        presetStore.patchOutput((config) => {
+        presetStore.patchOutput((config: OutputConfig) => {
           config.outputDir = outputDir
         })
       }
