@@ -58,7 +58,7 @@ export const useMediaStore = defineStore('media', () => {
     outputConfig: activeItem.value?.outputConfig ?? presetStore.draftPreset.outputConfig,
   }))
 
-  const editorVideoCodec = computed(() => activeItem.value?.info?.video_codec ?? '')
+  const editorVideoCodec = computed(() => activeItem.value?.info?.videoCodec ?? '')
 
   function findItem(id: string | null): MediaItem | null {
     if (!id) {
@@ -106,7 +106,7 @@ export const useMediaStore = defineStore('media', () => {
   }
 
   function normalizeItemProfiles(item: MediaItem, preferDefaults = false): void {
-    item.decodeConfig = presetStore.normalizeDecodeConfig(item.decodeConfig, item.info?.video_codec ?? '', preferDefaults)
+    item.decodeConfig = presetStore.normalizeDecodeConfig(item.decodeConfig, item.info?.videoCodec ?? '', preferDefaults)
     item.encodeConfig = presetStore.normalizeEncodeConfig(item.encodeConfig, preferDefaults)
   }
 

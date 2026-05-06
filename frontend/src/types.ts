@@ -67,13 +67,13 @@ export interface GpuAdapter {
 }
 
 export interface ResourceSummary {
-  backend_root?: string
-  runtime_root?: string
-  runtime_mode?: string
-  python_executable?: string
-  ffmpeg_path?: string
-  ffprobe_path?: string
-  default_model_path?: string
+  backendRoot?: string
+  runtimeRoot?: string
+  runtimeMode?: string
+  pythonExecutable?: string
+  ffmpegPath?: string
+  ffprobePath?: string
+  defaultModelPath?: string
   [key: string]: string | boolean | number | null | undefined
 }
 
@@ -83,7 +83,7 @@ export interface EnvironmentCheckResult {
     available?: boolean
     version?: string
     path?: string
-    ffprobe_path?: string
+    ffprobePath?: string
     hwaccels: string[]
     encoderProfiles: EncoderProfileSpec[]
     decoderProfiles: DecoderProfileSpec[]
@@ -92,32 +92,32 @@ export interface EnvironmentCheckResult {
     available?: boolean
     devices: string[]
     adapters: GpuAdapter[]
-    cuda_available?: boolean
+    cudaAvailable?: boolean
   }
-  tensor_backends: {
+  tensorBackends: {
     pytorch?: boolean
     paddle?: boolean
     onnx?: boolean
   }
-  tensor_engines?: {
+  tensorEngines?: {
     pytorch?: string[]
     paddle?: string[]
     onnx?: string[]
   }
-  backend_device_support?: {
+  backendDeviceSupport?: {
     pytorch?: string[]
     paddle?: string[]
     onnx?: string[]
   }
-  onnx_runtime?: {
+  onnxRuntime?: {
     available?: boolean
     providers: string[]
   }
-  onnx_models?: {
+  onnxModels?: {
     interpolation: string[]
     super_resolution: string[]
   }
-  rife_model: {
+  rifeModel: {
     available?: boolean
     version?: string
     path?: string
@@ -125,8 +125,8 @@ export interface EnvironmentCheckResult {
   runtime?: {
     mode?: string
     bundled?: boolean
-    python_executable?: string
-    default_model_available?: boolean
+    pythonExecutable?: string
+    defaultModelAvailable?: boolean
   }
   resources?: ResourceSummary
 }
@@ -167,8 +167,8 @@ export interface VideoInfoResult {
   duration: number
   width: number
   height: number
-  has_audio: boolean
-  video_codec: string
+  hasAudio: boolean
+  videoCodec: string
 }
 
 export type FilterStepKind = 'scale' | 'crop' | 'pad' | 'sharpen' | 'denoise' | 'color'
@@ -204,15 +204,15 @@ export type ResumeMode = 'auto' | 'force-fresh' | 'force-resume'
 export interface ResumeInspectionResult {
   type: 'resume_inspection'
   pipeline_kind: 'streaming' | 'format_conversion'
-  output_path: string
-  input_path: string
-  final_exists: boolean
-  sidecar_exists: boolean
-  signature_match: boolean
-  completed_chunks: number
-  completed_output_frames: number
-  next_source_frame: number
-  total_output_frames: number
+  outputPath: string
+  inputPath: string
+  finalExists: boolean
+  sidecarExists: boolean
+  signatureMatch: boolean
+  completedChunks: number
+  completedOutputFrames: number
+  nextSourceFrame: number
+  totalOutputFrames: number
 }
 
 export type ResumeConflictKind =

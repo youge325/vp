@@ -168,13 +168,13 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 
 export function createDefaultWorkbenchPreset(env: EnvironmentCheckResult | null): WorkbenchPreset {
   const workflowConfig = createDefaultWorkflowConfig()
-  workflowConfig.interpolation.onnxModel = env?.onnx_models?.interpolation?.[0] ?? ''
-  workflowConfig.superResolution.onnxModel = env?.onnx_models?.super_resolution?.[0] ?? ''
+  workflowConfig.interpolation.onnxModel = env?.onnxModels?.interpolation?.[0] ?? ''
+  workflowConfig.superResolution.onnxModel = env?.onnxModels?.super_resolution?.[0] ?? ''
 
   // 根据 GPU 类型设置默认推理引擎
   const vendor = env?.gpu?.adapters?.[0]?.vendor
   const backend = workflowConfig.interpolation.tensorBackend
-  const engines = (env?.tensor_engines as Record<string, string[]> | undefined)?.[backend] ?? []
+  const engines = (env?.tensorEngines as Record<string, string[]> | undefined)?.[backend] ?? []
   if (vendor === 'hygon') {
     workflowConfig.interpolation.engine = engines.includes('dcu') ? 'dcu' : (engines[0] as InferenceEngine) ?? 'cuda'
   } else if (vendor === 'nvidia') {

@@ -117,24 +117,24 @@ function createEnvStoreMock(overrides: Record<string, unknown> = {}) {
           available: true,
           devices: ['NVIDIA GeForce RTX 4090'],
           adapters: [{ name: 'NVIDIA GeForce RTX 4090', vendor: 'nvidia', deviceType: 'discrete' }],
-          cuda_available: true,
+          cudaAvailable: true,
         },
-        tensor_backends: {
+        tensorBackends: {
           pytorch: true,
           paddle: true,
           onnx: true,
         },
-        tensor_engines: {
+        tensorEngines: {
           pytorch: ['cuda', 'tensorrt'],
           paddle: ['cuda', 'tensorrt'],
           onnx: ['tensorrt', 'cuda'],
         },
-        backend_device_support: {
+        backendDeviceSupport: {
           pytorch: ['nvidia', 'intel', 'amd'],
           paddle: ['nvidia', 'intel', 'amd', 'hygon'],
           onnx: ['nvidia', 'intel', 'amd'],
         },
-        onnx_models: {
+        onnxModels: {
           interpolation: ['interp.onnx'],
           super_resolution: ['sr.onnx'],
         },
@@ -219,18 +219,18 @@ describe('EnhanceModuleView', () => {
             devices: ['Hygon DCU'],
             adapters: [{ name: 'Hygon DCU', vendor: 'hygon', deviceType: 'discrete' }],
           },
-          tensor_backends: { pytorch: true, paddle: true, onnx: true },
-          tensor_engines: {
+          tensorBackends: { pytorch: true, paddle: true, onnx: true },
+          tensorEngines: {
             pytorch: ['cuda'],
             paddle: ['cuda', 'dcu'],
             onnx: ['tensorrt', 'cuda'],
           },
-          backend_device_support: {
+          backendDeviceSupport: {
             pytorch: ['nvidia', 'intel', 'amd'],
             paddle: ['nvidia', 'intel', 'amd', 'hygon'],
             onnx: ['nvidia', 'intel', 'amd'],
           },
-          onnx_models: { interpolation: [], super_resolution: [] },
+          onnxModels: { interpolation: [], super_resolution: [] },
         },
       },
     })

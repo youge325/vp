@@ -159,7 +159,7 @@ export const useTaskStore = defineStore('task', () => {
       pendingConflict.value = {
         itemId: nextId,
         kind: conflict,
-        outputPath: inspection.output_path,
+        outputPath: inspection.outputPath,
         inspection,
       }
       // Hold the item in 'running' state but defer the actual startTask
@@ -182,10 +182,10 @@ export const useTaskStore = defineStore('task', () => {
   }
 
   function _classifyConflict(inspection: ResumeInspectionResult): ResumeConflictKind | null {
-    if (!inspection.final_exists) {
+    if (!inspection.finalExists) {
       return null
     }
-    if (inspection.signature_match && inspection.completed_chunks > 0) {
+    if (inspection.signatureMatch && inspection.completedChunks > 0) {
       return 'final_exists_with_resume'
     }
     return 'final_exists_only'
@@ -420,20 +420,20 @@ export const useTaskStore = defineStore('task', () => {
             const inspection: ResumeInspectionResult = {
               type: 'resume_inspection',
               pipeline_kind: 'streaming',
-              output_path: typeof details.output_path === 'string' ? details.output_path : '',
-              input_path: typeof details.input_path === 'string' ? details.input_path : item.inputPath,
-              final_exists: true,
-              sidecar_exists: Boolean(details.sidecar_signature_match),
-              signature_match: Boolean(details.sidecar_signature_match),
-              completed_chunks: Number(details.completed_chunks ?? 0),
-              completed_output_frames: Number(details.completed_output_frames ?? 0),
-              next_source_frame: 0,
-              total_output_frames: 0,
+              outputPath: typeof details.outputPath === 'string' ? details.outputPath : '',
+              inputPath: typeof details.inputPath === 'string' ? details.inputPath : item.inputPath,
+              finalExists: true,
+              sidecarExists: Boolean(details.sidecarSignatureMatch),
+              signatureMatch: Boolean(details.sidecarSignatureMatch),
+              completedChunks: Number(details.completedChunks ?? 0),
+              completedOutputFrames: Number(details.completedOutputFrames ?? 0),
+              nextSourceFrame: 0,
+              totalOutputFrames: 0,
             }
             pendingConflict.value = {
               itemId: item.id,
-              kind: inspection.signature_match ? 'final_exists_with_resume' : 'final_exists_only',
-              outputPath: inspection.output_path,
+              kind: inspection.signatureMatch ? 'final_exists_with_resume' : 'final_exists_only',
+              outputPath: inspection.outputPath,
               inspection,
             }
             return

@@ -47,10 +47,10 @@ class ResumeConflictError(Exception):
 
     def to_details(self) -> dict[str, Any]:
         return {
-            "output_path": self.output_path,
-            "completed_chunks": self.completed_chunks,
-            "completed_output_frames": self.completed_output_frames,
-            "sidecar_signature_match": self.sidecar_signature_match,
+            "outputPath": self.output_path,
+            "completedChunks": self.completed_chunks,
+            "completedOutputFrames": self.completed_output_frames,
+            "sidecarSignatureMatch": self.sidecar_signature_match,
         }
 
 
@@ -249,14 +249,14 @@ class SegmentManifest:
             state = self._empty_state()
 
         return {
-            "output_path": str(self.output_path),
-            "final_exists": self.output_path.exists(),
-            "sidecar_exists": self.manifest_path.is_file(),
-            "signature_match": signature_match,
-            "completed_chunks": len(state.completed_segments),
-            "completed_output_frames": state.completed_output_frames,
-            "next_source_frame": state.start_source_frame,
-            "total_output_frames": total_output_frames,
+            "outputPath": str(self.output_path),
+            "finalExists": self.output_path.exists(),
+            "sidecarExists": self.manifest_path.is_file(),
+            "signatureMatch": signature_match,
+            "completedChunks": len(state.completed_segments),
+            "completedOutputFrames": state.completed_output_frames,
+            "nextSourceFrame": state.start_source_frame,
+            "totalOutputFrames": total_output_frames,
         }
 
     # ---------------------------------------------------------- chunk filenames

@@ -16,7 +16,7 @@ function makeEnv(): EnvironmentCheckResult {
       available: true,
       version: 'ffmpeg n7',
       path: 'D:/ffmpeg/bin/ffmpeg.exe',
-      ffprobe_path: 'D:/ffmpeg/bin/ffprobe.exe',
+      ffprobePath: 'D:/ffmpeg/bin/ffprobe.exe',
       hwaccels: ['cuda', 'qsv'],
       encoderProfiles: [
         {
@@ -75,22 +75,22 @@ function makeEnv(): EnvironmentCheckResult {
           driverVersion: '1',
         },
       ],
-      cuda_available: true,
+      cudaAvailable: true,
     },
-    tensor_backends: {
+    tensorBackends: {
       pytorch: true,
       paddle: false,
       onnx: true,
     },
-    onnx_runtime: {
+    onnxRuntime: {
       available: true,
       providers: ['CPUExecutionProvider'],
     },
-    onnx_models: {
+    onnxModels: {
       interpolation: ['interp.onnx'],
       super_resolution: ['sr.onnx'],
     },
-    rife_model: {
+    rifeModel: {
       available: true,
       version: '4.25',
       path: 'D:/model',
@@ -98,8 +98,8 @@ function makeEnv(): EnvironmentCheckResult {
     runtime: {
       mode: 'desktop',
       bundled: false,
-      python_executable: 'python',
-      default_model_available: true,
+      pythonExecutable: 'python',
+      defaultModelAvailable: true,
     },
     resources: {},
   }
@@ -119,8 +119,8 @@ function makeItem(env = makeEnv()): MediaItem {
       duration: 10,
       width: 1920,
       height: 1080,
-      has_audio: true,
-      video_codec: 'hevc',
+      hasAudio: true,
+      videoCodec: 'hevc',
     },
     issue: null,
     decodeConfig: createDefaultDecodeConfig(env, 'hevc'),

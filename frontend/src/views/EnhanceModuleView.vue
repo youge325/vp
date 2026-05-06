@@ -20,14 +20,14 @@ const caption = computed(() =>
     ? '增强参数可以在导入前先配置好，新导入的视频会直接继承这些默认设置。'
     : '当前修改会同步到激活文件与所有已勾选文件，方便批量套用增强流程。',
 )
-const interpolationOnnxModels = computed(() => envStore.env.checkResult?.onnx_models?.interpolation ?? [])
-const superResolutionOnnxModels = computed(() => envStore.env.checkResult?.onnx_models?.super_resolution ?? [])
+const interpolationOnnxModels = computed(() => envStore.env.checkResult?.onnxModels?.interpolation ?? [])
+const superResolutionOnnxModels = computed(() => envStore.env.checkResult?.onnxModels?.super_resolution ?? [])
 const isOnnxBackend = computed(() => workflow.value.interpolation.tensorBackend === 'onnx')
 
 // 根据 GPU vendor 过滤可见后端
 const visibleBackends = computed(() => {
   const vendor = envStore.env.checkResult?.gpu?.adapters?.[0]?.vendor
-  const support = envStore.env.checkResult?.backend_device_support
+  const support = envStore.env.checkResult?.backendDeviceSupport
   const all: TensorBackend[] = ['pytorch', 'paddle', 'onnx']
   if (!vendor || vendor === 'other' || !support) {
     return all
@@ -50,14 +50,14 @@ const visibleBackends = computed(() => {
 // 当前后端支持的推理引擎
 const availableEngines = computed(() => {
   const backend = workflow.value.interpolation.tensorBackend
-  const engines = (envStore.env.checkResult?.tensor_engines as Record<string, string[]> | undefined)?.[backend] ?? []
+  const engines = (envStore.env.checkResult?.tensorEngines as Record<string, string[]> | undefined)?.[backend] ?? []
   if (engines.length > 0) {
     return engines
   }
 
-  // 后备推断：后端未返回 tensor_engines 时根据 GPU 信息推断
+  // 后备推断：后端未返回 tensorEngines 时根据 GPU 信息推断
   const vendor = envStore.env.checkResult?.gpu?.adapters?.[0]?.vendor
-  const cudaAvailable = envStore.env.checkResult?.gpu?.cuda_available
+  const cudaAvailable = envStore.env.checkResult?.gpu?.cudaAvailable
   const gpuAvailable = envStore.env.checkResult?.gpu?.available
   const deviceNames = envStore.env.checkResult?.gpu?.devices ?? []
   const hasNvidiaInName = deviceNames.some((name) => name.toLowerCase().includes('nvidia'))
@@ -112,7 +112,7 @@ const interpolationBackend = computed({
     presetStore.patchWorkflow((config) => {
       config.interpolation.tensorBackend = value
       // 自动选择该后端的第一个可用推理引擎
-      const engines = envStore.env.checkResult?.tensor_engines?.[value] ?? []
+      const engines = envStore.env.checkResult?.tensorEngines?.[value] ?? []
       config.interpolation.engine = engines[0] as InferenceEngine
       if (value === 'onnx') {
         config.interpolation.onnxModel ||= interpolationOnnxModels.value[0] ?? ''
