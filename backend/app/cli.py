@@ -32,6 +32,7 @@ from app.utils.file_utils import get_output_path, validate_input_path
 from app.utils.logger import get_logger, setup_logging
 from app.utils.subprocess_utils import hidden_subprocess_kwargs
 from app.utils.system_probe import list_gpu_adapters
+from app.models import DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig
 
 logger = get_logger(__name__)
 
@@ -84,7 +85,11 @@ def _emit_error(
     raise SystemExit(exit_code)
 
 
-def _load_json_arg(raw_value: str | None, default: dict[str, Any]) -> dict[str, Any]:
+def _load_json_arg(
+    raw_value: str | None,
+    default: dict[str, Any],
+    model_cls: type,
+) -> dict[str, Any]:
     if not raw_value:
         return default
     try:
@@ -93,7 +98,12 @@ def _load_json_arg(raw_value: str | None, default: dict[str, Any]) -> dict[str, 
         raise ValueError(f"Invalid JSON payload: {exc}") from exc
     if not isinstance(payload, dict):
         raise ValueError("JSON payload must be an object.")
-    return _deep_merge(default, payload)
+    merged = _deep_merge(default, payload)
+    try:
+        validated = model_cls.model_validate(merged)
+    except Exception as exc:
+        raise ValueError(f"Config validation failed for {model_cls.__name__}: {exc}") from exc
+    return validated.model_dump(by_alias=True)
 
 
 def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
@@ -596,10 +606,10 @@ def cmd_process(args: argparse.Namespace) -> None:
         )
 
     try:
-        decode_config = _load_json_arg(args.decode_config_json, _default_decode_config())
-        encode_config = _load_json_arg(args.encode_config_json, _default_encode_config(args))
-        workflow_config = _load_json_arg(args.workflow_config_json, _default_workflow_config(args))
-        output_config = _load_json_arg(args.output_config_json, _default_output_config(args))
+        decode_config = _load_json_arg(args.decode_config_json, _default_decode_config(), DecodeConfig)
+        encode_config = _load_json_arg(args.encode_config_json, _default_encode_config(args), EncodeConfig)
+        workflow_config = _load_json_arg(args.workflow_config_json, _default_workflow_config(args), WorkflowConfig)
+        output_config = _load_json_arg(args.output_config_json, _default_output_config(args), OutputConfig)
     except ValueError as exc:
         _emit_error("invalid_config", str(exc))
 
@@ -808,10 +818,10 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
         )
 
     try:
-        decode_config = _load_json_arg(args.decode_config_json, _default_decode_config())
-        encode_config = _load_json_arg(args.encode_config_json, _default_encode_config(args))
-        workflow_config = _load_json_arg(args.workflow_config_json, _default_workflow_config(args))
-        output_config = _load_json_arg(args.output_config_json, _default_output_config(args))
+        decode_config = _load_json_arg(args.decode_config_json, _default_decode_config(), DecodeConfig)
+        encode_config = _load_json_arg(args.encode_config_json, _default_encode_config(args), EncodeConfig)
+        workflow_config = _load_json_arg(args.workflow_config_json, _default_workflow_config(args), WorkflowConfig)
+        output_config = _load_json_arg(args.output_config_json, _default_output_config(args), OutputConfig)
     except ValueError as exc:
         _emit_error("invalid_config", str(exc))
 
