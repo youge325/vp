@@ -56,16 +56,3 @@ class AlgorithmFactory:
     def get_available_algorithms(cls) -> dict[str, str]:
         """返回算法类型到名称的映射。"""
         return {type_name: cls._registry[type_name]().get_name() for type_name in cls._registry}
-
-
-def register_default_algorithms():
-    """注册所有默认算法。"""
-    from app.processing.interpolation import FrameInterpolationAlgorithm
-    from app.processing.super_resolution import SuperResolutionAlgorithm
-    from app.processing.anime_optimization import AnimeOptimizationAlgorithm
-    from app.processing.frame_filters import FrameFilterChainAlgorithm
-
-    AlgorithmFactory.register("frame_interpolation", FrameInterpolationAlgorithm)
-    AlgorithmFactory.register("super_resolution", SuperResolutionAlgorithm)
-    AlgorithmFactory.register("anime_optimization", AnimeOptimizationAlgorithm)
-    AlgorithmFactory.register("frame_filter_chain", FrameFilterChainAlgorithm)

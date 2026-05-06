@@ -9,7 +9,8 @@ import shutil
 import numpy as np
 import pytest
 
-from app.processing.streaming import SegmentManifest, _build_signature, process_video_streaming
+from app.planning import SegmentManifest, build_signature
+from app.processing.streaming import process_video_streaming
 
 
 class _IdentityBackend:
@@ -287,7 +288,7 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
         "duration": len(source_frames) / 24.0,
         "has_audio": True,
     }
-    signature = _build_signature(
+    signature = build_signature(
         input_path=str(input_path),
         output_path=str(output_path),
         decode_config=decode_config,

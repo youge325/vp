@@ -2,6 +2,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+// Re-export so existing callers do not break.
+pub use crate::models::TaskErrorCode;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "kebab-case")]
 #[ts(export, export_to = "../../src/types/generated/")]
@@ -23,35 +26,6 @@ impl TaskEventName {
             Self::TaskCancelled => "task-cancelled",
             Self::TaskLog => "task-log",
             Self::TaskResumeStatus => "task-resume-status",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "snake_case")]
-#[ts(export, export_to = "../../src/types/generated/")]
-pub enum TaskErrorCode {
-    MissingFfmpeg,
-    MissingModel,
-    MissingTensorBackend,
-    Cancelled,
-    ProcessFailed,
-    InvalidInput,
-    InvalidConfig,
-    ResumeConflict,
-}
-
-impl TaskErrorCode {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::MissingFfmpeg => "missing_ffmpeg",
-            Self::MissingModel => "missing_model",
-            Self::MissingTensorBackend => "missing_tensor_backend",
-            Self::Cancelled => "cancelled",
-            Self::ProcessFailed => "process_failed",
-            Self::InvalidInput => "invalid_input",
-            Self::InvalidConfig => "invalid_config",
-            Self::ResumeConflict => "resume_conflict",
         }
     }
 }

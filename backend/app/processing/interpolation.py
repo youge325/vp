@@ -11,7 +11,6 @@ from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
 from app.algorithms.rife import RIFESolver
 from app.algorithms.rife.onnx_solver import RIFEONNXSolver
-from app.config import settings
 
 logger = get_logger(__name__)
 
@@ -40,20 +39,20 @@ class FrameInterpolationAlgorithm(IAlgorithm):
         参数:
             tensor_backend: Tensor 后端（当前未使用，RIFE 直接使用 PyTorch）
             **kwargs: 额外参数
-                - multi: 补帧倍率（2=2x, 4=4x），默认使用配置值
+                - multi: 补帧倍率（2=2x, 4=4x），默认 2
                 - model_version: RIFE 模型版本，默认 "4.25"
                 - scale: 处理分辨率缩放，默认 1.0
                 - fp16: 是否使用半精度推理，默认 False
                 - device: 推理设备，默认自动选择
-                - model_dir: 模型权重目录
+                - model_dir: 模型权重目录，默认空字符串
         """
         self._tensor_backend = tensor_backend
-        self._multi = kwargs.get("multi", settings.RIFE_DEFAULT_MULTI)
-        self._model_version = kwargs.get("model_version", settings.RIFE_MODEL_VERSION)
-        self._scale = kwargs.get("scale", settings.RIFE_SCALE)
-        self._fp16 = kwargs.get("fp16", settings.RIFE_FP16)
+        self._multi = kwargs.get("multi", 2)
+        self._model_version = kwargs.get("model_version", "4.25")
+        self._scale = kwargs.get("scale", 1.0)
+        self._fp16 = kwargs.get("fp16", False)
         self._device = kwargs.get("device", None)
-        self._model_dir = kwargs.get("model_dir", settings.RIFE_MODEL_DIR)
+        self._model_dir = kwargs.get("model_dir", "")
         self._onnx_model = kwargs.get("onnx_model")
         self._engine = kwargs.get("engine", "cuda")
 

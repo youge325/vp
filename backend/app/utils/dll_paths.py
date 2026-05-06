@@ -19,7 +19,6 @@ import sys
 from pathlib import Path
 from typing import Iterable
 
-from app.config import settings
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -76,11 +75,12 @@ def _scan_common_tensorrt_roots() -> list[Path]:
     return roots
 
 
-def _candidate_dirs() -> list[Path]:
+def _candidate_dirs(tensorrt_dir: str | None = None) -> list[Path]:
     """Build the ordered list of directories to register, dedup'd downstream."""
     candidates: list[Path] = []
 
-    tensorrt_dir = (settings.TENSORRT_DIR or "").strip()
+    if tensorrt_dir is None:
+        tensorrt_dir = os.environ.get("VP_TENSORRT_DIR", "").strip()
     if tensorrt_dir:
         root = Path(tensorrt_dir).expanduser()
         bin_dir = root / "bin"
@@ -105,7 +105,10 @@ def _candidate_dirs() -> list[Path]:
     return candidates
 
 
-def register_native_dll_paths(extra: Iterable[Path] | None = None) -> list[Path]:
+def register_native_dll_paths(
+    tensorrt_dir: str | None = None,
+    extra: Iterable[Path] | None = None,
+) -> list[Path]:
     """Add GPU-runtime directories to the Windows DLL search path.
 
     Returns the list of directories registered on this call (excluding ones
@@ -123,7 +126,7 @@ def register_native_dll_paths(extra: Iterable[Path] | None = None) -> list[Path]
     if not sys.platform.startswith("win"):
         return []
 
-    candidates = list(_candidate_dirs())
+    candidates = list(_candidate_dirs(tensorrt_dir))
     if extra:
         candidates.extend(extra)
 

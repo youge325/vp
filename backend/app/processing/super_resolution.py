@@ -7,7 +7,6 @@ import numpy as np
 from app.algorithms.base import IAlgorithm
 from app.algorithms.onnx_models import create_onnx_session, resolve_onnx_model_path
 from app.algorithms.tensor_backend import ITensorBackend
-from app.config import settings
 
 
 class SuperResolutionAlgorithm(IAlgorithm):
@@ -26,7 +25,7 @@ class SuperResolutionAlgorithm(IAlgorithm):
         self._scale_factor = kwargs.get("scale_factor", 2.0)
         self._algorithm_name = kwargs.get("sr_algorithm", "placeholder")
         self._onnx_model = kwargs.get("onnx_model")
-        self._model_dir = kwargs.get("model_dir", settings.RIFE_MODEL_DIR)
+        self._model_dir = kwargs.get("model_dir", "")
         self._engine = kwargs.get("engine", "cuda")
         self._session = None
         self._input_name = ""

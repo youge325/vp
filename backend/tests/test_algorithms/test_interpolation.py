@@ -1,7 +1,8 @@
 """补帧算法测试 — 基于 RIFE v4.25。"""
 
 import pytest
-from app.algorithms.factory import AlgorithmFactory, register_default_algorithms
+from app.algorithms.factory import AlgorithmFactory
+from app.cli import _register_default_algorithms as register_default_algorithms
 
 
 class TestFrameInterpolationAlgorithm:

@@ -13,7 +13,6 @@ from typing import Any, Callable
 
 import numpy as np
 
-from app.config import settings
 from app.utils.logger import get_logger
 from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
@@ -165,8 +164,8 @@ class FFmpegWrapper:
     def __init__(self, ffmpeg_path: str | None = None, ffprobe_path: str | None = None):
         self._ffmpeg_path_explicit = ffmpeg_path is not None
         self._ffprobe_path_explicit = ffprobe_path is not None
-        self.ffmpeg_path = ffmpeg_path or settings.FFMPEG_PATH
-        self.ffprobe_path = ffprobe_path or settings.FFPROBE_PATH
+        self.ffmpeg_path = ffmpeg_path or "ffmpeg"
+        self.ffprobe_path = ffprobe_path or "ffprobe"
         self._auto_detect_paths()
         # Probe caches keyed by (abspath, mtime_ns); invalidates on file mutation.
         self._video_info_cache: dict[tuple[str, int], dict[str, Any]] = {}

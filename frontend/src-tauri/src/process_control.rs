@@ -1,3 +1,42 @@
+use std::sync::Arc;
+
+pub trait ProcessController: Send + Sync {
+    fn suspend(&self, root_pid: u32) -> Result<(), String>;
+    fn resume(&self, root_pid: u32) -> Result<(), String>;
+}
+
+pub struct WindowsProcessController;
+
+impl ProcessController for WindowsProcessController {
+    fn suspend(&self, root_pid: u32) -> Result<(), String> {
+        imp::set_process_tree_suspended(root_pid, true)
+    }
+
+    fn resume(&self, root_pid: u32) -> Result<(), String> {
+        imp::set_process_tree_suspended(root_pid, false)
+    }
+}
+
+pub fn default_controller() -> Arc<dyn ProcessController> {
+    Arc::new(WindowsProcessController)
+}
+
+// ------------------------------------------------------------------
+// Legacy free-standing functions (kept for backward compatibility)
+// ------------------------------------------------------------------
+
+pub fn suspend_process_tree(root_pid: u32) -> Result<(), String> {
+    default_controller().suspend(root_pid)
+}
+
+pub fn resume_process_tree(root_pid: u32) -> Result<(), String> {
+    default_controller().resume(root_pid)
+}
+
+// ------------------------------------------------------------------
+// Platform-specific implementation
+// ------------------------------------------------------------------
+
 #[cfg(target_os = "windows")]
 mod imp {
     use std::collections::BTreeSet;
@@ -13,15 +52,7 @@ mod imp {
         OpenThread, ResumeThread, SuspendThread, THREAD_SUSPEND_RESUME,
     };
 
-    pub fn suspend_process_tree(root_pid: u32) -> Result<(), String> {
-        set_process_tree_suspended(root_pid, true)
-    }
-
-    pub fn resume_process_tree(root_pid: u32) -> Result<(), String> {
-        set_process_tree_suspended(root_pid, false)
-    }
-
-    fn set_process_tree_suspended(root_pid: u32, suspend: bool) -> Result<(), String> {
+    pub fn set_process_tree_suspended(root_pid: u32, suspend: bool) -> Result<(), String> {
         let pids = collect_process_tree(root_pid)?;
         let touched_threads = set_threads_suspended(&pids, suspend)?;
         if touched_threads == 0 {
@@ -133,13 +164,7 @@ mod imp {
 
 #[cfg(not(target_os = "windows"))]
 mod imp {
-    pub fn suspend_process_tree(_root_pid: u32) -> Result<(), String> {
-        Err("Task pause is only supported on Windows.".to_string())
-    }
-
-    pub fn resume_process_tree(_root_pid: u32) -> Result<(), String> {
-        Err("Task resume is only supported on Windows.".to_string())
+    pub fn set_process_tree_suspended(_root_pid: u32, _suspend: bool) -> Result<(), String> {
+        Err("Task pause/resume is only supported on Windows.".to_string())
     }
 }
-
-pub use imp::{resume_process_tree, suspend_process_tree};

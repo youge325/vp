@@ -1,4 +1,3 @@
-use crate::protocol::TaskErrorCode;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -206,6 +205,35 @@ pub struct TaskCompletedPayload {
     #[ts(type = "number")]
     pub processed_frames: u64,
     pub time_seconds: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub enum TaskErrorCode {
+    MissingFfmpeg,
+    MissingModel,
+    MissingTensorBackend,
+    Cancelled,
+    ProcessFailed,
+    InvalidInput,
+    InvalidConfig,
+    ResumeConflict,
+}
+
+impl TaskErrorCode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::MissingFfmpeg => "missing_ffmpeg",
+            Self::MissingModel => "missing_model",
+            Self::MissingTensorBackend => "missing_tensor_backend",
+            Self::Cancelled => "cancelled",
+            Self::ProcessFailed => "process_failed",
+            Self::InvalidInput => "invalid_input",
+            Self::InvalidConfig => "invalid_config",
+            Self::ResumeConflict => "resume_conflict",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
