@@ -1,23 +1,16 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, toRef } from 'vue'
 import { RIFE_MODELS } from '@/services/workflow/modules'
 import { useEnhanceForm } from '@/composables/forms/useEnhanceForm'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
-import { useEnvStore } from '@/stores/env'
-import {
-  getAvailableEngines,
-  getVisibleBackends,
-  shouldShowEngineSelector,
-} from '@/services/env/gpu-capabilities'
+import { useGpuCapabilities } from '@/composables/selectors/useGpuCapabilities'
 import { BACKEND_LABELS, ENGINE_LABELS } from '@/services/format/labels'
 
-const envStore = useEnvStore()
 const { editingScopeLabel } = useWorkbenchEditor()
 const form = useEnhanceForm()
-
-const visibleBackends = computed(() => getVisibleBackends(envStore.env.checkResult))
-const availableEngines = computed(() => getAvailableEngines(envStore.env.checkResult, form.interpolationBackend as any))
-const showEngineSelector = computed(() => shouldShowEngineSelector(envStore.env.checkResult, form.interpolationBackend as any))
+const { visibleBackends, availableEngines, showEngineSelector } = useGpuCapabilities(
+  toRef(form, 'interpolationBackend')
+)
 
 const targetLabel = computed(() => editingScopeLabel.value.targetLabel)
 const caption = computed(() => editingScopeLabel.value.caption)

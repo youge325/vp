@@ -1,7 +1,7 @@
 // 视图选择器 — GPU 能力 view-model。
 // 重写自旧 useGpuCapabilities,返回响应式 backend / engine 列表,而不是"computed of function"。
 
-import { computed, type ComputedRef } from 'vue'
+import { computed, type Ref } from 'vue'
 import { useEnvStore } from '@/stores/env'
 import {
   getAvailableEngines,
@@ -11,12 +11,12 @@ import {
 import type { InferenceEngine, TensorBackend } from '@/types/domain/workflow'
 
 export interface GpuCapabilitiesView {
-  visibleBackends: ComputedRef<TensorBackend[]>
-  availableEngines: ComputedRef<InferenceEngine[]>
-  showEngineSelector: ComputedRef<boolean>
+  visibleBackends: Ref<TensorBackend[]>
+  availableEngines: Ref<InferenceEngine[]>
+  showEngineSelector: Ref<boolean>
 }
 
-export function useGpuCapabilities(backendRef: ComputedRef<TensorBackend>): GpuCapabilitiesView {
+export function useGpuCapabilities(backendRef: Ref<TensorBackend>): GpuCapabilitiesView {
   const envStore = useEnvStore()
 
   return {
