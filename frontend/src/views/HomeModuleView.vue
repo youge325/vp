@@ -1,20 +1,25 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { groupEncoderProfilesByFamily, getProbeSourceLabel } from '@/services/format'
+import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
+import { groupEncoderProfilesByFamily, getProbeSourceLabel } from '@/services/format/labels'
+import { useEnvironmentChecker } from '@/composables/app/useEnvironmentChecker'
 import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
 
 const envStore = useEnvStore()
 const mediaStore = useMediaStore()
+const { recheckEnvironment } = useEnvironmentChecker()
+
+const visibleEncoderProfiles = computed(() => getVisibleEncoderProfiles(envStore.env.checkResult))
 
 const overviewStats = computed(() => [
   { label: '运行时', value: envStore.env.checkResult?.runtime?.mode ?? '--' },
   { label: 'FFmpeg', value: envStore.env.checkResult?.ffmpeg?.available ? 'Ready' : 'Missing' },
-  { label: '已探测编码器', value: `${envStore.visibleEncoderProfiles.length}` },
+  { label: '已探测编码器', value: `${visibleEncoderProfiles.value.length}` },
   { label: '已导入素材', value: `${mediaStore.mediaItems.length}` },
 ])
 
-const familyCards = computed(() => groupEncoderProfilesByFamily(envStore.visibleEncoderProfiles))
+const familyCards = computed(() => groupEncoderProfilesByFamily(visibleEncoderProfiles.value))
 
 const probeSourceLabel = computed(() => getProbeSourceLabel(envStore.env.checkSource))
 </script>
@@ -30,7 +35,7 @@ const probeSourceLabel = computed(() => getProbeSourceLabel(envStore.env.checkSo
 
         <div class="panel-actions">
           <span v-if="envStore.env.isBootstrapping || envStore.env.isChecking" class="panel-badge">探测中</span>
-          <button v-else class="ghost-button" @click="envStore.recheckEnvironment()">重新探测</button>
+          <button v-else class="ghost-button" @click="recheckEnvironment()">重新探测</button>
         </div>
       </div>
 

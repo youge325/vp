@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { useTaskStore } from '@/stores/task'
+import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 
-const taskStore = useTaskStore()
+const { consoleTaskItem, batch, batchTotal } = useTaskOrchestrator()
 const terminalRef = ref<HTMLDivElement | null>(null)
-const logs = computed(() => taskStore.consoleTaskItem?.taskState.logs ?? [])
-const resumeStatus = computed(() => taskStore.consoleTaskItem?.taskState.resumeStatus ?? null)
+const logs = computed(() => consoleTaskItem.value?.taskState.logs ?? [])
+const resumeStatus = computed(() => consoleTaskItem.value?.taskState.resumeStatus ?? null)
 const showResumeBanner = computed(() => Boolean(resumeStatus.value?.resumed))
 
-const done = computed(() => taskStore.batch.completedCount)
-const total = computed(() => taskStore.batchTotal)
+const done = computed(() => batch.completedCount)
+const total = computed(() => batchTotal.value)
 const progressPercent = computed(() => {
   if (total.value === 0) {
     return 0

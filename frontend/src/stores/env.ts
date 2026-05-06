@@ -1,16 +1,11 @@
-import { computed, reactive, ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { checkEnvironment as invokeCheckEnvironment } from '@/lib/tauri'
-import { getVisibleEncoderProfiles, normalizeTaskError } from '@/lib/task-mapper'
 import type {
   AppEnv,
   EnvironmentCheckPayload,
   EnvironmentCheckResult,
-  GpuAdapter,
-  OperationIssue,
-  OperationIssueScope,
-  TaskError,
-} from '@/types'
+} from '@/types/domain/env'
+import type { OperationIssue, OperationIssueScope, TaskError } from '@/types/domain/media'
 
 function createInitialEnv(): AppEnv {
   return {
@@ -24,74 +19,32 @@ function createInitialEnv(): AppEnv {
   }
 }
 
-function normalizeGpuAdapter(adapter: Record<string, unknown>): GpuAdapter {
-  return {
-    name: String(adapter.name || ''),
-    vendor: (adapter.vendor as GpuAdapter['vendor']) ?? 'other',
-    deviceType: (adapter.deviceType ?? adapter.device_type ?? 'other') as GpuAdapter['deviceType'],
-    adapterCompatibility: String(adapter.adapterCompatibility ?? adapter.adapter_compatibility ?? ''),
-    driverVersion: String(adapter.driverVersion ?? adapter.driver_version ?? ''),
-  }
-}
-
-function normalizeCheckResult(raw: EnvironmentCheckResult): EnvironmentCheckResult {
-  const adapters = Array.isArray(raw.gpu?.adapters)
-    ? raw.gpu.adapters.map((adapter) => normalizeGpuAdapter(adapter as unknown as Record<string, unknown>))
-    : []
-
-  return {
-    ...raw,
-    ffmpeg: {
-      ...raw.ffmpeg,
-      hwaccels: raw.ffmpeg?.hwaccels ?? [],
-      encoderProfiles: raw.ffmpeg?.encoderProfiles ?? [],
-      decoderProfiles: raw.ffmpeg?.decoderProfiles ?? [],
-    },
-    gpu: {
-      ...raw.gpu,
-      devices: raw.gpu?.devices ?? [],
-      adapters,
-    },
-    tensorBackends: {
-      ...raw.tensorBackends,
-      pytorch: raw.tensorBackends?.pytorch,
-      paddle: raw.tensorBackends?.paddle,
-      onnx: raw.tensorBackends?.onnx,
-    },
-    tensorEngines: {
-      pytorch: raw.tensorEngines?.pytorch ?? [],
-      paddle: raw.tensorEngines?.paddle ?? [],
-      onnx: raw.tensorEngines?.onnx ?? [],
-    },
-    backendDeviceSupport: {
-      pytorch: raw.backendDeviceSupport?.pytorch ?? [],
-      paddle: raw.backendDeviceSupport?.paddle ?? [],
-      onnx: raw.backendDeviceSupport?.onnx ?? [],
-    },
-    onnxRuntime: {
-      ...(raw.onnxRuntime ?? {}),
-      providers: raw.onnxRuntime?.providers ?? [],
-    },
-    onnxModels: {
-      interpolation: raw.onnxModels?.interpolation ?? [],
-      super_resolution: raw.onnxModels?.super_resolution ?? [],
-    },
-  }
-}
-
-function normalizeCheckPayload(raw: EnvironmentCheckPayload): EnvironmentCheckPayload {
-  return {
-    result: normalizeCheckResult(raw.result),
-    source: raw.source === 'cache' ? 'cache' : 'probe',
-    checkedAt: raw.checkedAt ?? null,
-  }
-}
-
 export const useEnvStore = defineStore('env', () => {
   const env = reactive<AppEnv>(createInitialEnv())
   const operationIssue = ref<OperationIssue | null>(null)
 
-  const visibleEncoderProfiles = computed(() => getVisibleEncoderProfiles(env.checkResult))
+  function setCheckPayload(payload: EnvironmentCheckPayload, checkedAt: string): void {
+    env.checkResult = payload.result
+    env.checkSource = payload.source
+    env.lastCheckedAt = checkedAt
+    env.lastProbeAt = payload.checkedAt ?? checkedAt
+  }
+
+  function setCheckResult(result: EnvironmentCheckResult | null): void {
+    env.checkResult = result
+  }
+
+  function setIssue(issue: TaskError | null): void {
+    env.issue = issue
+  }
+
+  function setChecking(value: boolean): void {
+    env.isChecking = value
+  }
+
+  function setBootstrapping(value: boolean): void {
+    env.isBootstrapping = value
+  }
 
   function setOperationIssue(scope: OperationIssueScope, error: TaskError): void {
     operationIssue.value = { scope, error }
@@ -103,28 +56,15 @@ export const useEnvStore = defineStore('env', () => {
     }
   }
 
-  async function recheckEnvironment(forceRefresh = true): Promise<void> {
-    env.isChecking = true
-    env.issue = null
-    try {
-      const payload = normalizeCheckPayload((await invokeCheckEnvironment(forceRefresh)) as EnvironmentCheckPayload)
-      env.checkResult = payload.result
-      env.checkSource = payload.source
-      env.lastCheckedAt = new Date().toISOString()
-      env.lastProbeAt = payload.checkedAt ?? env.lastCheckedAt
-    } catch (error) {
-      env.issue = normalizeTaskError(error, 'check_failed')
-    } finally {
-      env.isChecking = false
-    }
-  }
-
   return {
     env,
     operationIssue,
-    visibleEncoderProfiles,
+    setCheckPayload,
+    setCheckResult,
+    setIssue,
+    setChecking,
+    setBootstrapping,
     setOperationIssue,
     clearOperationIssue,
-    recheckEnvironment,
   }
 })

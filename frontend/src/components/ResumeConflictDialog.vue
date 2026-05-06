@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { ResumeConflictAction, ResumeConflictDescriptor } from '@/types'
+import type { ResumeConflictAction, ResumeConflictDescriptor } from '@/types/domain/batch'
 
 const props = defineProps<{
   descriptor: ResumeConflictDescriptor

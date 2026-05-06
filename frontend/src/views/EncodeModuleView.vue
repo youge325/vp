@@ -1,25 +1,31 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { CONTAINER_OPTIONS } from '@/lib/workflow'
-import { getVisibleEncoderProfiles } from '@/lib/task-mapper'
-import { useWorkbenchEditor } from '@/composables/useEditor'
-import { useEnvStore } from '@/stores/env'
-import { usePresetStore } from '@/stores/preset'
-import type { CapabilityOptionSpec, CapabilityValue, RateControlMode } from '@/types'
+import { CONTAINER_OPTIONS } from '@/services/workflow/modules'
+import { useEncodeForm } from '@/composables/forms/useEncodeForm'
+import { useOutputPicker } from '@/composables/app/useOutputPicker'
+import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
+import { useEnvIssue } from '@/composables/selectors/useEnvIssue'
 
-const envStore = useEnvStore()
-const presetStore = usePresetStore()
+const {
+  visibleEncoderProfiles,
+  encoderOptions,
+  setEncodeProfile,
+  setRateControlMode,
+  setRateControlValue,
+  setEncodeOption,
+  getEncodeOption,
+  setContainer,
+  setKeepAudio,
+  setOutputDir,
+  setOpenOnComplete,
+  setSegmentFrames,
+  coerceOptionValue,
+} = useEncodeForm()
+
+const { pickOutputDirectory } = useOutputPicker()
 const { editorConfig, editingScopeLabel, isPresetMode } = useWorkbenchEditor()
+const encodeIssue = useEnvIssue('encode')
 
-const visibleEncoderProfiles = computed(() => getVisibleEncoderProfiles(envStore.env.checkResult))
-const currentEncoderProfile = computed(() =>
-  visibleEncoderProfiles.value.find((profile) => profile.name === editorConfig.value.encodeConfig.codec) ?? null,
-)
-
-const encoderOptions = computed(() => currentEncoderProfile.value?.options ?? [])
-const encodeOperationIssue = computed(() =>
-  envStore.operationIssue?.scope === 'encode' ? envStore.operationIssue.error : null,
-)
 const targetLabel = computed(() => editingScopeLabel.value.targetLabel)
 const caption = computed(() =>
   isPresetMode.value
@@ -27,58 +33,8 @@ const caption = computed(() =>
     : '当前修改会同步到激活文件与所有已勾选文件，适合批量统一编码策略。',
 )
 
-function coerceOptionValue(option: CapabilityOptionSpec, event: Event): CapabilityValue {
-  const target = event.target as HTMLInputElement | HTMLSelectElement
-  if (option.type === 'boolean') {
-    return (target as HTMLInputElement).checked
-  }
-  if (option.type === 'number') {
-    return Number(target.value)
-  }
-  return target.value
-}
-
-function updateContainer(event: Event): void {
-  const value = (event.target as HTMLSelectElement).value
-  presetStore.patchEncode((config) => {
-    config.container = value
-  })
-}
-
-function updateKeepAudio(event: Event): void {
-  const value = (event.target as HTMLInputElement).checked
-  presetStore.patchEncode((config) => {
-    config.keepAudio = value
-  })
-}
-
-function updateOpenOnComplete(event: Event): void {
-  const value = (event.target as HTMLInputElement).checked
-  presetStore.patchOutput((config) => {
-    config.openOnComplete = value
-  })
-}
-
-function updateRateControlMode(event: Event): void {
-  presetStore.setEncodeRateControlMode((event.target as HTMLSelectElement).value as RateControlMode)
-}
-
-function updateRateControlValue(event: Event): void {
-  presetStore.setEncodeRateControlValue(Number((event.target as HTMLInputElement).value))
-}
-
-function updateOutputDir(event: Event): void {
-  const value = (event.target as HTMLInputElement).value
-  presetStore.patchOutput((config) => {
-    config.outputDir = value
-  })
-}
-
-function updateSegmentFrames(event: Event): void {
-  const value = Number((event.target as HTMLInputElement).value)
-  presetStore.patchOutput((config) => {
-    config.segmentFrames = Number.isFinite(value) && value > 0 ? Math.round(value) : 1000
-  })
+async function handlePickOutputDirectory(): Promise<void> {
+  await pickOutputDirectory()
 }
 </script>
 
@@ -93,13 +49,13 @@ function updateSegmentFrames(event: Event): void {
 
         <div class="panel-actions">
           <span class="panel-badge">{{ targetLabel }}</span>
-          <button class="ghost-button" @click="presetStore.pickOutputDirectory()">选择输出目录</button>
+          <button class="ghost-button" @click="handlePickOutputDirectory">选择输出目录</button>
         </div>
       </div>
 
-      <div v-if="encodeOperationIssue" class="info-banner info-banner-danger">
+      <div v-if="encodeIssue" class="info-banner info-banner-danger">
         <strong>输出目录操作失败</strong>
-        <p>{{ encodeOperationIssue.message }}</p>
+        <p>{{ encodeIssue.message }}</p>
       </div>
     </section>
 
@@ -118,13 +74,13 @@ function updateSegmentFrames(event: Event): void {
             :value="editorConfig.outputConfig.outputDir"
             type="text"
             placeholder="留空则使用默认输出目录"
-            @input="updateOutputDir"
+            @input="setOutputDir(($event.target as HTMLInputElement).value)"
           />
         </label>
 
         <label class="field">
           <span>容器</span>
-          <select :value="editorConfig.encodeConfig.container" @change="updateContainer">
+          <select :value="editorConfig.encodeConfig.container" @change="setContainer(($event.target as HTMLSelectElement).value)">
             <option v-for="container in CONTAINER_OPTIONS" :key="container" :value="container">
               {{ container.toUpperCase() }}
             </option>
@@ -138,7 +94,7 @@ function updateSegmentFrames(event: Event): void {
             type="number"
             min="1"
             step="1"
-            @input="updateSegmentFrames"
+            @input="setSegmentFrames(Number(($event.target as HTMLInputElement).value))"
           />
         </label>
 
@@ -146,7 +102,7 @@ function updateSegmentFrames(event: Event): void {
           <span>编码器</span>
           <select
             :value="editorConfig.encodeConfig.codec"
-            @change="presetStore.setEncodeProfile(($event.target as HTMLSelectElement).value)"
+            @change="setEncodeProfile(($event.target as HTMLSelectElement).value)"
           >
             <option v-for="profile in visibleEncoderProfiles" :key="profile.name" :value="profile.name">
               {{ profile.label }}
@@ -156,7 +112,7 @@ function updateSegmentFrames(event: Event): void {
 
         <label class="field">
           <span>码率控制模式</span>
-          <select :value="editorConfig.encodeConfig.rateControl.mode" @change="updateRateControlMode">
+          <select :value="editorConfig.encodeConfig.rateControl.mode" @change="setRateControlMode(($event.target as HTMLSelectElement).value)">
             <option value="crf">CRF</option>
             <option value="cq">CQ</option>
             <option value="qp">QP</option>
@@ -170,14 +126,14 @@ function updateSegmentFrames(event: Event): void {
             :value="Number(editorConfig.encodeConfig.rateControl.value)"
             type="number"
             min="0"
-            @input="updateRateControlValue"
+            @input="setRateControlValue(Number(($event.target as HTMLInputElement).value))"
           />
         </label>
 
         <label class="field toggle-field">
           <span>保留音频</span>
           <label class="toggle-chip">
-            <input :checked="editorConfig.encodeConfig.keepAudio" type="checkbox" @change="updateKeepAudio" />
+            <input :checked="editorConfig.encodeConfig.keepAudio" type="checkbox" @change="setKeepAudio(($event.target as HTMLInputElement).checked)" />
             <span>Keep Audio</span>
           </label>
         </label>
@@ -185,7 +141,7 @@ function updateSegmentFrames(event: Event): void {
         <label class="field toggle-field">
           <span>完成后打开目录</span>
           <label class="toggle-chip">
-            <input :checked="editorConfig.outputConfig.openOnComplete" type="checkbox" @change="updateOpenOnComplete" />
+            <input :checked="editorConfig.outputConfig.openOnComplete" type="checkbox" @change="setOpenOnComplete(($event.target as HTMLInputElement).checked)" />
             <span>Open Folder</span>
           </label>
         </label>
@@ -212,17 +168,17 @@ function updateSegmentFrames(event: Event): void {
 
           <label v-if="option.type === 'boolean'" class="toggle-chip">
             <input
-              :checked="Boolean(presetStore.getOptionValue(option, editorConfig.encodeConfig.options))"
+              :checked="Boolean(getEncodeOption(option))"
               type="checkbox"
-              @change="presetStore.setEncodeOption(option.name, coerceOptionValue(option, $event))"
+              @change="setEncodeOption(option.name, coerceOptionValue(option, $event))"
             />
             <span>启用</span>
           </label>
 
           <select
             v-else-if="option.type === 'choice'"
-            :value="String(presetStore.getOptionValue(option, editorConfig.encodeConfig.options))"
-            @change="presetStore.setEncodeOption(option.name, coerceOptionValue(option, $event))"
+            :value="String(getEncodeOption(option))"
+            @change="setEncodeOption(option.name, coerceOptionValue(option, $event))"
           >
             <option
               v-for="choice in option.choices"
@@ -235,18 +191,18 @@ function updateSegmentFrames(event: Event): void {
 
           <input
             v-else-if="option.type === 'number'"
-            :value="Number(presetStore.getOptionValue(option, editorConfig.encodeConfig.options))"
+            :value="Number(getEncodeOption(option))"
             type="number"
             :min="option.min ?? undefined"
             :max="option.max ?? undefined"
-            @input="presetStore.setEncodeOption(option.name, coerceOptionValue(option, $event))"
+            @input="setEncodeOption(option.name, coerceOptionValue(option, $event))"
           />
 
           <input
             v-else
-            :value="String(presetStore.getOptionValue(option, editorConfig.encodeConfig.options))"
+            :value="String(getEncodeOption(option))"
             type="text"
-            @input="presetStore.setEncodeOption(option.name, coerceOptionValue(option, $event))"
+            @input="setEncodeOption(option.name, coerceOptionValue(option, $event))"
           />
         </label>
       </div>

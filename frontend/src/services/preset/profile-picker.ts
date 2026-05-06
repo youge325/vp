@@ -1,0 +1,96 @@
+// pure: no Vue / no Pinia / no Tauri
+// 编码器/解码器 profile 选优,以及主流程模式推断。
+
+import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/view/capability'
+import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { MediaItem } from '@/types/domain/media'
+import type { WorkflowMode } from '@/types/domain/workflow'
+
+const FAMILY_PRIORITY = ['nvidia', 'intel', 'cpu'] as const
+const CODEC_PRIORITY = ['hevc', 'h264', 'av1'] as const
+
+export function getEncoderProfiles(env: EnvironmentCheckResult | null): EncoderProfileSpec[] {
+  return env?.ffmpeg.encoderProfiles ?? []
+}
+
+export function getDecoderProfiles(env: EnvironmentCheckResult | null): DecoderProfileSpec[] {
+  return env?.ffmpeg.decoderProfiles ?? []
+}
+
+export function getVisibleEncoderProfiles(env: EnvironmentCheckResult | null): EncoderProfileSpec[] {
+  return getEncoderProfiles(env).filter((profile) => profile.available)
+}
+
+export function getVisibleDecoderProfiles(
+  env: EnvironmentCheckResult | null,
+  videoCodec = '',
+): DecoderProfileSpec[] {
+  const codec = normalizeCodec(videoCodec)
+  return getDecoderProfiles(env).filter((profile) => {
+    if (!profile.available) {
+      return false
+    }
+    return profile.codec === 'any' || !codec || profile.codec === codec
+  })
+}
+
+export function pickPreferredEncoderProfile(env: EnvironmentCheckResult | null): EncoderProfileSpec | null {
+  const profiles = getVisibleEncoderProfiles(env)
+  for (const family of FAMILY_PRIORITY) {
+    const familyProfiles = profiles.filter((profile) => profile.family === family)
+    if (familyProfiles.length === 0) {
+      continue
+    }
+    for (const codec of CODEC_PRIORITY) {
+      const match = familyProfiles.find((profile) => profile.codec === codec)
+      if (match) {
+        return match
+      }
+    }
+    return familyProfiles[0] ?? null
+  }
+  return null
+}
+
+export function pickPreferredDecoderProfile(
+  env: EnvironmentCheckResult | null,
+  videoCodec: string,
+): DecoderProfileSpec | null {
+  const codec = normalizeCodec(videoCodec)
+  const profiles = getVisibleDecoderProfiles(env, codec)
+  for (const family of ['nvidia', 'intel'] as const) {
+    const match = profiles.find((profile) => profile.family === family)
+    if (match) {
+      return match
+    }
+  }
+  return profiles.find((profile) => profile.family === 'software') ?? null
+}
+
+export function normalizeCodec(codec: string): string {
+  const lowered = codec.toLowerCase()
+  if (lowered.includes('hevc') || lowered.includes('h265')) {
+    return 'hevc'
+  }
+  if (lowered.includes('av1')) {
+    return 'av1'
+  }
+  if (lowered.includes('h264') || lowered.includes('avc')) {
+    return 'h264'
+  }
+  return lowered
+}
+
+export function resolvePrimaryMode(item: Pick<MediaItem, 'workflowConfig'>): WorkflowMode {
+  const workflow = item.workflowConfig
+  if (workflow.interpolation.enabled) {
+    return 'frame_interpolation'
+  }
+  if (workflow.superResolution.enabled) {
+    return 'super_resolution'
+  }
+  if (workflow.anime.enabled) {
+    return 'anime_optimization'
+  }
+  return 'format_conversion'
+}
