@@ -1,5 +1,8 @@
 // 视图 form-binding — 增强模块(补帧 / 超分 / 动漫优化)。
 // 把 EnhanceModuleView 的 18 个双向 computed 折叠到此处,业务规则在 services/preset/enhance-rules。
+//
+// TODO(round-3): mutator 总是写到 presetStore.draftPreset,但当 activeItem 存在时应分发到 mediaItem。
+// 应在 useWorkbenchEditor 增加统一写入 API,form 改走它。
 
 import { computed, reactive } from 'vue'
 import { useEnvStore } from '@/stores/env'

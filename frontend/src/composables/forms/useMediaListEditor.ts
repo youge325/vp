@@ -1,7 +1,9 @@
+// 视图 form-binding — 素材列表编辑器(读 + mutation)。
+
 import { computed } from 'vue'
 import { useMediaStore } from '@/stores/media'
 
-export function useMediaList() {
+export function useMediaListEditor() {
   const mediaStore = useMediaStore()
 
   const items = computed(() => mediaStore.mediaItems)

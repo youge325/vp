@@ -1,6 +1,7 @@
-// 视图层 — 能力选项 view-model(用于 UI 表单渲染的衍生类型)。
+// 领域层 — 能力探测模型(后端探测出的编解码 profile 与可调选项)。
+// 这些类型源自后端运行时探测,不是 UI 衍生类型。
 
-import type { CodecFamily } from '../domain/workflow'
+import type { CodecFamily } from './workflow'
 
 export type CapabilityValue = string | number | boolean
 export type CapabilityOptionType = 'boolean' | 'number' | 'string' | 'choice'

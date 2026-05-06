@@ -3,10 +3,10 @@ import { ref } from 'vue'
 import { formatNumber } from '@/services/format/numbers'
 import { getWorkflowSummaryLabel } from '@/services/format/labels'
 import { useMediaImport } from '@/composables/app/useMediaImport'
-import { useMediaList } from '@/composables/forms/useMediaList'
+import { useMediaListEditor } from '@/composables/forms/useMediaListEditor'
 import { useEnvIssue } from '@/composables/selectors/useEnvIssue'
 
-const list = useMediaList()
+const list = useMediaListEditor()
 const { pickAndImport, importPaths, reinspectIds } = useMediaImport()
 const inputIssue = useEnvIssue('input')
 const dragActive = ref(false)

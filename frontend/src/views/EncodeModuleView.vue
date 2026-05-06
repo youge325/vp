@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { CONTAINER_OPTIONS } from '@/services/workflow/modules'
 import { useEncodeForm } from '@/composables/forms/useEncodeForm'
 import { useOutputPicker } from '@/composables/app/useOutputPicker'
-import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
+import { useWorkbenchEditor, useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
 import { useEnvIssue } from '@/composables/selectors/useEnvIssue'
 
 const {
@@ -23,15 +22,9 @@ const {
 } = useEncodeForm()
 
 const { pickOutputDirectory } = useOutputPicker()
-const { editorConfig, editingScopeLabel, isPresetMode } = useWorkbenchEditor()
+const { editorConfig } = useWorkbenchEditor()
+const { targetLabel, caption } = useEditingScope('encode')
 const encodeIssue = useEnvIssue('encode')
-
-const targetLabel = computed(() => editingScopeLabel.value.targetLabel)
-const caption = computed(() =>
-  isPresetMode.value
-    ? '编码与输出参数会保存为默认预设，后续导入的新文件会直接继承这些设置。'
-    : '当前修改会同步到激活文件与所有已勾选文件，适合批量统一编码策略。',
-)
 
 async function handlePickOutputDirectory(): Promise<void> {
   await pickOutputDirectory()

@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // 编码器/解码器 profile 选优,以及主流程模式推断。
 
-import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/view/capability'
+import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/domain/capability'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { MediaItem } from '@/types/domain/media'
 import type { WorkflowMode } from '@/types/domain/workflow'
