@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::{io, process::ExitStatus, process::Stdio, time::Duration};
 
 use command_group::{AsyncCommandGroup, AsyncGroupChild};
+use serde::Deserialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -14,8 +15,22 @@ use crate::models::{
     ResumeStatusPayload, RunningTask, TaskCompletedPayload, TaskControlKind, TaskControlMessage,
     TaskErrorPayload, TaskLogPayload, TaskProgressPayload, TaskRequest, TaskState,
 };
+use crate::protocol::TaskEventName;
 use crate::process_control;
 use crate::runtime::{build_env_map, resolve_runtime_paths};
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum NdjsonEnvelope {
+    #[serde(rename = "progress")]
+    Progress(TaskProgressPayload),
+    #[serde(rename = "completed")]
+    Completed(TaskCompletedPayload),
+    #[serde(rename = "error")]
+    Error(TaskErrorPayload),
+    #[serde(rename = "resume_status")]
+    ResumeStatus(ResumeStatusPayload),
+}
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
@@ -221,110 +236,31 @@ fn spawn_stdout_reader<R: Runtime + 'static>(
                 continue;
             }
 
-            if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-                match value
-                    .get("type")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                {
-                    "progress" => {
-                        let payload = TaskProgressPayload {
-                            current: value.get("current").and_then(Value::as_u64).unwrap_or(0),
-                            total: value.get("total").and_then(Value::as_u64).unwrap_or(0),
-                            percent: value.get("percent").and_then(Value::as_f64).unwrap_or(0.0),
-                            stage: value
-                                .get("stage")
-                                .and_then(Value::as_str)
-                                .unwrap_or_default()
-                                .to_string(),
-                            stage_index: value
-                                .get("stage_index")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(1),
-                            stage_total: value
-                                .get("stage_total")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(1),
-                        };
-                        let _ = app.emit("task-progress", payload);
+            match serde_json::from_str::<NdjsonEnvelope>(trimmed) {
+                Ok(envelope) => match envelope {
+                    NdjsonEnvelope::Progress(payload) => {
+                        let _ = app.emit(TaskEventName::TaskProgress.as_str(), payload);
                     }
-                    "completed" => {
+                    NdjsonEnvelope::Completed(payload) => {
                         terminal_sent.store(true, Ordering::SeqCst);
-                        let payload = TaskCompletedPayload {
-                            output_path: value
-                                .get("output_path")
-                                .and_then(Value::as_str)
-                                .unwrap_or_default()
-                                .to_string(),
-                            processed_frames: value
-                                .get("processed_frames")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(0),
-                            time_seconds: value
-                                .get("time_seconds")
-                                .and_then(Value::as_f64)
-                                .unwrap_or(0.0),
-                        };
-                        let _ = app.emit("task-completed", payload);
+                        let _ = app.emit(TaskEventName::TaskCompleted.as_str(), payload);
                     }
-                    "resume_status" => {
-                        let payload = ResumeStatusPayload {
-                            resumed: value
-                                .get("resumed")
-                                .and_then(Value::as_bool)
-                                .unwrap_or(false),
-                            completed_chunks: value
-                                .get("completed_chunks")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(0),
-                            completed_output_frames: value
-                                .get("completed_output_frames")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(0),
-                            start_source_frame: value
-                                .get("start_source_frame")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(0),
-                            total_output_frames: value
-                                .get("total_output_frames")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(0),
-                        };
-                        let _ = app.emit("task-resume-status", payload);
+                    NdjsonEnvelope::ResumeStatus(payload) => {
+                        let _ = app.emit(TaskEventName::TaskResumeStatus.as_str(), payload);
                     }
-                    "error" => {
+                    NdjsonEnvelope::Error(payload) => {
                         terminal_sent.store(true, Ordering::SeqCst);
-                        let payload = TaskErrorPayload {
-                            code: value
-                                .get("code")
-                                .and_then(Value::as_str)
-                                .unwrap_or("process_failed")
-                                .to_string(),
-                            message: value
-                                .get("message")
-                                .and_then(Value::as_str)
-                                .unwrap_or("Backend process failed.")
-                                .to_string(),
-                            details: value.get("details").cloned(),
-                        };
-                        let _ = app.emit("task-error", payload);
+                        let _ = app.emit(TaskEventName::TaskError.as_str(), payload);
                     }
-                    _ => {
-                        let _ = app.emit(
-                            "task-log",
-                            TaskLogPayload {
-                                message: trimmed.to_string(),
-                            },
-                        );
-                    }
+                },
+                Err(_) => {
+                    let _ = app.emit(
+                        TaskEventName::TaskLog.as_str(),
+                        TaskLogPayload {
+                            message: trimmed.to_string(),
+                        },
+                    );
                 }
-            } else {
-                let _ = app.emit(
-                    "task-log",
-                    TaskLogPayload {
-                        message: trimmed.to_string(),
-                    },
-                );
             }
         }
     });
@@ -343,7 +279,7 @@ fn spawn_stderr_reader<R: Runtime + 'static>(
             }
 
             let _ = app.emit(
-                "task-log",
+                TaskEventName::TaskLog.as_str(),
                 TaskLogPayload {
                     message: trimmed.to_string(),
                 },
@@ -410,15 +346,15 @@ fn spawn_task_controller<R: Runtime + 'static>(
         match status {
             Ok(exit_status) => {
                 if was_cancelled {
-                    let _ = app.emit("task-cancelled", ());
+                    let _ = app.emit(TaskEventName::TaskCancelled.as_str(), ());
                     return;
                 }
 
                 if !exit_status.success() && !terminal_sent {
                     let _ = app.emit(
-                        "task-error",
+                        TaskEventName::TaskError.as_str(),
                         TaskErrorPayload {
-                            code: "process_failed".to_string(),
+                            code: crate::protocol::TaskErrorCode::ProcessFailed,
                             message: format!("Backend process exited with status {}.", exit_status),
                             details: None,
                         },
@@ -427,12 +363,12 @@ fn spawn_task_controller<R: Runtime + 'static>(
             }
             Err(error) => {
                 if was_cancelled {
-                    let _ = app.emit("task-cancelled", ());
+                    let _ = app.emit(TaskEventName::TaskCancelled.as_str(), ());
                 } else if !terminal_sent {
                     let _ = app.emit(
-                        "task-error",
+                        TaskEventName::TaskError.as_str(),
                         TaskErrorPayload {
-                            code: "process_failed".to_string(),
+                            code: crate::protocol::TaskErrorCode::ProcessFailed,
                             message: format!("Failed while waiting for backend process: {error}"),
                             details: None,
                         },

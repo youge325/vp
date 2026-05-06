@@ -1,3 +1,4 @@
+import { TERMINAL_PROGRESS_PREFIX, TASK_ERROR_CODES } from '@/types'
 import type {
   MediaTaskState,
   ResumeStatus,
@@ -6,8 +7,6 @@ import type {
   TaskLogPayload,
   TaskProgressPayload,
 } from '@/types'
-
-export const TERMINAL_PROGRESS_PREFIX = '[VP_PROGRESS]'
 
 export function createIdleTaskState(): MediaTaskState {
   return {
@@ -117,7 +116,7 @@ export function applyTaskCancelled(state: MediaTaskState): MediaTaskState {
     status: 'cancelled',
     finishedAt: new Date().toISOString(),
     error: {
-      code: 'cancelled',
+      code: TASK_ERROR_CODES.Cancelled,
       message: '任务已取消。',
       details: null,
     },

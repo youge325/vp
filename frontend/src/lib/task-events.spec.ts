@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { TERMINAL_PROGRESS_PREFIX } from '@/types'
 import {
   applyTaskCancelled,
   applyTaskCancelling,
@@ -9,7 +10,6 @@ import {
   applyTaskResumed,
   appendTaskLog,
   createIdleTaskState,
-  TERMINAL_PROGRESS_PREFIX,
 } from '@/lib/task-events'
 
 describe('task event reducers', () => {
@@ -29,9 +29,23 @@ describe('task event reducers', () => {
   })
 
   it('tracks paused, resumed, and cancelling states', () => {
-    const running = applyTaskProgress(createIdleTaskState(), { percent: 24 })
+    const running = applyTaskProgress(createIdleTaskState(), {
+      current: 24,
+      total: 100,
+      percent: 24,
+      stage: 'encode',
+      stageIndex: 1,
+      stageTotal: 2,
+    })
     const paused = applyTaskPaused(running)
-    const bufferedProgress = applyTaskProgress(paused, { percent: 25 })
+    const bufferedProgress = applyTaskProgress(paused, {
+      current: 25,
+      total: 100,
+      percent: 25,
+      stage: 'encode',
+      stageIndex: 1,
+      stageTotal: 2,
+    })
     const resumed = applyTaskResumed(paused)
     const cancelling = applyTaskCancelling(resumed)
 

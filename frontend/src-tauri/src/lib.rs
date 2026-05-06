@@ -1,4 +1,5 @@
 pub mod models;
+pub mod protocol;
 mod persistence;
 mod process_control;
 mod runtime;

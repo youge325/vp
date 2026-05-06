@@ -1,3 +1,4 @@
+use crate::protocol::TaskErrorCode;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -181,7 +182,7 @@ pub struct TaskRequest {
     pub resume_mode: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct TaskProgressPayload {
@@ -197,7 +198,7 @@ pub struct TaskProgressPayload {
     pub stage_total: u64,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct TaskCompletedPayload {
@@ -207,13 +208,13 @@ pub struct TaskCompletedPayload {
     pub time_seconds: f64,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct TaskLogPayload {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct ResumeStatusPayload {
@@ -228,10 +229,10 @@ pub struct ResumeStatusPayload {
     pub total_output_frames: u64,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct TaskErrorPayload {
-    pub code: String,
+    pub code: TaskErrorCode,
     pub message: String,
     #[ts(type = "Record<string, unknown> | null")]
     pub details: Option<serde_json::Value>,

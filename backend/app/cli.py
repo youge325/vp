@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import time
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,19 @@ from app.utils.system_probe import list_gpu_adapters
 from app.models import DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig
 
 logger = get_logger(__name__)
+
+
+class TaskErrorCode(str, Enum):
+    """Error codes synchronized with Rust protocol::TaskErrorCode."""
+
+    MISSING_FFMPEG = "missing_ffmpeg"
+    MISSING_MODEL = "missing_model"
+    MISSING_TENSOR_BACKEND = "missing_tensor_backend"
+    CANCELLED = "cancelled"
+    PROCESS_FAILED = "process_failed"
+    INVALID_INPUT = "invalid_input"
+    INVALID_CONFIG = "invalid_config"
+    RESUME_CONFLICT = "resume_conflict"
 
 
 PROCESS_ORDER_MAP = {
@@ -68,7 +82,7 @@ def _emit_terminal(message: str) -> None:
 
 
 def _emit_error(
-    code: str,
+    code: TaskErrorCode | str,
     message: str,
     *,
     details: dict[str, Any] | None = None,
@@ -125,17 +139,17 @@ def _processing_needs_interpolation(processing_steps: list[dict[str, Any]]) -> b
     return any(step["algorithm_type"] == "frame_interpolation" for step in processing_steps)
 
 
-def _infer_error_code(exc: BaseException) -> str:
+def _infer_error_code(exc: BaseException) -> TaskErrorCode:
     message = str(exc).lower()
     if isinstance(exc, FileNotFoundError):
         if "ffmpeg" in message or "ffprobe" in message:
-            return "missing_ffmpeg"
+            return TaskErrorCode.MISSING_FFMPEG
         if "flownet_v" in message or "model" in message:
-            return "missing_model"
+            return TaskErrorCode.MISSING_MODEL
     if "ffmpeg" in message or "ffprobe" in message:
-        return "missing_ffmpeg"
+        return TaskErrorCode.MISSING_FFMPEG
     if "flownet_v" in message or "model" in message:
-        return "missing_model"
+        return TaskErrorCode.MISSING_MODEL
     if (
         "no module named 'torch'" in message
         or "no module named torch" in message
@@ -144,10 +158,10 @@ def _infer_error_code(exc: BaseException) -> str:
         or "no module named paddle" in message
         or "tensor backend" in message
     ):
-        return "missing_tensor_backend"
+        return TaskErrorCode.MISSING_TENSOR_BACKEND
     if "cancelled" in message or "canceled" in message:
-        return "cancelled"
-    return "process_failed"
+        return TaskErrorCode.CANCELLED
+    return TaskErrorCode.PROCESS_FAILED
 
 
 def _default_decode_config() -> dict[str, Any]:
@@ -422,8 +436,8 @@ class CliProgressReporter:
                 "total": self.total_frames,
                 "percent": round(percent, 1),
                 "stage": "Encoding",
-                "stage_index": 1,
-                "stage_total": 1,
+                "stageIndex": 1,
+                "stageTotal": 1,
             }
         )
 
@@ -589,7 +603,7 @@ def cmd_process(args: argparse.Namespace) -> None:
     input_path = args.input
     if not validate_input_path(input_path):
         _emit_error(
-            "invalid_input",
+            TaskErrorCode.INVALID_INPUT,
             f"Input file is invalid or unsupported: {input_path}",
             details={"input_path": input_path},
         )
@@ -597,7 +611,7 @@ def cmd_process(args: argparse.Namespace) -> None:
     ffmpeg = FFmpegWrapper()
     if not ffmpeg.is_available():
         _emit_error(
-            "missing_ffmpeg",
+            TaskErrorCode.MISSING_FFMPEG,
             "FFmpeg is not available.",
             details={
                 "ffmpeg_path": ffmpeg.ffmpeg_path,
@@ -611,7 +625,7 @@ def cmd_process(args: argparse.Namespace) -> None:
         workflow_config = _load_json_arg(args.workflow_config_json, _default_workflow_config(args), WorkflowConfig)
         output_config = _load_json_arg(args.output_config_json, _default_output_config(args), OutputConfig)
     except ValueError as exc:
-        _emit_error("invalid_config", str(exc))
+        _emit_error(TaskErrorCode.INVALID_CONFIG, str(exc))
 
     processing_steps = _resolve_processing_steps(workflow_config)
     tensor_backend_name = workflow_config["interpolation"].get("tensorBackend", args.backend)
@@ -621,7 +635,7 @@ def cmd_process(args: argparse.Namespace) -> None:
                 _validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
             except FileNotFoundError as exc:
                 _emit_error(
-                    "missing_model",
+                    TaskErrorCode.MISSING_MODEL,
                     str(exc),
                     details={
                         "tensor_backend": tensor_backend_name,
@@ -632,7 +646,7 @@ def cmd_process(args: argparse.Namespace) -> None:
             model_path = _model_path(workflow_config["interpolation"]["model"])
             if not model_path.is_file() or model_path.stat().st_size == 0:
                 _emit_error(
-                    "missing_model",
+                    TaskErrorCode.MISSING_MODEL,
                     f"Default interpolation model is missing: {model_path}",
                     details={
                         "model_path": str(model_path),
@@ -644,7 +658,7 @@ def cmd_process(args: argparse.Namespace) -> None:
             _validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
         except FileNotFoundError as exc:
             _emit_error(
-                "missing_model",
+                TaskErrorCode.MISSING_MODEL,
                 str(exc),
                 details={
                     "tensor_backend": tensor_backend_name,
@@ -732,21 +746,21 @@ def cmd_process(args: argparse.Namespace) -> None:
         _emit(
             {
                 "type": "completed",
-                "output_path": result.get("output_path", output_path),
-                "processed_frames": processed_frames,
-                "time_seconds": elapsed,
+                "outputPath": result.get("output_path", output_path),
+                "processedFrames": processed_frames,
+                "timeSeconds": elapsed,
             }
         )
     except KeyboardInterrupt:
         _emit_error(
-            "cancelled",
+            TaskErrorCode.CANCELLED,
             "Processing was cancelled by the user.",
             details={"input_path": input_path},
             exit_code=130,
         )
     except ResumeConflictError as exc:
         _emit_error(
-            "resume_conflict",
+            TaskErrorCode.RESUME_CONFLICT,
             "An existing output was detected; please choose how to proceed.",
             details={
                 "input_path": input_path,
@@ -801,7 +815,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     input_path = args.input
     if not validate_input_path(input_path):
         _emit_error(
-            "invalid_input",
+            TaskErrorCode.INVALID_INPUT,
             f"Input file is invalid or unsupported: {input_path}",
             details={"input_path": input_path},
         )
@@ -809,7 +823,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     ffmpeg = FFmpegWrapper()
     if not ffmpeg.is_available():
         _emit_error(
-            "missing_ffmpeg",
+            TaskErrorCode.MISSING_FFMPEG,
             "FFmpeg is not available.",
             details={
                 "ffmpeg_path": ffmpeg.ffmpeg_path,
@@ -823,7 +837,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
         workflow_config = _load_json_arg(args.workflow_config_json, _default_workflow_config(args), WorkflowConfig)
         output_config = _load_json_arg(args.output_config_json, _default_output_config(args), OutputConfig)
     except ValueError as exc:
-        _emit_error("invalid_config", str(exc))
+        _emit_error(TaskErrorCode.INVALID_CONFIG, str(exc))
 
     processing_steps = _resolve_processing_steps(workflow_config)
 
@@ -886,7 +900,7 @@ def cmd_info(args: argparse.Namespace) -> None:
     input_path = args.input
     if not os.path.isfile(input_path):
         _emit_error(
-            "invalid_input",
+            TaskErrorCode.INVALID_INPUT,
             f"Input file does not exist: {input_path}",
             details={"input_path": input_path},
         )
@@ -894,7 +908,7 @@ def cmd_info(args: argparse.Namespace) -> None:
     ffmpeg = FFmpegWrapper()
     if not ffmpeg.is_available():
         _emit_error(
-            "missing_ffmpeg",
+            TaskErrorCode.MISSING_FFMPEG,
             "FFmpeg is not available.",
             details={
                 "ffmpeg_path": ffmpeg.ffmpeg_path,
@@ -1180,7 +1194,7 @@ def main() -> None:
         args = parser.parse_args()
         args.func(args)
     except KeyboardInterrupt:
-        _emit_error("cancelled", "Operation cancelled by the user.", exit_code=130)
+        _emit_error(TaskErrorCode.CANCELLED, "Operation cancelled by the user.", exit_code=130)
     except SystemExit:
         raise
     except Exception as exc:  # pragma: no cover - defensive CLI boundary

@@ -870,10 +870,10 @@ def _emit_resume_status_event(*, resume_state: ResumeState, total_output_frames:
     payload = {
         "type": "resume_status",
         "resumed": resume_state.completed_output_frames > 0,
-        "completed_chunks": len(resume_state.completed_segments),
-        "completed_output_frames": resume_state.completed_output_frames,
-        "start_source_frame": resume_state.start_source_frame,
-        "total_output_frames": total_output_frames,
+        "completedChunks": len(resume_state.completed_segments),
+        "completedOutputFrames": resume_state.completed_output_frames,
+        "startSourceFrame": resume_state.start_source_frame,
+        "totalOutputFrames": total_output_frames,
     }
     try:
         print(json.dumps(payload, ensure_ascii=False), flush=True)
