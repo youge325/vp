@@ -52,7 +52,9 @@ jobs:
         run: ./scripts/prepare-windows-runtime.ps1
 
       - name: Generate TypeScript types from Rust
-        run: cargo test --lib
+        run: |
+          New-Item -ItemType Directory -Force -Path "../dist" | Out-Null
+          cargo test --lib
         working-directory: frontend/src-tauri
 
       - name: Build Tauri App (no installer)
