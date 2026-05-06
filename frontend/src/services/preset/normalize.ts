@@ -3,7 +3,7 @@
 
 import type { DecodeConfig, EncodeConfig } from '@/types/protocol'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { CapabilityValue } from '@/types/view/capability'
+import type { CapabilityValue } from '@/types/domain/capability'
 import { createDefaultDecodeConfig, createDefaultEncodeConfig } from './defaults'
 import { getVisibleDecoderProfiles, getVisibleEncoderProfiles } from './profile-picker'
 

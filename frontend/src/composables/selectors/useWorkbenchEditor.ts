@@ -4,7 +4,7 @@
 import { computed } from 'vue'
 import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
-import { getEditingScopeLabel } from '@/services/format/labels'
+import { getEditingScopeLabel, type WorkflowStage } from '@/services/format/labels'
 
 export function useWorkbenchEditor() {
   const mediaStore = useMediaStore()
@@ -22,15 +22,25 @@ export function useWorkbenchEditor() {
 
   const editorVideoCodec = computed(() => activeItem.value?.info?.videoCodec ?? '')
 
-  const editingScopeLabel = computed(() =>
-    getEditingScopeLabel(isPresetMode.value, mediaStore.selectedIds.length || 1),
-  )
-
   return {
     activeItem,
     isPresetMode,
     editorConfig,
     editorVideoCodec,
-    editingScopeLabel,
+  }
+}
+
+export function useEditingScope(stage: WorkflowStage) {
+  const mediaStore = useMediaStore()
+  const isPresetMode = computed(() => !mediaStore.activeItem)
+
+  const label = computed(() =>
+    getEditingScopeLabel(isPresetMode.value, mediaStore.selectedIds.length || 1, stage),
+  )
+
+  return {
+    isPresetMode,
+    targetLabel: computed(() => label.value.targetLabel),
+    caption: computed(() => label.value.caption),
   }
 }

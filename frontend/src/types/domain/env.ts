@@ -2,7 +2,7 @@
 
 import type { TaskError } from './media'
 import type { EnvironmentCheckSource, GpuDeviceType, GpuVendor } from './workflow'
-import type { DecoderProfileSpec, EncoderProfileSpec } from '../view/capability'
+import type { DecoderProfileSpec, EncoderProfileSpec } from './capability'
 
 export interface GpuAdapter {
   name: string

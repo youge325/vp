@@ -1,6 +1,7 @@
-// 视图层 form-binding 工具 — getOptionValue / coerceOptionValue 等纯辅助。
+// pure: no Vue / no Pinia / no Tauri
+// 表单选项纯函数 — getOptionValue / coerceOptionValue。
 
-import type { CapabilityOptionSpec, CapabilityValue } from '@/types/view/capability'
+import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
 
 export function getOptionValue(
   option: { name: string; defaultValue?: CapabilityValue | null; choices: Array<{ value: CapabilityValue }>; type: string },

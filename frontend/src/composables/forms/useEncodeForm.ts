@@ -1,4 +1,7 @@
 // 视图 form-binding — 编码模块。
+//
+// TODO(round-3): mutator 总是写到 presetStore.draftPreset,但当 activeItem 存在时应分发到 mediaItem。
+// 应在 useWorkbenchEditor 增加统一写入 API,form 改走它。
 
 import { computed } from 'vue'
 import { useEnvStore } from '@/stores/env'
@@ -9,8 +12,8 @@ import {
   seedProfileOptions,
 } from '@/services/preset/normalize'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
-import { getOptionValue, coerceOptionValue } from './usePresetEditor'
-import type { CapabilityOptionSpec, CapabilityValue } from '@/types/view/capability'
+import { getOptionValue, coerceOptionValue } from '@/services/preset/options'
+import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
 import type { EncodeConfig, OutputConfig } from '@/types/protocol'
 
 export function useEncodeForm() {

@@ -1,4 +1,7 @@
 // 视图 form-binding — 滤镜链编辑(预处理 / 后处理)。
+//
+// TODO(round-3): mutator 总是写到 presetStore.draftPreset,但当 activeItem 存在时应分发到 mediaItem。
+// 应在 useWorkbenchEditor 增加统一写入 API,form 改走它。
 
 import { computed } from 'vue'
 import { usePresetStore } from '@/stores/preset'

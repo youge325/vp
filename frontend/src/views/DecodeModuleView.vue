@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useDecodeForm } from '@/composables/forms/useDecodeForm'
-import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
+import { useWorkbenchEditor, useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
 
 const {
   visibleDecoderProfiles,
@@ -14,14 +13,8 @@ const {
   coerceOptionValue,
 } = useDecodeForm()
 
-const { editorConfig, editingScopeLabel, isPresetMode } = useWorkbenchEditor()
-
-const targetLabel = computed(() => editingScopeLabel.value.targetLabel)
-const caption = computed(() =>
-  isPresetMode.value
-    ? '启动探测完成后即可直接设置解码策略，后续新导入的视频会继承这些默认值。'
-    : '当前修改会同步到激活文件与所有已勾选文件，解码器参数来自 FFmpeg 能力探测。',
-)
+const { editorConfig } = useWorkbenchEditor()
+const { targetLabel, caption } = useEditingScope('decode')
 </script>
 
 <template>
