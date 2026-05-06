@@ -26,5 +26,9 @@ ts-rs = { version = "11", features = ["serde-json-impl"] }
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }
 
 [[bin]]
+name = "vp-workbench"
+path = "src/main.rs"
+
+[[bin]]
 name = "dump_schema"
 path = "src/bin/dump_schema.rs"
