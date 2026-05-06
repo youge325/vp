@@ -1,27 +1,24 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { getVisibleDecoderProfiles } from '@/lib/task-mapper'
+import { useWorkbenchEditor } from '@/composables/useEditor'
 import { useEnvStore } from '@/stores/env'
-import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
 import type { CapabilityOptionSpec, CapabilityValue } from '@/types'
 
 const envStore = useEnvStore()
-const mediaStore = useMediaStore()
 const presetStore = usePresetStore()
+const { editorConfig, editorVideoCodec, editingScopeLabel, isPresetMode } = useWorkbenchEditor()
 
 const visibleDecoderProfiles = computed(() =>
-  getVisibleDecoderProfiles(envStore.env.checkResult, mediaStore.editorVideoCodec),
+  getVisibleDecoderProfiles(envStore.env.checkResult, editorVideoCodec.value),
 )
 const currentDecoderProfile = computed(() =>
-  visibleDecoderProfiles.value.find((profile) => profile.name === mediaStore.editor.decodeConfig.decoder) ?? null,
+  visibleDecoderProfiles.value.find((profile) => profile.name === editorConfig.value.decodeConfig.decoder) ?? null,
 )
 
 const decoderOptions = computed(() => currentDecoderProfile.value?.options ?? [])
-const isPresetMode = computed(() => mediaStore.editingScope === 'preset')
-const targetLabel = computed(() =>
-  isPresetMode.value ? '默认预设（后续导入会继承）' : `作用于 ${mediaStore.editingSelectionCount} 个文件`,
-)
+const targetLabel = computed(() => editingScopeLabel.value.targetLabel)
 const caption = computed(() =>
   isPresetMode.value
     ? '启动探测完成后即可直接设置解码策略，后续新导入的视频会继承这些默认值。'
@@ -67,7 +64,7 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
         <label class="field">
           <span>硬件设备</span>
           <input
-            :value="mediaStore.editor.decodeConfig.hwaccelDevice"
+            :value="editorConfig.decodeConfig.hwaccelDevice"
             type="text"
             placeholder="留空则使用默认设备"
             @input="presetStore.setDecodeHwaccelDevice(($event.target as HTMLInputElement).value)"
@@ -76,9 +73,9 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
       </div>
 
       <div class="chip-row">
-        <span class="tag">模式: {{ mediaStore.editor.decodeConfig.mode }}</span>
-        <span class="tag">hwaccel: {{ mediaStore.editor.decodeConfig.hwaccel || 'software' }}</span>
-        <span class="tag">decoder: {{ mediaStore.editor.decodeConfig.decoder || 'software' }}</span>
+        <span class="tag">模式: {{ editorConfig.decodeConfig.mode }}</span>
+        <span class="tag">hwaccel: {{ editorConfig.decodeConfig.hwaccel || 'software' }}</span>
+        <span class="tag">decoder: {{ editorConfig.decodeConfig.decoder || 'software' }}</span>
       </div>
 
       <div v-if="decoderOptions.length > 0" class="field-grid field-grid-2">
@@ -87,7 +84,7 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
 
           <label v-if="option.type === 'boolean'" class="toggle-chip">
             <input
-              :checked="Boolean(presetStore.getOptionValue(option, mediaStore.editor.decodeConfig.options))"
+              :checked="Boolean(presetStore.getOptionValue(option, editorConfig.decodeConfig.options))"
               type="checkbox"
               @change="presetStore.setDecodeOption(option.name, coerceOptionValue(option, $event))"
             />
@@ -96,7 +93,7 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
 
           <select
             v-else-if="option.type === 'choice'"
-            :value="String(presetStore.getOptionValue(option, mediaStore.editor.decodeConfig.options))"
+            :value="String(presetStore.getOptionValue(option, editorConfig.decodeConfig.options))"
             @change="presetStore.setDecodeOption(option.name, coerceOptionValue(option, $event))"
           >
             <option
@@ -110,7 +107,7 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
 
           <input
             v-else-if="option.type === 'number'"
-            :value="Number(presetStore.getOptionValue(option, mediaStore.editor.decodeConfig.options))"
+            :value="Number(presetStore.getOptionValue(option, editorConfig.decodeConfig.options))"
             type="number"
             :min="option.min ?? undefined"
             :max="option.max ?? undefined"
@@ -119,7 +116,7 @@ function coerceOptionValue(option: CapabilityOptionSpec, event: Event): Capabili
 
           <input
             v-else
-            :value="String(presetStore.getOptionValue(option, mediaStore.editor.decodeConfig.options))"
+            :value="String(presetStore.getOptionValue(option, editorConfig.decodeConfig.options))"
             type="text"
             @input="presetStore.setDecodeOption(option.name, coerceOptionValue(option, $event))"
           />

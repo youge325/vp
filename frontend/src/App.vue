@@ -7,6 +7,7 @@ import { useEnvStore } from '@/stores/env'
 import { usePresetStore } from '@/stores/preset'
 import { useTaskStore } from '@/stores/task'
 import { createDefaultWorkbenchPreset } from '@/lib/task-mapper'
+import { getTaskStatusLabel } from '@/services/format'
 import type { WorkbenchModuleDefinition } from '@/types'
 
 const envStore = useEnvStore()
@@ -18,9 +19,9 @@ const activeModule = computed<WorkbenchModuleDefinition>(
   () => (route.meta.module as WorkbenchModuleDefinition | undefined) ?? WORKBENCH_MODULES[0],
 )
 
-const topbarStatus = computed(() => {
-  return taskStore.globalTaskStatus
-})
+const topbarStatus = computed(() =>
+  getTaskStatusLabel(taskStore.batch, taskStore.currentTaskItem?.taskState.status ?? null),
+)
 
 async function bootstrap(): Promise<void> {
   if (envStore.env.isBootstrapping) {

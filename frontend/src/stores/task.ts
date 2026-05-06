@@ -23,7 +23,6 @@ import {
   applyTaskResumed,
   createIdleTaskState,
 } from '@/lib/task-events'
-import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
 import { TASK_ERROR_CODES } from '@/types'
 import type {
@@ -53,7 +52,6 @@ function createInitialBatch(): BatchState {
 }
 
 export const useTaskStore = defineStore('task', () => {
-  const envStore = useEnvStore()
   const mediaStore = useMediaStore()
 
   const batch = reactive<BatchState>(createInitialBatch())
@@ -71,12 +69,6 @@ export const useTaskStore = defineStore('task', () => {
     () => !batch.isRunning && selectedItems.value.length > 0 && selectedItems.value.every((item) => Boolean(item.inputPath)),
   )
   const batchTotal = computed(() => batchRuntimeIds.value.length || selectedItems.value.length)
-  const globalTaskStatus = computed(() => {
-    if (batch.isRunning) {
-      return currentTaskItem.value?.taskState.status ?? 'running'
-    }
-    return 'idle'
-  })
 
   function clearBatchRuntimeArtifacts(preserveLogs: boolean = false): void {
     mediaStore.resetItemsRunState(new Set(batchRuntimeIds.value), preserveLogs)
@@ -233,15 +225,11 @@ export const useTaskStore = defineStore('task', () => {
       }
       batch.completedCount += 1
     } else if (state === 'cancelled') {
-      if (item.outputConfig.openOnComplete) {
-        const fallbackDir = envStore.env.checkResult?.resources?.output_dir
-        const openPath = item.lastOutputPath || item.outputConfig.outputDir || (typeof fallbackDir === 'string' ? fallbackDir : '')
-        if (openPath) {
-          try {
-            await openOutputLocation(openPath)
-          } catch {
-            // Ignore shell-open failures after processing finished.
-          }
+      if (item.outputConfig.openOnComplete && item.lastOutputPath) {
+        try {
+          await openOutputLocation(item.lastOutputPath)
+        } catch {
+          // Ignore shell-open failures after processing finished.
         }
       }
       batch.failedCount += 1
@@ -295,8 +283,6 @@ export const useTaskStore = defineStore('task', () => {
     if (!canStartBatch.value) {
       return
     }
-    envStore.clearOperationIssue('task')
-    envStore.clearOperationIssue('output')
     resetBatchRunState(selectedIds.value)
     await runNextQueuedItem()
   }
@@ -313,9 +299,8 @@ export const useTaskStore = defineStore('task', () => {
       if (item) {
         item.taskState = applyTaskPaused(item.taskState)
       }
-      envStore.clearOperationIssue('task')
     } catch (error) {
-      envStore.setOperationIssue('task', normalizeTaskError(error, 'pause_failed'))
+      throw normalizeTaskError(error, 'pause_failed')
     }
   }
 
@@ -331,9 +316,8 @@ export const useTaskStore = defineStore('task', () => {
       if (item) {
         item.taskState = applyTaskResumed(item.taskState)
       }
-      envStore.clearOperationIssue('task')
     } catch (error) {
-      envStore.setOperationIssue('task', normalizeTaskError(error, 'resume_failed'))
+      throw normalizeTaskError(error, 'resume_failed')
     }
   }
 
@@ -359,7 +343,6 @@ export const useTaskStore = defineStore('task', () => {
 
     try {
       await cancelTask()
-      envStore.clearOperationIssue('task')
     } catch (error) {
       batch.queue = previousQueue
       batch.isPaused = wasPaused
@@ -367,7 +350,7 @@ export const useTaskStore = defineStore('task', () => {
       if (item && previousTaskState) {
         item.taskState = previousTaskState
       }
-      envStore.setOperationIssue('task', normalizeTaskError(error, 'cancel_failed'))
+      throw normalizeTaskError(error, 'cancel_failed')
     }
   }
 
@@ -455,7 +438,6 @@ export const useTaskStore = defineStore('task', () => {
     consoleTaskItem,
     canStartBatch,
     batchTotal,
-    globalTaskStatus,
     startBatch,
     runNextQueuedItem,
     pauseCurrentTask,

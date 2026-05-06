@@ -1,101 +1,25 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RIFE_MODELS } from '@/lib/workflow'
+import { useWorkbenchEditor } from '@/composables/useEditor'
+import { BACKEND_LABELS, ENGINE_LABELS } from '@/services/format'
+import { getVisibleBackends, getAvailableEngines, shouldShowEngineSelector } from '@/services/gpu'
 import { useEnvStore } from '@/stores/env'
-import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
 import type { FpsMode, ProcessOrder, TensorBackend, InferenceEngine } from '@/types'
 
-const mediaStore = useMediaStore()
 const envStore = useEnvStore()
 const presetStore = usePresetStore()
+const { editorConfig, editingScopeLabel } = useWorkbenchEditor()
 
-const workflow = computed(() => mediaStore.editor.workflowConfig)
-const isPresetMode = computed(() => mediaStore.editingScope === 'preset')
-const targetLabel = computed(() =>
-  isPresetMode.value ? '默认预设（后续导入会继承）' : `作用于 ${mediaStore.editingSelectionCount} 个文件`,
-)
-const caption = computed(() =>
-  isPresetMode.value
-    ? '增强参数可以在导入前先配置好，新导入的视频会直接继承这些默认设置。'
-    : '当前修改会同步到激活文件与所有已勾选文件，方便批量套用增强流程。',
-)
+const workflow = computed(() => editorConfig.value.workflowConfig)
+const targetLabel = computed(() => editingScopeLabel.value.targetLabel)
+const caption = computed(() => editingScopeLabel.value.caption)
 const interpolationOnnxModels = computed(() => envStore.env.checkResult?.onnxModels?.interpolation ?? [])
 const superResolutionOnnxModels = computed(() => envStore.env.checkResult?.onnxModels?.super_resolution ?? [])
 const isOnnxBackend = computed(() => workflow.value.interpolation.tensorBackend === 'onnx')
 
-// 根据 GPU vendor 过滤可见后端
-const visibleBackends = computed(() => {
-  const vendor = envStore.env.checkResult?.gpu?.adapters?.[0]?.vendor
-  const support = envStore.env.checkResult?.backendDeviceSupport
-  const all: TensorBackend[] = ['pytorch', 'paddle', 'onnx']
-  if (!vendor || vendor === 'other' || !support) {
-    return all
-  }
-  // 后端设备支持数据存在时按数据过滤
-  const filtered = all.filter((b) => {
-    const supported = (support as Record<string, string[]>)[b]
-    return supported && supported.length > 0 ? supported.includes(vendor) : true
-  })
-  if (filtered.length > 0) {
-    return filtered
-  }
-  // 后备推断：数据异常时根据 vendor 硬编码兼容矩阵
-  if (vendor === 'hygon') {
-    return ['paddle']
-  }
-  return all
-})
-
-// 当前后端支持的推理引擎
-const availableEngines = computed(() => {
-  const backend = workflow.value.interpolation.tensorBackend
-  const engines = (envStore.env.checkResult?.tensorEngines as Record<string, string[]> | undefined)?.[backend] ?? []
-  if (engines.length > 0) {
-    return engines
-  }
-
-  // 后备推断：后端未返回 tensorEngines 时根据 GPU 信息推断
-  const vendor = envStore.env.checkResult?.gpu?.adapters?.[0]?.vendor
-  const cudaAvailable = envStore.env.checkResult?.gpu?.cudaAvailable
-  const gpuAvailable = envStore.env.checkResult?.gpu?.available
-  const deviceNames = envStore.env.checkResult?.gpu?.devices ?? []
-  const hasNvidiaInName = deviceNames.some((name) => name.toLowerCase().includes('nvidia'))
-  // 多种方式判断 NVIDIA GPU：vendor 标签、PyTorch CUDA 检测结果、设备名称
-  const isNvidia = vendor === 'nvidia' || cudaAvailable || hasNvidiaInName || (gpuAvailable === true && vendor === undefined)
-
-  if (isNvidia) {
-    if (backend === 'pytorch') return ['cuda', 'tensorrt']
-    if (backend === 'paddle') return ['cuda', 'tensorrt']
-    if (backend === 'onnx') return ['tensorrt', 'cuda']
-  }
-  if (vendor === 'hygon' && backend === 'paddle') return ['dcu']
-  if (vendor === 'hygon') return []
-  return ['cuda']
-})
-
-// 只要有 GPU 且当前后端有可用的推理引擎，就显示引擎选择器
-const showEngineSelector = computed(() => {
-  const gpuAvailable = envStore.env.checkResult?.gpu?.available
-  return gpuAvailable === true && availableEngines.value.length > 0
-})
-
-// 后端显示名称映射
-const backendLabels: Record<string, string> = {
-  pytorch: 'PyTorch',
-  paddle: 'PaddlePaddle',
-  onnx: 'ONNX Runtime',
-}
-
-// 引擎显示名称映射
-const engineLabels: Record<string, string> = {
-  cuda: 'CUDA',
-  tensorrt: 'TensorRT',
-  dcu: 'DCU',
-  directml: 'DirectML',
-  rocm: 'ROCm',
-  cpu: 'CPU',
-}
+const visibleBackends = computed(() => getVisibleBackends(envStore.env.checkResult))
 
 const interpolationEnabled = computed({
   get: () => workflow.value.interpolation.enabled,
@@ -123,7 +47,7 @@ const interpolationBackend = computed({
 })
 
 const interpolationEngine = computed({
-  get: () => workflow.value.interpolation.engine ?? availableEngines.value[0] ?? 'cuda',
+  get: () => workflow.value.interpolation.engine ?? getAvailableEngines(envStore.env.checkResult, workflow.value.interpolation.tensorBackend as TensorBackend)[0] ?? 'cuda',
   set: (value: InferenceEngine) => {
     presetStore.patchWorkflow((config) => {
       config.interpolation.engine = value
@@ -302,16 +226,16 @@ const animeEdgeBoost = computed({
           <span>后端</span>
           <select v-model="interpolationBackend">
             <option v-for="b in visibleBackends" :key="b" :value="b">
-              {{ backendLabels[b] }}
+              {{ BACKEND_LABELS[b] }}
             </option>
           </select>
         </label>
 
-        <label v-if="showEngineSelector" class="field">
+        <label v-if="shouldShowEngineSelector(envStore.env.checkResult, interpolationBackend as TensorBackend)" class="field">
           <span>推理引擎</span>
           <select v-model="interpolationEngine">
-            <option v-for="engine in availableEngines" :key="engine" :value="engine">
-              {{ engineLabels[engine] || engine }}
+            <option v-for="engine in getAvailableEngines(envStore.env.checkResult, interpolationBackend as TensorBackend)" :key="engine" :value="engine">
+              {{ ENGINE_LABELS[engine] || engine }}
             </option>
           </select>
         </label>

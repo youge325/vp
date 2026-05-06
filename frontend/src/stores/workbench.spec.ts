@@ -305,7 +305,6 @@ describe('workbench integration', () => {
     await bootstrapStores()
 
     const envStore = useEnvStore()
-    const mediaStore = useMediaStore()
 
     expect(mockLoadWorkbenchPreset).toHaveBeenCalledTimes(1)
     expect(mockCheckEnvironment).toHaveBeenCalledTimes(1)
@@ -314,7 +313,6 @@ describe('workbench integration', () => {
     expect(envStore.env.checkResult?.gpu.adapters[0]?.deviceType).toBe('discrete')
     expect(envStore.env.checkSource).toBe('probe')
     expect(envStore.env.lastProbeAt).toBe('2026-04-23T11:00:00Z')
-    expect(mediaStore.editingScope).toBe('preset')
   })
 
   it('exposes editable draft presets before any media is imported', async () => {
@@ -325,9 +323,8 @@ describe('workbench integration', () => {
     const mediaStore = useMediaStore()
 
     expect(mediaStore.activeItem).toBeNull()
-    expect(mediaStore.editingScope).toBe('preset')
-    expect(mediaStore.editor.decodeConfig.mode).toBe('hardware')
-    expect(mediaStore.editor.decodeConfig.decoder).toBe('hevc_cuvid')
+    expect(presetStore.draftPreset.decodeConfig.mode).toBe('hardware')
+    expect(presetStore.draftPreset.decodeConfig.decoder).toBe('hevc_cuvid')
     expect(presetStore.draftPreset.workflowConfig.interpolation.enabled).toBe(true)
     expect(getVisibleDecoderProfiles(envStore.env.checkResult, '')).toHaveLength(3)
   })
@@ -338,25 +335,24 @@ describe('workbench integration', () => {
 
     const mediaStore = useMediaStore()
     const envStore = useEnvStore()
-    await mediaStore.pickInputs()
+    const result = await mediaStore.pickInputs()
 
-    expect(mediaStore.mediaItems).toHaveLength(1)
+    expect(result.paths).toHaveLength(1)
+    expect(result.error).toBeNull()
     expect(envStore.env.issue).toBeNull()
     expect(envStore.operationIssue).toBeNull()
   })
 
-  it('stores pickInputs failures as input operation issues', async () => {
+  it('returns pickInputs failures in result', async () => {
     await bootstrapStores()
     mockPickInputs.mockRejectedValueOnce(new Error('pick_inputs not allowed'))
 
     const mediaStore = useMediaStore()
-    const envStore = useEnvStore()
-    await mediaStore.pickInputs()
+    const result = await mediaStore.pickInputs()
 
-    expect(envStore.env.issue).toBeNull()
-    expect(envStore.operationIssue?.scope).toBe('input')
-    expect(envStore.operationIssue?.error.code).toBe('pick_inputs_failed')
-    expect(envStore.operationIssue?.error.message).toContain('pick_inputs')
+    expect(result.paths).toHaveLength(0)
+    expect(result.error).not.toBeNull()
+    expect(result.error?.code).toBe('pick_inputs_failed')
   })
 
   it('keeps environment failures in env.issue', async () => {
@@ -374,7 +370,7 @@ describe('workbench integration', () => {
     await bootstrapStores()
     const mediaStore = useMediaStore()
     const presetStore = usePresetStore()
-    await mediaStore.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4', 'D:/input/c.mp4'])
+    await mediaStore.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4', 'D:/input/c.mp4'], presetStore.draftPreset)
 
     const [first, second, third] = mediaStore.mediaItems
     mediaStore.setActiveItem(first.id)
@@ -410,7 +406,7 @@ describe('workbench integration', () => {
     await bootstrapStores()
     const mediaStore = useMediaStore()
     const presetStore = usePresetStore()
-    await mediaStore.addMediaPaths(['D:/input/a.mp4'])
+    await mediaStore.addMediaPaths(['D:/input/a.mp4'], presetStore.draftPreset)
 
     expect(mediaStore.mediaItems).toHaveLength(1)
     expect(presetStore.draftPreset.outputConfig.outputDir).toBe('D:/output/preset')
@@ -426,7 +422,8 @@ describe('workbench integration', () => {
 
     await bootstrapStores()
     const mediaStore = useMediaStore()
-    await mediaStore.addMediaPaths(['D:/input/h264-demo.mp4'])
+    const presetStore = usePresetStore()
+    await mediaStore.addMediaPaths(['D:/input/h264-demo.mp4'], presetStore.draftPreset)
 
     expect(mediaStore.mediaItems[0]?.info?.videoCodec).toBe('h264')
     expect(mediaStore.mediaItems[0]?.decodeConfig.mode).toBe('hardware')
@@ -464,7 +461,8 @@ describe('workbench integration', () => {
     await bootstrapStores()
     const mediaStore = useMediaStore()
     const taskStore = useTaskStore()
-    await mediaStore.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4', 'D:/input/c.mp4'])
+    const presetStore = usePresetStore()
+    await mediaStore.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4', 'D:/input/c.mp4'], presetStore.draftPreset)
     await taskStore.attachTaskListeners()
 
     expect(handlersRef.current).not.toBeNull()
@@ -509,7 +507,8 @@ describe('workbench integration', () => {
     await bootstrapStores()
     const mediaStore = useMediaStore()
     const taskStore = useTaskStore()
-    await mediaStore.addMediaPaths(['D:/input/a.mp4'])
+    const presetStore = usePresetStore()
+    await mediaStore.addMediaPaths(['D:/input/a.mp4'], presetStore.draftPreset)
 
     await taskStore.startBatch()
     expect(taskStore.currentTaskItem?.taskState.status).toBe('running')
@@ -531,7 +530,8 @@ describe('workbench integration', () => {
     await bootstrapStores()
     const mediaStore = useMediaStore()
     const taskStore = useTaskStore()
-    await mediaStore.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4'])
+    const presetStore = usePresetStore()
+    await mediaStore.addMediaPaths(['D:/input/a.mp4', 'D:/input/b.mp4'], presetStore.draftPreset)
     await taskStore.attachTaskListeners()
 
     await taskStore.startBatch()
@@ -559,7 +559,8 @@ describe('workbench integration', () => {
     const mediaStore = useMediaStore()
     const taskStore = useTaskStore()
     const envStore = useEnvStore()
-    await mediaStore.addMediaPaths(['D:/input/a.mp4'])
+    const presetStore = usePresetStore()
+    await mediaStore.addMediaPaths(['D:/input/a.mp4'], presetStore.draftPreset)
 
     await taskStore.startBatch()
     mockPauseTask.mockRejectedValueOnce(new Error('pause unsupported'))

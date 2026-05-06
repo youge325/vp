@@ -1,33 +1,40 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { formatNumber, resolvePrimaryMode } from '@/lib/task-mapper'
-import { WORKFLOW_LABELS } from '@/lib/workflow'
+import { formatNumber } from '@/lib/task-mapper'
+import { getWorkflowSummaryLabel } from '@/services/format'
 import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
-import { useTaskStore } from '@/stores/task'
-import type { MediaItem } from '@/types'
+import { usePresetStore } from '@/stores/preset'
 
 const envStore = useEnvStore()
 const mediaStore = useMediaStore()
-const taskStore = useTaskStore()
+const presetStore = usePresetStore()
 const dragActive = ref(false)
 
 const inputOperationIssue = computed(() =>
   envStore.operationIssue?.scope === 'input' ? envStore.operationIssue.error : null,
 )
 
-function getWorkflowSummary(item: MediaItem): string {
-  const labels = [
-    item.workflowConfig.interpolation.enabled ? '补帧' : null,
-    item.workflowConfig.superResolution.enabled ? '超分' : null,
-    item.workflowConfig.anime.enabled ? '动漫' : null,
-  ].filter(Boolean)
-  return labels.length > 0 ? labels.join(' / ') : WORKFLOW_LABELS[resolvePrimaryMode(item)]
-}
-
 async function reinspectSelection(): Promise<void> {
   const ids = mediaStore.selectedIds.length > 0 ? mediaStore.selectedIds : mediaStore.activeItem ? [mediaStore.activeItem.id] : []
-  await mediaStore.inspectItems(ids)
+  await mediaStore.inspectItems(ids, presetStore.normalizeDecodeConfig, presetStore.normalizeEncodeConfig)
+}
+
+async function handlePickInputs(): Promise<void> {
+  const result = await mediaStore.pickInputs()
+  if (result.error) {
+    envStore.setOperationIssue('input', result.error)
+    return
+  }
+  envStore.clearOperationIssue('input')
+  if (result.paths.length > 0) {
+    await mediaStore.addMediaPaths(
+      result.paths,
+      presetStore.draftPreset,
+      presetStore.normalizeDecodeConfig,
+      presetStore.normalizeEncodeConfig,
+    )
+  }
 }
 
 async function handleDrop(event: DragEvent): Promise<void> {
@@ -38,7 +45,13 @@ async function handleDrop(event: DragEvent): Promise<void> {
     .filter((path): path is string => Boolean(path))
 
   if (paths.length > 0) {
-    await mediaStore.addMediaPaths(paths)
+    envStore.clearOperationIssue('input')
+    await mediaStore.addMediaPaths(
+      paths,
+      presetStore.draftPreset,
+      presetStore.normalizeDecodeConfig,
+      presetStore.normalizeEncodeConfig,
+    )
   }
 }
 
@@ -68,7 +81,7 @@ function handleDragLeave(): void {
           <button class="ghost-button" :disabled="mediaStore.mediaItems.length === 0" @click="reinspectSelection()">
             重新读取
           </button>
-          <button class="primary-button" @click="mediaStore.pickInputs()">批量导入</button>
+          <button class="primary-button" @click="handlePickInputs">批量导入</button>
         </div>
       </div>
 
@@ -138,12 +151,12 @@ function handleDragLeave(): void {
               <td>{{ item.info ? `${item.info.width}×${item.info.height}` : '--' }}</td>
               <td>{{ item.info ? `${formatNumber(item.info.fps)} FPS` : '--' }}</td>
               <td>{{ item.info?.videoCodec || '--' }}</td>
-              <td>{{ getWorkflowSummary(item) }}</td>
+              <td>{{ getWorkflowSummaryLabel(item) }}</td>
               <td>
                 <span class="inline-status" :data-state="item.taskState.status">{{ item.taskState.status }}</span>
               </td>
               <td @click.stop>
-                <button class="table-action" :disabled="taskStore.batch.isRunning" @click="mediaStore.removeMediaItem(item.id)">
+                <button class="table-action" @click="mediaStore.removeMediaItem(item.id)">
                   移除
                 </button>
               </td>
