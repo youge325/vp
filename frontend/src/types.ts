@@ -3,6 +3,8 @@ import type { DecodeConfig } from './types/generated/DecodeConfig'
 import type { EncodeConfig } from './types/generated/EncodeConfig'
 import type { OutputConfig } from './types/generated/OutputConfig'
 import type { WorkflowConfig } from './types/generated/WorkflowConfig'
+import type { TaskEventName } from './types/generated/TaskEventName'
+import type { TaskErrorCode } from './types/generated/TaskErrorCode'
 
 export type WorkflowMode =
   | 'frame_interpolation'
@@ -253,25 +255,6 @@ export interface BatchState {
   isCancelling: boolean
 }
 
-export interface TaskProgressPayload {
-  current?: number
-  total?: number
-  percent?: number
-  stage?: string
-  stageIndex?: number
-  stageTotal?: number
-}
-
-export interface TaskCompletedPayload {
-  outputPath?: string
-  processedFrames?: number
-  timeSeconds?: number
-}
-
-export interface TaskLogPayload {
-  message: string
-}
-
 export interface WorkbenchModuleDefinition {
   key: ModuleKey
   title: string
@@ -279,6 +262,31 @@ export interface WorkbenchModuleDefinition {
   description: string
   icon: Component
 }
+
+// ---------------------------------------------------------------------------
+// 协议常量 —— 与 Rust protocol.rs 同步,不要手工编辑
+// ---------------------------------------------------------------------------
+export const TASK_EVENT_NAMES = {
+  TaskProgress: 'task-progress',
+  TaskCompleted: 'task-completed',
+  TaskError: 'task-error',
+  TaskCancelled: 'task-cancelled',
+  TaskLog: 'task-log',
+  TaskResumeStatus: 'task-resume-status',
+} as const satisfies Record<string, TaskEventName>
+
+export const TASK_ERROR_CODES = {
+  MissingFfmpeg: 'missing_ffmpeg',
+  MissingModel: 'missing_model',
+  MissingTensorBackend: 'missing_tensor_backend',
+  Cancelled: 'cancelled',
+  ProcessFailed: 'process_failed',
+  InvalidInput: 'invalid_input',
+  InvalidConfig: 'invalid_config',
+  ResumeConflict: 'resume_conflict',
+} as const satisfies Record<string, TaskErrorCode>
+
+export const TERMINAL_PROGRESS_PREFIX = '[VP_PROGRESS]'
 
 // ---------------------------------------------------------------------------
 // 从 Rust models 自动生成的 IPC 类型 —— 不要手工编辑
@@ -297,3 +305,12 @@ export type { SuperResolutionConfig } from './types/generated/SuperResolutionCon
 export type { TaskRequest } from './types/generated/TaskRequest'
 export type { WorkbenchPreset } from './types/generated/WorkbenchPreset'
 export type { WorkflowConfig }
+
+// Payload types (re-export from generated, required fields, no fallbacks)
+export type { TaskProgressPayload } from './types/generated/TaskProgressPayload'
+export type { TaskCompletedPayload } from './types/generated/TaskCompletedPayload'
+export type { TaskLogPayload } from './types/generated/TaskLogPayload'
+export type { TaskErrorPayload } from './types/generated/TaskErrorPayload'
+export type { ResumeStatusPayload } from './types/generated/ResumeStatusPayload'
+export type { TaskEventName }
+export type { TaskErrorCode }

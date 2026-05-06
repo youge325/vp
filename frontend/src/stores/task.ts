@@ -25,6 +25,7 @@ import {
 } from '@/lib/task-events'
 import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
+import { TASK_ERROR_CODES } from '@/types'
 import type {
   BatchState,
   ResumeConflictAction,
@@ -412,7 +413,7 @@ export const useTaskStore = defineStore('task', () => {
         // The backend may emit a resume_conflict if the pre-flight raced with
         // a filesystem change; surface it through the same dialog as the
         // pre-flight detection to keep the UX consistent.
-        if (error.code === 'resume_conflict') {
+        if (error.code === TASK_ERROR_CODES.ResumeConflict) {
           const item = currentTaskItem.value
           if (item) {
             const details = (error.details ?? {}) as Record<string, unknown>
