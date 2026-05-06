@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { groupEncoderProfilesByFamily, getProbeSourceLabel } from '@/services/format'
 import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
 
@@ -13,34 +14,9 @@ const overviewStats = computed(() => [
   { label: '已导入素材', value: `${mediaStore.mediaItems.length}` },
 ])
 
-const familyCards = computed(() => {
-  const profiles = envStore.visibleEncoderProfiles
-  return [
-    {
-      title: 'CPU',
-      value: profiles.filter((profile) => profile.family === 'cpu').map((profile) => profile.name).join(', ') || '--',
-    },
-    {
-      title: 'NVENC',
-      value:
-        profiles.filter((profile) => profile.family === 'nvidia').map((profile) => profile.name).join(', ') || '--',
-    },
-    {
-      title: 'QSV',
-      value: profiles.filter((profile) => profile.family === 'intel').map((profile) => profile.name).join(', ') || '--',
-    },
-  ]
-})
+const familyCards = computed(() => groupEncoderProfilesByFamily(envStore.visibleEncoderProfiles))
 
-const probeSourceLabel = computed(() => {
-  if (envStore.env.checkSource === 'cache') {
-    return '缓存'
-  }
-  if (envStore.env.checkSource === 'probe') {
-    return '实时探测'
-  }
-  return '--'
-})
+const probeSourceLabel = computed(() => getProbeSourceLabel(envStore.env.checkSource))
 </script>
 
 <template>

@@ -2,8 +2,6 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { inspectVideo as invokeInspectVideo, pickInputs as invokePickInputs } from '@/lib/tauri'
 import { cloneDecodeConfig, cloneEncodeConfig, cloneOutputConfig, cloneWorkflowConfig, normalizeTaskError } from '@/lib/task-mapper'
-import { useEnvStore } from '@/stores/env'
-import { usePresetStore } from '@/stores/preset'
 import type { MediaItem, VideoInfoResult } from '@/types'
 
 function createMediaId(path: string): string {
@@ -36,9 +34,6 @@ function createIdleTaskState(): import('@/types').MediaTaskState {
 }
 
 export const useMediaStore = defineStore('media', () => {
-  const envStore = useEnvStore()
-  const presetStore = usePresetStore()
-
   const mediaItems = ref<MediaItem[]>([])
   const activeItemId = ref<string | null>(null)
 
@@ -48,17 +43,6 @@ export const useMediaStore = defineStore('media', () => {
   const allSelected = computed(
     () => mediaItems.value.length > 0 && mediaItems.value.every((item) => item.selected),
   )
-  const editingScope = computed(() => (activeItem.value ? 'selection' : 'preset'))
-  const editingSelectionCount = computed(() => (activeItem.value ? selectedIds.value.length || 1 : 0))
-
-  const editor = computed(() => ({
-    decodeConfig: activeItem.value?.decodeConfig ?? presetStore.draftPreset.decodeConfig,
-    workflowConfig: activeItem.value?.workflowConfig ?? presetStore.draftPreset.workflowConfig,
-    encodeConfig: activeItem.value?.encodeConfig ?? presetStore.draftPreset.encodeConfig,
-    outputConfig: activeItem.value?.outputConfig ?? presetStore.draftPreset.outputConfig,
-  }))
-
-  const editorVideoCodec = computed(() => activeItem.value?.info?.videoCodec ?? '')
 
   function findItem(id: string | null): MediaItem | null {
     if (!id) {
@@ -101,16 +85,25 @@ export const useMediaStore = defineStore('media', () => {
       lastOutputPath: '',
     }
 
-    normalizeItemProfiles(item)
+    // normalizeItemProfiles 在 inspect 之后通过外部传入的函数调用
     return item
   }
 
-  function normalizeItemProfiles(item: MediaItem, preferDefaults = false): void {
-    item.decodeConfig = presetStore.normalizeDecodeConfig(item.decodeConfig, item.info?.videoCodec ?? '', preferDefaults)
-    item.encodeConfig = presetStore.normalizeEncodeConfig(item.encodeConfig, preferDefaults)
+  function normalizeItemProfiles(
+    item: MediaItem,
+    normalizeDecodeFn: (config: MediaItem['decodeConfig'], codec: string, preferDefaults?: boolean) => MediaItem['decodeConfig'],
+    normalizeEncodeFn: (config: MediaItem['encodeConfig'], preferDefaults?: boolean) => MediaItem['encodeConfig'],
+    preferDefaults = false,
+  ): void {
+    item.decodeConfig = normalizeDecodeFn(item.decodeConfig, item.info?.videoCodec ?? '', preferDefaults)
+    item.encodeConfig = normalizeEncodeFn(item.encodeConfig, preferDefaults)
   }
 
-  async function inspectMediaItem(id: string): Promise<void> {
+  async function inspectMediaItem(
+    id: string,
+    normalizeDecodeFn?: (config: MediaItem['decodeConfig'], codec: string, preferDefaults?: boolean) => MediaItem['decodeConfig'],
+    normalizeEncodeFn?: (config: MediaItem['encodeConfig'], preferDefaults?: boolean) => MediaItem['encodeConfig'],
+  ): Promise<void> {
     const item = findItem(id)
     if (!item || item.inspecting) {
       return
@@ -121,7 +114,9 @@ export const useMediaStore = defineStore('media', () => {
     try {
       const info = (await invokeInspectVideo(item.inputPath)) as VideoInfoResult
       item.info = info
-      normalizeItemProfiles(item)
+      if (normalizeDecodeFn && normalizeEncodeFn) {
+        normalizeItemProfiles(item, normalizeDecodeFn, normalizeEncodeFn)
+      }
     } catch (error) {
       item.issue = normalizeTaskError(error, 'inspect_failed')
     } finally {
@@ -129,17 +124,25 @@ export const useMediaStore = defineStore('media', () => {
     }
   }
 
-  async function inspectItems(ids: string[]): Promise<void> {
-    await Promise.allSettled(ids.map((id) => inspectMediaItem(id)))
+  async function inspectItems(
+    ids: string[],
+    normalizeDecodeFn?: (config: MediaItem['decodeConfig'], codec: string, preferDefaults?: boolean) => MediaItem['decodeConfig'],
+    normalizeEncodeFn?: (config: MediaItem['encodeConfig'], preferDefaults?: boolean) => MediaItem['encodeConfig'],
+  ): Promise<void> {
+    await Promise.allSettled(ids.map((id) => inspectMediaItem(id, normalizeDecodeFn, normalizeEncodeFn)))
   }
 
-  async function addMediaPaths(paths: string[], preset?: import('@/types').WorkbenchPreset): Promise<void> {
+  async function addMediaPaths(
+    paths: string[],
+    preset: import('@/types').WorkbenchPreset,
+    normalizeDecodeFn?: (config: MediaItem['decodeConfig'], codec: string, preferDefaults?: boolean) => MediaItem['decodeConfig'],
+    normalizeEncodeFn?: (config: MediaItem['encodeConfig'], preferDefaults?: boolean) => MediaItem['encodeConfig'],
+  ): Promise<void> {
     const normalizedPaths = paths.filter(Boolean)
     const existing = new Set(mediaItems.value.map((item) => item.inputPath.toLowerCase()))
-    const draftPreset = preset ?? presetStore.draftPreset
     const freshItems = normalizedPaths
       .filter((path) => !existing.has(path.toLowerCase()))
-      .map((path) => createMediaItem(path, draftPreset))
+      .map((path) => createMediaItem(path, preset))
 
     if (freshItems.length === 0) {
       return
@@ -147,17 +150,15 @@ export const useMediaStore = defineStore('media', () => {
 
     mediaItems.value.push(...freshItems)
     activeItemId.value = freshItems[0]?.id ?? activeItemId.value
-    envStore.clearOperationIssue('input')
-    await inspectItems(freshItems.map((item) => item.id))
+    await inspectItems(freshItems.map((item) => item.id), normalizeDecodeFn, normalizeEncodeFn)
   }
 
-  async function pickInputs(): Promise<void> {
+  async function pickInputs(): Promise<{ paths: string[]; error: import('@/types').TaskError | null }> {
     try {
       const paths = await invokePickInputs()
-      envStore.clearOperationIssue('input')
-      await addMediaPaths(paths)
+      return { paths, error: null }
     } catch (error) {
-      envStore.setOperationIssue('input', normalizeTaskError(error, 'pick_inputs_failed'))
+      return { paths: [], error: normalizeTaskError(error, 'pick_inputs_failed') }
     }
   }
 
@@ -222,10 +223,6 @@ export const useMediaStore = defineStore('media', () => {
     selectedItems,
     activeItem,
     allSelected,
-    editingScope,
-    editingSelectionCount,
-    editor,
-    editorVideoCodec,
     findItem,
     getEditableTargetIds,
     forEachEditableItem,

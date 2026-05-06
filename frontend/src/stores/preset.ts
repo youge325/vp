@@ -11,13 +11,18 @@ import {
   cloneOutputConfig,
   cloneWorkflowConfig,
   cloneWorkbenchPreset,
-  createDefaultDecodeConfig,
-  createDefaultEncodeConfig,
   createDefaultWorkbenchPreset,
   getVisibleDecoderProfiles,
   getVisibleEncoderProfiles,
   normalizeTaskError,
 } from '@/lib/task-mapper'
+import {
+  defaultRateControlValue,
+  inferHwaccelForProfile,
+  normalizeDecodeConfig as normalizeDecode,
+  normalizeEncodeConfig as normalizeEncode,
+  seedProfileOptions,
+} from '@/services/config'
 import { useEnvStore } from '@/stores/env'
 import type {
   CapabilityValue,
@@ -28,56 +33,6 @@ import type {
 } from '@/types'
 
 const PRESET_SAVE_DEBOUNCE_MS = 300
-
-function seedProfileOptions(
-  profile: { options: Array<{ name: string; defaultValue?: CapabilityValue | null; choices: Array<{ value: CapabilityValue }>; type: string }> } | null,
-  currentOptions: Record<string, CapabilityValue> = {},
-): Record<string, CapabilityValue> {
-  if (!profile) {
-    return {}
-  }
-
-  const next: Record<string, CapabilityValue> = {}
-  for (const option of profile.options) {
-    if (option.name in currentOptions) {
-      next[option.name] = currentOptions[option.name] as CapabilityValue
-      continue
-    }
-    if (option.defaultValue != null) {
-      next[option.name] = option.defaultValue
-      continue
-    }
-    if (option.choices.length > 0) {
-      next[option.name] = option.choices[0]?.value ?? ''
-      continue
-    }
-    next[option.name] = option.type === 'boolean' ? false : ''
-  }
-  return next
-}
-
-function inferHwaccelForProfile(profile: { family: string } | null): string {
-  if (!profile) {
-    return ''
-  }
-  if (profile.family === 'nvidia') {
-    return 'cuda'
-  }
-  if (profile.family === 'intel') {
-    return 'qsv'
-  }
-  return ''
-}
-
-function defaultRateControlValue(family: EncodeConfig['family']): EncodeConfig['rateControl'] {
-  if (family === 'nvidia') {
-    return { mode: 'cq', value: 23 }
-  }
-  if (family === 'intel') {
-    return { mode: 'qp', value: 23 }
-  }
-  return { mode: 'crf', value: 18 }
-}
 
 function coercePreset(raw: WorkbenchPreset | null, env: EnvironmentCheckResult | null): WorkbenchPreset {
   const defaults = createDefaultWorkbenchPreset(env)
@@ -167,89 +122,11 @@ export const usePresetStore = defineStore('preset', () => {
     videoCodec: string,
     preferDefaults = false,
   ): DecodeConfig {
-    const visibleProfiles = getVisibleDecoderProfiles(envStore.env.checkResult, videoCodec)
-    const allProfiles = getVisibleDecoderProfiles(envStore.env.checkResult, '')
-
-    if (preferDefaults) {
-      return createDefaultDecodeConfig(envStore.env.checkResult, videoCodec)
-    }
-
-    const selectedName = config.mode === 'software' ? 'software' : config.decoder
-    const matchedVisible = visibleProfiles.find((profile) => profile.name === selectedName) ?? null
-    if (matchedVisible) {
-      if (matchedVisible.family === 'software') {
-        return {
-          mode: 'software',
-          hwaccel: '',
-          hwaccelDevice: '',
-          decoder: 'software',
-          options: {},
-        }
-      }
-
-      return {
-        ...config,
-        mode: 'hardware',
-        hwaccel: inferHwaccelForProfile(matchedVisible),
-        hwaccelDevice: config.hwaccelDevice,
-        decoder: matchedVisible.name,
-        options: seedProfileOptions(matchedVisible, config.options),
-      }
-    }
-
-    const currentProfile = allProfiles.find((profile) => profile.name === selectedName) ?? null
-    const remappedProfile = currentProfile
-      ? visibleProfiles.find((profile) => profile.family === currentProfile.family) ?? null
-      : null
-    if (remappedProfile && remappedProfile.family !== 'software') {
-      return {
-        ...config,
-        mode: 'hardware',
-        hwaccel: inferHwaccelForProfile(remappedProfile),
-        hwaccelDevice: config.hwaccelDevice,
-        decoder: remappedProfile.name,
-        options: seedProfileOptions(remappedProfile, config.options),
-      }
-    }
-
-    return createDefaultDecodeConfig(envStore.env.checkResult, videoCodec)
+    return normalizeDecode(config, envStore.env.checkResult, videoCodec, preferDefaults)
   }
 
   function normalizeEncodeConfig(config: EncodeConfig, preferDefaults = false): EncodeConfig {
-    const profiles = getVisibleEncoderProfiles(envStore.env.checkResult)
-    const matchedProfile = profiles.find((profile) => profile.name === config.codec) ?? null
-
-    if (preferDefaults || !matchedProfile) {
-      const fallbackProfile = profiles.find((profile) => profile.family === config.family) ?? null
-      const defaults = createDefaultEncodeConfig(envStore.env.checkResult)
-      const candidate = preferDefaults ? null : fallbackProfile
-      if (!candidate) {
-        return {
-          ...defaults,
-          container: config.container || defaults.container,
-          keepAudio: config.keepAudio,
-        }
-      }
-
-      const family =
-        candidate.family === 'nvidia' || candidate.family === 'intel' ? candidate.family : 'cpu'
-      return {
-        ...config,
-        codec: candidate.name,
-        family,
-        rateControl: defaultRateControlValue(family),
-        options: seedProfileOptions(candidate, config.options),
-      }
-    }
-
-    return {
-      ...config,
-      family:
-        matchedProfile.family === 'nvidia' || matchedProfile.family === 'intel'
-          ? matchedProfile.family
-          : 'cpu',
-      options: seedProfileOptions(matchedProfile, config.options),
-    }
+    return normalizeEncode(config, envStore.env.checkResult, preferDefaults)
   }
 
   function normalizeDraftPresetProfiles(preferDefaults = false): void {
@@ -355,18 +232,17 @@ export const usePresetStore = defineStore('preset', () => {
     })
   }
 
-  async function pickOutputDirectory(): Promise<void> {
+  async function pickOutputDirectory(): Promise<{ outputDir: string | null; error: import('@/types').TaskError | null }> {
     try {
       const outputDir = await invokePickOutputDirectory()
-      envStore.clearOperationIssue('encode')
-      if (!outputDir) {
-        return
+      if (outputDir) {
+        patchOutput((config) => {
+          config.outputDir = outputDir
+        })
       }
-      patchOutput((config) => {
-        config.outputDir = outputDir
-      })
+      return { outputDir, error: null }
     } catch (error) {
-      envStore.setOperationIssue('encode', normalizeTaskError(error, 'pick_output_dir_failed'))
+      return { outputDir: null, error: normalizeTaskError(error, 'pick_output_dir_failed') }
     }
   }
 

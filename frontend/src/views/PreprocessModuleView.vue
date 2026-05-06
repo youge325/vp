@@ -1,17 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import FilterChainEditor from '@/components/FilterChainEditor.vue'
-import { useMediaStore } from '@/stores/media'
+import { useWorkbenchEditor } from '@/composables/useEditor'
 import { usePresetStore } from '@/stores/preset'
 
-const mediaStore = useMediaStore()
 const presetStore = usePresetStore()
+const { editorConfig, editingScopeLabel, isPresetMode } = useWorkbenchEditor()
 
-const workflow = computed(() => mediaStore.editor.workflowConfig)
-const isPresetMode = computed(() => mediaStore.editingScope === 'preset')
-const targetLabel = computed(() =>
-  isPresetMode.value ? '默认预设（后续导入会继承）' : `作用于 ${mediaStore.editingSelectionCount} 个文件`,
-)
+const workflow = computed(() => editorConfig.value.workflowConfig)
+const targetLabel = computed(() => editingScopeLabel.value.targetLabel)
 const caption = computed(() =>
   isPresetMode.value
     ? '预处理滤镜链会在解码之后、增强之前执行，可用来缩放帧尺寸等。'

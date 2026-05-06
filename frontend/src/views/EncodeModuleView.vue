@@ -2,28 +2,25 @@
 import { computed } from 'vue'
 import { CONTAINER_OPTIONS } from '@/lib/workflow'
 import { getVisibleEncoderProfiles } from '@/lib/task-mapper'
+import { useWorkbenchEditor } from '@/composables/useEditor'
 import { useEnvStore } from '@/stores/env'
-import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
 import type { CapabilityOptionSpec, CapabilityValue, RateControlMode } from '@/types'
 
 const envStore = useEnvStore()
-const mediaStore = useMediaStore()
 const presetStore = usePresetStore()
+const { editorConfig, editingScopeLabel, isPresetMode } = useWorkbenchEditor()
 
 const visibleEncoderProfiles = computed(() => getVisibleEncoderProfiles(envStore.env.checkResult))
 const currentEncoderProfile = computed(() =>
-  visibleEncoderProfiles.value.find((profile) => profile.name === mediaStore.editor.encodeConfig.codec) ?? null,
+  visibleEncoderProfiles.value.find((profile) => profile.name === editorConfig.value.encodeConfig.codec) ?? null,
 )
 
 const encoderOptions = computed(() => currentEncoderProfile.value?.options ?? [])
 const encodeOperationIssue = computed(() =>
   envStore.operationIssue?.scope === 'encode' ? envStore.operationIssue.error : null,
 )
-const isPresetMode = computed(() => mediaStore.editingScope === 'preset')
-const targetLabel = computed(() =>
-  isPresetMode.value ? '默认预设（后续导入会继承）' : `作用于 ${mediaStore.editingSelectionCount} 个文件`,
-)
+const targetLabel = computed(() => editingScopeLabel.value.targetLabel)
 const caption = computed(() =>
   isPresetMode.value
     ? '编码与输出参数会保存为默认预设，后续导入的新文件会直接继承这些设置。'
@@ -118,7 +115,7 @@ function updateSegmentFrames(event: Event): void {
         <label class="field field-span-2">
           <span>输出目录</span>
           <input
-            :value="mediaStore.editor.outputConfig.outputDir"
+            :value="editorConfig.outputConfig.outputDir"
             type="text"
             placeholder="留空则使用默认输出目录"
             @input="updateOutputDir"
@@ -127,7 +124,7 @@ function updateSegmentFrames(event: Event): void {
 
         <label class="field">
           <span>容器</span>
-          <select :value="mediaStore.editor.encodeConfig.container" @change="updateContainer">
+          <select :value="editorConfig.encodeConfig.container" @change="updateContainer">
             <option v-for="container in CONTAINER_OPTIONS" :key="container" :value="container">
               {{ container.toUpperCase() }}
             </option>
@@ -137,7 +134,7 @@ function updateSegmentFrames(event: Event): void {
         <label class="field">
           <span>分段帧数</span>
           <input
-            :value="Number(mediaStore.editor.outputConfig.segmentFrames)"
+            :value="Number(editorConfig.outputConfig.segmentFrames)"
             type="number"
             min="1"
             step="1"
@@ -148,7 +145,7 @@ function updateSegmentFrames(event: Event): void {
         <label class="field">
           <span>编码器</span>
           <select
-            :value="mediaStore.editor.encodeConfig.codec"
+            :value="editorConfig.encodeConfig.codec"
             @change="presetStore.setEncodeProfile(($event.target as HTMLSelectElement).value)"
           >
             <option v-for="profile in visibleEncoderProfiles" :key="profile.name" :value="profile.name">
@@ -159,7 +156,7 @@ function updateSegmentFrames(event: Event): void {
 
         <label class="field">
           <span>码率控制模式</span>
-          <select :value="mediaStore.editor.encodeConfig.rateControl.mode" @change="updateRateControlMode">
+          <select :value="editorConfig.encodeConfig.rateControl.mode" @change="updateRateControlMode">
             <option value="crf">CRF</option>
             <option value="cq">CQ</option>
             <option value="qp">QP</option>
@@ -170,7 +167,7 @@ function updateSegmentFrames(event: Event): void {
         <label class="field">
           <span>码率控制值</span>
           <input
-            :value="Number(mediaStore.editor.encodeConfig.rateControl.value)"
+            :value="Number(editorConfig.encodeConfig.rateControl.value)"
             type="number"
             min="0"
             @input="updateRateControlValue"
@@ -180,7 +177,7 @@ function updateSegmentFrames(event: Event): void {
         <label class="field toggle-field">
           <span>保留音频</span>
           <label class="toggle-chip">
-            <input :checked="mediaStore.editor.encodeConfig.keepAudio" type="checkbox" @change="updateKeepAudio" />
+            <input :checked="editorConfig.encodeConfig.keepAudio" type="checkbox" @change="updateKeepAudio" />
             <span>Keep Audio</span>
           </label>
         </label>
@@ -188,16 +185,16 @@ function updateSegmentFrames(event: Event): void {
         <label class="field toggle-field">
           <span>完成后打开目录</span>
           <label class="toggle-chip">
-            <input :checked="mediaStore.editor.outputConfig.openOnComplete" type="checkbox" @change="updateOpenOnComplete" />
+            <input :checked="editorConfig.outputConfig.openOnComplete" type="checkbox" @change="updateOpenOnComplete" />
             <span>Open Folder</span>
           </label>
         </label>
       </div>
 
       <div class="chip-row">
-        <span class="tag">Family: {{ mediaStore.editor.encodeConfig.family }}</span>
-        <span class="tag">Codec: {{ mediaStore.editor.encodeConfig.codec }}</span>
-        <span class="tag">Container: {{ mediaStore.editor.encodeConfig.container.toUpperCase() }}</span>
+        <span class="tag">Family: {{ editorConfig.encodeConfig.family }}</span>
+        <span class="tag">Codec: {{ editorConfig.encodeConfig.codec }}</span>
+        <span class="tag">Container: {{ editorConfig.encodeConfig.container.toUpperCase() }}</span>
       </div>
     </section>
 
@@ -215,7 +212,7 @@ function updateSegmentFrames(event: Event): void {
 
           <label v-if="option.type === 'boolean'" class="toggle-chip">
             <input
-              :checked="Boolean(presetStore.getOptionValue(option, mediaStore.editor.encodeConfig.options))"
+              :checked="Boolean(presetStore.getOptionValue(option, editorConfig.encodeConfig.options))"
               type="checkbox"
               @change="presetStore.setEncodeOption(option.name, coerceOptionValue(option, $event))"
             />
@@ -224,7 +221,7 @@ function updateSegmentFrames(event: Event): void {
 
           <select
             v-else-if="option.type === 'choice'"
-            :value="String(presetStore.getOptionValue(option, mediaStore.editor.encodeConfig.options))"
+            :value="String(presetStore.getOptionValue(option, editorConfig.encodeConfig.options))"
             @change="presetStore.setEncodeOption(option.name, coerceOptionValue(option, $event))"
           >
             <option
@@ -238,7 +235,7 @@ function updateSegmentFrames(event: Event): void {
 
           <input
             v-else-if="option.type === 'number'"
-            :value="Number(presetStore.getOptionValue(option, mediaStore.editor.encodeConfig.options))"
+            :value="Number(presetStore.getOptionValue(option, editorConfig.encodeConfig.options))"
             type="number"
             :min="option.min ?? undefined"
             :max="option.max ?? undefined"
@@ -247,7 +244,7 @@ function updateSegmentFrames(event: Event): void {
 
           <input
             v-else
-            :value="String(presetStore.getOptionValue(option, mediaStore.editor.encodeConfig.options))"
+            :value="String(presetStore.getOptionValue(option, editorConfig.encodeConfig.options))"
             type="text"
             @input="presetStore.setEncodeOption(option.name, coerceOptionValue(option, $event))"
           />
