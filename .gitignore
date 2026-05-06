@@ -29,7 +29,7 @@
 
 # Workspace editor settings
 /.vscode/
-/.idea/
+*.idea/
 *.swp
 *.swo
 *~
