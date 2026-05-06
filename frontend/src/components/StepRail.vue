@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { WORKBENCH_MODULES } from '@/lib/workflow'
-import { useWorkbenchEditor } from '@/composables/useEditor'
-import { getTaskStatusLabel } from '@/services/format'
+import { WORKBENCH_MODULES } from '@/views/registry'
+import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
+import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
+import { getTaskStatusLabel } from '@/services/format/labels'
+import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
 import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
-import { useTaskStore } from '@/stores/task'
-import { getVisibleEncoderProfiles } from '@/lib/task-mapper'
-import type { ModuleKey, WorkbenchModuleDefinition } from '@/types'
+import type { ModuleKey, WorkbenchModuleDefinition } from '@/types/view/modules'
 
 const route = useRoute()
 const envStore = useEnvStore()
 const mediaStore = useMediaStore()
-const taskStore = useTaskStore()
+const { batch, currentTaskItem } = useTaskOrchestrator()
 const { editorConfig, isPresetMode } = useWorkbenchEditor()
 
 const activeModuleKey = computed<ModuleKey>(() => {
@@ -29,7 +29,7 @@ const moduleStates = computed<Record<ModuleKey, string>>(() => ({
   enhance: envStore.env.checkResult ? 'ready' : 'idle',
   postprocess: editorConfig.value.workflowConfig.postprocess.enabled ? 'ready' : 'idle',
   encode: envStore.env.checkResult && getVisibleEncoderProfiles(envStore.env.checkResult).length > 0 ? 'ready' : 'idle',
-  render: taskStore.batch.isRunning || taskStore.canStartBatch ? 'ready' : 'idle',
+  render: batch.isRunning || (mediaStore.selectedItems.length > 0 && mediaStore.selectedItems.every((item) => Boolean(item.inputPath))) ? 'ready' : 'idle',
 }))
 
 const workflowLabel = computed(() => {
@@ -82,7 +82,7 @@ const selectionLabel = computed(() =>
     <section class="rail-footer">
       <span class="rail-footer-chip">{{ workflowLabel }}</span>
       <span class="rail-footer-chip">{{ selectionLabel }}</span>
-      <span class="rail-footer-chip" :data-state="getTaskStatusLabel(taskStore.batch, taskStore.currentTaskItem?.taskState.status ?? null)">任务 {{ getTaskStatusLabel(taskStore.batch, taskStore.currentTaskItem?.taskState.status ?? null) }}</span>
+      <span class="rail-footer-chip" :data-state="getTaskStatusLabel(batch, currentTaskItem?.taskState.status ?? null)">任务 {{ getTaskStatusLabel(batch, currentTaskItem?.taskState.status ?? null) }}</span>
     </section>
   </aside>
 </template>

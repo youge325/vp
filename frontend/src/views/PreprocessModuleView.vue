@@ -1,37 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import FilterChainEditor from '@/components/FilterChainEditor.vue'
-import { useWorkbenchEditor } from '@/composables/useEditor'
-import { usePresetStore } from '@/stores/preset'
+import { useFilterChainForm } from '@/composables/forms/useFilterChainForm'
+import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 
-const presetStore = usePresetStore()
-const { editorConfig, editingScopeLabel, isPresetMode } = useWorkbenchEditor()
+const { enabled, filters } = useFilterChainForm('preprocess')
+const { editingScopeLabel, isPresetMode } = useWorkbenchEditor()
 
-const workflow = computed(() => editorConfig.value.workflowConfig)
 const targetLabel = computed(() => editingScopeLabel.value.targetLabel)
 const caption = computed(() =>
   isPresetMode.value
     ? '预处理滤镜链会在解码之后、增强之前执行，可用来缩放帧尺寸等。'
     : '当前修改会同步到激活文件与所有已勾选文件。',
 )
-
-const preprocessEnabled = computed({
-  get: () => workflow.value.preprocess.enabled,
-  set: (value: boolean) => {
-    presetStore.patchWorkflow((config) => {
-      config.preprocess.enabled = value
-    })
-  },
-})
-
-const preprocessFilters = computed({
-  get: () => workflow.value.preprocess.filters,
-  set: (value) => {
-    presetStore.patchWorkflow((config) => {
-      config.preprocess.filters = value
-    })
-  },
-})
 </script>
 
 <template>
@@ -49,15 +30,15 @@ const preprocessFilters = computed({
         <label class="field toggle-field">
           <span>启用预处理</span>
           <label class="toggle-chip">
-            <input v-model="preprocessEnabled" type="checkbox" />
+            <input v-model="enabled" type="checkbox" />
             <span>启用</span>
           </label>
         </label>
       </div>
 
-      <div v-if="preprocessEnabled" class="filter-section">
+      <div v-if="enabled" class="filter-section">
         <p class="panel-caption">位于 解码 → 增强 之间</p>
-        <FilterChainEditor v-model="preprocessFilters" />
+        <FilterChainEditor v-model="filters" />
       </div>
     </section>
   </div>

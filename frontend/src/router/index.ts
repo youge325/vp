@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { WORKBENCH_MODULES } from '@/lib/workflow'
+import { WORKBENCH_MODULES } from '@/views/registry'
 import DecodeModuleView from '@/views/DecodeModuleView.vue'
 import EncodeModuleView from '@/views/EncodeModuleView.vue'
 import EnhanceModuleView from '@/views/EnhanceModuleView.vue'

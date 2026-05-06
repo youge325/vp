@@ -1,54 +1,29 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import StepRail from '@/components/StepRail.vue'
-import { WORKBENCH_MODULES } from '@/lib/workflow'
+import { WORKBENCH_MODULES } from '@/views/registry'
 import { useEnvStore } from '@/stores/env'
-import { usePresetStore } from '@/stores/preset'
-import { useTaskStore } from '@/stores/task'
-import { createDefaultWorkbenchPreset } from '@/lib/task-mapper'
-import { getTaskStatusLabel } from '@/services/format'
-import type { WorkbenchModuleDefinition } from '@/types'
+import { useBootstrap } from '@/composables/app/useBootstrap'
+import { useEnvironmentChecker } from '@/composables/app/useEnvironmentChecker'
+import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
+import { getTaskStatusLabel } from '@/services/format/labels'
+import type { WorkbenchModuleDefinition } from '@/types/view/modules'
 
 const envStore = useEnvStore()
-const presetStore = usePresetStore()
-const taskStore = useTaskStore()
 const route = useRoute()
+const { recheckEnvironment } = useEnvironmentChecker()
+const { batch, currentTaskItem } = useTaskOrchestrator()
+
+useBootstrap()
 
 const activeModule = computed<WorkbenchModuleDefinition>(
   () => (route.meta.module as WorkbenchModuleDefinition | undefined) ?? WORKBENCH_MODULES[0],
 )
 
 const topbarStatus = computed(() =>
-  getTaskStatusLabel(taskStore.batch, taskStore.currentTaskItem?.taskState.status ?? null),
+  getTaskStatusLabel(batch, currentTaskItem.value?.taskState.status ?? null),
 )
-
-async function bootstrap(): Promise<void> {
-  if (envStore.env.isBootstrapping) {
-    return
-  }
-  envStore.env.isBootstrapping = true
-  try {
-    await taskStore.attachTaskListeners()
-    const hasPersistedPreset = await presetStore.loadPersistedPreset()
-    await envStore.recheckEnvironment(false)
-    if (!hasPersistedPreset && envStore.env.checkResult) {
-      presetStore.replaceDraftPreset(createDefaultWorkbenchPreset(envStore.env.checkResult))
-    }
-    presetStore.presetPersistenceReady = true
-    presetStore.schedulePresetSave()
-  } finally {
-    envStore.env.isBootstrapping = false
-  }
-}
-
-onMounted(() => {
-  void bootstrap()
-})
-
-onBeforeUnmount(() => {
-  taskStore.detachTaskListeners()
-})
 </script>
 
 <template>
@@ -71,7 +46,7 @@ onBeforeUnmount(() => {
             <button
               v-if="envStore.env.issue && !envStore.env.isChecking"
               class="ghost-button compact-button"
-              @click="envStore.recheckEnvironment()"
+              @click="recheckEnvironment()"
             >
               重试探测
             </button>

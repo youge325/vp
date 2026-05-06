@@ -2,21 +2,28 @@
 import { computed } from 'vue'
 import ResumeConflictDialog from '@/components/ResumeConflictDialog.vue'
 import TaskConsole from '@/components/TaskConsole.vue'
-import { useEnvStore } from '@/stores/env'
-import { useTaskStore } from '@/stores/task'
-import type { ResumeConflictAction } from '@/types'
+import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
+import { useEnvIssue } from '@/composables/selectors/useEnvIssue'
+import type { ResumeConflictAction } from '@/types/domain/batch'
 
-const envStore = useEnvStore()
-const taskStore = useTaskStore()
+const {
+  batch,
+  pendingConflict,
+  canStartBatch,
+  startBatch,
+  pauseCurrentTask,
+  resumeCurrentTask,
+  interruptBatch,
+  resolveConflict,
+} = useTaskOrchestrator()
 
-const taskOperationIssue = computed(() =>
-  envStore.operationIssue?.scope === 'task' ? envStore.operationIssue.error : null,
-)
-const pauseButtonLabel = computed(() => (taskStore.batch.isPaused ? '继续队列' : '暂停队列'))
-const interruptButtonLabel = computed(() => (taskStore.batch.isCancelling ? '中断中...' : '中断批次'))
+const taskIssue = useEnvIssue('task')
+
+const pauseButtonLabel = computed(() => (batch.isPaused ? '继续队列' : '暂停队列'))
+const interruptButtonLabel = computed(() => (batch.isCancelling ? '中断中...' : '中断批次'))
 
 function handleResolveConflict(action: ResumeConflictAction): void {
-  void taskStore.resolveConflict(action)
+  void resolveConflict(action)
 }
 </script>
 
@@ -30,37 +37,37 @@ function handleResolveConflict(action: ResumeConflictAction): void {
         </div>
 
         <div class="panel-actions">
-          <button class="primary-button" :disabled="!taskStore.canStartBatch" @click="taskStore.startBatch()">
+          <button class="primary-button" :disabled="!canStartBatch" @click="startBatch()">
             开始队列
           </button>
           <button
             class="ghost-button"
-            :disabled="!taskStore.batch.isRunning || taskStore.batch.isCancelling"
-            @click="taskStore.batch.isPaused ? taskStore.resumeCurrentTask() : taskStore.pauseCurrentTask()"
+            :disabled="!batch.isRunning || batch.isCancelling"
+            @click="batch.isPaused ? resumeCurrentTask() : pauseCurrentTask()"
           >
             {{ pauseButtonLabel }}
           </button>
           <button
             class="danger-button"
-            :disabled="!taskStore.batch.isRunning || taskStore.batch.isCancelling"
-            @click="taskStore.interruptBatch()"
+            :disabled="!batch.isRunning || batch.isCancelling"
+            @click="interruptBatch()"
           >
             {{ interruptButtonLabel }}
           </button>
         </div>
       </div>
 
-      <div v-if="taskOperationIssue" class="info-banner info-banner-danger">
+      <div v-if="taskIssue" class="info-banner info-banner-danger">
         <strong>任务操作失败</strong>
-        <p>{{ taskOperationIssue.message }}</p>
+        <p>{{ taskIssue.message }}</p>
       </div>
     </section>
 
     <TaskConsole />
 
     <ResumeConflictDialog
-      v-if="taskStore.pendingConflict"
-      :descriptor="taskStore.pendingConflict"
+      v-if="pendingConflict"
+      :descriptor="pendingConflict"
       @resolve="handleResolveConflict"
     />
   </div>

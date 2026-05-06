@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { FilterStep, FilterStepKind } from '@/types'
+import type { FilterStep } from '@/types/protocol'
+import type { FilterStepKind } from '@/types/domain/workflow'
 
 const props = defineProps<{
   modelValue: FilterStep[]

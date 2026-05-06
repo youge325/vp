@@ -1,39 +1,20 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { formatNumber } from '@/lib/task-mapper'
-import { getWorkflowSummaryLabel } from '@/services/format'
-import { useEnvStore } from '@/stores/env'
+import { ref } from 'vue'
+import { formatNumber } from '@/services/format/numbers'
+import { getWorkflowSummaryLabel } from '@/services/format/labels'
+import { useMediaImport } from '@/composables/app/useMediaImport'
 import { useMediaStore } from '@/stores/media'
-import { usePresetStore } from '@/stores/preset'
+import { useEnvIssue } from '@/composables/selectors/useEnvIssue'
 
-const envStore = useEnvStore()
 const mediaStore = useMediaStore()
-const presetStore = usePresetStore()
+const { pickAndImport, importPaths, reinspectIds } = useMediaImport()
+const inputIssue = useEnvIssue('input')
 const dragActive = ref(false)
 
-const inputOperationIssue = computed(() =>
-  envStore.operationIssue?.scope === 'input' ? envStore.operationIssue.error : null,
-)
-
-async function reinspectSelection(): Promise<void> {
-  const ids = mediaStore.selectedIds.length > 0 ? mediaStore.selectedIds : mediaStore.activeItem ? [mediaStore.activeItem.id] : []
-  await mediaStore.inspectItems(ids, presetStore.normalizeDecodeConfig, presetStore.normalizeEncodeConfig)
-}
-
 async function handlePickInputs(): Promise<void> {
-  const result = await mediaStore.pickInputs()
-  if (result.error) {
-    envStore.setOperationIssue('input', result.error)
-    return
-  }
-  envStore.clearOperationIssue('input')
-  if (result.paths.length > 0) {
-    await mediaStore.addMediaPaths(
-      result.paths,
-      presetStore.draftPreset,
-      presetStore.normalizeDecodeConfig,
-      presetStore.normalizeEncodeConfig,
-    )
+  const { error } = await pickAndImport()
+  if (error) {
+    // error 已通过 useMediaImport 内部处理
   }
 }
 
@@ -43,15 +24,8 @@ async function handleDrop(event: DragEvent): Promise<void> {
   const paths = files
     .map((file) => (file as File & { path?: string }).path)
     .filter((path): path is string => Boolean(path))
-
   if (paths.length > 0) {
-    envStore.clearOperationIssue('input')
-    await mediaStore.addMediaPaths(
-      paths,
-      presetStore.draftPreset,
-      presetStore.normalizeDecodeConfig,
-      presetStore.normalizeEncodeConfig,
-    )
+    await importPaths(paths)
   }
 }
 
@@ -62,6 +36,15 @@ function handleDragOver(event: DragEvent): void {
 
 function handleDragLeave(): void {
   dragActive.value = false
+}
+
+async function reinspectSelection(): Promise<void> {
+  const ids = mediaStore.selectedIds.length > 0
+    ? mediaStore.selectedIds
+    : mediaStore.activeItem
+      ? [mediaStore.activeItem.id]
+      : []
+  await reinspectIds(ids)
 }
 </script>
 
@@ -75,7 +58,7 @@ function handleDragLeave(): void {
         </div>
 
         <div class="panel-actions">
-          <button class="ghost-button" @click="mediaStore.selectAllMedia(!mediaStore.allSelected)">
+          <button class="ghost-button" @click="mediaStore.selectAll(!mediaStore.allSelected)">
             {{ mediaStore.allSelected ? '取消全选' : '全选全部' }}
           </button>
           <button class="ghost-button" :disabled="mediaStore.mediaItems.length === 0" @click="reinspectSelection()">
@@ -92,13 +75,13 @@ function handleDragLeave(): void {
         @dragover="handleDragOver"
         @dragleave="handleDragLeave"
       >
-        <strong>拖放视频到这里，或使用“批量导入”按钮</strong>
+        <strong>拖放视频到这里，或使用"批量导入"按钮</strong>
         <p>支持多文件导入，导入后自动探测分辨率、帧率、音频与视频编码。</p>
       </div>
 
-      <div v-if="inputOperationIssue" class="info-banner info-banner-danger">
+      <div v-if="inputIssue" class="info-banner info-banner-danger">
         <strong>批量导入失败</strong>
-        <p>{{ inputOperationIssue.message }}</p>
+        <p>{{ inputIssue.message }}</p>
       </div>
     </section>
 
@@ -135,13 +118,13 @@ function handleDragLeave(): void {
               :key="item.id"
               class="media-row"
               :class="{ active: item.id === mediaStore.activeItemId }"
-              @click="mediaStore.setActiveItem(item.id)"
+              @click="mediaStore.setActive(item.id)"
             >
               <td @click.stop>
                 <input
                   :checked="item.selected"
                   type="checkbox"
-                  @change="mediaStore.setItemSelected(item.id, ($event.target as HTMLInputElement).checked)"
+                  @change="mediaStore.setSelected(item.id, ($event.target as HTMLInputElement).checked)"
                 />
               </td>
               <td>
@@ -156,7 +139,7 @@ function handleDragLeave(): void {
                 <span class="inline-status" :data-state="item.taskState.status">{{ item.taskState.status }}</span>
               </td>
               <td @click.stop>
-                <button class="table-action" @click="mediaStore.removeMediaItem(item.id)">
+                <button class="table-action" @click="mediaStore.removeItem(item.id)">
                   移除
                 </button>
               </td>
