@@ -42,7 +42,7 @@ async fn pick_output_directory() -> Result<Option<String>, String> {
 async fn check_environment<R: Runtime>(
     app: AppHandle<R>,
     forceRefresh: bool,
-) -> Result<serde_json::Value, String> {
+) -> Result<models::EnvironmentCheckPayload, String> {
     let paths = resolve_runtime_paths(&app)?;
     let fingerprint = persistence::build_environment_fingerprint(&paths).ok();
     let app_data_dir = persistence::app_data_dir(&app).ok();
@@ -51,26 +51,30 @@ async fn check_environment<R: Runtime>(
         if let Some(cached) =
             persistence::load_environment_cache(data_dir, fingerprint, forceRefresh)
         {
-            return Ok(json!({
-                "result": cached.result,
-                "source": "cache",
-                "checkedAt": cached.checked_at,
-            }));
+            let result = serde_json::from_value::<models::EnvironmentCheckResult>(cached.result)
+                .map_err(|error| format!("Unable to deserialize cached environment check: {error}"))?;
+            return Ok(models::EnvironmentCheckPayload {
+                result,
+                source: String::from("cache"),
+                checked_at: cached.checked_at,
+            });
         }
     }
 
-    let result = tasks::run_single_cli_command(&app, &[String::from("check")]).await?;
+    let raw = tasks::run_single_cli_command(&app, &[String::from("check")]).await?;
+    let result = serde_json::from_value::<models::EnvironmentCheckResult>(raw)
+        .map_err(|error| format!("Unable to deserialize environment check result: {error}"))?;
     let checked_at = persistence::current_timestamp()?;
 
     if let (Some(data_dir), Some(fingerprint)) = (app_data_dir.as_deref(), fingerprint.as_deref()) {
-        let _ = persistence::save_environment_cache(data_dir, &checked_at, fingerprint, &result);
+        let _ = persistence::save_environment_cache(data_dir, &checked_at, fingerprint, &serde_json::to_value(&result).unwrap_or_default());
     }
 
-    Ok(json!({
-        "result": result,
-        "source": "probe",
-        "checkedAt": checked_at,
-    }))
+    Ok(models::EnvironmentCheckPayload {
+        result,
+        source: String::from("probe"),
+        checked_at,
+    })
 }
 
 #[tauri::command]
@@ -94,12 +98,14 @@ async fn save_workbench_preset<R: Runtime>(
 async fn inspect_video<R: Runtime>(
     app: AppHandle<R>,
     input_path: String,
-) -> Result<serde_json::Value, String> {
-    tasks::run_single_cli_command(
+) -> Result<models::VideoInfo, String> {
+    let raw = tasks::run_single_cli_command(
         &app,
         &[String::from("info"), String::from("--input"), input_path],
     )
-    .await
+    .await?;
+    serde_json::from_value::<models::VideoInfo>(raw)
+        .map_err(|error| format!("Unable to deserialize video info: {error}"))
 }
 
 #[tauri::command]

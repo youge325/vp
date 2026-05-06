@@ -65,7 +65,7 @@ function makeEnvResult(): EnvironmentCheckResult {
       available: true,
       version: 'ffmpeg n7',
       path: 'D:/ffmpeg/bin/ffmpeg.exe',
-      ffprobe_path: 'D:/ffmpeg/bin/ffprobe.exe',
+      ffprobePath: 'D:/ffmpeg/bin/ffprobe.exe',
       hwaccels: ['cuda', 'qsv'],
       encoderProfiles: [
         {
@@ -119,18 +119,18 @@ function makeEnvResult(): EnvironmentCheckResult {
         {
           name: 'NVIDIA GeForce RTX 3070',
           vendor: 'nvidia',
-          device_type: 'discrete',
-          adapter_compatibility: 'NVIDIA',
-          driver_version: '1',
+          deviceType: 'discrete',
+          adapterCompatibility: 'NVIDIA',
+          driverVersion: '1',
         } as unknown as never,
       ],
-      cuda_available: true,
+      cudaAvailable: true,
     },
-    tensor_backends: {
+    tensorBackends: {
       pytorch: true,
       paddle: false,
     },
-    rife_model: {
+    rifeModel: {
       available: true,
       version: '4.25',
       path: 'D:/model',
@@ -138,11 +138,11 @@ function makeEnvResult(): EnvironmentCheckResult {
     runtime: {
       mode: 'desktop',
       bundled: false,
-      python_executable: 'python',
-      default_model_available: true,
+      pythonExecutable: 'python',
+      defaultModelAvailable: true,
     },
     resources: {
-      output_dir: 'D:/default-output',
+      outputDir: 'D:/default-output',
     },
   }
 }
@@ -166,8 +166,8 @@ function makeVideoInfo(inputPath: string, videoCodec = 'hevc'): VideoInfoResult 
     duration: 10,
     width: inputPath.includes('4k') ? 3840 : 1920,
     height: inputPath.includes('4k') ? 2160 : 1080,
-    has_audio: true,
-    video_codec: videoCodec,
+    hasAudio: true,
+    videoCodec: videoCodec,
   }
 }
 
@@ -275,15 +275,15 @@ describe('workbench integration', () => {
     mockCheckResumeState.mockResolvedValue({
       type: 'resume_inspection',
       pipeline_kind: 'streaming',
-      output_path: '',
-      input_path: '',
-      final_exists: false,
-      sidecar_exists: false,
-      signature_match: false,
-      completed_chunks: 0,
-      completed_output_frames: 0,
-      next_source_frame: 0,
-      total_output_frames: 0,
+      outputPath: '',
+      inputPath: '',
+      finalExists: false,
+      sidecarExists: false,
+      signatureMatch: false,
+      completedChunks: 0,
+      completedOutputFrames: 0,
+      nextSourceFrame: 0,
+      totalOutputFrames: 0,
     })
     mockStartTask.mockResolvedValue()
     mockCancelTask.mockResolvedValue()
@@ -428,7 +428,7 @@ describe('workbench integration', () => {
     const mediaStore = useMediaStore()
     await mediaStore.addMediaPaths(['D:/input/h264-demo.mp4'])
 
-    expect(mediaStore.mediaItems[0]?.info?.video_codec).toBe('h264')
+    expect(mediaStore.mediaItems[0]?.info?.videoCodec).toBe('h264')
     expect(mediaStore.mediaItems[0]?.decodeConfig.mode).toBe('hardware')
     expect(mediaStore.mediaItems[0]?.decodeConfig.hwaccel).toBe('cuda')
     expect(mediaStore.mediaItems[0]?.decodeConfig.hwaccelDevice).toBe('0')

@@ -12,7 +12,7 @@ const emit = defineEmits<{
 
 const inspection = computed(() => props.descriptor.inspection)
 const hasResume = computed(
-  () => props.descriptor.kind === 'final_exists_with_resume' && inspection.value.completed_chunks > 0,
+  () => props.descriptor.kind === 'final_exists_with_resume' && inspection.value.completedChunks > 0,
 )
 
 const headline = computed(() => {
@@ -24,10 +24,10 @@ const headline = computed(() => {
 
 const message = computed(() => {
   if (hasResume.value) {
-    const completed = inspection.value.completed_output_frames
-    const total = inspection.value.total_output_frames
+    const completed = inspection.value.completedOutputFrames
+    const total = inspection.value.totalOutputFrames
     const totalLabel = total > 0 ? ` / ${total}` : ''
-    return `已找到 ${inspection.value.completed_chunks} 段缓存（第 ${completed}${totalLabel} 帧），是否继续？`
+    return `已找到 ${inspection.value.completedChunks} 段缓存（第 ${completed}${totalLabel} 帧），是否继续？`
   }
   return `目标路径已存在最终成品文件：\n${props.descriptor.outputPath}`
 })

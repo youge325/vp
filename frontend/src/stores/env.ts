@@ -52,29 +52,29 @@ function normalizeCheckResult(raw: EnvironmentCheckResult): EnvironmentCheckResu
       devices: raw.gpu?.devices ?? [],
       adapters,
     },
-    tensor_backends: {
-      ...raw.tensor_backends,
-      pytorch: raw.tensor_backends?.pytorch,
-      paddle: raw.tensor_backends?.paddle,
-      onnx: raw.tensor_backends?.onnx,
+    tensorBackends: {
+      ...raw.tensorBackends,
+      pytorch: raw.tensorBackends?.pytorch,
+      paddle: raw.tensorBackends?.paddle,
+      onnx: raw.tensorBackends?.onnx,
     },
-    tensor_engines: {
-      pytorch: raw.tensor_engines?.pytorch ?? [],
-      paddle: raw.tensor_engines?.paddle ?? [],
-      onnx: raw.tensor_engines?.onnx ?? [],
+    tensorEngines: {
+      pytorch: raw.tensorEngines?.pytorch ?? [],
+      paddle: raw.tensorEngines?.paddle ?? [],
+      onnx: raw.tensorEngines?.onnx ?? [],
     },
-    backend_device_support: {
-      pytorch: raw.backend_device_support?.pytorch ?? [],
-      paddle: raw.backend_device_support?.paddle ?? [],
-      onnx: raw.backend_device_support?.onnx ?? [],
+    backendDeviceSupport: {
+      pytorch: raw.backendDeviceSupport?.pytorch ?? [],
+      paddle: raw.backendDeviceSupport?.paddle ?? [],
+      onnx: raw.backendDeviceSupport?.onnx ?? [],
     },
-    onnx_runtime: {
-      ...(raw.onnx_runtime ?? {}),
-      providers: raw.onnx_runtime?.providers ?? [],
+    onnxRuntime: {
+      ...(raw.onnxRuntime ?? {}),
+      providers: raw.onnxRuntime?.providers ?? [],
     },
-    onnx_models: {
-      interpolation: raw.onnx_models?.interpolation ?? [],
-      super_resolution: raw.onnx_models?.super_resolution ?? [],
+    onnxModels: {
+      interpolation: raw.onnxModels?.interpolation ?? [],
+      super_resolution: raw.onnxModels?.super_resolution ?? [],
     },
   }
 }

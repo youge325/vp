@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import traceback
+
+
+def _emit(payload: dict) -> None:
+    print(json.dumps(payload, ensure_ascii=False), flush=True)
 
 
 def _infer_bootstrap_error_code(exc: BaseException) -> str:
@@ -23,19 +26,43 @@ def _infer_bootstrap_error_code(exc: BaseException) -> str:
 try:
     from app.cli import main
 except Exception as exc:  # pragma: no cover - defensive bootstrap boundary
-    traceback.print_exc(file=sys.stderr)
-    print(
-        json.dumps(
-            {
-                "type": "error",
-                "code": _infer_bootstrap_error_code(exc),
-                "message": str(exc) or exc.__class__.__name__,
-                "details": {"exception": exc.__class__.__name__},
+    _emit(
+        {
+            "type": "error",
+            "code": _infer_bootstrap_error_code(exc),
+            "message": str(exc) or exc.__class__.__name__,
+            "details": {
+                "exception": exc.__class__.__name__,
+                "traceback": traceback.format_exc(),
             },
-            ensure_ascii=False,
-        ),
-        flush=True,
+        }
     )
     raise SystemExit(1) from exc
 
-main()
+try:
+    from app.errors import ProcessError
+
+    main()
+except ProcessError as exc:
+    _emit(
+        {
+            "type": "error",
+            "code": exc.code,
+            "message": exc.message,
+            "details": exc.details,
+        }
+    )
+    raise SystemExit(1) from exc
+except Exception as exc:  # pragma: no cover - defensive boundary
+    _emit(
+        {
+            "type": "error",
+            "code": "process_failed",
+            "message": str(exc) or exc.__class__.__name__,
+            "details": {
+                "exception": exc.__class__.__name__,
+                "traceback": traceback.format_exc(),
+            },
+        }
+    )
+    raise SystemExit(1) from exc

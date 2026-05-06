@@ -137,7 +137,7 @@ function handleDragLeave(): void {
               </td>
               <td>{{ item.info ? `${item.info.width}×${item.info.height}` : '--' }}</td>
               <td>{{ item.info ? `${formatNumber(item.info.fps)} FPS` : '--' }}</td>
-              <td>{{ item.info?.video_codec || '--' }}</td>
+              <td>{{ item.info?.videoCodec || '--' }}</td>
               <td>{{ getWorkflowSummary(item) }}</td>
               <td>
                 <span class="inline-status" :data-state="item.taskState.status">{{ item.taskState.status }}</span>

@@ -222,9 +222,9 @@ def test_check_reports_onnx_runtime_and_model_lists(tmp_path, monkeypatch, capsy
     cmd_check(argparse.Namespace())
 
     payload = json.loads(capsys.readouterr().out.strip())
-    assert payload["tensor_backends"]["onnx"] is True
-    assert payload["onnx_runtime"]["providers"] == ["CPUExecutionProvider"]
-    assert payload["onnx_models"] == {
+    assert payload["tensorBackends"]["onnx"] is True
+    assert payload["onnxRuntime"]["providers"] == ["CPUExecutionProvider"]
+    assert payload["onnxModels"] == {
         "interpolation": ["interp.onnx"],
         "super_resolution": ["sr.onnx"],
     }

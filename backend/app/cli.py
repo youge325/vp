@@ -9,9 +9,12 @@ import os
 import subprocess
 import sys
 import time
+import traceback
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+from app.errors import ProcessError
 
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(_BACKEND_DIR) not in sys.path:
@@ -86,17 +89,8 @@ def _emit_error(
     message: str,
     *,
     details: dict[str, Any] | None = None,
-    exit_code: int = 1,
 ) -> None:
-    _emit(
-        {
-            "type": "error",
-            "code": code,
-            "message": message,
-            "details": details or {},
-        }
-    )
-    raise SystemExit(exit_code)
+    raise ProcessError(code, message, details=details or {})
 
 
 def _load_json_arg(
@@ -752,14 +746,13 @@ def cmd_process(args: argparse.Namespace) -> None:
             }
         )
     except KeyboardInterrupt:
-        _emit_error(
+        raise ProcessError(
             TaskErrorCode.CANCELLED,
             "Processing was cancelled by the user.",
             details={"input_path": input_path},
-            exit_code=130,
         )
     except ResumeConflictError as exc:
-        _emit_error(
+        raise ProcessError(
             TaskErrorCode.RESUME_CONFLICT,
             "An existing output was detected; please choose how to proceed.",
             details={
@@ -768,7 +761,9 @@ def cmd_process(args: argparse.Namespace) -> None:
             },
         )
     except Exception as exc:  # pragma: no cover - defensive boundary
-        _emit_error(
+        if isinstance(exc, ProcessError):
+            raise
+        raise ProcessError(
             _infer_error_code(exc),
             str(exc),
             details={
@@ -776,6 +771,7 @@ def cmd_process(args: argparse.Namespace) -> None:
                 "output_path": output_path,
                 "algorithm": _resolve_primary_algorithm(workflow_config),
                 "processing_steps": [step["algorithm_type"] for step in processing_steps],
+                "traceback": traceback.format_exc(),
             },
         )
 
@@ -880,14 +876,14 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
         # Format conversion path has no sidecar; only the final-file check matters.
         resolved_output = Path(output_path).expanduser().resolve()
         info = {
-            "output_path": str(resolved_output),
-            "final_exists": resolved_output.exists(),
-            "sidecar_exists": False,
-            "signature_match": False,
-            "completed_chunks": 0,
-            "completed_output_frames": 0,
-            "next_source_frame": 0,
-            "total_output_frames": stage_plan.total_encoded_frames,
+            "outputPath": str(resolved_output),
+            "finalExists": resolved_output.exists(),
+            "sidecarExists": False,
+            "signatureMatch": False,
+            "completedChunks": 0,
+            "completedOutputFrames": 0,
+            "nextSourceFrame": 0,
+            "totalOutputFrames": stage_plan.total_encoded_frames,
         }
 
     info["type"] = "resume_inspection"
@@ -938,17 +934,19 @@ def cmd_info(args: argparse.Namespace) -> None:
                 "fps": fps,
                 "frames": frames,
                 "duration": duration,
-                "has_audio": has_audio,
+                "hasAudio": has_audio,
                 "width": width,
                 "height": height,
-                "video_codec": video_codec,
+                "videoCodec": video_codec,
             }
         )
     except Exception as exc:  # pragma: no cover - defensive boundary
-        _emit_error(
+        if isinstance(exc, ProcessError):
+            raise
+        raise ProcessError(
             _infer_error_code(exc),
             str(exc),
-            details={"input_path": input_path},
+            details={"input_path": input_path, "traceback": traceback.format_exc()},
         )
 
 
@@ -1015,7 +1013,7 @@ def cmd_check(_args: argparse.Namespace) -> None:
             "ffmpeg": {
                 "available": ffmpeg_available,
                 "path": ffmpeg.ffmpeg_path,
-                "ffprobe_path": ffmpeg.ffprobe_path,
+                "ffprobePath": ffmpeg.ffprobe_path,
                 "version": ffmpeg_version,
                 "hwaccels": ffmpeg_capabilities["hwaccels"],
                 "encoderProfiles": ffmpeg_capabilities["encoderProfiles"],
@@ -1025,24 +1023,24 @@ def cmd_check(_args: argparse.Namespace) -> None:
                 "available": bool(non_virtual_adapters),
                 "devices": [adapter["name"] for adapter in non_virtual_adapters],
                 "adapters": gpu_adapters,
-                "cuda_available": pytorch_result["gpu_available"],
+                "cudaAvailable": pytorch_result["gpu_available"],
             },
-            "tensor_backends": {
+            "tensorBackends": {
                 "pytorch": pytorch_result["pytorch_available"],
                 "paddle": paddle_result["paddle_available"],
                 "onnx": onnx_result["onnx_available"],
             },
-            "tensor_engines": tensor_engines,
-            "backend_device_support": backend_device_support,
-            "onnx_runtime": {
+            "tensorEngines": tensor_engines,
+            "backendDeviceSupport": backend_device_support,
+            "onnxRuntime": {
                 "available": onnx_result["onnx_available"],
                 "providers": onnx_result["providers"],
             },
-            "onnx_models": {
+            "onnxModels": {
                 "interpolation": onnx_models["interpolation"],
                 "super_resolution": onnx_models["super_resolution"],
             },
-            "rife_model": {
+            "rifeModel": {
                 "available": default_model_available,
                 "version": settings.RIFE_MODEL_VERSION,
                 "path": str(default_model_path),
@@ -1050,8 +1048,8 @@ def cmd_check(_args: argparse.Namespace) -> None:
             "runtime": {
                 "mode": settings.runtime_mode,
                 "bundled": settings.bundled_runtime_available,
-                "python_executable": settings.PYTHON_EXECUTABLE,
-                "default_model_available": default_model_available,
+                "pythonExecutable": settings.PYTHON_EXECUTABLE,
+                "defaultModelAvailable": default_model_available,
             },
             "resources": settings.resource_summary(),
         }
