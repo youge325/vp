@@ -1,4 +1,4 @@
-mod models;
+pub mod models;
 mod persistence;
 mod process_control;
 mod runtime;

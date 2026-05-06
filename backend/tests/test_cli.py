@@ -121,7 +121,9 @@ def test_resolve_processing_steps_format_conversion_skips_frame_filters():
 def test_default_output_config_includes_segment_frames_and_json_override():
     args = argparse.Namespace(output_dir="D:/output")
     config = _default_output_config(args)
-    merged = _load_json_arg('{"segmentFrames": 240}', config)
+    from app.models import OutputConfig
+
+    merged = _load_json_arg('{"segmentFrames": 240}', config, OutputConfig)
 
     assert config["segmentFrames"] == 1000
     assert merged["segmentFrames"] == 240

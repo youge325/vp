@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PostprocessConfig",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "filters": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FilterStep"
+      },
+      "default": []
+    }
+  },
+  "required": [
+    "enabled"
+  ],
+  "$defs": {
+    "FilterStep": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": true,
+          "default": {}
+        }
+      },
+      "required": [
+        "kind",
+        "enabled"
+      ]
+    }
+  }
+}

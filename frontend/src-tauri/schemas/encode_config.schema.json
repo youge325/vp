@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EncodeConfig",
+  "type": "object",
+  "properties": {
+    "codec": {
+      "type": "string"
+    },
+    "family": {
+      "type": "string"
+    },
+    "container": {
+      "type": "string"
+    },
+    "keepAudio": {
+      "type": "boolean"
+    },
+    "rateControl": {
+      "$ref": "#/$defs/RateControlConfig"
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": true,
+      "default": {}
+    }
+  },
+  "required": [
+    "codec",
+    "family",
+    "container",
+    "keepAudio",
+    "rateControl"
+  ],
+  "$defs": {
+    "RateControlConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "value": true
+      },
+      "required": [
+        "mode",
+        "value"
+      ]
+    }
+  }
+}

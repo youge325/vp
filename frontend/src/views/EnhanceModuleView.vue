@@ -50,7 +50,7 @@ const visibleBackends = computed(() => {
 // 当前后端支持的推理引擎
 const availableEngines = computed(() => {
   const backend = workflow.value.interpolation.tensorBackend
-  const engines = envStore.env.checkResult?.tensor_engines?.[backend] ?? []
+  const engines = (envStore.env.checkResult?.tensor_engines as Record<string, string[]> | undefined)?.[backend] ?? []
   if (engines.length > 0) {
     return engines
   }

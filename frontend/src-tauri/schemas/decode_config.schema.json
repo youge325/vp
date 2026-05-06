@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DecodeConfig",
+  "type": "object",
+  "properties": {
+    "mode": {
+      "type": "string"
+    },
+    "hwaccel": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "hwaccelDevice": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "decoder": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": true,
+      "default": {}
+    }
+  },
+  "required": [
+    "mode"
+  ]
+}

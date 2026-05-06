@@ -191,6 +191,7 @@ function makePreset(): WorkbenchPreset {
         scale: 1,
         fp16: false,
         tensorBackend: 'pytorch',
+        engine: 'cuda',
       },
       superResolution: {
         enabled: false,

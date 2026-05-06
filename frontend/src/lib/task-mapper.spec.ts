@@ -136,6 +136,7 @@ function makeItem(env = makeEnv()): MediaItem {
         scale: 1,
         fp16: false,
         tensorBackend: 'pytorch',
+        engine: 'cuda',
       },
       superResolution: {
         enabled: true,

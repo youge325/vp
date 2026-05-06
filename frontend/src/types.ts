@@ -1,4 +1,8 @@
 import type { Component } from 'vue'
+import type { DecodeConfig } from './types/generated/DecodeConfig'
+import type { EncodeConfig } from './types/generated/EncodeConfig'
+import type { OutputConfig } from './types/generated/OutputConfig'
+import type { WorkflowConfig } from './types/generated/WorkflowConfig'
 
 export type WorkflowMode =
   | 'frame_interpolation'
@@ -165,94 +169,7 @@ export interface VideoInfoResult {
   video_codec: string
 }
 
-export interface DecodeConfig {
-  mode: 'software' | 'hardware'
-  hwaccel: string
-  hwaccelDevice: string
-  decoder: string
-  options: Record<string, CapabilityValue>
-}
-
-export interface InterpolationConfig {
-  enabled: boolean
-  targetFps: number
-  multi: number
-  model: string
-  onnxModel?: string
-  scale: number
-  fp16: boolean
-  tensorBackend: TensorBackend
-  engine?: InferenceEngine
-}
-
-export interface SuperResolutionConfig {
-  enabled: boolean
-  scaleFactor: number
-  algorithm: string
-  onnxModel?: string
-}
-
-export interface AnimeConfig {
-  enabled: boolean
-  profile: string
-  denoise: number
-  edgeBoost: number
-}
-
 export type FilterStepKind = 'scale' | 'crop' | 'pad' | 'sharpen' | 'denoise' | 'color'
-
-export interface FilterStep {
-  kind: FilterStepKind
-  enabled: boolean
-  params: Record<string, number | string | boolean>
-}
-
-export interface PreprocessConfig {
-  enabled: boolean
-  filters: FilterStep[]
-}
-
-export interface PostprocessConfig {
-  enabled: boolean
-  filters: FilterStep[]
-}
-
-export interface WorkflowConfig {
-  fpsMode: FpsMode
-  processOrder: ProcessOrder
-  interpolation: InterpolationConfig
-  superResolution: SuperResolutionConfig
-  anime: AnimeConfig
-  preprocess: PreprocessConfig
-  postprocess: PostprocessConfig
-}
-
-export interface RateControlConfig {
-  mode: RateControlMode
-  value: number
-}
-
-export interface EncodeConfig {
-  codec: string
-  family: Exclude<CodecFamily, 'software'>
-  container: string
-  keepAudio: boolean
-  rateControl: RateControlConfig
-  options: Record<string, CapabilityValue>
-}
-
-export interface OutputConfig {
-  outputDir: string
-  openOnComplete: boolean
-  segmentFrames: number
-}
-
-export interface WorkbenchPreset {
-  decodeConfig: DecodeConfig
-  workflowConfig: WorkflowConfig
-  encodeConfig: EncodeConfig
-  outputConfig: OutputConfig
-}
 
 export interface MediaTaskState {
   status: TaskStatus
@@ -297,9 +214,9 @@ export interface ResumeInspectionResult {
 }
 
 export type ResumeConflictKind =
-  | 'resume_available' // sidecar matches signature, prior progress >0, no final yet
-  | 'final_exists_with_resume' // both final & matching sidecar exist (rare; user picks)
-  | 'final_exists_only' // final exists but no sidecar / mismatch
+  | 'resume_available'
+  | 'final_exists_with_resume'
+  | 'final_exists_only'
 
 export interface ResumeConflictDescriptor {
   itemId: string
@@ -355,15 +272,6 @@ export interface TaskLogPayload {
   message: string
 }
 
-export interface TaskRequest {
-  inputPath: string
-  decodeConfig: DecodeConfig
-  workflowConfig: WorkflowConfig
-  encodeConfig: EncodeConfig
-  outputConfig: OutputConfig
-  resumeMode?: ResumeMode
-}
-
 export interface WorkbenchModuleDefinition {
   key: ModuleKey
   title: string
@@ -371,3 +279,21 @@ export interface WorkbenchModuleDefinition {
   description: string
   icon: Component
 }
+
+// ---------------------------------------------------------------------------
+// 从 Rust models 自动生成的 IPC 类型 —— 不要手工编辑
+// 重新生成: cd frontend/src-tauri && cargo test
+// ---------------------------------------------------------------------------
+export type { AnimeConfig } from './types/generated/AnimeConfig'
+export type { DecodeConfig }
+export type { EncodeConfig }
+export type { FilterStep } from './types/generated/FilterStep'
+export type { InterpolationConfig } from './types/generated/InterpolationConfig'
+export type { OutputConfig }
+export type { PostprocessConfig } from './types/generated/PostprocessConfig'
+export type { PreprocessConfig } from './types/generated/PreprocessConfig'
+export type { RateControlConfig } from './types/generated/RateControlConfig'
+export type { SuperResolutionConfig } from './types/generated/SuperResolutionConfig'
+export type { TaskRequest } from './types/generated/TaskRequest'
+export type { WorkbenchPreset } from './types/generated/WorkbenchPreset'
+export type { WorkflowConfig }

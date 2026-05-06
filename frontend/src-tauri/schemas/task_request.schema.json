@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TaskRequest",
+  "type": "object",
+  "properties": {
+    "inputPath": {
+      "type": "string"
+    },
+    "decodeConfig": {
+      "$ref": "#/$defs/DecodeConfig"
+    },
+    "workflowConfig": {
+      "$ref": "#/$defs/WorkflowConfig"
+    },
+    "encodeConfig": {
+      "$ref": "#/$defs/EncodeConfig"
+    },
+    "outputConfig": {
+      "$ref": "#/$defs/OutputConfig"
+    },
+    "resumeMode": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "inputPath",
+    "decodeConfig",
+    "workflowConfig",
+    "encodeConfig",
+    "outputConfig"
+  ],
+  "$defs": {
+    "DecodeConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "hwaccel": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hwaccelDevice": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "decoder": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": true,
+          "default": {}
+        }
+      },
+      "required": [
+        "mode"
+      ]
+    },
+    "WorkflowConfig": {
+      "type": "object",
+      "properties": {
+        "fpsMode": {
+          "type": "string"
+        },
+        "processOrder": {
+          "type": "string"
+        },
+        "interpolation": {
+          "$ref": "#/$defs/InterpolationConfig"
+        },
+        "superResolution": {
+          "$ref": "#/$defs/SuperResolutionConfig"
+        },
+        "anime": {
+          "$ref": "#/$defs/AnimeConfig"
+        },
+        "preprocess": {
+          "$ref": "#/$defs/PreprocessConfig",
+          "default": {
+            "enabled": false,
+            "filters": []
+          }
+        },
+        "postprocess": {
+          "$ref": "#/$defs/PostprocessConfig",
+          "default": {
+            "enabled": false,
+            "filters": []
+          }
+        }
+      },
+      "required": [
+        "fpsMode",
+        "processOrder",
+        "interpolation",
+        "superResolution",
+        "anime"
+      ]
+    },
+    "InterpolationConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "targetFps": {
+          "type": "number",
+          "format": "double"
+        },
+        "multi": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "model": {
+          "type": "string"
+        },
+        "onnxModel": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "scale": {
+          "type": "number",
+          "format": "double"
+        },
+        "fp16": {
+          "type": "boolean"
+        },
+        "tensorBackend": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string",
+          "default": "cuda"
+        }
+      },
+      "required": [
+        "enabled",
+        "targetFps",
+        "multi",
+        "model",
+        "scale",
+        "fp16",
+        "tensorBackend"
+      ]
+    },
+    "SuperResolutionConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "scaleFactor": {
+          "type": "number",
+          "format": "double"
+        },
+        "algorithm": {
+          "type": "string"
+        },
+        "onnxModel": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "enabled",
+        "scaleFactor",
+        "algorithm"
+      ]
+    },
+    "AnimeConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "denoise": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "edgeBoost": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "enabled",
+        "profile",
+        "denoise",
+        "edgeBoost"
+      ]
+    },
+    "PreprocessConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FilterStep"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "FilterStep": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": true,
+          "default": {}
+        }
+      },
+      "required": [
+        "kind",
+        "enabled"
+      ]
+    },
+    "PostprocessConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FilterStep"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "EncodeConfig": {
+      "type": "object",
+      "properties": {
+        "codec": {
+          "type": "string"
+        },
+        "family": {
+          "type": "string"
+        },
+        "container": {
+          "type": "string"
+        },
+        "keepAudio": {
+          "type": "boolean"
+        },
+        "rateControl": {
+          "$ref": "#/$defs/RateControlConfig"
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": true,
+          "default": {}
+        }
+      },
+      "required": [
+        "codec",
+        "family",
+        "container",
+        "keepAudio",
+        "rateControl"
+      ]
+    },
+    "RateControlConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "value": true
+      },
+      "required": [
+        "mode",
+        "value"
+      ]
+    },
+    "OutputConfig": {
+      "type": "object",
+      "properties": {
+        "outputDir": {
+          "type": "string"
+        },
+        "openOnComplete": {
+          "type": "boolean"
+        },
+        "segmentFrames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "outputDir",
+        "openOnComplete",
+        "segmentFrames"
+      ]
+    }
+  }
+}

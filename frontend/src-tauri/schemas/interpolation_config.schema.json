@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InterpolationConfig",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "targetFps": {
+      "type": "number",
+      "format": "double"
+    },
+    "multi": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "model": {
+      "type": "string"
+    },
+    "onnxModel": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "scale": {
+      "type": "number",
+      "format": "double"
+    },
+    "fp16": {
+      "type": "boolean"
+    },
+    "tensorBackend": {
+      "type": "string"
+    },
+    "engine": {
+      "type": "string",
+      "default": "cuda"
+    }
+  },
+  "required": [
+    "enabled",
+    "targetFps",
+    "multi",
+    "model",
+    "scale",
+    "fp16",
+    "tensorBackend"
+  ]
+}
