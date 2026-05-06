@@ -11,6 +11,7 @@ import {
   pickDefaultEngine,
 } from '@/services/preset/enhance-rules'
 import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/domain/workflow'
+import type { WorkflowConfig } from '@/types/protocol'
 
 export function useEnhanceForm() {
   const envStore = useEnvStore()
@@ -29,13 +30,13 @@ export function useEnhanceForm() {
 
   const interpolationEnabled = computed({
     get: () => workflow.value.interpolation.enabled,
-    set: (value: boolean) => presetStore.patchWorkflow((c) => { c.interpolation.enabled = value }),
+    set: (value: boolean) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.interpolation.enabled = value }),
   })
 
   const interpolationBackend = computed({
     get: () => workflow.value.interpolation.tensorBackend as TensorBackend,
     set: (value: TensorBackend) => {
-      presetStore.patchWorkflow((c) => {
+      presetStore.patchWorkflow((c: WorkflowConfig) => {
         c.interpolation.tensorBackend = value
         c.interpolation.engine = pickDefaultEngine(envStore.env.checkResult, value) ?? c.interpolation.engine
         if (value === 'onnx') {
@@ -48,87 +49,87 @@ export function useEnhanceForm() {
 
   const interpolationEngine = computed({
     get: () => (workflow.value.interpolation.engine as InferenceEngine) ?? 'cuda',
-    set: (value: InferenceEngine) => presetStore.patchWorkflow((c) => { c.interpolation.engine = value }),
+    set: (value: InferenceEngine) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.interpolation.engine = value }),
   })
 
   const interpolationModel = computed({
     get: () => workflow.value.interpolation.model,
-    set: (value: string) => presetStore.patchWorkflow((c) => { c.interpolation.model = value }),
+    set: (value: string) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.interpolation.model = value }),
   })
 
   const interpolationOnnxModel = computed({
     get: () => workflow.value.interpolation.onnxModel ?? '',
-    set: (value: string) => presetStore.patchWorkflow((c) => { c.interpolation.onnxModel = value }),
+    set: (value: string) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.interpolation.onnxModel = value }),
   })
 
   const fpsMode = computed({
     get: () => workflow.value.fpsMode as FpsMode,
-    set: (value: FpsMode) => presetStore.patchWorkflow((c) => { c.fpsMode = value }),
+    set: (value: FpsMode) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.fpsMode = value }),
   })
 
   const targetFps = computed({
     get: () => workflow.value.interpolation.targetFps,
-    set: (value: number) => presetStore.patchWorkflow((c) => { c.interpolation.targetFps = value }),
+    set: (value: number) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.interpolation.targetFps = value }),
   })
 
   const interpolationMulti = computed({
     get: () => workflow.value.interpolation.multi,
-    set: (value: number) => presetStore.patchWorkflow((c) => { c.interpolation.multi = value }),
+    set: (value: number) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.interpolation.multi = value }),
   })
 
   const interpolationScale = computed({
     get: () => workflow.value.interpolation.scale,
-    set: (value: number) => presetStore.patchWorkflow((c) => { c.interpolation.scale = value }),
+    set: (value: number) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.interpolation.scale = value }),
   })
 
   const interpolationFp16 = computed({
     get: () => workflow.value.interpolation.fp16,
-    set: (value: boolean) => presetStore.patchWorkflow((c) => { c.interpolation.fp16 = value }),
+    set: (value: boolean) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.interpolation.fp16 = value }),
   })
 
   const superResolutionEnabled = computed({
     get: () => workflow.value.superResolution.enabled,
-    set: (value: boolean) => presetStore.patchWorkflow((c) => { c.superResolution.enabled = value }),
+    set: (value: boolean) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.superResolution.enabled = value }),
   })
 
   const superResolutionScale = computed({
     get: () => workflow.value.superResolution.scaleFactor,
-    set: (value: number) => presetStore.patchWorkflow((c) => { c.superResolution.scaleFactor = value }),
+    set: (value: number) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.superResolution.scaleFactor = value }),
   })
 
   const superResolutionAlgorithm = computed({
     get: () => workflow.value.superResolution.algorithm,
-    set: (value: string) => presetStore.patchWorkflow((c) => { c.superResolution.algorithm = value }),
+    set: (value: string) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.superResolution.algorithm = value }),
   })
 
   const superResolutionOnnxModel = computed({
     get: () => workflow.value.superResolution.onnxModel ?? '',
-    set: (value: string) => presetStore.patchWorkflow((c) => { c.superResolution.onnxModel = value }),
+    set: (value: string) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.superResolution.onnxModel = value }),
   })
 
   const processOrder = computed({
     get: () => workflow.value.processOrder as ProcessOrder,
-    set: (value: ProcessOrder) => presetStore.patchWorkflow((c) => { c.processOrder = value }),
+    set: (value: ProcessOrder) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.processOrder = value }),
   })
 
   const animeEnabled = computed({
     get: () => workflow.value.anime.enabled,
-    set: (value: boolean) => presetStore.patchWorkflow((c) => { c.anime.enabled = value }),
+    set: (value: boolean) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.anime.enabled = value }),
   })
 
   const animeProfile = computed({
     get: () => workflow.value.anime.profile,
-    set: (value: string) => presetStore.patchWorkflow((c) => { c.anime.profile = value }),
+    set: (value: string) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.anime.profile = value }),
   })
 
   const animeDenoise = computed({
     get: () => workflow.value.anime.denoise,
-    set: (value: number) => presetStore.patchWorkflow((c) => { c.anime.denoise = value }),
+    set: (value: number) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.anime.denoise = value }),
   })
 
   const animeEdgeBoost = computed({
     get: () => workflow.value.anime.edgeBoost,
-    set: (value: number) => presetStore.patchWorkflow((c) => { c.anime.edgeBoost = value }),
+    set: (value: number) => presetStore.patchWorkflow((c: WorkflowConfig) => { c.anime.edgeBoost = value }),
   })
 
   return reactive({

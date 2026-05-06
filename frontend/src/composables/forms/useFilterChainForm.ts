@@ -3,7 +3,7 @@
 import { computed } from 'vue'
 import { usePresetStore } from '@/stores/preset'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
-import type { FilterStep } from '@/types/protocol'
+import type { FilterStep, WorkflowConfig } from '@/types/protocol'
 
 export type FilterStage = 'preprocess' | 'postprocess'
 
@@ -14,7 +14,7 @@ export function useFilterChainForm(stage: FilterStage) {
   const enabled = computed({
     get: () => editorConfig.value.workflowConfig[stage].enabled,
     set: (value: boolean) => {
-      presetStore.patchWorkflow((c) => {
+      presetStore.patchWorkflow((c: WorkflowConfig) => {
         c[stage].enabled = value
       })
     },
@@ -23,7 +23,7 @@ export function useFilterChainForm(stage: FilterStage) {
   const filters = computed({
     get: () => editorConfig.value.workflowConfig[stage].filters,
     set: (value: FilterStep[]) => {
-      presetStore.patchWorkflow((c) => {
+      presetStore.patchWorkflow((c: WorkflowConfig) => {
         c[stage].filters = value
       })
     },
