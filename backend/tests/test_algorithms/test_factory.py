@@ -2,7 +2,8 @@
 
 import pytest
 from app.algorithms.base import IAlgorithm
-from app.algorithms.factory import AlgorithmFactory, register_default_algorithms
+from app.algorithms.factory import AlgorithmFactory
+from app.cli import _register_default_algorithms as register_default_algorithms
 
 
 class MockAlgorithm(IAlgorithm):

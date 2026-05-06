@@ -84,7 +84,7 @@ export const useMediaStore = defineStore('media', () => {
     }
   }
 
-  function createMediaItem(path: string): MediaItem {
+  function createMediaItem(path: string, preset: import('@/types').WorkbenchPreset): MediaItem {
     const item: MediaItem = {
       id: createMediaId(path),
       inputPath: path,
@@ -93,10 +93,10 @@ export const useMediaStore = defineStore('media', () => {
       inspecting: false,
       info: null,
       issue: null,
-      decodeConfig: cloneDecodeConfig(presetStore.draftPreset.decodeConfig),
-      workflowConfig: cloneWorkflowConfig(presetStore.draftPreset.workflowConfig),
-      encodeConfig: cloneEncodeConfig(presetStore.draftPreset.encodeConfig),
-      outputConfig: cloneOutputConfig(presetStore.draftPreset.outputConfig),
+      decodeConfig: cloneDecodeConfig(preset.decodeConfig),
+      workflowConfig: cloneWorkflowConfig(preset.workflowConfig),
+      encodeConfig: cloneEncodeConfig(preset.encodeConfig),
+      outputConfig: cloneOutputConfig(preset.outputConfig),
       taskState: createIdleTaskState(),
       lastOutputPath: '',
     }
@@ -133,12 +133,13 @@ export const useMediaStore = defineStore('media', () => {
     await Promise.allSettled(ids.map((id) => inspectMediaItem(id)))
   }
 
-  async function addMediaPaths(paths: string[]): Promise<void> {
+  async function addMediaPaths(paths: string[], preset?: import('@/types').WorkbenchPreset): Promise<void> {
     const normalizedPaths = paths.filter(Boolean)
     const existing = new Set(mediaItems.value.map((item) => item.inputPath.toLowerCase()))
+    const draftPreset = preset ?? presetStore.draftPreset
     const freshItems = normalizedPaths
       .filter((path) => !existing.has(path.toLowerCase()))
-      .map((path) => createMediaItem(path))
+      .map((path) => createMediaItem(path, draftPreset))
 
     if (freshItems.length === 0) {
       return
@@ -160,9 +161,31 @@ export const useMediaStore = defineStore('media', () => {
     }
   }
 
-  function setActiveItem(id: string): void {
+  function setActiveItem(id: string | null): void {
+    if (id === null) {
+      activeItemId.value = null
+      return
+    }
     if (findItem(id)) {
       activeItemId.value = id
+    }
+  }
+
+  function resetItemRunState(
+    item: { taskState: ReturnType<typeof createIdleTaskState>; issue: import('@/types').TaskError | null; lastOutputPath: string },
+    preserveLogs: boolean = false,
+  ): void {
+    const existingLogs = preserveLogs ? item.taskState.logs : []
+    item.taskState = { ...createIdleTaskState(), logs: existingLogs }
+    item.issue = null
+    item.lastOutputPath = ''
+  }
+
+  function resetItemsRunState(ids: Set<string>, preserveLogs: boolean = false): void {
+    for (const item of mediaItems.value) {
+      if (ids.has(item.id)) {
+        resetItemRunState(item, preserveLogs)
+      }
     }
   }
 
@@ -213,6 +236,8 @@ export const useMediaStore = defineStore('media', () => {
     addMediaPaths,
     pickInputs,
     setActiveItem,
+    resetItemRunState,
+    resetItemsRunState,
     selectAllMedia,
     setItemSelected,
     removeMediaItem,

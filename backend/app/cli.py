@@ -20,17 +20,21 @@ _BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
-from app.algorithms.factory import register_default_algorithms
+from app.algorithms.factory import AlgorithmFactory
 from app.algorithms.onnx_models import resolve_onnx_model_path, scan_onnx_models
 from app.config import settings
-from app.processing.streaming import (
+from app.processing.anime_optimization import AnimeOptimizationAlgorithm
+from app.processing.frame_filters import FrameFilterChainAlgorithm
+from app.processing.interpolation import FrameInterpolationAlgorithm
+from app.planning import (
+    build_signature,
+    build_stage_plan,
+    resolve_video_info,
     ResumeConflictError,
     SegmentManifest,
-    _build_signature,
-    _build_stage_plan,
-    _resolve_video_info,
-    process_video_streaming,
 )
+from app.processing.streaming import process_video_streaming
+from app.processing.super_resolution import SuperResolutionAlgorithm
 from app.utils.ffmpeg_wrapper import FFmpegWrapper
 from app.utils.file_utils import get_output_path, validate_input_path
 from app.utils.logger import get_logger, setup_logging
@@ -39,6 +43,20 @@ from app.utils.system_probe import list_gpu_adapters
 from app.models import DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig
 
 logger = get_logger(__name__)
+
+
+def _register_default_algorithms() -> None:
+    """Register all default algorithm classes with the factory.
+
+    Kept in the CLI layer (rather than ``algorithms.factory``) to avoid a
+    circular import: ``algorithms.factory`` must not know about
+    ``processing.*``, but ``processing.*`` already import from
+    ``algorithms.*``.
+    """
+    AlgorithmFactory.register("frame_interpolation", FrameInterpolationAlgorithm)
+    AlgorithmFactory.register("super_resolution", SuperResolutionAlgorithm)
+    AlgorithmFactory.register("anime_optimization", AnimeOptimizationAlgorithm)
+    AlgorithmFactory.register("frame_filter_chain", FrameFilterChainAlgorithm)
 
 
 class TaskErrorCode(str, Enum):
@@ -581,10 +599,10 @@ def _validate_onnx_models_for_workflow(
     for step in processing_steps:
         if step["algorithm_type"] == "frame_interpolation":
             model_name = _get_onnx_model_name(workflow_config["interpolation"])
-            resolve_onnx_model_path("interpolation", model_name)
+            resolve_onnx_model_path("interpolation", model_name, model_root=settings.RIFE_MODEL_DIR)
         elif step["algorithm_type"] == "super_resolution":
             model_name = _get_onnx_model_name(workflow_config["superResolution"])
-            resolve_onnx_model_path("super_resolution", model_name)
+            resolve_onnx_model_path("super_resolution", model_name, model_root=settings.RIFE_MODEL_DIR)
 
 
 def _get_onnx_model_name(config: dict[str, Any]) -> str | None:
@@ -592,7 +610,7 @@ def _get_onnx_model_name(config: dict[str, Any]) -> str | None:
 
 
 def cmd_process(args: argparse.Namespace) -> None:
-    register_default_algorithms()
+    _register_default_algorithms()
 
     input_path = args.input
     if not validate_input_path(input_path):
@@ -806,7 +824,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     sidecar represents. Used by the Tauri host as a pre-flight before
     spawning ``process``.
     """
-    register_default_algorithms()
+    _register_default_algorithms()
 
     input_path = args.input
     if not validate_input_path(input_path):
@@ -848,8 +866,8 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     workflow_config["interpolation"]["multi"] = multi
     final_output_fps = encode_fps if need_resample else None
 
-    video_info = _resolve_video_info(ffmpeg, input_path)
-    stage_plan = _build_stage_plan(
+    video_info = resolve_video_info(ffmpeg, input_path)
+    stage_plan = build_stage_plan(
         processing_steps,
         video_info["source_frames"],
         source_duration=video_info["duration"],
@@ -857,7 +875,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     )
 
     if processing_steps:
-        signature = _build_signature(
+        signature = build_signature(
             input_path=input_path,
             output_path=output_path,
             decode_config=decode_config,

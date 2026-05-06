@@ -3,6 +3,7 @@ pub mod protocol;
 mod persistence;
 mod process_control;
 mod runtime;
+mod services;
 mod tasks;
 
 use std::path::PathBuf;
@@ -43,38 +44,7 @@ async fn check_environment<R: Runtime>(
     app: AppHandle<R>,
     forceRefresh: bool,
 ) -> Result<models::EnvironmentCheckPayload, String> {
-    let paths = resolve_runtime_paths(&app)?;
-    let fingerprint = persistence::build_environment_fingerprint(&paths).ok();
-    let app_data_dir = persistence::app_data_dir(&app).ok();
-
-    if let (Some(data_dir), Some(fingerprint)) = (app_data_dir.as_deref(), fingerprint.as_deref()) {
-        if let Some(cached) =
-            persistence::load_environment_cache(data_dir, fingerprint, forceRefresh)
-        {
-            let result = serde_json::from_value::<models::EnvironmentCheckResult>(cached.result)
-                .map_err(|error| format!("Unable to deserialize cached environment check: {error}"))?;
-            return Ok(models::EnvironmentCheckPayload {
-                result,
-                source: String::from("cache"),
-                checked_at: cached.checked_at,
-            });
-        }
-    }
-
-    let raw = tasks::run_single_cli_command(&app, &[String::from("check")]).await?;
-    let result = serde_json::from_value::<models::EnvironmentCheckResult>(raw)
-        .map_err(|error| format!("Unable to deserialize environment check result: {error}"))?;
-    let checked_at = persistence::current_timestamp()?;
-
-    if let (Some(data_dir), Some(fingerprint)) = (app_data_dir.as_deref(), fingerprint.as_deref()) {
-        let _ = persistence::save_environment_cache(data_dir, &checked_at, fingerprint, &serde_json::to_value(&result).unwrap_or_default());
-    }
-
-    Ok(models::EnvironmentCheckPayload {
-        result,
-        source: String::from("probe"),
-        checked_at,
-    })
+    services::environment_service::check_environment(app, forceRefresh).await
 }
 
 #[tauri::command]

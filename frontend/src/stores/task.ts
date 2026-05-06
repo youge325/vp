@@ -78,21 +78,8 @@ export const useTaskStore = defineStore('task', () => {
     return 'idle'
   })
 
-  function resetItemRunState(item: { taskState: ReturnType<typeof createIdleTaskState>; issue: TaskError | null; lastOutputPath: string }, preserveLogs: boolean = false): void {
-    const existingLogs = preserveLogs ? item.taskState.logs : []
-    item.taskState = { ...createIdleTaskState(), logs: existingLogs }
-    item.issue = null
-    item.lastOutputPath = ''
-  }
-
   function clearBatchRuntimeArtifacts(preserveLogs: boolean = false): void {
-    const runtimeIds = new Set(batchRuntimeIds.value)
-    for (const item of mediaStore.mediaItems) {
-      if (!runtimeIds.has(item.id)) {
-        continue
-      }
-      resetItemRunState(item, preserveLogs)
-    }
+    mediaStore.resetItemsRunState(new Set(batchRuntimeIds.value), preserveLogs)
   }
 
   function resetBatchCounters(): void {
@@ -114,7 +101,7 @@ export const useTaskStore = defineStore('task', () => {
       if (!queuedIds.has(item.id)) {
         continue
       }
-      resetItemRunState(item)
+      mediaStore.resetItemRunState(item)
     }
   }
 
@@ -138,7 +125,7 @@ export const useTaskStore = defineStore('task', () => {
     batch.currentId = nextId
     batch.isPaused = false
     batch.isCancelling = false
-    mediaStore.activeItemId = nextId
+    mediaStore.setActiveItem(nextId)
     item.taskState = {
       ...createIdleTaskState(),
       status: 'running',

@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Literal
 
-from app.config import settings
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -26,7 +25,9 @@ _ENGINE_PROVIDER_PRIORITY: dict[str, list[str]] = {
 
 def get_onnx_model_dir(kind: OnnxModelKind, model_root: str | Path | None = None) -> Path:
     """Return the configured ONNX model directory for a model kind."""
-    root = Path(model_root or settings.RIFE_MODEL_DIR).expanduser().resolve()
+    if model_root is None:
+        raise ValueError("model_root is required")
+    root = Path(model_root).expanduser().resolve()
     return root / ONNX_MODEL_SUBDIRS[kind]
 
 

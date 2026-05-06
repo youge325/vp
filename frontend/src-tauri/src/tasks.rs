@@ -16,7 +16,6 @@ use crate::models::{
     TaskErrorPayload, TaskLogPayload, TaskProgressPayload, TaskRequest, TaskState,
 };
 use crate::protocol::TaskEventName;
-use crate::process_control;
 use crate::runtime::{build_env_map, resolve_runtime_paths};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -295,6 +294,9 @@ fn spawn_task_controller<R: Runtime + 'static>(
     mut control_rx: mpsc::Receiver<TaskControlMessage>,
     terminal_sent: Arc<std::sync::atomic::AtomicBool>,
 ) {
+    let controller: Arc<dyn crate::process_control::ProcessController> =
+        crate::process_control::default_controller();
+
     tauri::async_runtime::spawn(async move {
         let mut was_cancelled = false;
         let mut is_paused = false;
@@ -311,6 +313,7 @@ fn spawn_task_controller<R: Runtime + 'static>(
                         continue;
                     };
                     let result = handle_task_control(
+                        &*controller,
                         &mut child,
                         root_pid,
                         message.kind,
@@ -380,6 +383,7 @@ fn spawn_task_controller<R: Runtime + 'static>(
 }
 
 fn handle_task_control(
+    controller: &dyn crate::process_control::ProcessController,
     child: &mut AsyncGroupChild,
     root_pid: u32,
     kind: TaskControlKind,
@@ -390,7 +394,7 @@ fn handle_task_control(
         TaskControlKind::Cancel => {
             *was_cancelled = true;
             if *is_paused {
-                let _ = process_control::resume_process_tree(root_pid);
+                let _ = controller.resume(root_pid);
                 *is_paused = false;
             }
             match child.start_kill() {
@@ -406,7 +410,7 @@ fn handle_task_control(
             if *is_paused {
                 return Ok(());
             }
-            process_control::suspend_process_tree(root_pid)?;
+            controller.suspend(root_pid)?;
             *is_paused = true;
             Ok(())
         }
@@ -417,7 +421,7 @@ fn handle_task_control(
             if !*is_paused {
                 return Ok(());
             }
-            process_control::resume_process_tree(root_pid)?;
+            controller.resume(root_pid)?;
             *is_paused = false;
             Ok(())
         }
