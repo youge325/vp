@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Tauri workbench for video interpolation and delivery."
 authors = ["OpenAI Codex"]
 edition = "2021"
+default-run = "vp-workbench"
 
 [lib]
 name = "vp_workbench_lib"
