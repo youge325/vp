@@ -16,7 +16,7 @@ def main():
     failed = []
 
     for version in SUPPORTED_MODELS:
-        onnx_path = os.path.join(model_dir, f"rife_v{version}.onnx")
+        onnx_path = os.path.join(model_dir, "interpolation", "rife", f"rife_v{version}.onnx")
         if os.path.isfile(onnx_path) and os.path.getsize(onnx_path) > 0:
             print(f"[SKIP] v{version}: ONNX 已存在 ({onnx_path})")
             success.append(version)

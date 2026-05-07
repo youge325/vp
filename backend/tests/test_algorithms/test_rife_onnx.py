@@ -187,7 +187,7 @@ class TestRIFEONNXSolver:
 
         # 导出到 models 目录（solver 默认从这里加载）
         model_dir = get_model_dir()
-        onnx_path = os.path.join(model_dir, "rife_v4.25.onnx")
+        onnx_path = os.path.join(model_dir, "interpolation", "rife", "rife_v4.25.onnx")
         if not os.path.isfile(onnx_path):
             export_rife_to_onnx(
                 model_version="4.25",
@@ -233,7 +233,7 @@ class TestFrameInterpolationAlgorithmONNX:
         from app.processing.interpolation import FrameInterpolationAlgorithm
 
         model_dir = get_model_dir()
-        onnx_path = os.path.join(model_dir, "rife_v4.25.onnx")
+        onnx_path = os.path.join(model_dir, "interpolation", "rife", "rife_v4.25.onnx")
         if not os.path.isfile(onnx_path):
             export_rife_to_onnx(
                 model_version="4.25",
