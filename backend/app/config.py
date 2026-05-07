@@ -171,7 +171,9 @@ class Settings(BaseSettings):
         return runtime_root is not None and runtime_root.exists()
 
     def resource_summary(self) -> dict[str, object]:
-        default_model_path = Path(self.RIFE_MODEL_DIR) / f"rife_v{self.RIFE_MODEL_VERSION}.onnx"
+        default_model_path = (
+            Path(self.RIFE_MODEL_DIR) / "interpolation" / "rife" / f"rife_v{self.RIFE_MODEL_VERSION}.onnx"
+        )
         onnx_interpolation_dir = Path(self.RIFE_MODEL_DIR) / "interpolation"
         onnx_super_resolution_dir = Path(self.RIFE_MODEL_DIR) / "super_resolution"
         return {

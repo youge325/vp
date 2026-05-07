@@ -95,10 +95,9 @@ function Resolve-ModelDir {
         @{ Label = "VP_CI_MODEL_DIR"; Path = (Get-EnvValue "VP_CI_MODEL_DIR") },
         @{ Label = "VP_RELEASE_MODEL_DIR"; Path = (Get-EnvValue "VP_RELEASE_MODEL_DIR") },
         @{ Label = "VP_RIFE_MODEL_DIR"; Path = (Get-EnvValue "VP_RIFE_MODEL_DIR") },
-        @{ Label = "default local repo"; Path = "D:\Lenovo\vp\backend\models"; ModelSubdir = "interpolation" },
+        @{ Label = "default local repo"; Path = "D:\Lenovo\vp\backend\models" },
         @{ Label = "runner assets"; Path = "D:\actions-runner-vp\_assets\models" },
-        @{ Label = "checkout backend models"; Path = (Join-Path $RepoRoot "backend\models") },
-        @{ Label = "checkout backend models interpolation"; Path = (Join-Path $RepoRoot "backend\models"); ModelSubdir = "interpolation" }
+        @{ Label = "checkout backend models"; Path = (Join-Path $RepoRoot "backend\models") }
     )
 
     $checked = New-Object System.Collections.Generic.List[string]
@@ -108,10 +107,7 @@ function Resolve-ModelDir {
             continue
         }
 
-        $defaultModel = Join-Path $path "rife_v4.25.onnx"
-        if ($candidate.ContainsKey("ModelSubdir") -and -not [string]::IsNullOrWhiteSpace($candidate.ModelSubdir)) {
-            $defaultModel = Join-Path (Join-Path $path $candidate.ModelSubdir) "rife_v4.25.onnx"
-        }
+        $defaultModel = Join-Path (Join-Path (Join-Path $path "interpolation") "rife") "rife_v4.25.onnx"
         if ((Test-Path -LiteralPath $path -PathType Container) -and
             (Test-Path -LiteralPath $defaultModel -PathType Leaf) -and
             ((Get-Item -LiteralPath $defaultModel).Length -gt 0)) {
@@ -121,7 +117,7 @@ function Resolve-ModelDir {
         $checked.Add("$($candidate.Label): $path")
     }
 
-    throw "Unable to locate RIFE model weights. Expected non-empty rife_v4.25.onnx. Checked: $($checked -join '; ')"
+    throw "Unable to locate RIFE model weights. Expected non-empty interpolation/rife/rife_v4.25.onnx. Checked: $($checked -join '; ')"
 }
 
 function Find-FfmpegPairInDir {
@@ -208,7 +204,7 @@ Write-Host "CI runtime environment resolved:"
 Write-Host "  python root:   $($pythonSource.Root)"
 Write-Host "  python exe:    $($pythonSource.Exe)"
 Write-Host "  model dir:     $modelDir"
-Write-Host "  default model: $(Join-Path $modelDir 'rife_v4.25.onnx')"
+Write-Host "  default model: $(Join-Path (Join-Path (Join-Path $modelDir 'interpolation') 'rife') 'rife_v4.25.onnx')"
 Write-Host "  ffmpeg dir:    $($ffmpegSource.Dir)"
 Write-Host "  ffmpeg:        $($ffmpegSource.Ffmpeg)"
 Write-Host "  ffprobe:       $($ffmpegSource.Ffprobe)"
