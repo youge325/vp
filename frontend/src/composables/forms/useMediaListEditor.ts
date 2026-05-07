@@ -2,6 +2,9 @@
 
 import { computed } from 'vue'
 import { useMediaStore } from '@/stores/media'
+import { formatNumber } from '@/services/format/numbers'
+import { getWorkflowSummaryLabel } from '@/services/format/labels'
+import type { MediaItem } from '@/types/domain/media'
 
 export function useMediaListEditor() {
   const mediaStore = useMediaStore()
@@ -18,6 +21,9 @@ export function useMediaListEditor() {
     activeItemId,
     selectedIds,
     allSelected,
+    fpsLabelOf: (item: MediaItem) =>
+      item.info ? `${formatNumber(item.info.fps)} FPS` : '--',
+    workflowLabelOf: (item: MediaItem) => getWorkflowSummaryLabel(item),
     selectAll: (selected: boolean) => mediaStore.selectAll(selected),
     setActive: (id: string) => mediaStore.setActive(id),
     setSelected: (id: string, selected: boolean) => mediaStore.setSelected(id, selected),

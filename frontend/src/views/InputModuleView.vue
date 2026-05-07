@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { formatNumber } from '@/services/format/numbers'
-import { getWorkflowSummaryLabel } from '@/services/format/labels'
 import { useMediaImport } from '@/composables/app/useMediaImport'
 import { useMediaListEditor } from '@/composables/forms/useMediaListEditor'
 import { useEnvIssue } from '@/composables/selectors/useEnvIssue'
@@ -132,9 +130,9 @@ async function reinspectSelection(): Promise<void> {
                 <div class="table-secondary path-text">{{ item.inputPath }}</div>
               </td>
               <td>{{ item.info ? `${item.info.width}×${item.info.height}` : '--' }}</td>
-              <td>{{ item.info ? `${formatNumber(item.info.fps)} FPS` : '--' }}</td>
+              <td>{{ list.fpsLabelOf(item) }}</td>
               <td>{{ item.info?.videoCodec || '--' }}</td>
-              <td>{{ getWorkflowSummaryLabel(item) }}</td>
+              <td>{{ list.workflowLabelOf(item) }}</td>
               <td>
                 <span class="inline-status" :data-state="item.taskState.status">{{ item.taskState.status }}</span>
               </td>
