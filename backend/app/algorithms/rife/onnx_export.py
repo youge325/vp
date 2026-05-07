@@ -98,7 +98,11 @@ def export_rife_to_onnx(
 
     if output_path is None:
         model_dir = model_dir or get_model_dir()
-        output_path = os.path.join(model_dir, f"rife_v{model_version}.onnx")
+        output_path = os.path.join(model_dir, "interpolation", "rife", f"rife_v{model_version}.onnx")
+
+    parent_dir = os.path.dirname(output_path)
+    if parent_dir:
+        os.makedirs(parent_dir, exist_ok=True)
 
     logger.info(f"导出 ONNX: {output_path} (opset={opset_version}, dummy={dummy_size}, dynamo={dynamo})")
 
