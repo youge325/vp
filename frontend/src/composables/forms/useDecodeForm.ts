@@ -1,12 +1,8 @@
 // 视图 form-binding — 解码模块。
 // 把"切换 profile / 调 hwaccel / 编辑 option"封装成纯方法,业务规则下沉到 services。
-//
-// TODO(round-3): mutator 总是写到 presetStore.draftPreset,但当 activeItem 存在时应分发到 mediaItem。
-// 应在 useWorkbenchEditor 增加统一写入 API,form 改走它。
 
 import { computed } from 'vue'
 import { useEnvStore } from '@/stores/env'
-import { usePresetStore } from '@/stores/preset'
 import {
   getVisibleDecoderProfiles,
 } from '@/services/preset/profile-picker'
@@ -21,8 +17,7 @@ import type { DecodeConfig } from '@/types/protocol'
 
 export function useDecodeForm() {
   const envStore = useEnvStore()
-  const presetStore = usePresetStore()
-  const { editorConfig, editorVideoCodec } = useWorkbenchEditor()
+  const { editorConfig, editorVideoCodec, patchDecode } = useWorkbenchEditor()
 
   const visibleDecoderProfiles = computed(() =>
     getVisibleDecoderProfiles(envStore.env.checkResult, editorVideoCodec.value),
@@ -37,7 +32,7 @@ export function useDecodeForm() {
   function setDecodeProfile(profileName: string): void {
     const allProfiles = getVisibleDecoderProfiles(envStore.env.checkResult, '')
     const profile = allProfiles.find((entry) => entry.name === profileName) ?? null
-    presetStore.patchDecode((config: DecodeConfig) => {
+    patchDecode((config: DecodeConfig) => {
       if (!profile || profile.family === 'software') {
         config.mode = 'software'
         config.hwaccel = ''
@@ -54,13 +49,13 @@ export function useDecodeForm() {
   }
 
   function setDecodeHwaccelDevice(value: string): void {
-    presetStore.patchDecode((config: DecodeConfig) => {
+    patchDecode((config: DecodeConfig) => {
       config.hwaccelDevice = value
     })
   }
 
   function setDecodeOption(name: string, value: CapabilityValue): void {
-    presetStore.patchDecode((config: DecodeConfig) => {
+    patchDecode((config: DecodeConfig) => {
       config.options = { ...config.options, [name]: value }
     })
   }
