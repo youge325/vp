@@ -8,6 +8,5 @@ export interface WorkbenchModuleDefinition {
   key: ModuleKey
   title: string
   path: string
-  description: string
   icon: Component
 }

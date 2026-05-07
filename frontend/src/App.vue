@@ -38,8 +38,6 @@ const isBusy = computed(() => shell.isBootstrapping.value || shell.isChecking.va
             <p class="topbar-label">VP Desktop</p>
             <div class="topbar-title-row">
               <h1>{{ activeModule.title }}</h1>
-              <span class="topbar-divider" />
-              <span class="topbar-tab">{{ activeModule.description }}</span>
             </div>
           </div>
 
