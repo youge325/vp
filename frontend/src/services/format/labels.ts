@@ -4,8 +4,22 @@
 import type { MediaItem } from '@/types/domain/media'
 import type { BatchState } from '@/types/domain/batch'
 import type { EncoderProfileSpec } from '@/types/domain/capability'
-import { WORKFLOW_LABELS } from '@/services/workflow/modules'
-import { resolvePrimaryMode } from '@/services/preset/profile-picker'
+import type { WorkflowMode } from '@/types/domain/workflow'
+
+const WORKFLOW_LABELS: Record<WorkflowMode, string> = {
+  frame_interpolation: '补帧',
+  super_resolution: '超分',
+  anime_optimization: '动漫优化',
+  format_conversion: '转码',
+}
+
+export function resolvePrimaryMode(item: Pick<MediaItem, 'workflowConfig'>): WorkflowMode {
+  const wf = item.workflowConfig
+  if (wf.interpolation.enabled) return 'frame_interpolation'
+  if (wf.superResolution.enabled) return 'super_resolution'
+  if (wf.anime.enabled) return 'anime_optimization'
+  return 'format_conversion'
+}
 
 export type WorkflowStage = 'decode' | 'preprocess' | 'enhance' | 'postprocess' | 'encode'
 

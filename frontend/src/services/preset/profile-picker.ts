@@ -1,10 +1,8 @@
 // pure: no Vue / no Pinia / no Tauri
-// 编码器/解码器 profile 选优,以及主流程模式推断。
+// 编码器/解码器 profile 选优。
 
 import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/domain/capability'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { MediaItem } from '@/types/domain/media'
-import type { WorkflowMode } from '@/types/domain/workflow'
 
 const FAMILY_PRIORITY = ['nvidia', 'intel', 'cpu'] as const
 const CODEC_PRIORITY = ['hevc', 'h264', 'av1'] as const
@@ -79,18 +77,4 @@ export function normalizeCodec(codec: string): string {
     return 'h264'
   }
   return lowered
-}
-
-export function resolvePrimaryMode(item: Pick<MediaItem, 'workflowConfig'>): WorkflowMode {
-  const workflow = item.workflowConfig
-  if (workflow.interpolation.enabled) {
-    return 'frame_interpolation'
-  }
-  if (workflow.superResolution.enabled) {
-    return 'super_resolution'
-  }
-  if (workflow.anime.enabled) {
-    return 'anime_optimization'
-  }
-  return 'format_conversion'
 }

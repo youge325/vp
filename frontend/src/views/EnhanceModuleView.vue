@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toRef } from 'vue'
-import { RIFE_MODELS } from '@/services/workflow/modules'
+import { RIFE_MODELS } from '@/services/preset/enhance-rules'
 import { useEnhanceForm } from '@/composables/forms/useEnhanceForm'
 import { useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
 import { useGpuCapabilities } from '@/composables/selectors/useGpuCapabilities'
