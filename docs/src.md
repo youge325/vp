@@ -114,9 +114,7 @@ class node28 {
 class node8 {
     RouterLink
     WORKBENCH_MODULES
-    getTaskStatusLabel
     useStepRailState
-    useTaskOrchestrator
 }
 class node114 {
     computed
@@ -254,7 +252,6 @@ class node77 {
     seedProfileOptions
     useDecodeForm
     useEnvStore
-    usePresetStore
     useWorkbenchEditor
 }
 class node92 {
@@ -270,7 +267,6 @@ class node92 {
     seedProfileOptions
     useEncodeForm
     useEnvStore
-    usePresetStore
     useWorkbenchEditor
 }
 class node108 {
@@ -286,7 +282,6 @@ class node108 {
     reactive
     useEnhanceForm
     useEnvStore
-    usePresetStore
     useWorkbenchEditor
 }
 class node3 {
@@ -294,7 +289,6 @@ class node3 {
     WorkflowConfig
     computed
     useFilterChainForm
-    usePresetStore
     useWorkbenchEditor
 }
 class node87 {
@@ -606,6 +600,7 @@ class node72 {
     WORKBENCH_MODULES
     WorkbenchModuleDefinition
     computed
+    getTaskStatusLabel
     getVisibleEncoderProfiles
     useEnvStore
     useMediaStore
@@ -615,7 +610,15 @@ class node72 {
     useWorkbenchEditor
 }
 class node35 {
+    DecodeConfig
+    EncodeConfig
+    OutputConfig
+    WorkflowConfig
     WorkflowStage
+    cloneDecodeConfig
+    cloneEncodeConfig
+    cloneOutputConfig
+    cloneWorkflowConfig
     computed
     getEditingScopeLabel
     useEditingScope
@@ -932,8 +935,6 @@ node43  -->  node80
 node88  -->  node28
 node29  -->  node28
 node29  -->  node28
-node51  -->  node8
-node18  -->  node8
 node72  -->  node8
 node118  -->  node8
 node69  -->  node8
@@ -988,7 +989,6 @@ node105  -->  node77
 node60  -->  node77
 node35  -->  node77
 node83  -->  node77
-node101  -->  node77
 node88  -->  node92
 node112  -->  node92
 node112  -->  node92
@@ -1001,7 +1001,6 @@ node105  -->  node92
 node60  -->  node92
 node35  -->  node92
 node83  -->  node92
-node101  -->  node92
 node97  -->  node108
 node88  -->  node108
 node23  -->  node108
@@ -1014,12 +1013,10 @@ node56  -->  node108
 node56  -->  node108
 node35  -->  node108
 node83  -->  node108
-node101  -->  node108
 node88  -->  node3
 node43  -->  node3
 node53  -->  node3
 node35  -->  node3
-node101  -->  node3
 node88  -->  node87
 node26  -->  node87
 node90  -->  node1
@@ -1150,6 +1147,7 @@ node83  -->  node33
 node26  -->  node33
 node88  -->  node72
 node51  -->  node72
+node18  -->  node72
 node60  -->  node72
 node35  -->  node72
 node83  -->  node72
@@ -1161,6 +1159,14 @@ node69  -->  node72
 node88  -->  node35
 node18  -->  node35
 node18  -->  node35
+node111  -->  node35
+node1  -->  node35
+node39  -->  node35
+node53  -->  node35
+node89  -->  node35
+node89  -->  node35
+node89  -->  node35
+node89  -->  node35
 node26  -->  node35
 node101  -->  node35
 node88  -->  node21
