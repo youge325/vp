@@ -8,6 +8,7 @@ import {
   fallbackInterpolationOnnxModel,
   fallbackSuperResolutionOnnxModel,
   pickDefaultEngine,
+  pickDefaultInterpolationModel,
 } from '@/services/preset/enhance-rules'
 import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/domain/workflow'
 import type { WorkflowConfig } from '@/types/protocol'
@@ -24,8 +25,14 @@ export function useEnhanceForm() {
   const superResolutionOnnxModels = computed(
     () => envStore.env.checkResult?.onnxModels?.super_resolution ?? [],
   )
-  const rifeModels = computed(
-    () => envStore.env.checkResult?.rifeModels ?? [],
+  const interpolationAlgorithms = computed(
+    () => envStore.env.checkResult?.interpolationAlgorithms ?? [],
+  )
+  const superResolutionAlgorithms = computed(
+    () => envStore.env.checkResult?.superResolutionAlgorithms ?? [],
+  )
+  const animeProfiles = computed(
+    () => envStore.env.checkResult?.animeProfiles ?? [],
   )
   const isOnnxBackend = computed(() => workflow.value.interpolation.tensorBackend === 'onnx')
 
@@ -52,6 +59,20 @@ export function useEnhanceForm() {
     get: () => (workflow.value.interpolation.engine as InferenceEngine) ?? 'cuda',
     set: (value: InferenceEngine) => patchWorkflow((c: WorkflowConfig) => { c.interpolation.engine = value }),
   })
+
+  const interpolationAlgorithm = computed({
+    get: () => workflow.value.interpolation.algorithm,
+    set: (value: string) => patchWorkflow((c: WorkflowConfig) => {
+      c.interpolation.algorithm = value
+      c.interpolation.model = pickDefaultInterpolationModel(envStore.env.checkResult, value)
+    }),
+  })
+
+  const interpolationModels = computed(
+    () =>
+      interpolationAlgorithms.value.find((a) => a.name === workflow.value.interpolation.algorithm)
+        ?.models ?? [],
+  )
 
   const interpolationModel = computed({
     get: () => workflow.value.interpolation.model,
@@ -136,11 +157,15 @@ export function useEnhanceForm() {
   return reactive({
     interpolationOnnxModels,
     superResolutionOnnxModels,
-    rifeModels,
+    interpolationAlgorithms,
+    superResolutionAlgorithms,
+    animeProfiles,
+    interpolationModels,
     isOnnxBackend,
     interpolationEnabled,
     interpolationBackend,
     interpolationEngine,
+    interpolationAlgorithm,
     interpolationModel,
     interpolationOnnxModel,
     fpsMode,

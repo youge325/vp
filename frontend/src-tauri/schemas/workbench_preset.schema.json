@@ -113,6 +113,10 @@
           "format": "uint32",
           "minimum": 0
         },
+        "algorithm": {
+          "type": "string",
+          "default": "rife"
+        },
         "model": {
           "type": "string"
         },

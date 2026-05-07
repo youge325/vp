@@ -52,10 +52,19 @@ const { targetLabel, caption } = useEditingScope('enhance')
           </select>
         </label>
 
+        <label class="field">
+          <span>算法</span>
+          <select v-model="form.interpolationAlgorithm">
+            <option v-for="alg in form.interpolationAlgorithms" :key="alg.name" :value="alg.name">
+              {{ alg.name }}
+            </option>
+          </select>
+        </label>
+
         <label v-if="!form.isOnnxBackend" class="field">
           <span>模型</span>
           <select v-model="form.interpolationModel">
-            <option v-for="model in form.rifeModels" :key="model" :value="model">{{ model }}</option>
+            <option v-for="model in form.interpolationModels" :key="model" :value="model">{{ model }}</option>
           </select>
         </label>
 
@@ -125,8 +134,13 @@ const { targetLabel, caption } = useEditingScope('enhance')
         <label class="field">
           <span>算法</span>
           <select v-model="form.superResolutionAlgorithm">
-            <option value="placeholder">placeholder</option>
-            <option value="realesrgan-plan">realesrgan-plan</option>
+            <option
+              v-for="alg in form.superResolutionAlgorithms"
+              :key="alg.name"
+              :value="alg.name"
+            >
+              {{ alg.name }}
+            </option>
           </select>
         </label>
 
@@ -162,9 +176,9 @@ const { targetLabel, caption } = useEditingScope('enhance')
         <label class="field">
           <span>预设</span>
           <select v-model="form.animeProfile">
-            <option value="clean-lines">clean-lines</option>
-            <option value="thin-outline">thin-outline</option>
-            <option value="balanced-cel">balanced-cel</option>
+            <option v-for="profile in form.animeProfiles" :key="profile" :value="profile">
+              {{ profile }}
+            </option>
           </select>
         </label>
 

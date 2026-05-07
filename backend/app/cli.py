@@ -20,7 +20,6 @@ _BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
-from app.algorithms.rife.model_loader import SUPPORTED_MODELS
 from app.utils.onnx_models import resolve_onnx_model_path, scan_onnx_models
 from app.config import settings
 from app.planning import (
@@ -29,7 +28,10 @@ from app.planning import (
     resolve_video_info,
     SegmentManifest,
 )
+from app.processing.anime_optimization import SUPPORTED_PROFILES as ANIME_PROFILES
+from app.processing.interpolation import SUPPORTED_ALGORITHMS as INTERPOLATION_ALGORITHMS
 from app.processing.streaming import process_video_streaming
+from app.processing.super_resolution import SUPPORTED_ALGORITHMS as SR_ALGORITHMS
 from app.utils.ffmpeg_wrapper import FFmpegWrapper
 from app.utils.file_utils import get_output_path, validate_input_path
 from app.utils.logger import get_logger, setup_logging
@@ -1040,7 +1042,9 @@ def cmd_check(_args: argparse.Namespace) -> None:
                 "version": settings.RIFE_MODEL_VERSION,
                 "path": str(default_model_path),
             },
-            "rifeModels": SUPPORTED_MODELS,
+            "interpolationAlgorithms": INTERPOLATION_ALGORITHMS,
+            "superResolutionAlgorithms": SR_ALGORITHMS,
+            "animeProfiles": ANIME_PROFILES,
             "runtime": {
                 "mode": settings.runtime_mode,
                 "bundled": settings.bundled_runtime_available,

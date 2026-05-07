@@ -29,6 +29,8 @@ pub struct InterpolationConfig {
     pub enabled: bool,
     pub target_fps: f64,
     pub multi: u32,
+    #[serde(default = "default_interpolation_algorithm")]
+    pub algorithm: String,
     pub model: String,
     #[serde(default)]
     #[ts(optional)]
@@ -42,6 +44,10 @@ pub struct InterpolationConfig {
 
 fn default_engine() -> String {
     "cuda".to_string()
+}
+
+fn default_interpolation_algorithm() -> String {
+    "rife".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]

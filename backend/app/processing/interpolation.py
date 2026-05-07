@@ -10,9 +10,14 @@ from typing import Any, Optional
 from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
 from app.algorithms.rife import RIFESolver
+from app.algorithms.rife.model_loader import SUPPORTED_MODELS as _RIFE_MODELS
 from app.algorithms.rife.onnx_solver import RIFEONNXSolver
 
 logger = get_logger(__name__)
+
+SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
+    {"name": "rife", "models": list(_RIFE_MODELS)},
+]
 
 
 class FrameInterpolationAlgorithm(IAlgorithm):

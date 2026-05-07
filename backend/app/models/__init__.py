@@ -38,6 +38,7 @@ class InterpolationConfig(_CamelBase):
     enabled: bool
     target_fps: float
     multi: int
+    algorithm: str = "rife"
     model: str
     onnx_model: str | None = None
     scale: float
