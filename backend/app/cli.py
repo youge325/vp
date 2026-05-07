@@ -14,27 +14,21 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from app.errors import ProcessError
+from app.errors import ProcessError, ResumeConflictError
 
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
-from app.algorithms.factory import AlgorithmFactory
-from app.algorithms.onnx_models import resolve_onnx_model_path, scan_onnx_models
+from app.utils.onnx_models import resolve_onnx_model_path, scan_onnx_models
 from app.config import settings
-from app.processing.anime_optimization import AnimeOptimizationAlgorithm
-from app.processing.frame_filters import FrameFilterChainAlgorithm
-from app.processing.interpolation import FrameInterpolationAlgorithm
 from app.planning import (
     build_signature,
     build_stage_plan,
     resolve_video_info,
-    ResumeConflictError,
     SegmentManifest,
 )
 from app.processing.streaming import process_video_streaming
-from app.processing.super_resolution import SuperResolutionAlgorithm
 from app.utils.ffmpeg_wrapper import FFmpegWrapper
 from app.utils.file_utils import get_output_path, validate_input_path
 from app.utils.logger import get_logger, setup_logging
@@ -43,20 +37,6 @@ from app.utils.system_probe import list_gpu_adapters
 from app.models import DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig
 
 logger = get_logger(__name__)
-
-
-def _register_default_algorithms() -> None:
-    """Register all default algorithm classes with the factory.
-
-    Kept in the CLI layer (rather than ``algorithms.factory``) to avoid a
-    circular import: ``algorithms.factory`` must not know about
-    ``processing.*``, but ``processing.*`` already import from
-    ``algorithms.*``.
-    """
-    AlgorithmFactory.register("frame_interpolation", FrameInterpolationAlgorithm)
-    AlgorithmFactory.register("super_resolution", SuperResolutionAlgorithm)
-    AlgorithmFactory.register("anime_optimization", AnimeOptimizationAlgorithm)
-    AlgorithmFactory.register("frame_filter_chain", FrameFilterChainAlgorithm)
 
 
 class TaskErrorCode(str, Enum):
@@ -610,8 +590,6 @@ def _get_onnx_model_name(config: dict[str, Any]) -> str | None:
 
 
 def cmd_process(args: argparse.Namespace) -> None:
-    _register_default_algorithms()
-
     input_path = args.input
     if not validate_input_path(input_path):
         _emit_error(
@@ -824,8 +802,6 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     sidecar represents. Used by the Tauri host as a pre-flight before
     spawning ``process``.
     """
-    _register_default_algorithms()
-
     input_path = args.input
     if not validate_input_path(input_path):
         _emit_error(

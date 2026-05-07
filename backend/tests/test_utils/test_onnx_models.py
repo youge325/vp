@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.algorithms.onnx_models import (
+from app.utils.onnx_models import (
     create_onnx_session,
     is_safe_onnx_filename,
     resolve_onnx_model_path,
