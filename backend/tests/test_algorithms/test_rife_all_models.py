@@ -13,6 +13,8 @@ import os
 import sys
 import pytest
 
+pytestmark = pytest.mark.pytorch
+
 import torch
 import torch.nn as nn
 

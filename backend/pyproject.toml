@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "paddle: tests that load PaddlePaddle (cudnn-incompatible with torch in same process)",
+    "pytorch: tests that load PyTorch (cudnn-incompatible with paddle in same process)",
+]

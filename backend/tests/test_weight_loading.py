@@ -14,6 +14,10 @@
 import os
 import sys
 
+import pytest
+
+pytestmark = pytest.mark.pytorch
+
 # 确保 backend 目录在 sys.path 上
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND_DIR not in sys.path:
