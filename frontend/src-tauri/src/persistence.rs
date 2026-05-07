@@ -12,7 +12,7 @@ use time::format_description::well_known::Rfc3339;
 use crate::models::WorkbenchPreset;
 use crate::runtime::ResolvedRuntimePaths;
 
-const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 1;
+const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 2;
 const WORKBENCH_PRESET_SCHEMA_VERSION: u32 = 1;
 const ENVIRONMENT_CACHE_FILE: &str = "environment-cache.json";
 const WORKBENCH_PRESET_FILE: &str = "workbench-preset.json";

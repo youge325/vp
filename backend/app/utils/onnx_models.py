@@ -31,36 +31,43 @@ def get_onnx_model_dir(kind: OnnxModelKind, model_root: str | Path | None = None
     return root / ONNX_MODEL_SUBDIRS[kind]
 
 
-def scan_onnx_models(model_root: str | Path | None = None) -> dict[str, list[str]]:
-    """List available ONNX model filenames by supported video model kind."""
-    return {kind: _scan_dir(get_onnx_model_dir(kind, model_root)) for kind in ONNX_MODEL_SUBDIRS}
+def scan_onnx_models(model_root: str | Path | None = None) -> dict[str, dict[str, list[str]]]:
+    """List ONNX model basenames grouped by kind, then by algorithm subdir.
+
+    Layout: ``<model_root>/<kind>/<algorithm>/<basename>.onnx``
+    Returns ``{"interpolation": {"rife": ["rife_v4.25.onnx", ...]}, "super_resolution": {...}}``.
+    """
+    return {kind: _scan_kind_dir(get_onnx_model_dir(kind, model_root)) for kind in ONNX_MODEL_SUBDIRS}
 
 
 def resolve_onnx_model_path(
     kind: OnnxModelKind,
+    algorithm: str,
     filename: str | None,
     model_root: str | Path | None = None,
 ) -> Path:
-    """Resolve a frontend-supplied ONNX filename inside the expected model subdir."""
-    if not filename or not is_safe_onnx_filename(filename):
+    """Resolve a frontend-supplied ONNX basename inside ``<kind>/<algorithm>/``."""
+    if not filename or not is_safe_onnx_basename(filename):
         raise FileNotFoundError(f"Invalid ONNX model filename: {filename or '<empty>'}")
+    if not is_safe_algorithm_name(algorithm):
+        raise FileNotFoundError(f"Invalid ONNX algorithm name: {algorithm!r}")
 
-    model_dir = get_onnx_model_dir(kind, model_root)
-    candidate = (model_dir / filename).resolve()
-    model_dir_resolved = model_dir.resolve()
+    kind_dir = get_onnx_model_dir(kind, model_root)
+    candidate = (kind_dir / algorithm / filename).resolve()
+    kind_dir_resolved = kind_dir.resolve()
 
     try:
-        candidate.relative_to(model_dir_resolved)
+        candidate.relative_to(kind_dir_resolved)
     except ValueError as exc:
-        raise FileNotFoundError(f"ONNX model path escapes the model directory: {filename}") from exc
+        raise FileNotFoundError(f"ONNX model path escapes the model directory: {algorithm}/{filename}") from exc
 
     if not candidate.is_file() or candidate.stat().st_size <= 0:
         raise FileNotFoundError(f"ONNX model file not found: {candidate}")
     return candidate
 
 
-def is_safe_onnx_filename(filename: str) -> bool:
-    """Return True when filename is a basename-only .onnx file reference."""
+def is_safe_onnx_basename(filename: str) -> bool:
+    """True when ``filename`` is a basename-only ``.onnx`` file reference."""
     if filename in {"", ".", ".."}:
         return False
     if PurePosixPath(filename).name != filename:
@@ -73,20 +80,40 @@ def is_safe_onnx_filename(filename: str) -> bool:
     return filename.lower().endswith(".onnx")
 
 
-def _scan_dir(model_dir: Path) -> list[str]:
-    if not model_dir.is_dir():
-        return []
-    return sorted(
-        (
-            item.name
-            for item in model_dir.iterdir()
-            if item.is_file()
-            and item.suffix.lower() == ".onnx"
-            and item.stat().st_size > 0
-            and is_safe_onnx_filename(item.name)
-        ),
-        key=str.casefold,
-    )
+def is_safe_algorithm_name(name: str) -> bool:
+    """True when ``name`` is a single path segment (no separators, no traversal)."""
+    if name in {"", ".", ".."}:
+        return False
+    if PurePosixPath(name).name != name:
+        return False
+    windows_path = PureWindowsPath(name)
+    if windows_path.name != name or windows_path.drive or windows_path.root:
+        return False
+    return True
+
+
+def _scan_kind_dir(kind_dir: Path) -> dict[str, list[str]]:
+    """Scan a kind directory: each immediate subdirectory is treated as an algorithm name."""
+    if not kind_dir.is_dir():
+        return {}
+    result: dict[str, list[str]] = {}
+    for alg_dir in sorted(kind_dir.iterdir(), key=lambda p: p.name.casefold()):
+        if not alg_dir.is_dir() or not is_safe_algorithm_name(alg_dir.name):
+            continue
+        files = sorted(
+            (
+                item.name
+                for item in alg_dir.iterdir()
+                if item.is_file()
+                and item.suffix.lower() == ".onnx"
+                and item.stat().st_size > 0
+                and is_safe_onnx_basename(item.name)
+            ),
+            key=str.casefold,
+        )
+        if files:
+            result[alg_dir.name] = files
+    return result
 
 
 def select_onnx_providers(engine: str, ort_module: Any) -> list[str]:

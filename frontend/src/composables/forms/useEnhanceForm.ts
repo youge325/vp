@@ -19,12 +19,6 @@ export function useEnhanceForm() {
 
   const workflow = computed(() => editorConfig.value.workflowConfig)
 
-  const interpolationOnnxModels = computed(
-    () => envStore.env.checkResult?.onnxModels?.interpolation ?? [],
-  )
-  const superResolutionOnnxModels = computed(
-    () => envStore.env.checkResult?.onnxModels?.super_resolution ?? [],
-  )
   const interpolationAlgorithms = computed(
     () => envStore.env.checkResult?.interpolationAlgorithms ?? [],
   )
@@ -34,6 +28,18 @@ export function useEnhanceForm() {
   const animeProfiles = computed(
     () => envStore.env.checkResult?.animeProfiles ?? [],
   )
+  const interpolationOnnxModels = computed(() => {
+    const alg = interpolationAlgorithms.value.find(
+      (a) => a.name === workflow.value.interpolation.algorithm,
+    )
+    return alg?.onnxModels ?? []
+  })
+  const superResolutionOnnxModels = computed(() => {
+    const alg = superResolutionAlgorithms.value.find(
+      (a) => a.name === workflow.value.superResolution.algorithm,
+    )
+    return alg?.onnxModels ?? []
+  })
   const isOnnxBackend = computed(() => workflow.value.interpolation.tensorBackend === 'onnx')
 
   const interpolationEnabled = computed({
@@ -48,8 +54,8 @@ export function useEnhanceForm() {
         c.interpolation.tensorBackend = value
         c.interpolation.engine = pickDefaultEngine(envStore.env.checkResult, value) ?? c.interpolation.engine
         if (value === 'onnx') {
-          c.interpolation.onnxModel = fallbackInterpolationOnnxModel(envStore.env.checkResult, c.interpolation.onnxModel)
-          c.superResolution.onnxModel = fallbackSuperResolutionOnnxModel(envStore.env.checkResult, c.superResolution.onnxModel)
+          c.interpolation.onnxModel = fallbackInterpolationOnnxModel(envStore.env.checkResult, c.interpolation.algorithm, c.interpolation.onnxModel)
+          c.superResolution.onnxModel = fallbackSuperResolutionOnnxModel(envStore.env.checkResult, c.superResolution.algorithm, c.superResolution.onnxModel)
         }
       })
     },

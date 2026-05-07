@@ -4,27 +4,31 @@ import pytest
 
 from app.utils.onnx_models import (
     create_onnx_session,
-    is_safe_onnx_filename,
+    is_safe_algorithm_name,
+    is_safe_onnx_basename,
     resolve_onnx_model_path,
     scan_onnx_models,
     select_onnx_providers,
 )
 
 
-def test_scan_onnx_models_uses_expected_subdirectories(tmp_path: Path):
-    interpolation = tmp_path / "interpolation"
-    super_resolution = tmp_path / "super_resolution"
-    interpolation.mkdir()
-    super_resolution.mkdir()
-    (interpolation / "b.onnx").write_bytes(b"model")
-    (interpolation / "a.ONNX").write_bytes(b"model")
-    (interpolation / "empty.onnx").write_bytes(b"")
-    (interpolation / "notes.txt").write_text("skip", encoding="utf-8")
-    (super_resolution / "sr.onnx").write_bytes(b"model")
+def test_scan_onnx_models_groups_by_algorithm_subdirectory(tmp_path: Path):
+    interp_rife = tmp_path / "interpolation" / "rife"
+    interp_rife.mkdir(parents=True)
+    (interp_rife / "b.onnx").write_bytes(b"model")
+    (interp_rife / "a.ONNX").write_bytes(b"model")
+    (interp_rife / "empty.onnx").write_bytes(b"")
+    (interp_rife / "notes.txt").write_text("skip", encoding="utf-8")
+    # Loose .onnx file directly under <kind>/ (no algorithm subdir) must be ignored.
+    (tmp_path / "interpolation" / "stray.onnx").write_bytes(b"model")
+
+    sr_alg = tmp_path / "super_resolution" / "realesrgan"
+    sr_alg.mkdir(parents=True)
+    (sr_alg / "sr.onnx").write_bytes(b"model")
 
     assert scan_onnx_models(tmp_path) == {
-        "interpolation": ["a.ONNX", "b.onnx"],
-        "super_resolution": ["sr.onnx"],
+        "interpolation": {"rife": ["a.ONNX", "b.onnx"]},
+        "super_resolution": {"realesrgan": ["sr.onnx"]},
     }
 
 
@@ -35,24 +39,42 @@ def test_scan_onnx_models_uses_expected_subdirectories(tmp_path: Path):
         "..\\escape.onnx",
         "C:\\model.onnx",
         "/tmp/model.onnx",
+        "rife/model.onnx",
         "model.pkl",
         "",
     ],
 )
 def test_rejects_non_basename_onnx_filenames(filename: str):
-    assert is_safe_onnx_filename(filename) is False
+    assert is_safe_onnx_basename(filename) is False
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "../rife",
+        "rife/sub",
+        "rife\\sub",
+        "",
+        ".",
+        "..",
+    ],
+)
+def test_rejects_unsafe_algorithm_names(name: str):
+    assert is_safe_algorithm_name(name) is False
 
 
 def test_resolve_onnx_model_path_rejects_missing_or_unsafe_files(tmp_path: Path):
-    model_dir = tmp_path / "interpolation"
-    model_dir.mkdir()
+    model_dir = tmp_path / "interpolation" / "rife"
+    model_dir.mkdir(parents=True)
     (model_dir / "model.onnx").write_bytes(b"model")
 
-    assert resolve_onnx_model_path("interpolation", "model.onnx", tmp_path) == model_dir / "model.onnx"
+    assert resolve_onnx_model_path("interpolation", "rife", "model.onnx", tmp_path) == model_dir / "model.onnx"
     with pytest.raises(FileNotFoundError):
-        resolve_onnx_model_path("interpolation", "../model.onnx", tmp_path)
+        resolve_onnx_model_path("interpolation", "rife", "../model.onnx", tmp_path)
     with pytest.raises(FileNotFoundError):
-        resolve_onnx_model_path("interpolation", "missing.onnx", tmp_path)
+        resolve_onnx_model_path("interpolation", "rife", "missing.onnx", tmp_path)
+    with pytest.raises(FileNotFoundError):
+        resolve_onnx_model_path("interpolation", "../rife", "model.onnx", tmp_path)
 
 
 class _StubOrt:

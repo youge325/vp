@@ -113,14 +113,19 @@ export function createDefaultEncodeConfig(env: EnvironmentCheckResult | null): E
 
 export function createDefaultWorkbenchPreset(env: EnvironmentCheckResult | null): WorkbenchPreset {
   const workflowConfig = createDefaultWorkflowConfig()
-  workflowConfig.interpolation.onnxModel = env?.onnxModels?.interpolation?.[0] ?? ''
-  workflowConfig.superResolution.onnxModel = env?.onnxModels?.super_resolution?.[0] ?? ''
 
   const algorithm = pickDefaultInterpolationAlgorithm(env)
   workflowConfig.interpolation.algorithm = algorithm
   workflowConfig.interpolation.model = pickDefaultInterpolationModel(env, algorithm)
   workflowConfig.superResolution.algorithm = pickDefaultSuperResolutionAlgorithm(env)
   workflowConfig.anime.profile = pickDefaultAnimeProfile(env)
+
+  workflowConfig.interpolation.onnxModel =
+    env?.interpolationAlgorithms?.find((a) => a.name === workflowConfig.interpolation.algorithm)
+      ?.onnxModels?.[0] ?? ''
+  workflowConfig.superResolution.onnxModel =
+    env?.superResolutionAlgorithms?.find((a) => a.name === workflowConfig.superResolution.algorithm)
+      ?.onnxModels?.[0] ?? ''
 
   const vendor = env?.gpu?.adapters?.[0]?.vendor
   const backend = workflowConfig.interpolation.tensorBackend

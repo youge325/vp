@@ -19,7 +19,6 @@ function makeEnv(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCh
     tensorBackends: {},
     tensorEngines: {},
     onnxRuntime: { available: false, providers: [] },
-    onnxModels: { interpolation: [], super_resolution: [] },
     rifeModel: { available: false },
     ...overrides,
   } as EnvironmentCheckResult
