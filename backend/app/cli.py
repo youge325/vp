@@ -20,6 +20,7 @@ _BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
+from app.algorithms.rife.model_loader import SUPPORTED_MODELS
 from app.utils.onnx_models import resolve_onnx_model_path, scan_onnx_models
 from app.config import settings
 from app.planning import (
@@ -1039,6 +1040,7 @@ def cmd_check(_args: argparse.Namespace) -> None:
                 "version": settings.RIFE_MODEL_VERSION,
                 "path": str(default_model_path),
             },
+            "rifeModels": SUPPORTED_MODELS,
             "runtime": {
                 "mode": settings.runtime_mode,
                 "bundled": settings.bundled_runtime_available,

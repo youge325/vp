@@ -68,6 +68,7 @@ export interface EnvironmentCheckResult {
     version?: string
     path?: string
   }
+  rifeModels?: string[]
   runtime?: {
     mode?: string
     bundled?: boolean
