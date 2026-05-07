@@ -6,14 +6,11 @@ import { WORKBENCH_MODULES } from '@/views/registry'
 import { useBootstrap } from '@/composables/app/useBootstrap'
 import { useEnvironmentChecker } from '@/composables/app/useEnvironmentChecker'
 import { useAppShellStatus } from '@/composables/selectors/useAppShellStatus'
-import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
-import { getTaskStatusLabel } from '@/services/format/labels'
 import type { WorkbenchModuleDefinition } from '@/types/view/modules'
 
 const route = useRoute()
 const { recheckEnvironment } = useEnvironmentChecker()
 const shell = useAppShellStatus()
-const { batch, currentTaskItem } = useTaskOrchestrator()
 
 useBootstrap()
 
@@ -21,9 +18,6 @@ const activeModule = computed<WorkbenchModuleDefinition>(
   () => (route.meta.module as WorkbenchModuleDefinition | undefined) ?? WORKBENCH_MODULES[0],
 )
 
-const topbarStatus = computed(() =>
-  getTaskStatusLabel(batch, currentTaskItem.value?.taskState.status ?? null),
-)
 const isBusy = computed(() => shell.isBootstrapping.value || shell.isChecking.value)
 </script>
 
@@ -49,8 +43,8 @@ const isBusy = computed(() => shell.isBootstrapping.value || shell.isChecking.va
             >
               重试探测
             </button>
-            <span class="status-pill" :data-state="topbarStatus">
-              {{ isBusy ? 'checking' : topbarStatus }}
+            <span class="status-pill" :data-state="shell.topbarStatus.value">
+              {{ isBusy ? 'checking' : shell.topbarStatus.value }}
             </span>
           </div>
         </header>
