@@ -7,10 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from app.processing.streaming import (
-    ResumeConflictError,
-    SegmentManifest,
-)
+from app.errors import ResumeConflictError
+from app.processing.streaming import SegmentManifest
 
 
 def _workspace(name: str) -> Path:

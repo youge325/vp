@@ -14,11 +14,11 @@ import numpy as np
 
 from app.algorithms.factory import AlgorithmFactory
 from app.algorithms.tensor_backend import get_tensor_backend
+from app.errors import ResumeConflictError
 from app.planning import (
     build_signature,
     build_stage_plan,
     resolve_video_info,
-    ResumeConflictError,
     ResumeMode,
     ResumeState,
     SegmentManifest,

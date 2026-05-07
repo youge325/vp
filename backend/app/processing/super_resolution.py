@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 
 from app.algorithms.base import IAlgorithm
-from app.algorithms.onnx_models import create_onnx_session, resolve_onnx_model_path
+from app.utils.onnx_models import create_onnx_session, resolve_onnx_model_path
 from app.algorithms.tensor_backend import ITensorBackend
 
 

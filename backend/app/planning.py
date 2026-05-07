@@ -24,32 +24,6 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class ResumeConflictError(Exception):
-    """Raised when a final output already exists and the user must choose how to proceed."""
-
-    def __init__(
-        self,
-        *,
-        output_path: str,
-        completed_chunks: int,
-        completed_output_frames: int,
-        sidecar_signature_match: bool,
-    ) -> None:
-        super().__init__(f"Final output already exists at {output_path}; user decision required.")
-        self.output_path = output_path
-        self.completed_chunks = completed_chunks
-        self.completed_output_frames = completed_output_frames
-        self.sidecar_signature_match = sidecar_signature_match
-
-    def to_details(self) -> dict[str, Any]:
-        return {
-            "outputPath": self.output_path,
-            "completedChunks": self.completed_chunks,
-            "completedOutputFrames": self.completed_output_frames,
-            "sidecarSignatureMatch": self.sidecar_signature_match,
-        }
-
-
 @dataclass(slots=True)
 class SegmentRecord:
     """One completed chunk on disk, parsed from filename."""

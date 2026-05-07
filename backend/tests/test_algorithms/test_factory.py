@@ -3,7 +3,6 @@
 import pytest
 from app.algorithms.base import IAlgorithm
 from app.algorithms.factory import AlgorithmFactory
-from app.cli import _register_default_algorithms as register_default_algorithms
 
 
 class MockAlgorithm(IAlgorithm):
@@ -56,6 +55,8 @@ class TestAlgorithmFactory:
         assert "type_b" in types
 
     def test_register_default_algorithms(self):
+        from app.processing import register_default_algorithms
+
         register_default_algorithms()
         types = AlgorithmFactory.get_available_types()
         assert "frame_interpolation" in types

@@ -10,7 +10,7 @@ from typing import Optional
 import numpy as np
 
 from app.utils.logger import get_logger
-from app.algorithms.onnx_models import create_onnx_session, resolve_onnx_model_path
+from app.utils.onnx_models import create_onnx_session, resolve_onnx_model_path
 from .model_loader import get_model_dir, MODEL_CONFIGS
 
 
