@@ -3,6 +3,8 @@
 import pytest
 import numpy as np
 
+pytestmark = pytest.mark.pytorch
+
 from app.algorithms.tensor_backend import PyTorchBackend, get_tensor_backend
 
 

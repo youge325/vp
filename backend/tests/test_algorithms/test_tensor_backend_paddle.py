@@ -3,6 +3,8 @@
 import pytest
 import numpy as np
 
+pytestmark = pytest.mark.paddle
+
 from app.algorithms.tensor_backend import PaddleBackend, get_tensor_backend
 
 

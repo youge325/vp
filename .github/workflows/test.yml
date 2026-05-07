@@ -43,6 +43,7 @@ jobs:
     runs-on: [self-hosted, windows]
     env:
       PYTHONIOENCODING: utf-8
+      VP_TEST_BACKEND: pytorch
     defaults:
       run:
         shell: pwsh
@@ -55,13 +56,14 @@ jobs:
         run: ./scripts/setup-ci-runtime-env.ps1
 
       - name: Run PyTorch backend tests
-        run: python -m pytest tests --ignore=tests/test_algorithms/test_tensor_backend_paddle.py -q
+        run: python -m pytest -q
         working-directory: backend
 
   test-backend-paddle:
     runs-on: [self-hosted, windows]
     env:
       PYTHONIOENCODING: utf-8
+      VP_TEST_BACKEND: paddle
     defaults:
       run:
         shell: pwsh
@@ -74,5 +76,5 @@ jobs:
         run: ./scripts/setup-ci-runtime-env.ps1
 
       - name: Run Paddle backend tests
-        run: python -m pytest tests/test_algorithms/test_tensor_backend_paddle.py -q
+        run: python -m pytest -q
         working-directory: backend
