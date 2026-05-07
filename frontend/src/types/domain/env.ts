@@ -68,7 +68,9 @@ export interface EnvironmentCheckResult {
     version?: string
     path?: string
   }
-  rifeModels?: string[]
+  interpolationAlgorithms?: { name: string; models: string[] }[]
+  superResolutionAlgorithms?: { name: string; models: string[] }[]
+  animeProfiles?: string[]
   runtime?: {
     mode?: string
     bundled?: boolean

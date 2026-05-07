@@ -6,6 +6,9 @@ from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
 
 
+SUPPORTED_PROFILES: list[str] = ["clean-lines", "thin-outline", "balanced-cel"]
+
+
 class AnimeOptimizationAlgorithm(IAlgorithm):
     """
     动漫重复帧优化算法占位实现。

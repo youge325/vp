@@ -25,3 +25,31 @@ export function fallbackSuperResolutionOnnxModel(
 ): string {
   return current || checkResult?.onnxModels?.super_resolution?.[0] || ''
 }
+
+export function pickDefaultInterpolationAlgorithm(
+  checkResult: EnvironmentCheckResult | null,
+): string {
+  return checkResult?.interpolationAlgorithms?.[0]?.name ?? 'rife'
+}
+
+export function pickDefaultInterpolationModel(
+  checkResult: EnvironmentCheckResult | null,
+  algorithm: string,
+): string {
+  return (
+    checkResult?.interpolationAlgorithms?.find((a) => a.name === algorithm)?.models?.[0] ??
+    '4.25'
+  )
+}
+
+export function pickDefaultSuperResolutionAlgorithm(
+  checkResult: EnvironmentCheckResult | null,
+): string {
+  return checkResult?.superResolutionAlgorithms?.[0]?.name ?? 'placeholder'
+}
+
+export function pickDefaultAnimeProfile(
+  checkResult: EnvironmentCheckResult | null,
+): string {
+  return checkResult?.animeProfiles?.[0] ?? 'clean-lines'
+}

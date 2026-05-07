@@ -228,6 +228,7 @@ mod tests {
                     enabled: true,
                     target_fps: 60.0,
                     multi: 2,
+                    algorithm: "rife".to_string(),
                     model: "4.25".to_string(),
                     onnx_model: None,
                     scale: 1.0,

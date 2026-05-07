@@ -4,6 +4,12 @@
 import type { DecodeConfig, EncodeConfig, OutputConfig, WorkbenchPreset, WorkflowConfig } from '@/types/protocol'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { InferenceEngine } from '@/types/domain/workflow'
+import {
+  pickDefaultAnimeProfile,
+  pickDefaultInterpolationAlgorithm,
+  pickDefaultInterpolationModel,
+  pickDefaultSuperResolutionAlgorithm,
+} from './enhance-rules'
 import { pickPreferredDecoderProfile, pickPreferredEncoderProfile } from './profile-picker'
 
 export function createDefaultWorkflowConfig(): WorkflowConfig {
@@ -14,6 +20,7 @@ export function createDefaultWorkflowConfig(): WorkflowConfig {
       enabled: true,
       targetFps: 60,
       multi: 2,
+      algorithm: 'rife',
       model: '4.25',
       onnxModel: '',
       scale: 1,
@@ -108,6 +115,12 @@ export function createDefaultWorkbenchPreset(env: EnvironmentCheckResult | null)
   const workflowConfig = createDefaultWorkflowConfig()
   workflowConfig.interpolation.onnxModel = env?.onnxModels?.interpolation?.[0] ?? ''
   workflowConfig.superResolution.onnxModel = env?.onnxModels?.super_resolution?.[0] ?? ''
+
+  const algorithm = pickDefaultInterpolationAlgorithm(env)
+  workflowConfig.interpolation.algorithm = algorithm
+  workflowConfig.interpolation.model = pickDefaultInterpolationModel(env, algorithm)
+  workflowConfig.superResolution.algorithm = pickDefaultSuperResolutionAlgorithm(env)
+  workflowConfig.anime.profile = pickDefaultAnimeProfile(env)
 
   const vendor = env?.gpu?.adapters?.[0]?.vendor
   const backend = workflowConfig.interpolation.tensorBackend

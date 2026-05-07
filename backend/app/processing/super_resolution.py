@@ -9,6 +9,12 @@ from app.utils.onnx_models import create_onnx_session, resolve_onnx_model_path
 from app.algorithms.tensor_backend import ITensorBackend
 
 
+SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
+    {"name": "placeholder", "models": []},
+    {"name": "realesrgan-plan", "models": []},
+]
+
+
 class SuperResolutionAlgorithm(IAlgorithm):
     """
     超分辨率算法占位实现。

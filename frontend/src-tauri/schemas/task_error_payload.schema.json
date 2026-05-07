@@ -4,7 +4,7 @@
   "type": "object",
   "properties": {
     "code": {
-      "type": "string"
+      "$ref": "#/$defs/TaskErrorCode"
     },
     "message": {
       "type": "string"
@@ -14,5 +14,20 @@
   "required": [
     "code",
     "message"
-  ]
+  ],
+  "$defs": {
+    "TaskErrorCode": {
+      "type": "string",
+      "enum": [
+        "missing_ffmpeg",
+        "missing_model",
+        "missing_tensor_backend",
+        "cancelled",
+        "process_failed",
+        "invalid_input",
+        "invalid_config",
+        "resume_conflict"
+      ]
+    }
+  }
 }
