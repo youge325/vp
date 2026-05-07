@@ -1,12 +1,9 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 import { WORKBENCH_MODULES } from '@/views/registry'
-import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
-import { getTaskStatusLabel } from '@/services/format/labels'
 import { useStepRailState } from '@/composables/selectors/useStepRailState'
 
-const { batch, currentTaskItem } = useTaskOrchestrator()
-const { activeModuleKey, moduleStates, workflowLabel, selectionLabel } = useStepRailState()
+const { activeModuleKey, moduleStates, workflowLabel, selectionLabel, taskStatusLabel } = useStepRailState()
 </script>
 
 <template>
@@ -41,7 +38,7 @@ const { activeModuleKey, moduleStates, workflowLabel, selectionLabel } = useStep
     <section class="rail-footer">
       <span class="rail-footer-chip">{{ workflowLabel }}</span>
       <span class="rail-footer-chip">{{ selectionLabel }}</span>
-      <span class="rail-footer-chip" :data-state="getTaskStatusLabel(batch, currentTaskItem?.taskState.status ?? null)">任务 {{ getTaskStatusLabel(batch, currentTaskItem?.taskState.status ?? null) }}</span>
+      <span class="rail-footer-chip" :data-state="taskStatusLabel">任务 {{ taskStatusLabel }}</span>
     </section>
   </aside>
 </template>

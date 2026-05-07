@@ -5,6 +5,7 @@ import { useMediaStore } from '@/stores/media'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
+import { getTaskStatusLabel } from '@/services/format/labels'
 import { WORKBENCH_MODULES } from '@/views/registry'
 import type { ModuleKey, WorkbenchModuleDefinition } from '@/types/view/modules'
 
@@ -13,7 +14,7 @@ export function useStepRailState() {
   const envStore = useEnvStore()
   const mediaStore = useMediaStore()
   const { editorConfig, isPresetMode } = useWorkbenchEditor()
-  const { batch } = useTaskOrchestrator()
+  const { batch, currentTaskItem } = useTaskOrchestrator()
 
   const activeModuleKey = computed<ModuleKey>(() => {
     const module = route.meta.module as WorkbenchModuleDefinition | undefined
@@ -53,5 +54,9 @@ export function useStepRailState() {
       : `${mediaStore.selectedIds.length || 1}/${mediaStore.mediaItems.length} 已选`,
   )
 
-  return { activeModuleKey, moduleStates, workflowLabel, selectionLabel }
+  const taskStatusLabel = computed(() =>
+    getTaskStatusLabel(batch, currentTaskItem.value?.taskState.status ?? null),
+  )
+
+  return { activeModuleKey, moduleStates, workflowLabel, selectionLabel, taskStatusLabel }
 }
