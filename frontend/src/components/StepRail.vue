@@ -29,7 +29,6 @@ const { activeModuleKey, moduleStates, workflowLabel, selectionLabel, taskStatus
         </span>
         <span class="rail-link-copy">
           <strong>{{ module.title }}</strong>
-          <small>{{ module.description }}</small>
         </span>
         <span class="rail-state-dot" :data-state="moduleStates[module.key]" />
       </RouterLink>

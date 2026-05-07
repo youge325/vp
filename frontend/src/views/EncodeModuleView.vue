@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CONTAINER_OPTIONS } from '@/services/preset/constants'
+import { CONTAINER_OPTIONS } from '@/config/constants'
 import { useEncodeForm } from '@/composables/forms/useEncodeForm'
 import { useOutputPicker } from '@/composables/app/useOutputPicker'
 import { useWorkbenchEditor, useEditingScope } from '@/composables/selectors/useWorkbenchEditor'

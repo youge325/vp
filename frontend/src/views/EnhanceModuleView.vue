@@ -3,7 +3,7 @@ import { toRef } from 'vue'
 import { useEnhanceForm } from '@/composables/forms/useEnhanceForm'
 import { useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
 import { useGpuCapabilities } from '@/composables/selectors/useGpuCapabilities'
-import { BACKEND_LABELS, ENGINE_LABELS } from '@/services/format/labels'
+import { BACKEND_LABELS, ENGINE_LABELS } from '@/config/gpu-labels'
 
 const form = useEnhanceForm()
 const { visibleBackends, availableEngines, showEngineSelector } = useGpuCapabilities(

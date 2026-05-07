@@ -34,7 +34,6 @@ export const WORKBENCH_MODULES: WorkbenchModuleDefinition[] = WORKBENCH_MODULE_K
     key,
     title: meta.title,
     path: meta.path,
-    description: meta.description,
     icon: ICON_MAP[key],
   }
 })
