@@ -59,17 +59,13 @@ export interface EnvironmentCheckResult {
     available?: boolean
     providers: string[]
   }
-  onnxModels?: {
-    interpolation: string[]
-    super_resolution: string[]
-  }
   rifeModel: {
     available?: boolean
     version?: string
     path?: string
   }
-  interpolationAlgorithms?: { name: string; models: string[] }[]
-  superResolutionAlgorithms?: { name: string; models: string[] }[]
+  interpolationAlgorithms?: { name: string; models: string[]; onnxModels?: string[] }[]
+  superResolutionAlgorithms?: { name: string; models: string[]; onnxModels?: string[] }[]
   animeProfiles?: string[]
   runtime?: {
     mode?: string

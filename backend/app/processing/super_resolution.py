@@ -63,7 +63,9 @@ class SuperResolutionAlgorithm(IAlgorithm):
         register_native_dll_paths()
         import onnxruntime as ort
 
-        model_path = resolve_onnx_model_path("super_resolution", self._onnx_model, self._model_dir)
+        model_path = resolve_onnx_model_path(
+            "super_resolution", self._algorithm_name, self._onnx_model, self._model_dir
+        )
         session = create_onnx_session(str(model_path), engine=self._engine, ort_module=ort)
         inputs = session.get_inputs()
         outputs = session.get_outputs()

@@ -582,10 +582,12 @@ def _validate_onnx_models_for_workflow(
     for step in processing_steps:
         if step["algorithm_type"] == "frame_interpolation":
             model_name = _get_onnx_model_name(workflow_config["interpolation"])
-            resolve_onnx_model_path("interpolation", model_name, model_root=settings.RIFE_MODEL_DIR)
+            algorithm = workflow_config["interpolation"].get("algorithm", "rife")
+            resolve_onnx_model_path("interpolation", algorithm, model_name, model_root=settings.RIFE_MODEL_DIR)
         elif step["algorithm_type"] == "super_resolution":
             model_name = _get_onnx_model_name(workflow_config["superResolution"])
-            resolve_onnx_model_path("super_resolution", model_name, model_root=settings.RIFE_MODEL_DIR)
+            algorithm = workflow_config["superResolution"].get("algorithm", "placeholder")
+            resolve_onnx_model_path("super_resolution", algorithm, model_name, model_root=settings.RIFE_MODEL_DIR)
 
 
 def _get_onnx_model_name(config: dict[str, Any]) -> str | None:
@@ -958,7 +960,7 @@ def cmd_check(_args: argparse.Namespace) -> None:
     gpu_adapters = list_gpu_adapters()
     non_virtual_adapters = [adapter for adapter in gpu_adapters if adapter.get("device_type") != "virtual"]
 
-    default_model_path = Path(settings.RIFE_MODEL_DIR) / "rife_v4.25.onnx"
+    default_model_path = Path(settings.RIFE_MODEL_DIR) / "interpolation" / "rife" / "rife_v4.25.onnx"
     default_model_available = default_model_path.is_file() and default_model_path.stat().st_size > 0
     onnx_models = scan_onnx_models(settings.RIFE_MODEL_DIR)
     ffmpeg_capabilities = (
@@ -1004,6 +1006,14 @@ def cmd_check(_args: argparse.Namespace) -> None:
         "onnx": ["nvidia", "intel", "amd"],
     }
 
+    interpolation_algorithms_payload = [
+        {**alg, "onnxModels": onnx_models.get("interpolation", {}).get(alg["name"], [])}
+        for alg in INTERPOLATION_ALGORITHMS
+    ]
+    super_resolution_algorithms_payload = [
+        {**alg, "onnxModels": onnx_models.get("super_resolution", {}).get(alg["name"], [])} for alg in SR_ALGORITHMS
+    ]
+
     _emit(
         {
             "type": "check",
@@ -1033,17 +1043,13 @@ def cmd_check(_args: argparse.Namespace) -> None:
                 "available": onnx_result["onnx_available"],
                 "providers": onnx_result["providers"],
             },
-            "onnxModels": {
-                "interpolation": onnx_models["interpolation"],
-                "super_resolution": onnx_models["super_resolution"],
-            },
             "rifeModel": {
                 "available": default_model_available,
                 "version": settings.RIFE_MODEL_VERSION,
                 "path": str(default_model_path),
             },
-            "interpolationAlgorithms": INTERPOLATION_ALGORITHMS,
-            "superResolutionAlgorithms": SR_ALGORITHMS,
+            "interpolationAlgorithms": interpolation_algorithms_payload,
+            "superResolutionAlgorithms": super_resolution_algorithms_payload,
             "animeProfiles": ANIME_PROFILES,
             "runtime": {
                 "mode": settings.runtime_mode,

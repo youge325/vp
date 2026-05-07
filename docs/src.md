@@ -592,8 +592,10 @@ class node11 {
 }
 class node2 {
     computed
+    getTaskStatusLabel
     useAppShellStatus
     useEnvStore
+    useTaskOrchestrator
 }
 class node51 {
     OperationIssueScope
@@ -662,12 +664,10 @@ class node23 {
     WORKBENCH_MODULES
     WorkbenchModuleDefinition
     computed
-    getTaskStatusLabel
     useAppShellStatus
     useBootstrap
     useEnvironmentChecker
     useRoute
-    useTaskOrchestrator
 }
 class node118 {
     App
@@ -1154,6 +1154,8 @@ node123  -->  node11
 node73  -->  node11
 node73  -->  node11
 node93  -->  node2
+node54  -->  node2
+node19  -->  node2
 node88  -->  node2
 node93  -->  node51
 node47  -->  node51
@@ -1200,9 +1202,7 @@ node106  -->  node38
 node93  -->  node23
 node0  -->  node23
 node14  -->  node23
-node54  -->  node23
 node8  -->  node23
-node19  -->  node23
 node2  -->  node23
 node121  -->  node23
 node123  -->  node23

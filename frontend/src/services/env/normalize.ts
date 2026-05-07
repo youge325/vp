@@ -55,10 +55,6 @@ export function normalizeCheckResult(raw: EnvironmentCheckResult): EnvironmentCh
       ...(raw.onnxRuntime ?? {}),
       providers: raw.onnxRuntime?.providers ?? [],
     },
-    onnxModels: {
-      interpolation: raw.onnxModels?.interpolation ?? [],
-      super_resolution: raw.onnxModels?.super_resolution ?? [],
-    },
   }
 }
 

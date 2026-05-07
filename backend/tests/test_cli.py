@@ -200,11 +200,11 @@ def test_resource_summary_omits_legacy_temp_override_key():
 
 def test_check_reports_onnx_runtime_and_model_lists(tmp_path, monkeypatch, capsys):
     model_dir = tmp_path / "models"
-    (model_dir / "interpolation").mkdir(parents=True)
-    (model_dir / "super_resolution").mkdir()
+    (model_dir / "interpolation" / "rife").mkdir(parents=True)
+    (model_dir / "super_resolution" / "placeholder").mkdir(parents=True)
     (model_dir / "flownet_v4.25.pkl").write_bytes(b"model")
-    (model_dir / "interpolation" / "interp.onnx").write_bytes(b"onnx")
-    (model_dir / "super_resolution" / "sr.onnx").write_bytes(b"onnx")
+    (model_dir / "interpolation" / "rife" / "interp.onnx").write_bytes(b"onnx")
+    (model_dir / "super_resolution" / "placeholder" / "sr.onnx").write_bytes(b"onnx")
 
     monkeypatch.setattr("app.cli.FFmpegWrapper", _FakeCheckFFmpeg)
     monkeypatch.setattr(
@@ -224,7 +224,9 @@ def test_check_reports_onnx_runtime_and_model_lists(tmp_path, monkeypatch, capsy
     payload = json.loads(capsys.readouterr().out.strip())
     assert payload["tensorBackends"]["onnx"] is True
     assert payload["onnxRuntime"]["providers"] == ["CPUExecutionProvider"]
-    assert payload["onnxModels"] == {
-        "interpolation": ["interp.onnx"],
-        "super_resolution": ["sr.onnx"],
-    }
+    assert "onnxModels" not in payload
+
+    rife_alg = next(a for a in payload["interpolationAlgorithms"] if a["name"] == "rife")
+    assert rife_alg["onnxModels"] == ["interp.onnx"]
+    placeholder_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "placeholder")
+    assert placeholder_alg["onnxModels"] == ["sr.onnx"]

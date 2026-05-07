@@ -94,20 +94,17 @@ class RIFEONNXSolver:
 
         model_dir = model_dir or get_model_dir()
         if onnx_model:
-            onnx_path = str(resolve_onnx_model_path("interpolation", onnx_model, model_dir))
+            onnx_path = str(resolve_onnx_model_path("interpolation", "rife", onnx_model, model_dir))
             inferred = _infer_model_version_from_path(onnx_path)
             if inferred:
                 model_version = inferred
                 logger.debug("从 ONNX 文件名推断模型版本: %s", model_version)
         else:
-            onnx_path = os.path.join(model_dir, "interpolation", f"rife_v{model_version}.onnx")
-            legacy_path = os.path.join(model_dir, f"rife_v{model_version}.onnx")
-            if not os.path.isfile(onnx_path) and os.path.isfile(legacy_path):
-                onnx_path = legacy_path
+            onnx_path = os.path.join(model_dir, "interpolation", "rife", f"rife_v{model_version}.onnx")
             if not os.path.isfile(onnx_path):
                 raise FileNotFoundError(
                     f"ONNX 模型文件未找到: {onnx_path}。"
-                    f"请将补帧 ONNX 模型放入 {os.path.join(model_dir, 'interpolation')}，"
+                    f"请将补帧 ONNX 模型放入 {os.path.join(model_dir, 'interpolation', 'rife')}，"
                     f"或运行 export_rife_to_onnx(model_version='{model_version}') 导出模型"
                 )
 

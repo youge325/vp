@@ -17,8 +17,8 @@ class _Node:
 
 
 def test_super_resolution_onnx_lazily_loads_and_scales(tmp_path: Path, monkeypatch):
-    model_dir = tmp_path / "super_resolution"
-    model_dir.mkdir()
+    model_dir = tmp_path / "super_resolution" / "placeholder"
+    model_dir.mkdir(parents=True)
     (model_dir / "sr.onnx").write_bytes(b"model")
     created_sessions = []
 

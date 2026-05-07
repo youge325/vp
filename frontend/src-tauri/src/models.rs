@@ -396,16 +396,6 @@ pub struct OnnxRuntimeInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct OnnxModels {
-    #[serde(default)]
-    pub interpolation: Vec<String>,
-    #[serde(default)]
-    pub super_resolution: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../src/types/generated/")]
 pub struct RifeModel {
     #[serde(default)]
     pub available: Option<bool>,
@@ -435,6 +425,8 @@ pub struct RuntimeInfo {
 pub struct AlgorithmInfo {
     pub name: String,
     pub models: Vec<String>,
+    #[serde(default)]
+    pub onnx_models: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
@@ -452,8 +444,6 @@ pub struct EnvironmentCheckResult {
     pub backend_device_support: Option<BackendDeviceSupport>,
     #[serde(default)]
     pub onnx_runtime: Option<OnnxRuntimeInfo>,
-    #[serde(default)]
-    pub onnx_models: Option<OnnxModels>,
     pub rife_model: RifeModel,
     #[serde(default)]
     pub interpolation_algorithms: Option<Vec<AlgorithmInfo>>,
