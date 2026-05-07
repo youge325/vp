@@ -171,15 +171,9 @@ function Resolve-ModelSource {
         $resolvedDir = (Resolve-Path -LiteralPath $resolvedDir).Path
     }
 
-    $defaultModel = Join-Path $resolvedDir "rife_v4.25.onnx"
-    $interpModel = Join-Path $resolvedDir "interpolation\rife_v4.25.onnx"
-    $foundModel = ""
-    if ((Test-Path -LiteralPath $defaultModel -PathType Leaf) -and (Get-Item -LiteralPath $defaultModel).Length -gt 0) {
-        $foundModel = $defaultModel
-    } elseif ((Test-Path -LiteralPath $interpModel -PathType Leaf) -and (Get-Item -LiteralPath $interpModel).Length -gt 0) {
-        $foundModel = $interpModel
-    } else {
-        throw "Default model is missing. Expected rife_v4.25.onnx in `$resolvedDir` or `$resolvedDir\interpolation`. Set VP_RELEASE_MODEL_DIR to a directory containing rife_v4.25.onnx."
+    $defaultModel = Join-Path (Join-Path (Join-Path $resolvedDir "interpolation") "rife") "rife_v4.25.onnx"
+    if (-not ((Test-Path -LiteralPath $defaultModel -PathType Leaf) -and ((Get-Item -LiteralPath $defaultModel).Length -gt 0))) {
+        throw "Default model is missing. Expected interpolation/rife/rife_v4.25.onnx under $resolvedDir. Set VP_RELEASE_MODEL_DIR to a directory containing it."
     }
     return $resolvedDir
 }
@@ -525,16 +519,23 @@ function Copy-ModelFiles {
 
         $destinationSubdir = Join-Path $DestinationDir $subdirName
         New-Item -ItemType Directory -Force -Path $destinationSubdir | Out-Null
-        $onnxModels = Get-ChildItem -LiteralPath $sourceSubdir -Filter "*.onnx" -File
+        $sourceSubdirFull = (Resolve-Path -LiteralPath $sourceSubdir).Path
+        $onnxModels = Get-ChildItem -LiteralPath $sourceSubdir -Filter "*.onnx" -File -Recurse
         foreach ($model in $onnxModels) {
-            $result = Copy-FileFast -Source $model.FullName -Destination (Join-Path $destinationSubdir $model.Name)
+            $relativePath = $model.FullName.Substring($sourceSubdirFull.Length).TrimStart('\', '/')
+            $destPath = Join-Path $destinationSubdir $relativePath
+            $destDir = Split-Path -Parent $destPath
+            if (-not [string]::IsNullOrWhiteSpace($destDir)) {
+                New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+            }
+            $result = Copy-FileFast -Source $model.FullName -Destination $destPath
             $bytes += [int64]$model.Length
             if ($result -eq "linked") {
                 $linked += 1
             } else {
                 $copied += 1
             }
-            Write-Step "model $subdirName\$($model.Name) complete: $(Format-ByteSize $model.Length), $result"
+            Write-Step "model $subdirName\$relativePath complete: $(Format-ByteSize $model.Length), $result"
         }
     }
 
@@ -691,7 +692,7 @@ Copy-ModelFiles -SourceDir $modelSourceDir -DestinationDir $modelsOut
 
 $destFfmpeg = Join-Path $ffmpegOut "ffmpeg.exe"
 $destFfprobe = Join-Path $ffmpegOut "ffprobe.exe"
-$destDefaultModel = Join-Path $modelsOut "rife_v4.25.onnx"
+$destDefaultModel = Join-Path (Join-Path (Join-Path $modelsOut "interpolation") "rife") "rife_v4.25.onnx"
 $requiredFiles = @($destFfmpeg, $destFfprobe, $destDefaultModel)
 if (-not $SkipPython) {
     $destPythonExe = Join-Path $pythonOut "python.exe"
