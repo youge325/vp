@@ -24,6 +24,9 @@ export function useEnhanceForm() {
   const superResolutionOnnxModels = computed(
     () => envStore.env.checkResult?.onnxModels?.super_resolution ?? [],
   )
+  const rifeModels = computed(
+    () => envStore.env.checkResult?.rifeModels ?? [],
+  )
   const isOnnxBackend = computed(() => workflow.value.interpolation.tensorBackend === 'onnx')
 
   const interpolationEnabled = computed({
@@ -133,6 +136,7 @@ export function useEnhanceForm() {
   return reactive({
     interpolationOnnxModels,
     superResolutionOnnxModels,
+    rifeModels,
     isOnnxBackend,
     interpolationEnabled,
     interpolationBackend,

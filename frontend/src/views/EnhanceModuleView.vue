@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { toRef } from 'vue'
-import { RIFE_MODELS } from '@/services/preset/enhance-rules'
 import { useEnhanceForm } from '@/composables/forms/useEnhanceForm'
 import { useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
 import { useGpuCapabilities } from '@/composables/selectors/useGpuCapabilities'
@@ -56,7 +55,7 @@ const { targetLabel, caption } = useEditingScope('enhance')
         <label v-if="!form.isOnnxBackend" class="field">
           <span>模型</span>
           <select v-model="form.interpolationModel">
-            <option v-for="model in RIFE_MODELS" :key="model" :value="model">{{ model }}</option>
+            <option v-for="model in form.rifeModels" :key="model" :value="model">{{ model }}</option>
           </select>
         </label>
 
