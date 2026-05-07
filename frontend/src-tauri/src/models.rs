@@ -432,6 +432,14 @@ pub struct RuntimeInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
+pub struct AlgorithmInfo {
+    pub name: String,
+    pub models: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct EnvironmentCheckResult {
     #[serde(rename = "type")]
     pub kind: String,
@@ -447,6 +455,12 @@ pub struct EnvironmentCheckResult {
     #[serde(default)]
     pub onnx_models: Option<OnnxModels>,
     pub rife_model: RifeModel,
+    #[serde(default)]
+    pub interpolation_algorithms: Option<Vec<AlgorithmInfo>>,
+    #[serde(default)]
+    pub super_resolution_algorithms: Option<Vec<AlgorithmInfo>>,
+    #[serde(default)]
+    pub anime_profiles: Option<Vec<String>>,
     #[serde(default)]
     pub runtime: Option<RuntimeInfo>,
     #[serde(default)]
