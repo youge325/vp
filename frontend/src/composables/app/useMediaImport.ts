@@ -10,6 +10,7 @@ import {
   normalizeEncodeConfig,
 } from '@/services/preset/normalize'
 import { normalizeError } from '@/services/error/normalize'
+import type { TaskError } from '@/types/domain/media'
 
 export function useMediaImport() {
   const envStore = useEnvStore()
