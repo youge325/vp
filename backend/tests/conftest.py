@@ -38,7 +38,7 @@ else:
 
 
 def _register_paddle_cudnn_dll_dir() -> None:
-    """注册 paddle 自带的 nvidia 运行时 DLL 目录到 DLL 搜索路径。
+    """Pre-load paddle 自带的 nvidia 运行时 DLL 到进程,避免系统其他位置的同名 DLL 冲突。
 
     paddle 在 ``import paddle`` 时通过 ``cudnn_cnn64_9.dll`` 链式加载 cudnn,
     cudnn 内部依赖 cudnn 同伴 DLL (cudnn_ops、cudnn_engines_*) **以及** CUDA
@@ -48,19 +48,30 @@ def _register_paddle_cudnn_dll_dir() -> None:
     - ``nvidia.cudnn`` -> ``site-packages/nvidia/cudnn/bin``  (cudnn 9 全套)
     - ``nvidia.cu13`` -> ``site-packages/nvidia/cu13/bin/x86_64`` (CUDA 13 toolkit)
 
-    如果这两个目录都没注册到进程 DLL 搜索路径里, ``LoadLibrary`` 解析
-    ``cudnn_cnn64_9.dll`` 的传递依赖时会失败,抛 ``OSError [WinError 127]``。
-    paddle 自身的 ``__init__`` 不可靠地处理这件事,因此这里在测试启动前手动
-    把两个目录注册到 ``os.add_dll_directory`` (现代 LoadLibraryEx 搜索) 和
-    PATH 头部 (legacy LoadLibrary 搜索)。
+    仅靠 ``os.add_dll_directory`` + PATH 在某些 runner 上不够,因为:
+
+    1. paddle 内部可能用 LoadLibraryW (默认搜索),不走 add_dll_directory 的
+       user-dirs 列表;
+    2. 系统目录 (System32 等) 在 LoadLibrary 搜索顺序里早于 PATH,如果系统装了
+       NVIDIA 驱动级别的 cudnn,会被优先加载,导致版本不匹配 (WinError 127 /
+       0xc0000139 STATUS_ENTRYPOINT_NOT_FOUND)。
+
+    所以这里用 ``ctypes.WinDLL`` 按依赖顺序**显式预加载** paddle 自己的 cudnn
+    和 CUDA toolkit DLL。一旦同名 DLL 已在进程中,Windows 不会再走 LoadLibrary
+    搜索流程,paddle 后续 ``import`` 直接复用我们预加载的版本。
     """
     if sys.platform != "win32":
         return
 
+    import ctypes
     import importlib.util
 
-    candidates: list[str] = []
-    for spec_name, sub in (("nvidia.cudnn", "bin"), ("nvidia.cu13", os.path.join("bin", "x86_64"))):
+    cudnn_bin: str | None = None
+    cu13_bin: str | None = None
+    for spec_name, sub, target in (
+        ("nvidia.cudnn", "bin", "cudnn"),
+        ("nvidia.cu13", os.path.join("bin", "x86_64"), "cu13"),
+    ):
         try:
             spec = importlib.util.find_spec(spec_name)
         except (ImportError, ValueError):
@@ -71,9 +82,14 @@ def _register_paddle_cudnn_dll_dir() -> None:
         if not root:
             continue
         candidate = os.path.join(root, sub)
-        if os.path.isdir(candidate):
-            candidates.append(candidate)
+        if not os.path.isdir(candidate):
+            continue
+        if target == "cudnn":
+            cudnn_bin = candidate
+        else:
+            cu13_bin = candidate
 
+    candidates = [d for d in (cudnn_bin, cu13_bin) if d]
     if not candidates:
         return
 
@@ -88,6 +104,44 @@ def _register_paddle_cudnn_dll_dir() -> None:
     new_prefix = [c for c in candidates if c.lower() not in lower_path]
     if new_prefix:
         os.environ["PATH"] = os.pathsep.join(new_prefix) + os.pathsep + current_path
+
+    cuda_dlls = (
+        "cudart64_13.dll",
+        "cublas64_13.dll",
+        "cublasLt64_13.dll",
+        "cusparse64_12.dll",
+        "cusolver64_12.dll",
+        "cufft64_12.dll",
+        "curand64_10.dll",
+        "nvJitLink_130_0.dll",
+        "nvrtc64_130_0.dll",
+        "nvrtc-builtins64_132.dll",
+    )
+    cudnn_dlls = (
+        "cudnn_ops64_9.dll",
+        "cudnn_heuristic64_9.dll",
+        "cudnn_engines_precompiled64_9.dll",
+        "cudnn_engines_runtime_compiled64_9.dll",
+        "cudnn_graph64_9.dll",
+        "cudnn_adv64_9.dll",
+        "cudnn_cnn64_9.dll",
+        "cudnn64_9.dll",
+    )
+
+    def _preload(directory: str | None, names: tuple[str, ...]) -> None:
+        if not directory:
+            return
+        for name in names:
+            full = os.path.join(directory, name)
+            if not os.path.isfile(full):
+                continue
+            try:
+                ctypes.WinDLL(full)
+            except OSError:
+                pass
+
+    _preload(cu13_bin, cuda_dlls)
+    _preload(cudnn_bin, cudnn_dlls)
 
 
 if _BACKEND == "paddle":
