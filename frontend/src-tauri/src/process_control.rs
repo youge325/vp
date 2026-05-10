@@ -164,7 +164,21 @@ mod imp {
 
 #[cfg(not(target_os = "windows"))]
 mod imp {
-    pub fn set_process_tree_suspended(_root_pid: u32, _suspend: bool) -> Result<(), String> {
-        Err("Task pause/resume is only supported on Windows.".to_string())
+    pub fn set_process_tree_suspended(root_pid: u32, suspend: bool) -> Result<(), String> {
+        unsafe {
+            let pgid = libc::getpgid(root_pid as i32);
+            if pgid < 0 {
+                return Err("Unable to get process group id".to_string());
+            }
+            let signal = if suspend { libc::SIGSTOP } else { libc::SIGCONT };
+            let result = libc::kill(-pgid, signal);
+            if result < 0 {
+                return Err(format!(
+                    "kill failed: {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+            Ok(())
+        }
     }
 }

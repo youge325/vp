@@ -9,7 +9,7 @@ import {
   normalizeDecodeConfig,
   normalizeEncodeConfig,
 } from '@/services/preset/normalize'
-import { normalizeTaskError } from '@/services/task/error-normalizer'
+import { normalizeError } from '@/services/error/normalize'
 
 export function useMediaImport() {
   const envStore = useEnvStore()
@@ -30,7 +30,7 @@ export function useMediaImport() {
       const encodeConfig = normalizeEncodeConfig(item.encodeConfig, envStore.env.checkResult)
       mediaStore.replaceItemConfig(itemId, { decodeConfig, encodeConfig })
     } catch (error) {
-      mediaStore.setItemIssue(itemId, normalizeTaskError(error, 'inspect_failed'))
+      mediaStore.setItemIssue(itemId, normalizeError(error, 'inspect_failed'))
     } finally {
       mediaStore.setInspecting(itemId, false)
     }
@@ -56,13 +56,13 @@ export function useMediaImport() {
     await inspectItems(fresh.map((item) => item.id))
   }
 
-  async function pickAndImport(): Promise<{ paths: string[]; error: ReturnType<typeof normalizeTaskError> | null }> {
+  async function pickAndImport(): Promise<{ paths: string[]; error: TaskError | null }> {
     try {
       const paths = await mediaIpc.pickInputs()
       await importPaths(paths)
       return { paths, error: null }
     } catch (error) {
-      return { paths: [], error: normalizeTaskError(error, 'pick_inputs_failed') }
+      return { paths: [], error: normalizeError(error, 'pick_inputs_failed') }
     }
   }
 

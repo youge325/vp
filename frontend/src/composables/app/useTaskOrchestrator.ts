@@ -1,6 +1,6 @@
 // 应用层 — 批处理编排:把 batch-runner 与 stores、IPC 装配,提供 listener 桥。
 
-import { computed } from 'vue'
+import { computed, onScopeDispose } from 'vue'
 import type { UnlistenFn } from '@/lib/ipc'
 import { listenTaskEvents } from '@/lib/ipc/events'
 import { taskIpc } from '@/lib/ipc/endpoints/task'
@@ -9,12 +9,18 @@ import { useTaskStore } from '@/stores/task'
 import { createBatchRunner, type BatchRunner } from '@/services/task/batch-runner'
 import { buildTaskRequest } from '@/services/task/request-builder'
 
-let cachedRunner: BatchRunner | null = null
-let detachHandle: UnlistenFn | null = null
-
 export function useTaskOrchestrator() {
   const mediaStore = useMediaStore()
   const taskStore = useTaskStore()
+
+  let cachedRunner: BatchRunner | null = null
+  let detachHandle: UnlistenFn | null = null
+
+  onScopeDispose(() => {
+    detachHandle?.()
+    detachHandle = null
+    cachedRunner = null
+  })
 
   const batch = taskStore.batch
   const pendingConflict = taskStore.pendingConflict

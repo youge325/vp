@@ -10,7 +10,6 @@ use std::path::PathBuf;
 
 use models::TaskState;
 use rfd::FileDialog;
-use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 use crate::runtime::resolve_runtime_paths;

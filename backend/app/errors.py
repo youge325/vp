@@ -7,7 +7,41 @@ normalized into a ``ProcessError`` so the Rust host can emit a typed
 
 from __future__ import annotations
 
+import traceback as _traceback
 from typing import Any
+
+
+def _infer_code_from_exception(exc: BaseException) -> str:
+    """Map an exception to a canonical error code string.
+
+    Centralises the inference rules that were previously duplicated in
+    ``cli._infer_error_code`` and ``__main__._infer_bootstrap_error_code``.
+    """
+    message = str(exc).lower()
+
+    if isinstance(exc, FileNotFoundError):
+        if "ffmpeg" in message or "ffprobe" in message:
+            return "missing_ffmpeg"
+        if "flownet_v" in message or "model" in message:
+            return "missing_model"
+
+    if "ffmpeg" in message or "ffprobe" in message:
+        return "missing_ffmpeg"
+    if "flownet_v" in message or "model" in message:
+        return "missing_model"
+    if (
+        "no module named 'torch'" in message
+        or "no module named torch" in message
+        or "pytorch" in message
+        or "no module named 'paddle'" in message
+        or "no module named paddle" in message
+        or "tensor backend" in message
+    ):
+        return "missing_tensor_backend"
+    if "cancelled" in message or "canceled" in message:
+        return "cancelled"
+
+    return "process_failed"
 
 
 class ProcessError(Exception):
@@ -29,6 +63,21 @@ class ProcessError(Exception):
         self.code = code
         self.message = message
         self.details = details or {}
+
+    @classmethod
+    def from_exception(cls, exc: BaseException) -> "ProcessError":
+        """Wrap any exception in a ``ProcessError`` with an inferred code.
+
+        If *exc* is already a ``ProcessError`` it is returned unchanged.
+        """
+        if isinstance(exc, ProcessError):
+            return exc
+        code = _infer_code_from_exception(exc)
+        return cls(
+            code,
+            str(exc),
+            details={"traceback": _traceback.format_exc()},
+        )
 
 
 class ResumeConflictError(Exception):
