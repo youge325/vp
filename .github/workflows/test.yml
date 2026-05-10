@@ -10,11 +10,13 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - '.github/workflows/test.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - '.github/workflows/test.yml'
 
 jobs:
   test-frontend:
