@@ -7,18 +7,14 @@ concurrency:
 on:
   push:
     branches: [main, master, develop]
-    paths-ignore:
-      - '.github/workflows/test.yml'
-      - '.github/workflows/release.yml'
-      - 'docs/**'
-      - '**/*.md'
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
   pull_request:
     branches: [main, master, develop]
-    paths-ignore:
-      - '.github/workflows/test.yml'
-      - '.github/workflows/release.yml'
-      - 'docs/**'
-      - '**/*.md'
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
 
 jobs:
   build-windows:
