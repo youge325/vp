@@ -13,10 +13,10 @@ class BaseException {
    add_note(self, __note: str)
 }
 class Exception
-class node160 {
+class node169 {
     __slots__
 }
-class node31 {
+class node35 {
     cls
    __new__(mcls, name, bases, namespace, /, **kwargs)
    register(cls, subclass)
@@ -26,7 +26,7 @@ class node31 {
    _abc_registry_clear(cls)
    _abc_caches_clear(cls)
 }
-class node40 {
+class node88 {
    process_frame(self, frame: Any, **kwargs)
    process_frame_batch(self, frames: list[Any], **kwargs)
    get_name(self)
@@ -36,7 +36,7 @@ class node40 {
    process_frame_pair(self, frame0: Any, frame1: Any, timestep: float = 0.5, **kwargs)
    get_interpolation_multi(self)
 }
-class node132 {
+class node183 {
     _registry
    register(cls, algorithm_type: str, algorithm_class: type[IAlgorithm])
    create(
@@ -49,7 +49,7 @@ class node132 {
    get_available_types(cls)
    get_available_algorithms(cls)
 }
-class node8 {
+class node46 {
     _has_head
     _fp16
     _orig_w
@@ -97,20 +97,103 @@ class node8 {
     )
    clear_cache(self)
 }
+class node24 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes: int, c: int = 64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node63 {
+    block0
+    block1
+    block2
+    block3
+    scale
+    ensemble
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: torch.Tensor,
+        tenFlow_div: torch.Tensor,
+        backwarp_tenGrid: torch.Tensor,
+    )
+}
+class node94 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes: int, c: int = 64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node147 {
+    block0
+    block1
+    block2
+    block3
+    scale
+    ensemble
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: torch.Tensor,
+        tenFlow_div: torch.Tensor,
+        backwarp_tenGrid: torch.Tensor,
+    )
+}
+class node114 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes: int, c: int = 64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node19 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: torch.Tensor,
+        tenFlow_div: torch.Tensor,
+        backwarp_tenGrid: torch.Tensor,
+        f0: torch.Tensor,
+        f1: torch.Tensor,
+    )
+}
 class node41 {
+    relu
+    conv
+    beta
+   __init__(self, c: int, dilation: int = 1)
+   forward(self, x: torch.Tensor)
+}
+class node90 {
     lastconv
     convblock
     conv0
    __init__(self, in_planes: int, c: int = 64)
    forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
 }
-class node36 {
+class node138 {
+    encode
     block0
     block1
     block2
     block3
-    scale
     ensemble
+    scale_list
    __init__(self, scale: float = 1, ensemble: bool = False)
    forward(
         self,
@@ -119,40 +202,25 @@ class node36 {
         timestep: torch.Tensor,
         tenFlow_div: torch.Tensor,
         backwarp_tenGrid: torch.Tensor,
+        f0: torch.Tensor,
+        f1: torch.Tensor,
     )
 }
-class node161 {
+class node102 {
+    relu
+    conv
+    beta
+   __init__(self, c: int, dilation: int = 1)
+   forward(self, x: torch.Tensor)
+}
+class node149 {
     lastconv
     convblock
     conv0
    __init__(self, in_planes: int, c: int = 64)
    forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node128 {
-    block0
-    block1
-    block2
-    block3
-    scale
-    ensemble
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(
-        self,
-        img0: torch.Tensor,
-        img1: torch.Tensor,
-        timestep: torch.Tensor,
-        tenFlow_div: torch.Tensor,
-        backwarp_tenGrid: torch.Tensor,
-    )
 }
 class node177 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes: int, c: int = 64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node43 {
     encode
     block0
     block1
@@ -172,21 +240,21 @@ class node43 {
         f1: torch.Tensor,
     )
 }
-class node156 {
+class node140 {
     relu
     conv
     beta
    __init__(self, c: int, dilation: int = 1)
    forward(self, x: torch.Tensor)
 }
-class node143 {
+class node153 {
     lastconv
     convblock
     conv0
    __init__(self, in_planes: int, c: int = 64)
    forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
 }
-class node111 {
+class node95 {
     encode
     block0
     block1
@@ -205,19 +273,291 @@ class node111 {
         f0: torch.Tensor,
         f1: torch.Tensor,
     )
+}
+class node71 {
+    relu
+    conv
+    beta
+   __init__(self, c: int, dilation: int = 1)
+   forward(self, x: torch.Tensor)
+}
+class node22 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node166 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node51 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node48 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node128 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node134 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node146 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node167 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node64 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node157 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node148 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node61 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node93 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node103 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node40 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node117 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node67 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node68 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node108 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node76 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node54 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node174 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node15 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node96 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node59 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node34 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node115 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node161 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node119 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
 }
 class node83 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node163 {
     relu
     conv
     beta
-   __init__(self, c: int, dilation: int = 1)
+   __init__(self, c, dilation=1)
    forward(self, x: torch.Tensor)
 }
-class node55 {
+class node139 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node65 {
     lastconv
     convblock
     conv0
-   __init__(self, in_planes: int, c: int = 64)
+   __init__(self, in_planes, c=64)
    forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
 }
 class node173 {
@@ -229,59 +569,16 @@ class node173 {
     ensemble
     scale_list
    __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(
-        self,
-        img0: torch.Tensor,
-        img1: torch.Tensor,
-        timestep: torch.Tensor,
-        tenFlow_div: torch.Tensor,
-        backwarp_tenGrid: torch.Tensor,
-        f0: torch.Tensor,
-        f1: torch.Tensor,
-    )
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
 }
-class node85 {
+class node10 {
     relu
     conv
     beta
-   __init__(self, c: int, dilation: int = 1)
+   __init__(self, c, dilation=1)
    forward(self, x: torch.Tensor)
 }
-class node163 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes: int, c: int = 64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node20 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(
-        self,
-        img0: torch.Tensor,
-        img1: torch.Tensor,
-        timestep: torch.Tensor,
-        tenFlow_div: torch.Tensor,
-        backwarp_tenGrid: torch.Tensor,
-        f0: torch.Tensor,
-        f1: torch.Tensor,
-    )
-}
-class node159 {
-    relu
-    conv
-    beta
-   __init__(self, c: int, dilation: int = 1)
-   forward(self, x: torch.Tensor)
-}
-class node150 {
+class node184 {
     cnn1
     cnn2
     cnn0
@@ -290,100 +587,7 @@ class node150 {
    __init__(self)
    forward(self, x: torch.Tensor, feat: bool = False)
 }
-class node7 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node64 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node70 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node162 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node12 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node166 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node95 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node142 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node171 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node114 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node69 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node106 {
+class node49 {
     lastconv
     convblock
     conv0
@@ -401,614 +605,7 @@ class node99 {
    __init__(self, scale: float = 1, ensemble: bool = False)
    forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
 }
-class node144 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node26 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node109 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node87 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node16 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node42 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node58 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node167 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node39 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node121 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node35 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node21 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node81 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node51 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node101 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node28 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node84 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node168 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node120 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node97 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node47 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node24 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node18 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node93 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
 class node44 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node126 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node71 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node72 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node68 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node37 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes: int, c: int = 64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node11 {
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(
-        self,
-        img0: torch.Tensor,
-        img1: torch.Tensor,
-        timestep: torch.Tensor,
-        tenFlow_div: torch.Tensor,
-        backwarp_tenGrid: torch.Tensor,
-    )
-}
-class node105 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node153 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node46 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node38 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node45 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node136 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node50 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node6 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node180 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node157 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node57 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node184 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node124 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node0 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node2 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node60 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node96 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node130 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node19 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node103 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node34 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node151 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node154 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node181 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node112 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node149 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes: int, c: int = 64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node9 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    block4
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(
-        self,
-        img0: torch.Tensor,
-        img1: torch.Tensor,
-        timestep: torch.Tensor,
-        tenFlow_div: torch.Tensor,
-        backwarp_tenGrid: torch.Tensor,
-        f0: torch.Tensor,
-        f1: torch.Tensor,
-    )
-}
-class node113 {
-    relu
-    conv
-    beta
-   __init__(self, c: int, dilation: int = 1)
-   forward(self, x: torch.Tensor)
-}
-class node61 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node175 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node178 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    block4
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node135 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node116 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node104 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node92 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    block4
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node127 {
-    relu
-    conv
-    beta
-   __init__(self, c, dilation=1)
-   forward(self, x: torch.Tensor)
-}
-class node98 {
-    cnn1
-    cnn2
-    cnn0
-    relu
-    cnn3
-   __init__(self)
-   forward(self, x: torch.Tensor, feat: bool = False)
-}
-class node74 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes, c=64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node174 {
-    encode
-    block0
-    block1
-    block2
-    block3
-    block4
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
-}
-class node73 {
     relu
     conv
     beta
@@ -1024,20 +621,111 @@ class node52 {
    __init__(self)
    forward(self, x: torch.Tensor, feat: bool = False)
 }
-class node137 {
+class node91 {
     lastconv
     convblock
     conv0
    __init__(self, in_planes, c=64)
    forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
 }
-class node65 {
+class node13 {
     encode
     block0
     block1
     block2
     block3
-    block4
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node37 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node123 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes: int, c: int = 64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node2 {
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: torch.Tensor,
+        tenFlow_div: torch.Tensor,
+        backwarp_tenGrid: torch.Tensor,
+    )
+}
+class node126 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node14 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node172 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node31 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node89 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node33 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node100 {
+    encode
+    block0
+    block1
+    block2
+    block3
     scale_list
    __init__(self, scale: float = 1, ensemble: bool = False)
    forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
@@ -1049,192 +737,436 @@ class node131 {
    __init__(self, c, dilation=1)
    forward(self, x: torch.Tensor)
 }
-class node164 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes: int, c: int = 64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node134 {
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(
-        self,
-        img0: torch.Tensor,
-        img1: torch.Tensor,
-        timestep: torch.Tensor,
-        tenFlow_div: torch.Tensor,
-        backwarp_tenGrid: torch.Tensor,
-    )
-}
-class node91 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes: int, c: int = 64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node30 {
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(
-        self,
-        img0: torch.Tensor,
-        img1: torch.Tensor,
-        timestep: torch.Tensor,
-        tenFlow_div: torch.Tensor,
-        backwarp_tenGrid: torch.Tensor,
-    )
-}
-class node176 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes: int, c: int = 64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node56 {
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(
-        self,
-        img0: torch.Tensor,
-        img1: torch.Tensor,
-        timestep: torch.Tensor,
-        tenFlow_div: torch.Tensor,
-        backwarp_tenGrid: torch.Tensor,
-    )
-}
-class node78 {
+class node116 {
+    cnn1
+    cnn2
+    cnn0
     relu
-    conv
-    beta
-   __init__(self, c: int, dilation: int = 1)
-   forward(self, x: torch.Tensor)
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
 }
-class node13 {
+class node86 {
     lastconv
     convblock
     conv0
-   __init__(self, in_planes: int, c: int = 64)
+   __init__(self, in_planes, c=64)
    forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
 }
-class node138 {
-    block0
-    block1
-    block2
-    block3
-    ensemble
-    scale_list
-   __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(
-        self,
-        img0: torch.Tensor,
-        img1: torch.Tensor,
-        timestep: torch.Tensor,
-        tenFlow_div: torch.Tensor,
-        backwarp_tenGrid: torch.Tensor,
-    )
-}
-class node25 {
-    relu
-    conv
-    beta
-   __init__(self, c: int, dilation: int = 1)
-   forward(self, x: torch.Tensor)
-}
-class node54 {
-    lastconv
-    convblock
-    conv0
-   __init__(self, in_planes: int, c: int = 64)
-   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
-}
-class node49 {
+class node97 {
     encode
     block0
     block1
     block2
     block3
-    ensemble
     scale_list
    __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(
-        self,
-        img0: torch.Tensor,
-        img1: torch.Tensor,
-        timestep: torch.Tensor,
-        tenFlow_div: torch.Tensor,
-        backwarp_tenGrid: torch.Tensor,
-        f0: torch.Tensor,
-        f1: torch.Tensor,
-    )
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
 }
-class node119 {
+class node178 {
     relu
     conv
     beta
-   __init__(self, c: int, dilation: int = 1)
+   __init__(self, c, dilation=1)
    forward(self, x: torch.Tensor)
 }
-class node15 {
+class node75 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node160 {
     lastconv
     convblock
     conv0
-   __init__(self, in_planes: int, c: int = 64)
+   __init__(self, in_planes, c=64)
    forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
 }
-class node94 {
+class node11 {
     encode
     block0
     block1
     block2
     block3
-    ensemble
     scale_list
    __init__(self, scale: float = 1, ensemble: bool = False)
-   forward(
-        self,
-        img0: torch.Tensor,
-        img1: torch.Tensor,
-        timestep: torch.Tensor,
-        tenFlow_div: torch.Tensor,
-        backwarp_tenGrid: torch.Tensor,
-        f0: torch.Tensor,
-        f1: torch.Tensor,
-    )
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
 }
-class node80 {
+class node151 {
     relu
     conv
     beta
-   __init__(self, c: int, dilation: int = 1)
+   __init__(self, c, dilation=1)
    forward(self, x: torch.Tensor)
 }
-class node33 {
+class node111 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node87 {
     lastconv
     convblock
     conv0
-   __init__(self, in_planes: int, c: int = 64)
+   __init__(self, in_planes, c=64)
    forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node6 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node50 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node98 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
 }
 class node179 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node182 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node21 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node8 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node158 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes: int, c: int = 64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node185 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    block4
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: torch.Tensor,
+        tenFlow_div: torch.Tensor,
+        backwarp_tenGrid: torch.Tensor,
+        f0: torch.Tensor,
+        f1: torch.Tensor,
+    )
+}
+class node39 {
+    relu
+    conv
+    beta
+   __init__(self, c: int, dilation: int = 1)
+   forward(self, x: torch.Tensor)
+}
+class node43 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node26 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node144 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    block4
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node23 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node72 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node159 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node152 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    block4
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node84 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node162 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node141 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node77 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    block4
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node38 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node12 {
+    cnn1
+    cnn2
+    cnn0
+    relu
+    cnn3
+   __init__(self)
+   forward(self, x: torch.Tensor, feat: bool = False)
+}
+class node132 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes, c=64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node112 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    block4
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(self, img0, img1, timestep, tenFlow_div, backwarp_tenGrid, f0, f1)
+}
+class node55 {
+    relu
+    conv
+    beta
+   __init__(self, c, dilation=1)
+   forward(self, x: torch.Tensor)
+}
+class node109 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes: int, c: int = 64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node143 {
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: torch.Tensor,
+        tenFlow_div: torch.Tensor,
+        backwarp_tenGrid: torch.Tensor,
+    )
+}
+class node79 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes: int, c: int = 64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node5 {
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: torch.Tensor,
+        tenFlow_div: torch.Tensor,
+        backwarp_tenGrid: torch.Tensor,
+    )
+}
+class node36 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes: int, c: int = 64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node73 {
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: torch.Tensor,
+        tenFlow_div: torch.Tensor,
+        backwarp_tenGrid: torch.Tensor,
+    )
+}
+class node154 {
+    relu
+    conv
+    beta
+   __init__(self, c: int, dilation: int = 1)
+   forward(self, x: torch.Tensor)
+}
+class node168 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes: int, c: int = 64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node80 {
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: torch.Tensor,
+        tenFlow_div: torch.Tensor,
+        backwarp_tenGrid: torch.Tensor,
+    )
+}
+class node27 {
+    relu
+    conv
+    beta
+   __init__(self, c: int, dilation: int = 1)
+   forward(self, x: torch.Tensor)
+}
+class node25 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes: int, c: int = 64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node18 {
     encode
     block0
     block1
@@ -1254,14 +1186,82 @@ class node179 {
         f1: torch.Tensor,
     )
 }
-class node148 {
+class node7 {
     relu
     conv
     beta
    __init__(self, c: int, dilation: int = 1)
    forward(self, x: torch.Tensor)
 }
-class node4 {
+class node45 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes: int, c: int = 64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node101 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: torch.Tensor,
+        tenFlow_div: torch.Tensor,
+        backwarp_tenGrid: torch.Tensor,
+        f0: torch.Tensor,
+        f1: torch.Tensor,
+    )
+}
+class node133 {
+    relu
+    conv
+    beta
+   __init__(self, c: int, dilation: int = 1)
+   forward(self, x: torch.Tensor)
+}
+class node181 {
+    lastconv
+    convblock
+    conv0
+   __init__(self, in_planes: int, c: int = 64)
+   forward(self, x: torch.Tensor, flow: torch.Tensor = None, scale: float = 1)
+}
+class node136 {
+    encode
+    block0
+    block1
+    block2
+    block3
+    ensemble
+    scale_list
+   __init__(self, scale: float = 1, ensemble: bool = False)
+   forward(
+        self,
+        img0: torch.Tensor,
+        img1: torch.Tensor,
+        timestep: torch.Tensor,
+        tenFlow_div: torch.Tensor,
+        backwarp_tenGrid: torch.Tensor,
+        f0: torch.Tensor,
+        f1: torch.Tensor,
+    )
+}
+class node92 {
+    relu
+    conv
+    beta
+   __init__(self, c: int, dilation: int = 1)
+   forward(self, x: torch.Tensor)
+}
+class node29 {
     flownet
     has_head
    __init__(self, flownet: nn.Module, has_head: bool)
@@ -1274,7 +1274,7 @@ class node4 {
         backwarp_tenGrid: torch.Tensor,
     )
 }
-class node102 {
+class node156 {
     _output_names
     _model_version
     _cached_size
@@ -1306,7 +1306,7 @@ class node102 {
     )
    clear_cache(self)
 }
-class node169 {
+class node47 {
    numpy_to_tensor(self, frame: np.ndarray)
    tensor_to_numpy(self, tensor: Any)
    get_name(self)
@@ -1314,7 +1314,7 @@ class node169 {
    get_supported_devices(self)
    get_supported_engines(self)
 }
-class node53 {
+class node164 {
     _ort
    __init__(self)
    numpy_to_tensor(self, frame: np.ndarray)
@@ -1324,7 +1324,7 @@ class node53 {
    get_supported_devices(self)
    get_supported_engines(self)
 }
-class node22 {
+class node28 {
     _paddle
    __init__(self)
    numpy_to_tensor(self, frame: np.ndarray)
@@ -1334,7 +1334,7 @@ class node22 {
    get_supported_devices(self)
    get_supported_engines(self)
 }
-class node76 {
+class node16 {
     _torch
    __init__(self)
    numpy_to_tensor(self, frame: np.ndarray)
@@ -1344,7 +1344,7 @@ class node76 {
    get_supported_devices(self)
    get_supported_engines(self)
 }
-class node29 {
+class node124 {
     started_at
     current_frame
     _last_reported_percent
@@ -1361,7 +1361,7 @@ class node29 {
    finish(self, processed_frames: int)
    _estimate_eta(self, current_frame: int, fps: float | None)
 }
-class node48 {
+class node110 {
     MISSING_FFMPEG
     MISSING_MODEL
     MISSING_TENSOR_BACKEND
@@ -1371,7 +1371,7 @@ class node48 {
     INVALID_CONFIG
     RESUME_CONFLICT
 }
-class node66 {
+class node130 {
     APP_NAME
     APP_VERSION
     DEBUG
@@ -1402,7 +1402,7 @@ class node66 {
    bundled_runtime_available(self)
    resource_summary(self)
 }
-class node118 {
+class node113 {
     code
     details
     message
@@ -1414,7 +1414,7 @@ class node118 {
         details: dict[str, Any] | None = None,
     )
 }
-class node155 {
+class node81 {
     completed_output_frames
     sidecar_signature_match
     output_path
@@ -1429,20 +1429,20 @@ class node155 {
     )
    to_details(self)
 }
-class node152 {
+class node58 {
     enabled
     profile
     denoise
     edge_boost
 }
-class node82 {
+class node155 {
     mode
     hwaccel
     hwaccel_device
     decoder
     options
 }
-class node117 {
+class node30 {
     codec
     family
     container
@@ -1450,12 +1450,12 @@ class node117 {
     rate_control
     options
 }
-class node182 {
+class node0 {
     kind
     enabled
     params
 }
-class node63 {
+class node82 {
     enabled
     target_fps
     multi
@@ -1467,30 +1467,30 @@ class node63 {
     tensor_backend
     engine
 }
-class node185 {
+class node74 {
     output_dir
     open_on_complete
     segment_frames
 }
-class node170 {
+class node9 {
     enabled
     filters
 }
-class node5 {
+class node145 {
     enabled
     filters
 }
-class node23 {
+class node176 {
     mode
     value
 }
-class node90 {
+class node20 {
     enabled
     scale_factor
     algorithm
     onnx_model
 }
-class node146 {
+class node32 {
     fps_mode
     process_order
     interpolation
@@ -1499,20 +1499,20 @@ class node146 {
     preprocess
     postprocess
 }
-class node165 {
+class node69 {
     model_config
 }
-class node115 {
+class node1 {
     kind
     state
     sidecar_signature_match
 }
-class node110 {
+class node106 {
     start_source_frame
     completed_output_frames
     completed_segments
 }
-class node59 {
+class node56 {
     manifest_path
     sidecar_dir
     output_path
@@ -1568,7 +1568,7 @@ class node59 {
    _write_manifest(self, signature: str, config_snapshot: dict[str, Any])
    _load_manifest_safe(self)
 }
-class node77 {
+class node78 {
     index
     path
     start_output_frame
@@ -1576,7 +1576,7 @@ class node77 {
     frame_count
     next_source_frame
 }
-class node183 {
+class node17 {
     pre_steps
     interpolation_step
     post_steps
@@ -1584,7 +1584,7 @@ class node183 {
     total_encoded_frames
     total_pairs
 }
-class node86 {
+class node42 {
     _tensor_backend
     _duplicate_threshold
    __init__(self, tensor_backend: ITensorBackend = None, **kwargs)
@@ -1594,7 +1594,7 @@ class node86 {
    validate(self)
    get_description(self)
 }
-class node147 {
+class node3 {
     _tensor_backend
     _filters
    __init__(self, tensor_backend: ITensorBackend | None = None, **kwargs: Any)
@@ -1613,7 +1613,7 @@ class node147 {
    _apply_denoise(self, frame: np.ndarray, params: dict[str, Any])
    _apply_color(self, frame: np.ndarray, params: dict[str, Any])
 }
-class node1 {
+class node142 {
     _tensor_backend
     _model_version
     _scale
@@ -1639,21 +1639,21 @@ class node1 {
    process_frame_pair(self, frame0: Any, frame1: Any, timestep: float = 0.5, **kwargs)
    get_interpolation_multi(self)
 }
-class node14 {
+class node120 {
     source_index
     frame
 }
-class node27 {
+class node60 {
     output_index
     frame
 }
-class node62 {
+class node85 {
     next_source_frame
 }
-class node88 {
+class node129 {
     next_source_frame
 }
-class node67 {
+class node57 {
     _tensor_backend
     _model_dir
     _engine
@@ -1673,7 +1673,7 @@ class node67 {
    validate(self)
    get_description(self)
 }
-class node122 {
+class node70 {
     _ffmpeg_path_explicit
     _frame_count_cache
     _video_info_cache
@@ -1772,7 +1772,7 @@ class node122 {
    _run_command(self, cmd: list[str], *, timeout: int = 3600)
    _auto_detect_paths(self)
 }
-class node125 {
+class node137 {
     _frame_bytes
     _width
     _height
@@ -1780,7 +1780,7 @@ class node125 {
    read_frame(self)
    close(self)
 }
-class node3 {
+class node171 {
     _width
     _height
    __init__(
@@ -1795,7 +1795,7 @@ class node3 {
    close(self)
    output_frame_count(self)
 }
-class node140 {
+class node62 {
     _stderr_thread
     _stderr_lines
     _latest_progress
@@ -1810,7 +1810,7 @@ class node140 {
    _update_progress(self, snapshot: dict[str, str])
    _wait_for_process(self)
 }
-class node172 {
+class node121 {
     result
     __context__
     exc
@@ -1831,7 +1831,7 @@ class node172 {
    name(self)
    value(self)
 }
-class node108 {
+class node105 {
     _member_names_
     _member_map_
     _value2member_map_
@@ -1894,7 +1894,7 @@ class object {
    __init_subclass__(cls)
    __subclasshook__(cls, __subclass: type)
 }
-class node133 {
+class node53 {
     parameters_str
     combined_parameters
     parent_namespace
@@ -1938,7 +1938,7 @@ class node133 {
    __fields__(self)
    __dir__(self)
 }
-class node10 {
+class node118 {
     __pydantic_parent_namespace__
     model_config
     model_fields
@@ -2134,7 +2134,7 @@ class node10 {
    _get_value(cls, *args: Any, **kwargs: Any)
    _calculate_keys(self, *args: Any, **kwargs: Any)
 }
-class node141 {
+class node150 {
     model_config
    __init__(
         __pydantic_self__,
@@ -2309,7 +2309,7 @@ class str {
    __rmul__(self, __value: SupportsIndex)
    __getnewargs__(self)
 }
-class node89 {
+class node165 {
     _compiled_call_impl
     _backward_pre_hooks
     training
@@ -2493,26 +2493,26 @@ class node89 {
    _replicate_for_data_parallel(self)
    compile(self, *args, **kwargs)
 }
-class node139 {
+class node66 {
    __len__(self)
 }
-class node145 {
+class node175 {
    __contains__(self, x: object, /)
 }
-class node158 {
+class node104 {
    __hash__(self)
 }
-class node100 {
+class node170 {
    __iter__(self)
 }
-class node107 {
+class node127 {
    __next__(self)
    __iter__(self)
 }
-class node129 {
+class node135 {
    __reversed__(self)
 }
-class node79 {
+class node122 {
    __getitem__(self, index: int)
    __getitem__(self, index: slice)
    index(self, value: Any, start: int = 0, stop: int = ...)
@@ -2524,191 +2524,191 @@ class node79 {
 
 object  -->  BaseException
 BaseException  -->  Exception
-object  -->  node160
-node160  -->  node40
-object  -->  node132
-object  -->  node8
-node89  -->  node41
-node89  -->  node36
-node89  -->  node161
-node89  -->  node128
-node89  -->  node177
-node89  -->  node43
-node89  -->  node156
-node89  -->  node143
-node89  -->  node111
-node89  -->  node83
-node89  -->  node55
-node89  -->  node173
-node89  -->  node85
-node89  -->  node163
-node89  -->  node20
-node89  -->  node159
-node89  -->  node150
-node89  -->  node7
-node89  -->  node64
-node89  -->  node70
-node89  -->  node162
-node89  -->  node12
-node89  -->  node166
-node89  -->  node95
-node89  -->  node142
-node89  -->  node171
-node89  -->  node114
-node89  -->  node69
-node89  -->  node106
-node89  -->  node99
-node89  -->  node144
-node89  -->  node26
-node89  -->  node109
-node89  -->  node87
-node89  -->  node16
-node89  -->  node42
-node89  -->  node58
-node89  -->  node167
-node89  -->  node39
-node89  -->  node121
-node89  -->  node35
-node89  -->  node21
-node89  -->  node81
-node89  -->  node51
-node89  -->  node101
-node89  -->  node28
-node89  -->  node84
-node89  -->  node168
-node89  -->  node120
-node89  -->  node97
-node89  -->  node47
-node89  -->  node24
-node89  -->  node18
-node89  -->  node93
-node89  -->  node44
-node89  -->  node126
-node89  -->  node71
-node89  -->  node72
-node89  -->  node68
-node89  -->  node37
-node89  -->  node11
-node89  -->  node105
-node89  -->  node153
-node89  -->  node46
-node89  -->  node38
-node89  -->  node45
-node89  -->  node136
-node89  -->  node50
-node89  -->  node6
-node89  -->  node180
-node89  -->  node157
-node89  -->  node57
-node89  -->  node184
-node89  -->  node124
-node89  -->  node0
-node89  -->  node2
-node89  -->  node60
-node89  -->  node96
-node89  -->  node130
-node89  -->  node19
-node89  -->  node103
-node89  -->  node34
-node89  -->  node151
-node89  -->  node154
-node89  -->  node181
-node89  -->  node112
-node89  -->  node149
-node89  -->  node9
-node89  -->  node113
-node89  -->  node61
-node89  -->  node175
-node89  -->  node178
-node89  -->  node135
-node89  -->  node116
-node89  -->  node104
-node89  -->  node92
-node89  -->  node127
-node89  -->  node98
-node89  -->  node74
-node89  -->  node174
-node89  -->  node73
-node89  -->  node52
-node89  -->  node137
-node89  -->  node65
-node89  -->  node131
-node89  -->  node164
-node89  -->  node134
-node89  -->  node91
-node89  -->  node30
-node89  -->  node176
-node89  -->  node56
-node89  -->  node78
-node89  -->  node13
-node89  -->  node138
-node89  -->  node25
-node89  -->  node54
-node89  -->  node49
-node89  -->  node119
-node89  -->  node15
-node89  -->  node94
-node89  -->  node80
-node89  -->  node33
-node89  -->  node179
-node89  -->  node148
-node89  -->  node4
-object  -->  node102
-node160  -->  node169
-node169  -->  node53
-node169  -->  node22
-node169  -->  node76
-object  -->  node29
-node172  -->  node48
-str  -->  node48
-node141  -->  node66
-Exception  -->  node118
-Exception  -->  node155
-node165  -->  node152
-node165  -->  node82
-node165  -->  node117
-node165  -->  node182
-node165  -->  node63
-node165  -->  node185
-node165  -->  node170
-node165  -->  node5
-node165  -->  node23
-node165  -->  node90
-node165  -->  node146
-node10  -->  node165
-object  -->  node115
-object  -->  node110
-object  -->  node59
-object  -->  node77
+object  -->  node169
+node169  -->  node88
 object  -->  node183
-node40  -->  node86
-node40  -->  node147
-node40  -->  node1
-object  -->  node14
-object  -->  node27
+object  -->  node46
+node165  -->  node24
+node165  -->  node63
+node165  -->  node94
+node165  -->  node147
+node165  -->  node114
+node165  -->  node19
+node165  -->  node41
+node165  -->  node90
+node165  -->  node138
+node165  -->  node102
+node165  -->  node149
+node165  -->  node177
+node165  -->  node140
+node165  -->  node153
+node165  -->  node95
+node165  -->  node71
+node165  -->  node22
+node165  -->  node166
+node165  -->  node51
+node165  -->  node48
+node165  -->  node128
+node165  -->  node134
+node165  -->  node146
+node165  -->  node167
+node165  -->  node64
+node165  -->  node157
+node165  -->  node148
+node165  -->  node61
+node165  -->  node93
+node165  -->  node103
+node165  -->  node40
+node165  -->  node117
+node165  -->  node67
+node165  -->  node68
+node165  -->  node108
+node165  -->  node76
+node165  -->  node54
+node165  -->  node174
+node165  -->  node15
+node165  -->  node96
+node165  -->  node59
+node165  -->  node34
+node165  -->  node115
+node165  -->  node161
+node165  -->  node119
+node165  -->  node83
+node165  -->  node163
+node165  -->  node139
+node165  -->  node65
+node165  -->  node173
+node165  -->  node10
+node165  -->  node184
+node165  -->  node49
+node165  -->  node99
+node165  -->  node44
+node165  -->  node52
+node165  -->  node91
+node165  -->  node13
+node165  -->  node37
+node165  -->  node123
+node165  -->  node2
+node165  -->  node126
+node165  -->  node14
+node165  -->  node172
+node165  -->  node31
+node165  -->  node89
+node165  -->  node33
+node165  -->  node100
+node165  -->  node131
+node165  -->  node116
+node165  -->  node86
+node165  -->  node97
+node165  -->  node178
+node165  -->  node75
+node165  -->  node160
+node165  -->  node11
+node165  -->  node151
+node165  -->  node111
+node165  -->  node87
+node165  -->  node6
+node165  -->  node50
+node165  -->  node98
+node165  -->  node179
+node165  -->  node182
+node165  -->  node21
+node165  -->  node8
+node165  -->  node158
+node165  -->  node185
+node165  -->  node39
+node165  -->  node43
+node165  -->  node26
+node165  -->  node144
+node165  -->  node23
+node165  -->  node72
+node165  -->  node159
+node165  -->  node152
+node165  -->  node84
+node165  -->  node162
+node165  -->  node141
+node165  -->  node77
+node165  -->  node38
+node165  -->  node12
+node165  -->  node132
+node165  -->  node112
+node165  -->  node55
+node165  -->  node109
+node165  -->  node143
+node165  -->  node79
+node165  -->  node5
+node165  -->  node36
+node165  -->  node73
+node165  -->  node154
+node165  -->  node168
+node165  -->  node80
+node165  -->  node27
+node165  -->  node25
+node165  -->  node18
+node165  -->  node7
+node165  -->  node45
+node165  -->  node101
+node165  -->  node133
+node165  -->  node181
+node165  -->  node136
+node165  -->  node92
+node165  -->  node29
+object  -->  node156
+node169  -->  node47
+node47  -->  node164
+node47  -->  node28
+node47  -->  node16
+object  -->  node124
+node121  -->  node110
+str  -->  node110
+node150  -->  node130
+Exception  -->  node113
+Exception  -->  node81
+node69  -->  node58
+node69  -->  node155
+node69  -->  node30
+node69  -->  node0
+node69  -->  node82
+node69  -->  node74
+node69  -->  node9
+node69  -->  node145
+node69  -->  node176
+node69  -->  node20
+node69  -->  node32
+node118  -->  node69
+object  -->  node1
+object  -->  node106
+object  -->  node56
+object  -->  node78
+object  -->  node17
+node88  -->  node42
+node88  -->  node3
+node88  -->  node142
+object  -->  node120
+object  -->  node60
+object  -->  node85
+object  -->  node129
+node88  -->  node57
+object  -->  node70
+node62  -->  node137
+node62  -->  node171
 object  -->  node62
-object  -->  node88
-node40  -->  node67
-object  -->  node122
-node140  -->  node125
-node140  -->  node3
-object  -->  node140
-node108 "isinstanceof" ..>  node172
-object  -->  node172
-node158  ..>  node172
-node100  ..>  node108
-node107  ..>  node108
-node79  ..>  node108
-node158  ..>  object
-node31  -->  node133
-object  -->  node10
-node133 "isinstanceof" ..>  node10
-node100  ..>  node10
-node10  -->  node141
-node158  ..>  str
-node107  ..>  str
-node79  -->  str
-object  -->  node89
-node145  -->  node139
-node100  -->  node139
-node100  -->  node129
+node105 "isinstanceof" ..>  node121
+object  -->  node121
+node104  ..>  node121
+node170  ..>  node105
+node127  ..>  node105
+node122  ..>  node105
+node104  ..>  object
+node35  -->  node53
+object  -->  node118
+node53 "isinstanceof" ..>  node118
+node170  ..>  node118
+node118  -->  node150
+node104  ..>  str
+node127  ..>  str
+node122  -->  str
+object  -->  node165
+node175  -->  node66
+node170  -->  node66
+node170  -->  node135

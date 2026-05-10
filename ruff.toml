@@ -1,4 +1,4 @@
-# Squirrel-RIFE ruff 配置
+# ruff 配置
 
 line-length = 120
 target-version = "py312"
