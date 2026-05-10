@@ -9,10 +9,12 @@ on:
     branches: [main, master, develop]
     paths:
       - 'backend/**'
+      - '.github/workflows/test-backend.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
       - 'backend/**'
+      - '.github/workflows/test-backend.yml'
 
 jobs:
   test-backend-pytorch:
