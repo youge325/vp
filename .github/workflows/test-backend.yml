@@ -52,5 +52,5 @@ jobs:
         run: ./scripts/setup-ci-runtime-env.ps1
 
       - name: Run Paddle backend tests
-        run: python -m pytest -q
+        run: python -m pytest -m paddle -q
         working-directory: backend
