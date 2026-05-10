@@ -1,0 +1,56 @@
+name: Test Backend
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/**'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/**'
+
+jobs:
+  test-backend-pytorch:
+    runs-on: [self-hosted, windows]
+    env:
+      PYTHONIOENCODING: utf-8
+      VP_TEST_BACKEND: pytorch
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup CI runtime environment
+        run: ./scripts/setup-ci-runtime-env.ps1
+
+      - name: Run PyTorch backend tests
+        run: python -m pytest -q
+        working-directory: backend
+
+  test-backend-paddle:
+    runs-on: [self-hosted, windows]
+    env:
+      PYTHONIOENCODING: utf-8
+      VP_TEST_BACKEND: paddle
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup CI runtime environment
+        run: ./scripts/setup-ci-runtime-env.ps1
+
+      - name: Run Paddle backend tests
+        run: python -m pytest -q
+        working-directory: backend
