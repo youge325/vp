@@ -158,6 +158,11 @@ class OnnxBackend(ITensorBackend):
     def __init__(self):
         self._ort = None
         try:
+            # 必须在 import onnxruntime 之前注册 DLL 搜索路径,因为 ORT 在 import
+            # 时就会尝试加载 TensorRT / CUDA EP 提供的 nvinfer_10.dll 等。
+            from app.utils.dll_paths import register_native_dll_paths
+
+            register_native_dll_paths()
             import onnxruntime as ort
 
             self._ort = ort
