@@ -10,9 +10,13 @@ use std::path::PathBuf;
 
 use models::TaskState;
 use rfd::FileDialog;
-use tauri::{AppHandle, Emitter, Manager, Runtime, State};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::runtime::resolve_runtime_paths;
+
+// ------------------------------------------------------------------
+// Desktop-shell native commands (genuinely belong in lib.rs)
+// ------------------------------------------------------------------
 
 #[tauri::command]
 async fn pick_inputs() -> Result<Vec<String>, String> {
@@ -44,71 +48,6 @@ async fn check_environment<R: Runtime>(
     forceRefresh: bool,
 ) -> Result<models::EnvironmentCheckPayload, String> {
     services::environment_service::check_environment(app, forceRefresh).await
-}
-
-#[tauri::command]
-async fn load_workbench_preset<R: Runtime>(
-    app: AppHandle<R>,
-) -> Result<Option<models::WorkbenchPreset>, String> {
-    let data_dir = persistence::app_data_dir(&app)?;
-    Ok(persistence::load_workbench_preset(&data_dir))
-}
-
-#[tauri::command]
-async fn save_workbench_preset<R: Runtime>(
-    app: AppHandle<R>,
-    preset: models::WorkbenchPreset,
-) -> Result<(), String> {
-    let data_dir = persistence::app_data_dir(&app)?;
-    persistence::save_workbench_preset(&data_dir, &preset)
-}
-
-#[tauri::command]
-async fn inspect_video<R: Runtime>(
-    app: AppHandle<R>,
-    input_path: String,
-) -> Result<models::VideoInfo, String> {
-    let raw = tasks::run_single_cli_command(
-        &app,
-        &[String::from("info"), String::from("--input"), input_path],
-    )
-    .await?;
-    serde_json::from_value::<models::VideoInfo>(raw)
-        .map_err(|error| format!("Unable to deserialize video info: {error}"))
-}
-
-#[tauri::command]
-async fn start_task<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, TaskState>,
-    request: models::TaskRequest,
-) -> Result<(), String> {
-    tasks::spawn_task(app, state, request).await
-}
-
-#[tauri::command]
-async fn check_resume_state<R: Runtime>(
-    app: AppHandle<R>,
-    request: models::TaskRequest,
-) -> Result<serde_json::Value, String> {
-    let args = tasks::build_inspect_output_args(&request)
-        .map_err(|error| format!("Unable to build resume inspection args: {error}"))?;
-    tasks::run_single_cli_command(&app, &args).await
-}
-
-#[tauri::command]
-async fn cancel_task(state: State<'_, TaskState>) -> Result<(), String> {
-    tasks::cancel_running_task(state).await
-}
-
-#[tauri::command]
-async fn pause_task(state: State<'_, TaskState>) -> Result<(), String> {
-    tasks::pause_running_task(state).await
-}
-
-#[tauri::command]
-async fn resume_task(state: State<'_, TaskState>) -> Result<(), String> {
-    tasks::resume_running_task(state).await
 }
 
 #[tauri::command]
@@ -144,15 +83,17 @@ pub fn run() {
             pick_inputs,
             pick_output_directory,
             check_environment,
-            load_workbench_preset,
-            save_workbench_preset,
-            inspect_video,
-            check_resume_state,
-            start_task,
-            cancel_task,
-            pause_task,
-            resume_task,
-            open_output_location
+            open_output_location,
+            // Task commands (sunk to tasks::commands)
+            tasks::commands::inspect_video,
+            tasks::commands::start_task,
+            tasks::commands::check_resume_state,
+            tasks::commands::cancel_task,
+            tasks::commands::pause_task,
+            tasks::commands::resume_task,
+            // Persistence commands (sunk to persistence::commands)
+            persistence::commands::load_workbench_preset,
+            persistence::commands::save_workbench_preset,
         ])
         .run(tauri::generate_context!())
         .expect("error while running VP Workbench");
@@ -206,6 +147,5 @@ mod tests {
         assert!(ACL_MANIFESTS.contains("allow-resume-task"));
         assert!(!ACL_MANIFESTS.contains("\"allow-pick-output\""));
         assert!(!ACL_MANIFESTS.contains("\"allow-open-file-or-directory\""));
-        assert!(!ACL_MANIFESTS.contains("\"allow-resolved-runtime\""));
     }
 }

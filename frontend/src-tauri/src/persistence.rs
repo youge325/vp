@@ -352,3 +352,5 @@ mod tests {
         assert!(loaded.is_none());
     }
 }
+
+pub mod commands;

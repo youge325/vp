@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::{io, process::ExitStatus, process::Stdio, time::Duration};
+use std::{io, process::ExitStatus, process::Stdio};
 
 use command_group::{AsyncCommandGroup, AsyncGroupChild};
 use serde::Deserialize;
@@ -9,7 +9,6 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::MissedTickBehavior;
 
 use crate::models::{
     ResumeStatusPayload, RunningTask, TaskCompletedPayload, TaskControlKind, TaskControlMessage,
@@ -289,7 +288,7 @@ fn spawn_stderr_reader<R: Runtime + 'static>(
 
 fn spawn_task_controller<R: Runtime + 'static>(
     app: AppHandle<R>,
-    mut child: AsyncGroupChild,
+    child: AsyncGroupChild,
     root_pid: u32,
     mut control_rx: mpsc::Receiver<TaskControlMessage>,
     terminal_sent: Arc<std::sync::atomic::AtomicBool>,
@@ -297,12 +296,34 @@ fn spawn_task_controller<R: Runtime + 'static>(
     let controller: Arc<dyn crate::process_control::ProcessController> =
         crate::process_control::default_controller();
 
+    // Channel for the controller to signal kill to the wait task.
+    let (kill_tx, mut kill_rx) = mpsc::channel::<()>(1);
+    // Oneshot for the wait task to report the child exit status.
+    let (exit_tx, mut exit_rx) = oneshot::channel::<io::Result<ExitStatus>>();
+
+    // Spawn the child-wait task.  It owns the AsyncGroupChild and waits
+    // either for a natural exit or for a kill signal from the controller.
+    tauri::async_runtime::spawn(async move {
+        let mut child = child;
+        tokio::select! {
+            _ = kill_rx.recv() => {
+                // Cancel requested: kill the entire process group then reap.
+                let _ = child.kill().await;
+                let status = child.wait().await;
+                let _ = exit_tx.send(status);
+            }
+            status = child.wait() => {
+                // Natural exit.
+                let _ = exit_tx.send(status);
+            }
+        }
+    });
+
+    // Controller task: handles Pause / Resume / Cancel and waits for exit.
     tauri::async_runtime::spawn(async move {
         let mut was_cancelled = false;
         let mut is_paused = false;
         let mut control_rx_closed = false;
-        let mut ticker = tokio::time::interval(Duration::from_millis(120));
-        ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
         let status: io::Result<ExitStatus>;
 
         loop {
@@ -312,49 +333,25 @@ fn spawn_task_controller<R: Runtime + 'static>(
                         control_rx_closed = true;
                         continue;
                     };
-
-                    let result = if message.kind == TaskControlKind::Cancel {
-                        let pre = handle_task_control(
-                            &*controller,
-                            &mut child,
-                            root_pid,
-                            TaskControlKind::Cancel,
-                            &mut was_cancelled,
-                            &mut is_paused,
-                        );
-                        if pre.is_ok() {
-                            match child.kill().await {
-                                Ok(()) => Ok(()),
-                                Err(error) if error.kind() == io::ErrorKind::InvalidInput => Ok(()),
-                                Err(error) => Err(format!("Unable to cancel task: {error}")),
-                            }
-                        } else {
-                            pre
-                        }
-                    } else {
-                        handle_task_control(
-                            &*controller,
-                            &mut child,
-                            root_pid,
-                            message.kind,
-                            &mut was_cancelled,
-                            &mut is_paused,
-                        )
-                    };
+                    let result = handle_task_control(
+                        &*controller,
+                        &kill_tx,
+                        root_pid,
+                        message.kind,
+                        &mut was_cancelled,
+                        &mut is_paused,
+                    );
                     let _ = message.response.send(result);
                 }
-                _ = ticker.tick() => {
-                    match child.try_wait() {
-                        Ok(Some(exit_status)) => {
-                            status = Ok(exit_status);
-                            break;
-                        }
-                        Ok(None) => {}
-                        Err(error) => {
-                            status = Err(error);
-                            break;
-                        }
-                    }
+                wait_result = &mut exit_rx => {
+                    status = match wait_result {
+                        Ok(status) => status,
+                        Err(_) => Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "wait task was dropped",
+                        )),
+                    };
+                    break;
                 }
             }
         }
@@ -405,7 +402,7 @@ fn spawn_task_controller<R: Runtime + 'static>(
 
 fn handle_task_control(
     controller: &dyn crate::process_control::ProcessController,
-    _child: &mut AsyncGroupChild,
+    kill_tx: &mpsc::Sender<()>,
     root_pid: u32,
     kind: TaskControlKind,
     was_cancelled: &mut bool,
@@ -418,7 +415,8 @@ fn handle_task_control(
                 let _ = controller.resume(root_pid);
                 *is_paused = false;
             }
-            // child.kill() is async; the caller (spawn_task_controller) handles it.
+            // Signal the wait task to kill the child group.
+            let _ = kill_tx.try_send(());
             Ok(())
         }
         TaskControlKind::Pause => {
@@ -466,3 +464,5 @@ mod tests {
         assert_eq!(parsed["type"], "check");
     }
 }
+
+pub mod commands;
