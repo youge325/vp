@@ -9,7 +9,6 @@ import os
 import subprocess
 import sys
 import time
-import traceback
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -38,6 +37,7 @@ from app.utils.logger import get_logger, setup_logging
 from app.utils.subprocess_utils import hidden_subprocess_kwargs
 from app.utils.system_probe import list_gpu_adapters
 from app.models import DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig
+from app.protocol import ndjson
 
 logger = get_logger(__name__)
 
@@ -77,10 +77,6 @@ TERMINAL_PROGRESS_PREFIX = "[VP_PROGRESS]"
 TERMINAL_PROGRESS_BAR_WIDTH = 24
 
 
-def _emit(payload: dict[str, Any]) -> None:
-    print(json.dumps(payload, ensure_ascii=False), flush=True)
-
-
 def _emit_terminal(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
@@ -90,8 +86,12 @@ def _emit_error(
     message: str,
     *,
     details: dict[str, Any] | None = None,
+    exit_code: int | None = None,
 ) -> None:
-    raise ProcessError(code, message, details=details or {})
+    exc = ProcessError(code, message, details=details or {})
+    if exit_code is not None:
+        exc.exit_code = exit_code
+    raise exc
 
 
 def _load_json_arg(
@@ -132,31 +132,6 @@ def _model_path(model_version: str | None = None) -> Path:
 
 def _processing_needs_interpolation(processing_steps: list[dict[str, Any]]) -> bool:
     return any(step["algorithm_type"] == "frame_interpolation" for step in processing_steps)
-
-
-def _infer_error_code(exc: BaseException) -> TaskErrorCode:
-    message = str(exc).lower()
-    if isinstance(exc, FileNotFoundError):
-        if "ffmpeg" in message or "ffprobe" in message:
-            return TaskErrorCode.MISSING_FFMPEG
-        if "flownet_v" in message or "model" in message:
-            return TaskErrorCode.MISSING_MODEL
-    if "ffmpeg" in message or "ffprobe" in message:
-        return TaskErrorCode.MISSING_FFMPEG
-    if "flownet_v" in message or "model" in message:
-        return TaskErrorCode.MISSING_MODEL
-    if (
-        "no module named 'torch'" in message
-        or "no module named torch" in message
-        or "pytorch" in message
-        or "no module named 'paddle'" in message
-        or "no module named paddle" in message
-        or "tensor backend" in message
-    ):
-        return TaskErrorCode.MISSING_TENSOR_BACKEND
-    if "cancelled" in message or "canceled" in message:
-        return TaskErrorCode.CANCELLED
-    return TaskErrorCode.PROCESS_FAILED
 
 
 def _default_decode_config() -> dict[str, Any]:
@@ -424,16 +399,13 @@ class CliProgressReporter:
             f"| {speed_text} "
             f"| ETA {_format_eta(eta_seconds)}"
         )
-        _emit(
-            {
-                "type": "progress",
-                "current": display_current,
-                "total": self.total_frames,
-                "percent": round(percent, 1),
-                "stage": "Encoding",
-                "stageIndex": 1,
-                "stageTotal": 1,
-            }
+        ndjson.progress(
+            current=display_current,
+            total=self.total_frames,
+            percent=round(percent, 1),
+            stage="Encoding",
+            stage_index=1,
+            stage_total=1,
         )
 
     def finish(self, processed_frames: int) -> None:
@@ -738,13 +710,10 @@ def cmd_process(args: argparse.Namespace) -> None:
             int(result.get("processed_frames", expected_output_frames) or expected_output_frames),
         )
         progress_reporter.finish(processed_frames)
-        _emit(
-            {
-                "type": "completed",
-                "outputPath": result.get("output_path", output_path),
-                "processedFrames": processed_frames,
-                "timeSeconds": elapsed,
-            }
+        ndjson.completed(
+            output_path=result.get("output_path", output_path),
+            processed_frames=processed_frames,
+            time_seconds=elapsed,
         )
     except KeyboardInterrupt:
         raise ProcessError(
@@ -764,17 +733,16 @@ def cmd_process(args: argparse.Namespace) -> None:
     except Exception as exc:  # pragma: no cover - defensive boundary
         if isinstance(exc, ProcessError):
             raise
-        raise ProcessError(
-            _infer_error_code(exc),
-            str(exc),
-            details={
+        pe = ProcessError.from_exception(exc)
+        pe.details.update(
+            {
                 "input_path": input_path,
                 "output_path": output_path,
                 "algorithm": _resolve_primary_algorithm(workflow_config),
                 "processing_steps": [step["algorithm_type"] for step in processing_steps],
-                "traceback": traceback.format_exc(),
-            },
+            }
         )
+        raise pe
 
 
 def _enforce_format_conversion_resume_mode(*, output_path: str, resume_mode: str) -> None:
@@ -885,10 +853,9 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
             "totalOutputFrames": stage_plan.total_encoded_frames,
         }
 
-    info["type"] = "resume_inspection"
     info["input_path"] = input_path
     info["pipeline_kind"] = "streaming" if processing_steps else "format_conversion"
-    _emit(info)
+    ndjson.resume_inspection(**info)
 
 
 def cmd_info(args: argparse.Namespace) -> None:
@@ -927,26 +894,21 @@ def cmd_info(args: argparse.Namespace) -> None:
                 height = int(stream.get("height", 0))
                 break
 
-        _emit(
-            {
-                "type": "info",
-                "fps": fps,
-                "frames": frames,
-                "duration": duration,
-                "hasAudio": has_audio,
-                "width": width,
-                "height": height,
-                "videoCodec": video_codec,
-            }
+        ndjson.info(
+            fps=fps,
+            frames=frames,
+            duration=duration,
+            hasAudio=has_audio,
+            width=width,
+            height=height,
+            videoCodec=video_codec,
         )
     except Exception as exc:  # pragma: no cover - defensive boundary
         if isinstance(exc, ProcessError):
             raise
-        raise ProcessError(
-            _infer_error_code(exc),
-            str(exc),
-            details={"input_path": input_path, "traceback": traceback.format_exc()},
-        )
+        pe = ProcessError.from_exception(exc)
+        pe.details["input_path"] = input_path
+        raise pe
 
 
 def cmd_check(_args: argparse.Namespace) -> None:
@@ -1014,52 +976,94 @@ def cmd_check(_args: argparse.Namespace) -> None:
         {**alg, "onnxModels": onnx_models.get("super_resolution", {}).get(alg["name"], [])} for alg in SR_ALGORITHMS
     ]
 
-    _emit(
-        {
-            "type": "check",
-            "ffmpeg": {
-                "available": ffmpeg_available,
-                "path": ffmpeg.ffmpeg_path,
-                "ffprobePath": ffmpeg.ffprobe_path,
-                "version": ffmpeg_version,
-                "hwaccels": ffmpeg_capabilities["hwaccels"],
-                "encoderProfiles": ffmpeg_capabilities["encoderProfiles"],
-                "decoderProfiles": ffmpeg_capabilities["decoderProfiles"],
-            },
-            "gpu": {
-                "available": bool(non_virtual_adapters),
-                "devices": [adapter["name"] for adapter in non_virtual_adapters],
-                "adapters": gpu_adapters,
-                "cudaAvailable": pytorch_result["gpu_available"],
-            },
-            "tensorBackends": {
-                "pytorch": pytorch_result["pytorch_available"],
-                "paddle": paddle_result["paddle_available"],
-                "onnx": onnx_result["onnx_available"],
-            },
-            "tensorEngines": tensor_engines,
-            "backendDeviceSupport": backend_device_support,
-            "onnxRuntime": {
-                "available": onnx_result["onnx_available"],
-                "providers": onnx_result["providers"],
-            },
-            "rifeModel": {
-                "available": default_model_available,
-                "version": settings.RIFE_MODEL_VERSION,
-                "path": str(default_model_path),
-            },
-            "interpolationAlgorithms": interpolation_algorithms_payload,
-            "superResolutionAlgorithms": super_resolution_algorithms_payload,
-            "animeProfiles": ANIME_PROFILES,
-            "runtime": {
-                "mode": settings.runtime_mode,
-                "bundled": settings.bundled_runtime_available,
-                "pythonExecutable": settings.PYTHON_EXECUTABLE,
-                "defaultModelAvailable": default_model_available,
-            },
-            "resources": settings.resource_summary(),
-        }
+    ndjson.check(
+        ffmpeg={
+            "available": ffmpeg_available,
+            "path": ffmpeg.ffmpeg_path,
+            "ffprobePath": ffmpeg.ffprobe_path,
+            "version": ffmpeg_version,
+            "hwaccels": ffmpeg_capabilities["hwaccels"],
+            "encoderProfiles": ffmpeg_capabilities["encoderProfiles"],
+            "decoderProfiles": ffmpeg_capabilities["decoderProfiles"],
+        },
+        gpu={
+            "available": bool(non_virtual_adapters),
+            "devices": [adapter["name"] for adapter in non_virtual_adapters],
+            "adapters": gpu_adapters,
+            "cudaAvailable": pytorch_result["gpu_available"],
+        },
+        tensorBackends={
+            "pytorch": pytorch_result["pytorch_available"],
+            "paddle": paddle_result["paddle_available"],
+            "onnx": onnx_result["onnx_available"],
+        },
+        tensorEngines=tensor_engines,
+        backendDeviceSupport=backend_device_support,
+        onnxRuntime={
+            "available": onnx_result["onnx_available"],
+            "providers": onnx_result["providers"],
+        },
+        rifeModel={
+            "available": default_model_available,
+            "version": settings.RIFE_MODEL_VERSION,
+            "path": str(default_model_path),
+        },
+        interpolationAlgorithms=interpolation_algorithms_payload,
+        superResolutionAlgorithms=super_resolution_algorithms_payload,
+        animeProfiles=ANIME_PROFILES,
+        runtime={
+            "mode": settings.runtime_mode,
+            "bundled": settings.bundled_runtime_available,
+            "pythonExecutable": settings.PYTHON_EXECUTABLE,
+            "defaultModelAvailable": default_model_available,
+        },
+        resources=settings.resource_summary(),
     )
+
+
+def _add_shared_planning_args(parser: argparse.ArgumentParser) -> None:
+    """Add arguments common to ``process`` and ``inspect-output`` subcommands.
+
+    Keeps the parser definitions in sync so a change to one command's CLI
+    surface is automatically reflected in the other.
+    """
+    parser.add_argument("--decode-config-json", default=None, help="Nested decode config JSON")
+    parser.add_argument("--encode-config-json", default=None, help="Nested encode config JSON")
+    parser.add_argument("--workflow-config-json", default=None, help="Nested workflow config JSON")
+    parser.add_argument("--output-config-json", default=None, help="Nested output config JSON")
+    parser.add_argument(
+        "--algorithm",
+        default="frame_interpolation",
+        choices=[
+            "frame_interpolation",
+            "super_resolution",
+            "anime_optimization",
+            "format_conversion",
+        ],
+        help="Primary algorithm to run",
+    )
+    parser.add_argument("--enable-interpolation", action="store_true", help="Enable interpolation stage")
+    parser.add_argument("--enable-super-resolution", action="store_true", help="Enable super-resolution stage")
+    parser.add_argument(
+        "--process-order",
+        default="super_resolution_then_interpolation",
+        choices=list(PROCESS_ORDER_MAP.keys()),
+        help="Stage order when interpolation and super-resolution are both enabled",
+    )
+    parser.add_argument("--fps", type=float, default=60.0, help="Default output FPS")
+    parser.add_argument("--fps-mode", default="multi", choices=["multi", "target"], help="FPS calculation mode")
+    parser.add_argument("--target-fps", type=float, default=60.0, help="Target FPS when using target mode")
+    parser.add_argument("--codec", default="libx264", help="Video codec")
+    parser.add_argument("--crf", type=int, default=18, help="CRF quality")
+    parser.add_argument("--preset", default="medium", help="Encoding preset")
+    parser.add_argument("--backend", default="pytorch", choices=["pytorch", "paddle", "onnx"], help="Tensor backend")
+    parser.add_argument("--output-dir", default=None, help="Output directory override")
+    parser.add_argument("--multi", type=int, default=2, help="Interpolation multiplier")
+    parser.add_argument("--model", default="4.25", help="RIFE model version")
+    parser.add_argument("--scale", type=float, default=1.0, help="Interpolation scale factor")
+    parser.add_argument("--fp16", action="store_true", help="Enable FP16 inference")
+    parser.add_argument("--sr-scale-factor", type=float, default=2.0, help="Super-resolution scale")
+    parser.add_argument("--sr-algorithm", default="placeholder", help="Super-resolution algorithm")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1072,45 +1076,7 @@ def build_parser() -> argparse.ArgumentParser:
     process_parser = subcommands.add_parser("process", help="Run the processing pipeline")
     process_parser.add_argument("--input", required=True, help="Input video path")
     process_parser.add_argument("--output", default=None, help="Optional output file path")
-    process_parser.add_argument(
-        "--algorithm",
-        default="frame_interpolation",
-        choices=[
-            "frame_interpolation",
-            "super_resolution",
-            "anime_optimization",
-            "format_conversion",
-        ],
-        help="Primary algorithm to run",
-    )
-    process_parser.add_argument("--enable-interpolation", action="store_true", help="Enable interpolation stage")
-    process_parser.add_argument("--enable-super-resolution", action="store_true", help="Enable super-resolution stage")
-    process_parser.add_argument(
-        "--process-order",
-        default="super_resolution_then_interpolation",
-        choices=list(PROCESS_ORDER_MAP.keys()),
-        help="Stage order when interpolation and super-resolution are both enabled",
-    )
-    process_parser.add_argument("--fps", type=float, default=60.0, help="Default output FPS")
-    process_parser.add_argument("--fps-mode", default="multi", choices=["multi", "target"], help="FPS calculation mode")
-    process_parser.add_argument("--target-fps", type=float, default=60.0, help="Target FPS when using target mode")
-    process_parser.add_argument("--codec", default="libx264", help="Video codec")
-    process_parser.add_argument("--crf", type=int, default=18, help="CRF quality")
-    process_parser.add_argument("--preset", default="medium", help="Encoding preset")
-    process_parser.add_argument(
-        "--backend", default="pytorch", choices=["pytorch", "paddle", "onnx"], help="Tensor backend"
-    )
-    process_parser.add_argument("--output-dir", default=None, help="Output directory override")
-    process_parser.add_argument("--multi", type=int, default=2, help="Interpolation multiplier")
-    process_parser.add_argument("--model", default="4.25", help="RIFE model version")
-    process_parser.add_argument("--scale", type=float, default=1.0, help="Interpolation scale factor")
-    process_parser.add_argument("--fp16", action="store_true", help="Enable FP16 inference")
-    process_parser.add_argument("--sr-scale-factor", type=float, default=2.0, help="Super-resolution scale")
-    process_parser.add_argument("--sr-algorithm", default="placeholder", help="Super-resolution algorithm")
-    process_parser.add_argument("--decode-config-json", default=None, help="Nested decode config JSON")
-    process_parser.add_argument("--encode-config-json", default=None, help="Nested encode config JSON")
-    process_parser.add_argument("--workflow-config-json", default=None, help="Nested workflow config JSON")
-    process_parser.add_argument("--output-config-json", default=None, help="Nested output config JSON")
+    _add_shared_planning_args(process_parser)
     process_parser.add_argument(
         "--resume-mode",
         default="auto",
@@ -1134,55 +1100,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inspect_output_parser.add_argument("--input", required=True, help="Input video path")
     inspect_output_parser.add_argument("--output", default=None, help="Optional explicit output file path")
-    inspect_output_parser.add_argument("--decode-config-json", default=None)
-    inspect_output_parser.add_argument("--encode-config-json", default=None)
-    inspect_output_parser.add_argument("--workflow-config-json", default=None)
-    inspect_output_parser.add_argument("--output-config-json", default=None)
-    inspect_output_parser.add_argument(
-        "--codec", default="libx264", help="Default codec used when encode JSON omits it"
-    )
-    inspect_output_parser.add_argument(
-        "--fps", type=float, default=60.0, help="Default output FPS used when no resampling info is given"
-    )
-    inspect_output_parser.add_argument(
-        "--fps-mode", default="multi", choices=["multi", "target"], help="FPS calculation mode"
-    )
-    inspect_output_parser.add_argument(
-        "--target-fps", type=float, default=60.0, help="Target FPS when using target mode"
-    )
-    inspect_output_parser.add_argument("--multi", type=int, default=2, help="Interpolation multiplier")
-    inspect_output_parser.add_argument("--model", default="4.25", help="RIFE model version")
-    inspect_output_parser.add_argument("--scale", type=float, default=1.0, help="Interpolation scale factor")
-    inspect_output_parser.add_argument("--fp16", action="store_true")
-    inspect_output_parser.add_argument("--sr-scale-factor", type=float, default=2.0)
-    inspect_output_parser.add_argument("--sr-algorithm", default="placeholder")
-    inspect_output_parser.add_argument(
-        "--algorithm",
-        default="frame_interpolation",
-        choices=[
-            "frame_interpolation",
-            "super_resolution",
-            "anime_optimization",
-            "format_conversion",
-        ],
-    )
-    inspect_output_parser.add_argument(
-        "--enable-interpolation",
-        action="store_true",
-    )
-    inspect_output_parser.add_argument(
-        "--enable-super-resolution",
-        action="store_true",
-    )
-    inspect_output_parser.add_argument(
-        "--process-order",
-        default="super_resolution_then_interpolation",
-        choices=list(PROCESS_ORDER_MAP.keys()),
-    )
-    inspect_output_parser.add_argument("--output-dir", default=None)
-    inspect_output_parser.add_argument("--backend", default="pytorch", choices=["pytorch", "paddle", "onnx"])
-    inspect_output_parser.add_argument("--preset", default="medium")
-    inspect_output_parser.add_argument("--crf", type=int, default=18)
+    _add_shared_planning_args(inspect_output_parser)
     inspect_output_parser.set_defaults(func=cmd_inspect_output)
 
     check_parser = subcommands.add_parser("check", help="Inspect runtime availability")
@@ -1203,10 +1121,11 @@ def main() -> None:
         raise
     except Exception as exc:  # pragma: no cover - defensive CLI boundary
         logger.exception("Unhandled backend CLI failure")
+        pe = ProcessError.from_exception(exc)
         _emit_error(
-            _infer_error_code(exc),
-            str(exc) or exc.__class__.__name__,
-            details={"exception": exc.__class__.__name__},
+            pe.code,
+            pe.message,
+            details={**pe.details, "exception": exc.__class__.__name__},
         )
 
 

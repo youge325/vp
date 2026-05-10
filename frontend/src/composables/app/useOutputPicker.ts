@@ -2,7 +2,7 @@
 
 import { usePresetStore } from '@/stores/preset'
 import { presetIpc } from '@/lib/ipc/endpoints/preset'
-import { normalizeTaskError } from '@/services/task/error-normalizer'
+import { normalizeError } from '@/services/error/normalize'
 import type { TaskError } from '@/types/domain/media'
 import type { OutputConfig } from '@/types/protocol'
 
@@ -19,7 +19,7 @@ export function useOutputPicker() {
       }
       return { outputDir, error: null }
     } catch (error) {
-      return { outputDir: null, error: normalizeTaskError(error, 'pick_output_dir_failed') }
+      return { outputDir: null, error: normalizeError(error, 'pick_output_dir_failed') }
     }
   }
 

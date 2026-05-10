@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import queue
 import threading
@@ -24,6 +23,7 @@ from app.planning import (
     SegmentManifest,
     StagePlan,
 )
+from app.protocol import ndjson
 from app.utils.ffmpeg_wrapper import FFmpegWrapper
 from app.utils.logger import get_logger
 
@@ -321,16 +321,14 @@ def _resolved_stream_fps(source_fps: float, stage_plan: StagePlan) -> float:
 
 def _emit_resume_status_event(*, resume_state: ResumeState, total_output_frames: int) -> None:
     """Emit a structured resume_status JSON line consumed by the Tauri host."""
-    payload = {
-        "type": "resume_status",
-        "resumed": resume_state.completed_output_frames > 0,
-        "completedChunks": len(resume_state.completed_segments),
-        "completedOutputFrames": resume_state.completed_output_frames,
-        "startSourceFrame": resume_state.start_source_frame,
-        "totalOutputFrames": total_output_frames,
-    }
     try:
-        print(json.dumps(payload, ensure_ascii=False), flush=True)
+        ndjson.resume_status(
+            resumed=resume_state.completed_output_frames > 0,
+            completed_chunks=len(resume_state.completed_segments),
+            completed_output_frames=resume_state.completed_output_frames,
+            start_source_frame=resume_state.start_source_frame,
+            total_output_frames=total_output_frames,
+        )
     except Exception:  # pragma: no cover - never let telemetry break the pipeline
         logger.exception("Failed to emit resume_status event")
 
@@ -601,35 +599,37 @@ def _initialize_algorithms(stage_plan: StagePlan, tensor_backend_name: str) -> d
         "interpolation": None,
     }
 
+    # Re-use a single backend instance across all algorithms in the pipeline.
+    # This avoids redundant DLL registration and repeated ``import onnxruntime``
+    # when multiple steps share the same tensor backend.
+    shared_backend = get_tensor_backend(tensor_backend_name)
+
     for step in stage_plan.pre_steps:
-        backend = get_tensor_backend(tensor_backend_name)
         algorithm = AlgorithmFactory.create(
             algorithm_type=step["algorithm_type"],
-            tensor_backend=backend,
+            tensor_backend=shared_backend,
             tensor_backend_name=tensor_backend_name,
             **step["algorithm_kwargs"],
         )
-        algorithms["single"].append((step, backend, algorithm))
+        algorithms["single"].append((step, shared_backend, algorithm))
 
     if stage_plan.interpolation_step is not None:
-        backend = get_tensor_backend(tensor_backend_name)
         algorithm = AlgorithmFactory.create(
             algorithm_type=stage_plan.interpolation_step["algorithm_type"],
-            tensor_backend=backend,
+            tensor_backend=shared_backend,
             tensor_backend_name=tensor_backend_name,
             **stage_plan.interpolation_step["algorithm_kwargs"],
         )
-        algorithms["interpolation"] = (backend, algorithm)
+        algorithms["interpolation"] = (shared_backend, algorithm)
 
     for step in stage_plan.post_steps:
-        backend = get_tensor_backend(tensor_backend_name)
         algorithm = AlgorithmFactory.create(
             algorithm_type=step["algorithm_type"],
-            tensor_backend=backend,
+            tensor_backend=shared_backend,
             tensor_backend_name=tensor_backend_name,
             **step["algorithm_kwargs"],
         )
-        algorithms["post"].append((step, backend, algorithm))
+        algorithms["post"].append((step, shared_backend, algorithm))
 
     return algorithms
 

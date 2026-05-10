@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -99,23 +100,36 @@ pub fn load_environment_cache(
     Some(entry)
 }
 
+fn atomic_write_json(path: &Path, value: &impl Serialize) -> Result<(), String> {
+    let dir = path.parent().unwrap_or(Path::new("."));
+    fs::create_dir_all(dir)
+        .map_err(|error| format!("Unable to create directory {}: {error}", dir.display()))?;
+    let mut temp = tempfile::NamedTempFile::new_in(dir)
+        .map_err(|error| format!("Unable to create temp file in {}: {error}", dir.display()))?;
+    let data = serde_json::to_vec_pretty(value)
+        .map_err(|error| format!("Unable to serialize JSON: {error}"))?;
+    temp.write_all(&data)
+        .map_err(|error| format!("Unable to write temp file: {error}"))?;
+    temp.flush()
+        .map_err(|error| format!("Unable to flush temp file: {error}"))?;
+    temp.persist(path)
+        .map_err(|error| format!("Unable to persist file to {}: {}", path.display(), error.error))?;
+    Ok(())
+}
+
 pub fn save_environment_cache(
     base_dir: &Path,
     checked_at: &str,
     fingerprint: &str,
     result: &Value,
 ) -> Result<(), String> {
-    fs::create_dir_all(base_dir)
-        .map_err(|error| format!("Unable to create environment cache directory {}: {error}", base_dir.display()))?;
     let entry = EnvironmentCacheEntry {
         schema_version: ENVIRONMENT_CACHE_SCHEMA_VERSION,
         checked_at: checked_at.to_string(),
         fingerprint: fingerprint.to_string(),
         result: result.clone(),
     };
-    let payload = serde_json::to_vec_pretty(&entry)
-        .map_err(|error| format!("Unable to serialize environment cache entry: {error}"))?;
-    fs::write(environment_cache_path(base_dir), payload)
+    atomic_write_json(&environment_cache_path(base_dir), &entry)
         .map_err(|error| format!("Unable to write environment cache: {error}"))
 }
 
@@ -129,15 +143,11 @@ pub fn load_workbench_preset(base_dir: &Path) -> Option<WorkbenchPreset> {
 }
 
 pub fn save_workbench_preset(base_dir: &Path, preset: &WorkbenchPreset) -> Result<(), String> {
-    fs::create_dir_all(base_dir)
-        .map_err(|error| format!("Unable to create preset directory {}: {error}", base_dir.display()))?;
     let entry = WorkbenchPresetEntry {
         schema_version: WORKBENCH_PRESET_SCHEMA_VERSION,
         preset: preset.clone(),
     };
-    let payload = serde_json::to_vec_pretty(&entry)
-        .map_err(|error| format!("Unable to serialize workbench preset: {error}"))?;
-    fs::write(workbench_preset_path(base_dir), payload)
+    atomic_write_json(&workbench_preset_path(base_dir), &entry)
         .map_err(|error| format!("Unable to write workbench preset: {error}"))
 }
 

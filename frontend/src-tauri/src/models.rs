@@ -1,10 +1,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use ts_rs::TS;
 
-pub type JsonMap = BTreeMap<String, serde_json::Value>;
+pub type JsonMap = serde_json::Map<String, serde_json::Value>;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -80,7 +79,7 @@ pub struct FilterStep {
     pub enabled: bool,
     #[serde(default)]
     #[ts(type = "Record<string, string | number | boolean>")]
-    pub params: serde_json::Map<String, serde_json::Value>,
+    pub params: JsonMap,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
@@ -272,7 +271,7 @@ pub struct TaskErrorPayload {
     pub details: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskControlKind {
     Cancel,
     Pause,

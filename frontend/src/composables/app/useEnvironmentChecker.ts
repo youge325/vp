@@ -3,7 +3,7 @@
 import { useEnvStore } from '@/stores/env'
 import { envIpc } from '@/lib/ipc/endpoints/env'
 import { normalizeCheckPayload } from '@/services/env/normalize'
-import { normalizeTaskError } from '@/services/task/error-normalizer'
+import { normalizeError } from '@/services/error/normalize'
 
 export function useEnvironmentChecker() {
   const envStore = useEnvStore()
@@ -15,7 +15,7 @@ export function useEnvironmentChecker() {
       const payload = normalizeCheckPayload(await envIpc.check(forceRefresh))
       envStore.setCheckPayload(payload, new Date().toISOString())
     } catch (error) {
-      envStore.setIssue(normalizeTaskError(error, 'check_failed'))
+      envStore.setIssue(normalizeError(error, 'check_failed'))
     } finally {
       envStore.setChecking(false)
     }

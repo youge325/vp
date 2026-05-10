@@ -312,14 +312,35 @@ fn spawn_task_controller<R: Runtime + 'static>(
                         control_rx_closed = true;
                         continue;
                     };
-                    let result = handle_task_control(
-                        &*controller,
-                        &mut child,
-                        root_pid,
-                        message.kind,
-                        &mut was_cancelled,
-                        &mut is_paused,
-                    );
+
+                    let result = if message.kind == TaskControlKind::Cancel {
+                        let pre = handle_task_control(
+                            &*controller,
+                            &mut child,
+                            root_pid,
+                            TaskControlKind::Cancel,
+                            &mut was_cancelled,
+                            &mut is_paused,
+                        );
+                        if pre.is_ok() {
+                            match child.kill().await {
+                                Ok(()) => Ok(()),
+                                Err(error) if error.kind() == io::ErrorKind::InvalidInput => Ok(()),
+                                Err(error) => Err(format!("Unable to cancel task: {error}")),
+                            }
+                        } else {
+                            pre
+                        }
+                    } else {
+                        handle_task_control(
+                            &*controller,
+                            &mut child,
+                            root_pid,
+                            message.kind,
+                            &mut was_cancelled,
+                            &mut is_paused,
+                        )
+                    };
                     let _ = message.response.send(result);
                 }
                 _ = ticker.tick() => {
@@ -384,7 +405,7 @@ fn spawn_task_controller<R: Runtime + 'static>(
 
 fn handle_task_control(
     controller: &dyn crate::process_control::ProcessController,
-    child: &mut AsyncGroupChild,
+    _child: &mut AsyncGroupChild,
     root_pid: u32,
     kind: TaskControlKind,
     was_cancelled: &mut bool,
@@ -397,11 +418,8 @@ fn handle_task_control(
                 let _ = controller.resume(root_pid);
                 *is_paused = false;
             }
-            match child.start_kill() {
-                Ok(()) => Ok(()),
-                Err(error) if error.kind() == io::ErrorKind::InvalidInput => Ok(()),
-                Err(error) => Err(format!("Unable to cancel task: {error}")),
-            }
+            // child.kill() is async; the caller (spawn_task_controller) handles it.
+            Ok(())
         }
         TaskControlKind::Pause => {
             if *was_cancelled {

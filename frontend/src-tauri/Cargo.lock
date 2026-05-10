@@ -4549,6 +4549,7 @@ name = "vp-workbench"
 version = "0.1.0"
 dependencies = [
  "command-group",
+ "libc",
  "open",
  "rfd",
  "schemars 1.2.1",
@@ -4556,6 +4557,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "tempfile",
  "time",
  "tokio",
  "ts-rs",
