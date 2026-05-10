@@ -38,40 +38,56 @@ else:
 
 
 def _register_paddle_cudnn_dll_dir() -> None:
-    """注册 paddle 自带的 nvidia/cudnn/bin 到 DLL 搜索路径。
+    """注册 paddle 自带的 nvidia 运行时 DLL 目录到 DLL 搜索路径。
 
-    paddle 在 ``import paddle`` 时尝试加载 ``cudnn_cnn64_9.dll`` 等 cudnn 库,
-    但 cudnn 内部互相依赖 (cudnn_cnn 依赖 cudnn_ops、cudnn_engines_*)。如果
-    nvidia/cudnn/bin 不在进程 DLL 搜索路径里,LoadLibrary 找到 cudnn_cnn64_9.dll
-    后无法解析它的同伴依赖,会抛 ``OSError [WinError 127]``。
+    paddle 在 ``import paddle`` 时通过 ``cudnn_cnn64_9.dll`` 链式加载 cudnn,
+    cudnn 内部依赖 cudnn 同伴 DLL (cudnn_ops、cudnn_engines_*) **以及** CUDA
+    toolkit 运行时 (cublas、cublasLt、cudart 等)。runner 上 paddle 通过两个
+    namespace package 提供这些库:
 
-    通过 ``importlib`` 定位 ``nvidia.cudnn`` 包的物理目录,把 ``bin`` 子目录
-    同时注册到 ``os.add_dll_directory`` (现代 LoadLibraryEx 搜索) 和 PATH 头部
-    (legacy LoadLibrary 搜索),让 paddle 后续 import 能找到全部 cudnn DLL。
+    - ``nvidia.cudnn`` -> ``site-packages/nvidia/cudnn/bin``  (cudnn 9 全套)
+    - ``nvidia.cu13`` -> ``site-packages/nvidia/cu13/bin/x86_64`` (CUDA 13 toolkit)
+
+    如果这两个目录都没注册到进程 DLL 搜索路径里, ``LoadLibrary`` 解析
+    ``cudnn_cnn64_9.dll`` 的传递依赖时会失败,抛 ``OSError [WinError 127]``。
+    paddle 自身的 ``__init__`` 不可靠地处理这件事,因此这里在测试启动前手动
+    把两个目录注册到 ``os.add_dll_directory`` (现代 LoadLibraryEx 搜索) 和
+    PATH 头部 (legacy LoadLibrary 搜索)。
     """
     if sys.platform != "win32":
         return
-    try:
-        import importlib.util
 
-        spec = importlib.util.find_spec("nvidia.cudnn")
-    except (ImportError, ValueError):
+    import importlib.util
+
+    candidates: list[str] = []
+    for spec_name, sub in (("nvidia.cudnn", "bin"), ("nvidia.cu13", os.path.join("bin", "x86_64"))):
+        try:
+            spec = importlib.util.find_spec(spec_name)
+        except (ImportError, ValueError):
+            continue
+        if spec is None or not spec.submodule_search_locations:
+            continue
+        root = next(iter(spec.submodule_search_locations), None)
+        if not root:
+            continue
+        candidate = os.path.join(root, sub)
+        if os.path.isdir(candidate):
+            candidates.append(candidate)
+
+    if not candidates:
         return
-    if spec is None or not spec.submodule_search_locations:
-        return
-    cudnn_root = next(iter(spec.submodule_search_locations), None)
-    if not cudnn_root:
-        return
-    cudnn_bin = os.path.join(cudnn_root, "bin")
-    if not os.path.isdir(cudnn_bin):
-        return
-    try:
-        os.add_dll_directory(cudnn_bin)
-    except (OSError, AttributeError):
-        pass
+
+    for candidate in candidates:
+        try:
+            os.add_dll_directory(candidate)
+        except (OSError, AttributeError):
+            pass
+
     current_path = os.environ.get("PATH", "")
-    if cudnn_bin.lower() not in current_path.lower():
-        os.environ["PATH"] = cudnn_bin + os.pathsep + current_path
+    lower_path = current_path.lower()
+    new_prefix = [c for c in candidates if c.lower() not in lower_path]
+    if new_prefix:
+        os.environ["PATH"] = os.pathsep.join(new_prefix) + os.pathsep + current_path
 
 
 if _BACKEND == "paddle":
