@@ -2,7 +2,7 @@
 name = "vp-workbench"
 version = "0.1.0"
 description = "Tauri workbench for video interpolation and delivery."
-authors = ["OpenAI Codex"]
+authors = ["youge325"]
 edition = "2021"
 default-run = "vp-workbench"
 
