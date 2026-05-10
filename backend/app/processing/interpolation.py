@@ -3,15 +3,19 @@
 支持 v4.0 ~ v4.26.heavy 全部 36 个模型版本。
 """
 
+from __future__ import annotations
+
 from app.utils.logger import get_logger
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 
 from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
-from app.algorithms.rife import RIFESolver
 from app.algorithms.rife.model_loader import SUPPORTED_MODELS as _RIFE_MODELS
 from app.algorithms.rife.onnx_solver import RIFEONNXSolver
+
+if TYPE_CHECKING:
+    from app.algorithms.rife.solver import RIFESolver
 
 logger = get_logger(__name__)
 
@@ -84,6 +88,8 @@ class FrameInterpolationAlgorithm(IAlgorithm):
                 f"初始化 RIFE PyTorch 推理器: v{self._model_version}, "
                 f"multi={self._multi}x, scale={self._scale}, fp16={self._fp16}, engine={self._engine}"
             )
+            from app.algorithms.rife.solver import RIFESolver
+
             self._solver = RIFESolver(
                 model_version=self._model_version,
                 scale=self._scale,

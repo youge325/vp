@@ -16,14 +16,18 @@
 - v4.13~v4.26.heavy: 自定义 Head 类（从 IFNet 文件导入）
 """
 
+from __future__ import annotations
+
 import importlib
 import importlib.util
-from app.utils.logger import get_logger
 import os
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-import torch
-import torch.nn as nn
+from app.utils.logger import get_logger
+
+if TYPE_CHECKING:
+    import torch
+    import torch.nn as nn
 
 logger = get_logger(__name__)
 
@@ -361,6 +365,8 @@ def _build_sequential_head(
     - in_channels=3, mid_channels=32, out_channels=8 → v4.10~v4.12
     - in_channels=3, mid_channels=32, out_channels=4 → v4.12.lite, v4.13.lite
     """
+    import torch.nn as nn
+
     if mid_channels == 16 and out_channels == 4:
         # v4.7~v4.9: 简单两层，无 LeakyReLU
         return nn.Sequential(
@@ -432,6 +438,8 @@ def load_rife_model(
     异常:
         FileNotFoundError: 权重文件不存在
     """
+    import torch
+
     if model_version not in MODEL_CONFIGS:
         raise ValueError(f"不支持的模型版本: {model_version}。可用版本: {SUPPORTED_MODELS}")
 
@@ -558,6 +566,8 @@ def create_backwarp_grid(height: int, width: int, device: torch.device) -> torch
     返回:
         采样网格，形状 (1, 2, H, W)
     """
+    import torch
+
     tenHorizontal = torch.linspace(-1.0, 1.0, width, dtype=torch.float, device=device)
     tenHorizontal = tenHorizontal.view(1, 1, 1, width).expand(-1, -1, height, -1)
     tenVertical = torch.linspace(-1.0, 1.0, height, dtype=torch.float, device=device)
@@ -577,6 +587,8 @@ def create_flow_div(height: int, width: int, device: torch.device) -> torch.Tens
     返回:
         归一化除数，形状 (2,)，值为 [(W-1)/2, (H-1)/2]
     """
+    import torch
+
     return torch.tensor(
         [(width - 1.0) / 2.0, (height - 1.0) / 2.0],
         dtype=torch.float,
@@ -595,6 +607,8 @@ def pad_frame(img: torch.Tensor, modulo: int) -> tuple[torch.Tensor, tuple]:
     返回:
         (padded_img, padding) 元组，padding 为 (left, right, top, bottom)
     """
+    import torch
+
     _, _, h, w = img.shape
     ph = ((h - 1) // modulo + 1) * modulo
     pw = ((w - 1) // modulo + 1) * modulo
