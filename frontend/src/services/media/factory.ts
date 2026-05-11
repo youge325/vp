@@ -3,12 +3,7 @@
 
 import type { MediaItem } from '@/types/domain/media'
 import type { WorkbenchPreset } from '@/types/protocol'
-import {
-  cloneDecodeConfig,
-  cloneEncodeConfig,
-  cloneOutputConfig,
-  cloneWorkflowConfig,
-} from '@/services/preset/clone'
+import { cloneWorkbenchPreset } from '@/services/preset/clone'
 import { createIdleTaskState } from '@/services/task/events'
 
 export function createMediaId(path: string): string {
@@ -21,6 +16,7 @@ export function basename(path: string): string {
 }
 
 export function createMediaItem(path: string, preset: WorkbenchPreset): MediaItem {
+  const snapshot = cloneWorkbenchPreset(preset)
   return {
     id: createMediaId(path),
     inputPath: path,
@@ -29,10 +25,10 @@ export function createMediaItem(path: string, preset: WorkbenchPreset): MediaIte
     inspecting: false,
     info: null,
     issue: null,
-    decodeConfig: cloneDecodeConfig(preset.decodeConfig),
-    workflowConfig: cloneWorkflowConfig(preset.workflowConfig),
-    encodeConfig: cloneEncodeConfig(preset.encodeConfig),
-    outputConfig: cloneOutputConfig(preset.outputConfig),
+    decodeConfig: snapshot.decodeConfig,
+    workflowConfig: snapshot.workflowConfig,
+    encodeConfig: snapshot.encodeConfig,
+    outputConfig: snapshot.outputConfig,
     taskState: createIdleTaskState(),
     lastOutputPath: '',
   }

@@ -5,10 +5,10 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, Runtime};
-use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 
 use crate::models::WorkbenchPreset;
 use crate::runtime::ResolvedRuntimePaths;
@@ -195,12 +195,12 @@ fn describe_path(path: Option<&Path>) -> Value {
 #[cfg(test)]
 mod tests {
     use super::{
-        WorkbenchPresetEntry, environment_cache_path, load_environment_cache, load_workbench_preset,
-        save_environment_cache, save_workbench_preset, workbench_preset_path,
+        environment_cache_path, load_environment_cache, load_workbench_preset,
+        save_environment_cache, save_workbench_preset, workbench_preset_path, WorkbenchPresetEntry,
     };
     use crate::models::{
-        AnimeConfig, DecodeConfig, EncodeConfig, InterpolationConfig, OutputConfig, RateControlConfig,
-        WorkbenchPreset, WorkflowConfig,
+        AnimeConfig, DecodeConfig, EncodeConfig, InterpolationConfig, OutputConfig, PostprocessConfig,
+        PreprocessConfig, RateControlConfig, SuperResolutionConfig, WorkbenchPreset, WorkflowConfig,
     };
     use serde_json::json;
     use std::path::PathBuf;
@@ -246,7 +246,7 @@ mod tests {
                     tensor_backend: "pytorch".to_string(),
                     engine: "cuda".to_string(),
                 },
-                super_resolution: crate::models::SuperResolutionConfig {
+                super_resolution: SuperResolutionConfig {
                     enabled: false,
                     scale_factor: 2.0,
                     algorithm: "placeholder".to_string(),
@@ -258,11 +258,11 @@ mod tests {
                     denoise: 10,
                     edge_boost: 15,
                 },
-                preprocess: crate::models::PreprocessConfig {
+                preprocess: PreprocessConfig {
                     enabled: false,
                     filters: Vec::new(),
                 },
-                postprocess: crate::models::PostprocessConfig {
+                postprocess: PostprocessConfig {
                     enabled: false,
                     filters: Vec::new(),
                 },
@@ -352,5 +352,3 @@ mod tests {
         assert!(loaded.is_none());
     }
 }
-
-pub mod commands;

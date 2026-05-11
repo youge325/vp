@@ -1,0 +1,27 @@
+"""Single source of truth for task error codes.
+
+The codes here MUST match the Rust ``TaskErrorCode`` enum at
+``frontend/src-tauri/src/models/task.rs`` (snake_case string values).
+A schema-drift test asserts this equality via the ts-rs generated
+JSON schema.
+"""
+
+from __future__ import annotations
+
+from enum import Enum
+
+
+class TaskErrorCode(str, Enum):
+    """Error codes synchronized with Rust ``protocol::TaskErrorCode``."""
+
+    MISSING_FFMPEG = "missing_ffmpeg"
+    MISSING_MODEL = "missing_model"
+    MISSING_TENSOR_BACKEND = "missing_tensor_backend"
+    CANCELLED = "cancelled"
+    PROCESS_FAILED = "process_failed"
+    INVALID_INPUT = "invalid_input"
+    INVALID_CONFIG = "invalid_config"
+    RESUME_CONFLICT = "resume_conflict"
+
+
+ALL_CODES = frozenset(code.value for code in TaskErrorCode)

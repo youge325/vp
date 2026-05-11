@@ -1,10 +1,10 @@
 use serde_json::Value;
 use tauri::{AppHandle, Runtime, State};
 
-use crate::models::{TaskRequest, TaskState, VideoInfo};
+use crate::models::{TaskRequest, VideoInfo};
 use crate::tasks::{
     build_inspect_output_args, cancel_running_task, pause_running_task,
-    resume_running_task, run_single_cli_command, spawn_task,
+    resume_running_task, run_single_cli_command, spawn_task, TaskState,
 };
 
 #[tauri::command]

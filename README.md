@@ -29,11 +29,12 @@
 - `cancel_task`
 - `open_output_location`
 
-后端 CLI 只保留下面三个入口：
+后端 CLI 只保留下面四个入口:
 
 - `python -m app check`
 - `python -m app info --input <video>`
 - `python -m app process --input <video> ...`
+- `python -m app inspect-output --input <video> ...`(由 Tauri 主机在启动 `process` 前做续传预检)
 
 ## 本地开发
 

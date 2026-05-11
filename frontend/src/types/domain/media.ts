@@ -1,6 +1,6 @@
 // 领域层 — 媒体项与任务错误模型。
 
-import type { DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig } from '../protocol'
+import type { DecodeConfig, EncodeConfig, OutputConfig, WorkbenchPreset, WorkflowConfig } from '../protocol'
 import type { ResumeStatus } from './batch'
 import type { TaskStatus } from './workflow'
 
@@ -16,6 +16,18 @@ export interface OperationIssue {
   scope: OperationIssueScope
   error: TaskError
 }
+
+/**
+ * Per-item snapshot of the workbench preset, taken when the media item is
+ * created. Same shape as ``WorkbenchPreset`` but semantically distinct: this
+ * is the immutable run-time config locked to one media file, whereas
+ * ``WorkbenchPreset`` in the preset store is the mutable draft the user is
+ * editing.
+ */
+export type ItemConfigSnapshot = Pick<
+  WorkbenchPreset,
+  'decodeConfig' | 'workflowConfig' | 'encodeConfig' | 'outputConfig'
+>
 
 export interface VideoInfoResult {
   type: 'info'

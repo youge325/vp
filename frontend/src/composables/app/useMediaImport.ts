@@ -6,6 +6,10 @@ import { usePresetStore } from '@/stores/preset'
 import { mediaIpc } from '@/lib/ipc/endpoints/media'
 import { createMediaItem } from '@/services/media/factory'
 import {
+  cloneOutputConfig,
+  cloneWorkflowConfig,
+} from '@/services/preset/clone'
+import {
   normalizeDecodeConfig,
   normalizeEncodeConfig,
 } from '@/services/preset/normalize'
@@ -82,8 +86,8 @@ export function useMediaImport() {
       mediaStore.replaceItemConfig(item.id, {
         decodeConfig,
         encodeConfig,
-        workflowConfig: JSON.parse(JSON.stringify(presetStore.draftPreset.workflowConfig)),
-        outputConfig: JSON.parse(JSON.stringify(presetStore.draftPreset.outputConfig)),
+        workflowConfig: cloneWorkflowConfig(presetStore.draftPreset.workflowConfig),
+        outputConfig: cloneOutputConfig(presetStore.draftPreset.outputConfig),
       })
     }
   }

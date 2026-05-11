@@ -3,7 +3,7 @@ import { CONTAINER_OPTIONS } from '@/config/constants'
 import { useEncodeForm } from '@/composables/forms/useEncodeForm'
 import { useOutputPicker } from '@/composables/app/useOutputPicker'
 import { useWorkbenchEditor, useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
-import { useEnvIssue } from '@/composables/selectors/useEnvIssue'
+import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
 
 const {
   visibleEncoderProfiles,
@@ -24,7 +24,7 @@ const {
 const { pickOutputDirectory } = useOutputPicker()
 const { editorConfig } = useWorkbenchEditor()
 const { targetLabel, caption } = useEditingScope('encode')
-const encodeIssue = useEnvIssue('encode')
+const encodeIssue = useOperationIssue('encode')
 
 async function handlePickOutputDirectory(): Promise<void> {
   await pickOutputDirectory()

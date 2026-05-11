@@ -42,12 +42,12 @@ graph TB
     end
 
     subgraph PY["Python 算法层"]
-        P1["CLI 入口 (cli.py: check / info / inspect-output / process)"]
+        P1["CLI 入口 (cli/: check / info / inspect-output / process)"]
         P2["配置体系 (config.py + models/)"]
-        P3["处理规划 (planning.py)"]
-        P4["流式执行器 (streaming.py)"]
+        P3["处理规划 (planning/)"]
+        P4["流式执行器 (processing/streaming/)"]
         P5["算法层 (algorithms/: RIFE / SR / Anime)"]
-        P6["FFmpeg 封装 (ffmpeg_wrapper.py)"]
+        P6["FFmpeg 封装 (utils/ffmpeg/)"]
     end
 
     FE -- "Tauri invoke" --> RS
@@ -152,11 +152,12 @@ Rust 的 `models.rs` 是 IPC schema 的唯一可信源。通过 `ts-rs` 派生�
 
 | 文件 | 职责 |
 |------|------|
-| [`backend/app/cli.py`](../backend/app/cli.py) | CLI 入口与 argparse |
+| [`backend/app/cli/`](../backend/app/cli/) | CLI 包 - parser/defaults/probes + commands/{check,info,process,inspect_output} |
 | [`backend/app/config.py`](../backend/app/config.py) | 环境变量配置加载 |
 | [`backend/app/models/__init__.py`](../backend/app/models/__init__.py) | Pydantic 配置模型 |
-| [`backend/app/planning.py`](../backend/app/planning.py) | 处理步骤规划与续传状态管理 |
-| [`backend/app/processing/streaming.py`](../backend/app/processing/streaming.py) | 核心流式执行器 |
+| [`backend/app/planning/`](../backend/app/planning/) | 处理步骤规划与续传 sidecar(stage_plan + manifest) |
+| [`backend/app/processing/streaming/`](../backend/app/processing/streaming/) | 流式执行器(pipeline + decoder/processor/encoder workers) |
 | [`backend/app/processing/interpolation.py`](../backend/app/processing/interpolation.py) | RIFE 补帧执行 |
-| [`backend/app/utils/ffmpeg_wrapper.py`](../backend/app/utils/ffmpeg_wrapper.py) | FFmpeg 命令构建与执行 |
-| [`backend/app/errors.py`](../backend/app/errors.py) | 统一异常体系 |
+| [`backend/app/utils/ffmpeg/`](../backend/app/utils/ffmpeg/) | FFmpeg 命令构建与执行 |
+| [`backend/app/errors/`](../backend/app/errors/) | 统一异常体系 + 错误码 SSOT (_codes / _bootstrap) |
+| [`backend/app/protocol/`](../backend/app/protocol/) | NDJSON emitter + CLI 进度上报 reporter |

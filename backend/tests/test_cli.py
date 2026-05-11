@@ -206,17 +206,17 @@ def test_check_reports_onnx_runtime_and_model_lists(tmp_path, monkeypatch, capsy
     (model_dir / "interpolation" / "rife" / "interp.onnx").write_bytes(b"onnx")
     (model_dir / "super_resolution" / "placeholder" / "sr.onnx").write_bytes(b"onnx")
 
-    monkeypatch.setattr("app.cli.FFmpegWrapper", _FakeCheckFFmpeg)
+    monkeypatch.setattr("app.cli.commands.check.FFmpegWrapper", _FakeCheckFFmpeg)
     monkeypatch.setattr(
-        "app.cli._check_pytorch_in_subprocess",
+        "app.cli.commands.check._check_pytorch_in_subprocess",
         lambda: {"pytorch_available": False, "gpu_available": False, "gpu_devices": []},
     )
-    monkeypatch.setattr("app.cli._check_paddle_in_subprocess", lambda: {"paddle_available": False})
+    monkeypatch.setattr("app.cli.commands.check._check_paddle_in_subprocess", lambda: {"paddle_available": False})
     monkeypatch.setattr(
-        "app.cli._check_onnxruntime_in_subprocess",
+        "app.cli.commands.check._check_onnxruntime_in_subprocess",
         lambda: {"onnx_available": True, "providers": ["CPUExecutionProvider"]},
     )
-    monkeypatch.setattr("app.cli.list_gpu_adapters", lambda: [])
+    monkeypatch.setattr("app.cli.commands.check.list_gpu_adapters", lambda: [])
     monkeypatch.setattr(settings, "RIFE_MODEL_DIR", str(model_dir))
 
     cmd_check(argparse.Namespace())

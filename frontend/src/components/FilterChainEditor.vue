@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type Component } from 'vue'
+import FilterScale from '@/components/filter-steps/FilterScale.vue'
+import FilterCrop from '@/components/filter-steps/FilterCrop.vue'
+import FilterPad from '@/components/filter-steps/FilterPad.vue'
+import FilterSharpen from '@/components/filter-steps/FilterSharpen.vue'
+import FilterDenoise from '@/components/filter-steps/FilterDenoise.vue'
+import FilterColor from '@/components/filter-steps/FilterColor.vue'
 import type { FilterStep } from '@/types/protocol'
 import type { FilterStepKind } from '@/types/domain/workflow'
 
@@ -25,36 +31,30 @@ const KIND_OPTIONS: { value: FilterStepKind; label: string }[] = [
   { value: 'color', label: '色彩调整' },
 ]
 
-const INTERP_OPTIONS = [
-  { value: 'lanczos4', label: 'Lanczos4' },
-  { value: 'cubic', label: 'Cubic' },
-  { value: 'area', label: 'Area' },
-  { value: 'linear', label: 'Linear' },
-]
+const KIND_COMPONENT: Record<FilterStepKind, Component> = {
+  scale: FilterScale,
+  crop: FilterCrop,
+  pad: FilterPad,
+  sharpen: FilterSharpen,
+  denoise: FilterDenoise,
+  color: FilterColor,
+}
+
+const KIND_DEFAULTS: Record<FilterStepKind, Record<string, unknown>> = {
+  scale: { mode: 'factor', factor: 0.5, width: 1920, height: 1080, interpolation: 'lanczos4' },
+  crop: { x: 0, y: 0, width: 1920, height: 1080 },
+  pad: { top: 0, bottom: 0, left: 0, right: 0, color: '#000000' },
+  sharpen: { amount: 0.5 },
+  denoise: { strength: 10, colorStrength: 10 },
+  color: { brightness: 0, contrast: 1, saturation: 1 },
+}
 
 function addFilter(kind: FilterStepKind) {
-  const base: FilterStep = { kind, enabled: true, params: {} }
-  switch (kind) {
-    case 'scale':
-      base.params = { mode: 'factor', factor: 0.5, width: 1920, height: 1080, interpolation: 'lanczos4' }
-      break
-    case 'crop':
-      base.params = { x: 0, y: 0, width: 1920, height: 1080 }
-      break
-    case 'pad':
-      base.params = { top: 0, bottom: 0, left: 0, right: 0, color: '#000000' }
-      break
-    case 'sharpen':
-      base.params = { amount: 0.5 }
-      break
-    case 'denoise':
-      base.params = { strength: 10, colorStrength: 10 }
-      break
-    case 'color':
-      base.params = { brightness: 0, contrast: 1, saturation: 1 }
-      break
-  }
-  filters.value = [...filters.value, base]
+  if (!kind) return
+  filters.value = [
+    ...filters.value,
+    { kind, enabled: true, params: { ...KIND_DEFAULTS[kind] } },
+  ]
 }
 
 function removeFilter(index: number) {
@@ -72,12 +72,14 @@ function moveFilter(index: number, direction: number) {
   filters.value = next
 }
 
-function patchFilter(index: number, mutator: (step: FilterStep) => void) {
+function updateStep(index: number, value: FilterStep) {
   const next = [...filters.value]
-  const copy = { ...next[index], params: { ...next[index].params } }
-  mutator(copy)
-  next[index] = copy
+  next[index] = value
   filters.value = next
+}
+
+function setEnabled(index: number, enabled: boolean) {
+  updateStep(index, { ...filters.value[index], enabled })
 }
 
 function filterLabel(kind: string) {
@@ -108,7 +110,7 @@ function filterLabel(kind: string) {
             <input
               :checked="step.enabled"
               type="checkbox"
-              @change="patchFilter(index, (s) => (s.enabled = ($event.target as HTMLInputElement).checked))"
+              @change="setEnabled(index, ($event.target as HTMLInputElement).checked)"
             />
             <span>启用</span>
           </label>
@@ -119,233 +121,11 @@ function filterLabel(kind: string) {
       </div>
 
       <div class="filter-card-body">
-        <!-- Scale -->
-        <template v-if="step.kind === 'scale'">
-          <div class="field-grid field-grid-2">
-            <label class="field">
-              <span>模式</span>
-              <select
-                :value="step.params.mode ?? 'factor'"
-                @change="patchFilter(index, (s) => (s.params.mode = ($event.target as HTMLSelectElement).value))"
-              >
-                <option value="factor">缩放系数</option>
-                <option value="resolution">目标分辨率</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>插值算法</span>
-              <select
-                :value="step.params.interpolation ?? 'lanczos4'"
-                @change="patchFilter(index, (s) => (s.params.interpolation = ($event.target as HTMLSelectElement).value))"
-              >
-                <option v-for="opt in INTERP_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-              </select>
-            </label>
-            <label v-if="step.params.mode === 'resolution'" class="field">
-              <span>宽度</span>
-              <input
-                :value="Number(step.params.width ?? 1920)"
-                type="number"
-                min="1"
-                @input="patchFilter(index, (s) => (s.params.width = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-            <label v-if="step.params.mode === 'resolution'" class="field">
-              <span>高度</span>
-              <input
-                :value="Number(step.params.height ?? 1080)"
-                type="number"
-                min="1"
-                @input="patchFilter(index, (s) => (s.params.height = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-            <label v-if="step.params.mode !== 'resolution'" class="field">
-              <span>缩放系数</span>
-              <input
-                :value="Number(step.params.factor ?? 0.5)"
-                type="number"
-                step="0.01"
-                min="0.01"
-                max="10"
-                @input="patchFilter(index, (s) => (s.params.factor = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-          </div>
-        </template>
-
-        <!-- Crop -->
-        <template v-if="step.kind === 'crop'">
-          <div class="field-grid field-grid-4">
-            <label class="field">
-              <span>X</span>
-              <input
-                :value="Number(step.params.x ?? 0)"
-                type="number"
-                min="0"
-                @input="patchFilter(index, (s) => (s.params.x = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-            <label class="field">
-              <span>Y</span>
-              <input
-                :value="Number(step.params.y ?? 0)"
-                type="number"
-                min="0"
-                @input="patchFilter(index, (s) => (s.params.y = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-            <label class="field">
-              <span>宽度</span>
-              <input
-                :value="Number(step.params.width ?? 1920)"
-                type="number"
-                min="1"
-                @input="patchFilter(index, (s) => (s.params.width = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-            <label class="field">
-              <span>高度</span>
-              <input
-                :value="Number(step.params.height ?? 1080)"
-                type="number"
-                min="1"
-                @input="patchFilter(index, (s) => (s.params.height = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-          </div>
-        </template>
-
-        <!-- Pad -->
-        <template v-if="step.kind === 'pad'">
-          <div class="field-grid field-grid-3">
-            <label class="field">
-              <span>上</span>
-              <input
-                :value="Number(step.params.top ?? 0)"
-                type="number"
-                min="0"
-                @input="patchFilter(index, (s) => (s.params.top = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-            <label class="field">
-              <span>下</span>
-              <input
-                :value="Number(step.params.bottom ?? 0)"
-                type="number"
-                min="0"
-                @input="patchFilter(index, (s) => (s.params.bottom = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-            <label class="field">
-              <span>左</span>
-              <input
-                :value="Number(step.params.left ?? 0)"
-                type="number"
-                min="0"
-                @input="patchFilter(index, (s) => (s.params.left = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-            <label class="field">
-              <span>右</span>
-              <input
-                :value="Number(step.params.right ?? 0)"
-                type="number"
-                min="0"
-                @input="patchFilter(index, (s) => (s.params.right = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-            <label class="field">
-              <span>颜色 (hex)</span>
-              <input
-                :value="String(step.params.color ?? '#000000')"
-                type="text"
-                @input="patchFilter(index, (s) => (s.params.color = ($event.target as HTMLInputElement).value))"
-              />
-            </label>
-          </div>
-        </template>
-
-        <!-- Sharpen -->
-        <template v-if="step.kind === 'sharpen'">
-          <div class="field-grid field-grid-2">
-            <label class="field">
-              <span>强度 (0~1)</span>
-              <input
-                :value="Number(step.params.amount ?? 0.5)"
-                type="number"
-                step="0.05"
-                min="0"
-                max="1"
-                @input="patchFilter(index, (s) => (s.params.amount = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-          </div>
-        </template>
-
-        <!-- Denoise -->
-        <template v-if="step.kind === 'denoise'">
-          <div class="field-grid field-grid-2">
-            <label class="field">
-              <span>强度 (1~20)</span>
-              <input
-                :value="Number(step.params.strength ?? 10)"
-                type="number"
-                min="1"
-                max="20"
-                @input="patchFilter(index, (s) => (s.params.strength = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-            <label class="field">
-              <span>色彩强度 (1~20)</span>
-              <input
-                :value="Number(step.params.colorStrength ?? 10)"
-                type="number"
-                min="1"
-                max="20"
-                @input="patchFilter(index, (s) => (s.params.colorStrength = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-          </div>
-        </template>
-
-        <!-- Color -->
-        <template v-if="step.kind === 'color'">
-          <div class="field-grid field-grid-3">
-            <label class="field">
-              <span>亮度 (-1~1)</span>
-              <input
-                :value="Number(step.params.brightness ?? 0)"
-                type="number"
-                step="0.05"
-                min="-1"
-                max="1"
-                @input="patchFilter(index, (s) => (s.params.brightness = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-            <label class="field">
-              <span>对比度 (0~3)</span>
-              <input
-                :value="Number(step.params.contrast ?? 1)"
-                type="number"
-                step="0.05"
-                min="0"
-                max="3"
-                @input="patchFilter(index, (s) => (s.params.contrast = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-            <label class="field">
-              <span>饱和度 (0~3)</span>
-              <input
-                :value="Number(step.params.saturation ?? 1)"
-                type="number"
-                step="0.05"
-                min="0"
-                max="3"
-                @input="patchFilter(index, (s) => (s.params.saturation = Number(($event.target as HTMLInputElement).value)))"
-              />
-            </label>
-          </div>
-        </template>
+        <component
+          :is="KIND_COMPONENT[step.kind as FilterStepKind]"
+          :model-value="step"
+          @update:model-value="updateStep(index, $event)"
+        />
       </div>
     </div>
   </div>

@@ -8,11 +8,11 @@ mod tasks;
 
 use std::path::PathBuf;
 
-use models::TaskState;
 use rfd::FileDialog;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::runtime::resolve_runtime_paths;
+use crate::tasks::TaskState;
 
 // ------------------------------------------------------------------
 // Desktop-shell native commands (genuinely belong in lib.rs)

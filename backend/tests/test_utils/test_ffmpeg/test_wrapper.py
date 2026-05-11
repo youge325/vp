@@ -5,7 +5,8 @@ from types import MethodType
 import pytest
 
 from app.config import settings
-from app.utils.ffmpeg_wrapper import FFmpegWrapper, _parse_progress_snapshot
+from app.utils.ffmpeg import FFmpegWrapper
+from app.utils.ffmpeg._progress import _parse_progress_snapshot
 
 
 class TestFFmpegWrapper:
