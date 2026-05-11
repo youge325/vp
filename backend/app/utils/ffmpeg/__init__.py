@@ -1,9 +1,8 @@
 """FFmpeg command wrapper and capability probing.
 
-This package replaces the monolithic ``ffmpeg_wrapper.py`` module with a
-clean split: constants, progress parsing, I/O pipes, probing, and encoding
-each live in their own sub-module.  ``FFmpegWrapper`` remains the public
-face and delegates to pure functions so existing imports keep working.
+Split into focused sub-modules: constants, progress parsing, I/O pipes,
+probing, and encoding.  ``FFmpegWrapper`` remains the public face and
+delegates to pure functions.
 """
 
 from __future__ import annotations

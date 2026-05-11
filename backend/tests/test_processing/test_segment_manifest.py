@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from app.errors import ResumeConflictError
-from app.processing.streaming import SegmentManifest
+from app.planning import SegmentManifest
 
 
 def _workspace(name: str) -> Path:
@@ -251,7 +251,7 @@ def test_manifest_write_uses_tmp_then_replace(tmp_path, monkeypatch):
 
     captured: list[tuple[str, str]] = []
 
-    import app.planning as planning_module
+    import app.planning.manifest as planning_module
 
     real_replace = planning_module.os.replace
 

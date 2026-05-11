@@ -15,7 +15,7 @@ const shell = useAppShellStatus()
 useBootstrap()
 
 const activeModule = computed<WorkbenchModuleDefinition>(
-  () => (route.meta.module as WorkbenchModuleDefinition | undefined) ?? WORKBENCH_MODULES[0],
+  () => route.meta.module ?? WORKBENCH_MODULES[0],
 )
 
 const isBusy = computed(() => shell.isBootstrapping.value || shell.isChecking.value)

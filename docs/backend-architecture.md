@@ -387,7 +387,7 @@ class IAlgorithm(ABC):
 
 ## FFmpeg 封装
 
-[`backend/app/utils/ffmpeg_wrapper.py`](../backend/app/utils/ffmpeg_wrapper.py) 的 `FFmpegWrapper` 类封装所有 FFmpeg/FFprobe 调用。
+[`backend/app/utils/ffmpeg/`](../backend/app/utils/ffmpeg/) 的 `FFmpegWrapper` 类封装所有 FFmpeg/FFprobe 调用,实现拆分为 `_constants` / `_progress` / `io` / `probe` / `encode` 五个子模块。
 
 ### 编码器/解码器候选表
 

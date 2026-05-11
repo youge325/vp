@@ -12,16 +12,17 @@ def _emit(payload: dict) -> None:
 
 try:
     from app.errors import ProcessError
+    from app.errors._bootstrap import infer_error_code
 except Exception:  # pragma: no cover - defensive bootstrap boundary
     ProcessError = None
+    infer_error_code = None
 
 
-def _infer_bootstrap_error_code(exc: BaseException) -> str:
-    """Bootstrap-time fallback for error-code inference.
-
-    Once ``app.errors`` is importable the canonical
-    :func:`app.errors._infer_code_from_exception` should be used instead.
-    """
+def _bootstrap_error_code(exc: BaseException) -> str:
+    """Resolve an error code without depending on a fully-loaded ``app``."""
+    if infer_error_code is not None:
+        return infer_error_code(str(exc).lower())
+    # Fallback if even ``app.errors._bootstrap`` failed to import.
     message = str(exc).lower()
     if "no module named" in message:
         if "torch" in message or "paddle" in message:
@@ -29,15 +30,13 @@ def _infer_bootstrap_error_code(exc: BaseException) -> str:
         return "missing_python_dependency"
     if "ffmpeg" in message or "ffprobe" in message:
         return "missing_ffmpeg"
-    if "flownet_v" in message or "model" in message:
-        return "missing_model"
     return "process_failed"
 
 
 try:
     from app.cli import main
 except Exception as exc:  # pragma: no cover - defensive bootstrap boundary
-    code = _infer_bootstrap_error_code(exc)
+    code = _bootstrap_error_code(exc)
     _emit(
         {
             "type": "error",
@@ -78,7 +77,7 @@ except Exception as exc:  # pragma: no cover - defensive boundary
         _emit(
             {
                 "type": "error",
-                "code": "process_failed",
+                "code": _bootstrap_error_code(exc),
                 "message": str(exc) or exc.__class__.__name__,
                 "details": {
                     "exception": exc.__class__.__name__,

@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import ResumeConflictDialog from '@/components/ResumeConflictDialog.vue'
 import TaskConsole from '@/components/TaskConsole.vue'
 import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
-import { useEnvIssue } from '@/composables/selectors/useEnvIssue'
+import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
 import type { ResumeConflictAction } from '@/types/domain/batch'
 
 const {
@@ -17,7 +17,7 @@ const {
   resolveConflict,
 } = useTaskOrchestrator()
 
-const taskIssue = useEnvIssue('task')
+const taskIssue = useOperationIssue('task')
 
 const pauseButtonLabel = computed(() => (batch.isPaused ? '继续队列' : '暂停队列'))
 const interruptButtonLabel = computed(() => (batch.isCancelling ? '中断中...' : '中断批次'))

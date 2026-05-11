@@ -197,10 +197,10 @@ def _frame(value: int) -> np.ndarray:
 
 
 def _install_video_frames_rename_hook(monkeypatch: pytest.MonkeyPatch, wrapper: "_FakeFFmpegWrapper") -> None:
-    """Patch os.replace inside the streaming module so renames propagate to the wrapper."""
-    import app.processing.streaming as streaming_module
+    """Patch os.replace inside the encoder so renames propagate to the wrapper."""
+    import app.processing.streaming.encoder as encoder_module
 
-    original_replace = streaming_module.os.replace
+    original_replace = encoder_module.os.replace
 
     def tracking_replace(src, dst):
         result = original_replace(src, dst)
@@ -210,7 +210,7 @@ def _install_video_frames_rename_hook(monkeypatch: pytest.MonkeyPatch, wrapper: 
             wrapper.video_frames[dst_str] = wrapper.video_frames.pop(src_str)
         return result
 
-    monkeypatch.setattr(streaming_module.os, "replace", tracking_replace)
+    monkeypatch.setattr(encoder_module.os, "replace", tracking_replace)
 
 
 def _workspace(name: str) -> Path:
@@ -313,7 +313,7 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
     wrapper.video_frames[str(Path(first_segment))] = [_frame(0), _frame(50)]
 
     _install_video_frames_rename_hook(monkeypatch, wrapper)
-    monkeypatch.setattr("app.processing.streaming.get_tensor_backend", lambda _name: _IdentityBackend())
+    monkeypatch.setattr("app.processing.streaming.processor.get_tensor_backend", lambda _name: _IdentityBackend())
 
     def fake_create(*, algorithm_type: str, **kwargs):
         del kwargs
@@ -321,7 +321,7 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
             return _MidpointInterpolationAlgorithm()
         return _IdentityAlgorithm()
 
-    monkeypatch.setattr("app.processing.streaming.AlgorithmFactory.create", fake_create)
+    monkeypatch.setattr("app.processing.streaming.processor.AlgorithmFactory.create", fake_create)
 
     result = process_video_streaming(
         ffmpeg=wrapper,
@@ -356,7 +356,7 @@ def test_streaming_pipeline_keeps_sidecar_when_finalization_fails(monkeypatch):
     decode_config = {"mode": "software", "decoder": "software", "options": {}}
 
     _install_video_frames_rename_hook(monkeypatch, wrapper)
-    monkeypatch.setattr("app.processing.streaming.get_tensor_backend", lambda _name: _IdentityBackend())
+    monkeypatch.setattr("app.processing.streaming.processor.get_tensor_backend", lambda _name: _IdentityBackend())
 
     def fake_create(*, algorithm_type: str, **kwargs):
         del kwargs
@@ -364,13 +364,13 @@ def test_streaming_pipeline_keeps_sidecar_when_finalization_fails(monkeypatch):
             return _MidpointInterpolationAlgorithm()
         return _IdentityAlgorithm()
 
-    monkeypatch.setattr("app.processing.streaming.AlgorithmFactory.create", fake_create)
+    monkeypatch.setattr("app.processing.streaming.processor.AlgorithmFactory.create", fake_create)
 
     def fail_finalize(**kwargs):
         del kwargs
         raise RuntimeError("concat failed")
 
-    monkeypatch.setattr("app.processing.streaming._finalize_segmented_output", fail_finalize)
+    monkeypatch.setattr("app.processing.streaming.pipeline._finalize_segmented_output", fail_finalize)
 
     with pytest.raises(RuntimeError, match="concat failed"):
         process_video_streaming(
@@ -404,7 +404,7 @@ def test_streaming_pipeline_reports_final_encoded_frames_when_resampling(monkeyp
     decode_config = {"mode": "software", "decoder": "software", "options": {}}
 
     _install_video_frames_rename_hook(monkeypatch, wrapper)
-    monkeypatch.setattr("app.processing.streaming.get_tensor_backend", lambda _name: _IdentityBackend())
+    monkeypatch.setattr("app.processing.streaming.processor.get_tensor_backend", lambda _name: _IdentityBackend())
 
     def fake_create(*, algorithm_type: str, **kwargs):
         del kwargs
@@ -412,7 +412,7 @@ def test_streaming_pipeline_reports_final_encoded_frames_when_resampling(monkeyp
             return _MidpointInterpolationAlgorithm()
         return _IdentityAlgorithm()
 
-    monkeypatch.setattr("app.processing.streaming.AlgorithmFactory.create", fake_create)
+    monkeypatch.setattr("app.processing.streaming.processor.AlgorithmFactory.create", fake_create)
 
     result = process_video_streaming(
         ffmpeg=wrapper,
@@ -484,8 +484,10 @@ def test_streaming_pipeline_uses_scaled_encoder_dimensions_for_onnx_super_resolu
     output_config = {"outputDir": "", "openOnComplete": False, "segmentFrames": 2}
 
     _install_video_frames_rename_hook(monkeypatch, wrapper)
-    monkeypatch.setattr("app.processing.streaming.get_tensor_backend", lambda _name: _IdentityBackend())
-    monkeypatch.setattr("app.processing.streaming.AlgorithmFactory.create", lambda **_kwargs: _IdentityAlgorithm())
+    monkeypatch.setattr("app.processing.streaming.processor.get_tensor_backend", lambda _name: _IdentityBackend())
+    monkeypatch.setattr(
+        "app.processing.streaming.processor.AlgorithmFactory.create", lambda **_kwargs: _IdentityAlgorithm()
+    )
 
     process_video_streaming(
         ffmpeg=wrapper,

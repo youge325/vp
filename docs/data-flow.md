@@ -174,7 +174,7 @@ class _CamelBase(BaseModel):
 | `decodeConfig.decoder` | `decode_config.decoder` | `decode_config.decoder` | `-c:v`（硬件解码器） |
 | `decodeConfig.options` | `decode_config.options` | `decode_config.options` | 解码器附加参数 |
 
-`ffmpeg_wrapper.py` 的 `build_decode_input_args()` 将 `DecodeConfig` 转换为 FFmpeg 输入参数：
+`utils/ffmpeg/` 的 `build_decode_input_args()` 将 `DecodeConfig` 转换为 FFmpeg 输入参数：
 
 - `mode == "software"`：不添加 `-hwaccel`，使用软件解码
 - `mode == "hardware"`：添加 `-hwaccel <cuda|qsv|...>` 和 `-hwaccel_device <device>`
@@ -213,7 +213,7 @@ class _CamelBase(BaseModel):
 | `encodeConfig.rateControl.value` | `encode_config.rate_control.value` | `rate_control.value` | 码率控制值 |
 | `encodeConfig.options` | `encode_config.options` | `encode_config.options` | 编码器附加参数（如 `-preset`） |
 
-`ffmpeg_wrapper.py` 的 `build_encode_video_args()` 将 `EncodeConfig` 转换为 FFmpeg 编码参数：
+`utils/ffmpeg/` 的 `build_encode_video_args()` 将 `EncodeConfig` 转换为 FFmpeg 编码参数：
 
 - `rate_control.mode == "crf"` → `-crf <value>`
 - `rate_control.mode == "cq"` → `-cq <value>`

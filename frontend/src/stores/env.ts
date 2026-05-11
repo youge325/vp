@@ -1,11 +1,11 @@
-import { reactive, ref } from 'vue'
+import { reactive } from 'vue'
 import { defineStore } from 'pinia'
 import type {
   AppEnv,
   EnvironmentCheckPayload,
   EnvironmentCheckResult,
 } from '@/types/domain/env'
-import type { OperationIssue, OperationIssueScope, TaskError } from '@/types/domain/media'
+import type { TaskError } from '@/types/domain/media'
 
 function createInitialEnv(): AppEnv {
   return {
@@ -21,7 +21,6 @@ function createInitialEnv(): AppEnv {
 
 export const useEnvStore = defineStore('env', () => {
   const env = reactive<AppEnv>(createInitialEnv())
-  const operationIssue = ref<OperationIssue | null>(null)
 
   function setCheckPayload(payload: EnvironmentCheckPayload, checkedAt: string): void {
     env.checkResult = payload.result
@@ -46,25 +45,12 @@ export const useEnvStore = defineStore('env', () => {
     env.isBootstrapping = value
   }
 
-  function setOperationIssue(scope: OperationIssueScope, error: TaskError): void {
-    operationIssue.value = { scope, error }
-  }
-
-  function clearOperationIssue(scope?: OperationIssueScope): void {
-    if (!scope || operationIssue.value?.scope === scope) {
-      operationIssue.value = null
-    }
-  }
-
   return {
     env,
-    operationIssue,
     setCheckPayload,
     setCheckResult,
     setIssue,
     setChecking,
     setBootstrapping,
-    setOperationIssue,
-    clearOperationIssue,
   }
 })

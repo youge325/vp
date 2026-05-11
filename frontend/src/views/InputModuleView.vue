@@ -2,11 +2,11 @@
 import { ref } from 'vue'
 import { useMediaImport } from '@/composables/app/useMediaImport'
 import { useMediaListEditor } from '@/composables/forms/useMediaListEditor'
-import { useEnvIssue } from '@/composables/selectors/useEnvIssue'
+import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
 
 const list = useMediaListEditor()
 const { pickAndImport, importPaths, reinspectIds } = useMediaImport()
-const inputIssue = useEnvIssue('input')
+const inputIssue = useOperationIssue('input')
 const dragActive = ref(false)
 
 async function handlePickInputs(): Promise<void> {

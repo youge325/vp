@@ -10,38 +10,17 @@ from __future__ import annotations
 import traceback as _traceback
 from typing import Any
 
+from app.errors._bootstrap import infer_error_code
+from app.errors._codes import TaskErrorCode
+
 
 def _infer_code_from_exception(exc: BaseException) -> str:
     """Map an exception to a canonical error code string.
 
-    Centralises the inference rules that were previously duplicated in
-    ``cli._infer_error_code`` and ``__main__._infer_bootstrap_error_code``.
+    Delegates to :func:`app.errors._bootstrap.infer_error_code` for
+    pattern matching against the lowercased exception message.
     """
-    message = str(exc).lower()
-
-    if isinstance(exc, FileNotFoundError):
-        if "ffmpeg" in message or "ffprobe" in message:
-            return "missing_ffmpeg"
-        if "flownet_v" in message or "model" in message:
-            return "missing_model"
-
-    if "ffmpeg" in message or "ffprobe" in message:
-        return "missing_ffmpeg"
-    if "flownet_v" in message or "model" in message:
-        return "missing_model"
-    if (
-        "no module named 'torch'" in message
-        or "no module named torch" in message
-        or "pytorch" in message
-        or "no module named 'paddle'" in message
-        or "no module named paddle" in message
-        or "tensor backend" in message
-    ):
-        return "missing_tensor_backend"
-    if "cancelled" in message or "canceled" in message:
-        return "cancelled"
-
-    return "process_failed"
+    return infer_error_code(str(exc).lower())
 
 
 class ProcessError(Exception):
@@ -54,7 +33,7 @@ class ProcessError(Exception):
 
     def __init__(
         self,
-        code: str,
+        code: TaskErrorCode | str,
         message: str,
         *,
         details: dict[str, Any] | None = None,
@@ -104,3 +83,28 @@ class ResumeConflictError(Exception):
             "completedOutputFrames": self.completed_output_frames,
             "sidecarSignatureMatch": self.sidecar_signature_match,
         }
+
+
+def emit_error(
+    code: TaskErrorCode | str,
+    message: str,
+    *,
+    details: dict[str, Any] | None = None,
+    exit_code: int | None = None,
+) -> None:
+    """Raise a ``ProcessError`` with the given code, optionally setting ``exit_code``.
+
+    Convenience wrapper used by CLI command handlers to fail-fast.
+    """
+    exc = ProcessError(code, message, details=details or {})
+    if exit_code is not None:
+        exc.exit_code = exit_code  # type: ignore[attr-defined]
+    raise exc
+
+
+__all__ = [
+    "ProcessError",
+    "ResumeConflictError",
+    "TaskErrorCode",
+    "emit_error",
+]

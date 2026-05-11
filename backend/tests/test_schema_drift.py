@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from app.errors import TaskErrorCode
 from app.models import (
     AnimeConfig,
     DecodeConfig,
@@ -110,3 +111,23 @@ def test_property_names_and_types_match(schema_name: str, model_cls: type) -> No
         rust_req = _is_required(rust_schema, name)
         py_req = _is_required(py_schema, name)
         assert rust_req == py_req, f"Required mismatch for {schema_name}.{name}: rust={rust_req} vs py={py_req}"
+
+
+def test_task_error_codes_match_rust() -> None:
+    """Python ``TaskErrorCode`` enum must contain exactly the codes Rust emits.
+
+    The Rust-side source of truth is ``frontend/src-tauri/src/models/task.rs``
+    where ``TaskErrorCode`` derives ``JsonSchema``; schemars writes the
+    snake_case variant strings into the generated JSON schema. This test
+    fails fast when one side adds or removes a code without the other.
+    """
+    schema_path = SCHEMA_DIR / "task_error_payload.schema.json"
+    assert schema_path.exists(), f"Rust schema missing: {schema_path}"
+
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    rust_codes = set(schema["$defs"]["TaskErrorCode"]["enum"])
+    python_codes = {code.value for code in TaskErrorCode}
+
+    assert rust_codes == python_codes, (
+        f"TaskErrorCode drift: only-in-rust={rust_codes - python_codes}, only-in-python={python_codes - rust_codes}"
+    )

@@ -7,7 +7,7 @@ import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
 import { getTaskStatusLabel } from '@/services/format/labels'
 import { WORKBENCH_MODULE_KEYS } from '@/config/workbench-modules'
-import type { ModuleKey, WorkbenchModuleDefinition } from '@/types/view/modules'
+import type { ModuleKey } from '@/types/view/modules'
 
 export function useStepRailState() {
   const route = useRoute()
@@ -16,10 +16,9 @@ export function useStepRailState() {
   const { editorConfig, isPresetMode } = useWorkbenchEditor()
   const { batch, currentTaskItem } = useTaskOrchestrator()
 
-  const activeModuleKey = computed<ModuleKey>(() => {
-    const module = route.meta.module as WorkbenchModuleDefinition | undefined
-    return module?.key ?? WORKBENCH_MODULE_KEYS[0]
-  })
+  const activeModuleKey = computed<ModuleKey>(
+    () => route.meta.module?.key ?? WORKBENCH_MODULE_KEYS[0],
+  )
 
   const moduleStates = computed<Record<ModuleKey, string>>(() => {
     const env = envStore.env.checkResult
