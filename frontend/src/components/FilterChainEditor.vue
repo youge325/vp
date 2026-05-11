@@ -40,7 +40,7 @@ const KIND_COMPONENT: Record<FilterStepKind, Component> = {
   color: FilterColor,
 }
 
-const KIND_DEFAULTS: Record<FilterStepKind, Record<string, unknown>> = {
+const KIND_DEFAULTS: Record<FilterStepKind, Record<string, string | number | boolean>> = {
   scale: { mode: 'factor', factor: 0.5, width: 1920, height: 1080, interpolation: 'lanczos4' },
   crop: { x: 0, y: 0, width: 1920, height: 1080 },
   pad: { top: 0, bottom: 0, left: 0, right: 0, color: '#000000' },
