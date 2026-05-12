@@ -1,8 +1,9 @@
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{oneshot, Mutex};
+
+use crate::tasks::handle::TaskHandle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskControlKind {
-    Cancel,
     Pause,
     Resume,
 }
@@ -12,12 +13,7 @@ pub struct TaskControlMessage {
     pub response: oneshot::Sender<Result<(), String>>,
 }
 
-#[derive(Clone)]
-pub struct RunningTask {
-    pub control_tx: mpsc::Sender<TaskControlMessage>,
-}
-
 #[derive(Default)]
 pub struct TaskState {
-    pub current: Mutex<Option<RunningTask>>,
+    pub current: Mutex<Option<TaskHandle>>,
 }
