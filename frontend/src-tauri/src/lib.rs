@@ -1,47 +1,18 @@
 pub mod models;
 pub mod protocol;
 pub mod error;
+mod dialogs;
 mod persistence;
 mod process_control;
 mod runtime;
 mod services;
 mod tasks;
 
-use std::path::PathBuf;
-
-use rfd::FileDialog;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::error::ShellError;
 use crate::runtime::resolve_runtime_paths;
 use crate::tasks::TaskState;
-
-// ------------------------------------------------------------------
-// Desktop-shell native commands (genuinely belong in lib.rs)
-// ------------------------------------------------------------------
-
-#[tauri::command]
-async fn pick_inputs() -> Result<Vec<String>, ShellError> {
-    Ok(FileDialog::new()
-        .set_title("Import Videos")
-        .add_filter(
-            "Video",
-            &["mp4", "avi", "mkv", "mov", "flv", "webm", "wmv", "ts"],
-        )
-        .pick_files()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|path| path.display().to_string())
-        .collect())
-}
-
-#[tauri::command]
-async fn pick_output_directory() -> Result<Option<String>, ShellError> {
-    Ok(FileDialog::new()
-        .set_title("Select Output Directory")
-        .pick_folder()
-        .map(|path| path.display().to_string()))
-}
 
 #[tauri::command]
 #[allow(non_snake_case)]
@@ -50,22 +21,6 @@ async fn check_environment<R: Runtime>(
     forceRefresh: bool,
 ) -> Result<models::EnvironmentCheckPayload, ShellError> {
     services::environment_service::check_environment(app, forceRefresh).await
-}
-
-#[tauri::command]
-async fn open_output_location(path: String) -> Result<(), ShellError> {
-    let path_buf = PathBuf::from(path);
-    let target = if path_buf.is_dir() {
-        path_buf
-    } else {
-        path_buf.parent().map(PathBuf::from).unwrap_or(path_buf)
-    };
-    open::that_detached(target).map_err(|error| {
-        ShellError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Unable to open output location: {error}"),
-        ))
-    })
 }
 
 pub fn run() {
@@ -87,10 +42,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            pick_inputs,
-            pick_output_directory,
+            dialogs::pick_inputs,
+            dialogs::pick_output_directory,
+            dialogs::open_output_location,
             check_environment,
-            open_output_location,
             // Task commands (sunk to tasks::commands)
             tasks::commands::inspect_video,
             tasks::commands::start_task,
