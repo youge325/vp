@@ -4,6 +4,12 @@
 //! maps to `protocol::TaskErrorCode`. The custom `Serialize` impl emits
 //! `{ code, message }` so the frontend can route on `code` rather than parse
 //! free-form strings.
+//!
+//! Phase C.2.3 removed the catch-all `Other(String)` / `From<String>` /
+//! `From<&str>` variants. Any new failure must pick a named variant — pick
+//! `BackendExit` for controller-internal panics, `Persistence` for storage
+//! IO, etc. This keeps the wire-level `code` field meaningful for the
+//! frontend.
 
 use std::fmt;
 
@@ -22,7 +28,6 @@ pub enum ShellError {
     Io(std::io::Error),
     InvalidInput(String),
     NoActiveTask,
-    Other(String),
 }
 
 impl ShellError {
@@ -37,7 +42,6 @@ impl ShellError {
             Self::Io(_) => TaskErrorCode::IoError,
             Self::InvalidInput(_) => TaskErrorCode::InvalidInput,
             Self::NoActiveTask => TaskErrorCode::InvalidInput,
-            Self::Other(_) => TaskErrorCode::ProcessFailed,
         }
     }
 }
@@ -62,7 +66,6 @@ impl fmt::Display for ShellError {
             Self::Io(error) => write!(f, "io failure: {error}"),
             Self::InvalidInput(message) => write!(f, "invalid input: {message}"),
             Self::NoActiveTask => write!(f, "no running task"),
-            Self::Other(message) => f.write_str(message),
         }
     }
 }
@@ -86,18 +89,6 @@ impl From<std::io::Error> for ShellError {
 impl From<serde_json::Error> for ShellError {
     fn from(error: serde_json::Error) -> Self {
         Self::NdjsonDecode(error)
-    }
-}
-
-impl From<String> for ShellError {
-    fn from(message: String) -> Self {
-        Self::Other(message)
-    }
-}
-
-impl From<&str> for ShellError {
-    fn from(message: &str) -> Self {
-        Self::Other(message.to_string())
     }
 }
 
@@ -144,11 +135,10 @@ mod tests {
     }
 
     #[test]
-    fn other_falls_back_to_process_failed() {
-        let error: ShellError = String::from("legacy untyped string").into();
+    fn backend_exit_maps_to_runtime_panic() {
+        let error = ShellError::BackendExit("controller stopped".into());
         let value = serde_json::to_value(&error).expect("serializable");
-        assert_eq!(value["code"], "process_failed");
-        assert_eq!(value["message"], "legacy untyped string");
+        assert_eq!(value["code"], "runtime_panic");
     }
 
     #[test]

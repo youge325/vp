@@ -1,6 +1,4 @@
 use std::env;
-use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -9,6 +7,7 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, Runtime};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+use tokio::fs;
 
 use crate::error::ShellError;
 use crate::models::WorkbenchPreset;
@@ -36,14 +35,15 @@ struct WorkbenchPresetEntry {
     pub preset: WorkbenchPreset,
 }
 
-pub fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, ShellError> {
-    let dir = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|error| {
-            ShellError::Persistence(format!("Unable to resolve app data directory: {error}"))
-        })?;
-    fs::create_dir_all(&dir).map_err(|error| {
+/// 解析并创建应用本地数据目录。
+///
+/// Phase C.2.2:从 ``std::fs::create_dir_all`` 改为 ``tokio::fs``,避免
+/// ``#[tauri::command] async fn`` 在 tokio runtime 上阻塞。
+pub async fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, ShellError> {
+    let dir = app.path().app_local_data_dir().map_err(|error| {
+        ShellError::Persistence(format!("Unable to resolve app data directory: {error}"))
+    })?;
+    fs::create_dir_all(&dir).await.map_err(|error| {
         ShellError::Persistence(format!(
             "Unable to create app data directory {}: {error}",
             dir.display()
@@ -63,11 +63,17 @@ pub fn workbench_preset_path(base_dir: &Path) -> PathBuf {
 pub fn current_timestamp() -> Result<String, ShellError> {
     OffsetDateTime::now_utc()
         .format(&Rfc3339)
-        .map_err(|error| ShellError::Other(format!("Unable to format timestamp: {error}")))
+        .map_err(|error| ShellError::Persistence(format!("Unable to format timestamp: {error}")))
 }
 
-pub fn build_environment_fingerprint(paths: &ResolvedRuntimePaths) -> Result<String, ShellError> {
-    let model_version = env::var("VP_RIFE_MODEL_VERSION").unwrap_or_else(|_| DEFAULT_RIFE_MODEL_VERSION.to_string());
+/// 构造环境检查的指纹字符串,用于决定缓存命中。
+///
+/// 内部对 ffmpeg / ffprobe / model 等路径做 metadata stat,所以也是 async。
+pub async fn build_environment_fingerprint(
+    paths: &ResolvedRuntimePaths,
+) -> Result<String, ShellError> {
+    let model_version =
+        env::var("VP_RIFE_MODEL_VERSION").unwrap_or_else(|_| DEFAULT_RIFE_MODEL_VERSION.to_string());
     let default_model_path = paths
         .model_dir
         .as_ref()
@@ -77,17 +83,17 @@ pub fn build_environment_fingerprint(paths: &ResolvedRuntimePaths) -> Result<Str
         "backendDir": paths.backend_dir.to_string_lossy().to_string(),
         "runtimeRoot": paths.runtime_root.as_ref().map(|path| path.to_string_lossy().to_string()),
         "outputDir": paths.output_dir.to_string_lossy().to_string(),
-        "pythonExecutable": describe_path(Some(paths.python_executable.as_path())),
-        "ffmpeg": describe_path(paths.ffmpeg_path.as_deref()),
-        "ffprobe": describe_path(paths.ffprobe_path.as_deref()),
-        "modelDir": describe_path(paths.model_dir.as_deref()),
-        "defaultModel": describe_path(default_model_path.as_deref()),
+        "pythonExecutable": describe_path(Some(paths.python_executable.as_path())).await,
+        "ffmpeg": describe_path(paths.ffmpeg_path.as_deref()).await,
+        "ffprobe": describe_path(paths.ffprobe_path.as_deref()).await,
+        "modelDir": describe_path(paths.model_dir.as_deref()).await,
+        "defaultModel": describe_path(default_model_path.as_deref()).await,
         "modelVersion": model_version,
     }))
     .map_err(ShellError::from)
 }
 
-pub fn load_environment_cache(
+pub async fn load_environment_cache(
     base_dir: &Path,
     fingerprint: &str,
     force_refresh: bool,
@@ -96,7 +102,7 @@ pub fn load_environment_cache(
         return None;
     }
 
-    let raw = fs::read_to_string(environment_cache_path(base_dir)).ok()?;
+    let raw = fs::read_to_string(environment_cache_path(base_dir)).await.ok()?;
     let entry = serde_json::from_str::<EnvironmentCacheEntry>(&raw).ok()?;
     if entry.schema_version != ENVIRONMENT_CACHE_SCHEMA_VERSION {
         return None;
@@ -107,29 +113,62 @@ pub fn load_environment_cache(
     Some(entry)
 }
 
-fn atomic_write_json(path: &Path, value: &impl Serialize) -> Result<(), ShellError> {
-    let dir = path.parent().unwrap_or(Path::new("."));
-    fs::create_dir_all(dir).map_err(|error| {
-        ShellError::Persistence(format!("Unable to create directory {}: {error}", dir.display()))
-    })?;
-    let mut temp = tempfile::NamedTempFile::new_in(dir).map_err(|error| {
+/// 原子地把序列化结果写入文件。
+///
+/// ``tempfile::NamedTempFile::persist`` 在所有平台上都是同步 syscall(Windows 走
+/// ``MoveFileEx``,POSIX 走 ``rename``),Phase C.2.2 把这一段包到
+/// ``tokio::task::spawn_blocking`` 避免阻塞 tokio worker。
+async fn atomic_write_json<T>(path: &Path, value: &T) -> Result<(), ShellError>
+where
+    T: Serialize,
+{
+    let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
+    fs::create_dir_all(&dir).await.map_err(|error| {
         ShellError::Persistence(format!(
-            "Unable to create temp file in {}: {error}",
+            "Unable to create directory {}: {error}",
             dir.display()
         ))
     })?;
+
+    // 序列化在异步上下文中执行,数据量小不会卡 runtime
     let data = serde_json::to_vec_pretty(value)?;
-    temp.write_all(&data)
-        .map_err(|error| ShellError::Persistence(format!("Unable to write temp file: {error}")))?;
-    temp.flush()
-        .map_err(|error| ShellError::Persistence(format!("Unable to flush temp file: {error}")))?;
-    temp.persist(path).map_err(|error| {
-        ShellError::Persistence(format!("Unable to persist file to {}: {}", path.display(), error.error))
-    })?;
+
+    // 写到 ``<dir>/<uuid>.tmp`` 后原子 rename。两步都包成 spawn_blocking 来
+    // 避免在 worker 线程内阻塞;persist() 本身没有 async 形式。
+    let target = path.to_path_buf();
+    let dir_for_blocking = dir.clone();
+    tokio::task::spawn_blocking(move || -> Result<(), ShellError> {
+        let mut temp = tempfile::NamedTempFile::new_in(&dir_for_blocking).map_err(|error| {
+            ShellError::Persistence(format!(
+                "Unable to create temp file in {}: {error}",
+                dir_for_blocking.display()
+            ))
+        })?;
+        std::io::Write::write_all(temp.as_file_mut(), &data).map_err(|error| {
+            ShellError::Persistence(format!("Unable to write temp file: {error}"))
+        })?;
+        // flush 在 drop 时自动发生,这里显式调以便提前发现写失败。
+        temp.as_file_mut().sync_all().map_err(|error| {
+            ShellError::Persistence(format!("Unable to flush temp file: {error}"))
+        })?;
+        temp.persist(&target).map_err(|error| {
+            ShellError::Persistence(format!(
+                "Unable to persist file to {}: {}",
+                target.display(),
+                error.error
+            ))
+        })?;
+        Ok(())
+    })
+    .await
+    .map_err(|error| {
+        ShellError::Persistence(format!("Persistence task join failed: {error}"))
+    })??;
+
     Ok(())
 }
 
-pub fn save_environment_cache(
+pub async fn save_environment_cache(
     base_dir: &Path,
     checked_at: &str,
     fingerprint: &str,
@@ -141,11 +180,11 @@ pub fn save_environment_cache(
         fingerprint: fingerprint.to_string(),
         result: result.clone(),
     };
-    atomic_write_json(&environment_cache_path(base_dir), &entry)
+    atomic_write_json(&environment_cache_path(base_dir), &entry).await
 }
 
-pub fn load_workbench_preset(base_dir: &Path) -> Option<WorkbenchPreset> {
-    let raw = fs::read_to_string(workbench_preset_path(base_dir)).ok()?;
+pub async fn load_workbench_preset(base_dir: &Path) -> Option<WorkbenchPreset> {
+    let raw = fs::read_to_string(workbench_preset_path(base_dir)).await.ok()?;
     let entry = serde_json::from_str::<WorkbenchPresetEntry>(&raw).ok()?;
     if entry.schema_version != WORKBENCH_PRESET_SCHEMA_VERSION {
         return None;
@@ -153,12 +192,15 @@ pub fn load_workbench_preset(base_dir: &Path) -> Option<WorkbenchPreset> {
     Some(entry.preset)
 }
 
-pub fn save_workbench_preset(base_dir: &Path, preset: &WorkbenchPreset) -> Result<(), ShellError> {
+pub async fn save_workbench_preset(
+    base_dir: &Path,
+    preset: &WorkbenchPreset,
+) -> Result<(), ShellError> {
     let entry = WorkbenchPresetEntry {
         schema_version: WORKBENCH_PRESET_SCHEMA_VERSION,
         preset: preset.clone(),
     };
-    atomic_write_json(&workbench_preset_path(base_dir), &entry)
+    atomic_write_json(&workbench_preset_path(base_dir), &entry).await
 }
 
 fn resolve_host_identifier() -> String {
@@ -167,7 +209,7 @@ fn resolve_host_identifier() -> String {
         .unwrap_or_else(|_| "unknown-host".to_string())
 }
 
-fn describe_path(path: Option<&Path>) -> Value {
+async fn describe_path(path: Option<&Path>) -> Value {
     let Some(path) = path else {
         return Value::Null;
     };
@@ -178,7 +220,7 @@ fn describe_path(path: Option<&Path>) -> Value {
         Value::String(path.to_string_lossy().to_string()),
     );
 
-    match fs::metadata(path) {
+    match fs::metadata(path).await {
         Ok(metadata) => {
             object.insert("exists".to_string(), Value::Bool(true));
             object.insert("size".to_string(), Value::from(metadata.len()));
@@ -209,8 +251,9 @@ mod tests {
         save_environment_cache, save_workbench_preset, workbench_preset_path, WorkbenchPresetEntry,
     };
     use crate::models::{
-        AnimeConfig, DecodeConfig, EncodeConfig, InterpolationConfig, OutputConfig, PostprocessConfig,
-        PreprocessConfig, RateControlConfig, SuperResolutionConfig, WorkbenchPreset, WorkflowConfig,
+        AnimeConfig, DecodeConfig, EncodeConfig, InterpolationConfig, OutputConfig,
+        PostprocessConfig, PreprocessConfig, RateControlConfig, SuperResolutionConfig,
+        WorkbenchPreset, WorkflowConfig,
     };
     use serde_json::json;
     use std::path::PathBuf;
@@ -296,60 +339,80 @@ mod tests {
         }
     }
 
-    #[test]
-    fn reuses_valid_environment_cache() {
+    #[tokio::test]
+    async fn reuses_valid_environment_cache() {
         let dir = temp_dir("env-hit");
-        save_environment_cache(&dir, "2026-04-23T11:00:00Z", "fingerprint-a", &json!({"type":"check"}))
-            .expect("write env cache");
+        save_environment_cache(
+            &dir,
+            "2026-04-23T11:00:00Z",
+            "fingerprint-a",
+            &json!({"type":"check"}),
+        )
+        .await
+        .expect("write env cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-a", false).expect("cache hit");
+        let entry = load_environment_cache(&dir, "fingerprint-a", false)
+            .await
+            .expect("cache hit");
         assert_eq!(entry.checked_at, "2026-04-23T11:00:00Z");
         assert_eq!(entry.result["type"], "check");
     }
 
-    #[test]
-    fn invalidates_environment_cache_when_fingerprint_changes() {
+    #[tokio::test]
+    async fn invalidates_environment_cache_when_fingerprint_changes() {
         let dir = temp_dir("env-fingerprint");
-        save_environment_cache(&dir, "2026-04-23T11:00:00Z", "fingerprint-a", &json!({"type":"check"}))
-            .expect("write env cache");
+        save_environment_cache(
+            &dir,
+            "2026-04-23T11:00:00Z",
+            "fingerprint-a",
+            &json!({"type":"check"}),
+        )
+        .await
+        .expect("write env cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-b", false);
+        let entry = load_environment_cache(&dir, "fingerprint-b", false).await;
         assert!(entry.is_none());
     }
 
-    #[test]
-    fn ignores_damaged_environment_cache() {
+    #[tokio::test]
+    async fn ignores_damaged_environment_cache() {
         let dir = temp_dir("env-damaged");
         fs::write(environment_cache_path(&dir), "{not-json").expect("write invalid cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-a", false);
+        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
         assert!(entry.is_none());
     }
 
-    #[test]
-    fn bypasses_environment_cache_when_force_refresh_is_enabled() {
+    #[tokio::test]
+    async fn bypasses_environment_cache_when_force_refresh_is_enabled() {
         let dir = temp_dir("env-force-refresh");
-        save_environment_cache(&dir, "2026-04-23T11:00:00Z", "fingerprint-a", &json!({"type":"check"}))
-            .expect("write env cache");
+        save_environment_cache(
+            &dir,
+            "2026-04-23T11:00:00Z",
+            "fingerprint-a",
+            &json!({"type":"check"}),
+        )
+        .await
+        .expect("write env cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-a", true);
+        let entry = load_environment_cache(&dir, "fingerprint-a", true).await;
         assert!(entry.is_none());
     }
 
-    #[test]
-    fn loads_saved_workbench_preset() {
+    #[tokio::test]
+    async fn loads_saved_workbench_preset() {
         let dir = temp_dir("preset");
         let preset = sample_preset();
 
-        save_workbench_preset(&dir, &preset).expect("save preset");
+        save_workbench_preset(&dir, &preset).await.expect("save preset");
 
-        let loaded = load_workbench_preset(&dir).expect("load preset");
+        let loaded = load_workbench_preset(&dir).await.expect("load preset");
         assert_eq!(loaded.decode_config.decoder.as_deref(), Some("hevc_cuvid"));
         assert_eq!(loaded.encode_config.codec, "hevc_nvenc");
     }
 
-    #[test]
-    fn ignores_workbench_preset_with_unknown_schema_version() {
+    #[tokio::test]
+    async fn ignores_workbench_preset_with_unknown_schema_version() {
         let dir = temp_dir("preset-schema");
         let payload = serde_json::to_vec_pretty(&WorkbenchPresetEntry {
             schema_version: 999,
@@ -358,7 +421,7 @@ mod tests {
         .expect("serialize preset");
         fs::write(workbench_preset_path(&dir), payload).expect("write preset");
 
-        let loaded = load_workbench_preset(&dir);
+        let loaded = load_workbench_preset(&dir).await;
         assert!(loaded.is_none());
     }
 }
