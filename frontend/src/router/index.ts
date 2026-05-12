@@ -1,13 +1,16 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { WORKBENCH_MODULES } from '@/views/registry'
-import DecodeModuleView from '@/views/DecodeModuleView.vue'
-import EncodeModuleView from '@/views/EncodeModuleView.vue'
-import EnhanceModuleView from '@/views/EnhanceModuleView.vue'
-import HomeModuleView from '@/views/HomeModuleView.vue'
-import InputModuleView from '@/views/InputModuleView.vue'
-import PostprocessModuleView from '@/views/PostprocessModuleView.vue'
-import PreprocessModuleView from '@/views/PreprocessModuleView.vue'
-import RenderModuleView from '@/views/RenderModuleView.vue'
+
+// 8 个 module 视图全部走懒加载,首屏只下载 Home + 共享 chunk;
+// 切到具体工作流模块时按需加载对应分块。
+const HomeModuleView = () => import('@/views/HomeModuleView.vue')
+const InputModuleView = () => import('@/views/InputModuleView.vue')
+const DecodeModuleView = () => import('@/views/DecodeModuleView.vue')
+const PreprocessModuleView = () => import('@/views/PreprocessModuleView.vue')
+const EnhanceModuleView = () => import('@/views/EnhanceModuleView.vue')
+const PostprocessModuleView = () => import('@/views/PostprocessModuleView.vue')
+const EncodeModuleView = () => import('@/views/EncodeModuleView.vue')
+const RenderModuleView = () => import('@/views/RenderModuleView.vue')
 
 export const router = createRouter({
   history: createWebHashHistory(),
