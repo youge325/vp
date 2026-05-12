@@ -9,7 +9,7 @@ graph TD
     subgraph FE["前端 Vue 层"]
         F1["Pinia preset store<br/>draftPreset (Decode/Workflow/Encode/Output)"]
         F2["Pinia media store<br/>activeItem (MediaItem)"]
-        F3["task-mapper.ts<br/>buildTaskRequest()"]
+        F3["services/task/request-builder.ts<br/>buildTaskRequest()"]
         F4["TaskRequest 对象"]
     end
 
@@ -67,7 +67,7 @@ graph TD
 
 ### TaskRequest 构建
 
-`task-mapper.ts:158-167` 的 `buildTaskRequest()` 将 `MediaItem` 转换为 `TaskRequest`：
+[`services/task/request-builder.ts`](../frontend/src/services/task/request-builder.ts) 的 `buildTaskRequest()` 将 `MediaItem` 转换为 `TaskRequest`:
 
 ```typescript
 export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): TaskRequest {
@@ -84,7 +84,7 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 
 ### 默认预设生成
 
-`task-mapper.ts:169-192` 的 `createDefaultWorkbenchPreset()` 根据环境检查结果生成智能默认配置：
+[`services/preset/defaults.ts`](../frontend/src/services/preset/defaults.ts) 的 `createDefaultWorkbenchPreset()` 根据环境检查结果生成智能默认配置:
 
 - **解码器**：优先选择 NVIDIA（cuda）→ Intel（qsv）→ 软件解码
 - **编码器**：优先选择 NVIDIA NVENC → Intel QSV → CPU 编码（hevc > h264 > av1）
@@ -96,7 +96,7 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 
 ### build_process_command
 
-[`tasks.rs:159-186`](../frontend/src-tauri/src/tasks.rs:159-186) 将 `TaskRequest` 序列化为 CLI 参数：
+[`tasks/builder.rs`](../frontend/src-tauri/src/tasks/builder.rs) 的 `build_process_command()` 将 `TaskRequest` 序列化为 CLI 参数:
 
 ```rust
 fn build_process_command(paths, request) -> Command {
@@ -123,13 +123,13 @@ fn build_process_command(paths, request) -> Command {
 
 ### inspect-output 命令构建
 
-[`tasks.rs:188-205`](../frontend/src-tauri/src/tasks.rs:188-205) 的 `build_inspect_output_args()` 用于续传状态预检查，结构与 `process` 命令类似但调用 `inspect-output` 子命令。
+[`tasks/builder.rs::build_inspect_output_args()`](../frontend/src-tauri/src/tasks/builder.rs) 用于续传状态预检查,结构与 `process` 命令类似但调用 `inspect-output` 子命令。
 
 ## Python 层：解析与规划
 
 ### 配置解析
 
-Python CLI 在 `cli.py` 中定义 `process` 子命令的参数解析器：
+Python CLI 在 [`backend/app/cli/parser.py`](../backend/app/cli/parser.py) 中定义 `process` 子命令的参数解析器,实际处理位于 [`backend/app/cli/commands/process.py`](../backend/app/cli/commands/process.py):
 
 ```python
 parser.add_argument("--input", required=True)
@@ -155,7 +155,7 @@ class _CamelBase(BaseModel):
 
 ### 处理步骤规划
 
-[`backend/app/planning.py`](../backend/app/planning.py) 的 `_resolve_processing_steps()` 根据配置生成执行计划：
+[`backend/app/cli/defaults.py`](../backend/app/cli/defaults.py) 的 `_resolve_processing_steps()` 根据配置生成执行计划:
 
 1. 解析 `workflowConfig.process_order`（`super_resolution_then_interpolation` 或 `frame_interpolation_then_super_resolution`）
 2. 检查各算法是否启用（`interpolation.enabled`、`super_resolution.enabled`、`anime.enabled`）
@@ -256,12 +256,12 @@ graph LR
 
 ### 续传冲突检测
 
-前端 [`task.ts:171-179`](../frontend/src/stores/task.ts:171-179) 的 `_classifyConflict()` 根据 `inspect-output` 结果判断冲突类型：
+前端 [`services/task/resume-classifier.ts`](../frontend/src/services/task/resume-classifier.ts) 的 `classifyConflict()` 根据 `inspect-output` 结果判断冲突类型:
 
 ```typescript
-function _classifyConflict(inspection: ResumeInspectionResult): ResumeConflictKind | null {
+export function classifyConflict(inspection: ResumeInspectionResult): ResumeConflictKind | null {
   if (!inspection.finalExists) {
-    return null  // 输出不存在，无冲突
+    return null  // 输出不存在,无冲突
   }
   if (inspection.signatureMatch && inspection.completedChunks > 0) {
     return 'final_exists_with_resume'  // 可以续传
@@ -270,21 +270,76 @@ function _classifyConflict(inspection: ResumeInspectionResult): ResumeConflictKi
 }
 ```
 
+调用方在 [`services/task/batch-runner.ts`](../frontend/src/services/task/batch-runner.ts) 检查 `inspection.signatureMatch` 决定 conflict kind 后,挂载到 `task store.pendingConflict`,由 `ResumeConflictDialog` 组件消费。
+
 ### 运行时续传冲突
 
-如果 `check_resume_state` 的预检查通过但 `start_task` 执行时文件系统发生变化，Python 后端可能在运行时抛出 `RESUME_CONFLICT` 错误。前端 `task.ts:399-427` 的 `onError` 回调会将这种运行时冲突同样转化为 `ResumeConflictDialog`，保持 UX 一致性。
+如果 `check_resume_state` 的预检查通过但 `start_task` 执行时文件系统发生变化,Python 后端可能在运行时抛出 `RESUME_CONFLICT` 错误。前端 [`services/task/batch-runner.ts`](../frontend/src/services/task/batch-runner.ts) 的 `onError` 回调会将这种运行时冲突同样转化为 `ResumeConflictDialog`,保持 UX 一致性。
 
 ## 进度数据流
 
 ```
 FFmpeg stderr progress 解析
-    → Python CliProgressReporter（1% 节流阈值）
+    → Python CliProgressReporter(1% 节流阈值)
     → stdout NDJSON: {"type":"progress","current":152,"total":1000,"percent":15.2,"stage":"Encoding","stageIndex":1,"stageTotal":2}
-    → Rust stdout_reader: serde_json::from_str::<NdjsonEnvelope>()
+    → Rust tasks/runner.rs::spawn_stdout_reader: serde_json::from_str::<NdjsonEnvelope>()
+        ↳ 每收到一行,更新 progress_beat: Arc<Mutex<Instant>>(用于 watchdog)
     → app.emit("task-progress", TaskProgressPayload)
-    → 前端 task-events.ts: applyTaskProgress()
-    → Pinia task store: item.taskState.percent/current/stage...
-    → Vue 组件: 进度条 / 阶段标签 / ETA 更新
+    → 前端 lib/ipc/events.ts: handlers.onProgress(payload)
+    → services/task/events.ts::applyTaskProgress → MediaTaskState
+    → Pinia task store → MediaItem.taskState 更新
+    → Vue 组件:进度条 / 阶段标签 / ETA
 ```
 
-Python 同时输出终端进度条（`[VP_PROGRESS] [####------------] 15.2% 152/1000 | 23.5 fps | 1.20x | ETA 00:00:35`），Rust 的 stderr_reader 将其作为 `TaskLog` 事件转发。前端 `task-events.ts:31-46` 的 `appendTaskLog()` 会识别 `TERMINAL_PROGRESS_PREFIX`，实现进度条行的覆盖更新（保留最近 300 条日志，进度行替换而非追加）。
+Python 同时输出终端进度条(`[VP_PROGRESS] [####------------] 15.2% 152/1000 | 23.5 fps | 1.20x | ETA 00:00:35`),Rust 的 stderr_reader 将其作为 `TaskLog` 事件转发。前端 [`services/task/events.ts::appendTaskLog`](../frontend/src/services/task/events.ts) 识别 `TERMINAL_PROGRESS_PREFIX`,实现进度条行的覆盖更新(保留最近 300 条日志,进度行替换而非追加)。
+
+### 多阶段进度的当前实现与已知 bug
+
+`stage_index` / `stage_total` 用于让前端展示"超分 1/2 → 补帧 2/2"这类多阶段进度。当前 [`backend/app/cli/commands/process.py`](../backend/app/cli/commands/process.py:213) 用同一个 `progress_callback` 闭包复用给所有 stage,导致 `stage_index` 实际始终是 `1`。Phase C.1.3 计划在拆分到 `_process_planning.py` 时为每个 stage 创建独立闭包,届时前端无需修改即可拿到正确的阶段索引。
+
+## 超时与卡顿处理
+
+为了避免子进程死循环 / 死锁让用户无限期等待,Rust 在 [`tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 启用一条 watchdog,在子进程长时间无 stdout 输出时把任务标记为 `Stalled`。
+
+### Watchdog 数据流
+
+```
+Rust tasks/runner.rs::spawn_stdout_reader
+    │  每读到一行 stdout 都 *progress_beat.lock() = Instant::now()
+    ▼
+Rust tasks/controller.rs::spawn_watchdog (单独的 tokio task)
+    │  每秒 tick:
+    │    if Instant::now().duration_since(*progress_beat.lock()) > timeout {
+    │        cancel_token.cancel(CancelReason::Stalled)
+    │    }
+    ▼
+Rust tasks/controller.rs::spawn_controller
+    │  tokio::select! 中接到 cancel_token.cancelled()
+    │  → child.kill() (经 process_control 唤醒被暂停的子进程后再杀)
+    ▼
+子进程退出 → controller 根据 cancel_token.reason() 分发终止事件
+    │  CancelReason::Stalled → emit "task-error" with code=runtime_panic + details={ stalled: true, traceback: StderrCapture.summary() }
+    │  CancelReason::User    → emit "task-cancelled" (无 payload)
+    ▼
+前端 services/task/events.ts → MediaTaskState.status = 'error' | 'cancelled'
+```
+
+### 配置项
+
+| 环境变量 | 默认 | 含义 |
+|----------|------|------|
+| `VP_TASK_STALL_TIMEOUT_SECS` | `600` | 子进程无 stdout 进度超过这么多秒就触发 Stalled |
+| `VP_TASK_STALL_TIMEOUT_SECS=0` | — | 关闭 watchdog(开发调试时可用) |
+
+`parse_stall_timeout()` 在 [`tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 解析这个变量:`0` 关闭 watchdog;无效值回退到默认 600s;有效正整数直接采用。
+
+### StderrCapture 兜底
+
+`task-error{code: runtime_panic, stalled: true}` 的 `details.traceback` 来自 [`tasks/stderr.rs::StderrCapture`](../frontend/src-tauri/src/tasks/stderr.rs):
+
+- stderr reader 把每行 stderr 推入滚动缓冲(最多 400 行 / 8 KB,先入先出)
+- `StderrCapture.summary()` 在子进程退出时被 controller 调用,优先返回最后一段以 `Traceback (most recent call last):` 开头的内容;若无 traceback 标记,则返回最后 20 行
+- 如果子进程在 NDJSON `error` 帧发出**之前**就崩溃(import-time、SIGSEGV 等),`traceback` 就是 stderr 里的真实 Python 调用栈
+- 如果子进程因为 stall 被 watchdog 杀掉,`traceback` 就是 stall 触发前最后一段 stderr,通常能反映"卡在哪儿"
+
+错误事件的语义区分见 [`docs/ipc-protocol.md` 任务终止事件区分](./ipc-protocol.md#任务终止事件区分)。
