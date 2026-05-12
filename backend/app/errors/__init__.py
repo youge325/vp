@@ -14,15 +14,6 @@ from app.errors._bootstrap import infer_error_code
 from app.errors._codes import TaskErrorCode
 
 
-def _infer_code_from_exception(exc: BaseException) -> str:
-    """Map an exception to a canonical error code string.
-
-    Delegates to :func:`app.errors._bootstrap.infer_error_code` for
-    pattern matching against the lowercased exception message.
-    """
-    return infer_error_code(str(exc).lower())
-
-
 class ProcessError(Exception):
     """Exception carrying a structured error code and optional details dict.
 
@@ -48,10 +39,13 @@ class ProcessError(Exception):
         """Wrap any exception in a ``ProcessError`` with an inferred code.
 
         If *exc* is already a ``ProcessError`` it is returned unchanged.
+        Delegates the code-inference rules to
+        :func:`app.errors._bootstrap.infer_error_code` — the single source
+        of truth shared with ``__main__``'s import-time fallback.
         """
         if isinstance(exc, ProcessError):
             return exc
-        code = _infer_code_from_exception(exc)
+        code = infer_error_code(str(exc).lower())
         return cls(
             code,
             str(exc),

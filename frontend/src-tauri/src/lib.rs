@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use rfd::FileDialog;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
+use crate::error::ShellError;
 use crate::runtime::resolve_runtime_paths;
 use crate::tasks::TaskState;
 
@@ -20,7 +21,7 @@ use crate::tasks::TaskState;
 // ------------------------------------------------------------------
 
 #[tauri::command]
-async fn pick_inputs() -> Result<Vec<String>, String> {
+async fn pick_inputs() -> Result<Vec<String>, ShellError> {
     Ok(FileDialog::new()
         .set_title("Import Videos")
         .add_filter(
@@ -35,7 +36,7 @@ async fn pick_inputs() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-async fn pick_output_directory() -> Result<Option<String>, String> {
+async fn pick_output_directory() -> Result<Option<String>, ShellError> {
     Ok(FileDialog::new()
         .set_title("Select Output Directory")
         .pick_folder()
@@ -47,19 +48,24 @@ async fn pick_output_directory() -> Result<Option<String>, String> {
 async fn check_environment<R: Runtime>(
     app: AppHandle<R>,
     forceRefresh: bool,
-) -> Result<models::EnvironmentCheckPayload, String> {
+) -> Result<models::EnvironmentCheckPayload, ShellError> {
     services::environment_service::check_environment(app, forceRefresh).await
 }
 
 #[tauri::command]
-async fn open_output_location(path: String) -> Result<(), String> {
+async fn open_output_location(path: String) -> Result<(), ShellError> {
     let path_buf = PathBuf::from(path);
     let target = if path_buf.is_dir() {
         path_buf
     } else {
         path_buf.parent().map(PathBuf::from).unwrap_or(path_buf)
     };
-    open::that_detached(target).map_err(|error| format!("Unable to open output location: {error}"))
+    open::that_detached(target).map_err(|error| {
+        ShellError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Unable to open output location: {error}"),
+        ))
+    })
 }
 
 pub fn run() {

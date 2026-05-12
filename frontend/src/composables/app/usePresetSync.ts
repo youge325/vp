@@ -3,9 +3,12 @@
 import { watch } from 'vue'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { WorkbenchPreset } from '@/types/protocol'
+import { TASK_ERROR_CODES } from '@/types/protocol'
 import { useEnvStore } from '@/stores/env'
+import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
 import { presetIpc } from '@/lib/ipc/endpoints/preset'
+import { normalizeError } from '@/services/error/normalize'
 import {
   cloneDecodeConfig,
   cloneEncodeConfig,
@@ -33,13 +36,38 @@ function coercePreset(raw: WorkbenchPreset | null, env: EnvironmentCheckResult |
 export function usePresetSync() {
   const envStore = useEnvStore()
   const presetStore = usePresetStore()
+  const mediaStore = useMediaStore()
   let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+  function reportPresetIssue(error: unknown, fallbackMessage: string): void {
+    const normalized = normalizeError(error, TASK_ERROR_CODES.PersistenceFailed)
+    mediaStore.setOperationIssue('preset', {
+      ...normalized,
+      message: normalized.message || fallbackMessage,
+    })
+  }
+
+  function recoverFromSchemaMismatch(): void {
+    presetStore.replaceDraftPreset(createDefaultWorkbenchPreset(envStore.env.checkResult))
+    mediaStore.setOperationIssue('preset', {
+      code: TASK_ERROR_CODES.SchemaMismatch,
+      message: 'Stored workbench preset is from an incompatible version. The editor has been reset to defaults.',
+      details: null,
+    })
+  }
 
   async function persistDraft(): Promise<void> {
     try {
       await presetIpc.save(cloneWorkbenchPreset(presetStore.draftPreset))
-    } catch {
-      // 忽略持久化失败,保留内存中的编辑器可用。
+      // Clear any prior preset-scoped error once a write succeeds.
+      mediaStore.clearOperationIssue('preset')
+    } catch (error) {
+      const normalized = normalizeError(error, TASK_ERROR_CODES.PersistenceFailed)
+      if (normalized.code === TASK_ERROR_CODES.SchemaMismatch) {
+        recoverFromSchemaMismatch()
+        return
+      }
+      reportPresetIssue(error, 'Unable to save the workbench preset.')
     }
   }
 
@@ -64,9 +92,16 @@ export function usePresetSync() {
         return false
       }
       presetStore.replaceDraftPreset(coercePreset(preset, envStore.env.checkResult))
+      mediaStore.clearOperationIssue('preset')
       return true
-    } catch {
+    } catch (error) {
+      const normalized = normalizeError(error, TASK_ERROR_CODES.PersistenceFailed)
+      if (normalized.code === TASK_ERROR_CODES.SchemaMismatch) {
+        recoverFromSchemaMismatch()
+        return false
+      }
       presetStore.replaceDraftPreset(createDefaultWorkbenchPreset(envStore.env.checkResult))
+      reportPresetIssue(error, 'Unable to load the saved workbench preset.')
       return false
     }
   }

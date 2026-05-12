@@ -13,11 +13,44 @@ export function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 }
 
+/**
+ * Error thrown by ``safeInvoke`` that preserves the structured ``{ code, message }``
+ * envelope produced by the Rust ``ShellError`` serializer. Callers that need to
+ * branch on the code (e.g. ``SchemaMismatch`` vs ``PersistenceFailed``) can
+ * inspect ``error.code`` directly; callers that only need a message can fall
+ * back to the standard ``Error`` API.
+ */
+export class InvokeError extends Error {
+  readonly code: string
+  readonly details: Record<string, unknown> | null
+
+  constructor(code: string, message: string, details: Record<string, unknown> | null = null) {
+    super(message)
+    this.name = 'InvokeError'
+    this.code = code
+    this.details = details
+  }
+}
+
+function isShellErrorPayload(value: unknown): value is { code: string; message: string; details?: Record<string, unknown> | null } {
+  return (
+    typeof value === 'object'
+    && value !== null
+    && typeof (value as { code?: unknown }).code === 'string'
+    && typeof (value as { message?: unknown }).message === 'string'
+  )
+}
+
 function normalizeInvokeError(error: unknown): Error {
-  const message = error instanceof Error ? error.message : String(error)
   if (!isTauriRuntime()) {
     return new Error(BROWSER_RUNTIME_MESSAGE)
   }
+
+  if (isShellErrorPayload(error)) {
+    return new InvokeError(error.code, error.message, error.details ?? null)
+  }
+
+  const message = error instanceof Error ? error.message : String(error)
   if (message.includes('not allowed') || message.includes('Command not found')) {
     return new Error(`${IPC_PERMISSION_MESSAGE}\n${message}`)
   }

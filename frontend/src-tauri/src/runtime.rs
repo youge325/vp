@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager, Runtime};
 
+use crate::error::ShellError;
+
 #[derive(Debug, Clone)]
 pub struct ResolvedRuntimePaths {
     pub backend_dir: PathBuf,
@@ -18,15 +20,15 @@ pub struct ResolvedRuntimePaths {
 
 pub fn resolve_runtime_paths<R: Runtime>(
     app: &AppHandle<R>,
-) -> Result<ResolvedRuntimePaths, String> {
+) -> Result<ResolvedRuntimePaths, ShellError> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let frontend_dir = manifest_dir
         .parent()
-        .ok_or_else(|| "Unable to resolve frontend directory.".to_string())?
+        .ok_or_else(|| ShellError::RuntimeResolution("Unable to resolve frontend directory.".to_string()))?
         .to_path_buf();
     let workspace_root = frontend_dir
         .parent()
-        .ok_or_else(|| "Unable to resolve workspace root.".to_string())?
+        .ok_or_else(|| ShellError::RuntimeResolution("Unable to resolve workspace root.".to_string()))?
         .to_path_buf();
     let resource_dir = app.path().resource_dir().ok();
 
@@ -45,7 +47,7 @@ pub fn resolve_runtime_paths<R: Runtime>(
         resource_backend,
         dev_backend_dir,
     ])
-    .ok_or_else(|| "Unable to locate backend directory.".to_string())?;
+    .ok_or_else(|| ShellError::RuntimeResolution("Unable to locate backend directory.".to_string()))?;
 
     let dev_runtime_root = if cfg!(debug_assertions) {
         Some(
@@ -80,10 +82,9 @@ pub fn resolve_runtime_paths<R: Runtime>(
         None => match find_in_system_path(platform_python_binary()) {
             Some(path) => path,
             None => {
-                return Err(
-                    "Python executable not found. Set VP_PYTHON_EXECUTABLE, install Python in your system PATH, or bundle resources/runtime/python/."
-                        .to_string(),
-                )
+                return Err(ShellError::RuntimeResolution(
+                    "Python executable not found. Set VP_PYTHON_EXECUTABLE, install Python in your system PATH, or bundle resources/runtime/python/.".to_string(),
+                ))
             }
         },
     };
@@ -139,26 +140,24 @@ pub fn resolve_runtime_paths<R: Runtime>(
 
     if !cfg!(debug_assertions) {
         if ffmpeg_path.is_none() {
-            return Err(
-                "Bundled FFmpeg is missing. Set VP_FFMPEG_PATH or include resources/runtime/ffmpeg/bin/ffmpeg.exe."
-                    .to_string(),
-            );
+            return Err(ShellError::RuntimeResolution(
+                "Bundled FFmpeg is missing. Set VP_FFMPEG_PATH or include resources/runtime/ffmpeg/bin/ffmpeg.exe.".to_string(),
+            ));
         }
         if ffprobe_path.is_none() {
-            return Err(
-                "Bundled FFprobe is missing. Set VP_FFPROBE_PATH or include resources/runtime/ffmpeg/bin/ffprobe.exe."
-                    .to_string(),
-            );
+            return Err(ShellError::RuntimeResolution(
+                "Bundled FFprobe is missing. Set VP_FFPROBE_PATH or include resources/runtime/ffmpeg/bin/ffprobe.exe.".to_string(),
+            ));
         }
         let has_default_model = model_dir
             .as_ref()
             .map(|path| path.join(default_rife_model_file()).is_file())
             .unwrap_or(false);
         if !has_default_model {
-            return Err(format!(
+            return Err(ShellError::RuntimeResolution(format!(
                 "Bundled RIFE model is missing. Set VP_RIFE_MODEL_DIR or include resources/runtime/models/{}.",
                 default_rife_model_file()
-            ));
+            )));
         }
     }
 
@@ -170,10 +169,8 @@ pub fn resolve_runtime_paths<R: Runtime>(
     let output_dir = app_data_dir.join("output");
     let log_dir = app_data_dir.join("logs");
 
-    std::fs::create_dir_all(&output_dir)
-        .map_err(|error| format!("Unable to create output directory: {error}"))?;
-    std::fs::create_dir_all(&log_dir)
-        .map_err(|error| format!("Unable to create log directory: {error}"))?;
+    std::fs::create_dir_all(&output_dir)?;
+    std::fs::create_dir_all(&log_dir)?;
 
     Ok(ResolvedRuntimePaths {
         backend_dir,
