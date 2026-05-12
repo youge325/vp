@@ -1,8 +1,10 @@
 // 视图 form-binding — 增强模块(补帧 / 超分 / 动漫优化)。
-// 把 EnhanceModuleView 的 18 个双向 computed 折叠到此处,业务规则在 services/preset/enhance-rules。
+// 单字段双向绑定走 ``fieldLens``;含副作用(切换 backend 时联动 onnxModel,
+// 切换 algorithm 时重置 model 默认值)的两个 setter 仍显式写出。
 
 import { computed, reactive } from 'vue'
 import { useEnvStore } from '@/stores/env'
+import { fieldLens } from '@/composables/forms/lens'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import {
   fallbackInterpolationOnnxModel,
@@ -18,6 +20,7 @@ export function useEnhanceForm() {
   const { editorConfig, patchWorkflow } = useWorkbenchEditor()
 
   const workflow = computed(() => editorConfig.value.workflowConfig)
+  const getWorkflow = () => workflow.value
 
   const interpolationAlgorithms = computed(
     () => envStore.env.checkResult?.interpolationAlgorithms ?? [],
@@ -42,11 +45,15 @@ export function useEnhanceForm() {
   })
   const isOnnxBackend = computed(() => workflow.value.interpolation.tensorBackend === 'onnx')
 
-  const interpolationEnabled = computed({
-    get: () => workflow.value.interpolation.enabled,
-    set: (value: boolean) => patchWorkflow((c: WorkflowConfig) => { c.interpolation.enabled = value }),
-  })
+  // 单字段透传 lens
+  const interpolationEnabled = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.interpolation.enabled,
+    (c, v) => { c.interpolation.enabled = v },
+  )
 
+  // 复合 setter:切换 backend 时同步 engine 与 onnx 模型默认值
   const interpolationBackend = computed({
     get: () => workflow.value.interpolation.tensorBackend as TensorBackend,
     set: (value: TensorBackend) => {
@@ -61,11 +68,14 @@ export function useEnhanceForm() {
     },
   })
 
-  const interpolationEngine = computed({
-    get: () => (workflow.value.interpolation.engine as InferenceEngine) ?? 'cuda',
-    set: (value: InferenceEngine) => patchWorkflow((c: WorkflowConfig) => { c.interpolation.engine = value }),
-  })
+  const interpolationEngine = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => (c.interpolation.engine as InferenceEngine) ?? 'cuda',
+    (c, v: InferenceEngine) => { c.interpolation.engine = v },
+  )
 
+  // 复合 setter:切换 algorithm 时联动 model 默认值
   const interpolationAlgorithm = computed({
     get: () => workflow.value.interpolation.algorithm,
     set: (value: string) => patchWorkflow((c: WorkflowConfig) => {
@@ -80,85 +90,117 @@ export function useEnhanceForm() {
         ?.models ?? [],
   )
 
-  const interpolationModel = computed({
-    get: () => workflow.value.interpolation.model,
-    set: (value: string) => patchWorkflow((c: WorkflowConfig) => { c.interpolation.model = value }),
-  })
+  const interpolationModel = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.interpolation.model,
+    (c, v: string) => { c.interpolation.model = v },
+  )
 
-  const interpolationOnnxModel = computed({
-    get: () => workflow.value.interpolation.onnxModel ?? '',
-    set: (value: string) => patchWorkflow((c: WorkflowConfig) => { c.interpolation.onnxModel = value }),
-  })
+  const interpolationOnnxModel = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.interpolation.onnxModel ?? '',
+    (c, v: string) => { c.interpolation.onnxModel = v },
+  )
 
-  const fpsMode = computed({
-    get: () => workflow.value.fpsMode as FpsMode,
-    set: (value: FpsMode) => patchWorkflow((c: WorkflowConfig) => { c.fpsMode = value }),
-  })
+  const fpsMode = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.fpsMode as FpsMode,
+    (c, v: FpsMode) => { c.fpsMode = v },
+  )
 
-  const targetFps = computed({
-    get: () => workflow.value.interpolation.targetFps,
-    set: (value: number) => patchWorkflow((c: WorkflowConfig) => { c.interpolation.targetFps = value }),
-  })
+  const targetFps = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.interpolation.targetFps,
+    (c, v: number) => { c.interpolation.targetFps = v },
+  )
 
-  const interpolationMulti = computed({
-    get: () => workflow.value.interpolation.multi,
-    set: (value: number) => patchWorkflow((c: WorkflowConfig) => { c.interpolation.multi = value }),
-  })
+  const interpolationMulti = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.interpolation.multi,
+    (c, v: number) => { c.interpolation.multi = v },
+  )
 
-  const interpolationScale = computed({
-    get: () => workflow.value.interpolation.scale,
-    set: (value: number) => patchWorkflow((c: WorkflowConfig) => { c.interpolation.scale = value }),
-  })
+  const interpolationScale = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.interpolation.scale,
+    (c, v: number) => { c.interpolation.scale = v },
+  )
 
-  const interpolationFp16 = computed({
-    get: () => workflow.value.interpolation.fp16,
-    set: (value: boolean) => patchWorkflow((c: WorkflowConfig) => { c.interpolation.fp16 = value }),
-  })
+  const interpolationFp16 = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.interpolation.fp16,
+    (c, v: boolean) => { c.interpolation.fp16 = v },
+  )
 
-  const superResolutionEnabled = computed({
-    get: () => workflow.value.superResolution.enabled,
-    set: (value: boolean) => patchWorkflow((c: WorkflowConfig) => { c.superResolution.enabled = value }),
-  })
+  const superResolutionEnabled = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.superResolution.enabled,
+    (c, v: boolean) => { c.superResolution.enabled = v },
+  )
 
-  const superResolutionScale = computed({
-    get: () => workflow.value.superResolution.scaleFactor,
-    set: (value: number) => patchWorkflow((c: WorkflowConfig) => { c.superResolution.scaleFactor = value }),
-  })
+  const superResolutionScale = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.superResolution.scaleFactor,
+    (c, v: number) => { c.superResolution.scaleFactor = v },
+  )
 
-  const superResolutionAlgorithm = computed({
-    get: () => workflow.value.superResolution.algorithm,
-    set: (value: string) => patchWorkflow((c: WorkflowConfig) => { c.superResolution.algorithm = value }),
-  })
+  const superResolutionAlgorithm = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.superResolution.algorithm,
+    (c, v: string) => { c.superResolution.algorithm = v },
+  )
 
-  const superResolutionOnnxModel = computed({
-    get: () => workflow.value.superResolution.onnxModel ?? '',
-    set: (value: string) => patchWorkflow((c: WorkflowConfig) => { c.superResolution.onnxModel = value }),
-  })
+  const superResolutionOnnxModel = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.superResolution.onnxModel ?? '',
+    (c, v: string) => { c.superResolution.onnxModel = v },
+  )
 
-  const processOrder = computed({
-    get: () => workflow.value.processOrder as ProcessOrder,
-    set: (value: ProcessOrder) => patchWorkflow((c: WorkflowConfig) => { c.processOrder = value }),
-  })
+  const processOrder = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.processOrder as ProcessOrder,
+    (c, v: ProcessOrder) => { c.processOrder = v },
+  )
 
-  const animeEnabled = computed({
-    get: () => workflow.value.anime.enabled,
-    set: (value: boolean) => patchWorkflow((c: WorkflowConfig) => { c.anime.enabled = value }),
-  })
+  const animeEnabled = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.anime.enabled,
+    (c, v: boolean) => { c.anime.enabled = v },
+  )
 
-  const animeProfile = computed({
-    get: () => workflow.value.anime.profile,
-    set: (value: string) => patchWorkflow((c: WorkflowConfig) => { c.anime.profile = value }),
-  })
+  const animeProfile = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.anime.profile,
+    (c, v: string) => { c.anime.profile = v },
+  )
 
-  const animeDenoise = computed({
-    get: () => workflow.value.anime.denoise,
-    set: (value: number) => patchWorkflow((c: WorkflowConfig) => { c.anime.denoise = value }),
-  })
+  const animeDenoise = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.anime.denoise,
+    (c, v: number) => { c.anime.denoise = v },
+  )
 
-  const animeEdgeBoost = computed({
-    get: () => workflow.value.anime.edgeBoost,
-    set: (value: number) => patchWorkflow((c: WorkflowConfig) => { c.anime.edgeBoost = value }),
-  })
+  const animeEdgeBoost = fieldLens(
+    getWorkflow,
+    patchWorkflow,
+    (c) => c.anime.edgeBoost,
+    (c, v: number) => { c.anime.edgeBoost = v },
+  )
 
   return reactive({
     interpolationOnnxModels,
