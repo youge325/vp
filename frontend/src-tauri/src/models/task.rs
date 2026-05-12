@@ -51,11 +51,17 @@ pub enum TaskErrorCode {
     MissingFfmpeg,
     MissingModel,
     MissingTensorBackend,
+    MissingPythonDependency,
     Cancelled,
     ProcessFailed,
+    SpawnFailed,
+    RuntimePanic,
     InvalidInput,
     InvalidConfig,
     ResumeConflict,
+    IoError,
+    SchemaMismatch,
+    PersistenceFailed,
 }
 
 impl TaskErrorCode {
@@ -64,11 +70,17 @@ impl TaskErrorCode {
             Self::MissingFfmpeg => "missing_ffmpeg",
             Self::MissingModel => "missing_model",
             Self::MissingTensorBackend => "missing_tensor_backend",
+            Self::MissingPythonDependency => "missing_python_dependency",
             Self::Cancelled => "cancelled",
             Self::ProcessFailed => "process_failed",
+            Self::SpawnFailed => "spawn_failed",
+            Self::RuntimePanic => "runtime_panic",
             Self::InvalidInput => "invalid_input",
             Self::InvalidConfig => "invalid_config",
             Self::ResumeConflict => "resume_conflict",
+            Self::IoError => "io_error",
+            Self::SchemaMismatch => "schema_mismatch",
+            Self::PersistenceFailed => "persistence_failed",
         }
     }
 }

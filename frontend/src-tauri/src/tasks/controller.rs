@@ -95,10 +95,12 @@ pub fn spawn_task_controller<R: Runtime + 'static>(
                 }
 
                 if !exit_status.success() && !terminal_sent {
+                    // Backend process exited unsuccessfully without emitting a terminal
+                    // NDJSON event. This is a runtime crash, not a normal failure.
                     let _ = app.emit(
                         TaskEventName::TaskError.as_str(),
                         TaskErrorPayload {
-                            code: crate::protocol::TaskErrorCode::ProcessFailed,
+                            code: crate::protocol::TaskErrorCode::RuntimePanic,
                             message: format!("Backend process exited with status {}.", exit_status),
                             details: None,
                         },
@@ -109,6 +111,7 @@ pub fn spawn_task_controller<R: Runtime + 'static>(
                 if was_cancelled {
                     let _ = app.emit(TaskEventName::TaskCancelled.as_str(), ());
                 } else if !terminal_sent {
+                    // OS-level failure while waiting for the child process.
                     let _ = app.emit(
                         TaskEventName::TaskError.as_str(),
                         TaskErrorPayload {

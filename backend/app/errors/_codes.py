@@ -17,11 +17,17 @@ class TaskErrorCode(str, Enum):
     MISSING_FFMPEG = "missing_ffmpeg"
     MISSING_MODEL = "missing_model"
     MISSING_TENSOR_BACKEND = "missing_tensor_backend"
+    MISSING_PYTHON_DEPENDENCY = "missing_python_dependency"
     CANCELLED = "cancelled"
     PROCESS_FAILED = "process_failed"
+    SPAWN_FAILED = "spawn_failed"
+    RUNTIME_PANIC = "runtime_panic"
     INVALID_INPUT = "invalid_input"
     INVALID_CONFIG = "invalid_config"
     RESUME_CONFLICT = "resume_conflict"
+    IO_ERROR = "io_error"
+    SCHEMA_MISMATCH = "schema_mismatch"
+    PERSISTENCE_FAILED = "persistence_failed"
 
 
 ALL_CODES = frozenset(code.value for code in TaskErrorCode)
