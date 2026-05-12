@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useEnvironmentChecker } from '@/composables/app/useEnvironmentChecker'
 import { useHomeDashboard } from '@/composables/selectors/useHomeDashboard'
+import IssueBanner from '@/components/IssueBanner.vue'
 
 const dashboard = useHomeDashboard()
 const { recheckEnvironment } = useEnvironmentChecker()
@@ -21,10 +22,7 @@ const { recheckEnvironment } = useEnvironmentChecker()
         </div>
       </div>
 
-      <div v-if="dashboard.issue.value" class="info-banner info-banner-danger">
-        <strong>环境探测失败</strong>
-        <p>{{ dashboard.issue.value.message }}</p>
-      </div>
+      <IssueBanner :issue="dashboard.issue.value" title="环境探测失败" />
 
       <div class="stats-grid stats-grid-4">
         <article v-for="item in dashboard.overviewStats.value" :key="item.label" class="stat-card stat-card-tall">

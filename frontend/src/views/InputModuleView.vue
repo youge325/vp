@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useMediaImport } from '@/composables/app/useMediaImport'
 import { useMediaListEditor } from '@/composables/forms/useMediaListEditor'
 import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
+import IssueBanner from '@/components/IssueBanner.vue'
 
 const list = useMediaListEditor()
 const { pickAndImport, importPaths, reinspectIds } = useMediaImport()
@@ -77,10 +78,7 @@ async function reinspectSelection(): Promise<void> {
         <p>支持多文件导入，导入后自动探测分辨率、帧率、音频与视频编码。</p>
       </div>
 
-      <div v-if="inputIssue" class="info-banner info-banner-danger">
-        <strong>批量导入失败</strong>
-        <p>{{ inputIssue.message }}</p>
-      </div>
+      <IssueBanner :issue="inputIssue" title="批量导入失败" />
     </section>
 
     <section class="panel-surface">

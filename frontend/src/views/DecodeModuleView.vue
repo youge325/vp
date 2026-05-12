@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useDecodeForm } from '@/composables/forms/useDecodeForm'
 import { useWorkbenchEditor, useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
+import BaseField from '@/components/forms/BaseField.vue'
+import BaseSelect from '@/components/forms/BaseSelect.vue'
 
 const {
   visibleDecoderProfiles,
@@ -15,6 +18,10 @@ const {
 
 const { editorConfig } = useWorkbenchEditor()
 const { targetLabel, caption } = useEditingScope('decode')
+
+const decoderProfileOptions = computed(() =>
+  visibleDecoderProfiles.value.map((profile) => ({ value: profile.name, label: profile.label })),
+)
 </script>
 
 <template>
@@ -29,27 +36,21 @@ const { targetLabel, caption } = useEditingScope('decode')
       </div>
 
       <div class="field-grid field-grid-2">
-        <label class="field">
-          <span>解码方案</span>
-          <select
-            :value="currentDecoderProfile?.name ?? 'software'"
-            @change="setDecodeProfile(($event.target as HTMLSelectElement).value)"
-          >
-            <option v-for="profile in visibleDecoderProfiles" :key="profile.name" :value="profile.name">
-              {{ profile.label }}
-            </option>
-          </select>
-        </label>
+        <BaseSelect
+          label="解码方案"
+          :model-value="currentDecoderProfile?.name ?? 'software'"
+          :options="decoderProfileOptions"
+          @update:model-value="setDecodeProfile"
+        />
 
-        <label class="field">
-          <span>硬件设备</span>
+        <BaseField label="硬件设备">
           <input
             :value="editorConfig.decodeConfig.hwaccelDevice"
             type="text"
             placeholder="留空则使用默认设备"
             @input="setDecodeHwaccelDevice(($event.target as HTMLInputElement).value)"
           />
-        </label>
+        </BaseField>
       </div>
 
       <div class="chip-row">
