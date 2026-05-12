@@ -9,15 +9,19 @@ from __future__ import annotations
 from app.cli.commands.check import cmd_check
 from app.cli.commands.info import cmd_info
 from app.cli.commands.inspect_output import cmd_inspect_output
-from app.cli.commands.process import (
-    _deep_merge,
+from app.cli.commands.process import cmd_process
+
+# Phase C.1.1 — process.py 拆分后,以下内部 helper 由子模块持有,
+# 这里继续 re-export 以保证既有测试 import 路径不破坏。
+from app.cli.commands._process_execution import (
     _enforce_format_conversion_resume_mode,
-    _get_onnx_model_name,
-    _load_json_arg,
     _resolve_processed_frame_count,
-    _validate_onnx_models_for_workflow,
-    cmd_process,
 )
+from app.cli.commands._process_planning import (
+    _get_onnx_model_name,
+    _validate_onnx_models_for_workflow,
+)
+from app.cli.commands._process_validation import _deep_merge, _load_json_arg
 from app.cli.defaults import (
     PROCESS_LABEL_MAP,
     PROCESS_ORDER_MAP,

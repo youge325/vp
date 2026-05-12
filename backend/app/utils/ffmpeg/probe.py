@@ -22,12 +22,20 @@ from ._progress import _coerce_default_value, _coerce_number
 logger = get_logger(__name__)
 
 
-def _probe_cache_key(input_path: str) -> tuple[str, int] | None:
+def _probe_cache_key(input_path: str) -> tuple[str, int, int] | None:
+    """Build the cache key for ``video_info_cache`` lookups.
+
+    Phase C.1.4 — key now includes ``size`` alongside ``mtime_ns``. Some
+    build tools preserve mtime when extracting or copying files, so a
+    pure ``(path, mtime)`` key would happily hand back stale info for a
+    completely different file. Adding ``size`` is essentially free here
+    (``os.stat`` already returns it) and closes the collision window.
+    """
     try:
         stat = os.stat(input_path)
     except OSError:
         return None
-    return (os.path.abspath(input_path), stat.st_mtime_ns)
+    return (os.path.abspath(input_path), stat.st_mtime_ns, stat.st_size)
 
 
 def _run_command(cmd: list[str], *, timeout: int = 3600) -> subprocess.CompletedProcess[str]:
@@ -51,7 +59,7 @@ def _run_command(cmd: list[str], *, timeout: int = 3600) -> subprocess.Completed
 def get_video_info(
     ffprobe_path: str,
     input_path: str,
-    video_info_cache: dict[tuple[str, int], dict[str, Any]],
+    video_info_cache: dict[tuple[str, int, int], dict[str, Any]],
 ) -> dict[str, Any]:
     cache_key = _probe_cache_key(input_path)
     if cache_key is not None and cache_key in video_info_cache:
@@ -120,7 +128,7 @@ def get_frame_count(
     info: dict[str, Any],
     duration: float,
     fps: float,
-    frame_count_cache: dict[tuple[str, int], int],
+    frame_count_cache: dict[tuple[str, int, int], int],
 ) -> int:
     cache_key = _probe_cache_key(input_path)
     if cache_key is not None and cache_key in frame_count_cache:

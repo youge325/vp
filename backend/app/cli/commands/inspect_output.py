@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from app.cli.commands.process import _load_json_arg
+from app.cli.commands._process_validation import _load_json_arg
 from app.cli.defaults import (
     _default_decode_config,
     _default_encode_config,

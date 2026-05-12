@@ -1,19 +1,23 @@
 """RIFE 模型加载器 — 权重加载、设备管理。
 
-支持：
-- 36 个 RIFE 模型版本（v4.0 ~ v4.26.heavy）
-- 从本地路径加载权重（权重文件预置于 backend/models/ 目录）
+支持:
+- 36 个 RIFE 模型版本(v4.0 ~ v4.26.heavy)
+- 从本地路径加载权重(权重文件预置于 backend/models/ 目录)
 - GPU/CPU 设备管理
 - fp16 半精度推理
 - 根据 Head 类型自动分离加载编码器
 
-参考 vs-rife 的 init_module 逻辑：
-- v4.0~v4.6: 无 Head 编码器，IFNet.forward 不接受 f0/f1
+参考 vs-rife 的 init_module 逻辑:
+- v4.0~v4.6: 无 Head 编码器,IFNet.forward 不接受 f0/f1
 - v4.7~v4.9: nn.Sequential Head (3→16→4)
 - v4.10~v4.12: nn.Sequential Head (3→32→8)
 - v4.12.lite: nn.Sequential Head (3→32→4)
 - v4.13.lite: nn.Sequential Head (3→32→4)
-- v4.13~v4.26.heavy: 自定义 Head 类（从 IFNet 文件导入）
+- v4.13~v4.26.heavy: 自定义 Head 类(从 IFNet 文件导入)
+
+Phase C.1.2 把 36 个 ``MODEL_CONFIGS`` 字面量收到了 ``_model_spec.py`` 的
+``_VERSION_GROUPS`` 表。本文件聚焦"如何加载权重 / 构 Head / 移动到设备"
+这条逻辑流,配置查表统一走 ``_model_spec``。
 """
 
 from __future__ import annotations
@@ -23,6 +27,16 @@ import importlib.util
 import os
 from typing import TYPE_CHECKING, Optional
 
+from app.algorithms.rife._model_spec import (
+    HEAD_CUSTOM,
+    HEAD_NONE,
+    HEAD_SEQUENTIAL,
+    MODEL_CONFIGS,
+    MODEL_SPECS,
+    SUPPORTED_MODELS,
+    RifeModelSpec,
+    get_spec,
+)
 from app.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -31,304 +45,25 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# ---------------------------------------------------------------------------
-# 模型版本列表
-# ---------------------------------------------------------------------------
 
-SUPPORTED_MODELS = [
-    "4.0",
-    "4.1",
-    "4.2",
-    "4.3",
-    "4.4",
-    "4.5",
-    "4.6",
-    "4.7",
-    "4.8",
-    "4.9",
-    "4.10",
-    "4.11",
-    "4.12",
-    "4.12.lite",
-    "4.13",
-    "4.13.lite",
-    "4.14",
-    "4.14.lite",
-    "4.15",
-    "4.15.lite",
-    "4.16.lite",
-    "4.17",
-    "4.17.lite",
-    "4.18",
-    "4.19",
-    "4.20",
-    "4.21",
-    "4.22",
-    "4.22.lite",
-    "4.23",
-    "4.24",
-    "4.25",
-    "4.25.lite",
-    "4.25.heavy",
-    "4.26",
-    "4.26.heavy",
+# Re-export 这些常量 / 表,让既有外部代码继续从 model_loader 导入。
+__all__ = [
+    "HEAD_CUSTOM",
+    "HEAD_NONE",
+    "HEAD_SEQUENTIAL",
+    "MODEL_CONFIGS",
+    "MODEL_SPECS",
+    "RifeModelSpec",
+    "SUPPORTED_MODELS",
+    "create_backwarp_grid",
+    "create_flow_div",
+    "get_model_dir",
+    "get_spec",
+    "load_rife_model",
+    "pad_frame",
+    "unpad_frame",
 ]
 
-# ---------------------------------------------------------------------------
-# 各模型版本的配置
-# ---------------------------------------------------------------------------
-
-# Head 类型常量
-HEAD_NONE = "none"  # 无 Head 编码器（v4.0~v4.6）
-HEAD_SEQUENTIAL = "sequential"  # nn.Sequential Head（v4.7~v4.13.lite）
-HEAD_CUSTOM = "custom"  # 自定义 Head 类，从 IFNet 文件导入（v4.13~v4.26.heavy）
-
-MODEL_CONFIGS = {
-    # v4.0~v4.6: 无 Head，4 block，ensemble 支持
-    "4.0": {
-        "encode_channel": 0,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_NONE,
-    },
-    "4.1": {
-        "encode_channel": 0,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_NONE,
-    },
-    "4.2": {
-        "encode_channel": 0,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_NONE,
-    },
-    "4.3": {
-        "encode_channel": 0,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_NONE,
-    },
-    "4.4": {
-        "encode_channel": 0,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_NONE,
-    },
-    "4.5": {
-        "encode_channel": 0,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_NONE,
-    },
-    "4.6": {
-        "encode_channel": 0,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_NONE,
-    },
-    # v4.7~v4.9: nn.Sequential Head (3→16→4), encode_channel=4
-    "4.7": {
-        "encode_channel": 4,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_SEQUENTIAL,
-        "head_config": {"in_channels": 3, "mid_channels": 16, "out_channels": 4},
-    },
-    "4.8": {
-        "encode_channel": 4,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_SEQUENTIAL,
-        "head_config": {"in_channels": 3, "mid_channels": 16, "out_channels": 4},
-    },
-    "4.9": {
-        "encode_channel": 4,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_SEQUENTIAL,
-        "head_config": {"in_channels": 3, "mid_channels": 16, "out_channels": 4},
-    },
-    # v4.10~v4.12: nn.Sequential Head (3→32→8), encode_channel=8
-    "4.10": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_SEQUENTIAL,
-        "head_config": {"in_channels": 3, "mid_channels": 32, "out_channels": 8},
-    },
-    "4.11": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_SEQUENTIAL,
-        "head_config": {"in_channels": 3, "mid_channels": 32, "out_channels": 8},
-    },
-    "4.12": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_SEQUENTIAL,
-        "head_config": {"in_channels": 3, "mid_channels": 32, "out_channels": 8},
-    },
-    # v4.12.lite: nn.Sequential Head (3→32→4), encode_channel=4
-    "4.12.lite": {
-        "encode_channel": 4,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_SEQUENTIAL,
-        "head_config": {"in_channels": 3, "mid_channels": 32, "out_channels": 4},
-    },
-    # v4.13: 自定义 Head (32→8), encode_channel=8
-    "4.13": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.13.lite: nn.Sequential Head (3→32→4), encode_channel=4
-    "4.13.lite": {
-        "encode_channel": 4,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_SEQUENTIAL,
-        "head_config": {"in_channels": 3, "mid_channels": 32, "out_channels": 4},
-    },
-    # v4.14: 自定义 Head (32→8), encode_channel=8
-    "4.14": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.14.lite: 自定义 Head (32→8), encode_channel=8, ResConv groups=2
-    "4.14.lite": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.15: 自定义 Head (32→8), encode_channel=8
-    "4.15": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.15.lite: 自定义 Head (16→4), encode_channel=4
-    "4.15.lite": {
-        "encode_channel": 4,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.16.lite: 自定义 Head (16→4), encode_channel=4
-    "4.16.lite": {
-        "encode_channel": 4,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.17: 自定义 Head (32→8), encode_channel=8
-    "4.17": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.17.lite: 自定义 Head (16→4), encode_channel=4
-    "4.17.lite": {
-        "encode_channel": 4,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.18~v4.20: 自定义 Head (32→8), encode_channel=8
-    "4.18": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_CUSTOM,
-    },
-    "4.19": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_CUSTOM,
-    },
-    "4.20": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": True,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.21~v4.24: 自定义 Head (32→8), feat 传播, 无 ensemble
-    "4.21": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": False,
-        "head_type": HEAD_CUSTOM,
-    },
-    "4.22": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": False,
-        "head_type": HEAD_CUSTOM,
-    },
-    "4.22.lite": {
-        "encode_channel": 4,
-        "modulo": 32,
-        "ensemble": False,
-        "head_type": HEAD_CUSTOM,
-    },
-    "4.23": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": False,
-        "head_type": HEAD_CUSTOM,
-    },
-    "4.24": {
-        "encode_channel": 8,
-        "modulo": 32,
-        "ensemble": False,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.25: 自定义 Head (16→4), 5 block, modulo=64
-    "4.25": {
-        "encode_channel": 4,
-        "modulo": 64,
-        "ensemble": False,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.25.lite: 自定义 Head (16→4), 5 block, modulo=128
-    "4.25.lite": {
-        "encode_channel": 4,
-        "modulo": 128,
-        "ensemble": False,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.25.heavy: 自定义 Head (16→4), 5 block, 2x 宽, modulo=64
-    "4.25.heavy": {
-        "encode_channel": 4,
-        "modulo": 64,
-        "ensemble": False,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.26: 自定义 Head (16→4), 5 block, modulo=64
-    "4.26": {
-        "encode_channel": 4,
-        "modulo": 64,
-        "ensemble": False,
-        "head_type": HEAD_CUSTOM,
-    },
-    # v4.26.heavy: 自定义 Head (16→16), 5 block, modulo=64
-    "4.26.heavy": {
-        "encode_channel": 16,
-        "modulo": 64,
-        "ensemble": False,
-        "head_type": HEAD_CUSTOM,
-    },
-}
 
 # ---------------------------------------------------------------------------
 # 版本号 → 模块名映射
@@ -339,7 +74,7 @@ def _version_to_module_name(version: str) -> str:
     """
     将版本号转换为 Python 模块名。
 
-    例如：
+    例如:
         "4.25"       → "ifnet_v4_25"
         "4.12.lite"  → "ifnet_v4_12_lite"
         "4.26.heavy" → "ifnet_v4_26_heavy"
@@ -356,11 +91,10 @@ def _build_sequential_head(
     in_channels: int,
     mid_channels: int,
     out_channels: int,
-) -> nn.Sequential:
-    """
-    构建 nn.Sequential 类型的 Head 编码器。
+) -> "nn.Sequential":
+    """构建 nn.Sequential 类型的 Head 编码器。
 
-    参照 vs-rife __init__.py 中的 Head 构建逻辑：
+    参照 vs-rife __init__.py 中的 Head 构建逻辑:
     - in_channels=3, mid_channels=16, out_channels=4 → v4.7~v4.9
     - in_channels=3, mid_channels=32, out_channels=8 → v4.10~v4.12
     - in_channels=3, mid_channels=32, out_channels=4 → v4.12.lite, v4.13.lite
@@ -368,22 +102,21 @@ def _build_sequential_head(
     import torch.nn as nn
 
     if mid_channels == 16 and out_channels == 4:
-        # v4.7~v4.9: 简单两层，无 LeakyReLU
+        # v4.7~v4.9: 简单两层,无 LeakyReLU
         return nn.Sequential(
             nn.Conv2d(in_channels, mid_channels, 3, 2, 1),
             nn.ConvTranspose2d(mid_channels, out_channels, 4, 2, 1),
         )
-    else:
-        # v4.10+: 带中间层和 LeakyReLU
-        return nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, 3, 2, 1),
-            nn.LeakyReLU(0.2, True),
-            nn.Conv2d(mid_channels, mid_channels, 3, 1, 1),
-            nn.LeakyReLU(0.2, True),
-            nn.Conv2d(mid_channels, mid_channels, 3, 1, 1),
-            nn.LeakyReLU(0.2, True),
-            nn.ConvTranspose2d(mid_channels, out_channels, 4, 2, 1),
-        )
+    # v4.10+: 带中间层和 LeakyReLU
+    return nn.Sequential(
+        nn.Conv2d(in_channels, mid_channels, 3, 2, 1),
+        nn.LeakyReLU(0.2, True),
+        nn.Conv2d(mid_channels, mid_channels, 3, 1, 1),
+        nn.LeakyReLU(0.2, True),
+        nn.Conv2d(mid_channels, mid_channels, 3, 1, 1),
+        nn.LeakyReLU(0.2, True),
+        nn.ConvTranspose2d(mid_channels, out_channels, 4, 2, 1),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -404,6 +137,92 @@ def get_model_dir() -> str:
     return model_dir
 
 
+def _load_weights(weight_path: str) -> dict:
+    """Load and de-DDP a state_dict from a .pkl checkpoint.
+
+    The old RIFE checkpoints were saved from a DistributedDataParallel
+    wrapper; their keys all carry a ``module.`` prefix. We strip it here
+    so downstream ``load_state_dict`` calls can match the bare module
+    hierarchy of the meta-device-constructed IFNet.
+    """
+    import torch
+
+    logger.info(f"加载模型权重: {weight_path}")
+    state_dict = torch.load(weight_path, map_location="cpu", weights_only=False)
+    return {k.replace("module.", ""): v for k, v in state_dict.items() if "module." in k}
+
+
+def _build_head_for_spec(
+    spec: RifeModelSpec,
+    mod,
+    state_dict: dict,
+    torch_device: "torch.device",
+    dtype: "torch.dtype",
+) -> "nn.Module | None":
+    """Create the Head encoder, load its weights, and move to device.
+
+    Returns ``None`` for ``HEAD_NONE`` versions. Centralises the three
+    Head-construction branches that used to live inline in
+    ``load_rife_model``.
+    """
+    import torch
+
+    head_type = spec.head_type
+    if head_type == HEAD_NONE:
+        return None
+
+    encode_state_dict = {k.replace("encode.", ""): v for k, v in state_dict.items() if "encode." in k}
+
+    if head_type == HEAD_CUSTOM:
+        head_cls = mod.Head
+        with torch.device("meta"):
+            encode = head_cls()
+    elif head_type == HEAD_SEQUENTIAL:
+        head_config = spec.head_config or {}
+        with torch.device("meta"):
+            encode = _build_sequential_head(
+                in_channels=head_config.get("in_channels", 3),
+                mid_channels=head_config.get("mid_channels", 16),
+                out_channels=head_config.get("out_channels", 4),
+            )
+    else:  # pragma: no cover - guarded by spec table
+        raise ValueError(f"Unknown head_type {head_type!r}")
+
+    encode.load_state_dict(encode_state_dict, assign=True)
+    encode.eval().to(torch_device, dtype)
+    return encode
+
+
+def _compile_with_tensorrt_if_available(
+    module: "nn.Module",
+    *,
+    label: str,
+    fp16: bool,
+) -> "nn.Module":
+    """Wrap ``module`` with ``torch.compile(backend='tensorrt')`` when possible.
+
+    Falls back to the un-compiled module with a warning if the
+    ``torch_tensorrt`` extra isn't installed — the original CUDA path
+    keeps working in either case.
+    """
+    import torch
+
+    if importlib.util.find_spec("torch_tensorrt") is None:
+        logger.warning(
+            "请求 TensorRT 引擎但未找到 torch_tensorrt,回退到 CUDA 推理。请安装 torch-tensorrt 以启用 TensorRT 加速。"
+        )
+        return module
+    logger.info(f"正在使用 torch_tensorrt 编译 {label} 模型...")
+    return torch.compile(
+        module,
+        backend="tensorrt",
+        options={
+            "truncate_long_and_double": True,
+            "precision": "fp16" if fp16 else "fp32",
+        },
+    )
+
+
 def load_rife_model(
     model_version: str = "4.25",
     scale: float = 1.0,
@@ -411,139 +230,84 @@ def load_rife_model(
     fp16: bool = False,
     model_dir: Optional[str] = None,
     engine: str = "cuda",
-) -> tuple[nn.Module, Optional[nn.Module], dict]:
-    """
-    加载 RIFE 模型（IFNet + Head 编码器）。
+) -> tuple["nn.Module", "Optional[nn.Module]", dict]:
+    """加载 RIFE 模型(IFNet + Head 编码器)。
 
-    参照 vs-rife 的 init_module 逻辑，根据版本配置：
-    1. 动态导入对应版本的 IFNet（和 Head，如果存在）
-    2. 加载 state_dict，移除 "module." 前缀
+    参照 vs-rife 的 init_module 逻辑,根据 ``_model_spec`` 表中查表得到的
+    ``RifeModelSpec``:
+
+    1. 动态导入对应版本的 IFNet(和 Head,如果存在)
+    2. 加载 state_dict,移除 "module." 前缀
     3. 用 torch.device("meta") 创建模型骨架再 load_state_dict
-    4. 分离 encode 权重到独立的 Head 编码器
+    4. 按 spec.head_type 分发到 ``_build_head_for_spec``
 
     参数:
-        model_version: 模型版本号（默认 "4.25"）
-        scale: 处理分辨率缩放因子（1.0 原始分辨率，0.5 半分辨率适用于 4K）
-        device: 推理设备（"cuda", "cuda:0", "cpu" 等，默认自动选择）
+        model_version: 模型版本号(默认 "4.25")
+        scale: 处理分辨率缩放因子(1.0 原始分辨率,0.5 半分辨率适用于 4K)
+        device: 推理设备("cuda", "cuda:0", "cpu" 等,默认自动选择)
         fp16: 是否使用半精度推理
-        model_dir: 模型权重目录（默认使用 backend/models/）
-        engine: 推理引擎（"cuda" 或 "tensorrt"，默认 "cuda"）
+        model_dir: 模型权重目录(默认使用 backend/models/)
+        engine: 推理引擎("cuda" 或 "tensorrt",默认 "cuda")
 
     返回:
-        (flownet, encode, config) 元组:
-        - flownet: IFNet 模型（eval 模式）
-        - encode: Head 编码器（eval 模式），无 Head 时为 None
-        - config: 模型配置字典（encode_channel, modulo, head_type 等）
+        ``(flownet, encode, config)`` 元组:
+        - flownet: IFNet 模型(eval 模式)
+        - encode: Head 编码器(eval 模式),无 Head 时为 None
+        - config: 模型配置字典(legacy dict 形式,保留兼容字段)
 
     异常:
         FileNotFoundError: 权重文件不存在
+        ValueError: 不支持的模型版本
     """
     import torch
 
-    if model_version not in MODEL_CONFIGS:
+    if model_version not in MODEL_SPECS:
         raise ValueError(f"不支持的模型版本: {model_version}。可用版本: {SUPPORTED_MODELS}")
 
-    config = MODEL_CONFIGS[model_version].copy()
-    head_type = config["head_type"]
+    spec = get_spec(model_version)
 
-    # 确定设备
+    # 确定设备 / dtype / 模型目录
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     torch_device = torch.device(device)
-
-    # 确定数据类型
     dtype = torch.half if fp16 else torch.float
 
-    # 确定模型目录
     if model_dir is None:
         model_dir = get_model_dir()
 
-    # 检查权重文件
-    filename = f"flownet_v{model_version}.pkl"
-    weight_path = os.path.join(model_dir, filename)
-
+    weight_path = os.path.join(model_dir, f"flownet_v{model_version}.pkl")
     if not os.path.isfile(weight_path) or os.path.getsize(weight_path) == 0:
         raise FileNotFoundError(f"模型权重文件未找到: {weight_path}。请确保权重文件已预置于 {model_dir} 目录下")
 
-    # 加载权重（旧格式 pkl 不支持 mmap，需使用 weights_only=False）
-    logger.info(f"加载模型权重: {weight_path}")
-    state_dict = torch.load(weight_path, map_location="cpu", weights_only=False)
-    # 移除 DistributedDataParallel 的 "module." 前缀
-    state_dict = {k.replace("module.", ""): v for k, v in state_dict.items() if "module." in k}
+    state_dict = _load_weights(weight_path)
 
-    # 动态导入 IFNet（和 Head）
+    # 动态导入 IFNet(和 Head)
     module_name = _version_to_module_name(model_version)
     rife_package = f"app.algorithms.rife.{module_name}"
     logger.info(f"动态导入模块: {rife_package}")
     mod = importlib.import_module(rife_package)
-    IFNet = mod.IFNet
+    ifnet_cls = mod.IFNet
 
-    # 创建 IFNet
-    ensemble = config.get("ensemble", False)
+    # 构建 IFNet
     with torch.device("meta"):
-        flownet = IFNet(scale=scale, ensemble=ensemble)
+        flownet = ifnet_cls(scale=scale, ensemble=spec.ensemble)
     flownet.load_state_dict(state_dict, strict=False, assign=True)
     flownet.eval().to(torch_device, dtype)
 
-    # 创建 Head 编码器
-    encode = None
-    if head_type == HEAD_CUSTOM:
-        # 从 IFNet 模块导入自定义 Head 类
-        Head = mod.Head
-        encode_state_dict = {k.replace("encode.", ""): v for k, v in state_dict.items() if "encode." in k}
-        with torch.device("meta"):
-            encode = Head()
-        encode.load_state_dict(encode_state_dict, assign=True)
-        encode.eval().to(torch_device, dtype)
+    # 构建 Head (None for HEAD_NONE versions)
+    encode = _build_head_for_spec(spec, mod, state_dict, torch_device, dtype)
 
-    elif head_type == HEAD_SEQUENTIAL:
-        # 构建 nn.Sequential Head
-        head_config = config.get("head_config", {})
-        with torch.device("meta"):
-            encode = _build_sequential_head(
-                in_channels=head_config.get("in_channels", 3),
-                mid_channels=head_config.get("mid_channels", 16),
-                out_channels=head_config.get("out_channels", 4),
-            )
-        encode_state_dict = {k.replace("encode.", ""): v for k, v in state_dict.items() if "encode." in k}
-        encode.load_state_dict(encode_state_dict, assign=True)
-        encode.eval().to(torch_device, dtype)
-
-    # HEAD_NONE 时 encode 保持 None
-
-    # TensorRT 编译（如果请求且可用）
+    # TensorRT 编译(可选)
     if engine == "tensorrt" and torch_device.type == "cuda":
-        if importlib.util.find_spec("torch_tensorrt") is not None:
-            logger.info(f"正在使用 torch_tensorrt 编译 RIFE v{model_version} 模型...")
-            # 使用 torch.compile 的 TensorRT 后端（PyTorch 2.x+）
-            flownet = torch.compile(
-                flownet,
-                backend="tensorrt",
-                options={
-                    "truncate_long_and_double": True,
-                    "precision": "fp16" if fp16 else "fp32",
-                },
-            )
-            if encode is not None:
-                encode = torch.compile(
-                    encode,
-                    backend="tensorrt",
-                    options={
-                        "truncate_long_and_double": True,
-                        "precision": "fp16" if fp16 else "fp32",
-                    },
-                )
-            logger.info(f"RIFE v{model_version} TensorRT 编译完成")
-        else:
-            logger.warning(
-                "请求 TensorRT 引擎但未找到 torch_tensorrt，回退到 CUDA 推理。"
-                "请安装 torch-tensorrt 以启用 TensorRT 加速。"
-            )
+        flownet = _compile_with_tensorrt_if_available(flownet, label=f"RIFE v{model_version}", fp16=fp16)
+        if encode is not None:
+            encode = _compile_with_tensorrt_if_available(encode, label=f"RIFE v{model_version} Head", fp16=fp16)
 
+    config = spec.to_dict()
     logger.info(
         f"RIFE v{model_version} 模型加载完成 "
         f"(device={torch_device}, dtype={dtype}, scale={scale}, engine={engine}, "
-        f"head_type={head_type}, encode={'有' if encode is not None else '无'})"
+        f"head_type={spec.head_type}, encode={'有' if encode is not None else '无'})"
     )
 
     return flownet, encode, config
@@ -554,9 +318,8 @@ def load_rife_model(
 # ---------------------------------------------------------------------------
 
 
-def create_backwarp_grid(height: int, width: int, device: torch.device) -> torch.Tensor:
-    """
-    创建后向变形的基础采样网格。
+def create_backwarp_grid(height: int, width: int, device: "torch.device") -> "torch.Tensor":
+    """创建后向变形的基础采样网格。
 
     参数:
         height: 帧高度
@@ -564,28 +327,22 @@ def create_backwarp_grid(height: int, width: int, device: torch.device) -> torch
         device: 计算设备
 
     返回:
-        采样网格，形状 (1, 2, H, W)
+        采样网格,形状 (1, 2, H, W)
     """
     import torch
 
-    tenHorizontal = torch.linspace(-1.0, 1.0, width, dtype=torch.float, device=device)
-    tenHorizontal = tenHorizontal.view(1, 1, 1, width).expand(-1, -1, height, -1)
-    tenVertical = torch.linspace(-1.0, 1.0, height, dtype=torch.float, device=device)
-    tenVertical = tenVertical.view(1, 1, height, 1).expand(-1, -1, -1, width)
-    return torch.cat([tenHorizontal, tenVertical], 1)
+    horizontal = torch.linspace(-1.0, 1.0, width, dtype=torch.float, device=device)
+    horizontal = horizontal.view(1, 1, 1, width).expand(-1, -1, height, -1)
+    vertical = torch.linspace(-1.0, 1.0, height, dtype=torch.float, device=device)
+    vertical = vertical.view(1, 1, height, 1).expand(-1, -1, -1, width)
+    return torch.cat([horizontal, vertical], 1)
 
 
-def create_flow_div(height: int, width: int, device: torch.device) -> torch.Tensor:
-    """
-    创建光流归一化除数。
-
-    参数:
-        height: 帧高度
-        width: 帧宽度
-        device: 计算设备
+def create_flow_div(height: int, width: int, device: "torch.device") -> "torch.Tensor":
+    """创建光流归一化除数。
 
     返回:
-        归一化除数，形状 (2,)，值为 [(W-1)/2, (H-1)/2]
+        归一化除数,形状 (2,),值为 [(W-1)/2, (H-1)/2]
     """
     import torch
 
@@ -596,16 +353,11 @@ def create_flow_div(height: int, width: int, device: torch.device) -> torch.Tens
     )
 
 
-def pad_frame(img: torch.Tensor, modulo: int) -> tuple[torch.Tensor, tuple]:
-    """
-    将帧 padding 到 modulo 的倍数。
-
-    参数:
-        img: 输入帧张量，形状 (1, C, H, W)
-        modulo: padding 模数
+def pad_frame(img: "torch.Tensor", modulo: int) -> "tuple[torch.Tensor, tuple]":
+    """将帧 padding 到 modulo 的倍数。
 
     返回:
-        (padded_img, padding) 元组，padding 为 (left, right, top, bottom)
+        ``(padded_img, padding)`` 元组,padding 为 (left, right, top, bottom)
     """
     import torch
 
@@ -618,18 +370,11 @@ def pad_frame(img: torch.Tensor, modulo: int) -> tuple[torch.Tensor, tuple]:
     return img, padding
 
 
-def unpad_frame(img: torch.Tensor, padding: tuple, orig_h: int, orig_w: int) -> torch.Tensor:
-    """
-    去除帧的 padding。
-
-    参数:
-        img: padding 后的帧张量，形状 (1, C, H', W')
-        padding: pad_frame 返回的 padding 元组
-        orig_h: 原始高度
-        orig_w: 原始宽度
+def unpad_frame(img: "torch.Tensor", padding: tuple, orig_h: int, orig_w: int) -> "torch.Tensor":
+    """去除帧的 padding。
 
     返回:
-        裁剪后的帧张量，形状 (1, C, orig_h, orig_w)
+        裁剪后的帧张量,形状 (1, C, orig_h, orig_w)
     """
     if any(p > 0 for p in padding):
         return img[:, :, :orig_h, :orig_w]

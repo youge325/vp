@@ -46,13 +46,35 @@ def format_progress_bar(current: int, total: int) -> str:
 
 
 class CliProgressReporter:
-    """Throttled progress reporter for CLI-driven runs."""
+    """Throttled progress reporter for CLI-driven runs.
+
+    Phase C.1.3:reporter 现在维护一个 ``(stage_name, stage_index, stage_total)``
+    元组,供 streaming pipeline 在切换阶段时调用 ``set_stage`` 更新。这修复
+    了原来 ``stage_index`` 在 NDJSON 中永远是 1 的 bug——以前 ``process.py``
+    给所有阶段同一份 callback,reporter 无从得知正在汇报的是哪个 stage。
+    """
 
     def __init__(self, total_frames: int) -> None:
         self.total_frames = max(int(total_frames), 1)
         self.current_frame = 0
         self.started_at = time.time()
         self._last_reported_percent = -1.0
+        # Phase C.1.3: stage 上下文。默认为单阶段,避免老调用方未 set_stage
+        # 时仍能拿到合理的 NDJSON 输出。
+        self._stage_name = "Encoding"
+        self._stage_index = 1
+        self._stage_total = 1
+
+    def set_stage(self, name: str, index: int, total: int) -> None:
+        """Switch the current stage label / index / total.
+
+        Called by the streaming pipeline (via per-stage callback closures)
+        before each batch of ``update()`` calls. Safe to call repeatedly;
+        no IO happens here, the change just rides on the next ``update``.
+        """
+        self._stage_name = name or self._stage_name
+        self._stage_index = max(int(index), 1)
+        self._stage_total = max(int(total), 1)
 
     def update(
         self,
@@ -88,9 +110,9 @@ class CliProgressReporter:
             current=display_current,
             total=self.total_frames,
             percent=round(percent, 1),
-            stage="Encoding",
-            stage_index=1,
-            stage_total=1,
+            stage=self._stage_name,
+            stage_index=self._stage_index,
+            stage_total=self._stage_total,
         )
 
     def finish(self, processed_frames: int) -> None:
