@@ -1,7 +1,7 @@
 import { reactive, ref } from 'vue'
 import { describe, expect, it } from 'vitest'
 
-import { defineLens, fieldLens } from '../lens'
+import { createDraftEditor, defineLens, fieldLens } from '../lens'
 
 interface Draft {
   count: number
@@ -86,5 +86,35 @@ describe('defineLens', () => {
     // The writer side-effect is preserved (useful for composite setters).
     expect(storage.value).toBe('NEXT')
     expect(lens.value).toBe('NEXT')
+  })
+})
+
+describe('createDraftEditor', () => {
+  it('shares the prebound getRoot/patcher across multiple field calls', () => {
+    const { state, patch } = createDraftStore()
+    const { field } = createDraftEditor<Draft>(() => state.draft, patch)
+    const count = field((d) => d.count, (d, v: number) => { d.count = v })
+    const label = field((d) => d.nested.label, (d, v: string) => { d.nested.label = v })
+    count.value = 7
+    label.value = 'hi'
+    expect(state.draft.count).toBe(7)
+    expect(state.draft.nested.label).toBe('hi')
+  })
+
+  it('effect() builds a composite setter that can mutate multiple fields', () => {
+    const { state, patch } = createDraftStore()
+    const { effect } = createDraftEditor<Draft>(() => state.draft, patch)
+    const toggle = effect<boolean>(
+      () => state.draft.nested.enabled,
+      (value) => patch((d) => {
+        d.nested.enabled = value
+        // Side effect: pin label to a derived value.
+        d.nested.label = value ? 'ON' : 'OFF'
+      }),
+    )
+    toggle.value = true
+    expect(state.draft.nested).toEqual({ enabled: true, label: 'ON' })
+    toggle.value = false
+    expect(state.draft.nested).toEqual({ enabled: false, label: 'OFF' })
   })
 })

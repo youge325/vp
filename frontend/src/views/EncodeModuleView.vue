@@ -1,9 +1,16 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { CONTAINER_OPTIONS } from '@/config/constants'
 import { useEncodeForm } from '@/composables/forms/useEncodeForm'
 import { useOutputPicker } from '@/composables/app/useOutputPicker'
 import { useWorkbenchEditor, useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
 import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
+import IssueBanner from '@/components/IssueBanner.vue'
+import BaseField from '@/components/forms/BaseField.vue'
+import BaseNumber from '@/components/forms/BaseNumber.vue'
+import BaseSelect from '@/components/forms/BaseSelect.vue'
+import BaseToggle from '@/components/forms/BaseToggle.vue'
+import type { RateControlMode } from '@/types/domain/workflow'
 
 const {
   visibleEncoderProfiles,
@@ -26,6 +33,25 @@ const { editorConfig } = useWorkbenchEditor()
 const { targetLabel, caption } = useEditingScope('encode')
 const encodeIssue = useOperationIssue('encode')
 
+const containerOptions = computed(() =>
+  CONTAINER_OPTIONS.map((value) => ({ value, label: value.toUpperCase() })),
+)
+
+const codecOptions = computed(() =>
+  visibleEncoderProfiles.value.map((profile) => ({ value: profile.name, label: profile.label })),
+)
+
+const RATE_CONTROL_OPTIONS = [
+  { value: 'crf', label: 'CRF' },
+  { value: 'cq', label: 'CQ' },
+  { value: 'qp', label: 'QP' },
+  { value: 'bitrate', label: 'Bitrate' },
+] as const
+
+function handleRateControlModeChange(value: string): void {
+  setRateControlMode(value as RateControlMode)
+}
+
 async function handlePickOutputDirectory(): Promise<void> {
   await pickOutputDirectory()
 }
@@ -46,10 +72,7 @@ async function handlePickOutputDirectory(): Promise<void> {
         </div>
       </div>
 
-      <div v-if="encodeIssue" class="info-banner info-banner-danger">
-        <strong>输出目录操作失败</strong>
-        <p>{{ encodeIssue.message }}</p>
-      </div>
+      <IssueBanner :issue="encodeIssue" title="输出目录操作失败" />
     </section>
 
     <section class="panel-surface">
@@ -61,83 +84,64 @@ async function handlePickOutputDirectory(): Promise<void> {
       </div>
 
       <div class="field-grid field-grid-2">
-        <label class="field field-span-2">
-          <span>输出目录</span>
+        <BaseField label="输出目录" span-two>
           <input
             :value="editorConfig.outputConfig.outputDir"
             type="text"
             placeholder="留空则使用默认输出目录"
             @input="setOutputDir(($event.target as HTMLInputElement).value)"
           />
-        </label>
+        </BaseField>
 
-        <label class="field">
-          <span>容器</span>
-          <select :value="editorConfig.encodeConfig.container" @change="setContainer(($event.target as HTMLSelectElement).value)">
-            <option v-for="container in CONTAINER_OPTIONS" :key="container" :value="container">
-              {{ container.toUpperCase() }}
-            </option>
-          </select>
-        </label>
+        <BaseSelect
+          label="容器"
+          :model-value="editorConfig.encodeConfig.container"
+          :options="containerOptions"
+          @update:model-value="setContainer"
+        />
 
-        <label class="field">
-          <span>分段帧数</span>
-          <input
-            :value="Number(editorConfig.outputConfig.segmentFrames)"
-            type="number"
-            min="1"
-            step="1"
-            @input="setSegmentFrames(Number(($event.target as HTMLInputElement).value))"
-          />
-        </label>
+        <BaseNumber
+          label="分段帧数"
+          :model-value="Number(editorConfig.outputConfig.segmentFrames)"
+          :min="1"
+          :step="1"
+          @update:model-value="setSegmentFrames"
+        />
 
-        <label class="field">
-          <span>编码器</span>
-          <select
-            :value="editorConfig.encodeConfig.codec"
-            @change="setEncodeProfile(($event.target as HTMLSelectElement).value)"
-          >
-            <option v-for="profile in visibleEncoderProfiles" :key="profile.name" :value="profile.name">
-              {{ profile.label }}
-            </option>
-          </select>
-        </label>
+        <BaseSelect
+          label="编码器"
+          :model-value="editorConfig.encodeConfig.codec"
+          :options="codecOptions"
+          @update:model-value="setEncodeProfile"
+        />
 
-        <label class="field">
-          <span>码率控制模式</span>
-          <select :value="editorConfig.encodeConfig.rateControl.mode" @change="setRateControlMode(($event.target as HTMLSelectElement).value)">
-            <option value="crf">CRF</option>
-            <option value="cq">CQ</option>
-            <option value="qp">QP</option>
-            <option value="bitrate">Bitrate</option>
-          </select>
-        </label>
+        <BaseSelect
+          label="码率控制模式"
+          :model-value="editorConfig.encodeConfig.rateControl.mode"
+          :options="RATE_CONTROL_OPTIONS"
+          @update:model-value="handleRateControlModeChange"
+        />
 
-        <label class="field">
-          <span>码率控制值</span>
-          <input
-            :value="Number(editorConfig.encodeConfig.rateControl.value)"
-            type="number"
-            min="0"
-            @input="setRateControlValue(Number(($event.target as HTMLInputElement).value))"
-          />
-        </label>
+        <BaseNumber
+          label="码率控制值"
+          :model-value="Number(editorConfig.encodeConfig.rateControl.value)"
+          :min="0"
+          @update:model-value="setRateControlValue"
+        />
 
-        <label class="field toggle-field">
-          <span>保留音频</span>
-          <label class="toggle-chip">
-            <input :checked="editorConfig.encodeConfig.keepAudio" type="checkbox" @change="setKeepAudio(($event.target as HTMLInputElement).checked)" />
-            <span>Keep Audio</span>
-          </label>
-        </label>
+        <BaseToggle
+          label="保留音频"
+          :model-value="editorConfig.encodeConfig.keepAudio"
+          chip-text="Keep Audio"
+          @update:model-value="setKeepAudio"
+        />
 
-        <label class="field toggle-field">
-          <span>完成后打开目录</span>
-          <label class="toggle-chip">
-            <input :checked="editorConfig.outputConfig.openOnComplete" type="checkbox" @change="setOpenOnComplete(($event.target as HTMLInputElement).checked)" />
-            <span>Open Folder</span>
-          </label>
-        </label>
+        <BaseToggle
+          label="完成后打开目录"
+          :model-value="editorConfig.outputConfig.openOnComplete"
+          chip-text="Open Folder"
+          @update:model-value="setOpenOnComplete"
+        />
       </div>
 
       <div class="chip-row">

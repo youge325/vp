@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import FilterChainEditor from '@/components/FilterChainEditor.vue'
+import BaseToggle from '@/components/forms/BaseToggle.vue'
 import { useFilterChainForm } from '@/composables/forms/useFilterChainForm'
 import { useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
 
@@ -19,13 +20,7 @@ const { targetLabel, caption } = useEditingScope('postprocess')
       </div>
 
       <div class="field-grid field-grid-2">
-        <label class="field toggle-field">
-          <span>启用后处理</span>
-          <label class="toggle-chip">
-            <input v-model="enabled" type="checkbox" />
-            <span>启用</span>
-          </label>
-        </label>
+        <BaseToggle v-model="enabled" label="启用后处理" />
       </div>
 
       <div v-if="enabled" class="filter-section">

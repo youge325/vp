@@ -1,10 +1,10 @@
 // 视图 form-binding — 增强模块(补帧 / 超分 / 动漫优化)。
-// 单字段双向绑定走 ``fieldLens``;含副作用(切换 backend 时联动 onnxModel,
-// 切换 algorithm 时重置 model 默认值)的两个 setter 仍显式写出。
+// 单字段 lens 走 ``field``;含副作用(切换 backend 时联动 onnxModel,
+// 切换 algorithm 时重置 model 默认值)的两个 setter 走 ``effect``。
 
 import { computed, reactive } from 'vue'
 import { useEnvStore } from '@/stores/env'
-import { fieldLens } from '@/composables/forms/lens'
+import { createDraftEditor } from '@/composables/forms/lens'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import {
   fallbackInterpolationOnnxModel,
@@ -20,7 +20,10 @@ export function useEnhanceForm() {
   const { editorConfig, patchWorkflow } = useWorkbenchEditor()
 
   const workflow = computed(() => editorConfig.value.workflowConfig)
-  const getWorkflow = () => workflow.value
+  const { field, effect } = createDraftEditor<WorkflowConfig>(
+    () => workflow.value,
+    patchWorkflow,
+  )
 
   const interpolationAlgorithms = computed(
     () => envStore.env.checkResult?.interpolationAlgorithms ?? [],
@@ -28,9 +31,7 @@ export function useEnhanceForm() {
   const superResolutionAlgorithms = computed(
     () => envStore.env.checkResult?.superResolutionAlgorithms ?? [],
   )
-  const animeProfiles = computed(
-    () => envStore.env.checkResult?.animeProfiles ?? [],
-  )
+  const animeProfiles = computed(() => envStore.env.checkResult?.animeProfiles ?? [])
   const interpolationOnnxModels = computed(() => {
     const alg = interpolationAlgorithms.value.find(
       (a) => a.name === workflow.value.interpolation.algorithm,
@@ -43,163 +44,114 @@ export function useEnhanceForm() {
     )
     return alg?.onnxModels ?? []
   })
-  const isOnnxBackend = computed(() => workflow.value.interpolation.tensorBackend === 'onnx')
-
-  // 单字段透传 lens
-  const interpolationEnabled = fieldLens(
-    getWorkflow,
-    patchWorkflow,
-    (c) => c.interpolation.enabled,
-    (c, v) => { c.interpolation.enabled = v },
-  )
-
-  // 复合 setter:切换 backend 时同步 engine 与 onnx 模型默认值
-  const interpolationBackend = computed({
-    get: () => workflow.value.interpolation.tensorBackend as TensorBackend,
-    set: (value: TensorBackend) => {
-      patchWorkflow((c: WorkflowConfig) => {
-        c.interpolation.tensorBackend = value
-        c.interpolation.engine = pickDefaultEngine(envStore.env.checkResult, value) ?? c.interpolation.engine
-        if (value === 'onnx') {
-          c.interpolation.onnxModel = fallbackInterpolationOnnxModel(envStore.env.checkResult, c.interpolation.algorithm, c.interpolation.onnxModel)
-          c.superResolution.onnxModel = fallbackSuperResolutionOnnxModel(envStore.env.checkResult, c.superResolution.algorithm, c.superResolution.onnxModel)
-        }
-      })
-    },
-  })
-
-  const interpolationEngine = fieldLens(
-    getWorkflow,
-    patchWorkflow,
-    (c) => (c.interpolation.engine as InferenceEngine) ?? 'cuda',
-    (c, v: InferenceEngine) => { c.interpolation.engine = v },
-  )
-
-  // 复合 setter:切换 algorithm 时联动 model 默认值
-  const interpolationAlgorithm = computed({
-    get: () => workflow.value.interpolation.algorithm,
-    set: (value: string) => patchWorkflow((c: WorkflowConfig) => {
-      c.interpolation.algorithm = value
-      c.interpolation.model = pickDefaultInterpolationModel(envStore.env.checkResult, value)
-    }),
-  })
-
   const interpolationModels = computed(
     () =>
       interpolationAlgorithms.value.find((a) => a.name === workflow.value.interpolation.algorithm)
         ?.models ?? [],
   )
+  const isOnnxBackend = computed(() => workflow.value.interpolation.tensorBackend === 'onnx')
 
-  const interpolationModel = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  // ── 纯字段 lens(读写同一处) ────────────────────────────────────────────
+  const interpolationEnabled = field(
+    (c) => c.interpolation.enabled,
+    (c, v: boolean) => { c.interpolation.enabled = v },
+  )
+  const interpolationEngine = field(
+    (c) => (c.interpolation.engine as InferenceEngine) ?? 'cuda',
+    (c, v: InferenceEngine) => { c.interpolation.engine = v },
+  )
+  const interpolationModel = field(
     (c) => c.interpolation.model,
     (c, v: string) => { c.interpolation.model = v },
   )
-
-  const interpolationOnnxModel = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const interpolationOnnxModel = field(
     (c) => c.interpolation.onnxModel ?? '',
     (c, v: string) => { c.interpolation.onnxModel = v },
   )
-
-  const fpsMode = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const fpsMode = field(
     (c) => c.fpsMode as FpsMode,
     (c, v: FpsMode) => { c.fpsMode = v },
   )
-
-  const targetFps = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const targetFps = field(
     (c) => c.interpolation.targetFps,
     (c, v: number) => { c.interpolation.targetFps = v },
   )
-
-  const interpolationMulti = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const interpolationMulti = field(
     (c) => c.interpolation.multi,
     (c, v: number) => { c.interpolation.multi = v },
   )
-
-  const interpolationScale = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const interpolationScale = field(
     (c) => c.interpolation.scale,
     (c, v: number) => { c.interpolation.scale = v },
   )
-
-  const interpolationFp16 = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const interpolationFp16 = field(
     (c) => c.interpolation.fp16,
     (c, v: boolean) => { c.interpolation.fp16 = v },
   )
-
-  const superResolutionEnabled = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const superResolutionEnabled = field(
     (c) => c.superResolution.enabled,
     (c, v: boolean) => { c.superResolution.enabled = v },
   )
-
-  const superResolutionScale = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const superResolutionScale = field(
     (c) => c.superResolution.scaleFactor,
     (c, v: number) => { c.superResolution.scaleFactor = v },
   )
-
-  const superResolutionAlgorithm = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const superResolutionAlgorithm = field(
     (c) => c.superResolution.algorithm,
     (c, v: string) => { c.superResolution.algorithm = v },
   )
-
-  const superResolutionOnnxModel = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const superResolutionOnnxModel = field(
     (c) => c.superResolution.onnxModel ?? '',
     (c, v: string) => { c.superResolution.onnxModel = v },
   )
-
-  const processOrder = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const processOrder = field(
     (c) => c.processOrder as ProcessOrder,
     (c, v: ProcessOrder) => { c.processOrder = v },
   )
-
-  const animeEnabled = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const animeEnabled = field(
     (c) => c.anime.enabled,
     (c, v: boolean) => { c.anime.enabled = v },
   )
-
-  const animeProfile = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const animeProfile = field(
     (c) => c.anime.profile,
     (c, v: string) => { c.anime.profile = v },
   )
-
-  const animeDenoise = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const animeDenoise = field(
     (c) => c.anime.denoise,
     (c, v: number) => { c.anime.denoise = v },
   )
-
-  const animeEdgeBoost = fieldLens(
-    getWorkflow,
-    patchWorkflow,
+  const animeEdgeBoost = field(
     (c) => c.anime.edgeBoost,
     (c, v: number) => { c.anime.edgeBoost = v },
+  )
+
+  // ── 复合 setter(切换时联动其他字段) ────────────────────────────────────
+  const interpolationBackend = effect<TensorBackend>(
+    () => workflow.value.interpolation.tensorBackend as TensorBackend,
+    (value) => patchWorkflow((c) => {
+      c.interpolation.tensorBackend = value
+      c.interpolation.engine = pickDefaultEngine(envStore.env.checkResult, value) ?? c.interpolation.engine
+      if (value === 'onnx') {
+        c.interpolation.onnxModel = fallbackInterpolationOnnxModel(
+          envStore.env.checkResult,
+          c.interpolation.algorithm,
+          c.interpolation.onnxModel,
+        )
+        c.superResolution.onnxModel = fallbackSuperResolutionOnnxModel(
+          envStore.env.checkResult,
+          c.superResolution.algorithm,
+          c.superResolution.onnxModel,
+        )
+      }
+    }),
+  )
+
+  const interpolationAlgorithm = effect<string>(
+    () => workflow.value.interpolation.algorithm,
+    (value) => patchWorkflow((c) => {
+      c.interpolation.algorithm = value
+      c.interpolation.model = pickDefaultInterpolationModel(envStore.env.checkResult, value)
+    }),
   )
 
   return reactive({

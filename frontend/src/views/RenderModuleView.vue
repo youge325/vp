@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import ResumeConflictDialog from '@/components/ResumeConflictDialog.vue'
 import TaskConsole from '@/components/TaskConsole.vue'
+import IssueBanner from '@/components/IssueBanner.vue'
 import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
 import type { ResumeConflictAction } from '@/types/domain/batch'
@@ -57,10 +58,7 @@ function handleResolveConflict(action: ResumeConflictAction): void {
         </div>
       </div>
 
-      <div v-if="taskIssue" class="info-banner info-banner-danger">
-        <strong>任务操作失败</strong>
-        <p>{{ taskIssue.message }}</p>
-      </div>
+      <IssueBanner :issue="taskIssue" title="任务操作失败" />
     </section>
 
     <TaskConsole />
