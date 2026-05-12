@@ -5,32 +5,70 @@ pub trait ProcessController: Send + Sync {
     fn resume(&self, root_pid: u32) -> Result<(), String>;
 }
 
-pub struct WindowsProcessController;
+#[derive(Default)]
+pub struct WindowsProcessController {
+    /// Cache of thread IDs collected on the last ``suspend()`` per root pid.
+    ///
+    /// Phase C.2.6:在 resume 时优先复用 suspend 期间扫到的 thread_ids,
+    /// 避免对全系统 ToolHelp 二次枚举(系统线程数轻易过万,每次 O(N))。
+    /// 由于 suspend 会让所有相关线程冻结,resume 时新建线程的可能性极低,
+    /// 复用 cache 是安全的;万一 cache miss(或 cache 过期),resume 会
+    /// fall back 到全扫并刷新 cache。
+    ///
+    /// 生命周期与单个 task 一致:[`tasks::controller::spawn_task_controller`]
+    /// 每次为新任务实例化一个 ``WindowsProcessController``,任务结束后整个
+    /// controller 被 drop,cache 自然回收。
+    #[cfg(target_os = "windows")]
+    cached_threads: std::sync::Mutex<std::collections::HashMap<u32, Vec<u32>>>,
+}
+
+impl WindowsProcessController {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
 
 impl ProcessController for WindowsProcessController {
     fn suspend(&self, root_pid: u32) -> Result<(), String> {
-        imp::set_process_tree_suspended(root_pid, true)
+        #[cfg(target_os = "windows")]
+        {
+            let threads = imp::set_process_tree_suspended(root_pid, true, None)?;
+            if let Ok(mut cache) = self.cached_threads.lock() {
+                cache.insert(root_pid, threads);
+            }
+            return Ok(());
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            imp::set_process_tree_suspended(root_pid, true, None).map(|_| ())
+        }
     }
 
     fn resume(&self, root_pid: u32) -> Result<(), String> {
-        imp::set_process_tree_suspended(root_pid, false)
+        #[cfg(target_os = "windows")]
+        {
+            // Cache 命中:只对已知 thread_id 调 ResumeThread,免去全系统枚举
+            let cached = self
+                .cached_threads
+                .lock()
+                .ok()
+                .and_then(|cache| cache.get(&root_pid).cloned());
+            let _ = imp::set_process_tree_suspended(root_pid, false, cached)?;
+            // Resume 后清掉缓存,避免对同一 root_pid 再次 resume 时引用过期 id
+            if let Ok(mut cache) = self.cached_threads.lock() {
+                cache.remove(&root_pid);
+            }
+            return Ok(());
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            imp::set_process_tree_suspended(root_pid, false, None).map(|_| ())
+        }
     }
 }
 
 pub fn default_controller() -> Arc<dyn ProcessController> {
-    Arc::new(WindowsProcessController)
-}
-
-// ------------------------------------------------------------------
-// Legacy free-standing functions (kept for backward compatibility)
-// ------------------------------------------------------------------
-
-pub fn suspend_process_tree(root_pid: u32) -> Result<(), String> {
-    default_controller().suspend(root_pid)
-}
-
-pub fn resume_process_tree(root_pid: u32) -> Result<(), String> {
-    default_controller().resume(root_pid)
+    Arc::new(WindowsProcessController::new())
 }
 
 // ------------------------------------------------------------------
@@ -52,13 +90,37 @@ mod imp {
         OpenThread, ResumeThread, SuspendThread, THREAD_SUSPEND_RESUME,
     };
 
-    pub fn set_process_tree_suspended(root_pid: u32, suspend: bool) -> Result<(), String> {
+    /// Suspend / resume a process tree.
+    ///
+    /// ``cached_threads`` (Phase C.2.6):
+    /// - ``None`` — 全扫:用 ToolHelp 枚举所有进程和线程,过滤出 root_pid
+    ///   的进程树,然后对每个线程 OpenThread + Suspend/Resume。返回的 Vec
+    ///   就是这次实际操作过的 thread_ids。
+    /// - ``Some(threads)`` — 快路径:跳过枚举,直接对给定的 thread_ids 调
+    ///   Suspend/ResumeThread。若全部失败,自动 fall back 到全扫。
+    pub fn set_process_tree_suspended(
+        root_pid: u32,
+        suspend: bool,
+        cached_threads: Option<Vec<u32>>,
+    ) -> Result<Vec<u32>, String> {
+        // 优先走 cache 快路径
+        if let Some(threads) = cached_threads {
+            if !threads.is_empty() {
+                let (touched, last_error) = set_specific_threads_suspended(&threads, suspend);
+                if touched > 0 {
+                    return Ok(threads);
+                }
+                // 全部失败:cache 过期(进程已死 / 线程已退出),退回全扫
+                let _ = last_error;
+            }
+        }
+
         let pids = collect_process_tree(root_pid)?;
-        let touched_threads = set_threads_suspended(&pids, suspend)?;
+        let (touched_threads, threads) = set_threads_suspended(&pids, suspend)?;
         if touched_threads == 0 {
             return Err("No live threads were found for the running task.".to_string());
         }
-        Ok(())
+        Ok(threads)
     }
 
     fn collect_process_tree(root_pid: u32) -> Result<BTreeSet<u32>, String> {
@@ -97,7 +159,13 @@ mod imp {
         Ok(pids)
     }
 
-    fn set_threads_suspended(pids: &BTreeSet<u32>, suspend: bool) -> Result<usize, String> {
+    /// 通过线程快照枚举所有线程,过滤出属于 pids 的线程,逐个 Suspend/Resume。
+    /// 返回 ``(touched_count, thread_ids)`` — 后者用于 caller 缓存,下次
+    /// resume 时跳过这一步。
+    fn set_threads_suspended(
+        pids: &BTreeSet<u32>,
+        suspend: bool,
+    ) -> Result<(usize, Vec<u32>), String> {
         let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
         if snapshot == INVALID_HANDLE_VALUE {
             return Err(last_os_error("Unable to enumerate threads"));
@@ -105,6 +173,7 @@ mod imp {
 
         let mut touched_threads = 0usize;
         let mut last_error: Option<String> = None;
+        let mut touched_ids: Vec<u32> = Vec::new();
         let mut entry = THREADENTRY32 {
             dwSize: size_of::<THREADENTRY32>() as u32,
             ..unsafe { std::mem::zeroed() }
@@ -114,7 +183,10 @@ mod imp {
         while has_entry {
             if pids.contains(&entry.th32OwnerProcessID) {
                 match set_thread_suspended(entry.th32ThreadID, suspend) {
-                    Ok(()) => touched_threads += 1,
+                    Ok(()) => {
+                        touched_threads += 1;
+                        touched_ids.push(entry.th32ThreadID);
+                    }
                     Err(error) => last_error = Some(error),
                 }
             }
@@ -131,7 +203,24 @@ mod imp {
             );
         }
 
-        Ok(touched_threads)
+        Ok((touched_threads, touched_ids))
+    }
+
+    /// 缓存命中时的快路径:对给定 thread_ids 直接 Suspend/ResumeThread,
+    /// 不枚举线程快照。返回 ``(touched_count, last_error)``。
+    fn set_specific_threads_suspended(
+        thread_ids: &[u32],
+        suspend: bool,
+    ) -> (usize, Option<String>) {
+        let mut touched = 0usize;
+        let mut last_error = None;
+        for &tid in thread_ids {
+            match set_thread_suspended(tid, suspend) {
+                Ok(()) => touched += 1,
+                Err(error) => last_error = Some(error),
+            }
+        }
+        (touched, last_error)
     }
 
     fn set_thread_suspended(thread_id: u32, suspend: bool) -> Result<(), String> {
@@ -164,7 +253,14 @@ mod imp {
 
 #[cfg(not(target_os = "windows"))]
 mod imp {
-    pub fn set_process_tree_suspended(root_pid: u32, suspend: bool) -> Result<(), String> {
+    /// POSIX 版本不需要 thread enumeration:``kill(-pgid, SIGSTOP/SIGCONT)``
+    /// 对整个进程组一次完成。``cached_threads`` 在 POSIX 上未使用,签名保持
+    /// 一致只是为了 cross-platform call site 不分叉。
+    pub fn set_process_tree_suspended(
+        root_pid: u32,
+        suspend: bool,
+        _cached_threads: Option<Vec<u32>>,
+    ) -> Result<Vec<u32>, String> {
         unsafe {
             let pgid = libc::getpgid(root_pid as i32);
             if pgid < 0 {
@@ -178,7 +274,7 @@ mod imp {
                     std::io::Error::last_os_error()
                 ));
             }
-            Ok(())
+            Ok(Vec::new())
         }
     }
 }

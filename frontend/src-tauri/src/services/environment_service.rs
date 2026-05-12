@@ -6,17 +6,32 @@ use crate::persistence;
 use crate::runtime::resolve_runtime_paths;
 use crate::tasks;
 
+/// Tauri command wrapper.
+///
+/// Phase C.2.5 sank this here from ``lib.rs`` so the entry crate only owns
+/// ``run()`` and integration tests. The ``forceRefresh`` argument name must
+/// stay camelCase to match the frontend payload — Rust ``rename_all`` cannot
+/// rewrite tauri command parameter names, so we ``#[allow(non_snake_case)]``.
+#[tauri::command]
+#[allow(non_snake_case)]
 pub async fn check_environment<R: Runtime>(
+    app: AppHandle<R>,
+    forceRefresh: bool,
+) -> Result<EnvironmentCheckPayload, ShellError> {
+    check_environment_impl(app, forceRefresh).await
+}
+
+async fn check_environment_impl<R: Runtime>(
     app: AppHandle<R>,
     force_refresh: bool,
 ) -> Result<EnvironmentCheckPayload, ShellError> {
     let paths = resolve_runtime_paths(&app)?;
-    let fingerprint = persistence::build_environment_fingerprint(&paths).ok();
-    let app_data_dir = persistence::app_data_dir(&app).ok();
+    let fingerprint = persistence::build_environment_fingerprint(&paths).await.ok();
+    let app_data_dir = persistence::app_data_dir(&app).await.ok();
 
     if let (Some(data_dir), Some(fingerprint)) = (app_data_dir.as_deref(), fingerprint.as_deref()) {
         if let Some(cached) =
-            persistence::load_environment_cache(data_dir, fingerprint, force_refresh)
+            persistence::load_environment_cache(data_dir, fingerprint, force_refresh).await
         {
             let result =
                 serde_json::from_value::<EnvironmentCheckResult>(cached.result).map_err(|error| {
@@ -46,7 +61,9 @@ pub async fn check_environment<R: Runtime>(
                 "Unable to serialize environment check result for cache: {error}"
             ))
         })?;
-        let _ = persistence::save_environment_cache(data_dir, &checked_at, fingerprint, &serialized);
+        let _ =
+            persistence::save_environment_cache(data_dir, &checked_at, fingerprint, &serialized)
+                .await;
     }
 
     Ok(EnvironmentCheckPayload {

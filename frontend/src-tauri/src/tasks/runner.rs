@@ -164,12 +164,12 @@ async fn send_task_control(
         })
         .await
         .map_err(|_| {
-            ShellError::Other("The running task controller is unavailable.".to_string())
+            ShellError::BackendExit("The running task controller is unavailable.".to_string())
         })?;
 
     match response_rx.await {
-        Ok(result) => result.map_err(ShellError::Other),
-        Err(_) => Err(ShellError::Other(
+        Ok(result) => result.map_err(ShellError::BackendExit),
+        Err(_) => Err(ShellError::BackendExit(
             "The running task controller stopped before replying.".to_string(),
         )),
     }
