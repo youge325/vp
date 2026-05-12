@@ -3,8 +3,9 @@
 // throw into a stable TaskError structure.
 
 import type { TaskError } from '@/types/domain/media'
+import { TASK_ERROR_CODES, type TaskErrorCode } from '@/types/protocol/errors'
 
-export function normalizeError(error: unknown, code = 'runtime_error'): TaskError {
+export function normalizeError(error: unknown, code: TaskErrorCode | string = TASK_ERROR_CODES.ProcessFailed): TaskError {
   if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
     const payload = error as { code?: unknown; message?: unknown; details?: Record<string, unknown> | null }
     return {

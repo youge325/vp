@@ -1,5 +1,6 @@
 pub mod models;
 pub mod protocol;
+pub mod error;
 mod persistence;
 mod process_control;
 mod runtime;

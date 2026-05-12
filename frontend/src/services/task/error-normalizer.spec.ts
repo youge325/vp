@@ -10,7 +10,7 @@ describe('normalizeTaskError', () => {
   it('wraps a plain Error instance', () => {
     const error = new Error('Plain error')
     expect(normalizeTaskError(error)).toEqual({
-      code: 'runtime_error',
+      code: 'process_failed',
       message: 'Plain error',
       details: null,
     })
@@ -24,9 +24,9 @@ describe('normalizeTaskError', () => {
     })
   })
 
-  it('uses default code when fallback is not provided', () => {
+  it('uses default code (process_failed) when fallback is not provided', () => {
     expect(normalizeTaskError(42)).toEqual({
-      code: 'runtime_error',
+      code: 'process_failed',
       message: '42',
       details: null,
     })
