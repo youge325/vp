@@ -1,0 +1,55 @@
+"""测试入口包装 ``scripts/check_error_code_drift.py``。
+
+让 ``pytest backend/tests`` 在 CI 也能跑这个三层漂移检查,而不仅依赖
+``pre-commit``——后者只有在用户本地装了 hook 时才生效。
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SCRIPT_PATH = REPO_ROOT / "scripts" / "check_error_code_drift.py"
+
+
+def _load_module():
+    """动态加载脚本,避免脚本目录加 ``__init__.py``。"""
+    spec = importlib.util.spec_from_file_location("check_error_code_drift", SCRIPT_PATH)
+    assert spec and spec.loader, "脚本路径不可加载"
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["check_error_code_drift"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_drift_script_exists() -> None:
+    assert SCRIPT_PATH.exists(), f"漂移检测脚本缺失: {SCRIPT_PATH}"
+
+
+def test_three_layers_consistent() -> None:
+    """三层 TaskErrorCode 完全一致。
+
+    如果失败,通常意味着:
+    - Rust 端新增了 variant 但忘了同步 Python ``_codes.py``
+    - 或在 src-tauri 改了 enum 后忘了跑 ``cargo test``(ts-rs 自动生成)
+    """
+    module = _load_module()
+    rust = module.collect_rust_codes(module._read(module.RUST_PATH))
+    python = module.collect_python_codes(module._read(module.PY_PATH))
+    ts = module.collect_ts_codes(module._read(module.TS_PATH))
+
+    issues = module.diff_report(rust, python, ts)
+    assert not issues, "TaskErrorCode 三层漂移:\n  - " + "\n  - ".join(issues)
+    # 双重保险:确保解析到了真实数据,而不是空集合互等
+    assert len(rust) >= 8, f"Rust codes 数量过少({len(rust)}),解析可能失败"
+
+
+def test_script_exits_zero_when_consistent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """端到端跑一遍 ``main()`` 入口,验证 exit code 与 stdout 提示。"""
+    module = _load_module()
+    exit_code = module.main()
+    assert exit_code == 0

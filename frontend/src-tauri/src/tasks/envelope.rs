@@ -103,4 +103,116 @@ mod tests {
         let result: Result<NdjsonEnvelope, _> = serde_json::from_str(line);
         assert!(result.is_err(), "unknown variant should fail to deserialize");
     }
+
+    // ------------------------------------------------------------------
+    // C.4.5 fixture-style integration: simulate a complete NDJSON stream
+    // and assert that each line is classified as the stdout reader would.
+    // This is the closest we can get to a spawn-level test without mocking
+    // tauri's AppHandle.
+    // ------------------------------------------------------------------
+
+    /// Mirrors the dispatch decision tree in
+    /// ``runner::spawn_stdout_reader``: parse each line, classify it as
+    /// Progress / Completed / ResumeStatus / Error or fall back to TaskLog.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum LineClassification {
+        Progress,
+        Completed,
+        Error,
+        ResumeStatus,
+        Log,       // either non-JSON or JSON that didn't match the envelope
+        Empty,
+    }
+
+    fn classify_line(line: &str) -> LineClassification {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return LineClassification::Empty;
+        }
+        match serde_json::from_str::<NdjsonEnvelope>(trimmed) {
+            Ok(NdjsonEnvelope::Progress(_)) => LineClassification::Progress,
+            Ok(NdjsonEnvelope::Completed(_)) => LineClassification::Completed,
+            Ok(NdjsonEnvelope::Error(_)) => LineClassification::Error,
+            Ok(NdjsonEnvelope::ResumeStatus(_)) => LineClassification::ResumeStatus,
+            Err(_) => LineClassification::Log,
+        }
+    }
+
+    #[test]
+    fn integration_classifies_success_stream() {
+        // Models a happy-path task: a few progress beats then completion.
+        let stream = concat!(
+            r#"{"type":"progress","current":10,"total":100,"percent":10.0,"stage":"Decoding","stageIndex":1,"stageTotal":2}"#, "\n",
+            "[VP_PROGRESS] 10% 10/100\n",
+            "Loading model from /opt/models/rife.onnx\n",
+            r#"{"type":"progress","current":50,"total":100,"percent":50.0,"stage":"Encoding","stageIndex":2,"stageTotal":2}"#, "\n",
+            r#"{"type":"completed","outputPath":"D:/out.mp4","processedFrames":100,"timeSeconds":4.2}"#, "\n",
+        );
+
+        let classifications: Vec<_> = stream.lines().map(classify_line).collect();
+        assert_eq!(
+            classifications,
+            vec![
+                LineClassification::Progress,
+                LineClassification::Log,        // VP_PROGRESS terminal bar
+                LineClassification::Log,        // free-form log line
+                LineClassification::Progress,
+                LineClassification::Completed,
+            ],
+            "stream classification drifted; stdout reader and envelope parser disagree"
+        );
+    }
+
+    #[test]
+    fn integration_classifies_resume_then_error_stream() {
+        // Models a resume path that subsequently fails — error envelope must
+        // still be picked up after the resume_status frame.
+        let stream = concat!(
+            r#"{"type":"resume_status","resumed":true,"completedChunks":2,"completedOutputFrames":200,"startSourceFrame":120,"totalOutputFrames":500}"#, "\n",
+            r#"{"type":"progress","current":210,"total":500,"percent":42.0,"stage":"Encoding","stageIndex":1,"stageTotal":1}"#, "\n",
+            "[VP_PROGRESS] 42% 210/500\n",
+            r#"{"type":"error","code":"missing_model","message":"weight file missing","details":{"path":"/opt/models/missing.pkl"}}"#, "\n",
+        );
+
+        let classifications: Vec<_> = stream.lines().map(classify_line).collect();
+        assert_eq!(
+            classifications,
+            vec![
+                LineClassification::ResumeStatus,
+                LineClassification::Progress,
+                LineClassification::Log,
+                LineClassification::Error,
+            ]
+        );
+    }
+
+    #[test]
+    fn integration_treats_malformed_json_as_log() {
+        // A line that looks JSON-ish but has typos must fall through to
+        // TaskLog rather than crashing the stdout reader.
+        let stream = concat!(
+            "{\"type\":\"progress\",\"oops\":\n",      // unterminated
+            "{\"type\":\"unknown_variant\"}\n",         // unknown variant
+            "not json at all\n",
+            "{\"type\":\"completed\",\"outputPath\":\"D:/out.mp4\",\"processedFrames\":1,\"timeSeconds\":0.1}\n",
+        );
+
+        let classifications: Vec<_> = stream.lines().map(classify_line).collect();
+        assert_eq!(
+            classifications,
+            vec![
+                LineClassification::Log,
+                LineClassification::Log,
+                LineClassification::Log,
+                LineClassification::Completed,
+            ]
+        );
+    }
+
+    #[test]
+    fn integration_skips_empty_and_whitespace_lines() {
+        let stream = "\n   \n\t\n";
+        let classifications: Vec<_> = stream.lines().map(classify_line).collect();
+        assert_eq!(classifications, vec![LineClassification::Empty; 3]);
+    }
 }
