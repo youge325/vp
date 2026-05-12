@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use command_group::AsyncGroupChild;
+use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::sync::{mpsc, oneshot};
 
@@ -11,6 +12,7 @@ use crate::models::TaskErrorPayload;
 use crate::process_control::{self, ProcessController};
 use crate::protocol::TaskEventName;
 use crate::tasks::state::{TaskControlKind, TaskControlMessage, TaskState};
+use crate::tasks::stderr::StderrCapture;
 
 pub fn spawn_task_controller<R: Runtime + 'static>(
     app: AppHandle<R>,
@@ -18,6 +20,7 @@ pub fn spawn_task_controller<R: Runtime + 'static>(
     root_pid: u32,
     mut control_rx: mpsc::Receiver<TaskControlMessage>,
     terminal_sent: Arc<AtomicBool>,
+    stderr_capture: StderrCapture,
 ) {
     let controller: Arc<dyn ProcessController> = process_control::default_controller();
 
@@ -97,12 +100,15 @@ pub fn spawn_task_controller<R: Runtime + 'static>(
                 if !exit_status.success() && !terminal_sent {
                     // Backend process exited unsuccessfully without emitting a terminal
                     // NDJSON event. This is a runtime crash, not a normal failure.
+                    let details = stderr_capture
+                        .summary()
+                        .map(|traceback| json!({ "traceback": traceback }));
                     let _ = app.emit(
                         TaskEventName::TaskError.as_str(),
                         TaskErrorPayload {
                             code: crate::protocol::TaskErrorCode::RuntimePanic,
                             message: format!("Backend process exited with status {}.", exit_status),
-                            details: None,
+                            details,
                         },
                     );
                 }
@@ -112,12 +118,15 @@ pub fn spawn_task_controller<R: Runtime + 'static>(
                     let _ = app.emit(TaskEventName::TaskCancelled.as_str(), ());
                 } else if !terminal_sent {
                     // OS-level failure while waiting for the child process.
+                    let details = stderr_capture
+                        .summary()
+                        .map(|traceback| json!({ "traceback": traceback }));
                     let _ = app.emit(
                         TaskEventName::TaskError.as_str(),
                         TaskErrorPayload {
                             code: crate::protocol::TaskErrorCode::ProcessFailed,
                             message: format!("Failed while waiting for backend process: {error}"),
-                            details: None,
+                            details,
                         },
                     );
                 }

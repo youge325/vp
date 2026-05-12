@@ -10,7 +10,7 @@ export interface TaskError {
   details?: Record<string, unknown> | null
 }
 
-export type OperationIssueScope = 'input' | 'encode' | 'output' | 'task'
+export type OperationIssueScope = 'input' | 'encode' | 'output' | 'task' | 'preset'
 
 export interface OperationIssue {
   scope: OperationIssueScope

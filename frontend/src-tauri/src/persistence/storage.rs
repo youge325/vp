@@ -10,6 +10,7 @@ use tauri::{AppHandle, Manager, Runtime};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
+use crate::error::ShellError;
 use crate::models::WorkbenchPreset;
 use crate::runtime::ResolvedRuntimePaths;
 
@@ -35,13 +36,19 @@ struct WorkbenchPresetEntry {
     pub preset: WorkbenchPreset,
 }
 
-pub fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+pub fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, ShellError> {
     let dir = app
         .path()
         .app_local_data_dir()
-        .map_err(|error| format!("Unable to resolve app data directory: {error}"))?;
-    fs::create_dir_all(&dir)
-        .map_err(|error| format!("Unable to create app data directory {}: {error}", dir.display()))?;
+        .map_err(|error| {
+            ShellError::Persistence(format!("Unable to resolve app data directory: {error}"))
+        })?;
+    fs::create_dir_all(&dir).map_err(|error| {
+        ShellError::Persistence(format!(
+            "Unable to create app data directory {}: {error}",
+            dir.display()
+        ))
+    })?;
     Ok(dir)
 }
 
@@ -53,13 +60,13 @@ pub fn workbench_preset_path(base_dir: &Path) -> PathBuf {
     base_dir.join(WORKBENCH_PRESET_FILE)
 }
 
-pub fn current_timestamp() -> Result<String, String> {
+pub fn current_timestamp() -> Result<String, ShellError> {
     OffsetDateTime::now_utc()
         .format(&Rfc3339)
-        .map_err(|error| format!("Unable to format timestamp: {error}"))
+        .map_err(|error| ShellError::Other(format!("Unable to format timestamp: {error}")))
 }
 
-pub fn build_environment_fingerprint(paths: &ResolvedRuntimePaths) -> Result<String, String> {
+pub fn build_environment_fingerprint(paths: &ResolvedRuntimePaths) -> Result<String, ShellError> {
     let model_version = env::var("VP_RIFE_MODEL_VERSION").unwrap_or_else(|_| DEFAULT_RIFE_MODEL_VERSION.to_string());
     let default_model_path = paths
         .model_dir
@@ -77,7 +84,7 @@ pub fn build_environment_fingerprint(paths: &ResolvedRuntimePaths) -> Result<Str
         "defaultModel": describe_path(default_model_path.as_deref()),
         "modelVersion": model_version,
     }))
-    .map_err(|error| format!("Unable to serialize environment fingerprint: {error}"))
+    .map_err(ShellError::from)
 }
 
 pub fn load_environment_cache(
@@ -100,20 +107,25 @@ pub fn load_environment_cache(
     Some(entry)
 }
 
-fn atomic_write_json(path: &Path, value: &impl Serialize) -> Result<(), String> {
+fn atomic_write_json(path: &Path, value: &impl Serialize) -> Result<(), ShellError> {
     let dir = path.parent().unwrap_or(Path::new("."));
-    fs::create_dir_all(dir)
-        .map_err(|error| format!("Unable to create directory {}: {error}", dir.display()))?;
-    let mut temp = tempfile::NamedTempFile::new_in(dir)
-        .map_err(|error| format!("Unable to create temp file in {}: {error}", dir.display()))?;
-    let data = serde_json::to_vec_pretty(value)
-        .map_err(|error| format!("Unable to serialize JSON: {error}"))?;
+    fs::create_dir_all(dir).map_err(|error| {
+        ShellError::Persistence(format!("Unable to create directory {}: {error}", dir.display()))
+    })?;
+    let mut temp = tempfile::NamedTempFile::new_in(dir).map_err(|error| {
+        ShellError::Persistence(format!(
+            "Unable to create temp file in {}: {error}",
+            dir.display()
+        ))
+    })?;
+    let data = serde_json::to_vec_pretty(value)?;
     temp.write_all(&data)
-        .map_err(|error| format!("Unable to write temp file: {error}"))?;
+        .map_err(|error| ShellError::Persistence(format!("Unable to write temp file: {error}")))?;
     temp.flush()
-        .map_err(|error| format!("Unable to flush temp file: {error}"))?;
-    temp.persist(path)
-        .map_err(|error| format!("Unable to persist file to {}: {}", path.display(), error.error))?;
+        .map_err(|error| ShellError::Persistence(format!("Unable to flush temp file: {error}")))?;
+    temp.persist(path).map_err(|error| {
+        ShellError::Persistence(format!("Unable to persist file to {}: {}", path.display(), error.error))
+    })?;
     Ok(())
 }
 
@@ -122,7 +134,7 @@ pub fn save_environment_cache(
     checked_at: &str,
     fingerprint: &str,
     result: &Value,
-) -> Result<(), String> {
+) -> Result<(), ShellError> {
     let entry = EnvironmentCacheEntry {
         schema_version: ENVIRONMENT_CACHE_SCHEMA_VERSION,
         checked_at: checked_at.to_string(),
@@ -130,7 +142,6 @@ pub fn save_environment_cache(
         result: result.clone(),
     };
     atomic_write_json(&environment_cache_path(base_dir), &entry)
-        .map_err(|error| format!("Unable to write environment cache: {error}"))
 }
 
 pub fn load_workbench_preset(base_dir: &Path) -> Option<WorkbenchPreset> {
@@ -142,13 +153,12 @@ pub fn load_workbench_preset(base_dir: &Path) -> Option<WorkbenchPreset> {
     Some(entry.preset)
 }
 
-pub fn save_workbench_preset(base_dir: &Path, preset: &WorkbenchPreset) -> Result<(), String> {
+pub fn save_workbench_preset(base_dir: &Path, preset: &WorkbenchPreset) -> Result<(), ShellError> {
     let entry = WorkbenchPresetEntry {
         schema_version: WORKBENCH_PRESET_SCHEMA_VERSION,
         preset: preset.clone(),
     };
     atomic_write_json(&workbench_preset_path(base_dir), &entry)
-        .map_err(|error| format!("Unable to write workbench preset: {error}"))
 }
 
 fn resolve_host_identifier() -> String {

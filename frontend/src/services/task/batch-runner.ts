@@ -27,7 +27,7 @@ import {
   createIdleTaskState,
 } from './events'
 import { buildInspectionFromError, classifyResumeConflict } from './resume-classifier'
-import { normalizeTaskError } from './error-normalizer'
+import { normalizeError } from '@/services/error/normalize'
 
 export interface BatchRunnerDeps {
   startTask: (req: TaskRequest) => Promise<void>
@@ -143,7 +143,7 @@ export function createBatchRunner(deps: BatchRunnerDeps): BatchRunner {
     try {
       inspection = await deps.checkResume(deps.buildRequest(item))
     } catch (error) {
-      await handleErrored(normalizeTaskError(error, 'start_failed'))
+      await handleErrored(normalizeError(error, 'start_failed'))
       return
     }
 
@@ -165,7 +165,7 @@ export function createBatchRunner(deps: BatchRunnerDeps): BatchRunner {
     try {
       await deps.startTask(deps.buildRequest(item, resumeMode))
     } catch (error) {
-      await handleErrored(normalizeTaskError(error, 'start_failed'))
+      await handleErrored(normalizeError(error, 'start_failed'))
     }
   }
 
@@ -256,7 +256,7 @@ export function createBatchRunner(deps: BatchRunnerDeps): BatchRunner {
         deps.setItemTaskState(item.id, applyTaskPaused(item.taskState))
       }
     } catch (error) {
-      throw normalizeTaskError(error, 'pause_failed')
+      throw normalizeError(error, 'pause_failed')
     }
   }
 
@@ -274,7 +274,7 @@ export function createBatchRunner(deps: BatchRunnerDeps): BatchRunner {
         deps.setItemTaskState(item.id, applyTaskResumed(item.taskState))
       }
     } catch (error) {
-      throw normalizeTaskError(error, 'resume_failed')
+      throw normalizeError(error, 'resume_failed')
     }
   }
 
@@ -311,7 +311,7 @@ export function createBatchRunner(deps: BatchRunnerDeps): BatchRunner {
       if (item && previousTaskState) {
         deps.setItemTaskState(item.id, previousTaskState)
       }
-      throw normalizeTaskError(error, 'cancel_failed')
+      throw normalizeError(error, 'cancel_failed')
     }
   }
 

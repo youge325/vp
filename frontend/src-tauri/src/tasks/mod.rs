@@ -4,6 +4,7 @@ pub mod controller;
 pub mod envelope;
 pub mod runner;
 pub mod state;
+pub mod stderr;
 
 pub use builder::build_inspect_output_args;
 pub use runner::{

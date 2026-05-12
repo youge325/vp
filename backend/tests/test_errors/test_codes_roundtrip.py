@@ -15,6 +15,7 @@ import json
 
 import pytest
 
+import app.__main__ as app_main
 from app.errors import ProcessError
 from app.errors._bootstrap import infer_error_code
 from app.errors._codes import ALL_CODES, TaskErrorCode
@@ -111,3 +112,74 @@ def test_phase_a_new_codes_are_present() -> None:
         TaskErrorCode.PERSISTENCE_FAILED.value,
     }
     assert new_codes.issubset(ALL_CODES)
+
+
+# ---------------------------------------------------------------------------
+# Phase B — verify the three error-code entry points agree.
+# ---------------------------------------------------------------------------
+# After collapsing the old ``_infer_code_from_exception`` wrapper, the only
+# legitimate entry points are:
+#   1. ``ProcessError.from_exception``           (application code path)
+#   2. ``infer_error_code``                       (the bootstrap source of truth)
+#   3. ``app.__main__._bootstrap_error_code``     (import-time fallback)
+# All three must agree on the codes they share — otherwise an exception that
+# raises during ``main()`` versus during ``import`` would surface different
+# codes to the frontend.
+
+_THREE_WAY_FIXTURES: list[tuple[BaseException, str]] = [
+    (
+        ImportError("No module named 'torch'"),
+        TaskErrorCode.MISSING_TENSOR_BACKEND.value,
+    ),
+    (
+        ImportError("No module named 'paddle'"),
+        TaskErrorCode.MISSING_TENSOR_BACKEND.value,
+    ),
+    (
+        ImportError("No module named 'pyav'"),
+        TaskErrorCode.MISSING_PYTHON_DEPENDENCY.value,
+    ),
+    (
+        FileNotFoundError("ffprobe not found in PATH"),
+        TaskErrorCode.MISSING_FFMPEG.value,
+    ),
+    (
+        FileNotFoundError("ffmpeg binary missing"),
+        TaskErrorCode.MISSING_FFMPEG.value,
+    ),
+    (
+        RuntimeError("operation was cancelled by user"),
+        TaskErrorCode.CANCELLED.value,
+    ),
+    (
+        RuntimeError("flownet_v4.25.pkl is missing"),
+        TaskErrorCode.MISSING_MODEL.value,
+    ),
+    (
+        RuntimeError("totally generic failure"),
+        TaskErrorCode.PROCESS_FAILED.value,
+    ),
+]
+
+
+@pytest.mark.parametrize(("exc", "expected_code"), _THREE_WAY_FIXTURES)
+def test_three_entry_points_agree(exc: BaseException, expected_code: str) -> None:
+    """``ProcessError.from_exception``, ``infer_error_code``, and the
+    ``__main__`` bootstrap fallback all yield the same code for the same
+    exception. This is the test that catches drift between the entry
+    points after the Phase B consolidation."""
+    from_exception_code = ProcessError.from_exception(exc).code
+    bootstrap_code = infer_error_code(str(exc).lower())
+    main_code = app_main._bootstrap_error_code(exc)
+    assert from_exception_code == expected_code
+    assert bootstrap_code == expected_code
+    assert main_code == expected_code
+
+
+def test_main_bootstrap_uses_shared_inference_when_available() -> None:
+    """The ``__main__`` fallback must prefer ``_bootstrap.infer_error_code``
+    over its inline mirror so additions to the shared rule set automatically
+    flow through. Verified by checking that a pattern only the shared module
+    recognises (``tensor backend`` literal) is routed correctly."""
+    code = app_main._bootstrap_error_code(RuntimeError("tensor backend not installed"))
+    assert code == TaskErrorCode.MISSING_TENSOR_BACKEND.value
