@@ -1,7 +1,13 @@
 """测试入口包装 ``scripts/check_error_code_drift.py``。
 
-让 ``pytest backend/tests`` 在 CI 也能跑这个三层漂移检查,而不仅依赖
+让 ``pytest backend/tests`` 在本地与 CI 都能跑这个三层漂移检查,而不仅依赖
 ``pre-commit``——后者只有在用户本地装了 hook 时才生效。
+
+CI 注意事项:
+``frontend/src/types/generated/TaskErrorCode.ts`` 由 ``ts-rs`` 在 ``cargo test``
+时生成。CI 上 backend-only 的 pytest 阶段往往**先于** Rust 编译,此时生成文件
+还不存在,我们用 ``pytest.skip`` 直接跳过本组测试 —— 真正的漂移检测在 Rust
+job 中通过 cargo test 阶段重新生成 + lib.rs::tests 触发,不依赖此处。
 """
 
 from __future__ import annotations
@@ -14,6 +20,13 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "check_error_code_drift.py"
+TS_GENERATED_PATH = REPO_ROOT / "frontend" / "src" / "types" / "generated" / "TaskErrorCode.ts"
+
+_TS_GENERATED_MISSING_MESSAGE = (
+    "frontend/src/types/generated/TaskErrorCode.ts 不存在 — 通常意味着这次 CI run "
+    "还没跑过 `cargo test`(ts-rs 是 cargo 端的派生宏)。漂移检测需要这个生成文件,"
+    "因此本组测试在该环境下跳过 —— Rust job 的 cargo test 阶段会重新生成并对漂移做断言。"
+)
 
 
 def _load_module():
@@ -24,6 +37,11 @@ def _load_module():
     sys.modules["check_error_code_drift"] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _require_ts_generated() -> None:
+    if not TS_GENERATED_PATH.exists():
+        pytest.skip(_TS_GENERATED_MISSING_MESSAGE)
 
 
 def test_drift_script_exists() -> None:
@@ -37,6 +55,7 @@ def test_three_layers_consistent() -> None:
     - Rust 端新增了 variant 但忘了同步 Python ``_codes.py``
     - 或在 src-tauri 改了 enum 后忘了跑 ``cargo test``(ts-rs 自动生成)
     """
+    _require_ts_generated()
     module = _load_module()
     rust = module.collect_rust_codes(module._read(module.RUST_PATH))
     python = module.collect_python_codes(module._read(module.PY_PATH))
@@ -50,6 +69,7 @@ def test_three_layers_consistent() -> None:
 
 def test_script_exits_zero_when_consistent(monkeypatch: pytest.MonkeyPatch) -> None:
     """端到端跑一遍 ``main()`` 入口,验证 exit code 与 stdout 提示。"""
+    _require_ts_generated()
     module = _load_module()
     exit_code = module.main()
     assert exit_code == 0
