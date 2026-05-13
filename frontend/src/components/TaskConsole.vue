@@ -17,8 +17,15 @@ const progressPercent = computed(() => {
   return Math.min(100, Math.round((done.value / total.value) * 100))
 })
 
+// Phase D.4.8 — watch length instead of the array contents. The previous
+// `deep: true` watcher fired on every progress-line replacement
+// (`[VP_PROGRESS]` overwrites the last entry roughly once per backend
+// percent tick) and forced a full panel reconcile every time. Listening
+// to `length` means we only scroll on append, which is the visible
+// behaviour the user actually cares about; progress-line tail updates
+// keep the user's scroll position intact.
 watch(
-  logs,
+  () => logs.value.length,
   async () => {
     await nextTick()
     const panel = terminalRef.value
@@ -27,7 +34,6 @@ watch(
     }
     panel.scrollTop = panel.scrollHeight
   },
-  { deep: true },
 )
 </script>
 
@@ -44,7 +50,7 @@ watch(
       </span>
     </div>
     <div ref="terminalRef" class="log-panel log-panel-terminal">
-      <p v-for="(line, index) in logs" :key="`${index}-${line}`" class="log-line">
+      <p v-for="(line, index) in logs" :key="index" class="log-line">
         {{ line }}
       </p>
     </div>

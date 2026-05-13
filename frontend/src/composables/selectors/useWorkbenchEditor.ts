@@ -1,5 +1,29 @@
 // 视图选择器 — Workbench 编辑器双轨视图(激活素材 vs 默认预设)。
 // 保持原 useEditor 的语义,但把它放进 selectors/ 命名空间。
+//
+// Phase D.4.6 — 双轨同步语义文档化:
+//
+// VP Workbench 有两套配置存储:
+//   1. **工作台预设**(``presetStore.draftPreset``):用户当前编辑的通用
+//      配置,自动持久化到本地。
+//   2. **素材级配置**(``mediaItem.{decode,workflow,encode,output}Config``):
+//      每个素材可以覆盖预设中的部分配置。
+//
+// 编辑路径(``patchDecode`` 等):
+//   - 有激活素材 → 改素材级配置
+//   - 无激活素材 → 改预设草稿
+//
+// 读取路径(``editorConfig``):
+//   - 有激活素材 → 返回素材级配置
+//   - 无激活素材 → 返回预设草稿
+//
+// **不自动同步**:预设草稿变化时,**不会**自动套用到已选 items;素材级
+// 配置变化时,**不会**反向写入预设。这是有意的:用户希望"调整预设不
+// 影响已存在的素材"。
+//
+// 如果用户希望把预设草稿手动套用到当前选中的所有素材,使用
+// ``useMediaImport.applyDraftToSelectedItems()``。Phase D 暂未在 UI 上
+// 暴露按钮,作为后续 D.4.6 第二步(显式"应用到选中")的钩子保留。
 
 import { computed } from 'vue'
 import { useMediaStore } from '@/stores/media'

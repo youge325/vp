@@ -205,36 +205,48 @@ interface BatchState {
 
 ## 工具库分工
 
-### tauri.ts（`lib/tauri.ts`）
+> Phase D.5.5 — 本节中提到的 `lib/tauri.ts`、`lib/workflow.ts`、
+> `lib/task-events.ts` 已在 Phase C / D 中拆分到更细的命名空间。
+> 新路径如下:
+> - `lib/tauri.ts` → [`lib/ipc/`](../frontend/src/lib/ipc/)(client.ts /
+>   endpoints/{env,media,preset,task}.ts / events.ts)
+> - `lib/workflow.ts` → [`config/workbench-modules.ts`](../frontend/src/config/workbench-modules.ts)
+>   + [`services/format/labels.ts`](../frontend/src/services/format/labels.ts)
+> - `lib/task-events.ts` → [`services/task/events.ts`](../frontend/src/services/task/events.ts)
+>
+> 下面的 API 列表仍按职责保留,但请按新路径定位文件。
 
-Tauri IPC 的统一封装层，提供两类功能：
+### IPC 调用层(`lib/ipc/`)
 
-**同步式命令封装**（`safeInvoke()`）：
+[`lib/ipc/client.ts`](../frontend/src/lib/ipc/client.ts) 提供 `safeInvoke()`
+封装,所有 endpoint 通过 [`lib/ipc/endpoints/*.ts`](../frontend/src/lib/ipc/endpoints/)
+分域:
 
-- `pickInputs()` → `pick_inputs`
-- `pickOutputDirectory()` → `pick_output_directory`
-- `checkEnvironment()` → `check_environment`
-- `loadWorkbenchPreset()` / `saveWorkbenchPreset()` → `load_workbench_preset` / `save_workbench_preset`
-- `inspectVideo()` → `inspect_video`
-- `startTask()` → `start_task`
-- `checkResumeState()` → `check_resume_state`
-- `cancelTask()` / `pauseTask()` / `resumeTask()` → `cancel_task` / `pause_task` / `resume_task`
-- `openOutputLocation()` → `open_output_location`
+- **env**:`checkEnvironment()` → `check_environment`
+- **media**:`pickInputs()` / `pickOutputDirectory()` / `inspectVideo()` /
+  `openOutputLocation()`
+- **preset**:`loadWorkbenchPreset()` / `saveWorkbenchPreset()`
+- **task**:`startTask()` / `cancelTask()` / `pauseTask()` /
+  `resumeTask()` / `checkResume()`
 
-**事件监听封装**（`listenTaskEvents()`）：
+[`lib/ipc/events.ts::listenTaskEvents()`](../frontend/src/lib/ipc/events.ts) 一次
+性注册 6 类事件监听器(`onProgress` / `onCompleted` / `onError` /
+`onCancelled` / `onLog` / `onResumeStatus`),返回 `UnlistenFn` 批量取消。
+Phase D.1.2 起 `onCancelled` 接收 `TaskCancelledPayload { reason }`,前端
+通过 `reason === "stalled"` 区分被动取消与用户取消;[Phase D.1.3](data-flow.md)
+起 NDJSON 出现"对象但 schema 不匹配"会自动 emit `task-error{SchemaMismatch}`
+而非吞掉为 log。
 
-一次性注册 6 类事件的监听器，返回 `UnlistenFn` 批量取消函数。若不在 Tauri 运行时（浏览器预览模式），返回空操作函数。
+### 静态配置与标签
 
-### workflow.ts（`lib/workflow.ts`）
+[`config/workbench-modules.ts`](../frontend/src/config/workbench-modules.ts) 持有
+8 个 view 的 `WORKBENCH_MODULES` 数组(key / title / path / description /
+icon)。[`services/format/labels.ts`](../frontend/src/services/format/labels.ts)
+是 UI 显示标签的集中位置:`WORKFLOW_LABELS` / `PROCESS_ORDER_LABELS` /
+`RATE_CONTROL_LABELS` / `RIFE_MODELS` / `VIDEO_EXTENSIONS` /
+`CONTAINER_OPTIONS` 等都在这里(未来若引入 vue-i18n,这会是文案收口点)。
 
-工作流的静态定义与常量：
-
-- `WORKBENCH_MODULES`：8 个工作流模块的定义数组（含 key、title、path、description、icon）
-- `WORKFLOW_LABELS` / `PROCESS_ORDER_LABELS` / `RATE_CONTROL_LABELS`：UI 显示标签映射
-- `RIFE_MODELS`：支持的 40+ 个 RIFE 模型版本列表
-- `VIDEO_EXTENSIONS` / `CONTAINER_OPTIONS`：文件扩展名和容器格式常量
-
-### task-events.ts（`lib/task-events.ts`）
+### 任务状态机(纯函数)
 
 纯函数集合，负责 `MediaTaskState` 的不可变状态变换。每个函数接收旧状态和事件载荷，返回新状态：
 
