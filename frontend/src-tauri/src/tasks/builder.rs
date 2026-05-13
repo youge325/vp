@@ -87,9 +87,9 @@ pub fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChil
 mod tests {
     use super::*;
     use crate::models::{
-        AnimeConfig, DecodeConfig, EncodeConfig, InterpolationConfig, OutputConfig,
-        PostprocessConfig, PreprocessConfig, RateControlConfig, SuperResolutionConfig,
-        WorkflowConfig,
+        AnimeConfig, DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig,
+        OutputConfig, PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig,
+        RateControlMode, SuperResolutionConfig, TensorBackend, WorkflowConfig,
     };
     use serde_json::json;
 
@@ -97,15 +97,15 @@ mod tests {
         TaskRequest {
             input_path: "D:/in.mp4".to_string(),
             decode_config: DecodeConfig {
-                mode: "software".to_string(),
+                mode: DecodeMode::Software,
                 hwaccel: None,
                 hwaccel_device: None,
                 decoder: Some("software".to_string()),
                 options: Default::default(),
             },
             workflow_config: WorkflowConfig {
-                fps_mode: "multi".to_string(),
-                process_order: "super_resolution_then_interpolation".to_string(),
+                fps_mode: FpsMode::Multi,
+                process_order: ProcessOrder::SuperResolutionThenInterpolation,
                 interpolation: InterpolationConfig {
                     enabled: true,
                     target_fps: 60.0,
@@ -115,7 +115,7 @@ mod tests {
                     onnx_model: None,
                     scale: 1.0,
                     fp16: false,
-                    tensor_backend: "pytorch".to_string(),
+                    tensor_backend: TensorBackend::Pytorch,
                     engine: "cuda".to_string(),
                 },
                 super_resolution: SuperResolutionConfig {
@@ -145,7 +145,7 @@ mod tests {
                 container: "mp4".to_string(),
                 keep_audio: true,
                 rate_control: RateControlConfig {
-                    mode: "crf".to_string(),
+                    mode: RateControlMode::Crf,
                     value: json!(18),
                 },
                 options: Default::default(),

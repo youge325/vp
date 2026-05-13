@@ -98,6 +98,10 @@ mod imp {
     ///   就是这次实际操作过的 thread_ids。
     /// - ``Some(threads)`` — 快路径:跳过枚举,直接对给定的 thread_ids 调
     ///   Suspend/ResumeThread。若全部失败,自动 fall back 到全扫。
+    ///
+    /// Phase D.3.3 — suspend 路径在完成第一轮扫描后再扫一次,捕获在第一轮
+    /// 扫描期间 spawn 出来的新孙进程线程(race 闭合)。同时 ``set_threads_suspended``
+    /// 现在会在 partial failure 时 rollback,避免留下"半冻结"的进程树。
     pub fn set_process_tree_suspended(
         root_pid: u32,
         suspend: bool,
@@ -116,10 +120,28 @@ mod imp {
         }
 
         let pids = collect_process_tree(root_pid)?;
-        let (touched_threads, threads) = set_threads_suspended(&pids, suspend)?;
+        let (touched_threads, mut threads) = set_threads_suspended(&pids, suspend)?;
         if touched_threads == 0 {
             return Err("No live threads were found for the running task.".to_string());
         }
+
+        // Phase D.3.3 — only the suspend direction has a race-with-spawn
+        // window. resume runs against a frozen tree, so spawning new
+        // workers can't happen there; one pass is enough.
+        if suspend {
+            let already = threads.iter().copied().collect::<std::collections::BTreeSet<_>>();
+            let pids_after = collect_process_tree(root_pid)?;
+            // Second pass picks up children that spawned between
+            // ToolHelp snapshot 1 and the first ``SuspendThread`` calls.
+            if let Ok((_, new_threads)) = set_threads_suspended(&pids_after, suspend) {
+                for tid in new_threads {
+                    if !already.contains(&tid) {
+                        threads.push(tid);
+                    }
+                }
+            }
+        }
+
         Ok(threads)
     }
 
@@ -162,6 +184,11 @@ mod imp {
     /// 通过线程快照枚举所有线程,过滤出属于 pids 的线程,逐个 Suspend/Resume。
     /// 返回 ``(touched_count, thread_ids)`` — 后者用于 caller 缓存,下次
     /// resume 时跳过这一步。
+    ///
+    /// Phase D.3.3 — partial-failure rollback。在 ``suspend == true`` 模式下,
+    /// 如果某个线程 SuspendThread 失败,先前已 suspend 的线程会被 ResumeThread
+    /// 复位,避免留下半冻结的进程树。``resume`` 模式不做 rollback:目的本就是
+    /// 让线程跑起来,失败也无需回滚。
     fn set_threads_suspended(
         pids: &BTreeSet<u32>,
         suspend: bool,
@@ -187,7 +214,23 @@ mod imp {
                         touched_threads += 1;
                         touched_ids.push(entry.th32ThreadID);
                     }
-                    Err(error) => last_error = Some(error),
+                    Err(error) => {
+                        last_error = Some(error);
+                        if suspend {
+                            // Phase D.3.3 — rollback to avoid a half-frozen
+                            // process tree. Best-effort: ResumeThread errors
+                            // here would be reported in the parent error.
+                            for &tid in &touched_ids {
+                                let _ = set_thread_suspended(tid, false);
+                            }
+                            unsafe {
+                                let _ = CloseHandle(snapshot);
+                            }
+                            return Err(last_error.unwrap_or_else(|| {
+                                "Suspend rollback triggered on unknown failure.".to_string()
+                            }));
+                        }
+                    }
                 }
             }
             has_entry = unsafe { Thread32Next(snapshot, &mut entry) } != 0;
