@@ -11,7 +11,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from app.cli.commands._process_validation import _load_json_arg, ensure_input_and_ffmpeg
+from app.cli.commands._process_validation import (
+    _load_json_arg,
+    collect_config_sections,
+    ensure_input_and_ffmpeg,
+)
 from app.cli.defaults import (
     _default_decode_config,
     _default_encode_config,
@@ -37,11 +41,12 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     input_path = args.input
     ffmpeg = ensure_input_and_ffmpeg(input_path)
 
+    sections = collect_config_sections(args)
     try:
-        decode_config = _load_json_arg(args.decode_config_json, _default_decode_config(), DecodeConfig)
-        encode_config = _load_json_arg(args.encode_config_json, _default_encode_config(args), EncodeConfig)
-        workflow_config = _load_json_arg(args.workflow_config_json, _default_workflow_config(args), WorkflowConfig)
-        output_config = _load_json_arg(args.output_config_json, _default_output_config(args), OutputConfig)
+        decode_config = _load_json_arg(sections["decode"], _default_decode_config(), DecodeConfig)
+        encode_config = _load_json_arg(sections["encode"], _default_encode_config(args), EncodeConfig)
+        workflow_config = _load_json_arg(sections["workflow"], _default_workflow_config(args), WorkflowConfig)
+        output_config = _load_json_arg(sections["output"], _default_output_config(args), OutputConfig)
     except ValueError as exc:
         emit_error(TaskErrorCode.INVALID_CONFIG, str(exc))
 

@@ -6,12 +6,19 @@ Pydantic 校验过、camelCase、已合并默认值的形状。
 
 Phase C.1.1 将原 ``process.py`` 中的 297 行单文件拆为
 validation / planning / execution / orchestrator 四段,本文件为第一段。
+
+Phase D.3.1 — ``load_configs`` 现在支持两种 wire 格式:
+- ``--config-stdin``:Tauri host 把 ``{decode, workflow, encode, output}``
+  作为单个 JSON 对象写入 stdin。规避 Windows 32 KiB 命令行上限。
+- ``--*-config-json``(传统):每段配置走独立命令行参数。手动 CLI 与测试
+  仍走这条,保持兼容。
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from typing import Any
 
 from app.cli.defaults import (
@@ -84,21 +91,82 @@ def ensure_input_and_ffmpeg(input_path: str) -> FFmpegWrapper:
     return ffmpeg
 
 
+def _read_stdin_config_sections() -> dict[str, str | None]:
+    """Read the four config sections from stdin as a single JSON object.
+
+    Returns a ``{decode, workflow, encode, output}`` dict where each value
+    is a JSON string (or ``None`` if the section is missing). Reusing the
+    string form means ``_load_json_arg`` can validate stdin and CLI paths
+    through the same code, including the deep-merge + Pydantic round-trip.
+    """
+    raw = sys.stdin.read()
+    if not raw.strip():
+        emit_error(
+            TaskErrorCode.INVALID_CONFIG,
+            "Empty stdin payload while --config-stdin was set.",
+        )
+    try:
+        container = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        emit_error(
+            TaskErrorCode.INVALID_CONFIG,
+            f"Invalid stdin JSON: {exc}",
+        )
+    if not isinstance(container, dict):
+        emit_error(
+            TaskErrorCode.INVALID_CONFIG,
+            "Stdin payload must be a JSON object with decode/workflow/encode/output keys.",
+        )
+
+    def _section(key: str) -> str | None:
+        value = container.get(key)
+        if value is None:
+            return None
+        return json.dumps(value)
+
+    return {
+        "decode": _section("decode"),
+        "workflow": _section("workflow"),
+        "encode": _section("encode"),
+        "output": _section("output"),
+    }
+
+
+def collect_config_sections(args: argparse.Namespace) -> dict[str, str | None]:
+    """Choose between the stdin and CLI-flag wire formats.
+
+    Returns the same ``{decode, workflow, encode, output}`` shape so that
+    ``load_configs`` and ``cmd_inspect_output`` can stay format-agnostic.
+    ``--config-stdin`` takes precedence; the four ``--*-config-json``
+    flags are ignored when it's set (the parser still accepts them so
+    older tooling doesn't break, but the documentation calls this out).
+    """
+    if getattr(args, "config_stdin", False):
+        return _read_stdin_config_sections()
+    return {
+        "decode": args.decode_config_json,
+        "workflow": args.workflow_config_json,
+        "encode": args.encode_config_json,
+        "output": args.output_config_json,
+    }
+
+
 def load_configs(
     args: argparse.Namespace,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Materialise the four config dicts from CLI JSON args.
+    """Materialise the four config dicts from CLI JSON args or stdin.
 
     Returns ``(decode_config, encode_config, workflow_config, output_config)``
     — all camelCase, all Pydantic-validated. ``ValueError`` from any
     sub-call is caught and re-emitted as ``INVALID_CONFIG`` so the frontend
     sees a typed error rather than a stack trace.
     """
+    sections = collect_config_sections(args)
     try:
-        decode_config = _load_json_arg(args.decode_config_json, _default_decode_config(), DecodeConfig)
-        encode_config = _load_json_arg(args.encode_config_json, _default_encode_config(args), EncodeConfig)
-        workflow_config = _load_json_arg(args.workflow_config_json, _default_workflow_config(args), WorkflowConfig)
-        output_config = _load_json_arg(args.output_config_json, _default_output_config(args), OutputConfig)
+        decode_config = _load_json_arg(sections["decode"], _default_decode_config(), DecodeConfig)
+        encode_config = _load_json_arg(sections["encode"], _default_encode_config(args), EncodeConfig)
+        workflow_config = _load_json_arg(sections["workflow"], _default_workflow_config(args), WorkflowConfig)
+        output_config = _load_json_arg(sections["output"], _default_output_config(args), OutputConfig)
     except ValueError as exc:
         emit_error(TaskErrorCode.INVALID_CONFIG, str(exc))
         raise  # unreachable; appeases the type-checker

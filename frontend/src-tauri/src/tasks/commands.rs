@@ -19,6 +19,7 @@ pub async fn inspect_video<R: Runtime>(
         &app,
         &paths,
         &[String::from("info"), String::from("--input"), input_path],
+        None,
     )
     .await?;
     serde_json::from_value::<VideoInfo>(raw).map_err(|error| {
@@ -42,8 +43,8 @@ pub async fn check_resume_state<R: Runtime>(
     paths: State<'_, ResolvedRuntimePaths>,
     request: TaskRequest,
 ) -> Result<Value, ShellError> {
-    let args = build_inspect_output_args(&request)?;
-    run_single_cli_command(&app, &paths, &args).await
+    let (args, stdin_payload) = build_inspect_output_args(&request)?;
+    run_single_cli_command(&app, &paths, &args, Some(&stdin_payload)).await
 }
 
 #[tauri::command]

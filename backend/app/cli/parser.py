@@ -19,7 +19,24 @@ def _add_shared_planning_args(parser: argparse.ArgumentParser) -> None:
 
     Keeps the parser definitions in sync so a change to one command's CLI
     surface is automatically reflected in the other.
+
+    Phase D.3.1 — added ``--config-stdin``. When set, the four config
+    sections are read as a single JSON object from stdin instead of from
+    four separate ``--*-config-json`` arguments. This is the Tauri host's
+    preferred path because Windows command lines cap at ~32 KiB and the
+    filter chain in ``workflowConfig`` can easily overflow that on real
+    user input. The legacy flags stay so manual CLI invocations and tests
+    don't need to be rewritten.
     """
+    parser.add_argument(
+        "--config-stdin",
+        action="store_true",
+        help=(
+            "Read decode/workflow/encode/output config as a single JSON object "
+            "from stdin (keys: decode, workflow, encode, output). When this flag "
+            "is set, --*-config-json flags are ignored."
+        ),
+    )
     parser.add_argument("--decode-config-json", default=None, help="Nested decode config JSON")
     parser.add_argument("--encode-config-json", default=None, help="Nested encode config JSON")
     parser.add_argument("--workflow-config-json", default=None, help="Nested workflow config JSON")
