@@ -38,8 +38,18 @@ jobs:
       # that renames or adds a Rust IPC type would still pass ``npm run
       # test`` (vitest only treats type imports as elidable), and the
       # drift would only surface during the much-later Build job.
+      #
+      # NOTE: ``tauri::generate_context!()`` (which the lib pulls in via
+      # ``tauri::Builder::default().run(generate_context!())``) eagerly
+      # validates the configured ``frontendDist`` (``../dist``) at compile
+      # time. We haven't actually built the frontend yet, so create an
+      # empty placeholder directory just to satisfy the macro — the
+      # contents don't matter for ``cargo test --lib``. Same trick the
+      # Build workflow uses.
       - name: Regenerate TypeScript types from Rust (ts-rs)
-        run: cargo test --lib --quiet
+        run: |
+          New-Item -ItemType Directory -Force -Path "../dist" | Out-Null
+          cargo test --lib --quiet
         working-directory: frontend/src-tauri
 
       - name: Run frontend tests
