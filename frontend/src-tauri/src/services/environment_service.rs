@@ -49,7 +49,7 @@ async fn check_environment_impl<R: Runtime>(
         }
     }
 
-    let raw = tasks::run_single_cli_command(&app, &paths, &[String::from("check")]).await?;
+    let raw = tasks::run_single_cli_command(&app, &paths, &[String::from("check")], None).await?;
     let result = serde_json::from_value::<EnvironmentCheckResult>(raw).map_err(|error| {
         ShellError::SchemaValidation(format!(
             "Unable to deserialize environment check result: {error}"

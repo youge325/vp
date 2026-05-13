@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Runtime, State};
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot};
 
@@ -24,21 +24,52 @@ use crate::tasks::stderr::StderrCapture;
 
 pub type ProgressBeat = Arc<Mutex<Instant>>;
 
+/// Run a one-shot CLI subcommand and parse the last JSON line from stdout.
+///
+/// Phase D.3.1 — ``stdin_payload`` lets callers feed config through stdin
+/// instead of command-line flags. ``None`` keeps the legacy
+/// ``Stdio::null`` behaviour for subcommands that don't take input
+/// (e.g. ``check``, ``info``). When ``Some(payload)`` is provided the
+/// command is spawned manually (instead of ``Command::output``), the
+/// payload is written to stdin, the handle is dropped to signal EOF,
+/// and stdout/stderr are then drained synchronously.
 pub async fn run_single_cli_command<R: Runtime>(
     app: &AppHandle<R>,
     paths: &ResolvedRuntimePaths,
     args: &[String],
+    stdin_payload: Option<&str>,
 ) -> Result<Value, ShellError> {
     let _ = app; // Reserved for future per-app log routing.
     let mut command = Command::new(&paths.python_executable);
     command.args(["-m", "app"]);
     command.args(args);
     command.current_dir(&paths.backend_dir);
-    command.stdin(Stdio::null());
     command.envs(build_env_map(paths));
     apply_no_window(&mut command);
 
-    let output = command.output().await.map_err(ShellError::Spawn)?;
+    let output = match stdin_payload {
+        None => {
+            command.stdin(Stdio::null());
+            command.output().await.map_err(ShellError::Spawn)?
+        }
+        Some(payload) => {
+            command.stdin(Stdio::piped());
+            command.stdout(Stdio::piped());
+            command.stderr(Stdio::piped());
+            let mut child = command.spawn().map_err(ShellError::Spawn)?;
+            if let Some(mut stdin) = child.stdin.take() {
+                // Write the entire payload then drop stdin to signal EOF.
+                // Errors here typically mean the child died before reading
+                // — let the wait below surface the real error message.
+                let _ = stdin.write_all(payload.as_bytes()).await;
+                let _ = stdin.flush().await;
+            }
+            child
+                .wait_with_output()
+                .await
+                .map_err(ShellError::Spawn)?
+        }
+    };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -73,12 +104,25 @@ pub async fn spawn_task<R: Runtime>(
         }
     }
 
-    let mut command = build_process_command(&paths, &request)?;
+    let (mut command, stdin_payload) = build_process_command(&paths, &request)?;
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
-    command.stdin(Stdio::null());
+    // ``build_process_command`` already set ``Stdio::piped()`` on stdin so the
+    // payload can be fed in immediately after spawn — see Phase D.3.1.
 
     let mut child = spawn_no_window_group(&mut command).map_err(ShellError::Spawn)?;
+
+    // Phase D.3.1 — push the config payload through stdin, then drop the
+    // handle to signal EOF. Doing this before reading stdout/stderr keeps
+    // the child unblocked even if the process group started fast.
+    if let Some(mut stdin) = child.inner().stdin.take() {
+        if !stdin_payload.is_empty() {
+            let _ = stdin.write_all(stdin_payload.as_bytes()).await;
+            let _ = stdin.flush().await;
+        }
+        // Explicit drop to close the pipe (signals EOF to the child).
+        drop(stdin);
+    }
 
     let stdout = child.inner().stdout.take().ok_or_else(|| {
         ShellError::BackendExit("Unable to capture backend stdout.".to_string())

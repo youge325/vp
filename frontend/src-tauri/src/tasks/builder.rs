@@ -2,6 +2,7 @@ use std::io;
 use std::process::Stdio;
 
 use command_group::{AsyncCommandGroup, AsyncGroupChild};
+use serde_json::json;
 use tokio::process::Command;
 
 use crate::models::TaskRequest;
@@ -10,23 +11,30 @@ use crate::runtime::ResolvedRuntimePaths;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
+/// Serialize the four config sections as a single JSON object.
+///
+/// Phase D.3.1 — the Tauri host now feeds backend config through stdin
+/// as ``{decode, workflow, encode, output}`` instead of four separate
+/// ``--*-config-json`` command line arguments. The previous wire format
+/// risked overflowing the Windows command-line limit (~32 KiB) once the
+/// user added more than a couple of preprocess / postprocess filters.
+fn build_config_stdin_payload(request: &TaskRequest) -> Result<String, serde_json::Error> {
+    serde_json::to_string(&json!({
+        "decode": &request.decode_config,
+        "workflow": &request.workflow_config,
+        "encode": &request.encode_config,
+        "output": &request.output_config,
+    }))
+}
+
 pub fn build_process_command(
     paths: &ResolvedRuntimePaths,
     request: &TaskRequest,
-) -> Result<Command, serde_json::Error> {
+) -> Result<(Command, String), serde_json::Error> {
     let mut command = Command::new(&paths.python_executable);
     command.args(["-m", "app", "process"]);
     command.args(["--input", &request.input_path]);
-
-    let decode_json = serde_json::to_string(&request.decode_config)?;
-    let workflow_json = serde_json::to_string(&request.workflow_config)?;
-    let encode_json = serde_json::to_string(&request.encode_config)?;
-    let output_json = serde_json::to_string(&request.output_config)?;
-
-    command.args(["--decode-config-json", &decode_json]);
-    command.args(["--workflow-config-json", &workflow_json]);
-    command.args(["--encode-config-json", &encode_json]);
-    command.args(["--output-config-json", &output_json]);
+    command.arg("--config-stdin");
 
     if let Some(mode) = request.resume_mode.as_deref() {
         if !mode.is_empty() {
@@ -36,27 +44,25 @@ pub fn build_process_command(
 
     command.current_dir(&paths.backend_dir);
     command.envs(crate::runtime::build_env_map(paths));
-    command.stdin(Stdio::null());
-    Ok(command)
+    // stdin is intentionally piped — the caller writes the JSON payload
+    // immediately after spawn and then drops the handle to signal EOF.
+    command.stdin(Stdio::piped());
+
+    let stdin_payload = build_config_stdin_payload(request)?;
+    Ok((command, stdin_payload))
 }
 
-pub fn build_inspect_output_args(request: &TaskRequest) -> Result<Vec<String>, serde_json::Error> {
-    let mut args = vec![
+pub fn build_inspect_output_args(
+    request: &TaskRequest,
+) -> Result<(Vec<String>, String), serde_json::Error> {
+    let args = vec![
         String::from("inspect-output"),
         String::from("--input"),
         request.input_path.clone(),
+        String::from("--config-stdin"),
     ];
-
-    args.push(String::from("--decode-config-json"));
-    args.push(serde_json::to_string(&request.decode_config)?);
-    args.push(String::from("--workflow-config-json"));
-    args.push(serde_json::to_string(&request.workflow_config)?);
-    args.push(String::from("--encode-config-json"));
-    args.push(serde_json::to_string(&request.encode_config)?);
-    args.push(String::from("--output-config-json"));
-    args.push(serde_json::to_string(&request.output_config)?);
-
-    Ok(args)
+    let stdin_payload = build_config_stdin_payload(request)?;
+    Ok((args, stdin_payload))
 }
 
 #[cfg(windows)]
@@ -154,49 +160,88 @@ mod tests {
     }
 
     #[test]
-    fn build_inspect_output_args_leads_with_subcommand_and_input() {
+    fn build_inspect_output_args_leads_with_subcommand_input_and_stdin_flag() {
         let request = sample_request();
-        let args = build_inspect_output_args(&request).expect("args");
+        let (args, _payload) = build_inspect_output_args(&request).expect("args");
         assert_eq!(args[0], "inspect-output");
         assert_eq!(args[1], "--input");
         assert_eq!(args[2], "D:/in.mp4");
+        // Phase D.3.1 — `--config-stdin` replaces the four `--*-config-json`
+        // flags as the wire format. Config payload now travels through stdin.
+        assert!(
+            args.iter().any(|arg| arg == "--config-stdin"),
+            "expected --config-stdin flag in {:?}",
+            args,
+        );
+        assert!(
+            !args.iter().any(|arg| arg.ends_with("-config-json")),
+            "legacy --*-config-json flags should not appear in stdin mode: {:?}",
+            args,
+        );
     }
 
     #[test]
-    fn build_inspect_output_args_includes_all_four_config_payloads() {
+    fn build_inspect_output_stdin_payload_packs_all_four_sections() {
         let request = sample_request();
-        let args = build_inspect_output_args(&request).expect("args");
-
-        let flags: Vec<&String> = args
-            .iter()
-            .filter(|arg| arg.starts_with("--") && arg.ends_with("-config-json"))
-            .collect();
-        assert_eq!(flags.len(), 4, "expected exactly 4 config-json flags, got {:?}", flags);
-
-        // Each flag should be followed by a valid JSON string.
-        for (index, arg) in args.iter().enumerate() {
-            if arg.starts_with("--") && arg.ends_with("-config-json") {
-                let payload = &args[index + 1];
-                serde_json::from_str::<serde_json::Value>(payload)
-                    .unwrap_or_else(|err| panic!("invalid JSON for {arg}: {err} -> {payload}"));
-            }
+        let (_args, payload) = build_inspect_output_args(&request).expect("args");
+        let parsed = serde_json::from_str::<serde_json::Value>(&payload)
+            .expect("stdin payload must be valid JSON");
+        let obj = parsed.as_object().expect("payload root must be object");
+        for key in ["decode", "workflow", "encode", "output"] {
+            assert!(
+                obj.contains_key(key),
+                "stdin payload missing `{key}` section: {payload}",
+            );
         }
     }
 
     #[test]
-    fn build_inspect_output_args_serializes_camel_case_fields() {
+    fn build_inspect_output_stdin_payload_serializes_camel_case_fields() {
         let request = sample_request();
-        let args = build_inspect_output_args(&request).expect("args");
-
-        let workflow_json = args
-            .iter()
-            .position(|arg| arg == "--workflow-config-json")
-            .map(|idx| &args[idx + 1])
-            .expect("workflow json present");
-
+        let (_args, payload) = build_inspect_output_args(&request).expect("args");
         // Rust uses snake_case fields (fps_mode) but serializes to camelCase (fpsMode).
-        assert!(workflow_json.contains("fpsMode"), "expected camelCase fpsMode in {workflow_json}");
-        assert!(workflow_json.contains("processOrder"), "expected camelCase processOrder");
-        assert!(!workflow_json.contains("fps_mode"), "snake_case must not leak");
+        assert!(
+            payload.contains("\"fpsMode\""),
+            "expected camelCase fpsMode in {payload}",
+        );
+        assert!(
+            payload.contains("\"processOrder\""),
+            "expected camelCase processOrder in {payload}",
+        );
+        assert!(
+            !payload.contains("\"fps_mode\""),
+            "snake_case must not leak into wire payload: {payload}",
+        );
+    }
+
+    #[test]
+    fn build_process_command_returns_stdin_payload_with_all_sections() {
+        // Smoke-check the sibling helper used by ``spawn_task`` —
+        // exercises the same packing logic without spawning a process.
+        // We can't easily inspect the Command's argv post-construction
+        // without running it, so this only validates the stdin payload
+        // shape; the command flags are covered by integration tests.
+        let request = sample_request();
+        let paths = ResolvedRuntimePaths {
+            backend_dir: std::path::PathBuf::from("."),
+            runtime_root: None,
+            python_executable: std::path::PathBuf::from("python"),
+            ffmpeg_path: None,
+            ffprobe_path: None,
+            model_dir: None,
+            tensorrt_dir: None,
+            output_dir: std::path::PathBuf::from("."),
+            log_dir: std::path::PathBuf::from("."),
+        };
+        let (_command, payload) = build_process_command(&paths, &request).expect("command");
+        let parsed = serde_json::from_str::<serde_json::Value>(&payload)
+            .expect("stdin payload must be valid JSON");
+        let obj = parsed.as_object().expect("payload root must be object");
+        for key in ["decode", "workflow", "encode", "output"] {
+            assert!(
+                obj.contains_key(key),
+                "process stdin payload missing `{key}` section: {payload}",
+            );
+        }
     }
 }
