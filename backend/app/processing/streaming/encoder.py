@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.planning import ResumeState, SegmentManifest
+from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import (
     EncodedFrame,
     SegmentBoundary,
@@ -37,6 +38,7 @@ def _encoder_worker(
     error_queue: queue.Queue[BaseException],
     stop_event: threading.Event,
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
+    metrics: PipelineMetrics,
 ) -> None:
     del decode_queue, signature
     extension = os.path.splitext(output_path)[1] or f".{encode_config.get('container') or 'mp4'}"
@@ -103,6 +105,8 @@ def _encoder_worker(
                     )
                 writer.write_frame(item.frame)
                 current_segment_input_frames += 1
+                metrics.record_processed_frames(1)
+                metrics.set_queue_depth("encode", encode_queue.qsize())
                 continue
 
             if isinstance(item, SegmentBoundary):

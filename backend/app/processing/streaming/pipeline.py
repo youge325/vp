@@ -24,6 +24,7 @@ from app.planning import (
 )
 from app.processing.streaming.decoder import _decoder_worker
 from app.processing.streaming.encoder import _encoder_worker, _finalize_segmented_output
+from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.processor import _processor_worker
 from app.processing.streaming.queues import (
     DecodedFrame,
@@ -53,8 +54,13 @@ def process_video_streaming(
     output_fps: float | None = None,
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None = None,
     resume_mode: ResumeMode = "auto",
+    metrics: PipelineMetrics | None = None,
 ) -> dict[str, Any]:
     """Process a video without writing temporary frames to disk."""
+    if metrics is None:
+        # Standalone caller (tests, smoke scripts) — keep the call site
+        # simple by self-provisioning metrics that nobody reads.
+        metrics = PipelineMetrics()
     video_info = resolve_video_info(ffmpeg, input_path)
     stage_plan = build_stage_plan(
         processing_steps,
@@ -121,6 +127,7 @@ def process_video_streaming(
             output_path=output_path,
             output_fps=output_fps,
             encode_progress_callback=encode_progress_callback,
+            metrics=metrics,
         )
 
     final_output = _finalize_segmented_output(
@@ -194,6 +201,7 @@ def _run_streaming_pipeline(
     output_path: str,
     output_fps: float | None,
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
+    metrics: PipelineMetrics,
 ) -> int:
     decode_queue: queue.Queue[DecodedFrame | object] = queue.Queue(maxsize=100)
     encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object] = queue.Queue(maxsize=8)
@@ -205,6 +213,7 @@ def _run_streaming_pipeline(
         "encode_queue": encode_queue,
         "error_queue": error_queue,
         "stop_event": stop_event,
+        "metrics": metrics,
     }
 
     threads = [

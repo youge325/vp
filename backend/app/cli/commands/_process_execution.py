@@ -71,6 +71,7 @@ def _run_streaming(
         output_fps=plan.final_output_fps,
         encode_progress_callback=plan.progress_reporter.update,
         resume_mode=resume_mode,
+        metrics=plan.metrics,
     )
 
 

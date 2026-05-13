@@ -51,18 +51,23 @@ class NdjsonEmitter:
         stage: str,
         stage_index: int,
         stage_total: int,
+        metrics: dict[str, Any] | None = None,
     ) -> None:
-        self._emit(
-            NdjsonEventType.PROGRESS,
-            {
-                "current": current,
-                "total": total,
-                "percent": percent,
-                "stage": stage,
-                "stageIndex": stage_index,
-                "stageTotal": stage_total,
-            },
-        )
+        payload: dict[str, Any] = {
+            "current": current,
+            "total": total,
+            "percent": percent,
+            "stage": stage,
+            "stageIndex": stage_index,
+            "stageTotal": stage_total,
+        }
+        # Phase D.2.3 — pipeline observability rides along on the progress
+        # frame. Fields land under ``metrics`` so the existing top-level
+        # schema stays untouched and Rust / older clients can ignore the
+        # bag entirely.
+        if metrics:
+            payload["metrics"] = metrics
+        self._emit(NdjsonEventType.PROGRESS, payload)
 
     def completed(
         self,

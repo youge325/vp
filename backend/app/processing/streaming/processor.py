@@ -18,6 +18,7 @@ import numpy as np
 from app.algorithms.factory import AlgorithmFactory
 from app.algorithms.tensor_backend import get_tensor_backend
 from app.planning import StagePlan
+from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import (
     DecodedFrame,
     EncodedFrame,
@@ -42,6 +43,7 @@ def _processor_worker(
     encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object],
     error_queue: queue.Queue[BaseException],
     stop_event: threading.Event,
+    metrics: PipelineMetrics,
 ) -> None:
     try:
         algorithms = _initialize_algorithms(stage_plan, tensor_backend_name)
@@ -56,6 +58,7 @@ def _processor_worker(
                 decode_queue=decode_queue,
                 encode_queue=encode_queue,
                 stop_event=stop_event,
+                metrics=metrics,
             )
         else:
             _process_interpolated_stream(
@@ -67,6 +70,7 @@ def _processor_worker(
                 decode_queue=decode_queue,
                 encode_queue=encode_queue,
                 stop_event=stop_event,
+                metrics=metrics,
             )
     except BaseException as exc:  # pragma: no cover - thread boundary
         stop_event.set()
@@ -126,6 +130,7 @@ def _process_single_frame_stream(
     decode_queue: queue.Queue[DecodedFrame | object],
     encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object],
     stop_event: threading.Event,
+    metrics: PipelineMetrics,
 ) -> None:
     held: tuple[int, np.ndarray] | None = None
     output_index = resume_output_frames
@@ -143,9 +148,10 @@ def _process_single_frame_stream(
             continue
 
         frame = item.frame
-        for step_index, (_, backend, algorithm) in enumerate(algorithms["single"]):
-            frame = _run_single_frame_algorithm(backend, algorithm, frame)
-            progress_callbacks[step_index](item.source_index + 1, single_total)
+        with metrics.timed("process"):
+            for step_index, (_, backend, algorithm) in enumerate(algorithms["single"]):
+                frame = _run_single_frame_algorithm(backend, algorithm, frame)
+                progress_callbacks[step_index](item.source_index + 1, single_total)
 
         if held is None:
             held = (item.source_index, frame)
@@ -157,6 +163,7 @@ def _process_single_frame_stream(
             EncodedFrame(output_index=output_index, frame=held_frame),
             stop_event,
         )
+        metrics.set_queue_depth("encode", encode_queue.qsize())
         output_index += 1
         _queue_put(
             encode_queue,
@@ -171,6 +178,7 @@ def _process_single_frame_stream(
             EncodedFrame(output_index=output_index, frame=held[1]),
             stop_event,
         )
+        metrics.set_queue_depth("encode", encode_queue.qsize())
         output_index += 1
 
     _queue_put(
@@ -192,6 +200,7 @@ def _process_interpolated_stream(
     decode_queue: queue.Queue[DecodedFrame | object],
     encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object],
     stop_event: threading.Event,
+    metrics: PipelineMetrics,
 ) -> None:
     interpolation_step = stage_plan.interpolation_step
     if interpolation_step is None:
@@ -219,9 +228,10 @@ def _process_interpolated_stream(
             continue
 
         current_frame = item.frame
-        for step_index, (_, backend, algorithm) in enumerate(algorithms["single"]):
-            current_frame = _run_single_frame_algorithm(backend, algorithm, current_frame)
-            progress_callbacks[step_index](item.source_index + 1, max(source_frames, 1))
+        with metrics.timed("process"):
+            for step_index, (_, backend, algorithm) in enumerate(algorithms["single"]):
+                current_frame = _run_single_frame_algorithm(backend, algorithm, current_frame)
+                progress_callbacks[step_index](item.source_index + 1, max(source_frames, 1))
 
         if previous is None:
             previous = (item.source_index, current_frame)
@@ -231,12 +241,13 @@ def _process_interpolated_stream(
         interpolation_callback(prev_source_index + 1, total_pairs)
 
         group_frames = [prev_frame]
-        prev_tensor = interpolation_backend.numpy_to_tensor(prev_frame)
-        current_tensor = interpolation_backend.numpy_to_tensor(current_frame)
-        for mid_index in range(1, multi):
-            timestep = mid_index / multi
-            mid_tensor = interpolation_algorithm.process_frame_pair(prev_tensor, current_tensor, timestep=timestep)
-            group_frames.append(interpolation_backend.tensor_to_numpy(mid_tensor))
+        with metrics.timed("interpolate"):
+            prev_tensor = interpolation_backend.numpy_to_tensor(prev_frame)
+            current_tensor = interpolation_backend.numpy_to_tensor(current_frame)
+            for mid_index in range(1, multi):
+                timestep = mid_index / multi
+                mid_tensor = interpolation_algorithm.process_frame_pair(prev_tensor, current_tensor, timestep=timestep)
+                group_frames.append(interpolation_backend.tensor_to_numpy(mid_tensor))
 
         for frame in group_frames:
             processed_output = frame
@@ -248,6 +259,7 @@ def _process_interpolated_stream(
                 EncodedFrame(output_index=output_index, frame=processed_output),
                 stop_event,
             )
+            metrics.set_queue_depth("encode", encode_queue.qsize())
             output_index += 1
 
         _queue_put(
@@ -267,6 +279,7 @@ def _process_interpolated_stream(
             EncodedFrame(output_index=output_index, frame=final_frame),
             stop_event,
         )
+        metrics.set_queue_depth("encode", encode_queue.qsize())
         output_index += 1
 
     _queue_put(

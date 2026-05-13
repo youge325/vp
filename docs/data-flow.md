@@ -293,9 +293,9 @@ FFmpeg stderr progress 解析
 
 Python 同时输出终端进度条(`[VP_PROGRESS] [####------------] 15.2% 152/1000 | 23.5 fps | 1.20x | ETA 00:00:35`),Rust 的 stderr_reader 将其作为 `TaskLog` 事件转发。前端 [`services/task/events.ts::appendTaskLog`](../frontend/src/services/task/events.ts) 识别 `TERMINAL_PROGRESS_PREFIX`,实现进度条行的覆盖更新(保留最近 300 条日志,进度行替换而非追加)。
 
-### 多阶段进度的当前实现与已知 bug
+### 多阶段进度的当前实现
 
-`stage_index` / `stage_total` 用于让前端展示"超分 1/2 → 补帧 2/2"这类多阶段进度。当前 [`backend/app/cli/commands/process.py`](../backend/app/cli/commands/process.py:213) 用同一个 `progress_callback` 闭包复用给所有 stage,导致 `stage_index` 实际始终是 `1`。Phase C.1.3 计划在拆分到 `_process_planning.py` 时为每个 stage 创建独立闭包,届时前端无需修改即可拿到正确的阶段索引。
+`stage_index` / `stage_total` 用于让前端展示"超分 1/2 → 补帧 2/2"这类多阶段进度。Phase C.1.3 引入 [`backend/app/cli/commands/_process_planning.py::_make_stage_progress_callback`](../backend/app/cli/commands/_process_planning.py),为 ``ProcessingPlan.progress_callbacks`` 里的每一项 stage 单独闭包持有 ``(stage_name, stage_index, stage_total)``,并在 ``update`` 之前先调 [`CliProgressReporter.set_stage`](../backend/app/protocol/reporter.py),NDJSON ``progress`` 帧因此能正确反映当前阶段位置。修复前所有阶段共享一个 callback,使 ``stage_index`` 永远是 ``1``。
 
 ## 超时与卡顿处理
 
