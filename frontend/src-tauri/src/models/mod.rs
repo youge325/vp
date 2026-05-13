@@ -3,9 +3,9 @@ pub mod env;
 pub mod task;
 
 pub use config::{
-    AnimeConfig, DecodeConfig, EncodeConfig, FilterStep, InterpolationConfig, JsonMap, OutputConfig,
-    PostprocessConfig, PreprocessConfig, RateControlConfig, SuperResolutionConfig, WorkbenchPreset,
-    WorkflowConfig,
+    AnimeConfig, DecodeConfig, DecodeMode, EncodeConfig, FilterStep, FpsMode, InterpolationConfig,
+    JsonMap, OutputConfig, PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig,
+    RateControlMode, SuperResolutionConfig, TensorBackend, WorkbenchPreset, WorkflowConfig,
 };
 pub use env::{
     AlgorithmInfo, BackendDeviceSupport, EnvironmentCheckPayload, EnvironmentCheckResult,

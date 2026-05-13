@@ -290,9 +290,9 @@ mod tests {
         save_environment_cache, save_workbench_preset, workbench_preset_path, WorkbenchPresetEntry,
     };
     use crate::models::{
-        AnimeConfig, DecodeConfig, EncodeConfig, InterpolationConfig, OutputConfig,
-        PostprocessConfig, PreprocessConfig, RateControlConfig, SuperResolutionConfig,
-        WorkbenchPreset, WorkflowConfig,
+        AnimeConfig, DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig,
+        OutputConfig, PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig,
+        RateControlMode, SuperResolutionConfig, TensorBackend, WorkbenchPreset, WorkflowConfig,
     };
     use serde_json::json;
     use std::path::PathBuf;
@@ -317,15 +317,15 @@ mod tests {
     fn sample_preset() -> WorkbenchPreset {
         WorkbenchPreset {
             decode_config: DecodeConfig {
-                mode: "hardware".to_string(),
+                mode: DecodeMode::Hardware,
                 hwaccel: Some("cuda".to_string()),
                 hwaccel_device: Some("0".to_string()),
                 decoder: Some("hevc_cuvid".to_string()),
                 options: Default::default(),
             },
             workflow_config: WorkflowConfig {
-                fps_mode: "target".to_string(),
-                process_order: "super_resolution_then_interpolation".to_string(),
+                fps_mode: FpsMode::Target,
+                process_order: ProcessOrder::SuperResolutionThenInterpolation,
                 interpolation: InterpolationConfig {
                     enabled: true,
                     target_fps: 60.0,
@@ -335,7 +335,7 @@ mod tests {
                     onnx_model: None,
                     scale: 1.0,
                     fp16: false,
-                    tensor_backend: "pytorch".to_string(),
+                    tensor_backend: TensorBackend::Pytorch,
                     engine: "cuda".to_string(),
                 },
                 super_resolution: SuperResolutionConfig {
@@ -365,7 +365,7 @@ mod tests {
                 container: "mp4".to_string(),
                 keep_audio: true,
                 rate_control: RateControlConfig {
-                    mode: "cq".to_string(),
+                    mode: RateControlMode::Cq,
                     value: json!(23),
                 },
                 options: Default::default(),

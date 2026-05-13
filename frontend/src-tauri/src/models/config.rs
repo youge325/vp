@@ -4,11 +4,61 @@ use ts_rs::TS;
 
 pub type JsonMap = serde_json::Map<String, serde_json::Value>;
 
+// Phase D.3.4a — string fields with a small, stable value set are
+// promoted to Rust enums. The serde wire format stays identical
+// (``rename_all = "snake_case"``), but ts-rs now emits union literal
+// types for the frontend, giving switch-case exhaustiveness checks. The
+// Python Pydantic models still see them as plain ``str`` so backward
+// compatibility with persisted preset JSON is preserved.
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub enum DecodeMode {
+    Software,
+    Hardware,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub enum FpsMode {
+    Multi,
+    Target,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub enum ProcessOrder {
+    SuperResolutionThenInterpolation,
+    FrameInterpolationThenSuperResolution,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub enum TensorBackend {
+    Pytorch,
+    Paddle,
+    Onnx,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub enum RateControlMode {
+    Crf,
+    Cq,
+    Qp,
+    Bitrate,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct DecodeConfig {
-    pub mode: String,
+    pub mode: DecodeMode,
     #[ts(optional)]
     pub hwaccel: Option<String>,
     #[ts(optional)]
@@ -35,7 +85,7 @@ pub struct InterpolationConfig {
     pub onnx_model: Option<String>,
     pub scale: f64,
     pub fp16: bool,
-    pub tensor_backend: String,
+    pub tensor_backend: TensorBackend,
     #[serde(default = "default_engine")]
     pub engine: String,
 }
@@ -103,8 +153,8 @@ pub struct PostprocessConfig {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct WorkflowConfig {
-    pub fps_mode: String,
-    pub process_order: String,
+    pub fps_mode: FpsMode,
+    pub process_order: ProcessOrder,
     pub interpolation: InterpolationConfig,
     pub super_resolution: SuperResolutionConfig,
     pub anime: AnimeConfig,
@@ -132,7 +182,7 @@ fn default_postprocess() -> PostprocessConfig {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct RateControlConfig {
-    pub mode: String,
+    pub mode: RateControlMode,
     #[ts(type = "number | string")]
     pub value: serde_json::Value,
 }
