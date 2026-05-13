@@ -55,7 +55,11 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
         output_path = get_output_path(input_path, output_dir, extension=f".{container}")
 
     multi, encode_fps, _interpolated_fps, need_resample = _resolve_fps_and_multi(workflow_config, ffmpeg, input_path)
-    workflow_config["interpolation"]["multi"] = multi
+    # Phase D.2.1 — same anti-mutate pattern as ``_process_planning.build_plan``.
+    workflow_config = {
+        **workflow_config,
+        "interpolation": {**workflow_config["interpolation"], "multi": multi},
+    }
     final_output_fps = encode_fps if need_resample else None
 
     video_info = resolve_video_info(ffmpeg, input_path)

@@ -6,6 +6,7 @@ import queue
 import threading
 from typing import Any
 
+from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import (
     DecodedFrame,
     _DECODE_END,
@@ -28,6 +29,7 @@ def _decoder_worker(
     encode_queue: queue.Queue[Any],
     error_queue: queue.Queue[BaseException],
     stop_event: threading.Event,
+    metrics: PipelineMetrics,
 ) -> None:
     del encode_queue
     try:
@@ -44,12 +46,14 @@ def _decoder_worker(
         )
         try:
             source_index = start_source_frame
-            while not stop_event.is_set():
-                frame = reader.read_frame()
-                if frame is None:
-                    break
-                _queue_put(decode_queue, DecodedFrame(source_index=source_index, frame=frame), stop_event)
-                source_index += 1
+            with metrics.timed("decode"):
+                while not stop_event.is_set():
+                    frame = reader.read_frame()
+                    if frame is None:
+                        break
+                    _queue_put(decode_queue, DecodedFrame(source_index=source_index, frame=frame), stop_event)
+                    metrics.set_queue_depth("decode", decode_queue.qsize())
+                    source_index += 1
         finally:
             reader.close()
 

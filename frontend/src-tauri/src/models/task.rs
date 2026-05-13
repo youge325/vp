@@ -32,6 +32,16 @@ pub struct TaskProgressPayload {
     pub stage_index: u64,
     #[ts(type = "number")]
     pub stage_total: u64,
+    /// Phase D.2.3 — optional pipeline observability bag. Carries the
+    /// snapshot from ``backend/app/processing/streaming/metrics.py``:
+    /// queue depths, processed-frame counter, measured fps, elapsed
+    /// seconds, per-stage durations. Free-form so the schema can evolve
+    /// without forcing a Rust + ts-rs roundtrip every iteration; UI
+    /// consumers should treat unknown sub-keys as best-effort.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[ts(type = "Record<string, unknown> | null")]
+    pub metrics: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]

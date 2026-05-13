@@ -18,6 +18,7 @@ from ._constants import (
     CHOICE_LINE_RE,
 )
 from ._progress import _coerce_default_value, _coerce_number
+from ._run import run_ffmpeg_command
 
 logger = get_logger(__name__)
 
@@ -36,24 +37,6 @@ def _probe_cache_key(input_path: str) -> tuple[str, int, int] | None:
     except OSError:
         return None
     return (os.path.abspath(input_path), stat.st_mtime_ns, stat.st_size)
-
-
-def _run_command(cmd: list[str], *, timeout: int = 3600) -> subprocess.CompletedProcess[str]:
-    logger.debug("Running FFmpeg command: %s", " ".join(cmd))
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=False,
-        **hidden_subprocess_kwargs(),
-    )
-    if result.returncode != 0:
-        message = result.stderr.strip() or result.stdout.strip()
-        raise RuntimeError(f"FFmpeg command failed ({result.returncode}): {message}")
-    return result
 
 
 def get_video_info(
@@ -75,7 +58,7 @@ def get_video_info(
         "-show_streams",
         input_path,
     ]
-    result = _run_command(cmd)
+    result = run_ffmpeg_command(cmd)
     try:
         info = json.loads(result.stdout)
     except json.JSONDecodeError:
@@ -152,7 +135,7 @@ def get_frame_count(
             "json",
             input_path,
         ]
-        result = _run_command(cmd)
+        result = run_ffmpeg_command(cmd)
         try:
             data = json.loads(result.stdout)
             streams = data.get("streams", [])
@@ -188,7 +171,7 @@ def list_codec_names(ffmpeg_path: str, mode: str) -> list[str]:
     if mode not in {"encoders", "decoders"}:
         raise ValueError(f"Unsupported codec list mode: {mode}")
     cmd = [ffmpeg_path, "-hide_banner", f"-{mode}"]
-    result = _run_command(cmd, timeout=30)
+    result = run_ffmpeg_command(cmd, timeout=30)
     names: list[str] = []
     for line in result.stdout.splitlines():
         match = CODEC_LIST_RE.match(line)
@@ -198,7 +181,7 @@ def list_codec_names(ffmpeg_path: str, mode: str) -> list[str]:
 
 
 def list_hwaccels(ffmpeg_path: str) -> list[str]:
-    result = _run_command([ffmpeg_path, "-hide_banner", "-hwaccels"], timeout=30)
+    result = run_ffmpeg_command([ffmpeg_path, "-hide_banner", "-hwaccels"], timeout=30)
     hwaccels: list[str] = []
     started = False
     for line in result.stdout.splitlines():
@@ -216,7 +199,7 @@ def list_hwaccels(ffmpeg_path: str) -> list[str]:
 def describe_codec(ffmpeg_path: str, mode: str, name: str) -> str:
     if mode not in {"encoder", "decoder"}:
         raise ValueError(f"Unsupported codec help mode: {mode}")
-    result = _run_command([ffmpeg_path, "-hide_banner", "-h", f"{mode}={name}"], timeout=30)
+    result = run_ffmpeg_command([ffmpeg_path, "-hide_banner", "-h", f"{mode}={name}"], timeout=30)
     return result.stdout
 
 

@@ -11,27 +11,10 @@ from app.utils.logger import get_logger
 from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
 from ._progress import _format_bitrate
+from ._run import run_ffmpeg_command
 from .io import _FFmpegPipeBase
 
 logger = get_logger(__name__)
-
-
-def _run_command(cmd: list[str], *, timeout: int = 3600) -> subprocess.CompletedProcess[str]:
-    logger.debug("Running FFmpeg command: %s", " ".join(cmd))
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=False,
-        **hidden_subprocess_kwargs(),
-    )
-    if result.returncode != 0:
-        message = result.stderr.strip() or result.stdout.strip()
-        raise RuntimeError(f"FFmpeg command failed ({result.returncode}): {message}")
-    return result
 
 
 def _build_option_args(options: dict[str, Any]) -> list[str]:
@@ -123,7 +106,7 @@ def build_encode_output_args(output_path: str, encode_config: dict[str, Any] | N
 def extract_audio(ffmpeg_path: str, input_path: str, output_path: str) -> str | None:
     cmd = [ffmpeg_path, "-i", input_path, "-vn", "-acodec", "copy", output_path, "-y"]
     try:
-        _run_command(cmd)
+        run_ffmpeg_command(cmd)
     except Exception as exc:  # pragma: no cover - defensive boundary
         logger.warning("Audio extraction failed: %s", exc)
         return None
@@ -151,7 +134,7 @@ def merge_audio(ffmpeg_path: str, video_path: str, audio_path: str, output_path:
         output_path,
         "-y",
     ]
-    _run_command(cmd)
+    run_ffmpeg_command(cmd)
     return output_path
 
 
@@ -190,7 +173,7 @@ def concat_videos(ffmpeg_path: str, segment_paths: list[str], output_path: str) 
             output_path,
             "-y",
         ]
-        _run_command(cmd)
+        run_ffmpeg_command(cmd)
         return output_path
     finally:
         if list_file_path and os.path.isfile(list_file_path):
@@ -221,7 +204,7 @@ def transcode_video(
         cmd.extend(["-r", str(output_fps)])
     cmd.extend(encode_output_args)
     if progress_callback is None:
-        _run_command(cmd)
+        run_ffmpeg_command(cmd)
         return output_path
 
     process = subprocess.Popen(
@@ -260,5 +243,5 @@ def convert_format(
         output_path,
         "-y",
     ]
-    _run_command(cmd)
+    run_ffmpeg_command(cmd)
     return output_path

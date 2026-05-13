@@ -22,6 +22,7 @@ from app.cli.defaults import (
 )
 from app.config import settings
 from app.errors import TaskErrorCode, emit_error
+from app.processing.streaming.metrics import PipelineMetrics
 from app.protocol.reporter import CliProgressReporter
 from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.file_utils import get_output_path
@@ -40,6 +41,7 @@ class ProcessingPlan:
     expected_output_frames: int
     progress_reporter: CliProgressReporter
     progress_callbacks: list[Callable[[int, int], None]]
+    metrics: PipelineMetrics
 
 
 def _get_onnx_model_name(config: dict[str, Any]) -> str | None:
@@ -206,7 +208,14 @@ def build_plan(
     output_dir, output_path = _resolve_output_paths(args, input_path, output_config, encode_config)
 
     multi, encode_fps, _interpolated_fps, need_resample = _resolve_fps_and_multi(workflow_config, ffmpeg, input_path)
-    workflow_config["interpolation"]["multi"] = multi
+    # Phase D.2.1 — avoid mutating the inbound dict; downstream consumers
+    # (``process_video_streaming``, planning helpers re-running on a
+    # retry path) should not observe a half-modified config. Returning a
+    # shallow + nested copy keeps the read-only contract obvious.
+    workflow_config = {
+        **workflow_config,
+        "interpolation": {**workflow_config["interpolation"], "multi": multi},
+    }
     final_output_fps = encode_fps if need_resample else None
 
     expected_output_frames = _resolve_expected_output_frames(
@@ -216,7 +225,11 @@ def build_plan(
         processing_steps=processing_steps,
         final_output_fps=final_output_fps,
     )
-    progress_reporter = CliProgressReporter(expected_output_frames)
+    # Phase D.2.3 — single PipelineMetrics instance shared between the
+    # reporter (read-side: snapshot rides on each NDJSON progress frame)
+    # and the workers (write-side: queue depth / processed frames).
+    metrics = PipelineMetrics()
+    progress_reporter = CliProgressReporter(expected_output_frames, metrics=metrics)
 
     # Phase C.1.3:per-stage 独立闭包,每次 update 前先 set_stage,
     # 让 NDJSON `progress.stageIndex/stageTotal` 真实反映当前阶段位置。
@@ -240,4 +253,5 @@ def build_plan(
         expected_output_frames=expected_output_frames,
         progress_reporter=progress_reporter,
         progress_callbacks=progress_callbacks,
+        metrics=metrics,
     )

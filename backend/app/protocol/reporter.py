@@ -17,6 +17,7 @@ from __future__ import annotations
 import sys
 import time
 
+from app.processing.streaming.metrics import PipelineMetrics
 from app.protocol import ndjson
 
 TERMINAL_PROGRESS_PREFIX = "[VP_PROGRESS]"
@@ -52,9 +53,13 @@ class CliProgressReporter:
     元组,供 streaming pipeline 在切换阶段时调用 ``set_stage`` 更新。这修复
     了原来 ``stage_index`` 在 NDJSON 中永远是 1 的 bug——以前 ``process.py``
     给所有阶段同一份 callback,reporter 无从得知正在汇报的是哪个 stage。
+
+    Phase D.2.3:reporter 可选持有一个 ``PipelineMetrics`` 引用,update 时
+    把当前 snapshot 一并塞进 NDJSON ``progress`` 帧的 ``metrics`` 字段。
+    metrics 由 pipeline 在构造 reporter 时注入,reporter 不主动创建。
     """
 
-    def __init__(self, total_frames: int) -> None:
+    def __init__(self, total_frames: int, metrics: PipelineMetrics | None = None) -> None:
         self.total_frames = max(int(total_frames), 1)
         self.current_frame = 0
         self.started_at = time.time()
@@ -64,6 +69,8 @@ class CliProgressReporter:
         self._stage_name = "Encoding"
         self._stage_index = 1
         self._stage_total = 1
+        # Phase D.2.3:可选 metrics 引用。
+        self._metrics = metrics
 
     def set_stage(self, name: str, index: int, total: int) -> None:
         """Switch the current stage label / index / total.
@@ -113,6 +120,7 @@ class CliProgressReporter:
             stage=self._stage_name,
             stage_index=self._stage_index,
             stage_total=self._stage_total,
+            metrics=self._metrics.snapshot() if self._metrics is not None else None,
         )
 
     def finish(self, processed_frames: int) -> None:
