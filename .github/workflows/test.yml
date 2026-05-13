@@ -33,6 +33,29 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      # Phase D.5.2 — generated TS types are .gitignore'd; ts-rs only
+      # produces them when ``cargo test`` runs. Without this step, a PR
+      # that renames or adds a Rust IPC type would still pass ``npm run
+      # test`` (vitest only treats type imports as elidable), and the
+      # drift would only surface during the much-later Build job.
+      - name: Regenerate TypeScript types from Rust (ts-rs)
+        run: cargo test --lib --quiet
+        working-directory: frontend/src-tauri
+
       - name: Run frontend tests
         run: npm run test
         working-directory: frontend
+
+      # ``npm run build`` runs ``vue-tsc`` first, which is the strictest
+      # type check we have. Putting it after ts-rs regeneration means a
+      # mismatched Rust ↔ TS schema will fail here in the CI rather than
+      # in the Build workflow that runs much later.
+      - name: Type-check frontend (vue-tsc + vite build)
+        run: npm run build
+        working-directory: frontend
+
+      # Phase D.5.1 — TaskErrorCode 三层一致性 already runs as a
+      # pre-commit hook; surface the same check in CI so PR authors
+      # who skip hooks (--no-verify) can't sneak drift in.
+      - name: TaskErrorCode three-layer consistency check
+        run: python scripts/check_error_code_drift.py

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import type { ResumeConflictAction, ResumeConflictDescriptor } from '@/types/domain/batch'
 
 const props = defineProps<{
@@ -35,19 +35,80 @@ const message = computed(() => {
 function handle(action: ResumeConflictAction): void {
   emit('resolve', action)
 }
+
+// Phase D.5.4 — a11y polish:
+// - Esc resolves to ``cancel`` so keyboard users can dismiss a stuck
+//   dialog without mouse navigation.
+// - Overlay click (outside the dialog box) also cancels — matches the
+//   pattern the system file dialogs already use.
+// - Default focus lands on the most-likely action: ``resume`` when
+//   it's offered, otherwise the destructive ``fresh`` (since at that
+//   point the user is forced to choose between overwrite / skip /
+//   cancel).
+// - ``aria-labelledby`` / ``aria-describedby`` wire the title +
+//   message into the dialog for screen readers.
+const primaryButtonRef = ref<HTMLButtonElement | null>(null)
+const titleId = 'resume-conflict-title'
+const messageId = 'resume-conflict-message'
+const previouslyFocused = ref<HTMLElement | null>(null)
+
+function handleEscape(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    handle('cancel')
+  }
+}
+
+onMounted(async () => {
+  previouslyFocused.value = (document.activeElement as HTMLElement | null) ?? null
+  document.addEventListener('keydown', handleEscape)
+  await nextTick()
+  primaryButtonRef.value?.focus()
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleEscape)
+  // Restore focus to the element that triggered the dialog so the user
+  // returns to their place in the form (e.g. the Render view start button).
+  previouslyFocused.value?.focus()
+})
 </script>
 
 <template>
-  <div class="resume-conflict-overlay" role="dialog" aria-modal="true">
+  <div
+    class="resume-conflict-overlay"
+    role="dialog"
+    aria-modal="true"
+    :aria-labelledby="titleId"
+    :aria-describedby="messageId"
+    @click.self="handle('cancel')"
+  >
     <div class="resume-conflict-dialog">
-      <h3 class="resume-conflict-title">{{ headline }}</h3>
-      <p class="resume-conflict-message">{{ message }}</p>
+      <h3 :id="titleId" class="resume-conflict-title">{{ headline }}</h3>
+      <p :id="messageId" class="resume-conflict-message">{{ message }}</p>
       <p class="resume-conflict-output" v-if="hasResume">{{ descriptor.outputPath }}</p>
       <div class="resume-conflict-actions">
-        <button v-if="hasResume" class="primary-button" @click="handle('resume')">继续续传</button>
-        <button class="ghost-button" @click="handle('fresh')">{{ hasResume ? '重新开始' : '覆盖' }}</button>
-        <button class="ghost-button" @click="handle('skip')">跳过此任务</button>
-        <button class="ghost-button" @click="handle('cancel')">取消批次</button>
+        <button
+          v-if="hasResume"
+          ref="primaryButtonRef"
+          class="primary-button"
+          type="button"
+          @click="handle('resume')"
+        >
+          继续续传
+        </button>
+        <button
+          v-else
+          ref="primaryButtonRef"
+          class="ghost-button"
+          type="button"
+          @click="handle('fresh')"
+        >
+          覆盖
+        </button>
+        <button v-if="hasResume" class="ghost-button" type="button" @click="handle('fresh')">重新开始</button>
+        <button class="ghost-button" type="button" @click="handle('skip')">跳过此任务</button>
+        <button class="ghost-button" type="button" @click="handle('cancel')">取消批次</button>
       </div>
     </div>
   </div>

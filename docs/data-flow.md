@@ -96,51 +96,80 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 
 ### build_process_command
 
-[`tasks/builder.rs`](../frontend/src-tauri/src/tasks/builder.rs) 的 `build_process_command()` 将 `TaskRequest` 序列化为 CLI 参数:
+[`tasks/builder.rs`](../frontend/src-tauri/src/tasks/builder.rs) 的 `build_process_command()` 把 `TaskRequest` 拆成两份:
+
+- 命令行参数:`-m app process --input <path> --config-stdin [--resume-mode <mode>]`
+- stdin payload:单个 JSON 对象 `{decode, workflow, encode, output}`
 
 ```rust
-fn build_process_command(paths, request) -> Command {
+pub fn build_process_command(paths, request) -> (Command, String) {
     command.args(["-m", "app", "process"]);
     command.args(["--input", &request.input_path]);
-
-    let decode_json = serde_json::to_string(&request.decode_config)?;
-    let workflow_json = serde_json::to_string(&request.workflow_config)?;
-    let encode_json = serde_json::to_string(&request.encode_config)?;
-    let output_json = serde_json::to_string(&request.output_config)?;
-
-    command.args(["--decode-config-json", &decode_json]);
-    command.args(["--workflow-config-json", &workflow_json]);
-    command.args(["--encode-config-json", &encode_json]);
-    command.args(["--output-config-json", &output_json]);
-
-    if let Some(mode) = request.resume_mode.as_deref() {
+    command.arg("--config-stdin");
+    if let Some(mode) = &request.resume_mode {
         command.args(["--resume-mode", mode]);
     }
+    command.stdin(Stdio::piped());
+
+    let stdin_payload = serde_json::to_string(&json!({
+        "decode":   &request.decode_config,
+        "workflow": &request.workflow_config,
+        "encode":   &request.encode_config,
+        "output":   &request.output_config,
+    }))?;
+    (command, stdin_payload)
 }
 ```
 
-四段 JSON 通过命令行参数直接传递，避免文件 I/O 和路径编码问题。`serde_json::to_string` 会自动将 Rust 的 snake_case 字段名转换为 camelCase（因为结构体上标注了 `#[serde(rename_all = "camelCase")]`）。
+Phase D.3.1 把 4 段配置从命令行参数移到了 stdin。原因是 Windows 命令行
+长度上限约 32 KiB,而 `workflowConfig` 的 preprocess/postprocess filter
+链在用户加多滤镜后非常容易溢出。stdin 没有大小限制,`serde_json::to_string`
+仍然把 Rust snake_case 自动转 camelCase(`#[serde(rename_all = "camelCase")]`)。
+
+旧的 `--decode-config-json` / `--workflow-config-json` 等参数仍被 Python
+parser 保留为兼容入口,手动 CLI 调用和已有测试不需要改动;Rust 端永远走
+stdin 通道。
+
+### spawn 后立即写 stdin
+
+[`tasks/runner.rs::spawn_task`](../frontend/src-tauri/src/tasks/runner.rs) 在
+`spawn_no_window_group(&mut command)` 之后,先把 payload 写入子进程
+stdin 并 drop 句柄(EOF),再开始读 stdout/stderr。顺序很重要 — Python
+子进程启动后立刻 `sys.stdin.read()`,如果不先写 stdin 就开始等 stdout,
+父子进程会互相 deadlock。
 
 ### inspect-output 命令构建
 
-[`tasks/builder.rs::build_inspect_output_args()`](../frontend/src-tauri/src/tasks/builder.rs) 用于续传状态预检查,结构与 `process` 命令类似但调用 `inspect-output` 子命令。
+[`tasks/builder.rs::build_inspect_output_args()`](../frontend/src-tauri/src/tasks/builder.rs)
+返回 `(Vec<String>, String)`,同样把 4 段配置打成 JSON 走 stdin。
+Tauri 端的 `check_resume_state` 命令通过 `run_single_cli_command(.., Some(payload))`
+触发 stdin 模式。
 
 ## Python 层：解析与规划
 
 ### 配置解析
 
-Python CLI 在 [`backend/app/cli/parser.py`](../backend/app/cli/parser.py) 中定义 `process` 子命令的参数解析器,实际处理位于 [`backend/app/cli/commands/process.py`](../backend/app/cli/commands/process.py):
+[`backend/app/cli/parser.py`](../backend/app/cli/parser.py) 的 `_add_shared_planning_args` 注册以下参数:
 
 ```python
 parser.add_argument("--input", required=True)
-parser.add_argument("--decode-config-json", type=str, default="{}")
-parser.add_argument("--workflow-config-json", type=str, default="{}")
-parser.add_argument("--encode-config-json", type=str, default="{}")
-parser.add_argument("--output-config-json", type=str, default="{}")
+parser.add_argument("--config-stdin", action="store_true")
+parser.add_argument("--decode-config-json", default=None)
+parser.add_argument("--workflow-config-json", default=None)
+parser.add_argument("--encode-config-json", default=None)
+parser.add_argument("--output-config-json", default=None)
 parser.add_argument("--resume-mode", choices=["auto", "force-fresh", "force-resume"])
 ```
 
-内部通过 `_load_json_arg()` 将 JSON 字符串解析为 Python dict，再用 Pydantic 模型校验。
+[`_process_validation.py::collect_config_sections`](../backend/app/cli/commands/_process_validation.py)
+是 wire 格式抽象层:
+
+- `--config-stdin` 设置 → 从 `sys.stdin.read()` 读 JSON 对象,拆出 4 段
+- 否则 → 从 `--*-config-json` 各自读
+
+两种路径都汇聚到 `_load_json_arg`,通过 Pydantic 模型校验,得到 4 个
+camelCase dict。Tauri host 永远走 stdin 路径;手动 CLI 与现有 spec 仍走
+旧路径。
 
 ### Pydantic 模型校验
 

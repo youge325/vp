@@ -1,6 +1,16 @@
 // 应用层 — 批处理编排:把 batch-runner 与 stores、IPC 装配,提供 listener 桥。
+//
+// Phase D.4.1 — runner / detach handle 提升到模块级单例。之前每个
+// caller(useBootstrap / useStepRailState / useAppShellStatus /
+// TaskConsole / RenderModuleView)都各自构造一个 BatchRunner closure,
+// 跨 caller 调用 ``startBatch`` / ``pauseCurrentTask`` 时实际上各操作
+// 不同实例,容易出现"以为在控制同一任务但其实是 R1/R2 各跑各的"。
+// 现在 5 处 caller 共享同一 runner;listeners 也只挂一份。
+//
+// pinia store 本来就是单例,模块级缓存 runner 不会泄漏过期的 store 引用。
 
-import { computed, onScopeDispose } from 'vue'
+import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import type { UnlistenFn } from '@/lib/ipc'
 import { listenTaskEvents } from '@/lib/ipc/events'
 import { taskIpc } from '@/lib/ipc/endpoints/task'
@@ -9,21 +19,57 @@ import { useTaskStore } from '@/stores/task'
 import { createBatchRunner, type BatchRunner } from '@/services/task/batch-runner'
 import { buildTaskRequest } from '@/services/task/request-builder'
 
+// Module-level singletons. The factory in ``ensureRunner`` runs at most
+// once per page load; subsequent calls (5 different composable sites)
+// return the same instance.
+let cachedRunner: BatchRunner | null = null
+let detachHandle: UnlistenFn | null = null
+
+function ensureRunner(): BatchRunner {
+  if (cachedRunner) {
+    return cachedRunner
+  }
+  // ``useXxxStore`` returns the pinia singleton, so resolving stores
+  // here (instead of taking them as arguments) keeps the singleton
+  // contract while preserving Pinia's lazy activation.
+  const mediaStore = useMediaStore()
+  const taskStore = useTaskStore()
+  cachedRunner = createBatchRunner({
+    startTask: taskIpc.start,
+    cancelTask: taskIpc.cancel,
+    pauseTask: taskIpc.pause,
+    resumeTask: taskIpc.resume,
+    checkResume: taskIpc.checkResume,
+    openOutputLocation: taskIpc.openOutputLocation,
+    getMediaItem: (id) => mediaStore.findItem(id),
+    setItemTaskState: (id, state) => mediaStore.setItemTaskState(id, state),
+    setItemIssue: (id, issue) => mediaStore.setItemIssue(id, issue),
+    setItemLastOutputPath: (id, path) => mediaStore.setItemLastOutputPath(id, path),
+    resetItemRunState: (id, preserveLogs) => mediaStore.resetItemRunState(id, preserveLogs),
+    resetItemsRunState: (ids, preserveLogs) => mediaStore.resetItemsRunState(ids, preserveLogs),
+    setActiveItem: (id) => mediaStore.setActive(id),
+    getActiveItemId: () => mediaStore.activeItemId,
+    getBatch: () => taskStore.batch,
+    setBatch: (partial) => taskStore.setBatch(partial),
+    getRuntimeIds: () => taskStore.batchRuntimeIds,
+    setRuntimeIds: (ids) => taskStore.setRuntimeIds(ids),
+    setPendingConflict: (descriptor) => taskStore.setPendingConflict(descriptor),
+    buildRequest: (item, resumeMode) => buildTaskRequest(item, resumeMode),
+  })
+  return cachedRunner
+}
+
 export function useTaskOrchestrator() {
   const mediaStore = useMediaStore()
   const taskStore = useTaskStore()
 
-  let cachedRunner: BatchRunner | null = null
-  let detachHandle: UnlistenFn | null = null
-
-  onScopeDispose(() => {
-    detachHandle?.()
-    detachHandle = null
-    cachedRunner = null
-  })
+  // ``storeToRefs`` keeps the reactive bindings for ref / computed fields
+  // when callers destructure the returned object — without it,
+  // ``pendingConflict`` would lose its reactivity at the destructure
+  // site.
+  const { pendingConflict } = storeToRefs(taskStore)
 
   const batch = taskStore.batch
-  const pendingConflict = taskStore.pendingConflict
   const currentTaskItem = computed(() =>
     mediaStore.mediaItems.find((item) => item.id === taskStore.batch.currentId) ?? null,
   )
@@ -36,63 +82,37 @@ export function useTaskOrchestrator() {
   )
   const batchTotal = computed(() => taskStore.batchRuntimeIds.length || mediaStore.selectedItems.length)
 
-  function getRunner(): BatchRunner {
-    if (cachedRunner) {
-      return cachedRunner
-    }
-    cachedRunner = createBatchRunner({
-      startTask: taskIpc.start,
-      cancelTask: taskIpc.cancel,
-      pauseTask: taskIpc.pause,
-      resumeTask: taskIpc.resume,
-      checkResume: taskIpc.checkResume,
-      openOutputLocation: taskIpc.openOutputLocation,
-      getMediaItem: (id) => mediaStore.findItem(id),
-      setItemTaskState: (id, state) => mediaStore.setItemTaskState(id, state),
-      setItemIssue: (id, issue) => mediaStore.setItemIssue(id, issue),
-      setItemLastOutputPath: (id, path) => mediaStore.setItemLastOutputPath(id, path),
-      resetItemRunState: (id, preserveLogs) => mediaStore.resetItemRunState(id, preserveLogs),
-      resetItemsRunState: (ids, preserveLogs) => mediaStore.resetItemsRunState(ids, preserveLogs),
-      setActiveItem: (id) => mediaStore.setActive(id),
-      getActiveItemId: () => mediaStore.activeItemId,
-      getBatch: () => taskStore.batch,
-      setBatch: (partial) => taskStore.setBatch(partial),
-      getRuntimeIds: () => taskStore.batchRuntimeIds,
-      setRuntimeIds: (ids) => taskStore.setRuntimeIds(ids),
-      setPendingConflict: (descriptor) => taskStore.setPendingConflict(descriptor),
-      buildRequest: (item, resumeMode) => buildTaskRequest(item, resumeMode),
-    })
-    return cachedRunner
-  }
-
   async function startBatch(): Promise<void> {
     if (!canStartBatch.value) {
       return
     }
-    await getRunner().start(mediaStore.selectedIds)
+    await ensureRunner().start(mediaStore.selectedIds)
   }
 
   async function pauseCurrentTask(): Promise<void> {
-    await getRunner().pause()
+    await ensureRunner().pause()
   }
 
   async function resumeCurrentTask(): Promise<void> {
-    await getRunner().resume()
+    await ensureRunner().resume()
   }
 
   async function interruptBatch(): Promise<void> {
-    await getRunner().cancel()
+    await ensureRunner().cancel()
   }
 
   async function resolveConflict(action: Parameters<BatchRunner['resolveConflict']>[0]): Promise<void> {
-    await getRunner().resolveConflict(action)
+    await ensureRunner().resolveConflict(action)
   }
 
   async function attachTaskListeners(): Promise<void> {
+    // Idempotent across callers — only the first attach actually wires
+    // the IPC listener; subsequent calls (e.g. from a remounted view)
+    // are no-ops.
     if (detachHandle) {
       return
     }
-    const runner = getRunner()
+    const runner = ensureRunner()
     detachHandle = await listenTaskEvents({
       onProgress: (payload) => runner.onProgress(payload),
       onLog: (payload) => runner.onLog(payload),
@@ -107,6 +127,12 @@ export function useTaskOrchestrator() {
     detachHandle?.()
     detachHandle = null
   }
+
+  // Note: no ``onScopeDispose`` here. Tearing down the listener from any
+  // unmounting view would knock out the singleton for everyone else.
+  // ``useBootstrap`` owns the explicit detach on app shutdown via
+  // its ``onBeforeUnmount`` hook; that's the only caller authorised
+  // to detach.
 
   return {
     batch,
