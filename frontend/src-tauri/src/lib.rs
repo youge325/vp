@@ -25,10 +25,18 @@ pub fn run() {
             // dropping them on the floor. Without ffmpeg / a Python runtime
             // every invoke would later fail with a generic error; aborting
             // setup gives the user a single clear startup error.
-            if let Err(error) = resolve_runtime_paths(&app_handle) {
-                eprintln!("VP Workbench failed to resolve runtime paths: {error}");
-                return Err(Box::new(error) as Box<dyn StdError>);
-            }
+            //
+            // Phase D.3.6 — resolve once at startup and stash the result in
+            // managed state. Previous code re-ran ``resolve_runtime_paths``
+            // (which does ~10 filesystem stats) inside every Tauri command.
+            let paths = match resolve_runtime_paths(&app_handle) {
+                Ok(paths) => paths,
+                Err(error) => {
+                    eprintln!("VP Workbench failed to resolve runtime paths: {error}");
+                    return Err(Box::new(error) as Box<dyn StdError>);
+                }
+            };
+            app.manage(paths);
 
             if let Ok(resource_dir) = app_handle.path().resource_dir() {
                 // Was previously an Emitter call that fired before any

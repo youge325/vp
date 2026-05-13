@@ -74,26 +74,12 @@ pub enum TaskErrorCode {
     PersistenceFailed,
 }
 
-impl TaskErrorCode {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::MissingFfmpeg => "missing_ffmpeg",
-            Self::MissingModel => "missing_model",
-            Self::MissingTensorBackend => "missing_tensor_backend",
-            Self::MissingPythonDependency => "missing_python_dependency",
-            Self::Cancelled => "cancelled",
-            Self::ProcessFailed => "process_failed",
-            Self::SpawnFailed => "spawn_failed",
-            Self::RuntimePanic => "runtime_panic",
-            Self::InvalidInput => "invalid_input",
-            Self::InvalidConfig => "invalid_config",
-            Self::ResumeConflict => "resume_conflict",
-            Self::IoError => "io_error",
-            Self::SchemaMismatch => "schema_mismatch",
-            Self::PersistenceFailed => "persistence_failed",
-        }
-    }
-}
+// Phase D.3.5 — ``TaskErrorCode::as_str`` was a hand-maintained string
+// table that mirrored ``#[serde(rename_all = "snake_case")]``. It had
+// zero call sites in the crate (every emit uses serde via
+// ``TaskErrorPayload``) and was a known drift hazard. Removed; if a
+// future caller needs the string, use ``serde_json::to_value`` or
+// ``serde_plain::to_string`` instead.
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export, export_to = "../../src/types/generated/")]

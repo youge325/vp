@@ -30,4 +30,9 @@ impl TaskEventName {
     }
 }
 
-pub const TERMINAL_PROGRESS_PREFIX: &str = "[VP_PROGRESS]";
+// Phase D.3.5 — ``TERMINAL_PROGRESS_PREFIX`` was a leftover constant
+// from before the NDJSON envelope took over progress reporting. The
+// Rust side never reads it (the prefix only matters inside Python's
+// reporter and inside frontend TaskConsole log-folding logic), so
+// keeping it here just invited bit-rot. The frontend has its own copy
+// at ``frontend/src/types/protocol/events.ts``.
