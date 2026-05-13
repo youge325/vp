@@ -118,10 +118,51 @@ pub async fn load_environment_cache(
 /// ``tempfile::NamedTempFile::persist`` 在所有平台上都是同步 syscall(Windows 走
 /// ``MoveFileEx``,POSIX 走 ``rename``),Phase C.2.2 把这一段包到
 /// ``tokio::task::spawn_blocking`` 避免阻塞 tokio worker。
+///
+/// Phase D.3.7 — Windows 上 OneDrive / 其它云盘代理偶尔会让 ``persist`` 拿
+/// 到 ``Access Denied``。我们退到 ``%TEMP%/vp-workbench/<basename>``,用同样
+/// 的原子写入语义重试一次。fallback 触发时 ``eprintln!`` 记一条 breadcrumb,
+/// 避免静默吞掉问题(Tauri 没法在 storage 层直接 emit ``task-log``,因为
+/// AppHandle 没参数到这里;若未来 caller 需要可视化,可以把
+/// ``actual_path`` 返回出去)。
 async fn atomic_write_json<T>(path: &Path, value: &T) -> Result<(), ShellError>
 where
     T: Serialize,
 {
+    let data = serde_json::to_vec_pretty(value)?;
+    match atomic_write_bytes(path, &data).await {
+        Ok(()) => Ok(()),
+        Err(primary_error) => {
+            let fallback_path = fallback_persistence_path(path);
+            if fallback_path == path {
+                // No usable fallback location — propagate the original error.
+                return Err(primary_error);
+            }
+            match atomic_write_bytes(&fallback_path, &data).await {
+                Ok(()) => {
+                    eprintln!(
+                        "VP Workbench persistence fell back to {} (primary {} failed: {})",
+                        fallback_path.display(),
+                        path.display(),
+                        primary_error,
+                    );
+                    Ok(())
+                }
+                Err(_) => Err(primary_error),
+            }
+        }
+    }
+}
+
+fn fallback_persistence_path(path: &Path) -> PathBuf {
+    let basename = path
+        .file_name()
+        .map(|name| PathBuf::from(name))
+        .unwrap_or_else(|| PathBuf::from("vp-workbench.json"));
+    env::temp_dir().join("vp-workbench").join(basename)
+}
+
+async fn atomic_write_bytes(path: &Path, data: &[u8]) -> Result<(), ShellError> {
     let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
     fs::create_dir_all(&dir).await.map_err(|error| {
         ShellError::Persistence(format!(
@@ -130,13 +171,11 @@ where
         ))
     })?;
 
-    // 序列化在异步上下文中执行,数据量小不会卡 runtime
-    let data = serde_json::to_vec_pretty(value)?;
-
     // 写到 ``<dir>/<uuid>.tmp`` 后原子 rename。两步都包成 spawn_blocking 来
     // 避免在 worker 线程内阻塞;persist() 本身没有 async 形式。
     let target = path.to_path_buf();
     let dir_for_blocking = dir.clone();
+    let data = data.to_vec();
     tokio::task::spawn_blocking(move || -> Result<(), ShellError> {
         let mut temp = tempfile::NamedTempFile::new_in(&dir_for_blocking).map_err(|error| {
             ShellError::Persistence(format!(

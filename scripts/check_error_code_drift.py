@@ -29,12 +29,15 @@ PY_PATH = ROOT / "backend" / "app" / "errors" / "_codes.py"
 TS_PATH = ROOT / "frontend" / "src" / "types" / "generated" / "TaskErrorCode.ts"
 
 # 注意:正则被特意写得"严"以拒绝畸形文件。
-# Rust:  捕获 ``pub enum TaskErrorCode { ... }`` 中所有 PascalCase variant 名,
-#        然后用 as_str() 大括号块里的字符串字面量做权威映射(因为 PascalCase →
-#        snake_case 在 Rust 通过 serde 派生,as_str() 是显式的字符串值)。
-_RUST_AS_STR_PATTERN = re.compile(
-    r"Self::(?P<variant>[A-Z][A-Za-z0-9]+)\s*=>\s*\"(?P<code>[a-z_]+)\"",
+# Rust:  从 ``pub enum TaskErrorCode { ... }`` 块中提取 PascalCase variant 名,
+#        再按 ``#[serde(rename_all = "snake_case")]`` 的语义本地转换。Phase D.3.5
+#        删除了之前手维护的 ``as_str()`` 字符串映射(零调用方、易漂移),所以脚本
+#        现在直接消费 enum 定义本身,不再需要 as_str() 同步。
+_RUST_ENUM_BLOCK_PATTERN = re.compile(
+    r"pub\s+enum\s+TaskErrorCode\s*\{(?P<body>[^}]+)\}",
+    re.DOTALL,
 )
+_RUST_VARIANT_PATTERN = re.compile(r"\b(?P<variant>[A-Z][A-Za-z0-9]+)\b")
 # Python: ``CODE_NAME = "snake_case"``
 _PY_MEMBER_PATTERN = re.compile(
     r"^\s+[A-Z_]+\s*=\s*\"(?P<code>[a-z_]+)\"",
@@ -42,6 +45,18 @@ _PY_MEMBER_PATTERN = re.compile(
 )
 # TS:    union 字符串字面量:每一段 ``"snake_case"`` 用 ``|`` 串联
 _TS_LITERAL_PATTERN = re.compile(r"\"(?P<code>[a-z_]+)\"")
+
+
+def _pascal_to_snake(name: str) -> str:
+    """Mirror ``#[serde(rename_all = "snake_case")]`` on PascalCase variants.
+
+    Rust serde lower-cases each ASCII uppercase that follows a lowercase
+    letter (or starts the identifier), inserting underscores between
+    consecutive words. ``MissingFfmpeg`` -> ``missing_ffmpeg``,
+    ``IoError`` -> ``io_error``.
+    """
+    # Insert ``_`` before any uppercase preceded by a lowercase letter.
+    return re.sub(r"(?<=[a-z0-9])([A-Z])", r"_\1", name).lower()
 
 
 def _fail_parse(message: str) -> None:
@@ -56,18 +71,25 @@ def _read(path: Path) -> str:
 
 
 def collect_rust_codes(text: str) -> set[str]:
-    """从 ``as_str()`` 返回的字符串字面量集合提取 codes。
+    """从 ``pub enum TaskErrorCode { ... }`` 块提取变体名,本地 snake_case 化。
 
-    选择 ``as_str()`` 而非 ``#[derive(Serialize, rename_all=snake_case)]`` 推断,
-    是因为 as_str() 在 protocol 层被前后端直接使用,是最贴近 wire 的事实来源。
+    Phase D.3.5:不再依赖 ``TaskErrorCode::as_str()`` 显式字符串表 — 该
+    impl 已被删除,enum 上的 ``#[serde(rename_all = "snake_case")]`` 是
+    wire 唯一可信源。脚本复刻这个转换以便离线校验三层一致性。
     """
-    matches = _RUST_AS_STR_PATTERN.findall(text)
-    if not matches:
+    block_match = _RUST_ENUM_BLOCK_PATTERN.search(text)
+    if not block_match:
         _fail_parse(
-            'no `Self::Variant => "code"` arms found in task.rs; check whether '
-            "TaskErrorCode::as_str() impl was renamed or removed",
+            "could not locate `pub enum TaskErrorCode { ... }` block in task.rs; "
+            "check whether the enum was renamed or moved",
         )
-    return {code for _variant, code in matches}
+    body = block_match.group("body")
+    variants = _RUST_VARIANT_PATTERN.findall(body)
+    if not variants:
+        _fail_parse(
+            "no PascalCase variants found inside the TaskErrorCode enum body",
+        )
+    return {_pascal_to_snake(variant) for variant in variants}
 
 
 def collect_python_codes(text: str) -> set[str]:

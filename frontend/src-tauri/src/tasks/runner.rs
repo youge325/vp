@@ -11,11 +11,12 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::error::ShellError;
 use crate::models::{TaskErrorPayload, TaskLogPayload, TaskRequest};
+use crate::process_control;
 use crate::protocol::TaskEventName;
-use crate::runtime::{build_env_map, resolve_runtime_paths};
+use crate::runtime::{build_env_map, ResolvedRuntimePaths};
 use crate::tasks::builder::{apply_no_window, build_process_command, spawn_no_window_group};
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
-use crate::tasks::controller::spawn_task_controller;
+use crate::tasks::controller::{spawn_task_controller, WatchdogConfig};
 use crate::tasks::envelope::{parse_last_json_line, NdjsonEnvelope};
 use crate::tasks::handle::TaskHandle;
 use crate::tasks::state::{TaskControlKind, TaskControlMessage, TaskState};
@@ -25,15 +26,16 @@ pub type ProgressBeat = Arc<Mutex<Instant>>;
 
 pub async fn run_single_cli_command<R: Runtime>(
     app: &AppHandle<R>,
+    paths: &ResolvedRuntimePaths,
     args: &[String],
 ) -> Result<Value, ShellError> {
-    let paths = resolve_runtime_paths(app)?;
+    let _ = app; // Reserved for future per-app log routing.
     let mut command = Command::new(&paths.python_executable);
     command.args(["-m", "app"]);
     command.args(args);
     command.current_dir(&paths.backend_dir);
     command.stdin(Stdio::null());
-    command.envs(build_env_map(&paths));
+    command.envs(build_env_map(paths));
     apply_no_window(&mut command);
 
     let output = command.output().await.map_err(ShellError::Spawn)?;
@@ -59,6 +61,7 @@ pub async fn run_single_cli_command<R: Runtime>(
 pub async fn spawn_task<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, TaskState>,
+    paths: State<'_, ResolvedRuntimePaths>,
     request: TaskRequest,
 ) -> Result<(), ShellError> {
     {
@@ -70,7 +73,6 @@ pub async fn spawn_task<R: Runtime>(
         }
     }
 
-    let paths = resolve_runtime_paths(&app)?;
     let mut command = build_process_command(&paths, &request)?;
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
@@ -116,6 +118,8 @@ pub async fn spawn_task<R: Runtime>(
         stderr_capture,
         cancel_token,
         progress_beat,
+        process_control::default_controller(),
+        WatchdogConfig::from_env(),
     );
     Ok(())
 }

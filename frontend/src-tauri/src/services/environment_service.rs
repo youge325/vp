@@ -1,9 +1,9 @@
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Runtime, State};
 
 use crate::error::ShellError;
 use crate::models::{EnvironmentCheckPayload, EnvironmentCheckResult};
 use crate::persistence;
-use crate::runtime::resolve_runtime_paths;
+use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks;
 
 /// Tauri command wrapper.
@@ -16,16 +16,18 @@ use crate::tasks;
 #[allow(non_snake_case)]
 pub async fn check_environment<R: Runtime>(
     app: AppHandle<R>,
+    paths: State<'_, ResolvedRuntimePaths>,
     forceRefresh: bool,
 ) -> Result<EnvironmentCheckPayload, ShellError> {
-    check_environment_impl(app, forceRefresh).await
+    let paths = paths.inner().clone();
+    check_environment_impl(app, paths, forceRefresh).await
 }
 
 async fn check_environment_impl<R: Runtime>(
     app: AppHandle<R>,
+    paths: ResolvedRuntimePaths,
     force_refresh: bool,
 ) -> Result<EnvironmentCheckPayload, ShellError> {
-    let paths = resolve_runtime_paths(&app)?;
     let fingerprint = persistence::build_environment_fingerprint(&paths).await.ok();
     let app_data_dir = persistence::app_data_dir(&app).await.ok();
 
@@ -47,7 +49,7 @@ async fn check_environment_impl<R: Runtime>(
         }
     }
 
-    let raw = tasks::run_single_cli_command(&app, &[String::from("check")]).await?;
+    let raw = tasks::run_single_cli_command(&app, &paths, &[String::from("check")]).await?;
     let result = serde_json::from_value::<EnvironmentCheckResult>(raw).map_err(|error| {
         ShellError::SchemaValidation(format!(
             "Unable to deserialize environment check result: {error}"

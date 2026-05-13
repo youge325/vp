@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::models::{TaskCancelledPayload, TaskCancelledReason, TaskErrorPayload};
-use crate::process_control::{self, ProcessController};
+use crate::process_control::ProcessController;
 use crate::protocol::TaskEventName;
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
 use crate::tasks::runner::ProgressBeat;
@@ -19,8 +19,39 @@ use crate::tasks::state::{TaskControlKind, TaskControlMessage, TaskState};
 use crate::tasks::stderr::StderrCapture;
 
 const DEFAULT_STALL_TIMEOUT_SECS: u64 = 600;
-const WATCHDOG_POLL_INTERVAL_SECS: u64 = 5;
+const DEFAULT_WATCHDOG_POLL_INTERVAL_SECS: u64 = 5;
 const STALL_TIMEOUT_ENV: &str = "VP_TASK_STALL_TIMEOUT_SECS";
+
+/// Watchdog configuration for the task controller.
+///
+/// Phase D.3.2 — previously the poll interval was a hard-coded ``const``
+/// and the stall timeout was read from ``VP_TASK_STALL_TIMEOUT_SECS``
+/// directly inside ``spawn_task_controller``. Splitting them into a
+/// dedicated struct (a) makes the watchdog testable with millisecond
+/// timeouts instead of seconds and (b) lets future PRs source the
+/// config from app settings without touching the controller spawn site.
+#[derive(Debug, Clone, Copy)]
+pub struct WatchdogConfig {
+    pub poll_interval: Duration,
+    /// ``None`` disables the watchdog entirely (matches the legacy
+    /// ``VP_TASK_STALL_TIMEOUT_SECS=0`` opt-out).
+    pub stall_timeout: Option<Duration>,
+}
+
+impl WatchdogConfig {
+    pub fn from_env() -> Self {
+        Self {
+            poll_interval: Duration::from_secs(DEFAULT_WATCHDOG_POLL_INTERVAL_SECS),
+            stall_timeout: parse_stall_timeout(),
+        }
+    }
+}
+
+impl Default for WatchdogConfig {
+    fn default() -> Self {
+        Self::from_env()
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_task_controller<R: Runtime + 'static>(
@@ -32,8 +63,10 @@ pub fn spawn_task_controller<R: Runtime + 'static>(
     stderr_capture: StderrCapture,
     cancel_token: CancellationToken,
     progress_beat: ProgressBeat,
+    controller: Arc<dyn ProcessController>,
+    watchdog: WatchdogConfig,
 ) {
-    let controller: Arc<dyn ProcessController> = process_control::default_controller();
+    let controller: Arc<dyn ProcessController> = controller;
 
     // Oneshot kill signal to the wait task — single-use, never dropped silently.
     let (kill_tx, kill_rx) = oneshot::channel::<()>();
@@ -57,13 +90,13 @@ pub fn spawn_task_controller<R: Runtime + 'static>(
 
     // Optional stall watchdog: polls ``progress_beat`` and cancels the
     // token with ``Stalled`` reason if no stdout progress arrives within
-    // the configured window. Disabled by ``VP_TASK_STALL_TIMEOUT_SECS=0``.
-    if let Some(timeout) = parse_stall_timeout() {
+    // the configured window. Disabled by ``watchdog.stall_timeout == None``.
+    if let Some(timeout) = watchdog.stall_timeout {
         let watchdog_token = cancel_token.clone();
         let watchdog_beat = progress_beat.clone();
+        let poll_interval = watchdog.poll_interval;
         tauri::async_runtime::spawn(async move {
-            let mut interval =
-                tokio::time::interval(Duration::from_secs(WATCHDOG_POLL_INTERVAL_SECS));
+            let mut interval = tokio::time::interval(poll_interval);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
