@@ -3,6 +3,7 @@
 
 import { TASK_ERROR_CODES, TERMINAL_PROGRESS_PREFIX } from '@/types/protocol'
 import type {
+  TaskCancelledPayload,
   TaskCompletedPayload,
   TaskLogPayload,
   TaskProgressPayload,
@@ -112,16 +113,33 @@ export function applyTaskError(state: MediaTaskState, error: TaskError): MediaTa
   }
 }
 
-export function applyTaskCancelled(state: MediaTaskState): MediaTaskState {
+export function applyTaskCancelled(
+  state: MediaTaskState,
+  payload?: TaskCancelledPayload | null,
+): MediaTaskState {
+  // Phase D.1.2 — stall is now a cancellation with reason "stalled"
+  // rather than a synthetic task-error. Reflect that in the error banner:
+  // stalled cancels show as ProcessFailed with traceback details; user
+  // cancels stay as the friendlier "任务已取消" placeholder.
+  const reason = payload?.reason ?? 'user'
+  const error: TaskError =
+    reason === 'stalled'
+      ? {
+          code: TASK_ERROR_CODES.ProcessFailed,
+          message: '后端进程在配置的超时时间内无任何进度,任务已被中止。',
+          details: payload?.details ?? null,
+        }
+      : {
+          code: TASK_ERROR_CODES.Cancelled,
+          message: '任务已取消。',
+          details: payload?.details ?? null,
+        }
+
   return {
     ...state,
     status: 'cancelled',
     finishedAt: new Date().toISOString(),
-    error: {
-      code: TASK_ERROR_CODES.Cancelled,
-      message: '任务已取消。',
-      details: null,
-    },
+    error,
   }
 }
 

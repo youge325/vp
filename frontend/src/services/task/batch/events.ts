@@ -4,6 +4,7 @@
 
 import type { TaskError } from '@/types/domain/media'
 import type {
+  TaskCancelledPayload,
   TaskCompletedPayload,
   TaskLogPayload,
   TaskProgressPayload,
@@ -29,7 +30,7 @@ export interface EventHandlers {
   onLog(payload: TaskLogPayload): void
   onCompleted(payload: TaskCompletedPayload): Promise<void>
   onError(error: TaskError): Promise<void>
-  onCancelled(): Promise<void>
+  onCancelled(payload?: TaskCancelledPayload | null): Promise<void>
   onResumeStatus(payload: ResumeStatus): void
 }
 
@@ -70,10 +71,10 @@ export function createEventHandlers(
     await lifecycle.handleErrored(error)
   }
 
-  async function onCancelled(): Promise<void> {
+  async function onCancelled(payload?: TaskCancelledPayload | null): Promise<void> {
     const item = lifecycle.getCurrentItem()
     if (item) {
-      deps.setItemTaskState(item.id, applyTaskCancelled(item.taskState))
+      deps.setItemTaskState(item.id, applyTaskCancelled(item.taskState, payload))
     }
     await lifecycle.finalizeCurrent('cancelled')
   }

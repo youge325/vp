@@ -98,7 +98,7 @@ export function useTaskOrchestrator() {
       onLog: (payload) => runner.onLog(payload),
       onCompleted: (payload) => void runner.onCompleted(payload),
       onError: (error) => void runner.onError(error),
-      onCancelled: () => void runner.onCancelled(),
+      onCancelled: (payload) => void runner.onCancelled(payload),
       onResumeStatus: (payload) => runner.onResumeStatus(payload),
     })
   }

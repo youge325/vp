@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from app.cli.commands._process_validation import _load_json_arg
+from app.cli.commands._process_validation import _load_json_arg, ensure_input_and_ffmpeg
 from app.cli.defaults import (
     _default_decode_config,
     _default_encode_config,
@@ -30,29 +30,12 @@ from app.planning import (
     resolve_video_info,
 )
 from app.protocol import ndjson
-from app.utils.ffmpeg import FFmpegWrapper
-from app.utils.file_utils import get_output_path, validate_input_path
+from app.utils.file_utils import get_output_path
 
 
 def cmd_inspect_output(args: argparse.Namespace) -> None:
     input_path = args.input
-    if not validate_input_path(input_path):
-        emit_error(
-            TaskErrorCode.INVALID_INPUT,
-            f"Input file is invalid or unsupported: {input_path}",
-            details={"input_path": input_path},
-        )
-
-    ffmpeg = FFmpegWrapper()
-    if not ffmpeg.is_available():
-        emit_error(
-            TaskErrorCode.MISSING_FFMPEG,
-            "FFmpeg is not available.",
-            details={
-                "ffmpeg_path": ffmpeg.ffmpeg_path,
-                "ffprobe_path": ffmpeg.ffprobe_path,
-            },
-        )
+    ffmpeg = ensure_input_and_ffmpeg(input_path)
 
     try:
         decode_config = _load_json_arg(args.decode_config_json, _default_decode_config(), DecodeConfig)

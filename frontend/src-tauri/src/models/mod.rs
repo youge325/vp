@@ -12,6 +12,6 @@ pub use env::{
     FfmpegInfo, GpuInfo, OnnxRuntimeInfo, RifeModel, RuntimeInfo, TensorBackends, TensorEngines,
 };
 pub use task::{
-    ResumeStatusPayload, TaskCompletedPayload, TaskErrorCode, TaskErrorPayload, TaskLogPayload,
-    TaskProgressPayload, TaskRequest, VideoInfo,
+    ResumeStatusPayload, TaskCancelledPayload, TaskCancelledReason, TaskCompletedPayload,
+    TaskErrorCode, TaskErrorPayload, TaskLogPayload, TaskProgressPayload, TaskRequest, VideoInfo,
 };

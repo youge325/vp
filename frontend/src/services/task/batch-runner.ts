@@ -6,6 +6,7 @@
 // (``@/services/task/batch-runner``) 保持不变,以便测试与编排层无感知。
 
 import type {
+  TaskCancelledPayload,
   TaskCompletedPayload,
   TaskLogPayload,
   TaskProgressPayload,
@@ -60,7 +61,7 @@ export interface BatchRunner {
   onLog(payload: TaskLogPayload): void
   onCompleted(payload: TaskCompletedPayload): Promise<void>
   onError(error: TaskError): Promise<void>
-  onCancelled(): Promise<void>
+  onCancelled(payload?: TaskCancelledPayload | null): Promise<void>
   onResumeStatus(payload: ResumeStatus): void
 }
 

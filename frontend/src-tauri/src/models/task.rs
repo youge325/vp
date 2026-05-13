@@ -115,6 +115,32 @@ pub struct TaskErrorPayload {
     pub details: Option<serde_json::Value>,
 }
 
+/// Why a task entered the cancelled terminal state.
+///
+/// Phase D.1.2 — promoted from a `details.stalled` boolean in
+/// ``TaskErrorPayload`` to a first-class enum on
+/// ``TaskCancelledPayload``. Lets the frontend route the two cases
+/// (user-initiated cancel vs. watchdog-triggered stall) by enum value
+/// instead of digging into a free-form details bag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub enum TaskCancelledReason {
+    /// The user pressed Cancel / Interrupt in the UI.
+    User,
+    /// The stall watchdog killed the backend after a long stdout silence.
+    Stalled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub struct TaskCancelledPayload {
+    pub reason: TaskCancelledReason,
+    #[ts(type = "Record<string, unknown> | null")]
+    pub details: Option<serde_json::Value>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]

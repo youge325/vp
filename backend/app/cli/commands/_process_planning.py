@@ -158,6 +158,35 @@ def _resolve_output_paths(
     return output_dir, output_path
 
 
+def _verify_super_resolution_backend(
+    workflow_config: dict[str, Any],
+    tensor_backend_name: str,
+) -> None:
+    """Reject SR + non-ONNX combinations before the pipeline silently no-ops.
+
+    Phase D.1.1 — ``SuperResolutionAlgorithm.process_frame`` only implements
+    the ONNX path; pytorch / paddle backends return frames unchanged. Catching
+    the invalid combo here surfaces ``INVALID_CONFIG`` to the frontend
+    instead of letting the task complete with un-upscaled output.
+    """
+    if not workflow_config.get("superResolution", {}).get("enabled"):
+        return
+    if tensor_backend_name == "onnx":
+        return
+    emit_error(
+        TaskErrorCode.INVALID_CONFIG,
+        (
+            "Super-resolution requires the ONNX tensor backend; "
+            f"got '{tensor_backend_name}'. Switch the tensor backend to onnx "
+            "or disable super-resolution."
+        ),
+        details={
+            "tensor_backend": tensor_backend_name,
+            "super_resolution_enabled": True,
+        },
+    )
+
+
 def build_plan(
     args: argparse.Namespace,
     input_path: str,
@@ -171,6 +200,7 @@ def build_plan(
     processing_steps = _resolve_processing_steps(workflow_config)
     tensor_backend_name = workflow_config["interpolation"].get("tensorBackend", args.backend)
 
+    _verify_super_resolution_backend(workflow_config, tensor_backend_name)
     _verify_model_availability(workflow_config, processing_steps, tensor_backend_name)
 
     output_dir, output_path = _resolve_output_paths(args, input_path, output_config, encode_config)

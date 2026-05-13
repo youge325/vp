@@ -17,13 +17,14 @@ SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
 
 class SuperResolutionAlgorithm(IAlgorithm):
     """
-    超分辨率算法占位实现。
+    超分辨率算法。当前仅 ONNX 后端有完整实现。
 
-    当前为无操作实现：接收 Tensor 后原样返回。
-    未来实现将：
-    - 使用 SR 模型（Real-ESRGAN 等）提升帧分辨率
-    - 支持可配置的放大倍率（2x, 4x）
-    - 支持至少 5 种不同的超分算法
+    - ONNX backend:运行 NCHW RGB float32 image-to-image 推理,按 scale_factor 验证输出尺寸。
+    - 其它 backend(pytorch / paddle / numpy):**未实现**。``validate()`` 返回 False,
+      ``process_frame`` 抛 ``NotImplementedError``;planning 层会通过
+      ``_verify_super_resolution_backend`` 提前拦截无效组合。
+
+    未来计划:Real-ESRGAN 等其它算法、多倍率(2x/4x)、Tensor 后端实现。
     """
 
     def __init__(self, tensor_backend: ITensorBackend = None, **kwargs):
@@ -38,9 +39,12 @@ class SuperResolutionAlgorithm(IAlgorithm):
         self._output_name = ""
 
     def process_frame(self, frame: Any, **kwargs) -> Any:
-        """处理单帧；ONNX 后端运行 image-to-image 超分，否则保持占位行为。"""
+        """处理单帧；ONNX 后端运行 image-to-image 超分，其它后端拒绝执行。"""
         if self._backend_name() != "onnx":
-            return frame
+            raise NotImplementedError(
+                "Super-resolution is only implemented on the ONNX tensor backend; "
+                f"got '{self._backend_name()}'. This should have been caught at planning time."
+            )
 
         session = self._ensure_onnx_session()
         input_tensor = np.asarray(frame, dtype=np.float32)
@@ -104,10 +108,15 @@ class SuperResolutionAlgorithm(IAlgorithm):
         return "超分辨率算法(占位)"
 
     def validate(self) -> bool:
-        """验证超分算法配置。"""
-        if self._backend_name() == "onnx":
-            return bool(self._onnx_model)
-        return True
+        """验证超分算法配置。
+
+        Phase D.1.1 — 非 ONNX backend 不支持 SR,直接 fail validation。
+        正常路径应该在 ``_process_planning._verify_super_resolution_backend``
+        提前拦截;此处是第二道防线,防止单独调用算法时静默 no-op。
+        """
+        if self._backend_name() != "onnx":
+            return False
+        return bool(self._onnx_model)
 
     def get_description(self) -> str:
         if self._backend_name() == "onnx":

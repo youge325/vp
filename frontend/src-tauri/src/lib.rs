@@ -9,25 +9,32 @@ mod runtime;
 mod services;
 mod tasks;
 
-use tauri::{Emitter, Manager};
+use std::error::Error as StdError;
+
+use tauri::Manager;
 
 use crate::runtime::resolve_runtime_paths;
 use crate::tasks::TaskState;
 
 pub fn run() {
-    tauri::Builder::default()
+    let result = tauri::Builder::default()
         .manage(TaskState::default())
         .setup(|app| {
             let app_handle = app.handle();
-            let _ = resolve_runtime_paths(&app_handle);
+            // Phase D.1.4 — surface runtime-resolution failures instead of
+            // dropping them on the floor. Without ffmpeg / a Python runtime
+            // every invoke would later fail with a generic error; aborting
+            // setup gives the user a single clear startup error.
+            if let Err(error) = resolve_runtime_paths(&app_handle) {
+                eprintln!("VP Workbench failed to resolve runtime paths: {error}");
+                return Err(Box::new(error) as Box<dyn StdError>);
+            }
 
-            if let Some(resource_dir) = app_handle.path().resource_dir().ok() {
-                let _ = app_handle.emit(
-                    "task-log",
-                    models::TaskLogPayload {
-                        message: format!("resource-dir={}", resource_dir.display()),
-                    },
-                );
+            if let Ok(resource_dir) = app_handle.path().resource_dir() {
+                // Was previously an Emitter call that fired before any
+                // frontend listener could be attached — make it a stderr
+                // breadcrumb so it survives into release-build console logs.
+                eprintln!("VP Workbench resource-dir={}", resource_dir.display());
             }
 
             Ok(())
@@ -46,8 +53,12 @@ pub fn run() {
             persistence::commands::load_workbench_preset,
             persistence::commands::save_workbench_preset,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running VP Workbench");
+        .run(tauri::generate_context!());
+
+    if let Err(error) = result {
+        eprintln!("VP Workbench exited with a fatal error: {error}");
+        std::process::exit(1);
+    }
 }
 
 #[cfg(test)]
