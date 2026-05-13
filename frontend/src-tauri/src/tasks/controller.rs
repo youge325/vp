@@ -10,7 +10,7 @@ use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::models::TaskErrorPayload;
+use crate::models::{TaskCancelledPayload, TaskCancelledReason, TaskErrorPayload};
 use crate::process_control::{self, ProcessController};
 use crate::protocol::TaskEventName;
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
@@ -154,18 +154,30 @@ fn emit_terminal_event<R: Runtime>(
     if let Some(reason) = cancel_token.reason() {
         match reason {
             CancelReason::User => {
-                let _ = app.emit(TaskEventName::TaskCancelled.as_str(), ());
+                let _ = app.emit(
+                    TaskEventName::TaskCancelled.as_str(),
+                    TaskCancelledPayload {
+                        reason: TaskCancelledReason::User,
+                        details: None,
+                    },
+                );
                 return;
             }
             CancelReason::Stalled => {
-                let details = stderr_capture
-                    .summary()
-                    .map(|traceback| json!({ "traceback": traceback, "stalled": true }));
+                // Phase D.1.2 — stall is now a cancellation (with reason)
+                // rather than a synthetic ``task-error{ProcessFailed}``.
+                // The traceback (if any) rides along in ``details`` so the
+                // UI can still surface it in the cancel banner.
+                let details = stderr_capture.summary().map(|traceback| {
+                    json!({
+                        "traceback": traceback,
+                        "message": "Backend stalled — no progress within the configured timeout.",
+                    })
+                });
                 let _ = app.emit(
-                    TaskEventName::TaskError.as_str(),
-                    TaskErrorPayload {
-                        code: crate::protocol::TaskErrorCode::ProcessFailed,
-                        message: "Backend stalled — no progress within the configured timeout.".to_string(),
+                    TaskEventName::TaskCancelled.as_str(),
+                    TaskCancelledPayload {
+                        reason: TaskCancelledReason::Stalled,
                         details,
                     },
                 );

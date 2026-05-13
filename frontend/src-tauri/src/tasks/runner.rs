@@ -10,7 +10,7 @@ use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::error::ShellError;
-use crate::models::{TaskLogPayload, TaskRequest};
+use crate::models::{TaskErrorPayload, TaskLogPayload, TaskRequest};
 use crate::protocol::TaskEventName;
 use crate::runtime::{build_env_map, resolve_runtime_paths};
 use crate::tasks::builder::{apply_no_window, build_process_command, spawn_no_window_group};
@@ -209,13 +209,43 @@ fn spawn_stdout_reader<R: Runtime + 'static>(
                         let _ = app.emit(TaskEventName::TaskError.as_str(), payload);
                     }
                 },
-                Err(_) => {
-                    let _ = app.emit(
-                        TaskEventName::TaskLog.as_str(),
-                        TaskLogPayload {
-                            message: trimmed.to_string(),
-                        },
-                    );
+                Err(envelope_err) => {
+                    // Phase D.1.3 — distinguish two failure modes:
+                    //   1. The line is a JSON object that does not match the
+                    //      known IPC envelope schema (likely a Rust ↔ Python
+                    //      schema drift) → emit ``task-error{SchemaMismatch}``
+                    //      so the task aborts loudly rather than silently
+                    //      continuing.
+                    //   2. The line is plain text (free-form logger output,
+                    //      tracebacks, ``[VP_PROGRESS]`` terminal bars) →
+                    //      emit ``task-log`` as before.
+                    match serde_json::from_str::<Value>(trimmed) {
+                        Ok(value) if value.is_object() => {
+                            terminal_sent.store(true, Ordering::SeqCst);
+                            let type_field = value.get("type").cloned().unwrap_or(Value::Null);
+                            let _ = app.emit(
+                                TaskEventName::TaskError.as_str(),
+                                TaskErrorPayload {
+                                    code: crate::protocol::TaskErrorCode::SchemaMismatch,
+                                    message: format!(
+                                        "Backend emitted an NDJSON object that does not match the IPC schema: {envelope_err}"
+                                    ),
+                                    details: Some(serde_json::json!({
+                                        "rawLine": trimmed,
+                                        "type": type_field,
+                                    })),
+                                },
+                            );
+                        }
+                        _ => {
+                            let _ = app.emit(
+                                TaskEventName::TaskLog.as_str(),
+                                TaskLogPayload {
+                                    message: trimmed.to_string(),
+                                },
+                            );
+                        }
+                    }
                 }
             }
         }

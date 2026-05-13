@@ -113,14 +113,20 @@ mod tests {
 
     /// Mirrors the dispatch decision tree in
     /// ``runner::spawn_stdout_reader``: parse each line, classify it as
-    /// Progress / Completed / ResumeStatus / Error or fall back to TaskLog.
+    /// Progress / Completed / ResumeStatus / Error / SchemaMismatch or
+    /// fall back to TaskLog.
+    ///
+    /// Phase D.1.3 — added the ``SchemaMismatch`` arm. JSON objects that
+    /// don't match the envelope schema now fail loudly instead of being
+    /// silently demoted to log lines.
     #[derive(Debug, Clone, PartialEq, Eq)]
     enum LineClassification {
         Progress,
         Completed,
         Error,
         ResumeStatus,
-        Log,       // either non-JSON or JSON that didn't match the envelope
+        SchemaMismatch, // JSON object whose ``type`` we don't recognise
+        Log,            // non-JSON text, including ``[VP_PROGRESS]`` lines
         Empty,
     }
 
@@ -134,7 +140,10 @@ mod tests {
             Ok(NdjsonEnvelope::Completed(_)) => LineClassification::Completed,
             Ok(NdjsonEnvelope::Error(_)) => LineClassification::Error,
             Ok(NdjsonEnvelope::ResumeStatus(_)) => LineClassification::ResumeStatus,
-            Err(_) => LineClassification::Log,
+            Err(_) => match serde_json::from_str::<serde_json::Value>(trimmed) {
+                Ok(value) if value.is_object() => LineClassification::SchemaMismatch,
+                _ => LineClassification::Log,
+            },
         }
     }
 
@@ -189,10 +198,13 @@ mod tests {
     #[test]
     fn integration_treats_malformed_json_as_log() {
         // A line that looks JSON-ish but has typos must fall through to
-        // TaskLog rather than crashing the stdout reader.
+        // TaskLog rather than crashing the stdout reader. Phase D.1.3
+        // distinguishes "JSON object with unknown ``type``" from "not
+        // even parseable JSON" — the former is escalated to SchemaMismatch,
+        // the latter is still a plain log line.
         let stream = concat!(
-            "{\"type\":\"progress\",\"oops\":\n",      // unterminated
-            "{\"type\":\"unknown_variant\"}\n",         // unknown variant
+            "{\"type\":\"progress\",\"oops\":\n",      // unterminated, not parseable
+            "{\"type\":\"unknown_variant\"}\n",         // JSON object, unknown variant
             "not json at all\n",
             "{\"type\":\"completed\",\"outputPath\":\"D:/out.mp4\",\"processedFrames\":1,\"timeSeconds\":0.1}\n",
         );
@@ -202,11 +214,20 @@ mod tests {
             classifications,
             vec![
                 LineClassification::Log,
-                LineClassification::Log,
+                LineClassification::SchemaMismatch,
                 LineClassification::Log,
                 LineClassification::Completed,
             ]
         );
+    }
+
+    #[test]
+    fn integration_flags_envelope_with_missing_required_field_as_schema_mismatch() {
+        // Progress envelope missing the mandatory ``stage`` field — valid
+        // JSON object but breaks the schema. Phase D.1.3 makes this loud
+        // so backend / Rust drift can't go unnoticed for a whole task.
+        let line = r#"{"type":"progress","current":50,"total":100,"percent":50.0}"#;
+        assert_eq!(classify_line(line), LineClassification::SchemaMismatch);
     }
 
     #[test]
