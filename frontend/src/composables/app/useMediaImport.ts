@@ -14,6 +14,7 @@ import {
   normalizeEncodeConfig,
 } from '@/services/preset/normalize'
 import { normalizeError } from '@/services/error/normalize'
+import { TASK_ERROR_CODES } from '@/types/protocol/errors'
 import type { TaskError } from '@/types/domain/media'
 
 export function useMediaImport() {
@@ -35,7 +36,7 @@ export function useMediaImport() {
       const encodeConfig = normalizeEncodeConfig(item.encodeConfig, envStore.env.checkResult)
       mediaStore.replaceItemConfig(itemId, { decodeConfig, encodeConfig })
     } catch (error) {
-      mediaStore.setItemIssue(itemId, normalizeError(error, 'inspect_failed'))
+      mediaStore.setItemIssue(itemId, normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
     } finally {
       mediaStore.setInspecting(itemId, false)
     }
@@ -67,7 +68,7 @@ export function useMediaImport() {
       await importPaths(paths)
       return { paths, error: null }
     } catch (error) {
-      return { paths: [], error: normalizeError(error, 'pick_inputs_failed') }
+      return { paths: [], error: normalizeError(error, TASK_ERROR_CODES.IoError) }
     }
   }
 

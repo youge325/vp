@@ -18,6 +18,7 @@ import {
   createIdleTaskState,
 } from '../events'
 import { normalizeError } from '@/services/error/normalize'
+import { TASK_ERROR_CODES } from '@/types/protocol/errors'
 import { classifyResumeConflict } from '../resume-classifier'
 
 export interface BatchLifecycleDeps {
@@ -133,7 +134,7 @@ export function createBatchLifecycle(deps: BatchLifecycleDeps): BatchLifecycle {
     try {
       inspection = await deps.checkResume(deps.buildRequest(item))
     } catch (error) {
-      await handleErrored(normalizeError(error, 'start_failed'))
+      await handleErrored(normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
       return
     }
 
@@ -155,7 +156,7 @@ export function createBatchLifecycle(deps: BatchLifecycleDeps): BatchLifecycle {
     try {
       await deps.startTask(deps.buildRequest(item, resumeMode))
     } catch (error) {
-      await handleErrored(normalizeError(error, 'start_failed'))
+      await handleErrored(normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
     }
   }
 
@@ -246,7 +247,7 @@ export function createBatchLifecycle(deps: BatchLifecycleDeps): BatchLifecycle {
         deps.setItemTaskState(item.id, applyTaskPaused(item.taskState))
       }
     } catch (error) {
-      throw normalizeError(error, 'pause_failed')
+      throw normalizeError(error, TASK_ERROR_CODES.ProcessFailed)
     }
   }
 
@@ -264,7 +265,7 @@ export function createBatchLifecycle(deps: BatchLifecycleDeps): BatchLifecycle {
         deps.setItemTaskState(item.id, applyTaskResumed(item.taskState))
       }
     } catch (error) {
-      throw normalizeError(error, 'resume_failed')
+      throw normalizeError(error, TASK_ERROR_CODES.ProcessFailed)
     }
   }
 
@@ -301,7 +302,7 @@ export function createBatchLifecycle(deps: BatchLifecycleDeps): BatchLifecycle {
       if (item && previousTaskState) {
         deps.setItemTaskState(item.id, previousTaskState)
       }
-      throw normalizeError(error, 'cancel_failed')
+      throw normalizeError(error, TASK_ERROR_CODES.ProcessFailed)
     }
   }
 

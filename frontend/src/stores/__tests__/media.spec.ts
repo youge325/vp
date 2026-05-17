@@ -67,19 +67,14 @@ describe('useMediaStore', () => {
     expect(store.allSelected).toBe(true)
   })
 
-  it('setOperationIssue and clearOperationIssue track a scope-tagged error', () => {
+  // Phase 6d — banner-state assertions moved to ``stores/__tests__/issue.spec.ts``.
+  // Lock in that ``useMediaStore`` no longer leaks the relocated surface so a
+  // future regression that re-introduces it fails loudly here.
+  it('does not expose the relocated operationIssue surface', () => {
     const store = useMediaStore()
-    expect(store.operationIssue).toBeNull()
-
-    store.setOperationIssue('input', { code: 'pick_inputs_failed', message: 'no files' })
-    expect(store.operationIssue?.scope).toBe('input')
-    expect(store.operationIssue?.error.code).toBe('pick_inputs_failed')
-
-    store.clearOperationIssue('encode') // different scope — should NOT clear
-    expect(store.operationIssue?.scope).toBe('input')
-
-    store.clearOperationIssue('input')
-    expect(store.operationIssue).toBeNull()
+    expect('operationIssue' in store).toBe(false)
+    expect('setOperationIssue' in store).toBe(false)
+    expect('clearOperationIssue' in store).toBe(false)
   })
 
   it('resetItemRunState restores idle defaults while preserving logs when asked', () => {
