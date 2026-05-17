@@ -25,7 +25,7 @@ from app.cli.defaults import (
     _resolve_processing_steps,
 )
 from app.config import settings
-from app.errors import TaskErrorCode, emit_error
+from app.errors import TaskErrorCode, raise_error
 from app.models import DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig
 from app.planning import (
     SegmentManifest,
@@ -48,7 +48,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
         workflow_config = _load_json_arg(sections["workflow"], _default_workflow_config(args), WorkflowConfig)
         output_config = _load_json_arg(sections["output"], _default_output_config(args), OutputConfig)
     except ValueError as exc:
-        emit_error(TaskErrorCode.INVALID_CONFIG, str(exc))
+        raise_error(TaskErrorCode.INVALID_CONFIG, str(exc))
 
     processing_steps = _resolve_processing_steps(workflow_config)
 

@@ -27,7 +27,7 @@ from app.cli.defaults import (
     _default_output_config,
     _default_workflow_config,
 )
-from app.errors import TaskErrorCode, emit_error
+from app.errors import TaskErrorCode, raise_error
 from app.models import DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig
 from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.file_utils import validate_input_path
@@ -72,7 +72,7 @@ def ensure_input_and_ffmpeg(input_path: str) -> FFmpegWrapper:
     it twice. Either guard failing emits a typed ``ProcessError``.
     """
     if not validate_input_path(input_path):
-        emit_error(
+        raise_error(
             TaskErrorCode.INVALID_INPUT,
             f"Input file is invalid or unsupported: {input_path}",
             details={"input_path": input_path},
@@ -80,7 +80,7 @@ def ensure_input_and_ffmpeg(input_path: str) -> FFmpegWrapper:
 
     ffmpeg = FFmpegWrapper()
     if not ffmpeg.is_available():
-        emit_error(
+        raise_error(
             TaskErrorCode.MISSING_FFMPEG,
             "FFmpeg is not available.",
             details={
@@ -101,19 +101,19 @@ def _read_stdin_config_sections() -> dict[str, str | None]:
     """
     raw = sys.stdin.read()
     if not raw.strip():
-        emit_error(
+        raise_error(
             TaskErrorCode.INVALID_CONFIG,
             "Empty stdin payload while --config-stdin was set.",
         )
     try:
         container = json.loads(raw)
     except json.JSONDecodeError as exc:
-        emit_error(
+        raise_error(
             TaskErrorCode.INVALID_CONFIG,
             f"Invalid stdin JSON: {exc}",
         )
     if not isinstance(container, dict):
-        emit_error(
+        raise_error(
             TaskErrorCode.INVALID_CONFIG,
             "Stdin payload must be a JSON object with decode/workflow/encode/output keys.",
         )
@@ -168,7 +168,7 @@ def load_configs(
         workflow_config = _load_json_arg(sections["workflow"], _default_workflow_config(args), WorkflowConfig)
         output_config = _load_json_arg(sections["output"], _default_output_config(args), OutputConfig)
     except ValueError as exc:
-        emit_error(TaskErrorCode.INVALID_CONFIG, str(exc))
+        raise_error(TaskErrorCode.INVALID_CONFIG, str(exc))
         raise  # unreachable; appeases the type-checker
 
     return decode_config, encode_config, workflow_config, output_config

@@ -21,7 +21,7 @@ from app.cli.defaults import (
     _resolve_processing_steps,
 )
 from app.config import settings
-from app.errors import TaskErrorCode, emit_error
+from app.errors import TaskErrorCode, raise_error
 from app.processing.streaming.metrics import PipelineMetrics
 from app.protocol.reporter import CliProgressReporter
 from app.utils.ffmpeg import FFmpegWrapper
@@ -107,7 +107,7 @@ def _verify_model_availability(
             try:
                 _validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
             except FileNotFoundError as exc:
-                emit_error(
+                raise_error(
                     TaskErrorCode.MISSING_MODEL,
                     str(exc),
                     details={
@@ -118,7 +118,7 @@ def _verify_model_availability(
         else:
             model_path = _model_path(workflow_config["interpolation"]["model"])
             if not model_path.is_file() or model_path.stat().st_size == 0:
-                emit_error(
+                raise_error(
                     TaskErrorCode.MISSING_MODEL,
                     f"Default interpolation model is missing: {model_path}",
                     details={
@@ -130,7 +130,7 @@ def _verify_model_availability(
         try:
             _validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
         except FileNotFoundError as exc:
-            emit_error(
+            raise_error(
                 TaskErrorCode.MISSING_MODEL,
                 str(exc),
                 details={
@@ -175,7 +175,7 @@ def _verify_super_resolution_backend(
         return
     if tensor_backend_name == "onnx":
         return
-    emit_error(
+    raise_error(
         TaskErrorCode.INVALID_CONFIG,
         (
             "Super-resolution requires the ONNX tensor backend; "

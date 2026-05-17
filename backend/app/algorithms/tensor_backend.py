@@ -151,23 +151,32 @@ class PaddleBackend(ITensorBackend):
 class OnnxBackend(ITensorBackend):
     """ONNX Runtime Tensor 后端。
 
-    ONNX Runtime 直接接受 numpy ndarray 作为输入，
-    因此本后端的 "tensor" 实际上就是 numpy ndarray (1CHW, float32)。
+    ONNX Runtime 直接接受 numpy ndarray 作为输入,因此本后端的 "tensor"
+    实际上就是 numpy ndarray (1CHW, float32)。
+
+    Phase D.6.1 — 不再在 ``__init__`` 内 ``import onnxruntime`` 或调用
+    ``register_native_dll_paths``。理由:
+    - CLI 入口已在 [cli/main.py](../cli/main.py) 的 ``_startup_hooks`` 显式
+      注册 DLL 路径,这里再调一次属于重复 bootstrap。
+    - ``onnxruntime`` 的 import 涉及 CUDA/TensorRT DLL 探测,放到首次使用
+      时再触发,可让"工厂只构造 PyTorch 后端"这种典型路径不付 ORT 启动成本。
+
+    可用性检查走 ``importlib.util.find_spec``,只看包是否存在,不真的 import。
     """
 
     def __init__(self):
-        self._ort = None
+        self._ort: Any = None
+
+    def _get_ort(self) -> Any:
+        """Lazy import onnxruntime;首次成功后缓存到 ``self._ort``。"""
+        if self._ort is not None:
+            return self._ort
         try:
-            # 必须在 import onnxruntime 之前注册 DLL 搜索路径,因为 ORT 在 import
-            # 时就会尝试加载 TensorRT / CUDA EP 提供的 nvinfer_10.dll 等。
-            from app.utils.dll_paths import register_native_dll_paths
-
-            register_native_dll_paths()
             import onnxruntime as ort
-
-            self._ort = ort
-        except ImportError:
-            logger.warning("onnxruntime 未安装")
+        except ImportError as exc:
+            raise RuntimeError("onnxruntime 未安装") from exc
+        self._ort = ort
+        return self._ort
 
     def numpy_to_tensor(self, frame: np.ndarray) -> Any:
         """将 numpy (HWC, uint8) 转换为 ONNX Tensor (1CHW, float32 [0,1])。"""
@@ -185,25 +194,33 @@ class OnnxBackend(ITensorBackend):
         return "onnx"
 
     def is_available(self) -> bool:
-        return self._ort is not None
+        """轻量探测 onnxruntime 是否安装,不触发实际 import。"""
+        import importlib.util
+
+        return importlib.util.find_spec("onnxruntime") is not None
 
     def get_supported_devices(self) -> list[str]:
         return ["nvidia", "intel", "amd"]
 
     def get_supported_engines(self) -> list[str]:
-        engines = []
-        if self._ort is not None:
-            providers = self._ort.get_available_providers()
-            if "TensorrtExecutionProvider" in providers:
-                engines.append("tensorrt")
-            if "CUDAExecutionProvider" in providers:
-                engines.append("cuda")
-            if "DmlExecutionProvider" in providers:
-                engines.append("directml")
-            if "ROCMExecutionProvider" in providers:
-                engines.append("rocm")
-            if not engines:
-                engines.append("cpu")
+        if not self.is_available():
+            return []
+        try:
+            ort = self._get_ort()
+        except RuntimeError:
+            return []
+        providers = ort.get_available_providers()
+        engines: list[str] = []
+        if "TensorrtExecutionProvider" in providers:
+            engines.append("tensorrt")
+        if "CUDAExecutionProvider" in providers:
+            engines.append("cuda")
+        if "DmlExecutionProvider" in providers:
+            engines.append("directml")
+        if "ROCMExecutionProvider" in providers:
+            engines.append("rocm")
+        if not engines:
+            engines.append("cpu")
         return engines
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 
-from app.errors import ProcessError, TaskErrorCode, emit_error
+from app.errors import ProcessError, TaskErrorCode, raise_error
 from app.protocol import ndjson
 from app.utils.ffmpeg import FFmpegWrapper
 
@@ -13,7 +13,7 @@ from app.utils.ffmpeg import FFmpegWrapper
 def cmd_info(args: argparse.Namespace) -> None:
     input_path = args.input
     if not os.path.isfile(input_path):
-        emit_error(
+        raise_error(
             TaskErrorCode.INVALID_INPUT,
             f"Input file does not exist: {input_path}",
             details={"input_path": input_path},
@@ -21,7 +21,7 @@ def cmd_info(args: argparse.Namespace) -> None:
 
     ffmpeg = FFmpegWrapper()
     if not ffmpeg.is_available():
-        emit_error(
+        raise_error(
             TaskErrorCode.MISSING_FFMPEG,
             "FFmpeg is not available.",
             details={
