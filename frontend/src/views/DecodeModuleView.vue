@@ -4,6 +4,7 @@ import { useDecodeForm } from '@/composables/forms/useDecodeForm'
 import { useWorkbenchEditor, useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
 import BaseField from '@/components/forms/BaseField.vue'
 import BaseSelect from '@/components/forms/BaseSelect.vue'
+import CapabilityOptionField from '@/components/forms/CapabilityOptionField.vue'
 
 const {
   visibleDecoderProfiles,
@@ -13,7 +14,6 @@ const {
   setDecodeHwaccelDevice,
   setDecodeOption,
   getDecodeOption,
-  coerceOptionValue,
 } = useDecodeForm()
 
 const { editorConfig } = useWorkbenchEditor()
@@ -59,49 +59,16 @@ const decoderProfileOptions = computed(() =>
         <span class="tag">decoder: {{ editorConfig.decodeConfig.decoder || 'software' }}</span>
       </div>
 
+      <!-- Phase 7c — 单选/数字/字符串/布尔四分支全部委托给 CapabilityOptionField,
+           ``option.type`` 一处判定即可。 -->
       <div v-if="decoderOptions.length > 0" class="field-grid field-grid-2">
-        <label v-for="option in decoderOptions" :key="option.name" class="field">
-          <span>{{ option.label }}</span>
-
-          <label v-if="option.type === 'boolean'" class="toggle-chip">
-            <input
-              :checked="Boolean(getDecodeOption(option))"
-              type="checkbox"
-              @change="setDecodeOption(option.name, coerceOptionValue(option, $event))"
-            />
-            <span>启用</span>
-          </label>
-
-          <select
-            v-else-if="option.type === 'choice'"
-            :value="String(getDecodeOption(option))"
-            @change="setDecodeOption(option.name, coerceOptionValue(option, $event))"
-          >
-            <option
-              v-for="choice in option.choices"
-              :key="`${option.name}-${choice.value}`"
-              :value="String(choice.value)"
-            >
-              {{ choice.label }}
-            </option>
-          </select>
-
-          <input
-            v-else-if="option.type === 'number'"
-            :value="Number(getDecodeOption(option))"
-            type="number"
-            :min="option.min ?? undefined"
-            :max="option.max ?? undefined"
-            @input="setDecodeOption(option.name, coerceOptionValue(option, $event))"
-          />
-
-          <input
-            v-else
-            :value="String(getDecodeOption(option))"
-            type="text"
-            @input="setDecodeOption(option.name, coerceOptionValue(option, $event))"
-          />
-        </label>
+        <CapabilityOptionField
+          v-for="option in decoderOptions"
+          :key="option.name"
+          :option="option"
+          :model-value="getDecodeOption(option)"
+          @update:model-value="setDecodeOption(option.name, $event)"
+        />
       </div>
     </section>
   </div>

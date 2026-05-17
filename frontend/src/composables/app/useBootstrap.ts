@@ -5,14 +5,14 @@ import { useEnvStore } from '@/stores/env'
 import { usePresetStore } from '@/stores/preset'
 import { useEnvironmentChecker } from './useEnvironmentChecker'
 import { usePresetSync } from './usePresetSync'
-import { useTaskOrchestrator } from './useTaskOrchestrator'
+import { disposeRunner, useTaskOrchestrator } from './useTaskOrchestrator'
 
 export function useBootstrap() {
   const envStore = useEnvStore()
   const presetStore = usePresetStore()
   const { recheckEnvironment } = useEnvironmentChecker()
   const { loadPersistedPreset, startAutoSync } = usePresetSync()
-  const { attachTaskListeners, detachTaskListeners } = useTaskOrchestrator()
+  const { attachTaskListeners } = useTaskOrchestrator()
 
   onMounted(async () => {
     envStore.setBootstrapping(true)
@@ -42,6 +42,11 @@ export function useBootstrap() {
   })
 
   onBeforeUnmount(() => {
-    detachTaskListeners()
+    // Phase 7f — full tear-down of the module-level singleton on root
+    // unmount. ``disposeRunner`` does both the listener detach (what
+    // the old ``detachTaskListeners`` call handled) AND drops the
+    // cached runner so HMR / dev-server re-mounts don't reuse a
+    // pre-existing instance bound to discarded Pinia stores.
+    disposeRunner()
   })
 }
