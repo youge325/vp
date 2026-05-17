@@ -21,8 +21,8 @@ from app.cli.defaults import (
     _default_encode_config,
     _default_output_config,
     _default_workflow_config,
-    _resolve_fps_and_multi,
     _resolve_processing_steps,
+    _resolve_workflow_and_output_fps,
 )
 from app.config import settings
 from app.errors import TaskErrorCode, raise_error
@@ -59,13 +59,11 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     else:
         output_path = get_output_path(input_path, output_dir, extension=f".{container}")
 
-    multi, encode_fps, _interpolated_fps, need_resample = _resolve_fps_and_multi(workflow_config, ffmpeg, input_path)
-    # Phase D.2.1 — same anti-mutate pattern as ``_process_planning.build_plan``.
-    workflow_config = {
-        **workflow_config,
-        "interpolation": {**workflow_config["interpolation"], "multi": multi},
-    }
-    final_output_fps = encode_fps if need_resample else None
+    workflow_config, final_output_fps = _resolve_workflow_and_output_fps(
+        workflow_config,
+        ffmpeg,
+        input_path,
+    )
 
     video_info = resolve_video_info(ffmpeg, input_path)
     stage_plan = build_stage_plan(

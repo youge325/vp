@@ -17,8 +17,8 @@ from app.cli.defaults import (
     _model_path,
     _processing_needs_interpolation,
     _resolve_expected_output_frames,
-    _resolve_fps_and_multi,
     _resolve_processing_steps,
+    _resolve_workflow_and_output_fps,
 )
 from app.config import settings
 from app.errors import TaskErrorCode, raise_error
@@ -207,16 +207,13 @@ def build_plan(
 
     output_dir, output_path = _resolve_output_paths(args, input_path, output_config, encode_config)
 
-    multi, encode_fps, _interpolated_fps, need_resample = _resolve_fps_and_multi(workflow_config, ffmpeg, input_path)
-    # Phase D.2.1 — avoid mutating the inbound dict; downstream consumers
-    # (``process_video_streaming``, planning helpers re-running on a
-    # retry path) should not observe a half-modified config. Returning a
-    # shallow + nested copy keeps the read-only contract obvious.
-    workflow_config = {
-        **workflow_config,
-        "interpolation": {**workflow_config["interpolation"], "multi": multi},
-    }
-    final_output_fps = encode_fps if need_resample else None
+    # Phase D.6.3 — multi 写回 + final_output_fps 推导收敛到 defaults helper,
+    # 与 cmd_inspect_output 共享一份"不 mutate 原 dict"的语义。
+    workflow_config, final_output_fps = _resolve_workflow_and_output_fps(
+        workflow_config,
+        ffmpeg,
+        input_path,
+    )
 
     expected_output_frames = _resolve_expected_output_frames(
         ffmpeg=ffmpeg,
