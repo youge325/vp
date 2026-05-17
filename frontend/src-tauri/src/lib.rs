@@ -29,7 +29,7 @@ pub fn run() {
             // Phase D.3.6 — resolve once at startup and stash the result in
             // managed state. Previous code re-ran ``resolve_runtime_paths``
             // (which does ~10 filesystem stats) inside every Tauri command.
-            let paths = match resolve_runtime_paths(&app_handle) {
+            let paths = match resolve_runtime_paths(app_handle) {
                 Ok(paths) => paths,
                 Err(error) => {
                     eprintln!("VP Workbench failed to resolve runtime paths: {error}");

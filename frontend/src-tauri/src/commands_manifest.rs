@@ -22,6 +22,12 @@
 // in ``APP_COMMAND_NAMES`` is also present in ``permissions/default.toml``
 // and ``gen/schemas/acl-manifests.json`` — a single source of truth check.
 
+// Phase 5 — ``clippy --lib`` cannot see the ``#[cfg(test)]`` consumer in
+// ``lib.rs::tests`` and flags this constant as dead code. The ``include!``
+// path from ``build.rs`` also bypasses normal use-tracking. Suppress the
+// false positive rather than dragging in an ``#[cfg(any(test, build))]``
+// gate that the build script can't honour.
+#[allow(dead_code)]
 pub const APP_COMMAND_NAMES: &[&str] = &[
     "pick_inputs",
     "pick_output_directory",

@@ -28,6 +28,15 @@ pub enum ShellError {
     Io(std::io::Error),
     InvalidInput(String),
     NoActiveTask,
+    /// Phase 5e — dedicated variant for failures coming back from
+    /// ``open::that_detached`` (and friends). The ``open`` crate
+    /// surfaces failures as plain ``std::io::Error`` values, so this
+    /// variant wraps the same underlying type as ``Io`` but keeps the
+    /// "OS file/folder handler failed to launch" classification
+    /// separate from generic filesystem IO. Previously these were
+    /// flattened into ``Io`` with a ``io::Error::new(Other, ...)``
+    /// shim that lost the original error chain.
+    OpenLocation(std::io::Error),
 }
 
 impl ShellError {
@@ -42,6 +51,7 @@ impl ShellError {
             Self::Io(_) => TaskErrorCode::IoError,
             Self::InvalidInput(_) => TaskErrorCode::InvalidInput,
             Self::NoActiveTask => TaskErrorCode::InvalidInput,
+            Self::OpenLocation(_) => TaskErrorCode::IoError,
         }
     }
 }
@@ -66,6 +76,7 @@ impl fmt::Display for ShellError {
             Self::Io(error) => write!(f, "io failure: {error}"),
             Self::InvalidInput(message) => write!(f, "invalid input: {message}"),
             Self::NoActiveTask => write!(f, "no running task"),
+            Self::OpenLocation(error) => write!(f, "unable to open location: {error}"),
         }
     }
 }
@@ -73,7 +84,7 @@ impl fmt::Display for ShellError {
 impl std::error::Error for ShellError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Spawn(error) | Self::Io(error) => Some(error),
+            Self::Spawn(error) | Self::Io(error) | Self::OpenLocation(error) => Some(error),
             Self::NdjsonDecode(error) => Some(error),
             _ => None,
         }
@@ -161,5 +172,30 @@ mod tests {
         let error: ShellError = json_error.into();
         let value = serde_json::to_value(&error).expect("serializable");
         assert_eq!(value["code"], "schema_mismatch");
+    }
+
+    #[test]
+    fn open_location_routes_to_io_code_and_keeps_message() {
+        let inner = std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Explorer launcher missing",
+        );
+        let error = ShellError::OpenLocation(inner);
+        let value = serde_json::to_value(&error).expect("serializable");
+        assert_eq!(value["code"], "io_error");
+        assert!(value["message"]
+            .as_str()
+            .expect("message")
+            .contains("Explorer launcher missing"));
+    }
+
+    #[test]
+    fn open_location_preserves_error_source_chain() {
+        // Phase 5e — the whole point of the dedicated variant is keeping
+        // the inner ``io::Error`` reachable via ``Error::source``.
+        let inner = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
+        let error = ShellError::OpenLocation(inner);
+        let source = std::error::Error::source(&error).expect("source must be present");
+        assert!(source.to_string().contains("denied"));
     }
 }

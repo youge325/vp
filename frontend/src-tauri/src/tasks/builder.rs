@@ -11,6 +11,27 @@ use crate::runtime::ResolvedRuntimePaths;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
+/// Single source of truth for spawning the Python backend.
+///
+/// Phase 5c — both [`build_process_command`] and the one-shot runner
+/// (``tasks::oneshot``) used to inline the exact same four lines for
+/// ``Command::new(python).args(["-m","app",sub]).current_dir(...).envs(...)``.
+/// Centralising the bootstrap here means a future change to (say) the
+/// ``-m app`` module path, the working directory convention, or the
+/// environment map only needs to land in one place.
+///
+/// The returned ``Command`` has only the executable, the subcommand,
+/// the working directory and the env map set. Callers are expected to
+/// append their own ``--flag value`` arguments, stdio configuration and
+/// platform-specific flags (``apply_no_window``, ``spawn_no_window_group``).
+pub fn backend_command(paths: &ResolvedRuntimePaths, subcommand: &str) -> Command {
+    let mut command = Command::new(&paths.python_executable);
+    command.args(["-m", "app", subcommand]);
+    command.current_dir(&paths.backend_dir);
+    command.envs(crate::runtime::build_env_map(paths));
+    command
+}
+
 /// Serialize the four config sections as a single JSON object.
 ///
 /// Phase D.3.1 — the Tauri host now feeds backend config through stdin
@@ -31,8 +52,7 @@ pub fn build_process_command(
     paths: &ResolvedRuntimePaths,
     request: &TaskRequest,
 ) -> Result<(Command, String), serde_json::Error> {
-    let mut command = Command::new(&paths.python_executable);
-    command.args(["-m", "app", "process"]);
+    let mut command = backend_command(paths, "process");
     command.args(["--input", &request.input_path]);
     command.arg("--config-stdin");
 
@@ -42,8 +62,6 @@ pub fn build_process_command(
         }
     }
 
-    command.current_dir(&paths.backend_dir);
-    command.envs(crate::runtime::build_env_map(paths));
     // stdin is intentionally piped — the caller writes the JSON payload
     // immediately after spawn and then drops the handle to signal EOF.
     command.stdin(Stdio::piped());

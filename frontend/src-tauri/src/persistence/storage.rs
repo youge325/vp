@@ -157,7 +157,7 @@ where
 fn fallback_persistence_path(path: &Path) -> PathBuf {
     let basename = path
         .file_name()
-        .map(|name| PathBuf::from(name))
+        .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("vp-workbench.json"));
     env::temp_dir().join("vp-workbench").join(basename)
 }

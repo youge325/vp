@@ -1,6 +1,6 @@
 //! RIFE 模型目录 / TensorRT 目录 解析,以及默认权重文件名常量。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::helpers::{env_path, first_existing_dir};
 
@@ -13,7 +13,7 @@ pub(super) const DEFAULT_RIFE_MODEL_FILENAME: &str = "flownet_v4.25.pkl";
 pub(super) fn resolve_model_dir(
     runtime_root: Option<&PathBuf>,
     resource_dir: Option<&PathBuf>,
-    workspace_root: &PathBuf,
+    workspace_root: &Path,
 ) -> Option<PathBuf> {
     let dev_model_dir = if cfg!(debug_assertions) {
         Some(workspace_root.join("backend").join("models"))
