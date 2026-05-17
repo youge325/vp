@@ -5,7 +5,7 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { WorkbenchPreset } from '@/types/protocol'
 import { TASK_ERROR_CODES } from '@/types/protocol'
 import { useEnvStore } from '@/stores/env'
-import { useMediaStore } from '@/stores/media'
+import { useIssueStore } from '@/stores/issue'
 import { usePresetStore } from '@/stores/preset'
 import { presetIpc } from '@/lib/ipc/endpoints/preset'
 import { normalizeError } from '@/services/error/normalize'
@@ -36,12 +36,13 @@ function coercePreset(raw: WorkbenchPreset | null, env: EnvironmentCheckResult |
 export function usePresetSync() {
   const envStore = useEnvStore()
   const presetStore = usePresetStore()
-  const mediaStore = useMediaStore()
+  // Phase 6d — banner state lives in ``useIssueStore`` now.
+  const issueStore = useIssueStore()
   let saveTimer: ReturnType<typeof setTimeout> | null = null
 
   function reportPresetIssue(error: unknown, fallbackMessage: string): void {
     const normalized = normalizeError(error, TASK_ERROR_CODES.PersistenceFailed)
-    mediaStore.setOperationIssue('preset', {
+    issueStore.setIssue('preset', {
       ...normalized,
       message: normalized.message || fallbackMessage,
     })
@@ -49,7 +50,7 @@ export function usePresetSync() {
 
   function recoverFromSchemaMismatch(): void {
     presetStore.replaceDraftPreset(createDefaultWorkbenchPreset(envStore.env.checkResult))
-    mediaStore.setOperationIssue('preset', {
+    issueStore.setIssue('preset', {
       code: TASK_ERROR_CODES.SchemaMismatch,
       message: 'Stored workbench preset is from an incompatible version. The editor has been reset to defaults.',
       details: null,
@@ -60,7 +61,7 @@ export function usePresetSync() {
     try {
       await presetIpc.save(cloneWorkbenchPreset(presetStore.draftPreset))
       // Clear any prior preset-scoped error once a write succeeds.
-      mediaStore.clearOperationIssue('preset')
+      issueStore.clearIssue('preset')
     } catch (error) {
       const normalized = normalizeError(error, TASK_ERROR_CODES.PersistenceFailed)
       if (normalized.code === TASK_ERROR_CODES.SchemaMismatch) {
@@ -92,7 +93,7 @@ export function usePresetSync() {
         return false
       }
       presetStore.replaceDraftPreset(coercePreset(preset, envStore.env.checkResult))
-      mediaStore.clearOperationIssue('preset')
+      issueStore.clearIssue('preset')
       return true
     } catch (error) {
       const normalized = normalizeError(error, TASK_ERROR_CODES.PersistenceFailed)

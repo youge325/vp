@@ -1,14 +1,16 @@
 // 领域层 — 媒体项与任务错误模型。
 
+import type { TaskErrorPayload } from '@/types/generated/TaskErrorPayload'
 import type { DecodeConfig, EncodeConfig, OutputConfig, WorkbenchPreset, WorkflowConfig } from '../protocol'
 import type { ResumeStatus } from './batch'
 import type { TaskStatus } from './workflow'
 
-export interface TaskError {
-  code: string
-  message: string
-  details?: Record<string, unknown> | null
-}
+/// Phase 6b — `TaskError` 不再单独维护,而是 generated `TaskErrorPayload`
+/// 的 type alias。这让 `code` 字段从开放的 `string` 收紧为 14 项
+/// `TaskErrorCode` union,避免与 Rust ↔ Python ↔ TS 三层 SSOT 漂移。
+/// 旧 `code: string` 形状下,callsite 在 fallback 路径上可以传任意字符串
+/// (如 `'pause_failed'`),那是 Phase 6c 一起清理掉的 magic string。
+export type TaskError = TaskErrorPayload
 
 export type OperationIssueScope = 'input' | 'encode' | 'output' | 'task' | 'preset'
 

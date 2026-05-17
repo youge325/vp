@@ -4,17 +4,20 @@ import type { DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig } from '@
 import type {
   MediaItem,
   MediaTaskState,
-  OperationIssue,
-  OperationIssueScope,
   TaskError,
   VideoInfoResult,
 } from '@/types/domain/media'
 import { createIdleTaskState } from '@/services/task/events'
 
+// Phase 6d — ``operationIssue`` / ``setOperationIssue`` /
+// ``clearOperationIssue`` moved to the dedicated ``useIssueStore``
+// (``@/stores/issue``). Media item state and global error-banner
+// state used to share this file; splitting them keeps the media
+// store focused on the media list itself.
+
 export const useMediaStore = defineStore('media', () => {
   const mediaItems = ref<MediaItem[]>([])
   const activeItemId = ref<string | null>(null)
-  const operationIssue = ref<OperationIssue | null>(null)
 
   const selectedIds = computed(() => mediaItems.value.filter((item) => item.selected).map((item) => item.id))
   const selectedItems = computed(() => mediaItems.value.filter((item) => item.selected))
@@ -164,20 +167,9 @@ export const useMediaStore = defineStore('media', () => {
     }
   }
 
-  function setOperationIssue(scope: OperationIssueScope, error: TaskError): void {
-    operationIssue.value = { scope, error }
-  }
-
-  function clearOperationIssue(scope?: OperationIssueScope): void {
-    if (!scope || operationIssue.value?.scope === scope) {
-      operationIssue.value = null
-    }
-  }
-
   return {
     mediaItems,
     activeItemId,
-    operationIssue,
     selectedIds,
     selectedItems,
     activeItem,
@@ -198,7 +190,5 @@ export const useMediaStore = defineStore('media', () => {
     setItemLastOutputPath,
     resetItemRunState,
     resetItemsRunState,
-    setOperationIssue,
-    clearOperationIssue,
   }
 })

@@ -4,6 +4,7 @@ import { useEnvStore } from '@/stores/env'
 import { envIpc } from '@/lib/ipc/endpoints/env'
 import { normalizeCheckPayload } from '@/services/env/normalize'
 import { normalizeError } from '@/services/error/normalize'
+import { TASK_ERROR_CODES } from '@/types/protocol/errors'
 
 export function useEnvironmentChecker() {
   const envStore = useEnvStore()
@@ -15,7 +16,11 @@ export function useEnvironmentChecker() {
       const payload = normalizeCheckPayload(await envIpc.check(forceRefresh))
       envStore.setCheckPayload(payload, new Date().toISOString())
     } catch (error) {
-      envStore.setIssue(normalizeError(error, 'check_failed'))
+      // Phase 6c — fallback narrowed from the legacy magic string
+      // ``'check_failed'`` to the enum value. Real failure codes
+      // come from the Rust ShellError envelope; this path only
+      // triggers when the error has no ``code`` field at all.
+      envStore.setIssue(normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
     } finally {
       envStore.setChecking(false)
     }
