@@ -1,9 +1,28 @@
-"""Pure-string-match error code inference, safe to import at bootstrap.
+"""Pure error-code inference, safe to import at bootstrap.
 
 This module deliberately depends on nothing from ``app.*`` (other than the
 sibling ``_codes`` module, which itself has no further dependencies) so that
 ``__main__`` can import it before resolving the rest of the package.
 Both ``errors.from_exception`` and ``__main__`` share these rules.
+
+Phase 4.1 — ``infer_error_code`` accepts either a raw lowercased message
+(legacy API used by callers that no longer have the exception object) or
+the exception itself. When the exception is provided, the resolver runs in
+two passes:
+
+1. **Message-pattern pass.** Existing keyword rules (ffmpeg / flownet /
+   torch / paddle / no module named / cancel) win first so that long-lived
+   downstream behavior — e.g. a ``FileNotFoundError("ffmpeg")`` mapping to
+   ``MISSING_FFMPEG`` rather than the generic ``IO_ERROR`` — is preserved.
+2. **stdlib type dispatch.** Only when the message offers no specific
+   signal do we fall back to broad ``isinstance`` buckets:
+   ``ImportError`` / ``ModuleNotFoundError`` → ``MISSING_PYTHON_DEPENDENCY``,
+   ``FileNotFoundError`` / ``PermissionError`` → ``IO_ERROR``,
+   ``ValueError`` / ``TypeError`` → ``INVALID_INPUT``.
+
+The legacy string-only path keeps producing the same answers as before,
+which is what the three-way round-trip test in ``test_codes_roundtrip``
+relies on.
 """
 
 from __future__ import annotations
@@ -11,12 +30,8 @@ from __future__ import annotations
 from app.errors._codes import TaskErrorCode
 
 
-def infer_error_code(message: str) -> str:
-    """Map a lowercased exception message to a canonical task error code.
-
-    The rules are pattern-match only; type-based branches (e.g. for
-    ``FileNotFoundError``) live in :mod:`app.errors`.
-    """
+def _match_by_message(message: str) -> str:
+    """Return a TaskErrorCode for messages with a recognised keyword, or PROCESS_FAILED."""
     if "ffmpeg" in message or "ffprobe" in message:
         return TaskErrorCode.MISSING_FFMPEG.value
     if "flownet_v" in message or "model" in message:
@@ -35,3 +50,38 @@ def infer_error_code(message: str) -> str:
     if "cancelled" in message or "canceled" in message:
         return TaskErrorCode.CANCELLED.value
     return TaskErrorCode.PROCESS_FAILED.value
+
+
+def _dispatch_by_type(exc: BaseException) -> str | None:
+    """Map common stdlib exception types to coarse TaskErrorCode buckets.
+
+    Returns ``None`` when no bucket applies, signalling the caller to fall
+    through to ``PROCESS_FAILED``.
+    """
+    if isinstance(exc, (ModuleNotFoundError, ImportError)):
+        return TaskErrorCode.MISSING_PYTHON_DEPENDENCY.value
+    if isinstance(exc, (FileNotFoundError, PermissionError)):
+        return TaskErrorCode.IO_ERROR.value
+    if isinstance(exc, (ValueError, TypeError)):
+        return TaskErrorCode.INVALID_INPUT.value
+    return None
+
+
+def infer_error_code(exc_or_message: BaseException | str) -> str:
+    """Resolve the canonical task error code for *exc_or_message*.
+
+    Accepts either an exception instance or a pre-lowercased message string.
+    With an exception, runs the message-pattern pass first (so keyword
+    matches like ``"ffmpeg"`` keep their specific code) before falling back
+    to ``isinstance`` dispatch over the common stdlib hierarchy.
+    """
+    if isinstance(exc_or_message, BaseException):
+        message_hit = _match_by_message(str(exc_or_message).lower())
+        if message_hit != TaskErrorCode.PROCESS_FAILED.value:
+            return message_hit
+        bucket = _dispatch_by_type(exc_or_message)
+        if bucket is not None:
+            return bucket
+        return TaskErrorCode.PROCESS_FAILED.value
+
+    return _match_by_message(exc_or_message)

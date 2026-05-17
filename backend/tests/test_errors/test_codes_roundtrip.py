@@ -183,3 +183,80 @@ def test_main_bootstrap_uses_shared_inference_when_available() -> None:
     recognises (``tensor backend`` literal) is routed correctly."""
     code = app_main._bootstrap_error_code(RuntimeError("tensor backend not installed"))
     assert code == TaskErrorCode.MISSING_TENSOR_BACKEND.value
+
+
+# ---------------------------------------------------------------------------
+# Phase 4.1 — stdlib type dispatch fallback.
+# ---------------------------------------------------------------------------
+# When the exception message has no recognised keyword, the resolver should
+# fall through to coarse ``isinstance`` buckets so common stdlib errors get a
+# more useful code than the generic ``PROCESS_FAILED``. The ``infer_error_code``
+# string-only legacy path keeps producing ``PROCESS_FAILED`` for the same
+# messages — only the exception-aware path provides type-level routing.
+
+_TYPE_DISPATCH_FIXTURES: list[tuple[BaseException, str]] = [
+    (
+        ImportError("cannot import name 'foo' from 'bar'"),
+        TaskErrorCode.MISSING_PYTHON_DEPENDENCY.value,
+    ),
+    (
+        ModuleNotFoundError("import side-effect blew up"),
+        TaskErrorCode.MISSING_PYTHON_DEPENDENCY.value,
+    ),
+    (
+        FileNotFoundError("temp scratch dir vanished"),
+        TaskErrorCode.IO_ERROR.value,
+    ),
+    (
+        PermissionError("cannot open output for writing"),
+        TaskErrorCode.IO_ERROR.value,
+    ),
+    (
+        ValueError("crf must be between 0 and 51"),
+        TaskErrorCode.INVALID_INPUT.value,
+    ),
+    (
+        TypeError("preset must be a string"),
+        TaskErrorCode.INVALID_INPUT.value,
+    ),
+    (
+        RuntimeError("truly opaque failure"),
+        TaskErrorCode.PROCESS_FAILED.value,
+    ),
+]
+
+
+@pytest.mark.parametrize(("exc", "expected_code"), _TYPE_DISPATCH_FIXTURES)
+def test_type_dispatch_fallback(exc: BaseException, expected_code: str) -> None:
+    """No keyword in the message → fall back to ``isinstance`` buckets.
+
+    Asserts that both ``infer_error_code(exc)`` (the new
+    exception-aware overload) and ``ProcessError.from_exception(exc)`` agree
+    on the coarse bucket the type dispatch picked.
+    """
+    assert infer_error_code(exc) == expected_code
+    assert ProcessError.from_exception(exc).code == expected_code
+
+
+def test_message_match_wins_over_type_dispatch() -> None:
+    """A keyword in the message must outrank the stdlib type bucket.
+
+    ``FileNotFoundError`` would normally bucket to ``IO_ERROR``, but a
+    message naming ``ffmpeg`` must still map to ``MISSING_FFMPEG`` so the
+    long-standing CLI behavior is preserved.
+    """
+    exc = FileNotFoundError("ffmpeg binary missing")
+    assert infer_error_code(exc) == TaskErrorCode.MISSING_FFMPEG.value
+    exc2 = ImportError("No module named 'torch'")
+    assert infer_error_code(exc2) == TaskErrorCode.MISSING_TENSOR_BACKEND.value
+
+
+def test_legacy_string_api_unchanged() -> None:
+    """The string-only ``infer_error_code(message)`` overload is untouched.
+
+    Callers that only have a lowercased message (eg. the bootstrap inline
+    fallback in ``__main__``) still get the same ``PROCESS_FAILED`` result
+    they did before — type dispatch is exception-aware only.
+    """
+    assert infer_error_code("truly opaque failure") == TaskErrorCode.PROCESS_FAILED.value
+    assert infer_error_code("crf must be between 0 and 51") == TaskErrorCode.PROCESS_FAILED.value

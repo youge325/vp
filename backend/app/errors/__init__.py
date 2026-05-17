@@ -42,11 +42,14 @@ class ProcessError(Exception):
         If *exc* is already a ``ProcessError`` it is returned unchanged.
         Delegates the code-inference rules to
         :func:`app.errors._bootstrap.infer_error_code` — the single source
-        of truth shared with ``__main__``'s import-time fallback.
+        of truth shared with ``__main__``'s import-time fallback. The
+        exception object (not just its message) is forwarded so the
+        resolver can apply the Phase 4.1 ``isinstance`` dispatch when no
+        keyword in the message gives a more specific answer.
         """
         if isinstance(exc, ProcessError):
             return exc
-        code = infer_error_code(str(exc).lower())
+        code = infer_error_code(exc)
         return cls(
             code,
             str(exc),

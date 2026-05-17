@@ -22,14 +22,17 @@ def _bootstrap_error_code(exc: BaseException) -> str:
     """Resolve an error code without depending on a fully-loaded ``app``.
 
     The primary path delegates to :func:`app.errors._bootstrap.infer_error_code`
-    which is the single source of truth for code inference. Only when the
-    bootstrap module itself fails to import (catastrophic dependency error
-    before the package finishes loading) do we fall back to a minimal inline
-    pattern set. Keep this inline list short and aligned with the bootstrap
-    module so the two never disagree on the codes they share.
+    which is the single source of truth for code inference. The full
+    exception object is forwarded so the bootstrap-mode resolver can run
+    its Phase 4.1 ``isinstance`` dispatch even before the rest of ``app``
+    is importable. Only when the bootstrap module itself fails to import
+    (catastrophic dependency error before the package finishes loading)
+    do we fall back to a minimal inline pattern set. Keep this inline list
+    short and aligned with the bootstrap module so the two never disagree
+    on the codes they share.
     """
     if infer_error_code is not None:
-        return infer_error_code(str(exc).lower())
+        return infer_error_code(exc)
     # Bootstrap-only fallback: ``app.errors._bootstrap`` failed to import,
     # so we cannot share rules. Mirror the most common cases verbatim.
     message = str(exc).lower()

@@ -3,12 +3,124 @@
 //! Pulls the canonical command list from ``src/commands_manifest.rs`` via
 //! ``include!`` so that adding a new ``#[tauri::command]`` only requires
 //! editing one file (the manifest), not two.
+//!
+//! Phase 4.4 — Also runs ``scripts/check_error_code_drift.py`` before
+//! the rest of the build so any Rust ↔ Python ↔ TS TaskErrorCode drift
+//! fails the compile, not the later runtime IPC roundtrip. Test workflows
+//! already invoke the script explicitly; wiring it into ``cargo build``
+//! covers the path where a developer skips the dedicated CI step (local
+//! ``cargo build`` / ``cargo run`` / ``cargo install``).
+
+use std::path::Path;
+use std::process::Command;
 
 include!("src/commands_manifest.rs");
 
 fn main() {
+    run_drift_check();
+
     let attributes = tauri_build::Attributes::new()
         .app_manifest(tauri_build::AppManifest::new().commands(APP_COMMAND_NAMES));
 
     tauri_build::try_build(attributes).expect("failed to run tauri-build");
+}
+
+/// Invoke the cross-layer ``TaskErrorCode`` consistency checker.
+///
+/// Failure modes:
+/// - ``VP_SKIP_DRIFT_CHECK=1``: skip entirely (logs a cargo warning so the
+///   bypass is visible in build output).
+/// - Script missing on disk: log a warning and continue — likely a partial
+///   workspace checkout, no point failing the build over it.
+/// - Python not found / fails to spawn: log a warning and continue. The
+///   Test Frontend workflow runs ``python scripts/check_error_code_drift.py``
+///   explicitly, so CI still gates drift even when this side-channel is
+///   skipped locally.
+/// - Script exits non-zero: forward stderr lines as cargo warnings and
+///   ``panic!`` so cargo reports the build as failed.
+fn run_drift_check() {
+    if std::env::var_os("VP_SKIP_DRIFT_CHECK").is_some() {
+        println!(
+            "cargo:warning=VP_SKIP_DRIFT_CHECK is set; skipping TaskErrorCode drift check",
+        );
+        return;
+    }
+
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .expect("CARGO_MANIFEST_DIR not set by cargo");
+    let project_root = match Path::new(&manifest_dir).ancestors().nth(2) {
+        Some(p) => p.to_path_buf(),
+        None => {
+            println!(
+                "cargo:warning=could not derive project root from CARGO_MANIFEST_DIR={}; skipping drift check",
+                manifest_dir,
+            );
+            return;
+        }
+    };
+    let script = project_root.join("scripts").join("check_error_code_drift.py");
+
+    if !script.exists() {
+        println!(
+            "cargo:warning=drift check script missing at {} — skipping",
+            script.display(),
+        );
+        return;
+    }
+
+    // Tell cargo to re-run this build script whenever any SSOT input
+    // changes. Without these, cargo would cache the previous success and
+    // a subsequent rename in ``task.rs`` would slip through.
+    println!("cargo:rerun-if-changed={}", script.display());
+    for rel in [
+        "frontend/src-tauri/src/models/task.rs",
+        "frontend/src-tauri/src/models/config.rs",
+        "frontend/src-tauri/src/protocol.rs",
+        "backend/app/errors/_codes.py",
+        "frontend/src/types/generated/TaskErrorCode.ts",
+    ] {
+        println!(
+            "cargo:rerun-if-changed={}",
+            project_root.join(rel).display(),
+        );
+    }
+    println!("cargo:rerun-if-env-changed=VP_SKIP_DRIFT_CHECK");
+
+    let python = std::env::var("PYTHON").unwrap_or_else(|_| "python".to_string());
+    let result = Command::new(&python)
+        .arg(&script)
+        .current_dir(&project_root)
+        // Force UTF-8 stdio so the script's Chinese fix-it tips don't get
+        // mojibake'd through Windows console MBCS when cargo replays them
+        // as ``cargo:warning=`` lines.
+        .env("PYTHONIOENCODING", "utf-8")
+        .env("PYTHONUTF8", "1")
+        .output();
+
+    let output = match result {
+        Ok(o) => o,
+        Err(err) => {
+            println!(
+                "cargo:warning=could not invoke '{}' to run drift check ({}); \
+                 set VP_SKIP_DRIFT_CHECK=1 to suppress this warning",
+                python, err,
+            );
+            return;
+        }
+    };
+
+    if !output.status.success() {
+        for line in String::from_utf8_lossy(&output.stderr).lines() {
+            if !line.is_empty() {
+                println!("cargo:warning={}", line);
+            }
+        }
+        panic!(
+            "cross-layer TaskErrorCode drift detected (exit code {:?}); \
+             see warnings above. Re-run `python scripts/check_error_code_drift.py` \
+             from the repo root for the full diff, or set VP_SKIP_DRIFT_CHECK=1 \
+             to bypass in an emergency.",
+            output.status.code(),
+        );
+    }
 }

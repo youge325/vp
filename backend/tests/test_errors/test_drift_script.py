@@ -57,11 +57,13 @@ def test_three_layers_consistent() -> None:
     """
     _require_ts_generated()
     module = _load_module()
-    rust = module.collect_rust_codes(module._read(module.RUST_PATH))
-    python = module.collect_python_codes(module._read(module.PY_PATH))
-    ts = module.collect_ts_codes(module._read(module.TS_PATH))
+    rust = module._collect_rust_task_error_codes(module._read(module.RUST_TASK_PATH))
+    python = module._collect_python_codes(module._read(module.PY_PATH))
+    ts = module._collect_ts_codes_from_task_error_code_file(
+        module._read(module.TS_TASK_ERROR_CODE_PATH),
+    )
 
-    issues = module.diff_report(rust, python, ts)
+    issues = module._diff_task_error_code(rust, python, ts)
     assert not issues, "TaskErrorCode 三层漂移:\n  - " + "\n  - ".join(issues)
     # 双重保险:确保解析到了真实数据,而不是空集合互等
     assert len(rust) >= 8, f"Rust codes 数量过少({len(rust)}),解析可能失败"
