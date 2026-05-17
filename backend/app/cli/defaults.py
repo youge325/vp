@@ -231,6 +231,34 @@ def _resolve_fps_and_multi(
     return multi, encode_fps, None, False
 
 
+def _resolve_workflow_and_output_fps(
+    workflow_config: dict[str, Any],
+    ffmpeg: FFmpegWrapper,
+    input_path: str,
+) -> tuple[dict[str, Any], float | None]:
+    """Phase D.6.3 — 把 _resolve_fps_and_multi 的两段样板收敛到一处。
+
+    `_process_planning.build_plan` 与 `cmd_inspect_output` 都需要:
+    1. 调 `_resolve_fps_and_multi` 拿到推导后的 multi / encode_fps / need_resample
+    2. 用不 mutate 原对象的方式把 multi 写回 workflow_config
+    3. 把 encode_fps 折算为 `final_output_fps`(仅当 need_resample 时使用)
+
+    返回的 ``workflow_config`` 是一个新对象;调用方应整体替换变量绑定,
+    不要继续使用旧的引用。
+    """
+    multi, encode_fps, _interpolated_fps, need_resample = _resolve_fps_and_multi(
+        workflow_config,
+        ffmpeg,
+        input_path,
+    )
+    new_workflow_config = {
+        **workflow_config,
+        "interpolation": {**workflow_config["interpolation"], "multi": multi},
+    }
+    final_output_fps = encode_fps if need_resample else None
+    return new_workflow_config, final_output_fps
+
+
 def _resolve_expected_output_frames(
     *,
     ffmpeg: FFmpegWrapper,
