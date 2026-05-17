@@ -8,6 +8,16 @@
 // 现在 5 处 caller 共享同一 runner;listeners 也只挂一份。
 //
 // pinia store 本来就是单例,模块级缓存 runner 不会泄漏过期的 store 引用。
+//
+// Phase 7f — ADR 边界:
+// - 单例的"持有方"是 *模块*,不是某个组件。组件只通过 ``useTaskOrchestrator()``
+//   读取共享视图(views / computed),不拥有生命周期。
+// - listener 绑定的所有权交给 ``useBootstrap`` —— 它是应用根组件的
+//   composable,attach 在 ``onMounted``、detach 在 ``onBeforeUnmount``。
+//   任何其他 caller 都不应主动 detach(注释里也写了);测试场景需要
+//   完整重置(例如 ``setActivePinia`` 之后)时调用 ``disposeRunner``,
+//   它会同时把 runner 与 detach handle 一并清掉,让下次 ``ensureRunner``
+//   重新解析 Pinia store。
 
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -57,6 +67,29 @@ function ensureRunner(): BatchRunner {
     buildRequest: (item, resumeMode) => buildTaskRequest(item, resumeMode),
   })
   return cachedRunner
+}
+
+/**
+ * Tear down the module-level singleton so the next ``ensureRunner`` call
+ * builds a fresh ``BatchRunner`` against whatever ``useXxxStore`` returns
+ * at that point.
+ *
+ * Production code does not need this — the module lives as long as the
+ * page does. It exists for:
+ *   1. ``useBootstrap``'s ``onBeforeUnmount`` hook on the root component,
+ *      so the app shutdown path doesn't leak the running listener.
+ *   2. Tests that call ``setActivePinia(createPinia())`` between cases:
+ *      without ``disposeRunner`` the cached runner still points at the
+ *      previous Pinia's stores and every subsequent ``startBatch`` call
+ *      writes to a detached store.
+ *
+ * Phase 7f — promoted from an internal detail of ``detachTaskListeners``
+ * to a named export so the two callsites above can express intent.
+ */
+export function disposeRunner(): void {
+  detachHandle?.()
+  detachHandle = null
+  cachedRunner = null
 }
 
 export function useTaskOrchestrator() {

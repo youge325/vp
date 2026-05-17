@@ -10,6 +10,7 @@ import BaseField from '@/components/forms/BaseField.vue'
 import BaseNumber from '@/components/forms/BaseNumber.vue'
 import BaseSelect from '@/components/forms/BaseSelect.vue'
 import BaseToggle from '@/components/forms/BaseToggle.vue'
+import CapabilityOptionField from '@/components/forms/CapabilityOptionField.vue'
 import type { RateControlMode } from '@/types/domain/workflow'
 
 const {
@@ -25,7 +26,6 @@ const {
   setOutputDir,
   setOpenOnComplete,
   setSegmentFrames,
-  coerceOptionValue,
 } = useEncodeForm()
 
 const { pickOutputDirectory } = useOutputPicker()
@@ -159,49 +159,17 @@ async function handlePickOutputDirectory(): Promise<void> {
         </div>
       </div>
 
+      <!-- Phase 7c — 编码器探测出的 capability options 走与 decode 视图相同的
+           ``CapabilityOptionField``,boolean/choice/number/string 由组件内部一处
+           switch 决定,模板不再重复四分支结构。 -->
       <div class="field-grid field-grid-2">
-        <label v-for="option in encoderOptions" :key="option.name" class="field">
-          <span>{{ option.label }}</span>
-
-          <label v-if="option.type === 'boolean'" class="toggle-chip">
-            <input
-              :checked="Boolean(getEncodeOption(option))"
-              type="checkbox"
-              @change="setEncodeOption(option.name, coerceOptionValue(option, $event))"
-            />
-            <span>启用</span>
-          </label>
-
-          <select
-            v-else-if="option.type === 'choice'"
-            :value="String(getEncodeOption(option))"
-            @change="setEncodeOption(option.name, coerceOptionValue(option, $event))"
-          >
-            <option
-              v-for="choice in option.choices"
-              :key="`${option.name}-${choice.value}`"
-              :value="String(choice.value)"
-            >
-              {{ choice.label }}
-            </option>
-          </select>
-
-          <input
-            v-else-if="option.type === 'number'"
-            :value="Number(getEncodeOption(option))"
-            type="number"
-            :min="option.min ?? undefined"
-            :max="option.max ?? undefined"
-            @input="setEncodeOption(option.name, coerceOptionValue(option, $event))"
-          />
-
-          <input
-            v-else
-            :value="String(getEncodeOption(option))"
-            type="text"
-            @input="setEncodeOption(option.name, coerceOptionValue(option, $event))"
-          />
-        </label>
+        <CapabilityOptionField
+          v-for="option in encoderOptions"
+          :key="option.name"
+          :option="option"
+          :model-value="getEncodeOption(option)"
+          @update:model-value="setEncodeOption(option.name, $event)"
+        />
       </div>
     </section>
   </div>
