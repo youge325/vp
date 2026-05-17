@@ -1,19 +1,22 @@
 # VP Workbench
 
-基于 Tauri 的桌面视频处理工作台，当前围绕“配置先行”的单一工作流构建：
+基于 Tauri v2 的桌面视频处理工作台，当前围绕"配置先行"的单一工作流构建：
 
 1. `home`：启动探测、能力缓存与运行时概览
 2. `input`：批量导入素材
 3. `decode`：解码方案与硬件设备
-4. `enhance`：补帧 / 超分 / 动漫优化
-5. `encode`：编码器与输出配置
-6. `render`：批处理队列与任务日志
+4. `preprocess`：解码后帧级滤镜链
+5. `enhance`：补帧 / 超分 / 动漫优化
+6. `postprocess`：增强后帧级滤镜链
+7. `encode`：编码器与输出配置
+8. `render`：批处理队列与任务日志
 
 ## 仓库结构
 
 - `backend/`：Python CLI 与流式处理链路
 - `frontend/`：Vue 3 + TypeScript + Pinia + Vue Router
 - `frontend/src-tauri/`：Tauri v2 桌面外壳、权限与运行时桥接
+- `docs/`：开发文档（见下方导航）
 
 ## 当前桌面命令面
 
@@ -25,8 +28,11 @@
 - `load_workbench_preset`
 - `save_workbench_preset`
 - `inspect_video`
+- `check_resume_state`
 - `start_task`
 - `cancel_task`
+- `pause_task`
+- `resume_task`
 - `open_output_location`
 
 后端 CLI 只保留下面四个入口:
@@ -34,7 +40,23 @@
 - `python -m app check`
 - `python -m app info --input <video>`
 - `python -m app process --input <video> ...`
-- `python -m app inspect-output --input <video> ...`(由 Tauri 主机在启动 `process` 前做续传预检)
+- `python -m app inspect-output --input <video> ...`（由 Tauri 主机在启动 `process` 前做续传预检）
+
+## 开发文档
+
+| 文档 | 内容 |
+|------|------|
+| [总体架构概览](docs/01-architecture-overview.md) | 三层架构、技术栈、核心设计特征 |
+| [前端架构](docs/02-frontend-architecture.md) | Vue 3 + Pinia + IPC 层 + 类型生成 |
+| [Rust 桌面外壳](docs/03-rust-shell-architecture.md) | Tauri Command、进程管理、持久化 |
+| [Python 后端](docs/04-backend-architecture.md) | CLI、流式处理、算法层、FFmpeg |
+| [IPC 通信协议](docs/05-ipc-protocol.md) | NDJSON 协议、错误码体系、事件分发 |
+| [配置数据流](docs/06-data-flow.md) | 参数映射、续传状态、进度上报 |
+| [任务生命周期](docs/07-task-lifecycle.md) | 状态机、启动/取消/暂停流程、Watchdog |
+| [错误处理](docs/08-error-handling.md) | 三层错误码、跨层传播、编译期一致性 |
+| [断点续传](docs/09-resume-checkpointing.md) | SegmentManifest、续传决策、片段生命周期 |
+| [环境与部署](docs/10-environment-deployment.md) | 资源解析、环境变量、Release 构建 |
+| [开发指南](docs/11-development-guide.md) | 开发命令、测试策略、调试技巧、Checklist |
 
 ## 本地开发
 
@@ -119,12 +141,7 @@ ONNX 引擎默认走 CUDA EP。若想启用 TensorRT EP 拿到额外性能，需
 2. 下载并解压 NVIDIA TensorRT 10.x（与 CUDA 版本匹配，例如 CUDA 13 对应 TRT 10.14）
 3. 把解压根目录设到 `VP_TENSORRT_DIR`，例如 `D:\TensorRT-10.14.1.48`
 
-桌面外壳会通过 `build_env_map` 把变量透传给 Python 子进程，后端 [`register_native_dll_paths`](backend/app/utils/dll_paths.py) 会在创建 ONNX session 前自动把 `<dir>/bin` 注册到 DLL 搜索路径，无需手动改系统 PATH。未设置变量时引擎自动降级到 CUDA EP。
-
-更细的参数流转和字段映射见：
-
-- `docs/architecture-parameter-flow.md`
-- `docs/field-level-mapping.md`
+桌面外壳会通过 `build_env_map` 把变量透传给 Python 子进程，后端 `register_native_dll_paths` 会在创建 ONNX session 前自动把 `<dir>/bin` 注册到 DLL 搜索路径，无需手动改系统 PATH。未设置变量时引擎自动降级到 CUDA EP。
 
 ## 参考项目
 
