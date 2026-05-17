@@ -13,7 +13,16 @@ use crate::error::ShellError;
 use crate::models::WorkbenchPreset;
 use crate::runtime::ResolvedRuntimePaths;
 
-const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 2;
+// Phase 8 — bumped from 2 to 3. ``AlgorithmInfo`` gained the
+// ``tensorBackends`` field, and ``#[serde(default)]`` makes old
+// cache entries (which lack the field) silently deserialize with
+// an empty vec. The frontend then filters every algorithm out of
+// the dropdown because ``[].includes(backend)`` is always false,
+// which is the bug users saw: "切换后端后,三个后端都找不到模型".
+// Bumping the version forces ``load_environment_cache`` to skip
+// the stale file and re-run ``python -m app check``, whose fresh
+// output now carries ``tensorBackends`` end-to-end.
+const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 3;
 const WORKBENCH_PRESET_SCHEMA_VERSION: u32 = 1;
 const ENVIRONMENT_CACHE_FILE: &str = "environment-cache.json";
 const WORKBENCH_PRESET_FILE: &str = "workbench-preset.json";
