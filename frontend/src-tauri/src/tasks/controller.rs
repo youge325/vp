@@ -11,10 +11,10 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::models::{TaskCancelledPayload, TaskCancelledReason, TaskErrorPayload};
-use crate::process_control::ProcessController;
+use crate::process_control::{ProcessController, ProcessControlError};
 use crate::protocol::TaskEventName;
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
-use crate::tasks::runner::ProgressBeat;
+use crate::tasks::readers::ProgressBeat;
 use crate::tasks::state::{TaskControlKind, TaskControlMessage, TaskState};
 use crate::tasks::stderr::StderrCapture;
 
@@ -132,7 +132,6 @@ pub fn spawn_task_controller<R: Runtime + 'static>(
                     let result = handle_pause_resume(
                         &*controller,
                         root_pid,
-                        &cancel_token,
                         message.kind,
                         &mut is_paused,
                     );
@@ -151,20 +150,21 @@ pub fn spawn_task_controller<R: Runtime + 'static>(
                 wait_result = &mut exit_rx => {
                     status = match wait_result {
                         Ok(status) => status,
-                        Err(_) => Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "wait task was dropped",
-                        )),
+                        Err(_) => Err(io::Error::other("wait task was dropped")),
                     };
                     break;
                 }
             }
         }
 
+        // Phase 5d — drop the state machine back to ``Idle`` through
+        // the dedicated transition rather than poking
+        // ``state.current`` directly. ``finish`` accepts any phase, so
+        // this works for normal completion, error exit, and the
+        // cancel-triggered kill path alike.
         {
             let state = app.state::<TaskState>();
-            let mut guard = state.current.lock().await;
-            *guard = None;
+            state.finish().await;
         }
 
         emit_terminal_event(
@@ -229,7 +229,7 @@ fn emit_terminal_event<R: Runtime>(
                     TaskEventName::TaskError.as_str(),
                     TaskErrorPayload {
                         code: crate::protocol::TaskErrorCode::RuntimePanic,
-                        message: format!("Backend process exited with status {}.", exit_status),
+                        message: format!("Backend process exited with status {exit_status}."),
                         details,
                     },
                 );
@@ -256,13 +256,18 @@ fn emit_terminal_event<R: Runtime>(
 fn handle_pause_resume(
     controller: &dyn ProcessController,
     root_pid: u32,
-    cancel_token: &CancellationToken,
     kind: TaskControlKind,
     is_paused: &mut bool,
-) -> Result<(), String> {
-    if cancel_token.is_cancelled() {
-        return Err("The task is already being cancelled.".to_string());
-    }
+) -> Result<(), ProcessControlError> {
+    // Phase 5a — cancellation check moved up to ``send_task_control``
+    // (and the controller's ``cancel_token.cancelled()`` select branch
+    // races us to the kill path either way). Keeping the check here as
+    // well would force the function to carry an unrelated ``CancellationToken``
+    // argument and produce a stringly-typed error variant just for
+    // this one early-return path. The race window between the outer
+    // check and this call is harmless: a suspend/resume against an
+    // already-killed process simply surfaces as
+    // ``ProcessControlError::NotFound``.
     match kind {
         TaskControlKind::Pause => {
             if *is_paused {
@@ -344,47 +349,20 @@ mod tests {
     }
 
     #[test]
-    fn handle_pause_resume_rejects_when_cancelled() {
-        struct NoopController;
-        impl ProcessController for NoopController {
-            fn suspend(&self, _pid: u32) -> Result<(), String> {
-                Ok(())
-            }
-            fn resume(&self, _pid: u32) -> Result<(), String> {
-                Ok(())
-            }
-        }
-        let token = CancellationToken::new();
-        token.cancel(CancelReason::User);
-        let mut paused = false;
-        let result = handle_pause_resume(
-            &NoopController,
-            1234,
-            &token,
-            TaskControlKind::Pause,
-            &mut paused,
-        );
-        assert!(result.is_err());
-        assert!(!paused);
-    }
-
-    #[test]
     fn handle_pause_resume_is_idempotent() {
         struct NoopController;
         impl ProcessController for NoopController {
-            fn suspend(&self, _pid: u32) -> Result<(), String> {
+            fn suspend(&self, _pid: u32) -> Result<(), ProcessControlError> {
                 Ok(())
             }
-            fn resume(&self, _pid: u32) -> Result<(), String> {
+            fn resume(&self, _pid: u32) -> Result<(), ProcessControlError> {
                 Ok(())
             }
         }
-        let token = CancellationToken::new();
         let mut paused = false;
         assert!(handle_pause_resume(
             &NoopController,
             1,
-            &token,
             TaskControlKind::Pause,
             &mut paused,
         )
@@ -394,12 +372,39 @@ mod tests {
         assert!(handle_pause_resume(
             &NoopController,
             1,
-            &token,
             TaskControlKind::Pause,
             &mut paused,
         )
         .is_ok());
         assert!(paused);
+    }
+
+    #[test]
+    fn handle_pause_resume_forwards_controller_failure() {
+        // Phase 5a — replaces the old "rejects when cancelled" test.
+        // The cancellation early-return moved up to ``send_task_control``
+        // (see the inline comment in ``handle_pause_resume``). What we
+        // still want to lock in here is that a controller failure is
+        // surfaced as a typed [`ProcessControlError`] instead of being
+        // silently swallowed.
+        struct FailingController;
+        impl ProcessController for FailingController {
+            fn suspend(&self, _pid: u32) -> Result<(), ProcessControlError> {
+                Err(ProcessControlError::NotFound)
+            }
+            fn resume(&self, _pid: u32) -> Result<(), ProcessControlError> {
+                Ok(())
+            }
+        }
+        let mut paused = false;
+        let result = handle_pause_resume(
+            &FailingController,
+            1234,
+            TaskControlKind::Pause,
+            &mut paused,
+        );
+        assert!(matches!(result, Err(ProcessControlError::NotFound)));
+        assert!(!paused, "paused flag must not flip when controller errored");
     }
 
     // Quick sanity that the Instant type wires up — used by the watchdog.

@@ -14,7 +14,7 @@ mod helpers;
 mod model;
 mod python;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -95,7 +95,7 @@ pub fn resolve_runtime_paths<R: Runtime>(
 }
 
 fn resolve_backend_dir(
-    workspace_root: &PathBuf,
+    workspace_root: &Path,
     resource_dir: Option<&PathBuf>,
 ) -> Result<PathBuf, ShellError> {
     let resource_backend = resource_dir.and_then(|path| {
@@ -120,7 +120,7 @@ fn resolve_backend_dir(
 }
 
 fn resolve_runtime_root(
-    frontend_dir: &PathBuf,
+    frontend_dir: &Path,
     resource_dir: Option<&PathBuf>,
 ) -> Option<PathBuf> {
     let dev_runtime_root = if cfg!(debug_assertions) {
@@ -167,8 +167,7 @@ fn require_release_bundle_artifacts(
     }
     if !has_default_rife_model(model_dir.as_ref()) {
         return Err(ShellError::RuntimeResolution(format!(
-            "Bundled RIFE model is missing. Set VP_RIFE_MODEL_DIR or include resources/runtime/models/{}.",
-            DEFAULT_RIFE_MODEL_FILENAME
+            "Bundled RIFE model is missing. Set VP_RIFE_MODEL_DIR or include resources/runtime/models/{DEFAULT_RIFE_MODEL_FILENAME}.",
         )));
     }
     Ok(())

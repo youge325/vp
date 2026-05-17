@@ -45,10 +45,9 @@ pub async fn open_output_location(path: String) -> Result<(), ShellError> {
     } else {
         path_buf.parent().map(PathBuf::from).unwrap_or(path_buf)
     };
-    open::that_detached(target).map_err(|error| {
-        ShellError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Unable to open output location: {error}"),
-        ))
-    })
+    // Phase 5e — route ``open::that_detached`` failures into the
+    // dedicated [`ShellError::OpenLocation`] variant so the original
+    // ``io::Error`` survives in the source chain instead of being
+    // re-wrapped inside a synthetic ``io::Error::new(Other, ...)``.
+    open::that_detached(target).map_err(ShellError::OpenLocation)
 }

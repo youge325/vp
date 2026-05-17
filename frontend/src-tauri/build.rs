@@ -52,8 +52,7 @@ fn run_drift_check() {
         Some(p) => p.to_path_buf(),
         None => {
             println!(
-                "cargo:warning=could not derive project root from CARGO_MANIFEST_DIR={}; skipping drift check",
-                manifest_dir,
+                "cargo:warning=could not derive project root from CARGO_MANIFEST_DIR={manifest_dir}; skipping drift check",
             );
             return;
         }
@@ -124,9 +123,8 @@ fn run_drift_check() {
         Ok(o) => o,
         Err(err) => {
             println!(
-                "cargo:warning=could not invoke '{}' to run drift check ({}); \
+                "cargo:warning=could not invoke '{python}' to run drift check ({err}); \
                  set VP_SKIP_DRIFT_CHECK=1 to suppress this warning",
-                python, err,
             );
             return;
         }
@@ -135,7 +133,7 @@ fn run_drift_check() {
     if !output.status.success() {
         for line in String::from_utf8_lossy(&output.stderr).lines() {
             if !line.is_empty() {
-                println!("cargo:warning={}", line);
+                println!("cargo:warning={line}");
             }
         }
         panic!(

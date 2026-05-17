@@ -1,5 +1,43 @@
+//! Three-phase task state machine.
+//!
+//! Phase 5d — replaced the previous ``Mutex<Option<TaskHandle>>`` shim
+//! with an explicit ``Idle / Running / Cancelling`` enum guarded by a
+//! single ``Mutex<TaskStatePhase>``. The atomic transitions
+//! ([`TaskState::try_start`], [`TaskState::begin_cancel`],
+//! [`TaskState::finish`]) close the read-then-write race window that
+//! used to exist between ``spawn_task``'s "is anything running?" peek
+//! and the subsequent write of the new ``TaskHandle``.
+//!
+//! State diagram:
+//!
+//! ```text
+//!                       try_start(handle)
+//!         ┌────────────────────────────────────────┐
+//!         │                                        │
+//!         ▼            begin_cancel ─→             │
+//!      ┌──────┐                              ┌─────────────┐
+//!      │ Idle │                              │ Cancelling  │
+//!      └──────┘                              └─────────────┘
+//!         ▲              finish                    │
+//!         └────────────────────────────────────────┘
+//!                                                  ▲
+//!                                                  │ finish
+//!                                                  │
+//!                                              ┌─────────┐
+//!                                              │ Running │
+//!                                              └─────────┘
+//!                                                  ▲
+//!                                                  │ try_start
+//!                                                  │
+//!                                                  Idle
+//! ```
+
+use std::time::Instant;
+
 use tokio::sync::{oneshot, Mutex};
 
+use crate::error::ShellError;
+use crate::process_control::ProcessControlError;
 use crate::tasks::handle::TaskHandle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -10,10 +48,204 @@ pub enum TaskControlKind {
 
 pub struct TaskControlMessage {
     pub kind: TaskControlKind,
-    pub response: oneshot::Sender<Result<(), String>>,
+    /// Phase 5a — typed reply channel. Previously this was
+    /// ``Result<(), String>``, which forced every layer between the
+    /// process controller and the IPC boundary to round-trip through
+    /// a stringly-typed error and lose the original ``io::Error``
+    /// source. Carrying the structured error all the way out keeps
+    /// the [`ShellError`] conversion (and the eventual frontend
+    /// [`TaskErrorCode`]) honest.
+    ///
+    /// [`ShellError`]: crate::error::ShellError
+    /// [`TaskErrorCode`]: crate::protocol::TaskErrorCode
+    pub response: oneshot::Sender<Result<(), ProcessControlError>>,
+}
+
+/// Lifecycle phase of the single in-flight task.
+pub enum TaskStatePhase {
+    /// No task is running. ``try_start`` is the only legal transition.
+    Idle,
+    /// A task is running normally. ``begin_cancel`` or ``finish`` are
+    /// the legal transitions.
+    Running { handle: TaskHandle },
+    /// A cancel request has been accepted and propagated to the
+    /// controller; we're waiting for the child to actually exit.
+    /// ``started_at`` is observability-only — the watchdog may use it
+    /// to escalate (e.g. SIGKILL) if the child ignores SIGTERM for
+    /// too long. ``finish`` is the only legal transition.
+    Cancelling { handle: TaskHandle, started_at: Instant },
+}
+
+impl Default for TaskStatePhase {
+    fn default() -> Self {
+        Self::Idle
+    }
 }
 
 #[derive(Default)]
 pub struct TaskState {
-    pub current: Mutex<Option<TaskHandle>>,
+    phase: Mutex<TaskStatePhase>,
+}
+
+impl TaskState {
+    /// Fast-path peek used by ``spawn_task`` to avoid paying for a
+    /// fork+exec when there's already a task running. The authoritative
+    /// check happens inside [`try_start`].
+    pub async fn is_idle(&self) -> bool {
+        matches!(*self.phase.lock().await, TaskStatePhase::Idle)
+    }
+
+    /// Atomically transition `Idle` → `Running { handle }`.
+    ///
+    /// Returns ``Err(ShellError::InvalidInput)`` when another task is
+    /// already running (or being cancelled). The check + write are
+    /// performed under the same mutex guard so two concurrent callers
+    /// can't both observe `Idle` and both insert a handle.
+    pub async fn try_start(&self, handle: TaskHandle) -> Result<(), ShellError> {
+        let mut guard = self.phase.lock().await;
+        if !matches!(*guard, TaskStatePhase::Idle) {
+            return Err(ShellError::InvalidInput(
+                "A task is already running.".to_string(),
+            ));
+        }
+        *guard = TaskStatePhase::Running { handle };
+        Ok(())
+    }
+
+    /// Atomically transition `Running` → `Cancelling` and hand back
+    /// the active handle so the caller can fire its cancel token.
+    ///
+    /// Errors:
+    /// - ``Idle`` → ``NoActiveTask``
+    /// - ``Cancelling`` → ``InvalidInput`` ("already being cancelled")
+    pub async fn begin_cancel(&self) -> Result<TaskHandle, ShellError> {
+        let mut guard = self.phase.lock().await;
+        // Take the current phase out so we can transition without
+        // cloning ``TaskHandle`` twice; restore the original variant
+        // on every error path.
+        let current = std::mem::replace(&mut *guard, TaskStatePhase::Idle);
+        match current {
+            TaskStatePhase::Idle => Err(ShellError::NoActiveTask),
+            TaskStatePhase::Running { handle } => {
+                let cloned = handle.clone();
+                *guard = TaskStatePhase::Cancelling {
+                    handle,
+                    started_at: Instant::now(),
+                };
+                Ok(cloned)
+            }
+            TaskStatePhase::Cancelling { handle, started_at } => {
+                *guard = TaskStatePhase::Cancelling { handle, started_at };
+                Err(ShellError::InvalidInput(
+                    "The task is already being cancelled.".to_string(),
+                ))
+            }
+        }
+    }
+
+    /// Read-only handle peek for pause / resume forwarding.
+    ///
+    /// Returns the active handle even in `Cancelling` so an in-flight
+    /// pause/resume request that landed during the cancel window
+    /// still gets a fair chance at reaching the controller (the
+    /// controller's ``cancel_token.cancelled()`` select branch will
+    /// race it to the kill path either way; this matches the
+    /// pre-Phase-5d semantics).
+    pub async fn current_handle(&self) -> Result<TaskHandle, ShellError> {
+        let guard = self.phase.lock().await;
+        match &*guard {
+            TaskStatePhase::Idle => Err(ShellError::NoActiveTask),
+            TaskStatePhase::Running { handle } => Ok(handle.clone()),
+            TaskStatePhase::Cancelling { handle, .. } => Ok(handle.clone()),
+        }
+    }
+
+    /// Drop to `Idle` from any phase. Called by the controller after
+    /// the child process exits — clean exit, error, or post-cancel kill
+    /// all funnel through here so the next ``try_start`` can succeed.
+    pub async fn finish(&self) {
+        let mut guard = self.phase.lock().await;
+        *guard = TaskStatePhase::Idle;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tasks::cancellation::CancellationToken;
+    use tokio::sync::mpsc;
+
+    fn make_handle() -> TaskHandle {
+        let (tx, _rx) = mpsc::channel(1);
+        TaskHandle::new(tx, CancellationToken::new())
+    }
+
+    #[tokio::test]
+    async fn fresh_state_is_idle() {
+        let state = TaskState::default();
+        assert!(state.is_idle().await);
+        assert!(state.current_handle().await.is_err());
+        assert!(state.begin_cancel().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn try_start_transitions_idle_to_running() {
+        let state = TaskState::default();
+        state.try_start(make_handle()).await.expect("idle accepts start");
+        assert!(!state.is_idle().await);
+        assert!(state.current_handle().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn try_start_rejects_when_already_running() {
+        let state = TaskState::default();
+        state.try_start(make_handle()).await.unwrap();
+        let second = state.try_start(make_handle()).await;
+        assert!(second.is_err(), "double-start must be rejected");
+    }
+
+    #[tokio::test]
+    async fn begin_cancel_moves_running_to_cancelling() {
+        let state = TaskState::default();
+        state.try_start(make_handle()).await.unwrap();
+        let _handle = state.begin_cancel().await.expect("running accepts cancel");
+        // Cancel a second time should fail with "already being cancelled".
+        let again = state.begin_cancel().await;
+        assert!(again.is_err());
+    }
+
+    #[tokio::test]
+    async fn current_handle_is_readable_in_cancelling_phase() {
+        let state = TaskState::default();
+        state.try_start(make_handle()).await.unwrap();
+        let _first = state.begin_cancel().await.unwrap();
+        // Pause/resume during the cancel window must still find a handle.
+        assert!(state.current_handle().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn finish_returns_to_idle_from_running() {
+        let state = TaskState::default();
+        state.try_start(make_handle()).await.unwrap();
+        state.finish().await;
+        assert!(state.is_idle().await);
+        // And a fresh start is accepted again.
+        state.try_start(make_handle()).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn finish_returns_to_idle_from_cancelling() {
+        let state = TaskState::default();
+        state.try_start(make_handle()).await.unwrap();
+        state.begin_cancel().await.unwrap();
+        state.finish().await;
+        assert!(state.is_idle().await);
+    }
+
+    #[tokio::test]
+    async fn finish_on_idle_is_noop() {
+        let state = TaskState::default();
+        state.finish().await;
+        assert!(state.is_idle().await);
+    }
 }
