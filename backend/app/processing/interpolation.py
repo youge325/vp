@@ -11,16 +11,24 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
-from app.algorithms.rife.model_loader import SUPPORTED_MODELS as _RIFE_MODELS
-from app.algorithms.rife.onnx_solver import RIFEONNXSolver
+from app.algorithms.pytorch.rife.model_loader import SUPPORTED_MODELS as _RIFE_MODELS
+from app.algorithms.pytorch.rife.onnx_solver import RIFEONNXSolver
 
 if TYPE_CHECKING:
-    from app.algorithms.rife.solver import RIFESolver
+    from app.algorithms.pytorch.rife.solver import RIFESolver
 
 logger = get_logger(__name__)
 
 SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
-    {"name": "rife", "models": list(_RIFE_MODELS)},
+    {
+        # Phase 8 — ``tensorBackends`` 显式声明该算法支持的 tensor
+        # 后端集合。RIFE 同时提供 PyTorch 实现 (algorithms/pytorch/rife/)
+        # 与 ONNX 推理路径,因此两者都列出;paddle 暂无实现,前端切到
+        # paddle 后该算法不会出现在下拉列表里。
+        "name": "rife",
+        "tensorBackends": ["pytorch", "onnx"],
+        "models": list(_RIFE_MODELS),
+    },
 ]
 
 
@@ -88,7 +96,7 @@ class FrameInterpolationAlgorithm(IAlgorithm):
                 f"初始化 RIFE PyTorch 推理器: v{self._model_version}, "
                 f"multi={self._multi}x, scale={self._scale}, fp16={self._fp16}, engine={self._engine}"
             )
-            from app.algorithms.rife.solver import RIFESolver
+            from app.algorithms.pytorch.rife.solver import RIFESolver
 
             self._solver = RIFESolver(
                 model_version=self._model_version,

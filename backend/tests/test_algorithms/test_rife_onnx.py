@@ -39,7 +39,7 @@ def _is_onnxruntime_available():
 
 
 def _weight_exists(version: str) -> bool:
-    from app.algorithms.rife.model_loader import get_model_dir
+    from app.algorithms.pytorch.rife.model_loader import get_model_dir
 
     path = os.path.join(get_model_dir(), f"flownet_v{version}.pkl")
     return os.path.isfile(path) and os.path.getsize(path) > 0
@@ -54,7 +54,7 @@ class TestRIFEONNXExport:
     @pytest.fixture(scope="class")
     def onnx_path(self, tmp_path_factory):
         """导出 ONNX 模型并返回路径（类级别只执行一次）。"""
-        from app.algorithms.rife.onnx_export import export_rife_to_onnx
+        from app.algorithms.pytorch.rife.onnx_export import export_rife_to_onnx
 
         output_dir = tmp_path_factory.mktemp("onnx_models")
         onnx_path = os.path.join(output_dir, "rife_v4.25.onnx")
@@ -101,7 +101,7 @@ class TestRIFEONNXExport:
         import torch
         import onnxruntime as ort
 
-        from app.algorithms.rife.model_loader import (
+        from app.algorithms.pytorch.rife.model_loader import (
             load_rife_model,
             create_backwarp_grid,
             create_flow_div,
@@ -149,7 +149,7 @@ class TestRIFEONNXExport:
     def test_onnx_dynamic_shape(self, onnx_path):
         """ONNX 模型支持动态尺寸（使用 modulo 倍数尺寸验证）。"""
         import onnxruntime as ort
-        from app.algorithms.rife.model_loader import MODEL_CONFIGS
+        from app.algorithms.pytorch.rife.model_loader import MODEL_CONFIGS
 
         session = ort.InferenceSession(onnx_path)
         modulo = MODEL_CONFIGS["4.25"]["modulo"]
@@ -183,9 +183,9 @@ class TestRIFEONNXSolver:
     @pytest.fixture(scope="class")
     def solver(self, tmp_path_factory):
         """导出 ONNX 并创建 Solver。"""
-        from app.algorithms.rife.onnx_export import export_rife_to_onnx
-        from app.algorithms.rife.onnx_solver import RIFEONNXSolver
-        from app.algorithms.rife.model_loader import get_model_dir
+        from app.algorithms.pytorch.rife.onnx_export import export_rife_to_onnx
+        from app.algorithms.pytorch.rife.onnx_solver import RIFEONNXSolver
+        from app.algorithms.pytorch.rife.model_loader import get_model_dir
 
         # 导出到 models 目录（solver 默认从这里加载）
         model_dir = get_model_dir()
@@ -228,9 +228,9 @@ class TestFrameInterpolationAlgorithmONNX:
     @pytest.fixture(scope="class")
     def algorithm(self, tmp_path_factory):
         """导出 ONNX 并创建算法实例。"""
-        from app.algorithms.rife.onnx_export import export_rife_to_onnx
-        from app.algorithms.rife.onnx_solver import RIFEONNXSolver
-        from app.algorithms.rife.model_loader import get_model_dir
+        from app.algorithms.pytorch.rife.onnx_export import export_rife_to_onnx
+        from app.algorithms.pytorch.rife.onnx_solver import RIFEONNXSolver
+        from app.algorithms.pytorch.rife.model_loader import get_model_dir
         from app.algorithms.tensor_backend import OnnxBackend
         from app.processing.interpolation import FrameInterpolationAlgorithm
 

@@ -118,6 +118,25 @@ pub struct RuntimeInfo {
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct AlgorithmInfo {
     pub name: String,
+    /// Phase 8 — tensor backends this algorithm has a working
+    /// implementation for. The frontend uses this list to hide the
+    /// algorithm from the dropdown when the currently selected
+    /// ``workflow.interpolation.tensorBackend`` is not a member —
+    /// previously every algorithm showed up under every backend
+    /// because the metadata had no such field.
+    ///
+    /// Wire values match ``tensor_backend.py::get_tensor_backend``
+    /// (``"pytorch"`` / ``"paddle"`` / ``"onnx"``). Modelled as
+    /// ``Vec<String>`` (not a dedicated enum) because the Python side
+    /// already speaks these strings end-to-end and the schema-drift
+    /// gate would otherwise need a third enum to police.
+    ///
+    /// ``#[serde(default)]`` keeps old persisted ``EnvironmentCheckCache``
+    /// entries (which predate this field) deserializable; they fall back
+    /// to an empty vec, which the frontend filter treats as "do not
+    /// show under any backend" — safer than silently showing under all.
+    #[serde(default)]
+    pub tensor_backends: Vec<String>,
     pub models: Vec<String>,
     #[serde(default)]
     pub onnx_models: Vec<String>,
