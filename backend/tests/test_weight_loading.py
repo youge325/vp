@@ -24,7 +24,7 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 import torch
-from app.algorithms.rife.model_loader import (
+from app.algorithms.pytorch.rife.model_loader import (
     SUPPORTED_MODELS,
     MODEL_CONFIGS,
     _version_to_module_name,
@@ -68,7 +68,7 @@ def _test_structure_impl():
         try:
             # 动态导入 IFNet 模块
             module_name = _version_to_module_name(version)
-            ifnet_module = __import__(f"app.algorithms.rife.{module_name}", fromlist=["IFNet"])
+            ifnet_module = __import__(f"app.algorithms.pytorch.rife.{module_name}", fromlist=["IFNet"])
             IFNet = ifnet_module.IFNet
 
             # 创建 IFNet（meta 设备，不分配内存）
@@ -183,7 +183,7 @@ def _test_forward_pass_impl():
         try:
             # 动态导入 IFNet 模块
             module_name = _version_to_module_name(version)
-            ifnet_module = __import__(f"app.algorithms.rife.{module_name}", fromlist=["IFNet"])
+            ifnet_module = __import__(f"app.algorithms.pytorch.rife.{module_name}", fromlist=["IFNet"])
             IFNet = ifnet_module.IFNet
 
             # 创建 IFNet（正常设备，随机初始化权重）
@@ -299,7 +299,7 @@ def _test_weight_loading_impl():
 
             # 动态导入 IFNet
             module_name = _version_to_module_name(version)
-            ifnet_module = __import__(f"app.algorithms.rife.{module_name}", fromlist=["IFNet"])
+            ifnet_module = __import__(f"app.algorithms.pytorch.rife.{module_name}", fromlist=["IFNet"])
             IFNet = ifnet_module.IFNet
 
             # 创建 IFNet（meta 设备）

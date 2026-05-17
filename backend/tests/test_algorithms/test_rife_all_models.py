@@ -23,7 +23,7 @@ _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
-from app.algorithms.rife.model_loader import (
+from app.algorithms.pytorch.rife.model_loader import (
     SUPPORTED_MODELS,
     MODEL_CONFIGS,
     HEAD_NONE,
@@ -178,7 +178,7 @@ class TestIFNetCreation:
         import importlib
 
         module_name = _version_to_module_name(version)
-        rife_package = f"app.algorithms.rife.{module_name}"
+        rife_package = f"app.algorithms.pytorch.rife.{module_name}"
         mod = importlib.import_module(rife_package)
         IFNet = mod.IFNet
 
@@ -197,7 +197,7 @@ class TestIFNetCreation:
         import importlib
 
         module_name = _version_to_module_name(version)
-        rife_package = f"app.algorithms.rife.{module_name}"
+        rife_package = f"app.algorithms.pytorch.rife.{module_name}"
         mod = importlib.import_module(rife_package)
         IFNet = mod.IFNet
 
@@ -212,7 +212,7 @@ class TestIFNetCreation:
         import importlib
 
         module_name = _version_to_module_name(version)
-        rife_package = f"app.algorithms.rife.{module_name}"
+        rife_package = f"app.algorithms.pytorch.rife.{module_name}"
         mod = importlib.import_module(rife_package)
 
         assert hasattr(mod, "Head"), f"{version} 应该导出 Head 类"
@@ -226,7 +226,7 @@ class TestIFNetCreation:
         import importlib
 
         module_name = _version_to_module_name(version)
-        rife_package = f"app.algorithms.rife.{module_name}"
+        rife_package = f"app.algorithms.pytorch.rife.{module_name}"
         mod = importlib.import_module(rife_package)
         Head = mod.Head
 
@@ -245,7 +245,7 @@ class TestIFNetCreation:
         import importlib
 
         module_name = _version_to_module_name(version)
-        rife_package = f"app.algorithms.rife.{module_name}"
+        rife_package = f"app.algorithms.pytorch.rife.{module_name}"
         mod = importlib.import_module(rife_package)
 
         # 无 Head 版本不导出 Head（或者导出了但不使用）
@@ -264,7 +264,7 @@ class TestStateDictStructure:
         import importlib
 
         module_name = _version_to_module_name(version)
-        rife_package = f"app.algorithms.rife.{module_name}"
+        rife_package = f"app.algorithms.pytorch.rife.{module_name}"
         mod = importlib.import_module(rife_package)
         IFNet = mod.IFNet
 
@@ -287,7 +287,7 @@ class TestStateDictStructure:
         import importlib
 
         module_name = _version_to_module_name(version)
-        rife_package = f"app.algorithms.rife.{module_name}"
+        rife_package = f"app.algorithms.pytorch.rife.{module_name}"
         mod = importlib.import_module(rife_package)
         IFNet = mod.IFNet
 
@@ -330,7 +330,7 @@ class TestWeightLoadingWithRealWeights:
         import importlib
 
         module_name = _version_to_module_name(version)
-        rife_package = f"app.algorithms.rife.{module_name}"
+        rife_package = f"app.algorithms.pytorch.rife.{module_name}"
         mod = importlib.import_module(rife_package)
         IFNet = mod.IFNet
 
@@ -377,7 +377,7 @@ class TestWeightLoadingWithRealWeights:
         import importlib
 
         module_name = _version_to_module_name(version)
-        rife_package = f"app.algorithms.rife.{module_name}"
+        rife_package = f"app.algorithms.pytorch.rife.{module_name}"
         mod = importlib.import_module(rife_package)
 
         # 加载权重

@@ -64,8 +64,13 @@ export interface EnvironmentCheckResult {
     version?: string
     path?: string
   }
-  interpolationAlgorithms?: { name: string; models: string[]; onnxModels?: string[] }[]
-  superResolutionAlgorithms?: { name: string; models: string[]; onnxModels?: string[] }[]
+  // Phase 8 — ``tensorBackends`` 由 Rust ``AlgorithmInfo`` 字段透出,
+  // 前端按 ``workflow.interpolation.tensorBackend`` 过滤算法下拉。
+  // 旧缓存反序列化时 ``tensorBackends`` 不存在 → 退化为 ``[]``,
+  // 在 ``useEnhanceForm`` 的 ``.includes(backend)`` 上返回 false
+  // (不显示),比错显示安全。
+  interpolationAlgorithms?: { name: string; tensorBackends: string[]; models: string[]; onnxModels?: string[] }[]
+  superResolutionAlgorithms?: { name: string; tensorBackends: string[]; models: string[]; onnxModels?: string[] }[]
   animeProfiles?: string[]
   runtime?: {
     mode?: string

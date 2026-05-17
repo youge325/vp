@@ -10,7 +10,9 @@ import {
   fallbackInterpolationOnnxModel,
   fallbackSuperResolutionOnnxModel,
   pickDefaultEngine,
+  pickDefaultInterpolationAlgorithm,
   pickDefaultInterpolationModel,
+  pickDefaultSuperResolutionAlgorithm,
 } from '@/services/preset/enhance-rules'
 import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/domain/workflow'
 import type { WorkflowConfig } from '@/types/protocol'
@@ -25,12 +27,22 @@ export function useEnhanceForm() {
     patchWorkflow,
   )
 
-  const interpolationAlgorithms = computed(
-    () => envStore.env.checkResult?.interpolationAlgorithms ?? [],
-  )
-  const superResolutionAlgorithms = computed(
-    () => envStore.env.checkResult?.superResolutionAlgorithms ?? [],
-  )
+  // Phase 8 — 算法下拉列表按当前选中的 tensorBackend 过滤。
+  // 没有 ``tensorBackends`` 字段的旧缓存(Phase 8 之前持久化的)
+  // 退化为 ``[]``,这里 ``.includes(backend)`` 返回 false,意味着
+  // "未声明支持 = 不显示";比错显示安全。
+  const interpolationAlgorithms = computed(() => {
+    const all = envStore.env.checkResult?.interpolationAlgorithms ?? []
+    const backend = workflow.value.interpolation.tensorBackend
+    return all.filter((alg) => alg.tensorBackends.includes(backend))
+  })
+  const superResolutionAlgorithms = computed(() => {
+    const all = envStore.env.checkResult?.superResolutionAlgorithms ?? []
+    // 共用 interpolation 模块的 backend 选择 — UI 上整个 enhance
+    // 面板只有一个 backend selector。
+    const backend = workflow.value.interpolation.tensorBackend
+    return all.filter((alg) => alg.tensorBackends.includes(backend))
+  })
   const animeProfiles = computed(() => envStore.env.checkResult?.animeProfiles ?? [])
   const interpolationOnnxModels = computed(() => {
     const alg = interpolationAlgorithms.value.find(
@@ -131,6 +143,30 @@ export function useEnhanceForm() {
     (value) => patchWorkflow((c) => {
       c.interpolation.tensorBackend = value
       c.interpolation.engine = pickDefaultEngine(envStore.env.checkResult, value) ?? c.interpolation.engine
+
+      // Phase 8 — 切 backend 后,如果当前选中的算法在新 backend 下
+      // 没有实现,自动跳到该 backend 第一个可用算法。否则 UI 会出现
+      // "下拉里没这个 algorithm,但 workflow.algorithm 还停在它上面"
+      // 的不一致 — 用户保存预设后,下次加载就以为算法消失了。
+      const interpolationSupportsCurrent = envStore.env.checkResult?.interpolationAlgorithms
+        ?.find((a) => a.name === c.interpolation.algorithm)
+        ?.tensorBackends?.includes(value) ?? false
+      if (!interpolationSupportsCurrent) {
+        const next = pickDefaultInterpolationAlgorithm(envStore.env.checkResult, value)
+        c.interpolation.algorithm = next
+        c.interpolation.model = pickDefaultInterpolationModel(envStore.env.checkResult, next)
+      }
+
+      const superResolutionSupportsCurrent = envStore.env.checkResult?.superResolutionAlgorithms
+        ?.find((a) => a.name === c.superResolution.algorithm)
+        ?.tensorBackends?.includes(value) ?? false
+      if (!superResolutionSupportsCurrent) {
+        c.superResolution.algorithm = pickDefaultSuperResolutionAlgorithm(
+          envStore.env.checkResult,
+          value,
+        )
+      }
+
       if (value === 'onnx') {
         c.interpolation.onnxModel = fallbackInterpolationOnnxModel(
           envStore.env.checkResult,

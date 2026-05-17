@@ -4,6 +4,21 @@
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { InferenceEngine, TensorBackend } from '@/types/domain/workflow'
 
+// Phase 8 — every "pick default *" helper now requires the
+// ``backend`` argument so it can filter the candidate list against
+// ``alg.tensorBackends.includes(backend)``. Without this, callers
+// would always pick the first algorithm registered (RIFE), which is
+// wrong when the user is on Paddle and RIFE has no Paddle impl.
+// The legacy "pick first" fallback only fires when **no** algorithm
+// declares support for the requested backend.
+
+function backendCompatible(
+  alg: { tensorBackends?: ReadonlyArray<string> } | null | undefined,
+  backend: TensorBackend,
+): boolean {
+  return Boolean(alg?.tensorBackends?.includes(backend))
+}
+
 export function pickDefaultEngine(
   checkResult: EnvironmentCheckResult | null,
   backend: TensorBackend,
@@ -34,8 +49,10 @@ export function fallbackSuperResolutionOnnxModel(
 
 export function pickDefaultInterpolationAlgorithm(
   checkResult: EnvironmentCheckResult | null,
+  backend: TensorBackend,
 ): string {
-  return checkResult?.interpolationAlgorithms?.[0]?.name ?? 'rife'
+  const all = checkResult?.interpolationAlgorithms ?? []
+  return all.find((a) => backendCompatible(a, backend))?.name ?? all[0]?.name ?? 'rife'
 }
 
 export function pickDefaultInterpolationModel(
@@ -50,8 +67,10 @@ export function pickDefaultInterpolationModel(
 
 export function pickDefaultSuperResolutionAlgorithm(
   checkResult: EnvironmentCheckResult | null,
+  backend: TensorBackend,
 ): string {
-  return checkResult?.superResolutionAlgorithms?.[0]?.name ?? 'placeholder'
+  const all = checkResult?.superResolutionAlgorithms ?? []
+  return all.find((a) => backendCompatible(a, backend))?.name ?? all[0]?.name ?? 'placeholder'
 }
 
 export function pickDefaultAnimeProfile(

@@ -10,8 +10,11 @@ from app.algorithms.tensor_backend import ITensorBackend
 
 
 SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
-    {"name": "placeholder", "models": []},
-    {"name": "realesrgan-plan", "models": []},
+    # Phase 8 — ``tensorBackends`` 显式声明该算法支持的 tensor 后端。
+    # 当前两个算法都只在 ONNX 路径下有完整实现(见下方 class doc),
+    # PyTorch / Paddle 路径返回 NotImplementedError。
+    {"name": "placeholder", "tensorBackends": ["onnx"], "models": []},
+    {"name": "realesrgan-plan", "tensorBackends": ["onnx"], "models": []},
 ]
 
 

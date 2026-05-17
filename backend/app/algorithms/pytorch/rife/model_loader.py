@@ -27,7 +27,7 @@ import importlib.util
 import os
 from typing import TYPE_CHECKING, Optional
 
-from app.algorithms.rife._model_spec import (
+from app.algorithms.pytorch.rife._model_spec import (
     HEAD_CUSTOM,
     HEAD_NONE,
     HEAD_SEQUENTIAL,
@@ -283,7 +283,7 @@ def load_rife_model(
 
     # 动态导入 IFNet(和 Head)
     module_name = _version_to_module_name(model_version)
-    rife_package = f"app.algorithms.rife.{module_name}"
+    rife_package = f"app.algorithms.pytorch.rife.{module_name}"
     logger.info(f"动态导入模块: {rife_package}")
     mod = importlib.import_module(rife_package)
     ifnet_cls = mod.IFNet

@@ -114,10 +114,19 @@ export function createDefaultEncodeConfig(env: EnvironmentCheckResult | null): E
 export function createDefaultWorkbenchPreset(env: EnvironmentCheckResult | null): WorkbenchPreset {
   const workflowConfig = createDefaultWorkflowConfig()
 
-  const algorithm = pickDefaultInterpolationAlgorithm(env)
+  // Phase 8 — pick the default algorithm against the initial backend
+  // (``createDefaultWorkflowConfig`` seeds it as ``'pytorch'``). With
+  // the backend filter in place, a preset created on a Paddle-only
+  // environment would otherwise still try to default to RIFE and then
+  // see it filtered out the moment the user opens the dropdown.
+  const interpolationBackend = workflowConfig.interpolation.tensorBackend
+  const algorithm = pickDefaultInterpolationAlgorithm(env, interpolationBackend)
   workflowConfig.interpolation.algorithm = algorithm
   workflowConfig.interpolation.model = pickDefaultInterpolationModel(env, algorithm)
-  workflowConfig.superResolution.algorithm = pickDefaultSuperResolutionAlgorithm(env)
+  workflowConfig.superResolution.algorithm = pickDefaultSuperResolutionAlgorithm(
+    env,
+    interpolationBackend,
+  )
   workflowConfig.anime.profile = pickDefaultAnimeProfile(env)
 
   workflowConfig.interpolation.onnxModel =
