@@ -4,7 +4,6 @@ import pytest
 
 pytestmark = pytest.mark.pytorch
 
-import app.processing  # noqa: F401  # importing the package registers default algorithms
 from app.algorithms.factory import AlgorithmFactory
 
 

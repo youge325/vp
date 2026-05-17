@@ -30,7 +30,8 @@ logger = get_logger(__name__)
 def _startup_hooks() -> None:
     """Run the CLI's one-shot setup tasks in a single readable place."""
     setup_logging()
-    # 显式注册算法(实际是 idempotent;import app.processing 也会触发)
+    # Phase D.6.1 之后,``import app.processing`` 不再有副作用注册算法,
+    # 注册的唯一生产入口就是这里。绕开 CLI 的脚本需要自行调用。
     register_default_algorithms()
     # Windows 上提前让 OS loader 知道 CUDA/TensorRT DLL 目录,以便后续
     # ``import onnxruntime`` 时 ORT 的静态依赖能解析。非 Windows 上为 no-op。
