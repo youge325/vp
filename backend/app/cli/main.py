@@ -19,7 +19,7 @@ Phase C.1.5 — explicit startup hooks:
 from __future__ import annotations
 
 from app.cli.parser import build_parser
-from app.errors import ProcessError, TaskErrorCode, emit_error
+from app.errors import ProcessError, TaskErrorCode, raise_error
 from app.processing import register_default_algorithms
 from app.utils.dll_paths import register_native_dll_paths
 from app.utils.logger import get_logger, setup_logging
@@ -44,13 +44,13 @@ def main() -> None:
         args = parser.parse_args()
         args.func(args)
     except KeyboardInterrupt:
-        emit_error(TaskErrorCode.CANCELLED, "Operation cancelled by the user.", exit_code=130)
+        raise_error(TaskErrorCode.CANCELLED, "Operation cancelled by the user.", exit_code=130)
     except SystemExit:
         raise
     except Exception as exc:  # pragma: no cover - defensive CLI boundary
         logger.exception("Unhandled backend CLI failure")
         pe = ProcessError.from_exception(exc)
-        emit_error(
+        raise_error(
             pe.code,
             pe.message,
             details={**pe.details, "exception": exc.__class__.__name__},

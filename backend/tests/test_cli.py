@@ -5,13 +5,12 @@ import json
 
 import pytest
 
-from app.cli import (
-    cmd_check,
+from app.cli import build_parser, cmd_check
+from app.cli.commands._process_validation import _load_json_arg
+from app.cli.defaults import (
     _default_output_config,
-    _load_json_arg,
     _resolve_expected_output_frames,
     _resolve_processing_steps,
-    build_parser,
 )
 from app.config import settings
 

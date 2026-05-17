@@ -3,6 +3,7 @@
 import pytest
 from app.algorithms.base import IAlgorithm
 from app.algorithms.factory import AlgorithmFactory
+from app.errors import ProcessError, TaskErrorCode
 
 
 class MockAlgorithm(IAlgorithm):
@@ -44,8 +45,17 @@ class TestAlgorithmFactory:
         assert algo.get_name() == "MockAlgorithm"
 
     def test_create_unknown_type_raises(self):
+        # 先注册一个无关项,确保走的是"未知类型"分支而不是空注册表早失败分支。
+        AlgorithmFactory.register("mock", MockAlgorithm)
         with pytest.raises(ValueError, match="未知算法类型"):
             AlgorithmFactory.create("nonexistent")
+
+    def test_create_with_empty_registry_raises_invalid_config(self):
+        """Phase D.6.1 — 空注册表是启动顺序 bug,应抛 ProcessError(INVALID_CONFIG)。"""
+        assert AlgorithmFactory._registry == {}
+        with pytest.raises(ProcessError) as exc_info:
+            AlgorithmFactory.create("frame_interpolation")
+        assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
 
     def test_get_available_types(self):
         AlgorithmFactory.register("type_a", MockAlgorithm)

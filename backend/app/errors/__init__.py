@@ -8,6 +8,7 @@ normalized into a ``ProcessError`` so the Rust host can emit a typed
 from __future__ import annotations
 
 import traceback as _traceback
+import warnings as _warnings
 from typing import Any
 
 from app.errors._bootstrap import infer_error_code
@@ -79,7 +80,7 @@ class ResumeConflictError(Exception):
         }
 
 
-def emit_error(
+def raise_error(
     code: TaskErrorCode | str,
     message: str,
     *,
@@ -88,7 +89,9 @@ def emit_error(
 ) -> None:
     """Raise a ``ProcessError`` with the given code, optionally setting ``exit_code``.
 
-    Convenience wrapper used by CLI command handlers to fail-fast.
+    Convenience wrapper used by CLI command handlers to fail-fast. The
+    function never returns; the ``None`` return type is for type-checker
+    flow analysis at the call site.
     """
     exc = ProcessError(code, message, details=details or {})
     if exit_code is not None:
@@ -96,9 +99,29 @@ def emit_error(
     raise exc
 
 
+def emit_error(
+    code: TaskErrorCode | str,
+    message: str,
+    *,
+    details: dict[str, Any] | None = None,
+    exit_code: int | None = None,
+) -> None:
+    """Deprecated alias for :func:`raise_error`.
+
+    Kept for one release so external callers can migrate.
+    """
+    _warnings.warn(
+        "emit_error has been renamed to raise_error; the old name will be removed in the next release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    raise_error(code, message, details=details, exit_code=exit_code)
+
+
 __all__ = [
     "ProcessError",
     "ResumeConflictError",
     "TaskErrorCode",
     "emit_error",
+    "raise_error",
 ]
