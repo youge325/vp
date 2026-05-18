@@ -30,16 +30,16 @@ repos:
       - id: check-ast
       - id: check-builtin-literals
 
-  # 本仓库自定义:三层 TaskErrorCode 漂移检测
+  # 本仓库自定义:三层 TaskErrorCode 漂移检测 + Phase 9 NdjsonEnvelope/EventType 漂移检测
   # 在 Rust enum / Python enum / ts-rs 生成的 TS union 之间比对成员集合
   - repo: local
     hooks:
       - id: check-error-code-drift
-        name: TaskErrorCode 三层一致性
+        name: TaskErrorCode 三层一致性 + NdjsonEnvelope 跨语言契约
         entry: python scripts/check_error_code_drift.py
         language: system
         pass_filenames: false
-        files: '^(frontend/src-tauri/src/models/task\.rs|backend/app/errors/_codes\.py|frontend/src/types/generated/TaskErrorCode\.ts)$'
+        files: '^(frontend/src-tauri/src/models/task\.rs|frontend/src-tauri/src/tasks/envelope\.rs|backend/app/errors/_codes\.py|backend/app/protocol/__init__\.py|frontend/src/types/generated/TaskErrorCode\.ts|scripts/check_error_code_drift\.py)$'
 
 # 跳过 Tauri 生成的 schema 文件，避免 pre-commit 反复检查自动生成产物
 exclude: ^frontend/src-tauri/(gen/schemas|schemas)/.*\.json$
