@@ -19,9 +19,17 @@ stderr,但只 TaskErrorCode 的不一致会影响退出码 — 其它 enum 的 P
 侧目前是字面量散落,等 Phase 7 字面量收敛把它们也建成 enum class 后,
 再把其加入硬验证列表。
 
+Phase 9 — NdjsonEnvelope ↔ NdjsonEventType 跨语言契约硬化。
+Python ``NdjsonEventType`` 是 Python emit 的全集(stream 长任务 + oneshot
+命令);Rust ``NdjsonEnvelope`` 只覆盖 stream 长任务路径上 ``readers.rs``
+要解码的事件。允许 Python 端有 ``NDJSON_ONESHOT_WHITELIST`` 中的事件,
+其余必须双向匹配,否则任何一侧加新事件而另一侧没跟上时,就会触发漂移
+失败(退出 1)。
+
 退出码:
-  0  TaskErrorCode 三处完全一致(其它 enum 漂移只在 stderr 报告)
-  1  TaskErrorCode 发现漂移,stderr 输出 only-in-* 差集
+  0  TaskErrorCode 三处一致,且 NdjsonEnvelope ↔ NdjsonEventType 漂移
+     ≤ ``NDJSON_ONESHOT_WHITELIST``(其它 enum 漂移只在 stderr 报告)
+  1  TaskErrorCode 漂移 或 NdjsonEnvelope/NdjsonEventType 漂移
   2  解析失败(文件缺失 / 正则不匹配 / 文件被裁剪)
 """
 
@@ -31,13 +39,33 @@ import re
 import sys
 from pathlib import Path
 
+# Force UTF-8 on stdout/stderr so Chinese fix-it tips & arrow glyphs (↔)
+# survive on Windows consoles whose default cp936 codepage can't encode
+# them. cargo's build.rs already sets PYTHONIOENCODING=utf-8 explicitly,
+# but pre-commit / direct ``python scripts/...`` invocations don't.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 ROOT = Path(__file__).resolve().parent.parent
 RUST_TASK_PATH = ROOT / "frontend" / "src-tauri" / "src" / "models" / "task.rs"
 RUST_CONFIG_PATH = ROOT / "frontend" / "src-tauri" / "src" / "models" / "config.rs"
 RUST_PROTOCOL_PATH = ROOT / "frontend" / "src-tauri" / "src" / "protocol.rs"
+RUST_ENVELOPE_PATH = ROOT / "frontend" / "src-tauri" / "src" / "tasks" / "envelope.rs"
 PY_PATH = ROOT / "backend" / "app" / "errors" / "_codes.py"
+PY_PROTOCOL_PATH = ROOT / "backend" / "app" / "protocol" / "__init__.py"
 TS_GENERATED_DIR = ROOT / "frontend" / "src" / "types" / "generated"
 TS_TASK_ERROR_CODE_PATH = TS_GENERATED_DIR / "TaskErrorCode.ts"
+
+# Phase 9 — Python emits these via ``oneshot`` CLI commands (info /
+# check / inspect-output). Their stdout is read by
+# ``frontend/src-tauri/src/tasks/oneshot.rs::parse_last_json_line`` as a
+# generic ``serde_json::Value`` — i.e. they intentionally do NOT need
+# corresponding ``NdjsonEnvelope`` variants. The drift checker subtracts
+# this set from the Python-only diff before failing, so adding a NEW
+# wire-name on either side without updating the other still fails fast.
+NDJSON_ONESHOT_WHITELIST = frozenset({"info", "check", "resume_inspection"})
 
 # 注意:正则被特意写得"严"以拒绝畸形文件。
 # Rust:  从 ``pub enum FooBar { ... }`` 块中提取 PascalCase variant 名;
@@ -59,6 +87,27 @@ _PY_MEMBER_PATTERN = re.compile(
 _TS_LITERAL_PATTERN = re.compile(r"\"(?P<code>[a-z0-9_-]+)\"")
 _TS_UNION_HEADER_PATTERN = re.compile(
     r"export type (?P<name>[A-Z][A-Za-z0-9]+)\s*=\s*(?P<body>(?:\"[^\"]+\"\s*\|?\s*)+);",
+)
+
+# Phase 9 — Python ``class NdjsonEventType(str, Enum):`` block. Anchored on
+# the class name so we don't confuse it with ``class TaskErrorCode``.
+_PY_NDJSON_EVENT_TYPE_BLOCK = re.compile(
+    r"class NdjsonEventType\(\s*str\s*,\s*Enum\s*\):\s*\n"
+    r"(?P<body>(?:[ \t]+[A-Z_]+\s*=\s*\"[a-z_]+\"\s*\n)+)",
+)
+_PY_NDJSON_MEMBER_PATTERN = re.compile(
+    r"^[ \t]+[A-Z_]+\s*=\s*\"(?P<wire>[a-z_]+)\"",
+    re.MULTILINE,
+)
+# Rust ``pub enum NdjsonEnvelope { ... }`` block. Each variant carries an
+# explicit ``#[serde(rename = "...")]`` attribute so we collect those
+# directly rather than reapplying the top-level ``rename_all`` rule.
+_RUST_NDJSON_ENVELOPE_BLOCK = re.compile(
+    r"pub\s+enum\s+NdjsonEnvelope\s*\{(?P<body>[^}]+)\}",
+    re.DOTALL,
+)
+_RUST_NDJSON_VARIANT_RENAME_PATTERN = re.compile(
+    r"#\[serde\(rename\s*=\s*\"(?P<wire>[a-z_]+)\"\)\]",
 )
 
 
@@ -159,6 +208,74 @@ def _collect_ts_codes_from_task_error_code_file(text: str) -> set[str]:
     return codes
 
 
+def _collect_python_ndjson_event_types(text: str) -> set[str]:
+    """从 ``class NdjsonEventType(str, Enum)`` 类体提取 wire values。"""
+    block_match = _PY_NDJSON_EVENT_TYPE_BLOCK.search(text)
+    if not block_match:
+        _fail_parse(
+            "could not locate `class NdjsonEventType(str, Enum):` block in protocol/__init__.py; "
+            "check whether the class was renamed or moved",
+        )
+    wires = set(_PY_NDJSON_MEMBER_PATTERN.findall(block_match.group("body")))
+    if not wires:
+        _fail_parse('NdjsonEventType class body matched but no `NAME = "wire"` members extracted')
+    return wires
+
+
+def _collect_rust_envelope_wire_names(text: str) -> set[str]:
+    """从 ``pub enum NdjsonEnvelope { ... }`` 块提取 ``#[serde(rename)]`` wire 名集合。"""
+    block_match = _RUST_NDJSON_ENVELOPE_BLOCK.search(text)
+    if not block_match:
+        _fail_parse(
+            "could not locate `pub enum NdjsonEnvelope { ... }` block in tasks/envelope.rs; "
+            "check whether the enum was renamed or moved",
+        )
+    wires = set(_RUST_NDJSON_VARIANT_RENAME_PATTERN.findall(block_match.group("body")))
+    if not wires:
+        _fail_parse(
+            'NdjsonEnvelope block matched but no `#[serde(rename = "...")]` attributes extracted; '
+            "did serde tagging style change?",
+        )
+    return wires
+
+
+def _diff_ndjson_event_types(python: set[str], rust_envelope: set[str]) -> list[str]:
+    """Compare Python ``NdjsonEventType`` against Rust ``NdjsonEnvelope`` variants.
+
+    Rule:
+    - Every Rust variant wire-name MUST exist in Python (Rust can't decode
+      events Python doesn't declare).
+    - Python may legitimately have **extra** wire-names — but only the ones
+      in ``NDJSON_ONESHOT_WHITELIST``. Anything else means the two sides
+      drifted: either someone added a Python event without wiring Rust, or
+      removed an event from the whitelist without updating it here.
+    """
+    issues: list[str] = []
+    rust_only = rust_envelope - python
+    if rust_only:
+        issues.append(
+            f"Rust NdjsonEnvelope ↔ Python NdjsonEventType 漂移: "
+            f"only-in-rust={sorted(rust_only)} (Rust 端的 variant 在 Python 端缺失,"
+            "后端 emit 时不会出现此 wire 名,readers.rs 永远不会命中此分支)",
+        )
+    python_only = python - rust_envelope
+    unexpected = python_only - NDJSON_ONESHOT_WHITELIST
+    missing_whitelist = NDJSON_ONESHOT_WHITELIST - python_only
+    if unexpected:
+        issues.append(
+            f"Python NdjsonEventType 有未授权的 oneshot-only 事件,Rust 端不识别: "
+            f"only-in-python(unexpected)={sorted(unexpected)}; "
+            "请把它加入 NdjsonEnvelope(并配套 readers.rs 路由),"
+            "或加入 scripts/check_error_code_drift.py 的 NDJSON_ONESHOT_WHITELIST",
+        )
+    if missing_whitelist:
+        issues.append(
+            f"白名单 NDJSON_ONESHOT_WHITELIST 中的事件不再出现在 Python NdjsonEventType: "
+            f"{sorted(missing_whitelist)};请同步删除白名单条目",
+        )
+    return issues
+
+
 def _scan_ts_string_enums(generated_dir: Path) -> dict[str, set[str]]:
     """Scan ``frontend/src/types/generated/*.ts`` for ``export type X = "a" | "b";`` unions.
 
@@ -236,12 +353,21 @@ def main() -> int:
     rust_task_text = _read(RUST_TASK_PATH)
     rust_config_text = _read(RUST_CONFIG_PATH)
     rust_protocol_text = _read(RUST_PROTOCOL_PATH)
+    rust_envelope_text = _read(RUST_ENVELOPE_PATH)
+    py_protocol_text = _read(PY_PROTOCOL_PATH)
 
     rust_task_codes = _collect_rust_task_error_codes(rust_task_text)
     python_codes = _collect_python_codes(_read(PY_PATH))
     ts_task_codes = _collect_ts_codes_from_task_error_code_file(_read(TS_TASK_ERROR_CODE_PATH))
 
     issues = _diff_task_error_code(rust_task_codes, python_codes, ts_task_codes)
+
+    # Phase 9 — hard-verify the NdjsonEnvelope ↔ NdjsonEventType handshake.
+    py_ndjson_events = _collect_python_ndjson_event_types(py_protocol_text)
+    rust_envelope_wires = _collect_rust_envelope_wire_names(rust_envelope_text)
+    ndjson_issues = _diff_ndjson_event_types(py_ndjson_events, rust_envelope_wires)
+    issues.extend(ndjson_issues)
+
     if issues:
         sys.stderr.write("[check-error-code-drift] DRIFT DETECTED:\n")
         for issue in issues:
@@ -250,7 +376,8 @@ def main() -> int:
             "\n修复建议:\n"
             "  1. 三处都补齐缺失的 code\n"
             "  2. 在 src-tauri/ 跑 `cargo test --quiet` 重新生成 ts-rs 文件\n"
-            "  3. 在 backend/ 跑 `python -m pytest tests/test_errors -q` 验证 round-trip\n",
+            "  3. 在 backend/ 跑 `python -m pytest tests/test_errors -q` 验证 round-trip\n"
+            "  4. 若新增了 oneshot-only NDJSON 事件,把 wire 名加入脚本顶部的 NDJSON_ONESHOT_WHITELIST\n",
         )
         return 1
 
@@ -263,6 +390,8 @@ def main() -> int:
 
     sys.stdout.write(
         f"[check-error-code-drift] OK ({len(rust_task_codes)} TaskErrorCode codes consistent across 3 layers; "
+        f"NdjsonEnvelope ↔ NdjsonEventType handshake verified "
+        f"({len(rust_envelope_wires)} stream variants + {len(py_ndjson_events) - len(rust_envelope_wires)} oneshot-only); "
         f"scanned {len(all_rust_enums)} Rust enums, {len(ts_enums)} TS enums)\n"
     )
     return 0

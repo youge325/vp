@@ -75,3 +75,58 @@ def test_script_exits_zero_when_consistent(monkeypatch: pytest.MonkeyPatch) -> N
     module = _load_module()
     exit_code = module.main()
     assert exit_code == 0
+
+
+# Phase 9 — NdjsonEnvelope ↔ NdjsonEventType handshake.
+#
+# Python ``class NdjsonEventType`` is the superset (stream + oneshot
+# emit). Rust ``enum NdjsonEnvelope`` only decodes the stream subset.
+# Anything in Python that Rust doesn't decode must be on the oneshot
+# whitelist. The next four tests cover the consistent state + the three
+# drift directions.
+
+
+def test_ndjson_envelope_handshake_consistent() -> None:
+    """当前仓库状态下:Rust envelope ⊆ Python NdjsonEventType,差集 == 白名单。"""
+    module = _load_module()
+    py_events = module._collect_python_ndjson_event_types(module._read(module.PY_PROTOCOL_PATH))
+    rust_wires = module._collect_rust_envelope_wire_names(module._read(module.RUST_ENVELOPE_PATH))
+
+    issues = module._diff_ndjson_event_types(py_events, rust_wires)
+    assert not issues, "NdjsonEnvelope ↔ NdjsonEventType 漂移:\n  - " + "\n  - ".join(issues)
+
+    # Sanity: extracted real data, not empty intersections.
+    assert len(rust_wires) >= 4, f"Rust envelope wires too few ({rust_wires})"
+    assert len(py_events) >= len(rust_wires) + 3, (
+        f"expected at least 3 oneshot-only events on the Python side, got py={py_events!r} rust={rust_wires!r}"
+    )
+
+
+def test_diff_flags_rust_variant_missing_from_python() -> None:
+    """Rust 有 Python 没有的 wire 名 — 后端不会发,但 readers 期待会发。"""
+    module = _load_module()
+    issues = module._diff_ndjson_event_types(
+        python={"progress", "completed", "error", "resume_status", "info", "check", "resume_inspection"},
+        rust_envelope={"progress", "completed", "error", "resume_status", "newly_added_event"},
+    )
+    assert any("only-in-rust" in issue and "newly_added_event" in issue for issue in issues), issues
+
+
+def test_diff_flags_unwhitelisted_python_event() -> None:
+    """Python 多出 Rust 不识别且不在白名单的事件 — 真漂移。"""
+    module = _load_module()
+    issues = module._diff_ndjson_event_types(
+        python={"progress", "completed", "error", "resume_status", "info", "check", "resume_inspection", "verbose"},
+        rust_envelope={"progress", "completed", "error", "resume_status"},
+    )
+    assert any("unexpected" in issue.lower() and "verbose" in issue for issue in issues), issues
+
+
+def test_diff_flags_whitelist_event_removed_from_python() -> None:
+    """白名单里的事件从 Python 删了 — 白名单与现实不一致,需要更新脚本。"""
+    module = _load_module()
+    issues = module._diff_ndjson_event_types(
+        python={"progress", "completed", "error", "resume_status", "info", "check"},  # 删掉 resume_inspection
+        rust_envelope={"progress", "completed", "error", "resume_status"},
+    )
+    assert any("resume_inspection" in issue for issue in issues), issues

@@ -98,7 +98,9 @@ fn run_drift_check() {
         "frontend/src-tauri/src/models/task.rs",
         "frontend/src-tauri/src/models/config.rs",
         "frontend/src-tauri/src/protocol.rs",
+        "frontend/src-tauri/src/tasks/envelope.rs",
         "backend/app/errors/_codes.py",
+        "backend/app/protocol/__init__.py",
         "frontend/src/types/generated/TaskErrorCode.ts",
     ] {
         println!(

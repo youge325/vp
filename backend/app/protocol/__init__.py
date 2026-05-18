@@ -13,6 +13,15 @@ from enum import Enum
 from typing import Any
 
 
+# SSOT for NDJSON wire names. Cross-language drift is gated by
+# ``scripts/check_error_code_drift.py`` (Phase 9):
+#   - Stream variants (read by ``frontend/src-tauri/src/tasks/envelope.rs``
+#     ``NdjsonEnvelope``) must round-trip both ways.
+#   - Oneshot-only variants (read by ``oneshot.rs::parse_last_json_line``
+#     as a generic ``Value``) are listed in the script's
+#     ``NDJSON_ONESHOT_WHITELIST`` constant.
+# Adding a new member here requires either a matching ``NdjsonEnvelope``
+# variant + ``readers.rs`` route, or an explicit whitelist update.
 class NdjsonEventType(str, Enum):
     PROGRESS = "progress"
     COMPLETED = "completed"
