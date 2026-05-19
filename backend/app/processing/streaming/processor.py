@@ -24,6 +24,7 @@ import numpy as np
 from app.algorithms.factory import AlgorithmFactory
 from app.algorithms.tensor_backend import get_tensor_backend
 from app.planning import StagePlan
+from app.processing.streaming._tensor_chain import run_tensor_chain
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import (
     DecodedFrame,
@@ -204,7 +205,20 @@ def _process_interpolated_stream(
     interpolation_backend, interpolation_algorithm = algorithms["interpolation"]
     multi = int(interpolation_step["algorithm_kwargs"].get("multi") or 2)
 
-    previous: tuple[int, np.ndarray] | None = None
+    # Phase 11 — 提前抽出 post 链路的 (backend, algorithm) 列表,供
+    # ``run_tensor_chain`` 单 H2D + 单 D2H 路径复用;所有 post step 在
+    # _initialize_algorithms 中绑定的是同一个 ``shared_backend``,所以
+    # 取第 0 个就代表整条链。
+    post_steps = algorithms["post"]
+    post_algorithm_objs = [algorithm for (_, _, algorithm) in post_steps]
+    post_backend = post_steps[0][1] if post_steps else None
+    total_output_frames_denominator = max(stage_plan.total_output_frames, 1)
+
+    # Phase 11 — ``previous`` 多带一个 prev_tensor 槽位,下一轮直接复用上一轮的
+    # ``current_tensor``,把每对相邻帧的 H2D 拷贝从 2 次降到 1 次(首帧 lazy,
+    # 末帧无下一轮所以不会浪费)。第三项允许 ``None``:首帧入时还没用上,
+    # 真正进入插值循环时再 lazy 转换。
+    previous: tuple[int, np.ndarray, Any | None] | None = None
     output_index = resume_output_frames
     total_pairs = max(source_frames - 1, 1)
 
@@ -218,15 +232,20 @@ def _process_interpolated_stream(
         )
 
         if previous is None:
-            previous = (item.source_index, current_frame)
+            previous = (item.source_index, current_frame, None)
             continue
 
-        prev_source_index, prev_frame = previous
+        prev_source_index, prev_frame, prev_tensor_cached = previous
         interpolation_callback(prev_source_index + 1, total_pairs)
 
         group_frames = [prev_frame]
         with metrics.timed("interpolate"):
-            prev_tensor = interpolation_backend.numpy_to_tensor(prev_frame)
+            # Phase 11 — prev_tensor 复用上一轮的 current_tensor;仅首对帧需
+            # 要 lazy H2D(``prev_tensor_cached is None`` 时)。
+            if prev_tensor_cached is None:
+                prev_tensor = interpolation_backend.numpy_to_tensor(prev_frame)
+            else:
+                prev_tensor = prev_tensor_cached
             current_tensor = interpolation_backend.numpy_to_tensor(current_frame)
             for mid_index in range(1, multi):
                 timestep = mid_index / multi
@@ -234,10 +253,14 @@ def _process_interpolated_stream(
                 group_frames.append(interpolation_backend.tensor_to_numpy(mid_tensor))
 
         for frame in group_frames:
-            processed_output = frame
-            for callback_index, (_, backend, algorithm) in enumerate(algorithms["post"]):
-                processed_output = _run_single_frame_algorithm(backend, algorithm, processed_output)
-                post_callbacks[callback_index](output_index + 1, max(stage_plan.total_output_frames, 1))
+            processed_output = _run_post_chain(
+                post_backend=post_backend,
+                post_algorithm_objs=post_algorithm_objs,
+                post_callbacks=post_callbacks,
+                frame=frame,
+                output_index=output_index,
+                total_output_frames_denominator=total_output_frames_denominator,
+            )
             _queue_put(
                 encode_queue,
                 EncodedFrame(output_index=output_index, frame=processed_output),
@@ -251,22 +274,64 @@ def _process_interpolated_stream(
             SegmentBoundary(next_source_frame=item.source_index),
             stop_event,
         )
-        previous = (item.source_index, current_frame)
+        previous = (item.source_index, current_frame, current_tensor)
 
     if previous is not None:
         final_frame = previous[1]
-        for callback_index, (_, backend, algorithm) in enumerate(algorithms["post"]):
-            final_frame = _run_single_frame_algorithm(backend, algorithm, final_frame)
-            post_callbacks[callback_index](output_index + 1, max(stage_plan.total_output_frames, 1))
+        final_output = _run_post_chain(
+            post_backend=post_backend,
+            post_algorithm_objs=post_algorithm_objs,
+            post_callbacks=post_callbacks,
+            frame=final_frame,
+            output_index=output_index,
+            total_output_frames_denominator=total_output_frames_denominator,
+        )
         _queue_put(
             encode_queue,
-            EncodedFrame(output_index=output_index, frame=final_frame),
+            EncodedFrame(output_index=output_index, frame=final_output),
             stop_event,
         )
         metrics.set_queue_depth("encode", encode_queue.qsize())
         output_index += 1
 
     _emit_stream_end(encode_queue, source_frames, stop_event)
+
+
+def _run_post_chain(
+    *,
+    post_backend: Any,
+    post_algorithm_objs: list[Any],
+    post_callbacks: list[Callable[[int, int], None]],
+    frame: np.ndarray,
+    output_index: int,
+    total_output_frames_denominator: int,
+) -> np.ndarray:
+    """Apply the post chain to a single frame with single H2D + single D2H.
+
+    Phase 11 — 等价语义改写原 line 236-240 / 256-263 的内联 post 循环。
+
+    - 空 post(``post_algorithm_objs == []`` / ``post_backend is None``):
+      ``run_tensor_chain`` 直接 return frame,我们也不调任何 callback
+      (原代码同样不进 for 循环,无 callback 触发)。
+    - 单步 post:等价于 1 次 H2D + 1 次 D2H,与 ``_run_single_frame_algorithm`` 同。
+    - 多步 post:中间无 numpy↔tensor 转换,GPU 上一路流转。
+
+    callback 在每步 ``process_frame`` 完成后立即调用,保留原"逐 step emit
+    NDJSON progress"的节奏(reporter 节流会自然合并近距离的同 percent 调用,
+    所以 NDJSON 帧密度与原实现近似)。
+    """
+    if post_backend is None or not post_algorithm_objs:
+        return frame
+
+    def emit_step(step_index: int) -> None:
+        post_callbacks[step_index](output_index + 1, total_output_frames_denominator)
+
+    return run_tensor_chain(
+        post_backend,
+        post_algorithm_objs,
+        frame,
+        step_callback=emit_step,
+    )
 
 
 def _run_single_frame_algorithm(backend: Any, algorithm: Any, frame: np.ndarray) -> np.ndarray:

@@ -260,3 +260,42 @@ def test_legacy_string_api_unchanged() -> None:
     """
     assert infer_error_code("truly opaque failure") == TaskErrorCode.PROCESS_FAILED.value
     assert infer_error_code("crf must be between 0 and 51") == TaskErrorCode.PROCESS_FAILED.value
+
+
+# ---------------------------------------------------------------------------
+# Phase 11 — MISSING_MODEL 关键字收窄。
+# ---------------------------------------------------------------------------
+# 原来 ``"model" in message`` 关键字太宽,任何含 "model" 字的消息都会被
+# 归类为 MISSING_MODEL —— 包括 Pydantic ValidationError 里携带字段名的
+# 字符串(如 ``"model_x has invalid type"``)。Phase 11 把关键字白名单
+# 收紧到 ``"flownet_v" / "model file" / "model weight" / "missing model"``,
+# message-first 优先级保持不变(否则 ``FileNotFoundError("ffmpeg")`` 会
+# 落到 IO_ERROR 而不是 MISSING_FFMPEG)。
+
+
+def test_pydantic_validation_error_with_model_word_is_invalid_input() -> None:
+    """Pydantic ValidationError 文本含 'model_x' 字段名 → 不再误归 MISSING_MODEL。
+
+    Phase 11 收窄关键字后,普通的 'model' 字提及不再触发 MISSING_MODEL,
+    而是按 type-dispatch fallback 走到 INVALID_INPUT(ValueError 桶)。
+    """
+    exc = ValueError("model_x must be one of ['4.6', '4.25']")
+    assert infer_error_code(exc) == TaskErrorCode.INVALID_INPUT.value
+
+
+def test_unrelated_model_mention_falls_through_to_process_failed() -> None:
+    """白名单外的 'model' 字提及在 legacy string API 下落到 PROCESS_FAILED。
+
+    例如 ``"yolov8 model not loaded"`` 含 'model' 但不在白名单
+    (``model file`` / ``model weight`` / ``missing model``),
+    legacy string-only path 没有 type dispatch 兜底,直接 PROCESS_FAILED。
+    """
+    assert infer_error_code("yolov8 model not loaded") == TaskErrorCode.PROCESS_FAILED.value
+
+
+def test_whitelisted_model_keywords_still_route_to_missing_model() -> None:
+    """白名单内的 4 个变体都必须保留 MISSING_MODEL 归类(回归护栏)。"""
+    assert infer_error_code("flownet_v4.25.pkl not found") == TaskErrorCode.MISSING_MODEL.value
+    assert infer_error_code("model file weights/rife.pkl missing") == TaskErrorCode.MISSING_MODEL.value
+    assert infer_error_code("model weight tensor not initialized") == TaskErrorCode.MISSING_MODEL.value
+    assert infer_error_code("missing model weights for super-resolution") == TaskErrorCode.MISSING_MODEL.value
