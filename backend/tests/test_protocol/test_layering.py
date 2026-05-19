@@ -1,0 +1,68 @@
+"""Protocol 层无反向 import 的 ast 校验测试(Phase 10)。
+
+``app.protocol`` 是 NDJSON wire 协议的 leaf 层 —— 它应只被上层
+(``app.processing``、``app.cli``、``app.errors`` 等)消费,自己不可
+反向 import 任何 ``app.processing.*`` / ``app.cli.*`` 模块。
+
+历史上 ``app.protocol.reporter`` 曾经直接 ``from
+app.processing.streaming.metrics import PipelineMetrics``,造成了
+``protocol → processing`` 的反向 import。Phase 10 把它替换成了
+``app.protocol.metrics_view.MetricsSnapshot`` Protocol;本测试把这一
+约束变成机器可强制的断言,防止以后再次出现回归。
+"""
+
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+
+PROTOCOL_PKG = Path(__file__).resolve().parents[2] / "app" / "protocol"
+
+# 严格禁止 protocol 层 import 这些上层包。
+# (允许 ``from app.errors._codes import ...`` 之类的低层 sibling,
+#  但 protocol 层目前并不需要 errors,所以也一并禁止。)
+FORBIDDEN_PREFIXES = (
+    "app.processing",
+    "app.cli",
+    "app.algorithms",
+    "app.planning",
+)
+
+
+def _iter_python_modules() -> list[Path]:
+    return sorted(p for p in PROTOCOL_PKG.rglob("*.py") if "__pycache__" not in p.parts)
+
+
+def _collect_imports(tree: ast.AST) -> list[str]:
+    """Return every module name referenced by ``import`` / ``from ... import``."""
+    names: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                names.append(node.module)
+    return names
+
+
+def test_protocol_package_present_and_non_empty() -> None:
+    modules = _iter_python_modules()
+    # Sanity: 至少有 __init__.py、reporter.py、metrics_view.py
+    names = {m.name for m in modules}
+    assert {"__init__.py", "reporter.py", "metrics_view.py"} <= names, f"protocol 包结构异常,实际文件: {names}"
+
+
+def test_protocol_does_not_reverse_import_upper_layers() -> None:
+    """``app.protocol.*`` 严禁 import ``app.processing`` / ``app.cli`` 等上层。"""
+    offenders: list[tuple[str, str]] = []
+    for path in _iter_python_modules():
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for module in _collect_imports(tree):
+            if any(module == prefix or module.startswith(prefix + ".") for prefix in FORBIDDEN_PREFIXES):
+                offenders.append((path.relative_to(PROTOCOL_PKG.parent.parent).as_posix(), module))
+
+    assert not offenders, (
+        "protocol 层出现了反向 import,违反 layering 约束:\n"
+        + "\n".join(f"  - {file}: {mod}" for file, mod in offenders)
+        + "\n如需共享类型,在 app/protocol/ 内定义 Protocol 接口(参考 metrics_view.py)。"
+    )
