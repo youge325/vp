@@ -4,7 +4,6 @@
 import type { MediaItem } from '@/types/domain/media'
 import type { WorkbenchPreset } from '@/types/protocol'
 import { cloneWorkbenchPreset } from '@/services/preset/clone'
-import { createIdleTaskState } from '@/services/task/events'
 
 export function createMediaId(path: string): string {
   const suffix = Math.random().toString(36).slice(2, 8)
@@ -15,6 +14,10 @@ export function basename(path: string): string {
   return path.split(/[/\\]/).pop() ?? path
 }
 
+// Phase 13.1 — taskState / issue / lastOutputPath 从 ``MediaItem`` 移走
+// 到 [[useMediaRunState]],``createMediaItem`` 不再初始化运行时投影:
+// run state 在第一次 setItemTaskState / setItemIssue / setItemLastOutputPath
+// 被调用时由 store 内部 lazy 创建。
 export function createMediaItem(path: string, preset: WorkbenchPreset): MediaItem {
   const snapshot = cloneWorkbenchPreset(preset)
   return {
@@ -24,12 +27,9 @@ export function createMediaItem(path: string, preset: WorkbenchPreset): MediaIte
     selected: true,
     inspecting: false,
     info: null,
-    issue: null,
     decodeConfig: snapshot.decodeConfig,
     workflowConfig: snapshot.workflowConfig,
     encodeConfig: snapshot.encodeConfig,
     outputConfig: snapshot.outputConfig,
-    taskState: createIdleTaskState(),
-    lastOutputPath: '',
   }
 }

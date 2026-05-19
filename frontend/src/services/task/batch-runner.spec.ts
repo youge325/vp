@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createBatchRunner, type BatchRunnerDeps } from './batch-runner'
 import type { BatchState, ResumeConflictDescriptor } from '@/types/domain/batch'
-import type { MediaItem, MediaTaskState } from '@/types/domain/media'
+import type { MediaItem, MediaRunState, MediaTaskState } from '@/types/domain/media'
+import { createIdleTaskState } from './events'
 import type { TaskRequest } from '@/types/protocol'
 
 function makeDeps(overrides: Partial<BatchRunnerDeps> = {}): BatchRunnerDeps {
@@ -17,7 +18,9 @@ function makeDeps(overrides: Partial<BatchRunnerDeps> = {}): BatchRunnerDeps {
   const runtimeIds: string[] = []
   let pendingConflict: ResumeConflictDescriptor | null = null
   const items = new Map<string, MediaItem>()
-  const taskStates = new Map<string, MediaTaskState>()
+  // Phase 13.1 — run state lives in its own store; fake here keeps the
+  // same Map shape so test cases can probe what's been written to it.
+  const runStates = new Map<string, MediaRunState>()
 
   return {
     startTask: vi.fn().mockResolvedValue(undefined),
@@ -40,7 +43,11 @@ function makeDeps(overrides: Partial<BatchRunnerDeps> = {}): BatchRunnerDeps {
     openOutputLocation: vi.fn().mockResolvedValue(undefined),
 
     getMediaItem: (id) => items.get(id) ?? null,
-    setItemTaskState: (id, state) => { taskStates.set(id, state) },
+    getItemRunState: (id) => runStates.get(id) ?? null,
+    setItemTaskState: (id, state: MediaTaskState) => {
+      const existing = runStates.get(id) ?? { taskState: createIdleTaskState(), issue: null, lastOutputPath: '' }
+      runStates.set(id, { ...existing, taskState: state })
+    },
     setItemIssue: vi.fn(),
     setItemLastOutputPath: vi.fn(),
     resetItemRunState: vi.fn(),
@@ -72,9 +79,6 @@ function makeItem(id: string): MediaItem {
     workflowConfig: { fpsMode: 'target', processOrder: 'super_resolution_then_interpolation', interpolation: { enabled: false, targetFps: 60, multi: 2, model: '4.25', onnxModel: '', scale: 1, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' }, superResolution: { enabled: false, scaleFactor: 2, algorithm: 'placeholder', onnxModel: '' }, anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 }, preprocess: { enabled: false, filters: [] }, postprocess: { enabled: false, filters: [] } },
     encodeConfig: { codec: 'libx265', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 18 }, options: {} },
     outputConfig: { outputDir: '', openOnComplete: false, segmentFrames: 1000 },
-    taskState: { status: 'idle', percent: 0, current: 0, total: 0, stage: '', stageIndex: 0, stageTotal: 0, logs: [], outputPath: '', processedFrames: 0, timeSeconds: 0, error: null, startedAt: null, finishedAt: null, resumeStatus: null },
-    issue: null,
-    lastOutputPath: '',
   }
 }
 

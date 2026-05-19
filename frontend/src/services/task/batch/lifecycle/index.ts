@@ -45,6 +45,8 @@ export function createBatchLifecycle(deps: BatchLifecycleDeps): BatchLifecycle {
   return {
     getCurrentItem: helpers.getCurrentItem,
     getConsoleItem: helpers.getConsoleItem,
+    getCurrentRunState: helpers.getCurrentRunState,
+    getConsoleRunState: helpers.getConsoleRunState,
     runNextQueuedItem: queueOps.runNextQueuedItem,
     launchCurrentItem: queueOps.launchCurrentItem,
     finalizeCurrent: finalizeOps.finalizeCurrent,

@@ -7,6 +7,10 @@
 //
 // 通过 ``internal.runNextQueuedItem`` 与 queue.ts 互相调用,组装在
 // index.ts 里用 lazy closure 完成 forward reference。
+//
+// Phase 13.1 — ``item.lastOutputPath`` / ``item.taskState`` 改从
+// ``helpers.getCurrentRunState()`` 取,因为运行时投影已经从 ``MediaItem``
+// 拆到 [[useMediaRunState]] store。
 
 import type { TaskError } from '@/types/domain/media'
 
@@ -50,9 +54,10 @@ export function createFinalizeOps(
     }
 
     if (state === 'completed' || state === 'cancelled') {
-      if (item.outputConfig.openOnComplete && item.lastOutputPath) {
+      const lastOutputPath = helpers.getCurrentRunState()?.lastOutputPath ?? ''
+      if (item.outputConfig.openOnComplete && lastOutputPath) {
         try {
-          await deps.openOutputLocation(item.lastOutputPath)
+          await deps.openOutputLocation(lastOutputPath)
         } catch {
           // Ignore shell-open failures after processing finished.
         }
@@ -87,8 +92,9 @@ export function createFinalizeOps(
 
   async function handleErrored(error: TaskError): Promise<void> {
     const item = helpers.getCurrentItem()
-    if (item) {
-      deps.setItemTaskState(item.id, applyTaskError(item.taskState, error))
+    const runState = helpers.getCurrentRunState()
+    if (item && runState) {
+      deps.setItemTaskState(item.id, applyTaskError(runState.taskState, error))
       deps.setItemIssue(item.id, error)
     }
     await finalizeCurrent('error')

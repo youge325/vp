@@ -2,6 +2,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
+import { useMediaRunState } from '@/stores/mediaRunState'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
@@ -13,6 +14,7 @@ export function useStepRailState() {
   const route = useRoute()
   const envStore = useEnvStore()
   const mediaStore = useMediaStore()
+  const runStateStore = useMediaRunState()
   const { editorConfig, isPresetMode } = useWorkbenchEditor()
   const { batch, currentTaskItem } = useTaskOrchestrator()
 
@@ -54,7 +56,10 @@ export function useStepRailState() {
   )
 
   const taskStatusLabel = computed(() =>
-    getTaskStatusLabel(batch, currentTaskItem.value?.taskState.status ?? null),
+    getTaskStatusLabel(
+      batch,
+      runStateStore.getByItemId(currentTaskItem.value?.id)?.taskState.status ?? null,
+    ),
   )
 
   return { activeModuleKey, moduleStates, workflowLabel, selectionLabel, taskStatusLabel }

@@ -2,6 +2,7 @@
 
 import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
+import { useMediaRunState } from '@/stores/mediaRunState'
 import { usePresetStore } from '@/stores/preset'
 import { mediaIpc } from '@/lib/ipc/endpoints/media'
 import { createMediaItem } from '@/services/media/factory'
@@ -20,6 +21,8 @@ import type { TaskError } from '@/types/domain/media'
 export function useMediaImport() {
   const envStore = useEnvStore()
   const mediaStore = useMediaStore()
+  // Phase 13.1 — item-level issue 拆到独立 store。
+  const runStateStore = useMediaRunState()
   const presetStore = usePresetStore()
 
   async function inspectAndNormalize(itemId: string): Promise<void> {
@@ -28,7 +31,7 @@ export function useMediaImport() {
       return
     }
     mediaStore.setInspecting(itemId, true)
-    mediaStore.setItemIssue(itemId, null)
+    runStateStore.setIssue(itemId, null)
     try {
       const info = await mediaIpc.inspect(item.inputPath)
       mediaStore.setItemInfo(itemId, info)
@@ -36,7 +39,7 @@ export function useMediaImport() {
       const encodeConfig = normalizeEncodeConfig(item.encodeConfig, envStore.env.checkResult)
       mediaStore.replaceItemConfig(itemId, { decodeConfig, encodeConfig })
     } catch (error) {
-      mediaStore.setItemIssue(itemId, normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
+      runStateStore.setIssue(itemId, normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
     } finally {
       mediaStore.setInspecting(itemId, false)
     }

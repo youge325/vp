@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
+import { useMediaRunState } from '@/stores/mediaRunState'
 
 const { consoleTaskItem, batch, batchTotal } = useTaskOrchestrator()
+const runStateStore = useMediaRunState()
 const terminalRef = ref<HTMLDivElement | null>(null)
-const logs = computed(() => consoleTaskItem.value?.taskState.logs ?? [])
-const resumeStatus = computed(() => consoleTaskItem.value?.taskState.resumeStatus ?? null)
+// Phase 13.1 — taskState 已从 MediaItem 拆到独立 store,这里改成按
+// itemId 二级 lookup。
+const consoleRunState = computed(() => runStateStore.getByItemId(consoleTaskItem.value?.id))
+const logs = computed(() => consoleRunState.value?.taskState.logs ?? [])
+const resumeStatus = computed(() => consoleRunState.value?.taskState.resumeStatus ?? null)
 const showResumeBanner = computed(() => Boolean(resumeStatus.value?.resumed))
 
 const done = computed(() => batch.completedCount)

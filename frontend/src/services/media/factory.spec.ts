@@ -55,7 +55,15 @@ describe('createMediaItem', () => {
     expect(item.inputPath).toBe('/path/to/video.mp4')
     expect(item.displayName).toBe('video.mp4')
     expect(item.selected).toBe(true)
-    expect(item.taskState.status).toBe('idle')
     expect(item.decodeConfig.mode).toBe('software')
+  })
+
+  // Phase 13.1 — taskState / issue / lastOutputPath 已经从 MediaItem
+  // 拆出到独立的 useMediaRunState store,factory 不应再返回这些字段。
+  it('does not return run-state fields after Phase 13.1 split', () => {
+    const item = createMediaItem('/path/to/video.mp4', mockPreset)
+    expect('taskState' in item).toBe(false)
+    expect('issue' in item).toBe(false)
+    expect('lastOutputPath' in item).toBe(false)
   })
 })

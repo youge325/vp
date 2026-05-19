@@ -1,6 +1,10 @@
 // NDJSON 事件订阅与归一 — 把 Tauri/Python 上抛的事件载荷映射到 store 状态。
 // 不感知队列推进,仅做 "事件 → 当前/激活 item 的 taskState" 归一,
 // 状态机迁移交给 [[lifecycle]] 完成。
+//
+// Phase 13.1 — ``item.taskState`` 改读 ``lifecycle.getConsoleRunState`` /
+// ``getCurrentRunState``。``MediaItem`` 已不持有运行时投影,事件 reducer
+// 把上一帧 ``taskState`` 从 [[useMediaRunState]] 拉出来后再 apply 新载荷。
 
 import type { TaskError } from '@/types/domain/media'
 import type {
@@ -41,22 +45,25 @@ export function createEventHandlers(
 ): EventHandlers {
   function onProgress(payload: TaskProgressPayload): void {
     const item = lifecycle.getConsoleItem()
-    if (item) {
-      deps.setItemTaskState(item.id, applyTaskProgress(item.taskState, payload))
+    const runState = lifecycle.getConsoleRunState()
+    if (item && runState) {
+      deps.setItemTaskState(item.id, applyTaskProgress(runState.taskState, payload))
     }
   }
 
   function onLog(payload: TaskLogPayload): void {
     const item = lifecycle.getConsoleItem()
-    if (item) {
-      deps.setItemTaskState(item.id, appendTaskLog(item.taskState, payload))
+    const runState = lifecycle.getConsoleRunState()
+    if (item && runState) {
+      deps.setItemTaskState(item.id, appendTaskLog(runState.taskState, payload))
     }
   }
 
   async function onCompleted(payload: TaskCompletedPayload): Promise<void> {
     const item = lifecycle.getCurrentItem()
-    if (item) {
-      deps.setItemTaskState(item.id, applyTaskCompleted(item.taskState, payload))
+    const runState = lifecycle.getCurrentRunState()
+    if (item && runState) {
+      deps.setItemTaskState(item.id, applyTaskCompleted(runState.taskState, payload))
       if (payload.outputPath) {
         deps.setItemLastOutputPath(item.id, payload.outputPath)
       }
@@ -73,16 +80,18 @@ export function createEventHandlers(
 
   async function onCancelled(payload?: TaskCancelledPayload | null): Promise<void> {
     const item = lifecycle.getCurrentItem()
-    if (item) {
-      deps.setItemTaskState(item.id, applyTaskCancelled(item.taskState, payload))
+    const runState = lifecycle.getCurrentRunState()
+    if (item && runState) {
+      deps.setItemTaskState(item.id, applyTaskCancelled(runState.taskState, payload))
     }
     await lifecycle.finalizeCurrent('cancelled')
   }
 
   function onResumeStatus(payload: ResumeStatus): void {
     const item = lifecycle.getConsoleItem()
-    if (item) {
-      deps.setItemTaskState(item.id, applyTaskResumeStatus(item.taskState, payload))
+    const runState = lifecycle.getConsoleRunState()
+    if (item && runState) {
+      deps.setItemTaskState(item.id, applyTaskResumeStatus(runState.taskState, payload))
     }
   }
 

@@ -3,12 +3,21 @@ import { ref } from 'vue'
 import { useMediaImport } from '@/composables/app/useMediaImport'
 import { useMediaListEditor } from '@/composables/forms/useMediaListEditor'
 import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
+import { useMediaRunState } from '@/stores/mediaRunState'
 import IssueBanner from '@/components/IssueBanner.vue'
 
 const list = useMediaListEditor()
 const { pickAndImport, importPaths, reinspectIds } = useMediaImport()
 const inputIssue = useOperationIssue('input')
+const runStateStore = useMediaRunState()
 const dragActive = ref(false)
+
+// Phase 13.1 — ``taskState`` 拆到独立 store 后,row 状态展示用 helper
+// 替换 ``item.taskState.status`` 的直接访问。未跑过任务的 item 返回
+// ``idle``(占位)。
+function statusOf(id: string): string {
+  return runStateStore.getByItemId(id)?.taskState.status ?? 'idle'
+}
 
 async function handlePickInputs(): Promise<void> {
   const { error } = await pickAndImport()
@@ -132,7 +141,7 @@ async function reinspectSelection(): Promise<void> {
               <td>{{ item.info?.videoCodec || '--' }}</td>
               <td>{{ list.workflowLabelOf(item) }}</td>
               <td>
-                <span class="inline-status" :data-state="item.taskState.status">{{ item.taskState.status }}</span>
+                <span class="inline-status" :data-state="statusOf(item.id)">{{ statusOf(item.id) }}</span>
               </td>
               <td @click.stop>
                 <button class="table-action" @click="list.removeItem(item.id)">
