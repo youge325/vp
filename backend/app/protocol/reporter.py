@@ -10,6 +10,13 @@ Bridges the streaming pipeline's progress callbacks to two sinks:
 Lives in :mod:`app.protocol` (not :mod:`app.cli`) because the streaming
 pipeline drives it through ``encode_progress_callback`` — keeping it
 outside ``cli/`` avoids a ``processing -> cli`` reverse dependency.
+
+Phase 10 — the metrics type annotation now uses
+:class:`app.protocol.metrics_view.MetricsSnapshot` (a structural
+``Protocol``) instead of importing
+``app.processing.streaming.metrics.PipelineMetrics`` directly. This
+restores "protocol is a leaf layer" — any object with a ``snapshot()``
+method qualifies, and ``protocol`` no longer reaches into ``processing``.
 """
 
 from __future__ import annotations
@@ -17,8 +24,8 @@ from __future__ import annotations
 import sys
 import time
 
-from app.processing.streaming.metrics import PipelineMetrics
 from app.protocol import ndjson
+from app.protocol.metrics_view import MetricsSnapshot
 
 TERMINAL_PROGRESS_PREFIX = "[VP_PROGRESS]"
 TERMINAL_PROGRESS_BAR_WIDTH = 24
@@ -57,9 +64,13 @@ class CliProgressReporter:
     Phase D.2.3:reporter 可选持有一个 ``PipelineMetrics`` 引用,update 时
     把当前 snapshot 一并塞进 NDJSON ``progress`` 帧的 ``metrics`` 字段。
     metrics 由 pipeline 在构造 reporter 时注入,reporter 不主动创建。
+
+    Phase 10:``metrics`` 的类型注解从具体类 ``PipelineMetrics`` 抽象为
+    ``MetricsSnapshot`` Protocol —— 任何实现 ``snapshot() -> dict`` 的对象
+    都可注入,protocol 层不再反向 import ``processing.streaming``。
     """
 
-    def __init__(self, total_frames: int, metrics: PipelineMetrics | None = None) -> None:
+    def __init__(self, total_frames: int, metrics: MetricsSnapshot | None = None) -> None:
         self.total_frames = max(int(total_frames), 1)
         self.current_frame = 0
         self.started_at = time.time()
