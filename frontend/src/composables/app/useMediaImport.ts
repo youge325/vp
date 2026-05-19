@@ -1,8 +1,8 @@
 // 应用层 — 媒体导入协调:选文件、构建 item、归一化、探测。
 
 import { useEnvStore } from '@/stores/env'
+import { useIssueStore } from '@/stores/issue'
 import { useMediaStore } from '@/stores/media'
-import { useMediaRunState } from '@/stores/mediaRunState'
 import { usePresetStore } from '@/stores/preset'
 import { mediaIpc } from '@/lib/ipc/endpoints/media'
 import { createMediaItem } from '@/services/media/factory'
@@ -21,8 +21,15 @@ import type { TaskError } from '@/types/domain/media'
 export function useMediaImport() {
   const envStore = useEnvStore()
   const mediaStore = useMediaStore()
-  // Phase 13.1 — item-level issue 拆到独立 store。
-  const runStateStore = useMediaRunState()
+  // Phase 14 — 把"导入失败"路由到 issueStore('input') scope,InputModuleView
+  // 的 ``useOperationIssue('input')`` 才能拿到、IssueBanner 才会显示。
+  //
+  // Phase 13.1 改 ``useMediaImport`` 写入 ``mediaRunState.setIssue(itemId, …)``
+  // 时,实际上没有任何视图侧消费方读 ``mediaRunState.getByItemId(id)?.issue``,
+  // 导入失败时 banner 永远不出现 —— 是真 dead write。改到 issueStore 后
+  // 同一个 import 工作流的失败会覆盖前一次的 banner 文案(per-scope 单
+  // banner 是设计),展示最后一次错误足够提示用户。
+  const issueStore = useIssueStore()
   const presetStore = usePresetStore()
 
   async function inspectAndNormalize(itemId: string): Promise<void> {
@@ -31,7 +38,7 @@ export function useMediaImport() {
       return
     }
     mediaStore.setInspecting(itemId, true)
-    runStateStore.setIssue(itemId, null)
+    issueStore.clearIssue('input')
     try {
       const info = await mediaIpc.inspect(item.inputPath)
       mediaStore.setItemInfo(itemId, info)
@@ -39,7 +46,7 @@ export function useMediaImport() {
       const encodeConfig = normalizeEncodeConfig(item.encodeConfig, envStore.env.checkResult)
       mediaStore.replaceItemConfig(itemId, { decodeConfig, encodeConfig })
     } catch (error) {
-      runStateStore.setIssue(itemId, normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
+      issueStore.setIssue('input', normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
     } finally {
       mediaStore.setInspecting(itemId, false)
     }
