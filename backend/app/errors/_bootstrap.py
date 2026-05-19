@@ -23,6 +23,14 @@ two passes:
 The legacy string-only path keeps producing the same answers as before,
 which is what the three-way round-trip test in ``test_codes_roundtrip``
 relies on.
+
+Phase 11 — ``MISSING_MODEL`` 的关键字从单字符串 ``"model"`` 缩窄到
+``"flownet_v" / "model file" / "model weight" / "missing model"``。原来
+任意 message 含 "model" 都会被归类 MISSING_MODEL,导致 Pydantic
+ValidationError 文本里的字段名(如 ``"model_x has invalid type"``)被误
+归类。**保留**message-first 优先级——文件顶部的 ffmpeg 规则就靠它让
+``FileNotFoundError("ffmpeg")`` 落到 MISSING_FFMPEG 而非 IO_ERROR,反转
+会回退此行为。
 """
 
 from __future__ import annotations
@@ -34,7 +42,7 @@ def _match_by_message(message: str) -> str:
     """Return a TaskErrorCode for messages with a recognised keyword, or PROCESS_FAILED."""
     if "ffmpeg" in message or "ffprobe" in message:
         return TaskErrorCode.MISSING_FFMPEG.value
-    if "flownet_v" in message or "model" in message:
+    if "flownet_v" in message or "model file" in message or "model weight" in message or "missing model" in message:
         return TaskErrorCode.MISSING_MODEL.value
     if (
         "no module named 'torch'" in message
