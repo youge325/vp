@@ -37,6 +37,16 @@ use super::ProcessControlError;
 /// spawned between the snapshot and the first freeze. ``resume`` runs
 /// against an already-frozen tree, so one pass is sufficient and the
 /// rollback bookkeeping is unnecessary there.
+///
+/// Phase 12 — the second pass previously called ``SuspendThread`` on
+/// *every* thread under ``root_pid``'s tree, including the ones the
+/// first pass had already frozen. That bumped their suspend-count from
+/// 1 to 2, and the matching ``ResumeThread`` (which only walks the
+/// cached thread IDs once) could only knock it back down to 1, leaving
+/// the task frozen forever. Now the second pass receives an explicit
+/// exclude-set of already-touched thread IDs and short-circuits before
+/// calling ``SuspendThread`` on them, so each tid has its suspend-count
+/// raised at most once per ``set_process_tree_suspended`` invocation.
 pub fn set_process_tree_suspended(
     root_pid: u32,
     suspend: bool,
@@ -55,7 +65,7 @@ pub fn set_process_tree_suspended(
     }
 
     let pids = collect_process_tree(root_pid)?;
-    let (touched_threads, mut threads) = set_threads_suspended(&pids, suspend)?;
+    let (touched_threads, mut threads) = set_threads_suspended(&pids, suspend, None)?;
     if touched_threads == 0 {
         return Err(ProcessControlError::NotFound);
     }
@@ -63,7 +73,11 @@ pub fn set_process_tree_suspended(
     if suspend {
         let already = threads.iter().copied().collect::<BTreeSet<_>>();
         let pids_after = collect_process_tree(root_pid)?;
-        if let Ok((_, new_threads)) = set_threads_suspended(&pids_after, suspend) {
+        // Phase 12 — pass ``already`` as the exclude-set so threads we
+        // already froze in the first pass are NOT re-suspended (which
+        // would push their suspend-count to 2 and trap the task on the
+        // subsequent ``ResumeThread`` that only knocks it down by 1).
+        if let Ok((_, new_threads)) = set_threads_suspended(&pids_after, suspend, Some(&already)) {
             for tid in new_threads {
                 if !already.contains(&tid) {
                     threads.push(tid);
@@ -119,9 +133,17 @@ fn collect_process_tree(root_pid: u32) -> Result<BTreeSet<u32>, ProcessControlEr
 /// Resume's every thread we already froze, preventing a half-frozen
 /// process tree. Resume mode never rolls back: the goal there is to
 /// let threads run, so a partial success is still better than nothing.
+///
+/// Phase 12 — ``exclude_tids`` lets the caller skip Suspend/ResumeThread
+/// for thread IDs whose state was already manipulated in an earlier call
+/// (specifically, the D.3.3 second pass passes the first pass's touched
+/// IDs so they don't get a second SuspendThread that would lift their
+/// suspend-count to 2). Excluded tids are NOT returned in ``touched_ids``
+/// either, since the cache already covers them.
 fn set_threads_suspended(
     pids: &BTreeSet<u32>,
     suspend: bool,
+    exclude_tids: Option<&BTreeSet<u32>>,
 ) -> Result<(usize, Vec<u32>), ProcessControlError> {
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
     if snapshot == INVALID_HANDLE_VALUE {
@@ -138,7 +160,12 @@ fn set_threads_suspended(
 
     let mut has_entry = unsafe { Thread32First(snapshot, &mut entry) } != 0;
     while has_entry {
-        if pids.contains(&entry.th32OwnerProcessID) {
+        if thread_should_be_touched(
+            pids,
+            exclude_tids,
+            entry.th32OwnerProcessID,
+            entry.th32ThreadID,
+        ) {
             match set_thread_suspended(entry.th32ThreadID, suspend) {
                 Ok(()) => {
                     touched_threads += 1;
@@ -208,4 +235,96 @@ fn set_thread_suspended(thread_id: u32, suspend: bool) -> Result<(), ProcessCont
     }
 
     Ok(())
+}
+
+/// Pure-decision helper extracted from ``set_threads_suspended`` so the
+/// Phase 12 second-pass exclude logic can be unit-tested without a real
+/// process tree.
+///
+/// Returns ``true`` iff the thread (``thread_id`` owned by ``owner_pid``)
+/// should have ``SuspendThread`` / ``ResumeThread`` called on it during
+/// the current pass.
+fn thread_should_be_touched(
+    pids: &BTreeSet<u32>,
+    exclude_tids: Option<&BTreeSet<u32>>,
+    owner_pid: u32,
+    thread_id: u32,
+) -> bool {
+    if !pids.contains(&owner_pid) {
+        return false;
+    }
+    match exclude_tids {
+        Some(set) => !set.contains(&thread_id),
+        None => true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pid_set(values: &[u32]) -> BTreeSet<u32> {
+        values.iter().copied().collect()
+    }
+
+    #[test]
+    fn touches_thread_when_owner_pid_matches_and_no_exclude_set() {
+        let pids = pid_set(&[100, 200]);
+        assert!(thread_should_be_touched(&pids, None, 100, 7777));
+    }
+
+    #[test]
+    fn skips_thread_whose_owner_pid_is_outside_the_tree() {
+        let pids = pid_set(&[100, 200]);
+        assert!(!thread_should_be_touched(&pids, None, 999, 1234));
+    }
+
+    #[test]
+    fn second_pass_skips_threads_already_suspended_in_first_pass() {
+        // Phase 12 — this is the regression guard against the D.3.3
+        // second-pass double-suspend bug: a tid in the exclude set must
+        // NOT be touched, otherwise its SuspendThread call would push
+        // its suspend-count to 2 and the subsequent ResumeThread (which
+        // only runs once over the cached IDs) leaves the task frozen.
+        let pids = pid_set(&[100]);
+        let already_touched = pid_set(&[7777, 8888]);
+        assert!(!thread_should_be_touched(
+            &pids,
+            Some(&already_touched),
+            100,
+            7777,
+        ));
+        assert!(!thread_should_be_touched(
+            &pids,
+            Some(&already_touched),
+            100,
+            8888,
+        ));
+    }
+
+    #[test]
+    fn second_pass_still_touches_brand_new_grandchild_threads() {
+        // After the first SuspendThread pass, a grandchild may spawn a
+        // new thread that isn't in the exclude set. Catching it is the
+        // entire reason the second pass exists in the first place; the
+        // Phase 12 fix must NOT throw the baby out with the bathwater.
+        let pids = pid_set(&[100]);
+        let already_touched = pid_set(&[7777]);
+        assert!(thread_should_be_touched(
+            &pids,
+            Some(&already_touched),
+            100,
+            9999,
+        ));
+    }
+
+    #[test]
+    fn empty_pid_set_skips_every_thread() {
+        // Defensive: if collect_process_tree somehow returns an empty
+        // set (process already gone between the two snapshots), we just
+        // don't touch anything — same outcome as the natural for-loop
+        // having no matches.
+        let pids = pid_set(&[]);
+        assert!(!thread_should_be_touched(&pids, None, 100, 7777));
+    }
 }
