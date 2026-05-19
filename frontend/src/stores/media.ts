@@ -1,19 +1,19 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig } from '@/types/protocol'
-import type {
-  MediaItem,
-  MediaTaskState,
-  TaskError,
-  VideoInfoResult,
-} from '@/types/domain/media'
-import { createIdleTaskState } from '@/services/task/events'
+import type { MediaItem, VideoInfoResult } from '@/types/domain/media'
 
 // Phase 6d — ``operationIssue`` / ``setOperationIssue`` /
 // ``clearOperationIssue`` moved to the dedicated ``useIssueStore``
 // (``@/stores/issue``). Media item state and global error-banner
 // state used to share this file; splitting them keeps the media
 // store focused on the media list itself.
+//
+// Phase 13.1 — ``taskState`` / ``issue`` / ``lastOutputPath`` 的写入路径
+// 进一步迁出到 [[useMediaRunState]]。``useMediaStore`` 现在就是"list
+// CRUD + 激活/选中 + info inspection"四件事,batch lifecycle 与 IPC
+// 事件改往 ``mediaRunState`` 写入,视图侧读取也按 itemId 二级查找。
+// 这样 batch-runner 注入函数从 13 个降到 8 个,store 关注点从 5 个降到 1 个。
 
 export const useMediaStore = defineStore('media', () => {
   const mediaItems = ref<MediaItem[]>([])
@@ -108,13 +108,6 @@ export const useMediaStore = defineStore('media', () => {
     }
   }
 
-  function setItemIssue(id: string, issue: TaskError | null): void {
-    const item = findItem(id)
-    if (item) {
-      item.issue = issue
-    }
-  }
-
   function replaceItemConfig(
     id: string,
     partial: {
@@ -134,39 +127,6 @@ export const useMediaStore = defineStore('media', () => {
     if (partial.outputConfig) item.outputConfig = partial.outputConfig
   }
 
-  function setItemTaskState(id: string, state: MediaTaskState): void {
-    const item = findItem(id)
-    if (item) {
-      item.taskState = state
-    }
-  }
-
-  function setItemLastOutputPath(id: string, path: string): void {
-    const item = findItem(id)
-    if (item) {
-      item.lastOutputPath = path
-    }
-  }
-
-  function resetItemRunState(id: string, preserveLogs = false): void {
-    const item = findItem(id)
-    if (!item) {
-      return
-    }
-    const existingLogs = preserveLogs ? item.taskState.logs : []
-    item.taskState = { ...createIdleTaskState(), logs: existingLogs }
-    item.issue = null
-    item.lastOutputPath = ''
-  }
-
-  function resetItemsRunState(ids: Set<string>, preserveLogs = false): void {
-    for (const item of mediaItems.value) {
-      if (ids.has(item.id)) {
-        resetItemRunState(item.id, preserveLogs)
-      }
-    }
-  }
-
   return {
     mediaItems,
     activeItemId,
@@ -184,11 +144,6 @@ export const useMediaStore = defineStore('media', () => {
     selectAll,
     setInspecting,
     setItemInfo,
-    setItemIssue,
     replaceItemConfig,
-    setItemTaskState,
-    setItemLastOutputPath,
-    resetItemRunState,
-    resetItemsRunState,
   }
 })

@@ -67,11 +67,18 @@ export interface MediaItem {
   selected: boolean
   inspecting: boolean
   info: VideoInfoResult | null
-  issue: TaskError | null
   decodeConfig: DecodeConfig
   workflowConfig: WorkflowConfig
   encodeConfig: EncodeConfig
   outputConfig: OutputConfig
+}
+
+// Phase 13.1 — 运行时投影,从 ``MediaItem`` 拆出到独立的
+// ``useMediaRunState`` store。``MediaItem`` 现在只描述列表实体(身份 +
+// 配置),不再承载会跨多个写入者(batch lifecycle / IPC 事件)持续刷新
+// 的字段。
+export interface MediaRunState {
   taskState: MediaTaskState
+  issue: TaskError | null
   lastOutputPath: string
 }

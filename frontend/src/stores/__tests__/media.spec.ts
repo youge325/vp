@@ -77,24 +77,14 @@ describe('useMediaStore', () => {
     expect('clearOperationIssue' in store).toBe(false)
   })
 
-  it('resetItemRunState restores idle defaults while preserving logs when asked', () => {
+  // Phase 13.1 — ``taskState`` / ``issue`` / ``lastOutputPath`` 拆到独立
+  // 的 ``useMediaRunState`` store。锁定 useMediaStore 不再暴露这些 mutator。
+  it('does not expose the relocated run-state mutators after Phase 13.1', () => {
     const store = useMediaStore()
-    const a = createMediaItem('/a.mp4', samplePreset)
-    store.appendItems([a])
-
-    store.setItemTaskState(a.id, {
-      ...a.taskState,
-      status: 'completed',
-      percent: 100,
-      logs: ['line-1', 'line-2'],
-    })
-    store.setItemLastOutputPath(a.id, 'D:/out.mp4')
-
-    store.resetItemRunState(a.id, true)
-    const refreshed = store.findItem(a.id)!
-    expect(refreshed.taskState.status).toBe('idle')
-    expect(refreshed.taskState.percent).toBe(0)
-    expect(refreshed.taskState.logs).toEqual(['line-1', 'line-2'])
-    expect(refreshed.lastOutputPath).toBe('')
+    expect('setItemTaskState' in store).toBe(false)
+    expect('setItemIssue' in store).toBe(false)
+    expect('setItemLastOutputPath' in store).toBe(false)
+    expect('resetItemRunState' in store).toBe(false)
+    expect('resetItemsRunState' in store).toBe(false)
   })
 })

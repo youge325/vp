@@ -25,6 +25,7 @@ import type { UnlistenFn } from '@/lib/ipc'
 import { listenTaskEvents } from '@/lib/ipc/events'
 import { taskIpc } from '@/lib/ipc/endpoints/task'
 import { useMediaStore } from '@/stores/media'
+import { useMediaRunState } from '@/stores/mediaRunState'
 import { useTaskStore } from '@/stores/task'
 import { createBatchRunner, type BatchRunner } from '@/services/task/batch-runner'
 import { buildTaskRequest } from '@/services/task/request-builder'
@@ -42,7 +43,12 @@ function ensureRunner(): BatchRunner {
   // ``useXxxStore`` returns the pinia singleton, so resolving stores
   // here (instead of taking them as arguments) keeps the singleton
   // contract while preserving Pinia's lazy activation.
+  //
+  // Phase 13.1 — ``mediaRunState`` 是从 ``useMediaStore`` 拆出的运行时
+  // 投影 store。``getItemRunState`` 把上一帧 taskState 暴露给 batch
+  // lifecycle / events 做 reducer 输入,5 个 setter / reset 直写新 store。
   const mediaStore = useMediaStore()
+  const mediaRunState = useMediaRunState()
   const taskStore = useTaskStore()
   cachedRunner = createBatchRunner({
     startTask: taskIpc.start,
@@ -52,11 +58,12 @@ function ensureRunner(): BatchRunner {
     checkResume: taskIpc.checkResume,
     openOutputLocation: taskIpc.openOutputLocation,
     getMediaItem: (id) => mediaStore.findItem(id),
-    setItemTaskState: (id, state) => mediaStore.setItemTaskState(id, state),
-    setItemIssue: (id, issue) => mediaStore.setItemIssue(id, issue),
-    setItemLastOutputPath: (id, path) => mediaStore.setItemLastOutputPath(id, path),
-    resetItemRunState: (id, preserveLogs) => mediaStore.resetItemRunState(id, preserveLogs),
-    resetItemsRunState: (ids, preserveLogs) => mediaStore.resetItemsRunState(ids, preserveLogs),
+    getItemRunState: (id) => mediaRunState.getByItemId(id),
+    setItemTaskState: (id, state) => mediaRunState.setTaskState(id, state),
+    setItemIssue: (id, issue) => mediaRunState.setIssue(id, issue),
+    setItemLastOutputPath: (id, path) => mediaRunState.setLastOutputPath(id, path),
+    resetItemRunState: (id, preserveLogs) => mediaRunState.resetItemRunState(id, preserveLogs),
+    resetItemsRunState: (ids, preserveLogs) => mediaRunState.resetItemsRunState(ids, preserveLogs),
     setActiveItem: (id) => mediaStore.setActive(id),
     getActiveItemId: () => mediaStore.activeItemId,
     getBatch: () => taskStore.batch,

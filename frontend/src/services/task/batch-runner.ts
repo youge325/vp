@@ -12,7 +12,7 @@ import type {
   TaskProgressPayload,
   TaskRequest,
 } from '@/types/protocol'
-import type { MediaItem, MediaTaskState, TaskError } from '@/types/domain/media'
+import type { MediaItem, MediaRunState, MediaTaskState, TaskError } from '@/types/domain/media'
 import type {
   BatchState,
   ResumeConflictAction,
@@ -34,6 +34,7 @@ export interface BatchRunnerDeps {
   openOutputLocation: (path: string) => Promise<void>
 
   getMediaItem: (id: string) => MediaItem | null
+  getItemRunState: (id: string) => MediaRunState | null
   setItemTaskState: (id: string, state: MediaTaskState) => void
   setItemIssue: (id: string, issue: TaskError | null) => void
   setItemLastOutputPath: (id: string, path: string) => void
