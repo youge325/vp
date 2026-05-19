@@ -78,6 +78,7 @@ pub(super) fn has_default_rife_model(model_dir: Option<&PathBuf>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::test_support::VP_TENSORRT_DIR_LOCK;
     use std::env;
 
     const TENSORRT_ENV_KEY: &str = "VP_TENSORRT_DIR";
@@ -85,14 +86,29 @@ mod tests {
     /// RAII guard that restores ``VP_TENSORRT_DIR`` to whatever the process
     /// had before the test ran, so test ordering / parallel runs don't leak
     /// state into each other.
+    ///
+    /// Phase 13.2 CI hotfix — additionally holds
+    /// [`VP_TENSORRT_DIR_LOCK`] for the duration of the test. Without it,
+    /// ``cargo test`` running these cases in parallel on multi-core CI
+    /// could read another test's ``set_var`` value before that test's
+    /// guard dropped (observed in GitHub Actions Phase 13.1 build), with
+    /// the env-only fallback never getting a chance to fire.
     struct EnvGuard {
         original: Option<std::ffi::OsString>,
+        _lock: std::sync::MutexGuard<'static, ()>,
     }
 
     impl EnvGuard {
         fn capture() -> Self {
+            // ``unwrap_or_else(into_inner)`` — if a previous test panicked
+            // mid-mutation the lock is poisoned, but the data it guards
+            // is just a unit ``()`` so we can safely keep going.
+            let lock = VP_TENSORRT_DIR_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             Self {
                 original: env::var_os(TENSORRT_ENV_KEY),
+                _lock: lock,
             }
         }
 
