@@ -41,17 +41,18 @@ pub fn build_env_map(paths: &ResolvedRuntimePaths) -> Vec<(String, String)> {
         ));
     }
 
-    // 优先透传系统环境变量中的 VP_TENSORRT_DIR(用户可能直接设了),
-    // 即使 resolve_runtime_paths 没找到本地目录,也要让后端有机会读取。
+    // Phase 12 — ``paths.tensorrt_dir`` is the single source of truth.
+    // ``runtime/model.rs::resolve_tensorrt_dir`` already handles the
+    // "honour ``VP_TENSORRT_DIR`` even if the directory doesn't exist
+    // yet" fallback, so this layer just forwards whatever paths gives
+    // us. (Before Phase 12 we did a second ``std::env::var`` peek here,
+    // which silently disagreed with the paths layer about whether a
+    // missing directory should be exposed to the backend.)
     if let Some(tensorrt_dir) = &paths.tensorrt_dir {
         envs.push((
             "VP_TENSORRT_DIR".to_string(),
             tensorrt_dir.to_string_lossy().to_string(),
         ));
-    } else if let Ok(trt_env) = std::env::var("VP_TENSORRT_DIR") {
-        if !trt_env.is_empty() {
-            envs.push(("VP_TENSORRT_DIR".to_string(), trt_env));
-        }
     }
 
     if let Some(runtime_root) = &paths.runtime_root {
@@ -113,5 +114,34 @@ mod tests {
         assert!(envs
             .iter()
             .any(|(key, value)| key == "VP_TENSORRT_DIR" && value == "D:\\TensorRT-10.14.1.48"));
+    }
+
+    #[test]
+    fn does_not_peek_env_when_paths_omitted_tensorrt() {
+        // Phase 12 — env_map.rs used to re-read ``VP_TENSORRT_DIR`` from
+        // ``std::env`` when ``paths.tensorrt_dir`` was None, which let
+        // it disagree with the paths layer about whether to expose the
+        // variable. Now ``runtime/model.rs::resolve_tensorrt_dir`` is
+        // the single decision point; build_env_map must NEVER inject
+        // VP_TENSORRT_DIR when paths.tensorrt_dir is None, regardless
+        // of what's in std::env.
+        let original = std::env::var_os("VP_TENSORRT_DIR");
+        std::env::set_var("VP_TENSORRT_DIR", "D:\\rogue-env-only");
+        let envs = build_env_map(&ResolvedRuntimePaths {
+            backend_dir: PathBuf::from("backend"),
+            runtime_root: None,
+            python_executable: PathBuf::from("python"),
+            ffmpeg_path: None,
+            ffprobe_path: None,
+            model_dir: None,
+            tensorrt_dir: None,
+            output_dir: PathBuf::from("output"),
+            log_dir: PathBuf::from("logs"),
+        });
+        match original {
+            Some(value) => std::env::set_var("VP_TENSORRT_DIR", value),
+            None => std::env::remove_var("VP_TENSORRT_DIR"),
+        }
+        assert!(!envs.iter().any(|(key, _)| key == "VP_TENSORRT_DIR"));
     }
 }
