@@ -172,3 +172,22 @@ fn require_release_bundle_artifacts(
     }
     Ok(())
 }
+
+// Phase 13.2 hotfix — Phase 12A 在 ``runtime/model.rs`` 与
+// ``runtime/env_map.rs`` 各加了改写 ``VP_TENSORRT_DIR`` 的测试,但没共享
+// 互斥锁。``cargo test`` 在多核 CI(GitHub Actions Windows runner)上把
+// 这些测试并行调度时,后台的 ``*_prefers_existing_dir_over_env_fallback``
+// 把变量设成 cwd 后还没 RAII restore,前台的
+// ``*_passes_env_through_even_when_path_missing`` 已经读 env_path 进入
+// first_existing_dir 命中 cwd,fallback 路径压根没机会跑。本地单线程
+// cargo test 串行不触发,但 CI 上 100% 复现。
+//
+// 把 ``VP_TENSORRT_DIR`` 的 set/restore 串行化到这把锁后,所有 5 个
+// 改 env 的测试(4 个 model + 1 个 env_map)就互不干扰了。pub(crate)
+// 范围确保 lib 外不可见;静态 const-fn ``Mutex::new(())`` 不依赖任何
+// init order。
+#[cfg(test)]
+pub(crate) mod test_support {
+    use std::sync::Mutex;
+    pub static VP_TENSORRT_DIR_LOCK: Mutex<()> = Mutex::new(());
+}

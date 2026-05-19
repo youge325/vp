@@ -125,6 +125,16 @@ mod tests {
         // the single decision point; build_env_map must NEVER inject
         // VP_TENSORRT_DIR when paths.tensorrt_dir is None, regardless
         // of what's in std::env.
+        //
+        // Phase 13.2 CI hotfix — hold the shared lock so this test
+        // doesn't race against ``runtime::model::tests::*`` (which also
+        // ``set_var(VP_TENSORRT_DIR, …)``). Without the lock multi-core
+        // ``cargo test`` on CI saw cross-test bleed and the model.rs
+        // env-only-fallback assertion blew up; see the test_support
+        // module comment in ``runtime/mod.rs`` for the full diagnosis.
+        let _lock = crate::runtime::test_support::VP_TENSORRT_DIR_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let original = std::env::var_os("VP_TENSORRT_DIR");
         std::env::set_var("VP_TENSORRT_DIR", "D:\\rogue-env-only");
         let envs = build_env_map(&ResolvedRuntimePaths {
