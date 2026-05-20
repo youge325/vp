@@ -88,19 +88,20 @@ pub struct TaskState {
 }
 
 impl TaskState {
-    /// Fast-path peek used by ``spawn_task`` to avoid paying for a
-    /// fork+exec when there's already a task running. The authoritative
-    /// check happens inside [`try_start`].
-    pub async fn is_idle(&self) -> bool {
-        matches!(*self.phase.lock().await, TaskStatePhase::Idle)
-    }
-
     /// Atomically transition `Idle` → `Running { handle }`.
     ///
     /// Returns ``Err(ShellError::InvalidInput)`` when another task is
     /// already running (or being cancelled). The check + write are
     /// performed under the same mutex guard so two concurrent callers
     /// can't both observe `Idle` and both insert a handle.
+    ///
+    /// Phase 17 — ``is_idle`` fast-peek removed. Previously
+    /// ``spawn_task`` did ``if !state.is_idle().await { return Err(...) }``
+    /// then handed control to ``try_start``; the peek saved a fork+exec
+    /// in the happy path but duplicated the "already running" message
+    /// across two files (drift hazard), and the docstring on
+    /// ``is_idle`` itself admitted the authoritative check was here.
+    /// ``try_start`` is now the only entry point.
     pub async fn try_start(&self, handle: TaskHandle) -> Result<(), ShellError> {
         let mut guard = self.phase.lock().await;
         if !matches!(*guard, TaskStatePhase::Idle) {
@@ -180,10 +181,14 @@ mod tests {
         TaskHandle::new(tx, CancellationToken::new())
     }
 
+    // Phase 17 — ``is_idle`` 删除后,"phase 是 Idle"由组合断言间接证明:
+    // current_handle() 返回 NoActiveTask + begin_cancel() 返回
+    // NoActiveTask + try_start(...) 成功。这三条本来就是 Idle phase 的
+    // 完整可观察特征。
+
     #[tokio::test]
-    async fn fresh_state_is_idle() {
+    async fn fresh_state_rejects_handle_reads_and_cancel() {
         let state = TaskState::default();
-        assert!(state.is_idle().await);
         assert!(state.current_handle().await.is_err());
         assert!(state.begin_cancel().await.is_err());
     }
@@ -192,7 +197,6 @@ mod tests {
     async fn try_start_transitions_idle_to_running() {
         let state = TaskState::default();
         state.try_start(make_handle()).await.expect("idle accepts start");
-        assert!(!state.is_idle().await);
         assert!(state.current_handle().await.is_ok());
     }
 
@@ -228,8 +232,7 @@ mod tests {
         let state = TaskState::default();
         state.try_start(make_handle()).await.unwrap();
         state.finish().await;
-        assert!(state.is_idle().await);
-        // And a fresh start is accepted again.
+        // Idle phase = a fresh start is accepted.
         state.try_start(make_handle()).await.unwrap();
     }
 
@@ -239,13 +242,16 @@ mod tests {
         state.try_start(make_handle()).await.unwrap();
         state.begin_cancel().await.unwrap();
         state.finish().await;
-        assert!(state.is_idle().await);
+        // Idle phase = a fresh start is accepted (would fail with
+        // InvalidInput if phase were still Cancelling).
+        state.try_start(make_handle()).await.unwrap();
     }
 
     #[tokio::test]
     async fn finish_on_idle_is_noop() {
         let state = TaskState::default();
         state.finish().await;
-        assert!(state.is_idle().await);
+        // Idle stays Idle: another start succeeds.
+        state.try_start(make_handle()).await.unwrap();
     }
 }

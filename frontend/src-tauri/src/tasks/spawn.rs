@@ -39,14 +39,11 @@ pub async fn spawn_task<R: Runtime>(
     paths: &ResolvedRuntimePaths,
     request: TaskRequest,
 ) -> Result<(), ShellError> {
-    // Fast-path peek so we don't pay for a fork+exec when there's
-    // obviously a task already running. The authoritative atomic
-    // check happens inside [`TaskState::try_start`] further down.
-    if !state.is_idle().await {
-        return Err(ShellError::InvalidInput(
-            "A task is already running.".to_string(),
-        ));
-    }
+    // Phase 17 — ``state.is_idle().await`` fast-peek removed. The
+    // authoritative ``Idle → Running`` transition is the atomic
+    // ``try_start`` further down; the peek saved a fork+exec in the
+    // happy path but duplicated the "already running" message across
+    // two files (drift hazard) without changing semantics.
 
     let (mut command, stdin_payload) =
         build_process_command(paths, &request).map_err(ShellError::from)?;
@@ -60,10 +57,19 @@ pub async fn spawn_task<R: Runtime>(
     // Phase D.3.1 — push the config payload through stdin, then drop the
     // handle to signal EOF. Doing this before reading stdout/stderr keeps
     // the child unblocked even if the process group started fast.
+    //
+    // Phase 17 — stdin 写错误从 silently swallow 升级到 ``eprintln!``。
+    // child 已经 spawn,写失败大概率是 child 已死;让 stderr/wait 处理终态,
+    // 但留一条 breadcrumb 给将来诊断"为什么 wait 返回 BackendExit 但没看到
+    // Python 端的 stack trace"(与 persistence/storage.rs:152 同款风格)。
     if let Some(mut stdin) = child.inner().stdin.take() {
         if !stdin_payload.is_empty() {
-            let _ = stdin.write_all(stdin_payload.as_bytes()).await;
-            let _ = stdin.flush().await;
+            if let Err(error) = stdin.write_all(stdin_payload.as_bytes()).await {
+                eprintln!("VP Workbench failed to write stdin payload to backend child: {error}");
+            }
+            if let Err(error) = stdin.flush().await {
+                eprintln!("VP Workbench failed to flush stdin payload to backend child: {error}");
+            }
         }
         // Explicit drop to close the pipe (signals EOF to the child).
         drop(stdin);
