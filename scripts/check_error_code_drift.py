@@ -55,6 +55,7 @@ RUST_PROTOCOL_PATH = ROOT / "frontend" / "src-tauri" / "src" / "protocol.rs"
 RUST_ENVELOPE_PATH = ROOT / "frontend" / "src-tauri" / "src" / "tasks" / "envelope.rs"
 PY_PATH = ROOT / "backend" / "app" / "errors" / "_codes.py"
 PY_PROTOCOL_PATH = ROOT / "backend" / "app" / "protocol" / "__init__.py"
+PY_MODELS_PATH = ROOT / "backend" / "app" / "models" / "__init__.py"
 TS_GENERATED_DIR = ROOT / "frontend" / "src" / "types" / "generated"
 TS_TASK_ERROR_CODE_PATH = TS_GENERATED_DIR / "TaskErrorCode.ts"
 
@@ -293,6 +294,40 @@ def _scan_ts_string_enums(generated_dir: Path) -> dict[str, set[str]]:
     return discovered
 
 
+def _diff_output_dir_optional_consistency(rust_config_text: str, py_models_text: str) -> list[str]:
+    """Phase 18 — outputDir 三层必填一致性硬验证。
+
+    Rust ``OutputConfig.output_dir`` 必须是 ``Option<String>``(允许 null
+    wire 表达"未选"),Python ``OutputConfig.output_dir`` 必须有
+    ``min_length=1`` 字段约束(拒空串/纯空白)。任一方向漂移就 fail-loudly:
+    - Rust 退回 ``String``:wire 上空串无法被 type 表达"未选",前端可能误传
+      ``""`` 让 Python validator 处理(行为虽仍 fail,但语义不清晰)
+    - Python 删 ``min_length=1`` validator:CLI 直调 / 测试可绕过前端门禁,
+      空 outputDir 走到 commands 里 ``output_config["outputDir"]`` 拿到空串,
+      ``Path("").mkdir()`` 行为不定
+    """
+    issues: list[str] = []
+    rust_pattern = re.compile(
+        r"pub struct OutputConfig\s*\{[^}]*?pub output_dir:\s*Option<String>",
+        re.DOTALL,
+    )
+    if not rust_pattern.search(rust_config_text):
+        issues.append(
+            "Phase 18 outputDir drift: Rust models/config.rs OutputConfig.output_dir "
+            '必须是 Option<String>(允许 null wire 表达"未选")'
+        )
+    py_pattern = re.compile(
+        r"class OutputConfig\([^)]*\):[\s\S]*?output_dir:\s*str\s*=\s*Field\(\.\.\.,\s*min_length=1",
+        re.DOTALL,
+    )
+    if not py_pattern.search(py_models_text):
+        issues.append(
+            "Phase 18 outputDir drift: Python models OutputConfig.output_dir "
+            "必须有 Field(..., min_length=1)(拒空串 + field_validator 拒空白)"
+        )
+    return issues
+
+
 def _diff_task_error_code(rust: set[str], python: set[str], ts: set[str]) -> list[str]:
     issues: list[str] = []
     only_rust = rust - python
@@ -355,6 +390,7 @@ def main() -> int:
     rust_protocol_text = _read(RUST_PROTOCOL_PATH)
     rust_envelope_text = _read(RUST_ENVELOPE_PATH)
     py_protocol_text = _read(PY_PROTOCOL_PATH)
+    py_models_text = _read(PY_MODELS_PATH)
 
     rust_task_codes = _collect_rust_task_error_codes(rust_task_text)
     python_codes = _collect_python_codes(_read(PY_PATH))
@@ -367,6 +403,10 @@ def main() -> int:
     rust_envelope_wires = _collect_rust_envelope_wire_names(rust_envelope_text)
     ndjson_issues = _diff_ndjson_event_types(py_ndjson_events, rust_envelope_wires)
     issues.extend(ndjson_issues)
+
+    # Phase 18 — outputDir 三层必填一致性。
+    output_dir_issues = _diff_output_dir_optional_consistency(rust_config_text, py_models_text)
+    issues.extend(output_dir_issues)
 
     if issues:
         sys.stderr.write("[check-error-code-drift] DRIFT DETECTED:\n")
@@ -392,6 +432,7 @@ def main() -> int:
         f"[check-error-code-drift] OK ({len(rust_task_codes)} TaskErrorCode codes consistent across 3 layers; "
         f"NdjsonEnvelope ↔ NdjsonEventType handshake verified "
         f"({len(rust_envelope_wires)} stream variants + {len(py_ndjson_events) - len(rust_envelope_wires)} oneshot-only); "
+        f"OutputConfig.outputDir Phase 18 contract verified (Rust Option<String> ↔ Python min_length=1); "
         f"scanned {len(all_rust_enums)} Rust enums, {len(ts_enums)} TS enums)\n"
     )
     return 0

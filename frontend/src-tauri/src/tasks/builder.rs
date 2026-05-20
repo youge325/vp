@@ -169,7 +169,7 @@ mod tests {
                 options: Default::default(),
             },
             output_config: OutputConfig {
-                output_dir: "D:/out".to_string(),
+                output_dir: Some("D:/out".to_string()),
                 open_on_complete: true,
                 segment_frames: 1000,
             },
