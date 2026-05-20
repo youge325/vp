@@ -147,7 +147,10 @@ def _resolve_output_paths(
     encode_config: dict[str, Any],
 ) -> tuple[str, str]:
     """Pick the (output_dir, output_path) pair, materialising parents on disk."""
-    output_dir = output_config.get("outputDir") or settings.OUTPUT_DIR
+    # Phase 18 — Pydantic ``OutputConfig`` validator 保证 outputDir 必填非空,
+    # 这里不再 ``or settings.OUTPUT_DIR`` 兜底;若 dict 来源绕过 Pydantic
+    # (CLI defaults 路径),直接 KeyError → 立即 fail 暴露上游 bug。
+    output_dir = output_config["outputDir"]
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     Path(settings.RIFE_MODEL_DIR).mkdir(parents=True, exist_ok=True)
 

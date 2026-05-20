@@ -110,8 +110,13 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _default_output_config(args: argparse.Namespace) -> dict[str, Any]:
+    # Phase 18 — outputDir 强制必填,不再走 ``settings.OUTPUT_DIR`` 兜底。
+    # 这里允许返回空串是为了"defaults 与 partial payload 合并"路径(merge
+    # 后 Pydantic ``OutputConfig`` validator 会拒空,fail-loudly)。直接
+    # CLI 调用如果没传 ``--output-dir`` 也会经过 validator 报 INVALID_CONFIG,
+    # 上层捕捉后返回结构化错误。
     return {
-        "outputDir": args.output_dir or settings.OUTPUT_DIR,
+        "outputDir": args.output_dir or "",
         "openOnComplete": True,
         "segmentFrames": 1000,
     }

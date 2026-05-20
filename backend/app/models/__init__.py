@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 def _to_camel(snake: str) -> str:
@@ -102,6 +102,17 @@ class EncodeConfig(_CamelBase):
 
 
 class OutputConfig(_CamelBase):
-    output_dir: str
+    # Phase 18 — ``output_dir`` 强制必填且非纯空白。用户明确要求不允许走
+    # 默认目录,任何空 / 纯空白都通过 validator 拒掉,前端 / Tauri / CLI
+    # 任何入口都 fail-loudly 而不是悄悄走 ``settings.OUTPUT_DIR`` 兜底。
+    # min_length=1 拒空串,validator 拒纯空白(strip 后空)。
+    output_dir: str = Field(..., min_length=1)
     open_on_complete: bool
     segment_frames: int
+
+    @field_validator("output_dir")
+    @classmethod
+    def _output_dir_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("output_dir must not be empty or whitespace-only")
+        return value
