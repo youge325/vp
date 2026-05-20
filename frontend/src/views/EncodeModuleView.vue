@@ -89,11 +89,19 @@ async function handlePickOutputDirectory(): Promise<void> {
       </div>
 
       <div class="field-grid field-grid-2">
-        <BaseField label="输出目录" span-two>
+        <!-- Phase 18 — outputDir 必填。空时 BaseField 显示红色 error 提示,
+             input 加 input-error class 显示红边;canStartBatch 已经在 store
+             层 disabled 启动按钮,这里只做即时视觉反馈。 -->
+        <BaseField
+          label="输出目录"
+          span-two
+          :error="!editorConfig.outputConfig.outputDir?.trim() ? '必填:请选择或填写输出目录' : null"
+        >
           <input
             :value="editorConfig.outputConfig.outputDir"
             type="text"
-            placeholder="留空则使用默认输出目录"
+            placeholder="必填:请选择输出目录"
+            :class="{ 'input-error': !editorConfig.outputConfig.outputDir?.trim() }"
             @input="setOutputDir(($event.target as HTMLInputElement).value)"
           />
         </BaseField>
@@ -179,3 +187,11 @@ async function handlePickOutputDirectory(): Promise<void> {
     </section>
   </div>
 </template>
+
+<style scoped>
+/* Phase 18 — 输出目录必填时的红边样式。 */
+.input-error {
+  border-color: var(--danger, #d6433a) !important;
+  outline-color: var(--danger, #d6433a);
+}
+</style>

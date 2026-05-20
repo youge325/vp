@@ -11,6 +11,7 @@ const {
   batch,
   pendingConflict,
   canStartBatch,
+  cannotStartReason,
   startBatch,
   pauseCurrentTask,
   resumeCurrentTask,
@@ -38,7 +39,12 @@ function handleResolveConflict(action: ResumeConflictAction): void {
         </div>
 
         <div class="panel-actions">
-          <button class="primary-button" :disabled="!canStartBatch" @click="startBatch()">
+          <button
+            class="primary-button"
+            :disabled="!canStartBatch"
+            :title="cannotStartReason ?? undefined"
+            @click="startBatch()"
+          >
             开始队列
           </button>
           <button
@@ -58,6 +64,11 @@ function handleResolveConflict(action: ResumeConflictAction): void {
         </div>
       </div>
 
+      <!-- Phase 18 — 启动按钮 disabled 时显式说明原因(未选素材 / 缺输出目录 / etc),
+           避免用户对着"灰色按钮"猜测。``cannotStartReason`` 在 useTaskOrchestrator
+           单点封装,所有 disabled 文案共享同一来源。 -->
+      <p v-if="cannotStartReason" class="start-blocked-hint">{{ cannotStartReason }}</p>
+
       <IssueBanner :issue="taskIssue" title="任务操作失败" />
     </section>
 
@@ -70,3 +81,13 @@ function handleResolveConflict(action: ResumeConflictAction): void {
     />
   </div>
 </template>
+
+<style scoped>
+/* Phase 18 — 启动按钮 disabled 原因提示。颜色与全局 muted text 一致,
+   字号略小,避免视觉抢占主操作。 */
+.start-blocked-hint {
+  margin: 0.5rem 0 0;
+  font-size: 12px;
+  color: var(--text-muted, #9ba0a8);
+}
+</style>
