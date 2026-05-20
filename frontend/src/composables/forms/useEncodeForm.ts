@@ -76,9 +76,11 @@ export function useEncodeForm() {
 
   function setOutputDir(value: string): void {
     // Phase 18 — outputDir 必填。trim 防止用户输入纯空格通过 canStartBatch
-    // 的 ``Boolean(...)`` 检查;空串显式存空,view 层据此显示红边 + 提示。
+    // 的 ``Boolean(...)`` 检查;trim 后空时存 null(Phase 18.C 后 wire 形状
+    // 是 ``string | null``),view 层据此显示红边 + 提示。
+    const trimmed = value.trim()
     patchOutput((config: OutputConfig) => {
-      config.outputDir = value.trim()
+      config.outputDir = trimmed || null
     })
   }
 

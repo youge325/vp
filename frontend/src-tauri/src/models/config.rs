@@ -205,7 +205,14 @@ pub struct EncodeConfig {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct OutputConfig {
-    pub output_dir: String,
+    // Phase 18 — ``output_dir`` 改为 ``Option<String>``。用户要求"强制选择
+    // 输出目录,不使用默认目录",Option 把"空 / 未选"提升到 type level,
+    // wire 上的 ``null`` 与 ``""`` 都表示"未填",由 Pydantic
+    // ``OutputConfig.output_dir`` validator(``min_length=1`` + 非空白)在
+    // backend 入口拒掉。Rust 端不再有兜底逻辑,序列化为 ``null`` 时 Python
+    // 收到 ``None`` → Pydantic alias resolution 失败 / ValidationError →
+    // INVALID_CONFIG。
+    pub output_dir: Option<String>,
     pub open_on_complete: bool,
     #[ts(type = "number")]
     pub segment_frames: u64,
