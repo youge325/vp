@@ -54,8 +54,10 @@ function handleRateControlModeChange(value: string): void {
 
 async function handlePickOutputDirectory(): Promise<void> {
   // Phase 16 — IO 失败由 useOutputPicker 内部路由到 issueStore('encode'),
-  // 模板里的 ``IssueBanner :issue="encodeIssue"`` 自动接收;view 不需要
-  // 再处理返回值的 error 字段。
+  // 模板里的 ``IssueBanner :issue="encodeIssue"`` 自动接收。
+  // Phase 17 — 成功路径走 useWorkbenchEditor.patchOutput 双轨:有 active
+  // item 写 item.outputConfig.outputDir,无 active item 写 preset.draftPreset。
+  // view 不需要再处理返回值,editorConfig 会自动反映新路径。
   await pickOutputDirectory()
 }
 </script>
