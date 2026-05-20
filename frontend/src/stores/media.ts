@@ -41,14 +41,10 @@ export const useMediaStore = defineStore('media', () => {
     return targetIds
   }
 
-  function forEachEditableItem(callback: (item: MediaItem) => void): void {
-    const targetIds = getEditableTargetIds()
-    for (const item of mediaItems.value) {
-      if (targetIds.has(item.id)) {
-        callback(item)
-      }
-    }
-  }
+  // Phase 17 — ``forEachEditableItem`` 下线(原来 grep 全仓 0 production callers,
+  // 只有 ``getEditableTargetIds`` 真在用)。若将来需要遍历 editable items,
+  // 直接在 caller 里写 `mediaItems.filter((item) => targetIds.has(item.id))`,
+  // 不需要在 store 上暴露 callback 接口。
 
   function appendItems(items: MediaItem[]): void {
     if (items.length === 0) {
@@ -136,7 +132,6 @@ export const useMediaStore = defineStore('media', () => {
     allSelected,
     findItem,
     getEditableTargetIds,
-    forEachEditableItem,
     appendItems,
     removeItem,
     setActive,

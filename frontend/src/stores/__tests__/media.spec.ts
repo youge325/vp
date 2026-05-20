@@ -87,4 +87,11 @@ describe('useMediaStore', () => {
     expect('resetItemRunState' in store).toBe(false)
     expect('resetItemsRunState' in store).toBe(false)
   })
+
+  // Phase 17 — ``forEachEditableItem`` 下线(grep 0 production callers,
+  // 只有 getEditableTargetIds 真在用)。
+  it('does not expose forEachEditableItem after Phase 17', () => {
+    const store = useMediaStore()
+    expect('forEachEditableItem' in store).toBe(false)
+  })
 })

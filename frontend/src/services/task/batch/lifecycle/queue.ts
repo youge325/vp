@@ -83,7 +83,6 @@ export function createQueueOps(
     deps.setItemTaskState(nextId, {
       ...createIdleTaskState(),
       status: 'running',
-      startedAt: new Date().toISOString(),
     })
 
     let inspection: ResumeInspectionResult | null = null

@@ -2,15 +2,18 @@
 // 任务事件 reducer — 把 IPC payload 应用到 MediaTaskState。
 //
 // Phase 16 — ``MediaTaskState.error`` 字段移除,reducer 不再写 error。
-// 错误展示统一走 [[useIssueStore]] 的 ``'task'`` scope:终态 reducer
-// (``applyTaskError`` / ``applyTaskCancelled``)只负责 status / timestamps,
-// banner 由 [[finalize.ts]] ``handleErrored`` 与 [[batch/events.ts]]
-// ``onCancelled`` 通过 ``deps.setTaskIssue`` 写入。
+// 错误展示统一走 [[useIssueStore]] 的 ``'task'`` scope。
 //
-// ``applyTaskCancelled`` 不再接 payload —— payload 对 reducer 的可见影响
-// 只是 error 的 message/details,而 error 已经搬到 issueStore,reducer
-// 本身不需要 payload 信息。caller(``onCancelled``)拿到 payload 后自己
-// 构造 banner。
+// Phase 17 — ``MediaTaskState`` 11 个 dead 字段移除(percent / current /
+// total / stage / stageIndex / stageTotal / processedFrames / timeSeconds /
+// outputPath / startedAt / finishedAt)。reducer 现在只动 ``status`` /
+// ``logs`` / ``resumeStatus``。payload 的进度数据(``percent`` 等)由
+// reducer 接住后直接丢弃 —— 它们的"持久化语义"从来没有 reader,batch
+// 粒度的进度条用 ``batch.completedCount / batchTotal``(见 [[TaskConsole.vue]])。
+//
+// ``applyTaskCancelled`` 不接 payload —— payload 对 reducer 的可见影响
+// 只是 error message/details,而 error 已经搬到 issueStore,reducer 本身
+// 不需要 payload。caller(``onCancelled``)拿到 payload 后自己构造 banner。
 
 import { TERMINAL_PROGRESS_PREFIX } from '@/types/protocol'
 import type {
@@ -24,18 +27,7 @@ import type { ResumeStatus } from '@/types/domain/batch'
 export function createIdleTaskState(): MediaTaskState {
   return {
     status: 'idle',
-    percent: 0,
-    current: 0,
-    total: 0,
-    stage: '',
-    stageIndex: 0,
-    stageTotal: 0,
     logs: [],
-    outputPath: '',
-    processedFrames: 0,
-    timeSeconds: 0,
-    startedAt: null,
-    finishedAt: null,
     resumeStatus: null,
   }
 }
@@ -57,71 +49,42 @@ export function appendTaskLog(state: MediaTaskState, payload: TaskLogPayload): M
   }
 }
 
-export function applyTaskProgress(state: MediaTaskState, payload: TaskProgressPayload): MediaTaskState {
+export function applyTaskProgress(state: MediaTaskState, _payload: TaskProgressPayload): MediaTaskState {
+  // Phase 17 — payload 的 percent / current / total / stage 字段全部丢弃,
+  // 视图侧 0 reader。这条 reducer 唯一的作用是把 status 从 idle 拉到
+  // running(paused / cancelling 不被覆盖)。
   const status = state.status === 'paused' || state.status === 'cancelling' ? state.status : 'running'
-
-  return {
-    ...state,
-    status,
-    percent: payload.percent ?? state.percent,
-    current: payload.current ?? state.current,
-    total: payload.total ?? state.total,
-    stage: payload.stage ?? state.stage,
-    stageIndex: payload.stageIndex ?? state.stageIndex,
-    stageTotal: payload.stageTotal ?? state.stageTotal,
-    startedAt: state.startedAt ?? new Date().toISOString(),
+  if (status === state.status) {
+    return state
   }
+  return { ...state, status }
 }
 
 export function applyTaskPaused(state: MediaTaskState): MediaTaskState {
-  return {
-    ...state,
-    status: 'paused',
-    startedAt: state.startedAt ?? new Date().toISOString(),
-  }
+  return { ...state, status: 'paused' }
 }
 
 export function applyTaskResumed(state: MediaTaskState): MediaTaskState {
-  return {
-    ...state,
-    status: 'running',
-    startedAt: state.startedAt ?? new Date().toISOString(),
-  }
+  return { ...state, status: 'running' }
 }
 
 export function applyTaskCancelling(state: MediaTaskState): MediaTaskState {
-  return {
-    ...state,
-    status: 'cancelling',
-  }
+  return { ...state, status: 'cancelling' }
 }
 
-export function applyTaskCompleted(state: MediaTaskState, payload: TaskCompletedPayload): MediaTaskState {
-  return {
-    ...state,
-    status: 'completed',
-    percent: 100,
-    outputPath: payload.outputPath ?? state.outputPath,
-    processedFrames: payload.processedFrames ?? state.processedFrames,
-    timeSeconds: payload.timeSeconds ?? state.timeSeconds,
-    finishedAt: new Date().toISOString(),
-  }
+export function applyTaskCompleted(state: MediaTaskState, _payload: TaskCompletedPayload): MediaTaskState {
+  // Phase 17 — payload.outputPath / processedFrames / timeSeconds 字段丢弃,
+  // 视图 0 reader。outputPath 进 ``mediaRunState.lastOutputPath`` 走另一条
+  // 写入路径(见 batch/events.ts onCompleted),不再经过 taskState。
+  return { ...state, status: 'completed' }
 }
 
 export function applyTaskError(state: MediaTaskState): MediaTaskState {
-  return {
-    ...state,
-    status: 'error',
-    finishedAt: new Date().toISOString(),
-  }
+  return { ...state, status: 'error' }
 }
 
 export function applyTaskCancelled(state: MediaTaskState): MediaTaskState {
-  return {
-    ...state,
-    status: 'cancelled',
-    finishedAt: new Date().toISOString(),
-  }
+  return { ...state, status: 'cancelled' }
 }
 
 export function applyTaskResumeStatus(state: MediaTaskState, payload: ResumeStatus): MediaTaskState {

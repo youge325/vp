@@ -175,16 +175,13 @@ export function useTaskOrchestrator() {
     })
   }
 
-  function detachTaskListeners(): void {
-    detachHandle?.()
-    detachHandle = null
-  }
-
-  // Note: no ``onScopeDispose`` here. Tearing down the listener from any
-  // unmounting view would knock out the singleton for everyone else.
-  // ``useBootstrap`` owns the explicit detach on app shutdown via
-  // its ``onBeforeUnmount`` hook; that's the only caller authorised
-  // to detach.
+  // Phase 17 — ``detachTaskListeners`` 已从 public API 下线。production 端
+  // 唯一关停入口是 ``disposeRunner``([[useBootstrap]] 在 onBeforeUnmount
+  // 调用),既清 listener handle 又清 cached runner;暴露独立 detach 给
+  // 任何 caller 反而是"任意 view 都能弄碎全局监听"的设计气味。
+  //
+  // ``cancelCurrentTask`` 也下线 —— 它只是 ``interruptBatch`` 的别名,无
+  // production caller(grep 0 命中)。
 
   return {
     batch,
@@ -197,9 +194,7 @@ export function useTaskOrchestrator() {
     pauseCurrentTask,
     resumeCurrentTask,
     interruptBatch,
-    cancelCurrentTask: interruptBatch,
     resolveConflict,
     attachTaskListeners,
-    detachTaskListeners,
   }
 }

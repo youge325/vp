@@ -52,14 +52,6 @@ describe('useTaskOrchestrator singleton', () => {
     expect(listenMock).toHaveBeenCalledTimes(1)
   })
 
-  it('detachTaskListeners + re-attach issues a fresh registration', async () => {
-    const orchestrator = useTaskOrchestrator()
-    await orchestrator.attachTaskListeners()
-    orchestrator.detachTaskListeners()
-    await orchestrator.attachTaskListeners()
-    expect(listenMock).toHaveBeenCalledTimes(2)
-  })
-
   it('disposeRunner drops the cached runner and the listener handle', async () => {
     // First cycle: attach to register a listener.
     const first = useTaskOrchestrator()
@@ -91,5 +83,18 @@ describe('useTaskOrchestrator singleton', () => {
     const next = useTaskOrchestrator()
     await next.attachTaskListeners()
     expect(listenMock).toHaveBeenCalledTimes(2)
+  })
+
+  // Phase 17 — 锁住 detachTaskListeners + cancelCurrentTask 已下线。production
+  // 关停入口是 ``disposeRunner``,task 取消入口是 ``interruptBatch``;两个
+  // 独立 export 是 dead surface(useBootstrap 已经改用 disposeRunner)。
+  it('does not expose detachTaskListeners after Phase 17', () => {
+    const orchestrator = useTaskOrchestrator()
+    expect('detachTaskListeners' in orchestrator).toBe(false)
+  })
+
+  it('does not expose cancelCurrentTask after Phase 17', () => {
+    const orchestrator = useTaskOrchestrator()
+    expect('cancelCurrentTask' in orchestrator).toBe(false)
   })
 })

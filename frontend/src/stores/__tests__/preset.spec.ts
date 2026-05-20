@@ -69,4 +69,15 @@ describe('usePresetStore', () => {
     store.setPersistenceReady(true)
     expect(store.presetPersistenceReady).toBe(true)
   })
+
+  // Phase 17 — ``setDecode / setEncode / setWorkflow / setOutput`` 4 个
+  // 直接替换型 setter 全是 dead exports(grep 0 production callers),
+  // callsite 全部走 ``patchX(mutator)`` 路径。
+  it('does not expose direct setters after Phase 17', () => {
+    const store = usePresetStore()
+    expect('setDecode' in store).toBe(false)
+    expect('setEncode' in store).toBe(false)
+    expect('setWorkflow' in store).toBe(false)
+    expect('setOutput' in store).toBe(false)
+  })
 })

@@ -42,9 +42,9 @@ export class InvokeError extends Error {
 }
 
 function normalizeInvokeError(error: unknown): Error {
-  if (!isTauriRuntime()) {
-    return new Error(BROWSER_RUNTIME_MESSAGE)
-  }
+  // Phase 17 — 这里曾经有 ``if (!isTauriRuntime()) return new Error(BROWSER_RUNTIME_MESSAGE)``
+  // 的早 return,但 ``safeInvoke`` 本身已经在 invoke 之前 throw 同样的
+  // 消息(L67-69),non-Tauri 运行时永远走不到这里。删 dead branch。
 
   // IPC-specific hint surface: when Tauri itself blocks the command
   // (capability ACL miss, freshly added command not in the bundled
