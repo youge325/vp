@@ -126,12 +126,39 @@ export function useTaskOrchestrator() {
     mediaStore.mediaItems.find((item) => item.id === taskStore.batch.currentId) ?? null,
   )
   const consoleTaskItem = computed(() => currentTaskItem.value ?? mediaStore.activeItem)
+
+  // Phase 18 — outputDir 强制必填。``canStartBatch`` 加 ``every(outputDir.trim())``
+  // guard,任一 selected item 的 outputConfig.outputDir 为空 / 纯空白都阻止启动。
+  // ``cannotStartReason`` 单点封装"按钮 disabled 时显示给用户的原因",让
+  // RenderModuleView / StepRail 等 caller 无需重复算原因(避免多处 disabled
+  // 文案漂移)。
   const canStartBatch = computed(
     () =>
       !taskStore.batch.isRunning &&
       mediaStore.selectedItems.length > 0 &&
-      mediaStore.selectedItems.every((item) => Boolean(item.inputPath)),
+      mediaStore.selectedItems.every((item) => Boolean(item.inputPath)) &&
+      mediaStore.selectedItems.every((item) =>
+        Boolean(item.outputConfig.outputDir?.trim()),
+      ),
   )
+  const cannotStartReason = computed<string | null>(() => {
+    if (taskStore.batch.isRunning) {
+      return null
+    }
+    if (mediaStore.selectedItems.length === 0) {
+      return '请先勾选要处理的素材'
+    }
+    if (!mediaStore.selectedItems.every((item) => Boolean(item.inputPath))) {
+      return '存在素材尚未解析输入路径'
+    }
+    const missingOutput = mediaStore.selectedItems.find(
+      (item) => !item.outputConfig.outputDir?.trim(),
+    )
+    if (missingOutput) {
+      return `素材 "${missingOutput.displayName}" 未填输出目录(必填),请在"编码与输出"页选择或填写。`
+    }
+    return null
+  })
   const batchTotal = computed(() => taskStore.batchRuntimeIds.length || mediaStore.selectedItems.length)
 
   async function startBatch(): Promise<void> {
@@ -189,6 +216,7 @@ export function useTaskOrchestrator() {
     currentTaskItem,
     consoleTaskItem,
     canStartBatch,
+    cannotStartReason,
     batchTotal,
     startBatch,
     pauseCurrentTask,

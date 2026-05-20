@@ -31,6 +31,9 @@ vi.mock('@/lib/ipc/endpoints/task', () => ({
 }))
 
 import { disposeRunner, useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
+import { useMediaStore } from '@/stores/media'
+import { createMediaItem } from '@/services/media/factory'
+import type { WorkbenchPreset } from '@/types/protocol'
 
 describe('useTaskOrchestrator singleton', () => {
   beforeEach(() => {
@@ -96,5 +99,68 @@ describe('useTaskOrchestrator singleton', () => {
   it('does not expose cancelCurrentTask after Phase 17', () => {
     const orchestrator = useTaskOrchestrator()
     expect('cancelCurrentTask' in orchestrator).toBe(false)
+  })
+})
+
+// Phase 18 — 启动门禁:outputDir 强制必填,任一 selected item 的
+// outputConfig.outputDir 为空 / 纯空白都阻止启动。``cannotStartReason``
+// 在按钮 disabled 时给出文案,RenderModuleView 直接显示。
+describe('useTaskOrchestrator outputDir gating', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    listenMock.mockClear()
+  })
+
+  afterEach(() => {
+    disposeRunner()
+  })
+
+  function seedItem(overrides: { outputDir?: string; selected?: boolean } = {}): void {
+    const samplePreset: WorkbenchPreset = {
+      decodeConfig: { mode: 'software', hwaccel: '', hwaccelDevice: '', decoder: 'software', options: {} },
+      workflowConfig: {
+        fpsMode: 'target',
+        processOrder: 'super_resolution_then_interpolation',
+        interpolation: { enabled: false, targetFps: 60, multi: 2, model: '4.25', onnxModel: '', scale: 1, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
+        superResolution: { enabled: false, scaleFactor: 2, algorithm: 'placeholder', onnxModel: '' },
+        anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
+        preprocess: { enabled: false, filters: [] },
+        postprocess: { enabled: false, filters: [] },
+      },
+      encodeConfig: { codec: 'libx265', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 18 }, options: {} },
+      outputConfig: { outputDir: overrides.outputDir ?? '', openOnComplete: true, segmentFrames: 1000 },
+    }
+    const mediaStore = useMediaStore()
+    const item = createMediaItem('/video/a.mp4', samplePreset)
+    item.selected = overrides.selected ?? true
+    mediaStore.appendItems([item])
+  }
+
+  it('canStartBatch is false when selected item has empty outputDir', () => {
+    seedItem({ outputDir: '' })
+    const orchestrator = useTaskOrchestrator()
+    expect(orchestrator.canStartBatch.value).toBe(false)
+    expect(orchestrator.cannotStartReason.value).toMatch(/输出目录/)
+  })
+
+  it('canStartBatch is false when outputDir is whitespace-only', () => {
+    seedItem({ outputDir: '   \t  ' })
+    const orchestrator = useTaskOrchestrator()
+    expect(orchestrator.canStartBatch.value).toBe(false)
+    expect(orchestrator.cannotStartReason.value).toMatch(/输出目录/)
+  })
+
+  it('canStartBatch is true when outputDir is a valid path', () => {
+    seedItem({ outputDir: 'D:/out' })
+    const orchestrator = useTaskOrchestrator()
+    expect(orchestrator.canStartBatch.value).toBe(true)
+    expect(orchestrator.cannotStartReason.value).toBeNull()
+  })
+
+  it('cannotStartReason reports "no item selected" when nothing is selected', () => {
+    const orchestrator = useTaskOrchestrator()
+    // No items at all — should be the "no item" reason, not outputDir.
+    expect(orchestrator.canStartBatch.value).toBe(false)
+    expect(orchestrator.cannotStartReason.value).toMatch(/勾选/)
   })
 })
