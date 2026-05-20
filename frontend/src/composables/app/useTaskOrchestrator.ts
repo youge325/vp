@@ -127,8 +127,9 @@ export function useTaskOrchestrator() {
   )
   const consoleTaskItem = computed(() => currentTaskItem.value ?? mediaStore.activeItem)
 
-  // Phase 18 — outputDir 强制必填。``canStartBatch`` 加 ``every(outputDir.trim())``
-  // guard,任一 selected item 的 outputConfig.outputDir 为空 / 纯空白都阻止启动。
+  // Phase 18 — outputDir 强制必填。``canStartBatch`` 加 ``every(outputDir)``
+  // guard,任一 selected item 的 outputConfig.outputDir 为 null 都阻止启动。
+  // ``normalizeOutputDir`` 已保证空 / 纯空白写入前被转为 null,这里无需再 trim。
   // ``cannotStartReason`` 单点封装"按钮 disabled 时显示给用户的原因",让
   // RenderModuleView / StepRail 等 caller 无需重复算原因(避免多处 disabled
   // 文案漂移)。
@@ -137,9 +138,7 @@ export function useTaskOrchestrator() {
       !taskStore.batch.isRunning &&
       mediaStore.selectedItems.length > 0 &&
       mediaStore.selectedItems.every((item) => Boolean(item.inputPath)) &&
-      mediaStore.selectedItems.every((item) =>
-        Boolean(item.outputConfig.outputDir?.trim()),
-      ),
+      mediaStore.selectedItems.every((item) => Boolean(item.outputConfig.outputDir)),
   )
   const cannotStartReason = computed<string | null>(() => {
     if (taskStore.batch.isRunning) {
@@ -152,7 +151,7 @@ export function useTaskOrchestrator() {
       return '存在素材尚未解析输入路径'
     }
     const missingOutput = mediaStore.selectedItems.find(
-      (item) => !item.outputConfig.outputDir?.trim(),
+      (item) => !item.outputConfig.outputDir,
     )
     if (missingOutput) {
       return `素材 "${missingOutput.displayName}" 未填输出目录(必填),请在"编码与输出"页选择或填写。`

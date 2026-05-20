@@ -29,6 +29,9 @@
       "type": "integer",
       "format": "uint64",
       "minimum": 0
+    },
+    "metrics": {
+      "description": "Phase D.2.3 — optional pipeline observability bag. Carries the\nsnapshot from ``backend/app/processing/streaming/metrics.py``:\nqueue depths, processed-frame counter, measured fps, elapsed\nseconds, per-stage durations. Free-form so the schema can evolve\nwithout forcing a Rust + ts-rs roundtrip every iteration; UI\nconsumers should treat unknown sub-keys as best-effort."
     }
   },
   "required": [

@@ -21,7 +21,23 @@ use crate::protocol::TaskErrorCode;
 pub enum ShellError {
     RuntimeResolution(String),
     Spawn(std::io::Error),
-    BackendExit(String),
+    /// Phase 2.1 — CLI 成功退出(状态码 0)但未在 stdout 上输出有效 JSON。
+    /// 原 ``BackendExit("Backend CLI did not emit JSON output.")`` 的语义
+    /// 被提取为独立变体,避免与进程崩溃/信封错误混为一谈。
+    BackendNoJson,
+    /// Phase 2.1 — 后端返回了结构化的错误信封
+    /// ``{"type":"error", code, message, details}``。
+    /// 保留 code 字段,让前端可以直接按 ``TaskErrorCode`` 路由。
+    BackendEnvelope {
+        code: TaskErrorCode,
+        message: String,
+    },
+    /// Phase 2.1 — 向运行中的任务控制器发送控制信号时,通道已关闭或
+    /// 控制器不再响应。原 ``BackendExit("controller unavailable")`` 的语义。
+    ControllerUnavailable,
+    /// Phase 2.1 — 一次性 CLI 命令(如 ``check``)失败且无法恢复结构化
+    /// 错误信封,只剩 stderr 摘要。原 ``FailedWithoutEnvelope`` 路径的语义。
+    BackendProbeFailed(String),
     NdjsonDecode(serde_json::Error),
     SchemaValidation(String),
     Persistence(String),
@@ -44,7 +60,10 @@ impl ShellError {
         match self {
             Self::RuntimeResolution(_) => TaskErrorCode::ProcessFailed,
             Self::Spawn(_) => TaskErrorCode::SpawnFailed,
-            Self::BackendExit(_) => TaskErrorCode::RuntimePanic,
+            Self::BackendNoJson => TaskErrorCode::BackendNoJson,
+            Self::BackendEnvelope { .. } => TaskErrorCode::BackendEnvelope,
+            Self::ControllerUnavailable => TaskErrorCode::ControllerUnavailable,
+            Self::BackendProbeFailed(_) => TaskErrorCode::BackendProbeFailed,
             Self::NdjsonDecode(_) => TaskErrorCode::SchemaMismatch,
             Self::SchemaValidation(_) => TaskErrorCode::SchemaMismatch,
             Self::Persistence(_) => TaskErrorCode::PersistenceFailed,
@@ -63,8 +82,17 @@ impl fmt::Display for ShellError {
                 write!(f, "runtime resolution failed: {message}")
             }
             Self::Spawn(error) => write!(f, "backend spawn failed: {error}"),
-            Self::BackendExit(message) => {
-                write!(f, "backend exited unexpectedly: {message}")
+            Self::BackendNoJson => {
+                write!(f, "backend CLI did not emit JSON output")
+            }
+            Self::BackendEnvelope { code, message } => {
+                write!(f, "backend error: {message} ({code:?})")
+            }
+            Self::ControllerUnavailable => {
+                write!(f, "the running task controller is unavailable")
+            }
+            Self::BackendProbeFailed(message) => {
+                write!(f, "backend probe failed: {message}")
             }
             Self::NdjsonDecode(error) => {
                 write!(f, "backend stdout was not valid NDJSON: {error}")
@@ -146,10 +174,37 @@ mod tests {
     }
 
     #[test]
-    fn backend_exit_maps_to_runtime_panic() {
-        let error = ShellError::BackendExit("controller stopped".into());
+    fn backend_no_json_maps_to_backend_no_json_code() {
+        let error = ShellError::BackendNoJson;
         let value = serde_json::to_value(&error).expect("serializable");
-        assert_eq!(value["code"], "runtime_panic");
+        assert_eq!(value["code"], "backend_no_json");
+        assert!(value["message"].as_str().unwrap().contains("did not emit JSON"));
+    }
+
+    #[test]
+    fn backend_envelope_maps_to_backend_envelope_code() {
+        let error = ShellError::BackendEnvelope {
+            code: TaskErrorCode::MissingFfmpeg,
+            message: "ffmpeg not found".into(),
+        };
+        let value = serde_json::to_value(&error).expect("serializable");
+        assert_eq!(value["code"], "backend_envelope");
+        assert!(value["message"].as_str().unwrap().contains("ffmpeg not found"));
+    }
+
+    #[test]
+    fn controller_unavailable_maps_to_controller_unavailable_code() {
+        let error = ShellError::ControllerUnavailable;
+        let value = serde_json::to_value(&error).expect("serializable");
+        assert_eq!(value["code"], "controller_unavailable");
+    }
+
+    #[test]
+    fn backend_probe_failed_maps_to_backend_probe_failed_code() {
+        let error = ShellError::BackendProbeFailed("dll load failed".into());
+        let value = serde_json::to_value(&error).expect("serializable");
+        assert_eq!(value["code"], "backend_probe_failed");
+        assert!(value["message"].as_str().unwrap().contains("dll load failed"));
     }
 
     #[test]

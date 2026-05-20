@@ -33,6 +33,7 @@ vi.mock('@/lib/ipc/endpoints/task', () => ({
 import { disposeRunner, useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { useMediaStore } from '@/stores/media'
 import { createMediaItem } from '@/services/media/factory'
+import { normalizeOutputDir } from '@/services/preset/normalize'
 import type { WorkbenchPreset } from '@/types/protocol'
 
 describe('useTaskOrchestrator singleton', () => {
@@ -128,7 +129,7 @@ describe('useTaskOrchestrator outputDir gating', () => {
         postprocess: { enabled: false, filters: [] },
       },
       encodeConfig: { codec: 'libx265', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 18 }, options: {} },
-      outputConfig: { outputDir: overrides.outputDir ?? '', openOnComplete: true, segmentFrames: 1000 },
+      outputConfig: { outputDir: normalizeOutputDir(overrides.outputDir ?? ''), openOnComplete: true, segmentFrames: 1000 },
     }
     const mediaStore = useMediaStore()
     const item = createMediaItem('/video/a.mp4', samplePreset)

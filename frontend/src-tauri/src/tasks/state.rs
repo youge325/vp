@@ -34,32 +34,10 @@
 
 use std::time::Instant;
 
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::Mutex;
 
 use crate::error::ShellError;
-use crate::process_control::ProcessControlError;
 use crate::tasks::handle::TaskHandle;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TaskControlKind {
-    Pause,
-    Resume,
-}
-
-pub struct TaskControlMessage {
-    pub kind: TaskControlKind,
-    /// Phase 5a — typed reply channel. Previously this was
-    /// ``Result<(), String>``, which forced every layer between the
-    /// process controller and the IPC boundary to round-trip through
-    /// a stringly-typed error and lose the original ``io::Error``
-    /// source. Carrying the structured error all the way out keeps
-    /// the [`ShellError`] conversion (and the eventual frontend
-    /// [`TaskErrorCode`]) honest.
-    ///
-    /// [`ShellError`]: crate::error::ShellError
-    /// [`TaskErrorCode`]: crate::protocol::TaskErrorCode
-    pub response: oneshot::Sender<Result<(), ProcessControlError>>,
-}
 
 /// Lifecycle phase of the single in-flight task.
 pub enum TaskStatePhase {

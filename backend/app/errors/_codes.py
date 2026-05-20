@@ -28,6 +28,11 @@ class TaskErrorCode(str, Enum):
     IO_ERROR = "io_error"
     SCHEMA_MISMATCH = "schema_mismatch"
     PERSISTENCE_FAILED = "persistence_failed"
+    # Phase 2.1 — 对应 Rust 层 BackendExit 拆分的新错误码。
+    BACKEND_NO_JSON = "backend_no_json"
+    BACKEND_ENVELOPE = "backend_envelope"
+    CONTROLLER_UNAVAILABLE = "controller_unavailable"
+    BACKEND_PROBE_FAILED = "backend_probe_failed"
 
 
 ALL_CODES = frozenset(code.value for code in TaskErrorCode)

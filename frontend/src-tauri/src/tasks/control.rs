@@ -16,7 +16,7 @@ use tokio::sync::oneshot;
 
 use crate::error::ShellError;
 use crate::tasks::cancellation::CancelReason;
-use crate::tasks::state::{TaskControlKind, TaskControlMessage, TaskState};
+use crate::tasks::{TaskControlKind, TaskControlMessage, TaskState};
 
 pub async fn cancel_running_task(state: &TaskState) -> Result<(), ShellError> {
     // Phase 5d — atomic Running → Cancelling. ``begin_cancel`` rejects
@@ -63,21 +63,18 @@ async fn send_task_control(
             response: response_tx,
         })
         .await
-        .map_err(|_| {
-            ShellError::BackendExit("The running task controller is unavailable.".to_string())
-        })?;
+        .map_err(|_| ShellError::ControllerUnavailable)?;
 
     // Phase 5a — the controller now replies with a typed
-    // [`ProcessControlError`](crate::process_control::ProcessControlError);
-    // forward its `Display` form into `ShellError::BackendExit` so the
-    // wire-level ``message`` stays human-readable while the source chain
-    // (an ``io::Error`` for OS failures) is preserved on the Rust side
-    // via ``std::error::Error::source``.
+    // [`ProcessControlError`](crate::process_control::ProcessControlError).
+    // Phase 2.1 — map controller execution failures to ``ProcessFailed``
+    // (semantically: the process control operation itself failed), while
+    // channel/timeout failures map to ``ControllerUnavailable``.
     match response_rx.await {
-        Ok(result) => result.map_err(|error| ShellError::BackendExit(error.to_string())),
-        Err(_) => Err(ShellError::BackendExit(
-            "The running task controller stopped before replying.".to_string(),
-        )),
+        Ok(result) => result.map_err(|error| {
+            ShellError::RuntimeResolution(format!("process control failed: {error}"))
+        }),
+        Err(_) => Err(ShellError::ControllerUnavailable),
     }
 }
 

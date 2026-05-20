@@ -38,7 +38,7 @@
       "type": "object",
       "properties": {
         "mode": {
-          "type": "string"
+          "$ref": "#/$defs/DecodeMode"
         },
         "hwaccel": {
           "type": [
@@ -68,14 +68,21 @@
         "mode"
       ]
     },
+    "DecodeMode": {
+      "type": "string",
+      "enum": [
+        "software",
+        "hardware"
+      ]
+    },
     "WorkflowConfig": {
       "type": "object",
       "properties": {
         "fpsMode": {
-          "type": "string"
+          "$ref": "#/$defs/FpsMode"
         },
         "processOrder": {
-          "type": "string"
+          "$ref": "#/$defs/ProcessOrder"
         },
         "interpolation": {
           "$ref": "#/$defs/InterpolationConfig"
@@ -107,6 +114,20 @@
         "interpolation",
         "superResolution",
         "anime"
+      ]
+    },
+    "FpsMode": {
+      "type": "string",
+      "enum": [
+        "multi",
+        "target"
+      ]
+    },
+    "ProcessOrder": {
+      "type": "string",
+      "enum": [
+        "super_resolution_then_interpolation",
+        "frame_interpolation_then_super_resolution"
       ]
     },
     "InterpolationConfig": {
@@ -146,7 +167,7 @@
           "type": "boolean"
         },
         "tensorBackend": {
-          "type": "string"
+          "$ref": "#/$defs/TensorBackend"
         },
         "engine": {
           "type": "string",
@@ -161,6 +182,14 @@
         "scale",
         "fp16",
         "tensorBackend"
+      ]
+    },
+    "TensorBackend": {
+      "type": "string",
+      "enum": [
+        "pytorch",
+        "paddle",
+        "onnx"
       ]
     },
     "SuperResolutionConfig": {
@@ -309,7 +338,7 @@
       "type": "object",
       "properties": {
         "mode": {
-          "type": "string"
+          "$ref": "#/$defs/RateControlMode"
         },
         "value": true
       },
@@ -318,11 +347,23 @@
         "value"
       ]
     },
+    "RateControlMode": {
+      "type": "string",
+      "enum": [
+        "crf",
+        "cq",
+        "qp",
+        "bitrate"
+      ]
+    },
     "OutputConfig": {
       "type": "object",
       "properties": {
         "outputDir": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "openOnComplete": {
           "type": "boolean"
@@ -334,7 +375,6 @@
         }
       },
       "required": [
-        "outputDir",
         "openOnComplete",
         "segmentFrames"
       ]

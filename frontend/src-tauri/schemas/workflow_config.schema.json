@@ -4,10 +4,10 @@
   "type": "object",
   "properties": {
     "fpsMode": {
-      "type": "string"
+      "$ref": "#/$defs/FpsMode"
     },
     "processOrder": {
-      "type": "string"
+      "$ref": "#/$defs/ProcessOrder"
     },
     "interpolation": {
       "$ref": "#/$defs/InterpolationConfig"
@@ -41,6 +41,20 @@
     "anime"
   ],
   "$defs": {
+    "FpsMode": {
+      "type": "string",
+      "enum": [
+        "multi",
+        "target"
+      ]
+    },
+    "ProcessOrder": {
+      "type": "string",
+      "enum": [
+        "super_resolution_then_interpolation",
+        "frame_interpolation_then_super_resolution"
+      ]
+    },
     "InterpolationConfig": {
       "type": "object",
       "properties": {
@@ -78,7 +92,7 @@
           "type": "boolean"
         },
         "tensorBackend": {
-          "type": "string"
+          "$ref": "#/$defs/TensorBackend"
         },
         "engine": {
           "type": "string",
@@ -93,6 +107,14 @@
         "scale",
         "fp16",
         "tensorBackend"
+      ]
+    },
+    "TensorBackend": {
+      "type": "string",
+      "enum": [
+        "pytorch",
+        "paddle",
+        "onnx"
       ]
     },
     "SuperResolutionConfig": {

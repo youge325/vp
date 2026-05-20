@@ -4,7 +4,10 @@
   "type": "object",
   "properties": {
     "outputDir": {
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "openOnComplete": {
       "type": "boolean"
@@ -16,7 +19,6 @@
     }
   },
   "required": [
-    "outputDir",
     "openOnComplete",
     "segmentFrames"
   ]

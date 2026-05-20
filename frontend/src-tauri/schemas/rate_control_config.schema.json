@@ -4,12 +4,23 @@
   "type": "object",
   "properties": {
     "mode": {
-      "type": "string"
+      "$ref": "#/$defs/RateControlMode"
     },
     "value": true
   },
   "required": [
     "mode",
     "value"
-  ]
+  ],
+  "$defs": {
+    "RateControlMode": {
+      "type": "string",
+      "enum": [
+        "crf",
+        "cq",
+        "qp",
+        "bitrate"
+      ]
+    }
+  }
 }

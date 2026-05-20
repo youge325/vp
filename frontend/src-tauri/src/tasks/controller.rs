@@ -15,7 +15,7 @@ use crate::process_control::{ProcessController, ProcessControlError};
 use crate::protocol::TaskEventName;
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
 use crate::tasks::readers::ProgressBeat;
-use crate::tasks::state::{TaskControlKind, TaskControlMessage, TaskState};
+use crate::tasks::{TaskControlKind, TaskControlMessage, TaskState};
 use crate::tasks::stderr::StderrCapture;
 
 const DEFAULT_STALL_TIMEOUT_SECS: u64 = 600;
@@ -307,11 +307,17 @@ fn parse_stall_timeout() -> Option<Duration> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use std::time::Instant;
+
+    // Phase 2.1 修复 — ``env::set_var`` / ``env::remove_var`` 不是线程安全的。
+    // 三个 ``parse_stall_timeout_*`` 测试并行运行时会互相覆盖全局环境变量,
+    // 导致 flaky failure。用静态 mutex 串行化这三个测试。
+    static STALL_TIMEOUT_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn parse_stall_timeout_uses_default_when_unset() {
-        // Use an env var that almost certainly is not set.
+        let _guard = STALL_TIMEOUT_MUTEX.lock().unwrap();
         let stash = env::var(STALL_TIMEOUT_ENV).ok();
         env::remove_var(STALL_TIMEOUT_ENV);
         let timeout = parse_stall_timeout();
@@ -323,6 +329,7 @@ mod tests {
 
     #[test]
     fn parse_stall_timeout_returns_none_for_zero() {
+        let _guard = STALL_TIMEOUT_MUTEX.lock().unwrap();
         let stash = env::var(STALL_TIMEOUT_ENV).ok();
         env::set_var(STALL_TIMEOUT_ENV, "0");
         assert_eq!(parse_stall_timeout(), None);
@@ -335,6 +342,7 @@ mod tests {
 
     #[test]
     fn parse_stall_timeout_falls_back_to_default_on_malformed_input() {
+        let _guard = STALL_TIMEOUT_MUTEX.lock().unwrap();
         let stash = env::var(STALL_TIMEOUT_ENV).ok();
         env::set_var(STALL_TIMEOUT_ENV, "not-a-number");
         assert_eq!(

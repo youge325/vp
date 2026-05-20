@@ -43,6 +43,22 @@ pub enum CliOutcome {
     FailedWithoutEnvelope(String),
 }
 
+impl CliOutcome {
+    /// Phase 2.2 — 将三种 outcome 变体折叠为 ``Result<Value, ShellError>``。
+    /// 消除 ``tasks/commands.rs`` 与 ``services/environment_service.rs`` 的重复
+    /// match 逻辑,使信封折叠语义单点维护。
+    pub fn into_result(self) -> Result<Value, ShellError> {
+        match self {
+            Self::Ok(value) => Ok(value),
+            Self::FailedWithEnvelope(envelope) => Err(ShellError::BackendEnvelope {
+                code: envelope.code,
+                message: envelope.message,
+            }),
+            Self::FailedWithoutEnvelope(message) => Err(ShellError::BackendProbeFailed(message)),
+        }
+    }
+}
+
 /// Lightweight shape probe used to decide whether ``last_json_line`` is
 /// a real error envelope or just success-shaped data that happens to
 /// be valid JSON. Mirrors the Python emission in ``backend/app/__main__.py``.
@@ -135,7 +151,7 @@ pub async fn run_single_cli_command<R: Runtime>(
 
     last_json
         .map(CliOutcome::Ok)
-        .ok_or_else(|| ShellError::BackendExit("Backend CLI did not emit JSON output.".to_string()))
+        .ok_or_else(|| ShellError::BackendNoJson)
 }
 
 #[cfg(test)]

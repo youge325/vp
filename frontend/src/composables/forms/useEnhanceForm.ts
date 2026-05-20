@@ -5,6 +5,7 @@
 import { computed, reactive } from 'vue'
 import { useEnvStore } from '@/stores/env'
 import { createDraftEditor } from '@/composables/forms/lens'
+import { createAlgorithmLens } from '@/composables/forms/enhance-lens'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import {
   fallbackInterpolationOnnxModel,
@@ -31,37 +32,22 @@ export function useEnhanceForm() {
   // 没有 ``tensorBackends`` 字段的旧缓存(Phase 8 之前持久化的)
   // 退化为 ``[]``,这里 ``.includes(backend)`` 返回 false,意味着
   // "未声明支持 = 不显示";比错显示安全。
-  const interpolationAlgorithms = computed(() => {
-    const all = envStore.env.checkResult?.interpolationAlgorithms ?? []
-    const backend = workflow.value.interpolation.tensorBackend
-    return all.filter((alg) => alg.tensorBackends.includes(backend))
-  })
-  const superResolutionAlgorithms = computed(() => {
-    const all = envStore.env.checkResult?.superResolutionAlgorithms ?? []
-    // 共用 interpolation 模块的 backend 选择 — UI 上整个 enhance
-    // 面板只有一个 backend selector。
-    const backend = workflow.value.interpolation.tensorBackend
-    return all.filter((alg) => alg.tensorBackends.includes(backend))
-  })
-  const animeProfiles = computed(() => envStore.env.checkResult?.animeProfiles ?? [])
-  const interpolationOnnxModels = computed(() => {
-    const alg = interpolationAlgorithms.value.find(
-      (a) => a.name === workflow.value.interpolation.algorithm,
-    )
-    return alg?.onnxModels ?? []
-  })
-  const superResolutionOnnxModels = computed(() => {
-    const alg = superResolutionAlgorithms.value.find(
-      (a) => a.name === workflow.value.superResolution.algorithm,
-    )
-    return alg?.onnxModels ?? []
-  })
-  const interpolationModels = computed(
-    () =>
-      interpolationAlgorithms.value.find((a) => a.name === workflow.value.interpolation.algorithm)
-        ?.models ?? [],
+  const backend = computed(() => workflow.value.interpolation.tensorBackend)
+
+  const interpolation = createAlgorithmLens(
+    computed(() => envStore.env.checkResult?.interpolationAlgorithms ?? []),
+    computed(() => workflow.value.interpolation.algorithm),
+    backend,
   )
-  const isOnnxBackend = computed(() => workflow.value.interpolation.tensorBackend === 'onnx')
+
+  const superResolution = createAlgorithmLens(
+    computed(() => envStore.env.checkResult?.superResolutionAlgorithms ?? []),
+    computed(() => workflow.value.superResolution.algorithm),
+    backend,
+  )
+
+  const animeProfiles = computed(() => envStore.env.checkResult?.animeProfiles ?? [])
+  const isOnnxBackend = computed(() => backend.value === 'onnx')
 
   // ── 纯字段 lens(读写同一处) ────────────────────────────────────────────
   const interpolationEnabled = field(
@@ -191,12 +177,12 @@ export function useEnhanceForm() {
   )
 
   return reactive({
-    interpolationOnnxModels,
-    superResolutionOnnxModels,
-    interpolationAlgorithms,
-    superResolutionAlgorithms,
+    interpolationOnnxModels: interpolation.onnxModels,
+    superResolutionOnnxModels: superResolution.onnxModels,
+    interpolationAlgorithms: interpolation.algorithms,
+    superResolutionAlgorithms: superResolution.algorithms,
     animeProfiles,
-    interpolationModels,
+    interpolationModels: interpolation.models,
     isOnnxBackend,
     interpolationEnabled,
     interpolationBackend,

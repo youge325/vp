@@ -110,12 +110,16 @@ impl DefaultProcessController {
 impl ProcessController for DefaultProcessController {
     fn suspend(&self, root_pid: u32) -> Result<(), ProcessControlError> {
         let threads = imp::set_process_tree_suspended(root_pid, true, None)?;
+        #[cfg(target_os = "windows")]
         self.store_thread_cache(root_pid, threads);
         Ok(())
     }
 
     fn resume(&self, root_pid: u32) -> Result<(), ProcessControlError> {
+        #[cfg(target_os = "windows")]
         let cached = self.take_thread_cache(root_pid);
+        #[cfg(not(target_os = "windows"))]
+        let cached: Option<Vec<u32>> = None;
         let _ = imp::set_process_tree_suspended(root_pid, false, cached)?;
         Ok(())
     }
@@ -142,18 +146,9 @@ impl DefaultProcessController {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
-impl DefaultProcessController {
-    fn store_thread_cache(&self, _root_pid: u32, _threads: Vec<u32>) {
-        // POSIX path doesn't enumerate threads — ``kill(-pgid, signal)``
-        // covers every group member in one syscall, so there's nothing
-        // worth caching.
-    }
-
-    fn take_thread_cache(&self, _root_pid: u32) -> Option<Vec<u32>> {
-        None
-    }
-}
+// Phase 4.1 — POSIX 空实现已删除。``suspend`` / ``resume`` 在 POSIX 路径上
+// 不再调用 ``store_thread_cache`` / ``take_thread_cache``(通过 ``#[cfg]``
+// 条件编译),因此无需保留无意义的方法。
 
 pub fn default_controller() -> Arc<dyn ProcessController> {
     Arc::new(DefaultProcessController::new())
