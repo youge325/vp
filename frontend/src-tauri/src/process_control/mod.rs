@@ -130,22 +130,15 @@ impl DefaultProcessController {
     }
 
     fn take_thread_cache(&self, root_pid: u32) -> Option<Vec<u32>> {
-        // Cache hit: only re-touch the threads we suspended last time
-        // instead of paying for another system-wide ToolHelp scan.
-        // The lookup-then-remove sequence keeps the lock window short
-        // (drop the guard between the two), at the cost of a tiny
-        // race where two ``resume()`` calls for the same pid could
-        // both grab the cached vec; that's harmless because the
-        // second ``ResumeThread`` is a no-op for already-running threads.
-        let cached = self
-            .cached_threads
+        // Phase 16 — 单锁取走缓存。``HashMap::remove`` 直接返回 owned
+        // ``Vec<u32>``,既完成了"读取"也完成了"释放",一次 lock 就够。
+        // 之前是 lock→clone→unlock→lock→remove 的双锁结构,中间窗口允许
+        // 两次 resume() 同时拿到同一份缓存(注释自圆其说是 "harmless")。
+        // 用单锁后 race 直接消失,且少付一次 ``MutexGuard`` 构造开销。
+        self.cached_threads
             .lock()
             .ok()
-            .and_then(|cache| cache.get(&root_pid).cloned());
-        if let Ok(mut cache) = self.cached_threads.lock() {
-            cache.remove(&root_pid);
-        }
-        cached
+            .and_then(|mut cache| cache.remove(&root_pid))
     }
 }
 
@@ -194,5 +187,21 @@ mod tests {
         let inner = io::Error::other("nope");
         let err: ProcessControlError = inner.into();
         assert!(matches!(err, ProcessControlError::Os(_)));
+    }
+
+    // Phase 16 — 单锁化后 take_thread_cache 必须真正"原子取走":两次
+    // 调用同一 pid,只有第一次拿到 cache,第二次返回 None。之前双锁版本
+    // 中间释放过 guard,理论上允许两个 take 在 remove 之前都看到 cache。
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn take_thread_cache_is_consume_once_after_phase_16() {
+        let controller = DefaultProcessController::new();
+        controller.store_thread_cache(1234, vec![10, 20, 30]);
+
+        let first = controller.take_thread_cache(1234);
+        let second = controller.take_thread_cache(1234);
+
+        assert_eq!(first.as_deref(), Some(&[10u32, 20, 30][..]));
+        assert!(second.is_none(), "cache must be consumed by the first take");
     }
 }
