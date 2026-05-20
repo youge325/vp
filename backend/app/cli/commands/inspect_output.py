@@ -4,6 +4,11 @@ Pure read-only pre-flight probe.  Returns a JSON payload describing
 whether the planned final output and resume sidecar already exist, and
 how much progress the sidecar represents.  Called by the Tauri host
 before spawning ``process``.
+
+Phase 16 — 改走 ``load_configs(args)`` 替代原本的 8 行 try/except + 4 个
+``_load_json_arg`` 重复块。``load_configs`` 是 ``_process_validation`` 的
+SSOT,inspect_output 历史遗留没接进来,导致两份等价代码并存(添加字段
+时必须同时改两处,容易漂移)。
 """
 
 from __future__ import annotations
@@ -12,21 +17,14 @@ import argparse
 from pathlib import Path
 
 from app.cli.commands._process_validation import (
-    _load_json_arg,
-    collect_config_sections,
     ensure_input_and_ffmpeg,
+    load_configs,
 )
 from app.cli.defaults import (
-    _default_decode_config,
-    _default_encode_config,
-    _default_output_config,
-    _default_workflow_config,
     _resolve_processing_steps,
     _resolve_workflow_and_output_fps,
 )
 from app.config import settings
-from app.errors import TaskErrorCode, raise_error
-from app.models import DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig
 from app.planning import (
     SegmentManifest,
     build_signature,
@@ -41,14 +39,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     input_path = args.input
     ffmpeg = ensure_input_and_ffmpeg(input_path)
 
-    sections = collect_config_sections(args)
-    try:
-        decode_config = _load_json_arg(sections["decode"], _default_decode_config(), DecodeConfig)
-        encode_config = _load_json_arg(sections["encode"], _default_encode_config(args), EncodeConfig)
-        workflow_config = _load_json_arg(sections["workflow"], _default_workflow_config(args), WorkflowConfig)
-        output_config = _load_json_arg(sections["output"], _default_output_config(args), OutputConfig)
-    except ValueError as exc:
-        raise_error(TaskErrorCode.INVALID_CONFIG, str(exc))
+    decode_config, encode_config, workflow_config, output_config = load_configs(args)
 
     processing_steps = _resolve_processing_steps(workflow_config)
 

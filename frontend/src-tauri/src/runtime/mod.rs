@@ -70,10 +70,27 @@ pub fn resolve_runtime_paths<R: Runtime>(
 
     require_release_bundle_artifacts(&ffmpeg_path, &ffprobe_path, &model_dir)?;
 
-    let app_data_dir = app
-        .path()
-        .app_local_data_dir()
-        .unwrap_or_else(|_| workspace_root.join(".tmp").join("app-data"));
+    // Phase 16 — ``app_local_data_dir()`` 失败的兜底按 build 模式分流:
+    // - debug:走 ``<workspace>/.tmp/app-data``,保持开发便利(本地测试
+    //   时 Tauri 还没注入 app_local_data_dir 也能跑)。
+    // - release:直接报 ``RuntimeResolution`` 拒绝启动。release 跑在
+    //   ``Program Files`` 或安装目录,``workspace_root = CARGO_MANIFEST_DIR/..``
+    //   可能不存在或不可写,默默落到那里再 ``create_dir_all`` 出错的话,
+    //   错误链路里看不到"为什么是这个路径",诊断成本高。release 下
+    //   ``app_local_data_dir`` 本就稳定指向 ``%LOCALAPPDATA%\<bundle-id>``,
+    //   失败大概率是 Tauri 初始化破损,fail-loudly 反而干净。
+    let app_data_dir = match app.path().app_local_data_dir() {
+        Ok(path) => path,
+        Err(error) => {
+            if cfg!(debug_assertions) {
+                workspace_root.join(".tmp").join("app-data")
+            } else {
+                return Err(ShellError::RuntimeResolution(format!(
+                    "Unable to resolve app local data dir: {error}",
+                )));
+            }
+        }
+    };
 
     let output_dir = app_data_dir.join("output");
     let log_dir = app_data_dir.join("logs");
