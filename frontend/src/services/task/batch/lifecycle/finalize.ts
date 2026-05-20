@@ -11,6 +11,12 @@
 // Phase 13.1 — ``item.lastOutputPath`` / ``item.taskState`` 改从
 // ``helpers.getCurrentRunState()`` 取,因为运行时投影已经从 ``MediaItem``
 // 拆到 [[useMediaRunState]] store。
+//
+// Phase 16 — ``handleErrored`` 现在把 error 写到 ``deps.setTaskIssue``
+// (即 ``useIssueStore.setIssue('task', …)``);此前写入的
+// ``mediaRunState.issue`` 是 dead write,IssueBanner 看不到。
+// ``applyTaskError`` 不再接 error 参数,reducer 只负责终态 status /
+// timestamps,banner 由 setTaskIssue 单独承载。
 
 import type { TaskError } from '@/types/domain/media'
 
@@ -94,9 +100,9 @@ export function createFinalizeOps(
     const item = helpers.getCurrentItem()
     const runState = helpers.getCurrentRunState()
     if (item && runState) {
-      deps.setItemTaskState(item.id, applyTaskError(runState.taskState, error))
-      deps.setItemIssue(item.id, error)
+      deps.setItemTaskState(item.id, applyTaskError(runState.taskState))
     }
+    deps.setTaskIssue(error)
     await finalizeCurrent('error')
   }
 

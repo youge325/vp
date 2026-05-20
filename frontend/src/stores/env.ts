@@ -3,7 +3,6 @@ import { defineStore } from 'pinia'
 import type {
   AppEnv,
   EnvironmentCheckPayload,
-  EnvironmentCheckResult,
 } from '@/types/domain/env'
 import type { TaskError } from '@/types/domain/media'
 
@@ -29,10 +28,6 @@ export const useEnvStore = defineStore('env', () => {
     env.lastProbeAt = payload.checkedAt ?? checkedAt
   }
 
-  function setCheckResult(result: EnvironmentCheckResult | null): void {
-    env.checkResult = result
-  }
-
   function setIssue(issue: TaskError | null): void {
     env.issue = issue
   }
@@ -48,7 +43,6 @@ export const useEnvStore = defineStore('env', () => {
   return {
     env,
     setCheckPayload,
-    setCheckResult,
     setIssue,
     setChecking,
     setBootstrapping,

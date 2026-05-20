@@ -2,22 +2,20 @@ import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useMediaRunState } from '@/stores/mediaRunState'
 import { createIdleTaskState } from '@/services/task/events'
-import type { MediaTaskState, TaskError } from '@/types/domain/media'
+import type { MediaTaskState } from '@/types/domain/media'
 
 // Phase 13.1 — useMediaRunState 是 useMediaStore 拆分出来后的运行时投影
-// store,只管 taskState / issue / lastOutputPath,这些字段不再挂在
-// MediaItem 上,而是按 itemId 二级 lookup。
+// store,只管 taskState / lastOutputPath,这些字段不再挂在 MediaItem
+// 上,而是按 itemId 二级 lookup。
+//
+// Phase 16 — ``issue`` 字段与 ``setIssue`` 移除。错误现在统一走
+// [[useIssueStore]] 的 ``'task'`` scope([[finalize.ts]] / [[batch/events.ts]]),
+// 本 store 只剩运行时进度投影。spec 同步去掉所有 issue 相关断言。
 
 const sampleTaskState = (overrides: Partial<MediaTaskState> = {}): MediaTaskState => ({
   ...createIdleTaskState(),
   ...overrides,
 })
-
-const sampleIssue: TaskError = {
-  code: 'process_failed',
-  message: 'boom',
-  details: null,
-}
 
 describe('useMediaRunState', () => {
   beforeEach(() => {
@@ -44,17 +42,7 @@ describe('useMediaRunState', () => {
     expect(entry).not.toBeNull()
     expect(entry?.taskState.status).toBe('running')
     expect(entry?.taskState.percent).toBe(42)
-    expect(entry?.issue).toBeNull()
     expect(entry?.lastOutputPath).toBe('')
-  })
-
-  it('setIssue lazily creates an entry and stores the issue', () => {
-    const store = useMediaRunState()
-    store.setIssue('a', sampleIssue)
-
-    const entry = store.getByItemId('a')
-    expect(entry?.issue).toEqual(sampleIssue)
-    expect(entry?.taskState.status).toBe('idle')
   })
 
   it('setLastOutputPath lazily creates an entry and stores the path', () => {
@@ -84,7 +72,6 @@ describe('useMediaRunState', () => {
       percent: 100,
       logs: ['line-1', 'line-2'],
     }))
-    store.setIssue('a', sampleIssue)
     store.setLastOutputPath('a', 'D:/out/a.mp4')
 
     store.resetItemRunState('a')
@@ -93,7 +80,6 @@ describe('useMediaRunState', () => {
     expect(entry?.taskState.status).toBe('idle')
     expect(entry?.taskState.percent).toBe(0)
     expect(entry?.taskState.logs).toEqual([])
-    expect(entry?.issue).toBeNull()
     expect(entry?.lastOutputPath).toBe('')
   })
 
@@ -120,7 +106,6 @@ describe('useMediaRunState', () => {
 
     const entry = store.getByItemId('first-time')
     expect(entry?.taskState.status).toBe('idle')
-    expect(entry?.issue).toBeNull()
     expect(entry?.lastOutputPath).toBe('')
   })
 
@@ -145,5 +130,12 @@ describe('useMediaRunState', () => {
 
     store.dropItem('a')
     expect(store.getByItemId('a')).toBeNull()
+  })
+
+  // Phase 16 — 锁住 setIssue 已下线,如果将来有人想再把 banner state
+  // 塞回这个 store(违反"banner 走 issueStore"约定),回归测试会立刻 fail。
+  it('does not expose setIssue after Phase 16', () => {
+    const store = useMediaRunState()
+    expect('setIssue' in store).toBe(false)
   })
 })

@@ -42,6 +42,11 @@ export interface VideoInfoResult {
   videoCodec: string
 }
 
+// Phase 16 — ``error: TaskError | null`` 字段移除。Phase 13.1 拆分后这个
+// 字段在视图 / batch 任何地方都没有 reader,reducer 链路写入是纯 dead
+// write;真正展示任务错误的链路是 ``useIssueStore.setIssue('task', …)``
+// (见 [[finalize.ts]] ``handleErrored`` 与 [[batch/events.ts]]
+// ``onCancelled`` 的 stalled 分支)。
 export interface MediaTaskState {
   status: TaskStatus
   percent: number
@@ -54,7 +59,6 @@ export interface MediaTaskState {
   outputPath: string
   processedFrames: number
   timeSeconds: number
-  error: TaskError | null
   startedAt: string | null
   finishedAt: string | null
   resumeStatus: ResumeStatus | null
@@ -77,8 +81,13 @@ export interface MediaItem {
 // ``useMediaRunState`` store。``MediaItem`` 现在只描述列表实体(身份 +
 // 配置),不再承载会跨多个写入者(batch lifecycle / IPC 事件)持续刷新
 // 的字段。
+//
+// Phase 16 — ``issue: TaskError | null`` 字段移除。Phase 14 后唯一 writer
+// 是 [[finalize.ts]] ``handleErrored``,但视图侧没有任何 reader 读
+// ``mediaRunState.getByItemId(id)?.issue``。任务错误现在统一写入
+// ``useIssueStore.setIssue('task', …)``,IssueBanner 通过
+// ``useOperationIssue('task')`` 直接消费。
 export interface MediaRunState {
   taskState: MediaTaskState
-  issue: TaskError | null
   lastOutputPath: string
 }

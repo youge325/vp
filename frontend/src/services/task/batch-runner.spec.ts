@@ -45,10 +45,10 @@ function makeDeps(overrides: Partial<BatchRunnerDeps> = {}): BatchRunnerDeps {
     getMediaItem: (id) => items.get(id) ?? null,
     getItemRunState: (id) => runStates.get(id) ?? null,
     setItemTaskState: (id, state: MediaTaskState) => {
-      const existing = runStates.get(id) ?? { taskState: createIdleTaskState(), issue: null, lastOutputPath: '' }
+      const existing = runStates.get(id) ?? { taskState: createIdleTaskState(), lastOutputPath: '' }
       runStates.set(id, { ...existing, taskState: state })
     },
-    setItemIssue: vi.fn(),
+    setTaskIssue: vi.fn(),
     setItemLastOutputPath: vi.fn(),
     resetItemRunState: vi.fn(),
     resetItemsRunState: vi.fn(),
@@ -156,6 +156,54 @@ describe('batch-runner', () => {
 
     expect(deps.getBatch().isRunning).toBe(true)
     expect(deps.getBatch().failedCount).toBe(1)
+  })
+
+  // Phase 16 — onError 必须把 error 路由到 deps.setTaskIssue
+  // (实际接到 issueStore.setIssue('task', error)),否则
+  // useOperationIssue('task') 看不到 banner 数据,真正的错误展示链路断开。
+  it('routes onError to setTaskIssue so the task banner picks it up', async () => {
+    const deps = makeDeps()
+    const runner = createBatchRunner(deps)
+    const itemA = makeItem('a')
+    deps.getMediaItem = (id) => id === 'a' ? itemA : null
+
+    await runner.start(['a'])
+    const err = { code: 'process_failed' as const, message: 'boom', details: null }
+    await runner.onError(err)
+
+    expect(deps.setTaskIssue).toHaveBeenCalledWith(err)
+  })
+
+  // Phase 16 — onCancelled 分两种 reason:
+  //   - 'stalled' 是 watchdog 主动中止,要 surface 给 banner 看 stderr
+  //   - 'user' 是正常 UX 流转,banner 应该清空(避免上次的错误条挂着)
+  it('user-initiated cancel clears the task banner instead of surfacing it', async () => {
+    const deps = makeDeps()
+    const runner = createBatchRunner(deps)
+    const itemA = makeItem('a')
+    deps.getMediaItem = (id) => id === 'a' ? itemA : null
+
+    await runner.start(['a'])
+    await runner.onCancelled({ reason: 'user', details: null })
+
+    expect(deps.setTaskIssue).toHaveBeenLastCalledWith(null)
+  })
+
+  it('stalled cancel surfaces a ProcessFailed banner via setTaskIssue', async () => {
+    const deps = makeDeps()
+    const runner = createBatchRunner(deps)
+    const itemA = makeItem('a')
+    deps.getMediaItem = (id) => id === 'a' ? itemA : null
+
+    await runner.start(['a'])
+    await runner.onCancelled({ reason: 'stalled', details: { stderr: 'hung' } })
+
+    // 取出 setTaskIssue 最后一次调用的实参,验证形状
+    const calls = (deps.setTaskIssue as ReturnType<typeof vi.fn>).mock.calls
+    const lastArg = calls[calls.length - 1]?.[0] as { code: string; details: unknown } | null
+    expect(lastArg).not.toBeNull()
+    expect(lastArg?.code).toBe('process_failed')
+    expect(lastArg?.details).toEqual({ stderr: 'hung' })
   })
 
   it('sets pending conflict when resume conflict detected', async () => {
