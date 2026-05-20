@@ -12,8 +12,6 @@ from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
 from ._constants import (
     CODEC_LIST_RE,
-    DECODER_CANDIDATES,
-    ENCODER_CANDIDATES,
     OPTION_LINE_RE,
     CHOICE_LINE_RE,
 )
@@ -280,62 +278,6 @@ def parse_codec_profile(
         "pixelFormats": pixel_formats,
         "hardwareDevices": hardware_devices,
         "options": options,
-    }
-
-
-def discover_capabilities(
-    ffmpeg_path: str,
-    gpu_adapters: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    adapters = gpu_adapters or []
-    available_vendors = {adapter.get("vendor") for adapter in adapters if adapter.get("device_type") != "virtual"}
-    encoder_names = set(list_codec_names(ffmpeg_path, "encoders"))
-    decoder_names = set(list_codec_names(ffmpeg_path, "decoders"))
-    hwaccels = list_hwaccels(ffmpeg_path)
-
-    encoder_profiles: list[dict[str, Any]] = []
-    for candidate in ENCODER_CANDIDATES:
-        if candidate["name"] not in encoder_names:
-            continue
-        if candidate["family"] != "cpu" and candidate["family"] not in available_vendors:
-            continue
-        encoder_profiles.append(
-            parse_codec_profile(
-                "encoder",
-                candidate,
-                describe_codec(ffmpeg_path, "encoder", candidate["name"]),
-            )
-        )
-
-    decoder_profiles: list[dict[str, Any]] = [
-        {
-            "name": "software",
-            "label": "Software Decode",
-            "family": "software",
-            "codec": "any",
-            "available": True,
-            "pixelFormats": [],
-            "hardwareDevices": [],
-            "options": [],
-        }
-    ]
-    for candidate in DECODER_CANDIDATES:
-        if candidate["name"] not in decoder_names:
-            continue
-        if candidate["family"] not in available_vendors:
-            continue
-        decoder_profiles.append(
-            parse_codec_profile(
-                "decoder",
-                candidate,
-                describe_codec(ffmpeg_path, "decoder", candidate["name"]),
-            )
-        )
-
-    return {
-        "hwaccels": hwaccels,
-        "encoderProfiles": encoder_profiles,
-        "decoderProfiles": decoder_profiles,
     }
 
 
