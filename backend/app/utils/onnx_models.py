@@ -66,22 +66,13 @@ def resolve_onnx_model_path(
     return candidate
 
 
-def is_safe_onnx_basename(filename: str) -> bool:
-    """True when ``filename`` is a basename-only ``.onnx`` file reference."""
-    if filename in {"", ".", ".."}:
-        return False
-    if PurePosixPath(filename).name != filename:
-        return False
+def _is_basename_only(name: str) -> bool:
+    """True when ``name`` is a single path segment — no separators, no traversal, no drive.
 
-    windows_path = PureWindowsPath(filename)
-    if windows_path.name != filename or windows_path.drive or windows_path.root:
-        return False
-
-    return filename.lower().endswith(".onnx")
-
-
-def is_safe_algorithm_name(name: str) -> bool:
-    """True when ``name`` is a single path segment (no separators, no traversal)."""
+    Phase 17 — 抽出 ``is_safe_onnx_basename`` 与 ``is_safe_algorithm_name``
+    重复的"basename-only"验证(空 / `.` / `..` / posix split / windows
+    split / drive / root 检查),两个公开函数现在只差 ``.onnx`` 后缀。
+    """
     if name in {"", ".", ".."}:
         return False
     if PurePosixPath(name).name != name:
@@ -90,6 +81,16 @@ def is_safe_algorithm_name(name: str) -> bool:
     if windows_path.name != name or windows_path.drive or windows_path.root:
         return False
     return True
+
+
+def is_safe_onnx_basename(filename: str) -> bool:
+    """True when ``filename`` is a basename-only ``.onnx`` file reference."""
+    return _is_basename_only(filename) and filename.lower().endswith(".onnx")
+
+
+def is_safe_algorithm_name(name: str) -> bool:
+    """True when ``name`` is a single path segment (no separators, no traversal)."""
+    return _is_basename_only(name)
 
 
 def _scan_kind_dir(kind_dir: Path) -> dict[str, list[str]]:
