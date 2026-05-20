@@ -4,7 +4,7 @@ use crate::error::ShellError;
 use crate::models::{EnvironmentCheckPayload, EnvironmentCheckResult};
 use crate::persistence;
 use crate::runtime::ResolvedRuntimePaths;
-use crate::tasks::{self, CliOutcome};
+use crate::tasks;
 
 /// Tauri command wrapper.
 ///
@@ -55,18 +55,7 @@ async fn check_environment_impl<R: Runtime>(
     // failed downstream as a schema-mismatch.
     let outcome =
         tasks::run_single_cli_command(&app, &paths, &[String::from("check")], None).await?;
-    let raw = match outcome {
-        CliOutcome::Ok(value) => value,
-        CliOutcome::FailedWithEnvelope(envelope) => {
-            return Err(ShellError::BackendExit(format!(
-                "{} ({:?})",
-                envelope.message, envelope.code
-            )));
-        }
-        CliOutcome::FailedWithoutEnvelope(message) => {
-            return Err(ShellError::BackendExit(message));
-        }
-    };
+    let raw = outcome.into_result()?;
     let result = serde_json::from_value::<EnvironmentCheckResult>(raw).map_err(|error| {
         ShellError::SchemaValidation(format!(
             "Unable to deserialize environment check result: {error}"

@@ -37,7 +37,7 @@
       "type": "boolean"
     },
     "tensorBackend": {
-      "type": "string"
+      "$ref": "#/$defs/TensorBackend"
     },
     "engine": {
       "type": "string",
@@ -52,5 +52,15 @@
     "scale",
     "fp16",
     "tensorBackend"
-  ]
+  ],
+  "$defs": {
+    "TensorBackend": {
+      "type": "string",
+      "enum": [
+        "pytorch",
+        "paddle",
+        "onnx"
+      ]
+    }
+  }
 }

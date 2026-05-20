@@ -72,6 +72,11 @@ pub enum TaskErrorCode {
     IoError,
     SchemaMismatch,
     PersistenceFailed,
+    // Phase 2.1 — 拆分 BackendExit 为语义明确的变体。
+    BackendNoJson,
+    BackendEnvelope,
+    ControllerUnavailable,
+    BackendProbeFailed,
 }
 
 // Phase D.3.5 — ``TaskErrorCode::as_str`` was a hand-maintained string

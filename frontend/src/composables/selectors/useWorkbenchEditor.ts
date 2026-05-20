@@ -36,6 +36,14 @@ import {
 } from '@/services/preset/clone'
 import { getEditingScopeLabel, type WorkflowStage } from '@/services/format/labels'
 import type { DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig } from '@/types/protocol'
+import type { MediaItem } from '@/types/domain/media'
+
+type ItemConfigPartial = {
+  decodeConfig?: DecodeConfig
+  encodeConfig?: EncodeConfig
+  workflowConfig?: WorkflowConfig
+  outputConfig?: OutputConfig
+}
 
 export function useWorkbenchEditor() {
   const mediaStore = useMediaStore()
@@ -53,45 +61,50 @@ export function useWorkbenchEditor() {
 
   const editorVideoCodec = computed(() => activeItem.value?.info?.videoCodec ?? '')
 
-  function patchDecode(mutator: (config: DecodeConfig) => void): void {
-    if (activeItem.value) {
-      const next = cloneDecodeConfig(activeItem.value.decodeConfig)
-      mutator(next)
-      mediaStore.replaceItemConfig(activeItem.value.id, { decodeConfig: next })
-    } else {
-      presetStore.patchDecode(mutator)
+  function makePatcher<TConfig>(
+    getItemConfig: (item: MediaItem) => TConfig,
+    clone: (c: TConfig) => TConfig,
+    buildPartial: (config: TConfig) => ItemConfigPartial,
+    patchPreset: (mutator: (c: TConfig) => void) => void,
+  ): (mutator: (c: TConfig) => void) => void {
+    return (mutator) => {
+      if (activeItem.value) {
+        const next = clone(getItemConfig(activeItem.value))
+        mutator(next)
+        mediaStore.replaceItemConfig(activeItem.value.id, buildPartial(next))
+      } else {
+        patchPreset(mutator)
+      }
     }
   }
 
-  function patchEncode(mutator: (config: EncodeConfig) => void): void {
-    if (activeItem.value) {
-      const next = cloneEncodeConfig(activeItem.value.encodeConfig)
-      mutator(next)
-      mediaStore.replaceItemConfig(activeItem.value.id, { encodeConfig: next })
-    } else {
-      presetStore.patchEncode(mutator)
-    }
-  }
+  const patchDecode = makePatcher(
+    (item) => item.decodeConfig,
+    cloneDecodeConfig,
+    (next) => ({ decodeConfig: next }),
+    presetStore.patchDecode,
+  )
 
-  function patchWorkflow(mutator: (config: WorkflowConfig) => void): void {
-    if (activeItem.value) {
-      const next = cloneWorkflowConfig(activeItem.value.workflowConfig)
-      mutator(next)
-      mediaStore.replaceItemConfig(activeItem.value.id, { workflowConfig: next })
-    } else {
-      presetStore.patchWorkflow(mutator)
-    }
-  }
+  const patchEncode = makePatcher(
+    (item) => item.encodeConfig,
+    cloneEncodeConfig,
+    (next) => ({ encodeConfig: next }),
+    presetStore.patchEncode,
+  )
 
-  function patchOutput(mutator: (config: OutputConfig) => void): void {
-    if (activeItem.value) {
-      const next = cloneOutputConfig(activeItem.value.outputConfig)
-      mutator(next)
-      mediaStore.replaceItemConfig(activeItem.value.id, { outputConfig: next })
-    } else {
-      presetStore.patchOutput(mutator)
-    }
-  }
+  const patchWorkflow = makePatcher(
+    (item) => item.workflowConfig,
+    cloneWorkflowConfig,
+    (next) => ({ workflowConfig: next }),
+    presetStore.patchWorkflow,
+  )
+
+  const patchOutput = makePatcher(
+    (item) => item.outputConfig,
+    cloneOutputConfig,
+    (next) => ({ outputConfig: next }),
+    presetStore.patchOutput,
+  )
 
   return {
     activeItem,

@@ -3,10 +3,12 @@ import { ref } from 'vue'
 import { useMediaImport } from '@/composables/app/useMediaImport'
 import { useMediaListEditor } from '@/composables/forms/useMediaListEditor'
 import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
+import { useMediaStore } from '@/stores/media'
 import { useMediaRunState } from '@/stores/mediaRunState'
 import IssueBanner from '@/components/IssueBanner.vue'
 
-const list = useMediaListEditor()
+const listEditor = useMediaListEditor()
+const mediaStore = useMediaStore()
 const { pickAndImport, importPaths, reinspectIds } = useMediaImport()
 const inputIssue = useOperationIssue('input')
 const runStateStore = useMediaRunState()
@@ -47,10 +49,10 @@ function handleDragLeave(): void {
 }
 
 async function reinspectSelection(): Promise<void> {
-  const ids = list.selectedIds.value.length > 0
-    ? list.selectedIds.value
-    : list.activeItem.value
-      ? [list.activeItem.value.id]
+  const ids = mediaStore.selectedIds.length > 0
+    ? mediaStore.selectedIds
+    : mediaStore.activeItem
+      ? [mediaStore.activeItem.id]
       : []
   await reinspectIds(ids)
 }
@@ -66,10 +68,10 @@ async function reinspectSelection(): Promise<void> {
         </div>
 
         <div class="panel-actions">
-          <button class="ghost-button" @click="list.selectAll(!list.allSelected.value)">
-            {{ list.allSelected.value ? '取消全选' : '全选全部' }}
+          <button class="ghost-button" @click="mediaStore.selectAll(!mediaStore.allSelected)">
+            {{ mediaStore.allSelected ? '取消全选' : '全选全部' }}
           </button>
-          <button class="ghost-button" :disabled="list.items.value.length === 0" @click="reinspectSelection()">
+          <button class="ghost-button" :disabled="mediaStore.mediaItems.length === 0" @click="reinspectSelection()">
             重新读取
           </button>
           <button class="primary-button" @click="handlePickInputs">批量导入</button>
@@ -98,7 +100,7 @@ async function reinspectSelection(): Promise<void> {
         </div>
       </div>
 
-      <div v-if="list.items.value.length === 0" class="empty-state">
+      <div v-if="mediaStore.mediaItems.length === 0" class="empty-state">
         <strong>还没有素材</strong>
         <p>前往上方批量导入后，这里会显示每个文件的元数据、流程摘要和任务状态。</p>
       </div>
@@ -119,17 +121,17 @@ async function reinspectSelection(): Promise<void> {
           </thead>
           <tbody>
             <tr
-              v-for="item in list.items.value"
+              v-for="item in mediaStore.mediaItems"
               :key="item.id"
               class="media-row"
-              :class="{ active: item.id === list.activeItemId.value }"
-              @click="list.setActive(item.id)"
+              :class="{ active: item.id === mediaStore.activeItemId }"
+              @click="mediaStore.setActive(item.id)"
             >
               <td @click.stop>
                 <input
                   :checked="item.selected"
                   type="checkbox"
-                  @change="list.setSelected(item.id, ($event.target as HTMLInputElement).checked)"
+                  @change="mediaStore.setSelected(item.id, ($event.target as HTMLInputElement).checked)"
                 />
               </td>
               <td>
@@ -137,14 +139,14 @@ async function reinspectSelection(): Promise<void> {
                 <div class="table-secondary path-text">{{ item.inputPath }}</div>
               </td>
               <td>{{ item.info ? `${item.info.width}×${item.info.height}` : '--' }}</td>
-              <td>{{ list.fpsLabelOf(item) }}</td>
+              <td>{{ listEditor.fpsLabelOf(item) }}</td>
               <td>{{ item.info?.videoCodec || '--' }}</td>
-              <td>{{ list.workflowLabelOf(item) }}</td>
+              <td>{{ listEditor.workflowLabelOf(item) }}</td>
               <td>
                 <span class="inline-status" :data-state="statusOf(item.id)">{{ statusOf(item.id) }}</span>
               </td>
               <td @click.stop>
-                <button class="table-action" @click="list.removeItem(item.id)">
+                <button class="table-action" @click="listEditor.removeItem(item.id)">
                   移除
                 </button>
               </td>

@@ -32,7 +32,11 @@
         "resume_conflict",
         "io_error",
         "schema_mismatch",
-        "persistence_failed"
+        "persistence_failed",
+        "backend_no_json",
+        "backend_envelope",
+        "controller_unavailable",
+        "backend_probe_failed"
       ]
     }
   }

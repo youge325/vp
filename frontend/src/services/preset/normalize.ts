@@ -151,3 +151,8 @@ export function normalizeEncodeConfig(
     options: seedProfileOptions(matchedProfile, config.options),
   }
 }
+
+export function normalizeOutputDir(value: string): string | null {
+  const trimmed = value.trim()
+  return trimmed || null
+}

@@ -316,14 +316,19 @@ def _diff_output_dir_optional_consistency(rust_config_text: str, py_models_text:
             "Phase 18 outputDir drift: Rust models/config.rs OutputConfig.output_dir "
             '必须是 Option<String>(允许 null wire 表达"未选")'
         )
+    # Phase 2.1 修正 — Python 同步为 ``str | None = Field(default=None, min_length=1)``,
+    # 与 Rust ``Option<String>`` 保持 schema 一致。wire 上的 ``null`` 被 Pydantic
+    # 接受后再由 validator 在业务层 fail-loudly,避免反序列化时抛晦涩的
+    # ``ValidationError``。
     py_pattern = re.compile(
-        r"class OutputConfig\([^)]*\):[\s\S]*?output_dir:\s*str\s*=\s*Field\(\.\.\.,\s*min_length=1",
+        r"class OutputConfig\([^)]*\):[\s\S]*?output_dir:\s*(?:str\s*\|\s*None|Optional\[str\])\s*=\s*Field\(default=None,\s*min_length=1",
         re.DOTALL,
     )
     if not py_pattern.search(py_models_text):
         issues.append(
             "Phase 18 outputDir drift: Python models OutputConfig.output_dir "
-            "必须有 Field(..., min_length=1)(拒空串 + field_validator 拒空白)"
+            "必须是 str | None = Field(default=None, min_length=1) "
+            "(与 Rust Option<String> 同步,validator 拒空串/空白)"
         )
     return issues
 

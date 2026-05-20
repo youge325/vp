@@ -13,7 +13,7 @@
 use tokio::sync::mpsc;
 
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
-use crate::tasks::state::TaskControlMessage;
+use crate::tasks::TaskControlMessage;
 
 #[derive(Clone)]
 pub struct TaskHandle {

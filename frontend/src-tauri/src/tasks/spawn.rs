@@ -76,14 +76,14 @@ pub async fn spawn_task<R: Runtime>(
     }
 
     let stdout = child.inner().stdout.take().ok_or_else(|| {
-        ShellError::BackendExit("Unable to capture backend stdout.".to_string())
+        ShellError::RuntimeResolution("Unable to capture backend stdout.".to_string())
     })?;
     let stderr = child.inner().stderr.take().ok_or_else(|| {
-        ShellError::BackendExit("Unable to capture backend stderr.".to_string())
+        ShellError::RuntimeResolution("Unable to capture backend stderr.".to_string())
     })?;
 
     let root_pid = child.id().ok_or_else(|| {
-        ShellError::BackendExit("Unable to resolve backend process id.".to_string())
+        ShellError::RuntimeResolution("Unable to resolve backend process id.".to_string())
     })?;
     let terminal_sent = Arc::new(AtomicBool::new(false));
     let cancel_token = CancellationToken::new();

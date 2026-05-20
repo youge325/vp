@@ -102,17 +102,17 @@ class EncodeConfig(_CamelBase):
 
 
 class OutputConfig(_CamelBase):
-    # Phase 18 — ``output_dir`` 强制必填且非纯空白。用户明确要求不允许走
-    # 默认目录,任何空 / 纯空白都通过 validator 拒掉,前端 / Tauri / CLI
-    # 任何入口都 fail-loudly 而不是悄悄走 ``settings.OUTPUT_DIR`` 兜底。
-    # min_length=1 拒空串,validator 拒纯空白(strip 后空)。
-    output_dir: str = Field(..., min_length=1)
+    # Phase 18.C — 与 Rust ``Option<String>`` 同步。wire 上的 ``null`` 表示
+    # "未填",在 backend 入口由 ``min_length=1`` + validator 拒掉。
+    # ``str | None`` 允许 Pydantic 接收 ``null`` 并在验证层 fail-loudly,
+    # 而不是在反序列化时抛出晦涩的 ``ValidationError``。
+    output_dir: str | None = Field(default=None, min_length=1)
     open_on_complete: bool
     segment_frames: int
 
     @field_validator("output_dir")
     @classmethod
-    def _output_dir_not_blank(cls, value: str) -> str:
-        if not value.strip():
+    def _output_dir_not_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
             raise ValueError("output_dir must not be empty or whitespace-only")
         return value

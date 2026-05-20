@@ -136,8 +136,8 @@ def test_diff_flags_whitelist_event_removed_from_python() -> None:
 
 
 def test_output_dir_consistency_passes_for_valid_setup() -> None:
-    """Rust ``Option<String>`` + Python ``min_length=1`` 都到位时,
-    应该返回空 issues 列表。"""
+    """Rust ``Option<String>`` + Python ``str | None = Field(default=None, min_length=1)``
+    都到位时,应该返回空 issues 列表。"""
     module = _load_module()
     rust_text = (
         "pub struct OutputConfig {\n"
@@ -147,7 +147,9 @@ def test_output_dir_consistency_passes_for_valid_setup() -> None:
         "}"
     )
     py_text = (
-        "class OutputConfig(_CamelBase):\n    output_dir: str = Field(..., min_length=1)\n    open_on_complete: bool\n"
+        "class OutputConfig(_CamelBase):\n"
+        "    output_dir: str | None = Field(default=None, min_length=1)\n"
+        "    open_on_complete: bool\n"
     )
     issues = module._diff_output_dir_optional_consistency(rust_text, py_text)
     assert issues == []
@@ -157,7 +159,7 @@ def test_output_dir_consistency_flags_rust_non_optional() -> None:
     """Rust 回退到 ``String``(非 Option)— Phase 18 wire 形状漂移,需要 fail。"""
     module = _load_module()
     rust_text = "pub struct OutputConfig {\n    pub output_dir: String,\n}"
-    py_text = "class OutputConfig(_CamelBase):\n    output_dir: str = Field(..., min_length=1)\n"
+    py_text = "class OutputConfig(_CamelBase):\n    output_dir: str | None = Field(default=None, min_length=1)\n"
     issues = module._diff_output_dir_optional_consistency(rust_text, py_text)
     assert any("Rust" in issue and "Option<String>" in issue for issue in issues), issues
 
@@ -168,7 +170,7 @@ def test_output_dir_consistency_flags_python_missing_validator() -> None:
     rust_text = "pub struct OutputConfig {\n    pub output_dir: Option<String>,\n}"
     py_text = (
         "class OutputConfig(_CamelBase):\n"
-        "    output_dir: str\n"  # 没有 Field(..., min_length=1)
+        "    output_dir: str | None\n"  # 没有 Field(default=None, min_length=1)
         "    open_on_complete: bool\n"
     )
     issues = module._diff_output_dir_optional_consistency(rust_text, py_text)
