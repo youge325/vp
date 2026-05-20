@@ -53,6 +53,9 @@ function handleRateControlModeChange(value: string): void {
 }
 
 async function handlePickOutputDirectory(): Promise<void> {
+  // Phase 16 — IO 失败由 useOutputPicker 内部路由到 issueStore('encode'),
+  // 模板里的 ``IssueBanner :issue="encodeIssue"`` 自动接收;view 不需要
+  // 再处理返回值的 error 字段。
   await pickOutputDirectory()
 }
 </script>
