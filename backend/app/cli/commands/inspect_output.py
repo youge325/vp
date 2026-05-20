@@ -24,7 +24,6 @@ from app.cli.defaults import (
     _resolve_processing_steps,
     _resolve_workflow_and_output_fps,
 )
-from app.config import settings
 from app.planning import (
     SegmentManifest,
     build_signature,
@@ -43,7 +42,9 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
 
     processing_steps = _resolve_processing_steps(workflow_config)
 
-    output_dir = output_config.get("outputDir") or settings.OUTPUT_DIR
+    # Phase 18 — Pydantic ``OutputConfig`` validator 保证 outputDir 必填非空,
+    # 这里不再 ``or settings.OUTPUT_DIR`` 兜底。
+    output_dir = output_config["outputDir"]
     container = str(encode_config.get("container") or "mp4")
     if args.output:
         output_path = args.output

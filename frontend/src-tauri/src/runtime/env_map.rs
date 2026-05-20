@@ -14,11 +14,12 @@ pub fn build_env_map(paths: &ResolvedRuntimePaths) -> Vec<(String, String)> {
             "VP_PYTHON_EXECUTABLE".to_string(),
             paths.python_executable.to_string_lossy().to_string(),
         ),
-        (
-            "VP_OUTPUT_DIR".to_string(),
-            paths.output_dir.to_string_lossy().to_string(),
-        ),
     ];
+    // Phase 18 — ``VP_OUTPUT_DIR`` env 注入已下线。Phase 18 之后 backend
+    // Pydantic ``OutputConfig`` 强制 ``output_dir`` 必填非空,前端必传
+    // 用户选择的目录;``settings.OUTPUT_DIR`` 不再作为缺省回退,注入
+    // 此 env 是 dead injection。``ResolvedRuntimePaths.output_dir`` 仍用
+    // 于 Rust 自身的 ``log_dir`` 推断,不影响。
 
     if let Some(ffmpeg_path) = &paths.ffmpeg_path {
         envs.push((
@@ -90,7 +91,9 @@ mod tests {
         });
         let legacy_temp_key = ["VP", "TEMP", "DIR"].join("_");
 
-        assert!(envs.iter().any(|(key, _)| key == "VP_OUTPUT_DIR"));
+        // Phase 18 — ``VP_OUTPUT_DIR`` 注入下线(backend 强制 outputDir 必填,
+        // env fallback 是 dead injection)。从"必须存在"反转为"必须不存在"。
+        assert!(!envs.iter().any(|(key, _)| key == "VP_OUTPUT_DIR"));
         assert!(envs
             .iter()
             .any(|(key, value)| key == "VP_PYTHON_EXECUTABLE" && value == "python"));
