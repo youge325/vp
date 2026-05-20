@@ -12,7 +12,7 @@ import type { TaskStatus } from './workflow'
 /// (如 `'pause_failed'`),那是 Phase 6c 一起清理掉的 magic string。
 export type TaskError = TaskErrorPayload
 
-export type OperationIssueScope = 'input' | 'encode' | 'output' | 'task' | 'preset'
+export type OperationIssueScope = 'input' | 'encode' | 'task' | 'preset'
 
 export interface OperationIssue {
   scope: OperationIssueScope
@@ -47,20 +47,17 @@ export interface VideoInfoResult {
 // write;真正展示任务错误的链路是 ``useIssueStore.setIssue('task', …)``
 // (见 [[finalize.ts]] ``handleErrored`` 与 [[batch/events.ts]]
 // ``onCancelled`` 的 stalled 分支)。
+//
+// Phase 17 — 大幅瘦身:删 11 个 dead 字段(percent / current / total /
+// stage / stageIndex / stageTotal / processedFrames / timeSeconds /
+// outputPath / startedAt / finishedAt)。这些在视图 / component /
+// composable 中 **零 reader**(grep 验证):reducer 之间仅做 transfer,
+// spec 测试有断言但实际不驱动 UI。视图侧只读 ``status / logs /
+// resumeStatus`` 三个字段,batch 粒度的进度条用 ``batch.completedCount /
+// batchTotal``(见 [[TaskConsole.vue]] L18-22)。
 export interface MediaTaskState {
   status: TaskStatus
-  percent: number
-  current: number
-  total: number
-  stage: string
-  stageIndex: number
-  stageTotal: number
   logs: string[]
-  outputPath: string
-  processedFrames: number
-  timeSeconds: number
-  startedAt: string | null
-  finishedAt: string | null
   resumeStatus: ResumeStatus | null
 }
 

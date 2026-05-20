@@ -40,11 +40,11 @@ describe('basename', () => {
 })
 
 describe('createIdleTaskState', () => {
-  it('returns idle state with zero progress', () => {
+  it('returns idle state with empty logs', () => {
     const state = createIdleTaskState()
     expect(state.status).toBe('idle')
-    expect(state.percent).toBe(0)
     expect(state.logs).toEqual([])
+    expect(state.resumeStatus).toBeNull()
   })
 
   // Phase 16 — ``MediaTaskState.error`` 字段移除。错误展示统一走
@@ -53,6 +53,22 @@ describe('createIdleTaskState', () => {
   it('does not return an error field after Phase 16', () => {
     const state = createIdleTaskState()
     expect('error' in state).toBe(false)
+  })
+
+  // Phase 17 — ``MediaTaskState`` 11 个 dead 字段移除(percent / current /
+  // total / stage / stageIndex / stageTotal / processedFrames / timeSeconds /
+  // outputPath / startedAt / finishedAt)。锁住 createIdleTaskState 不再
+  // 偷偷塞回这些字段。
+  it('does not return any of the removed dead progress fields after Phase 17', () => {
+    const state = createIdleTaskState()
+    for (const field of [
+      'percent', 'current', 'total',
+      'stage', 'stageIndex', 'stageTotal',
+      'processedFrames', 'timeSeconds',
+      'outputPath', 'startedAt', 'finishedAt',
+    ]) {
+      expect(field in state).toBe(false)
+    }
   })
 })
 

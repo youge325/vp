@@ -36,12 +36,11 @@ describe('useMediaRunState', () => {
 
   it('setTaskState lazily creates an entry with sensible defaults', () => {
     const store = useMediaRunState()
-    store.setTaskState('a', sampleTaskState({ status: 'running', percent: 42 }))
+    store.setTaskState('a', sampleTaskState({ status: 'running' }))
 
     const entry = store.getByItemId('a')
     expect(entry).not.toBeNull()
     expect(entry?.taskState.status).toBe('running')
-    expect(entry?.taskState.percent).toBe(42)
     expect(entry?.lastOutputPath).toBe('')
   })
 
@@ -56,20 +55,17 @@ describe('useMediaRunState', () => {
 
   it('keeps unrelated entries isolated when set on different ids', () => {
     const store = useMediaRunState()
-    store.setTaskState('a', sampleTaskState({ status: 'running', percent: 10 }))
-    store.setTaskState('b', sampleTaskState({ status: 'completed', percent: 100 }))
+    store.setTaskState('a', sampleTaskState({ status: 'running' }))
+    store.setTaskState('b', sampleTaskState({ status: 'completed' }))
 
     expect(store.getByItemId('a')?.taskState.status).toBe('running')
     expect(store.getByItemId('b')?.taskState.status).toBe('completed')
-    expect(store.getByItemId('a')?.taskState.percent).toBe(10)
-    expect(store.getByItemId('b')?.taskState.percent).toBe(100)
   })
 
   it('resetItemRunState restores idle defaults and clears logs by default', () => {
     const store = useMediaRunState()
     store.setTaskState('a', sampleTaskState({
       status: 'completed',
-      percent: 100,
       logs: ['line-1', 'line-2'],
     }))
     store.setLastOutputPath('a', 'D:/out/a.mp4')
@@ -78,7 +74,6 @@ describe('useMediaRunState', () => {
 
     const entry = store.getByItemId('a')
     expect(entry?.taskState.status).toBe('idle')
-    expect(entry?.taskState.percent).toBe(0)
     expect(entry?.taskState.logs).toEqual([])
     expect(entry?.lastOutputPath).toBe('')
   })
@@ -87,7 +82,6 @@ describe('useMediaRunState', () => {
     const store = useMediaRunState()
     store.setTaskState('a', sampleTaskState({
       status: 'completed',
-      percent: 100,
       logs: ['line-1', 'line-2'],
     }))
 
