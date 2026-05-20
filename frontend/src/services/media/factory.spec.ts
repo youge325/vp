@@ -45,7 +45,14 @@ describe('createIdleTaskState', () => {
     expect(state.status).toBe('idle')
     expect(state.percent).toBe(0)
     expect(state.logs).toEqual([])
-    expect(state.error).toBeNull()
+  })
+
+  // Phase 16 — ``MediaTaskState.error`` 字段移除。错误展示统一走
+  // ``useIssueStore.setIssue('task', …)``,createIdleTaskState 不该
+  // 再含 ``error: null``,future 回归不允许偷偷塞回。
+  it('does not return an error field after Phase 16', () => {
+    const state = createIdleTaskState()
+    expect('error' in state).toBe(false)
   })
 })
 

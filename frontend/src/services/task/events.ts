@@ -1,14 +1,24 @@
 // pure: no Vue / no Pinia / no Tauri
 // 任务事件 reducer — 把 IPC payload 应用到 MediaTaskState。
+//
+// Phase 16 — ``MediaTaskState.error`` 字段移除,reducer 不再写 error。
+// 错误展示统一走 [[useIssueStore]] 的 ``'task'`` scope:终态 reducer
+// (``applyTaskError`` / ``applyTaskCancelled``)只负责 status / timestamps,
+// banner 由 [[finalize.ts]] ``handleErrored`` 与 [[batch/events.ts]]
+// ``onCancelled`` 通过 ``deps.setTaskIssue`` 写入。
+//
+// ``applyTaskCancelled`` 不再接 payload —— payload 对 reducer 的可见影响
+// 只是 error 的 message/details,而 error 已经搬到 issueStore,reducer
+// 本身不需要 payload 信息。caller(``onCancelled``)拿到 payload 后自己
+// 构造 banner。
 
-import { TASK_ERROR_CODES, TERMINAL_PROGRESS_PREFIX } from '@/types/protocol'
+import { TERMINAL_PROGRESS_PREFIX } from '@/types/protocol'
 import type {
-  TaskCancelledPayload,
   TaskCompletedPayload,
   TaskLogPayload,
   TaskProgressPayload,
 } from '@/types/protocol'
-import type { MediaTaskState, TaskError } from '@/types/domain/media'
+import type { MediaTaskState } from '@/types/domain/media'
 import type { ResumeStatus } from '@/types/domain/batch'
 
 export function createIdleTaskState(): MediaTaskState {
@@ -24,7 +34,6 @@ export function createIdleTaskState(): MediaTaskState {
     outputPath: '',
     processedFrames: 0,
     timeSeconds: 0,
-    error: null,
     startedAt: null,
     finishedAt: null,
     resumeStatus: null,
@@ -60,7 +69,6 @@ export function applyTaskProgress(state: MediaTaskState, payload: TaskProgressPa
     stage: payload.stage ?? state.stage,
     stageIndex: payload.stageIndex ?? state.stageIndex,
     stageTotal: payload.stageTotal ?? state.stageTotal,
-    error: null,
     startedAt: state.startedAt ?? new Date().toISOString(),
   }
 }
@@ -69,7 +77,6 @@ export function applyTaskPaused(state: MediaTaskState): MediaTaskState {
   return {
     ...state,
     status: 'paused',
-    error: null,
     startedAt: state.startedAt ?? new Date().toISOString(),
   }
 }
@@ -78,7 +85,6 @@ export function applyTaskResumed(state: MediaTaskState): MediaTaskState {
   return {
     ...state,
     status: 'running',
-    error: null,
     startedAt: state.startedAt ?? new Date().toISOString(),
   }
 }
@@ -87,7 +93,6 @@ export function applyTaskCancelling(state: MediaTaskState): MediaTaskState {
   return {
     ...state,
     status: 'cancelling',
-    error: null,
   }
 }
 
@@ -100,46 +105,22 @@ export function applyTaskCompleted(state: MediaTaskState, payload: TaskCompleted
     processedFrames: payload.processedFrames ?? state.processedFrames,
     timeSeconds: payload.timeSeconds ?? state.timeSeconds,
     finishedAt: new Date().toISOString(),
-    error: null,
   }
 }
 
-export function applyTaskError(state: MediaTaskState, error: TaskError): MediaTaskState {
+export function applyTaskError(state: MediaTaskState): MediaTaskState {
   return {
     ...state,
     status: 'error',
-    error,
     finishedAt: new Date().toISOString(),
   }
 }
 
-export function applyTaskCancelled(
-  state: MediaTaskState,
-  payload?: TaskCancelledPayload | null,
-): MediaTaskState {
-  // Phase D.1.2 — stall is now a cancellation with reason "stalled"
-  // rather than a synthetic task-error. Reflect that in the error banner:
-  // stalled cancels show as ProcessFailed with traceback details; user
-  // cancels stay as the friendlier "任务已取消" placeholder.
-  const reason = payload?.reason ?? 'user'
-  const error: TaskError =
-    reason === 'stalled'
-      ? {
-          code: TASK_ERROR_CODES.ProcessFailed,
-          message: '后端进程在配置的超时时间内无任何进度,任务已被中止。',
-          details: payload?.details ?? null,
-        }
-      : {
-          code: TASK_ERROR_CODES.Cancelled,
-          message: '任务已取消。',
-          details: payload?.details ?? null,
-        }
-
+export function applyTaskCancelled(state: MediaTaskState): MediaTaskState {
   return {
     ...state,
     status: 'cancelled',
     finishedAt: new Date().toISOString(),
-    error,
   }
 }
 

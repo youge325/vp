@@ -7,7 +7,7 @@
 //
 // Phase 13.1 把"实体 list"和"运行时投影"分成两个 store:
 //   - [[useMediaStore]] 只管 list CRUD(增删改激活/选中/info)
-//   - 本 store 单独管 task 状态 / issue / 最近输出路径
+//   - 本 store 单独管 task 状态 / 最近输出路径
 //
 // 形状仍然是 ``Record<itemId, MediaRunState>``,通过 ``reactive`` 暴露
 // 子键的响应式追踪能力;调用方在 ``computed`` 中读 ``getByItemId(id)?.X``
@@ -15,11 +15,17 @@
 //
 // 未被 set 过的 itemId 直接返回 ``null`` —— 视图侧本来就在用
 // ``?? null`` / ``?? []`` fallback,迁移痛感低。
+//
+// Phase 16 — ``issue`` 字段与 ``setIssue`` mutator 移除。任务错误现在
+// 走 [[useIssueStore]] 的 ``'task'`` scope([[finalize.ts]] 的
+// ``handleErrored`` + [[batch/events.ts]] ``onCancelled`` 的 stalled
+// 分支),视图侧通过 ``useOperationIssue('task')`` 消费,本 store 不再
+// 承载任何 banner state。
 
 import { reactive } from 'vue'
 import { defineStore } from 'pinia'
 import { createIdleTaskState } from '@/services/task/events'
-import type { MediaRunState, MediaTaskState, TaskError } from '@/types/domain/media'
+import type { MediaRunState, MediaTaskState } from '@/types/domain/media'
 
 export const useMediaRunState = defineStore('mediaRunState', () => {
   const state = reactive<Record<string, MediaRunState>>({})
@@ -38,7 +44,6 @@ export const useMediaRunState = defineStore('mediaRunState', () => {
     }
     const fresh: MediaRunState = {
       taskState: createIdleTaskState(),
-      issue: null,
       lastOutputPath: '',
     }
     state[id] = fresh
@@ -49,10 +54,6 @@ export const useMediaRunState = defineStore('mediaRunState', () => {
     ensure(id).taskState = taskState
   }
 
-  function setIssue(id: string, issue: TaskError | null): void {
-    ensure(id).issue = issue
-  }
-
   function setLastOutputPath(id: string, path: string): void {
     ensure(id).lastOutputPath = path
   }
@@ -61,7 +62,6 @@ export const useMediaRunState = defineStore('mediaRunState', () => {
     const existingLogs = preserveLogs ? state[id]?.taskState.logs ?? [] : []
     state[id] = {
       taskState: { ...createIdleTaskState(), logs: existingLogs },
-      issue: null,
       lastOutputPath: '',
     }
   }
@@ -79,7 +79,6 @@ export const useMediaRunState = defineStore('mediaRunState', () => {
   return {
     getByItemId,
     setTaskState,
-    setIssue,
     setLastOutputPath,
     resetItemRunState,
     resetItemsRunState,

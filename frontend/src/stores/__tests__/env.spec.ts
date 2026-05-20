@@ -68,4 +68,12 @@ describe('useEnvStore', () => {
     expect('operationIssue' in store).toBe(false)
     expect('setOperationIssue' in store).toBe(false)
   })
+
+  // Phase 16 — 锁住 setCheckResult 已下线。生产路径全走 setCheckPayload
+  // (一次性写入 result + source + 时间戳),独立 setCheckResult 是 Phase
+  // 16 前的 dead mutator。
+  it('does not expose setCheckResult after Phase 16', () => {
+    const store = useEnvStore()
+    expect('setCheckResult' in store).toBe(false)
+  })
 })
