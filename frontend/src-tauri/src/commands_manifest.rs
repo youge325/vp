@@ -38,7 +38,6 @@ pub const APP_COMMAND_NAMES: &[&str] = &[
     "check_resume_state",
     "start_task",
     "cancel_task",
-    "pause_task",
-    "resume_task",
+    "control_task",
     "open_output_location",
 ];

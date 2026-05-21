@@ -15,10 +15,10 @@ export const taskIpc = {
     return safeInvoke<void>('cancel_task')
   },
   pause(): Promise<void> {
-    return safeInvoke<void>('pause_task')
+    return safeInvoke<void>('control_task', { kind: 'pause' })
   },
   resume(): Promise<void> {
-    return safeInvoke<void>('resume_task')
+    return safeInvoke<void>('control_task', { kind: 'resume' })
   },
   openOutputLocation(path: string): Promise<void> {
     return safeInvoke<void>('open_output_location', { path })

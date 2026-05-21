@@ -31,8 +31,7 @@
 - `check_resume_state`
 - `start_task`
 - `cancel_task`
-- `pause_task`
-- `resume_task`
+- `control_task`（合并 pause / resume；前端通过 `{ kind: "pause" | "resume" }` 区分）
 - `open_output_location`
 
 后端 CLI 只保留下面四个入口:

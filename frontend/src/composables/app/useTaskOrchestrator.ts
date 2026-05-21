@@ -30,6 +30,7 @@ import { useMediaRunState } from '@/stores/mediaRunState'
 import { useTaskStore } from '@/stores/task'
 import { createBatchRunner, type BatchRunner } from '@/services/task/batch-runner'
 import { buildTaskRequest } from '@/services/task/request-builder'
+import { evaluateStartReadiness } from '@/services/task/preflight'
 
 // Module-level singletons. The factory in ``ensureRunner`` runs at most
 // once per page load; subsequent calls (5 different composable sites)
@@ -133,31 +134,21 @@ export function useTaskOrchestrator() {
   // ``cannotStartReason`` 单点封装"按钮 disabled 时显示给用户的原因",让
   // RenderModuleView / StepRail 等 caller 无需重复算原因(避免多处 disabled
   // 文案漂移)。
-  const canStartBatch = computed(
-    () =>
-      !taskStore.batch.isRunning &&
-      mediaStore.selectedItems.length > 0 &&
-      mediaStore.selectedItems.every((item) => Boolean(item.inputPath)) &&
-      mediaStore.selectedItems.every((item) => Boolean(item.outputConfig.outputDir)),
+  //
+  // Phase A — 规则下沉到 ``services/task/preflight.ts``,这里只做投影。
+  // 业务校验不再绑死 ``MediaItem`` schema,view / form 也可以复用同一规则。
+  const preflightVerdict = computed(() =>
+    evaluateStartReadiness({
+      isRunning: taskStore.batch.isRunning,
+      selectedItems: mediaStore.selectedItems.map((item) => ({
+        displayName: item.displayName,
+        inputPath: item.inputPath,
+        outputDir: item.outputConfig.outputDir,
+      })),
+    }),
   )
-  const cannotStartReason = computed<string | null>(() => {
-    if (taskStore.batch.isRunning) {
-      return null
-    }
-    if (mediaStore.selectedItems.length === 0) {
-      return '请先勾选要处理的素材'
-    }
-    if (!mediaStore.selectedItems.every((item) => Boolean(item.inputPath))) {
-      return '存在素材尚未解析输入路径'
-    }
-    const missingOutput = mediaStore.selectedItems.find(
-      (item) => !item.outputConfig.outputDir,
-    )
-    if (missingOutput) {
-      return `素材 "${missingOutput.displayName}" 未填输出目录(必填),请在"编码与输出"页选择或填写。`
-    }
-    return null
-  })
+  const canStartBatch = computed(() => preflightVerdict.value.ok)
+  const cannotStartReason = computed(() => preflightVerdict.value.reason)
   const batchTotal = computed(() => taskStore.batchRuntimeIds.length || mediaStore.selectedItems.length)
 
   async function startBatch(): Promise<void> {
