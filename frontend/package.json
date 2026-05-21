@@ -9,6 +9,8 @@
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e": "playwright test e2e/",
+    "e2e:ui": "playwright test e2e/ --ui",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
@@ -21,6 +23,7 @@
     "vue-router": "^4.6.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@tauri-apps/cli": "^2.10.1",
     "@types/node": "^24.12.2",
     "@vitejs/plugin-vue": "^6.0.6",
