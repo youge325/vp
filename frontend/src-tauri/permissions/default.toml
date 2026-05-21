@@ -10,7 +10,6 @@ permissions = [
   "allow-check-resume-state",
   "allow-start-task",
   "allow-cancel-task",
-  "allow-pause-task",
-  "allow-resume-task",
+  "allow-control-task",
   "allow-open-output-location",
 ]

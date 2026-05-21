@@ -15,6 +15,7 @@ use std::fmt;
 
 use serde::{Serialize, Serializer};
 
+use crate::process_control::ProcessControlError;
 use crate::protocol::TaskErrorCode;
 
 #[derive(Debug)]
@@ -38,6 +39,11 @@ pub enum ShellError {
     /// Phase 2.1 — 一次性 CLI 命令(如 ``check``)失败且无法恢复结构化
     /// 错误信封,只剩 stderr 摘要。原 ``FailedWithoutEnvelope`` 路径的语义。
     BackendProbeFailed(String),
+    /// pause / resume 控制信号已送达控制器,但控制器调
+    /// ``ProcessController::suspend/resume`` 失败,例如目标 PID 已退出、
+    /// OS 拒绝权限。和 ``ControllerUnavailable``(通道断/超时)分开,
+    /// 让前端可以区分"任务已结束"与"控制层崩了"。
+    ProcessControl(ProcessControlError),
     NdjsonDecode(serde_json::Error),
     SchemaValidation(String),
     Persistence(String),
@@ -64,6 +70,7 @@ impl ShellError {
             Self::BackendEnvelope { .. } => TaskErrorCode::BackendEnvelope,
             Self::ControllerUnavailable => TaskErrorCode::ControllerUnavailable,
             Self::BackendProbeFailed(_) => TaskErrorCode::BackendProbeFailed,
+            Self::ProcessControl(_) => TaskErrorCode::ProcessFailed,
             Self::NdjsonDecode(_) => TaskErrorCode::SchemaMismatch,
             Self::SchemaValidation(_) => TaskErrorCode::SchemaMismatch,
             Self::Persistence(_) => TaskErrorCode::PersistenceFailed,
@@ -94,6 +101,7 @@ impl fmt::Display for ShellError {
             Self::BackendProbeFailed(message) => {
                 write!(f, "backend probe failed: {message}")
             }
+            Self::ProcessControl(error) => write!(f, "process control failed: {error}"),
             Self::NdjsonDecode(error) => {
                 write!(f, "backend stdout was not valid NDJSON: {error}")
             }
@@ -114,6 +122,7 @@ impl std::error::Error for ShellError {
         match self {
             Self::Spawn(error) | Self::Io(error) | Self::OpenLocation(error) => Some(error),
             Self::NdjsonDecode(error) => Some(error),
+            Self::ProcessControl(error) => Some(error),
             _ => None,
         }
     }

@@ -11,20 +11,25 @@ pub mod spawn;
 pub mod state;
 pub mod stderr;
 
+use serde::Deserialize;
 use tokio::sync::oneshot as TokioOneshot;
 
 use crate::process_control::ProcessControlError;
 
 pub use builder::build_inspect_output_args;
-pub use control::{cancel_running_task, pause_running_task, resume_running_task};
+pub use control::{cancel_running_task, send_task_control};
 pub use oneshot::run_single_cli_command;
 pub use spawn::spawn_task;
 pub use state::TaskState;
 
 // Phase 3.1 — TaskControlKind / TaskControlMessage 从 state.rs 上提到 mod.rs,
 // 打破 handle.rs <-> state.rs 的隐式循环依赖。
+// Phase A — 加 ``Deserialize`` + ``serde(rename_all = "lowercase")``,
+// 让前端可以通过 ``control_task({ kind: "pause" | "resume" })`` 直接传枚举,
+// 不需要 Rust 端再做一层手工 dispatch。
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TaskControlKind {
     Pause,
     Resume,

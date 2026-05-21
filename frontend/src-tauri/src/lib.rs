@@ -56,8 +56,7 @@ pub fn run() {
             tasks::commands::start_task,
             tasks::commands::check_resume_state,
             tasks::commands::cancel_task,
-            tasks::commands::pause_task,
-            tasks::commands::resume_task,
+            tasks::commands::control_task,
             persistence::commands::load_workbench_preset,
             persistence::commands::save_workbench_preset,
         ])
@@ -112,6 +111,10 @@ mod tests {
             "\"allow-pick-output\",",
             "\"allow-open-file-or-directory\",",
             "\"allow-resolved-runtime\",",
+            // Phase A — pause_task / resume_task 合并为 control_task,
+            // 旧 token 必须从 default.toml 中清除。
+            "\"allow-pause-task\",",
+            "\"allow-resume-task\",",
         ];
         for token in legacy {
             assert!(

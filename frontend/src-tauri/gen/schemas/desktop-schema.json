@@ -177,10 +177,10 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-load-workbench-preset`\n- `allow-save-workbench-preset`\n- `allow-inspect-video`\n- `allow-check-resume-state`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-pause-task`\n- `allow-resume-task`\n- `allow-open-output-location`",
+          "description": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-load-workbench-preset`\n- `allow-save-workbench-preset`\n- `allow-inspect-video`\n- `allow-check-resume-state`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-control-task`\n- `allow-open-output-location`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-load-workbench-preset`\n- `allow-save-workbench-preset`\n- `allow-inspect-video`\n- `allow-check-resume-state`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-pause-task`\n- `allow-resume-task`\n- `allow-open-output-location`"
+          "markdownDescription": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-load-workbench-preset`\n- `allow-save-workbench-preset`\n- `allow-inspect-video`\n- `allow-check-resume-state`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-control-task`\n- `allow-open-output-location`"
         },
         {
           "description": "Enables the cancel_task command without any pre-configured scope.",
@@ -201,6 +201,12 @@
           "markdownDescription": "Enables the check_resume_state command without any pre-configured scope."
         },
         {
+          "description": "Enables the control_task command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-control-task",
+          "markdownDescription": "Enables the control_task command without any pre-configured scope."
+        },
+        {
           "description": "Enables the inspect_video command without any pre-configured scope.",
           "type": "string",
           "const": "allow-inspect-video",
@@ -219,12 +225,6 @@
           "markdownDescription": "Enables the open_output_location command without any pre-configured scope."
         },
         {
-          "description": "Enables the pause_task command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-pause-task",
-          "markdownDescription": "Enables the pause_task command without any pre-configured scope."
-        },
-        {
           "description": "Enables the pick_inputs command without any pre-configured scope.",
           "type": "string",
           "const": "allow-pick-inputs",
@@ -235,12 +235,6 @@
           "type": "string",
           "const": "allow-pick-output-directory",
           "markdownDescription": "Enables the pick_output_directory command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the resume_task command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-resume-task",
-          "markdownDescription": "Enables the resume_task command without any pre-configured scope."
         },
         {
           "description": "Enables the save_workbench_preset command without any pre-configured scope.",
@@ -273,6 +267,12 @@
           "markdownDescription": "Denies the check_resume_state command without any pre-configured scope."
         },
         {
+          "description": "Denies the control_task command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-control-task",
+          "markdownDescription": "Denies the control_task command without any pre-configured scope."
+        },
+        {
           "description": "Denies the inspect_video command without any pre-configured scope.",
           "type": "string",
           "const": "deny-inspect-video",
@@ -291,12 +291,6 @@
           "markdownDescription": "Denies the open_output_location command without any pre-configured scope."
         },
         {
-          "description": "Denies the pause_task command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-pause-task",
-          "markdownDescription": "Denies the pause_task command without any pre-configured scope."
-        },
-        {
           "description": "Denies the pick_inputs command without any pre-configured scope.",
           "type": "string",
           "const": "deny-pick-inputs",
@@ -307,12 +301,6 @@
           "type": "string",
           "const": "deny-pick-output-directory",
           "markdownDescription": "Denies the pick_output_directory command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the resume_task command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-resume-task",
-          "markdownDescription": "Denies the resume_task command without any pre-configured scope."
         },
         {
           "description": "Denies the save_workbench_preset command without any pre-configured scope.",

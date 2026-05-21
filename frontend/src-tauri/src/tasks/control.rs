@@ -31,15 +31,7 @@ pub async fn cancel_running_task(state: &TaskState) -> Result<(), ShellError> {
     Ok(())
 }
 
-pub async fn pause_running_task(state: &TaskState) -> Result<(), ShellError> {
-    send_task_control(state, TaskControlKind::Pause).await
-}
-
-pub async fn resume_running_task(state: &TaskState) -> Result<(), ShellError> {
-    send_task_control(state, TaskControlKind::Resume).await
-}
-
-async fn send_task_control(
+pub async fn send_task_control(
     state: &TaskState,
     kind: TaskControlKind,
 ) -> Result<(), ShellError> {
@@ -67,13 +59,11 @@ async fn send_task_control(
 
     // Phase 5a — the controller now replies with a typed
     // [`ProcessControlError`](crate::process_control::ProcessControlError).
-    // Phase 2.1 — map controller execution failures to ``ProcessFailed``
-    // (semantically: the process control operation itself failed), while
-    // channel/timeout failures map to ``ControllerUnavailable``.
+    // Phase A —  ``ProcessControlError`` 通过专用 ``ShellError::ProcessControl``
+    // 变体向上抛,语义自描述,前端按 ``ProcessFailed`` code 路由。
+    // 通道/超时失败仍走 ``ControllerUnavailable``,两条路径在前端表现一致。
     match response_rx.await {
-        Ok(result) => result.map_err(|error| {
-            ShellError::RuntimeResolution(format!("process control failed: {error}"))
-        }),
+        Ok(result) => result.map_err(ShellError::ProcessControl),
         Err(_) => Err(ShellError::ControllerUnavailable),
     }
 }
@@ -122,7 +112,7 @@ mod tests {
     #[tokio::test]
     async fn pause_running_task_rejects_when_idle() {
         let state = TaskState::default();
-        let result = pause_running_task(&state).await;
+        let result = send_task_control(&state, TaskControlKind::Pause).await;
         assert!(matches!(result, Err(ShellError::NoActiveTask)));
     }
 
@@ -138,7 +128,7 @@ mod tests {
         handle.cancel(CancelReason::User);
         state.try_start(handle).await.expect("start ok");
 
-        let result = pause_running_task(&state).await;
+        let result = send_task_control(&state, TaskControlKind::Pause).await;
         assert!(
             matches!(result, Err(ShellError::InvalidInput(_))),
             "cancelled token must block pause, got: {result:?}",
@@ -152,7 +142,7 @@ mod tests {
         handle.cancel(CancelReason::User);
         state.try_start(handle).await.expect("start ok");
 
-        let result = resume_running_task(&state).await;
+        let result = send_task_control(&state, TaskControlKind::Resume).await;
         assert!(matches!(result, Err(ShellError::InvalidInput(_))));
     }
 }
