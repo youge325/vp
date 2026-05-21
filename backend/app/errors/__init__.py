@@ -21,6 +21,10 @@ class ProcessError(Exception):
     The ``code`` field should be a ``TaskErrorCode`` enum value when raised
     from application code; the ``__main__`` fallback uses the string
     ``"process_failed"`` for truly unexpected exceptions.
+
+    ``ResumeConflictError`` subclasses this and pre-fills
+    ``code=TaskErrorCode.RESUME_CONFLICT`` + details, so the ``__main__``
+    error envelope handles it uniformly with every other ``ProcessError``.
     """
 
     def __init__(
@@ -57,8 +61,17 @@ class ProcessError(Exception):
         )
 
 
-class ResumeConflictError(Exception):
-    """Raised when a final output already exists and the user must choose how to proceed."""
+class ResumeConflictError(ProcessError):
+    """Raised when a final output already exists and the user must choose how to proceed.
+
+    Specialises ``ProcessError`` with a fixed ``RESUME_CONFLICT`` code so
+    callers can catch it specifically (e.g. to enrich ``details`` with
+    ``input_path``) while still benefiting from ``ProcessError``'s direct
+    flow through ``__main__``'s error envelope. The ``details`` keys are
+    camelCase to match the NDJSON wire format consumed by the Tauri host.
+    """
+
+    _DEFAULT_MESSAGE = "An existing output was detected; please choose how to proceed."
 
     def __init__(
         self,
@@ -67,12 +80,17 @@ class ResumeConflictError(Exception):
         completed_chunks: int,
         completed_output_frames: int,
         sidecar_signature_match: bool,
+        message: str | None = None,
     ) -> None:
-        super().__init__(f"Final output already exists at {output_path}; user decision required.")
         self.output_path = output_path
         self.completed_chunks = completed_chunks
         self.completed_output_frames = completed_output_frames
         self.sidecar_signature_match = sidecar_signature_match
+        super().__init__(
+            TaskErrorCode.RESUME_CONFLICT,
+            message or self._DEFAULT_MESSAGE,
+            details=self.to_details(),
+        )
 
     def to_details(self) -> dict[str, Any]:
         return {

@@ -73,7 +73,6 @@ class Settings(BaseSettings):
     FFMPEG_PATH: str = ""
     FFPROBE_PATH: str = ""
 
-    OUTPUT_DIR: str = ""
     MAX_CONCURRENT_TASKS: int = 1
 
     DEFAULT_TENSOR_BACKEND: str = "pytorch"
@@ -105,7 +104,6 @@ class Settings(BaseSettings):
         if runtime_root is None:
             runtime_root = _first_existing_path(_candidate_runtime_roots(app_root, backend_root))
 
-        output_dir = _resolve_path(self.OUTPUT_DIR) or (backend_root / "output")
         log_dir = _resolve_path(self.LOG_DIR) or (backend_root / "logs")
 
         model_dir = _resolve_path(self.RIFE_MODEL_DIR)
@@ -139,7 +137,6 @@ class Settings(BaseSettings):
         object.__setattr__(self, "PYTHON_EXECUTABLE", python_value)
         object.__setattr__(self, "FFMPEG_PATH", ffmpeg_value)
         object.__setattr__(self, "FFPROBE_PATH", ffprobe_value)
-        object.__setattr__(self, "OUTPUT_DIR", str(output_dir))
         object.__setattr__(self, "LOG_DIR", str(log_dir))
         object.__setattr__(self, "RIFE_MODEL_DIR", str(model_dir))
         object.__setattr__(self, "TENSORRT_DIR", tensorrt_value)
@@ -185,7 +182,6 @@ class Settings(BaseSettings):
             "python_executable": self.PYTHON_EXECUTABLE,
             "ffmpeg_path": self.FFMPEG_PATH,
             "ffprobe_path": self.FFPROBE_PATH,
-            "output_dir": self.OUTPUT_DIR,
             "log_dir": self.LOG_DIR,
             "model_dir": self.RIFE_MODEL_DIR,
             "onnx_interpolation_model_dir": str(onnx_interpolation_dir),

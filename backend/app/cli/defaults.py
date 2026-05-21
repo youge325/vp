@@ -73,17 +73,21 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
     enable_interpolation = args.enable_interpolation or args.algorithm == "frame_interpolation"
     enable_super_resolution = args.enable_super_resolution or args.algorithm == "super_resolution"
     enable_anime = args.algorithm == "anime_optimization"
+    multi = args.multi if args.multi is not None else settings.RIFE_DEFAULT_MULTI
+    model = args.model if args.model is not None else settings.RIFE_MODEL_VERSION
+    scale = args.scale if args.scale is not None else settings.RIFE_SCALE
+    fp16 = args.fp16 if args.fp16 is not None else settings.RIFE_FP16
     return {
         "fpsMode": args.fps_mode,
         "processOrder": args.process_order,
         "interpolation": {
             "enabled": enable_interpolation,
             "targetFps": args.target_fps,
-            "multi": args.multi,
-            "model": args.model,
+            "multi": multi,
+            "model": model,
             "onnxModel": "",
-            "scale": args.scale,
-            "fp16": args.fp16,
+            "scale": scale,
+            "fp16": fp16,
             "tensorBackend": args.backend,
         },
         "superResolution": {
@@ -110,7 +114,7 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _default_output_config(args: argparse.Namespace) -> dict[str, Any]:
-    # Phase 18 — outputDir 强制必填,不再走 ``settings.OUTPUT_DIR`` 兜底。
+    # Phase 18 — outputDir 强制必填,无 settings 兜底。
     # 这里允许返回空串是为了"defaults 与 partial payload 合并"路径(merge
     # 后 Pydantic ``OutputConfig`` validator 会拒空,fail-loudly)。直接
     # CLI 调用如果没传 ``--output-dir`` 也会经过 validator 报 INVALID_CONFIG,
@@ -156,40 +160,39 @@ def _build_algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: str
     return {}
 
 
-def _resolve_processing_steps(config_or_args: dict[str, Any] | argparse.Namespace) -> list[dict[str, Any]]:
-    if isinstance(config_or_args, argparse.Namespace):
-        workflow_config = _default_workflow_config(config_or_args)
-        algorithm = config_or_args.algorithm
-    else:
-        workflow_config = config_or_args
-        algorithm = _resolve_primary_algorithm(workflow_config)
-
+def _resolve_algorithm_types(workflow_config: dict[str, Any], algorithm: str) -> list[str]:
     enable_interpolation = bool(workflow_config["interpolation"]["enabled"])
     enable_super_resolution = bool(workflow_config["superResolution"]["enabled"])
 
-    if enable_interpolation or enable_super_resolution:
-        if enable_interpolation and enable_super_resolution:
-            algorithm_types = PROCESS_ORDER_MAP[workflow_config["processOrder"]]
-        elif enable_interpolation:
-            algorithm_types = ["frame_interpolation"]
-        else:
-            algorithm_types = ["super_resolution"]
-    elif algorithm == "format_conversion":
-        algorithm_types = []
-    else:
-        algorithm_types = [algorithm]
+    if enable_interpolation and enable_super_resolution:
+        return PROCESS_ORDER_MAP[workflow_config["processOrder"]]
+    if enable_interpolation:
+        return ["frame_interpolation"]
+    if enable_super_resolution:
+        return ["super_resolution"]
+    if algorithm == "format_conversion":
+        return []
+    return [algorithm]
 
+
+def _compose_filter_chain(workflow_config: dict[str, Any], kind: str, existing_count: int) -> dict[str, Any] | None:
+    section = workflow_config.get(kind, {})
+    if not section.get("enabled"):
+        return None
+    return {
+        "algorithm_type": "frame_filter_chain",
+        "algorithm_kwargs": {"filters": section["filters"]},
+        "stage_name": f"{existing_count + 1:02d}_{kind}",
+    }
+
+
+def _steps_from_workflow(workflow_config: dict[str, Any], algorithm: str) -> list[dict[str, Any]]:
+    algorithm_types = _resolve_algorithm_types(workflow_config, algorithm)
     steps: list[dict[str, Any]] = []
 
-    # Prepend preprocess filter chain if enabled
-    if workflow_config.get("preprocess", {}).get("enabled"):
-        steps.append(
-            {
-                "algorithm_type": "frame_filter_chain",
-                "algorithm_kwargs": {"filters": workflow_config["preprocess"]["filters"]},
-                "stage_name": f"{len(steps) + 1:02d}_preprocess",
-            }
-        )
+    preprocess = _compose_filter_chain(workflow_config, "preprocess", len(steps))
+    if preprocess is not None:
+        steps.append(preprocess)
 
     for algorithm_type in algorithm_types:
         steps.append(
@@ -200,17 +203,21 @@ def _resolve_processing_steps(config_or_args: dict[str, Any] | argparse.Namespac
             }
         )
 
-    # Append postprocess filter chain if enabled
-    if workflow_config.get("postprocess", {}).get("enabled"):
-        steps.append(
-            {
-                "algorithm_type": "frame_filter_chain",
-                "algorithm_kwargs": {"filters": workflow_config["postprocess"]["filters"]},
-                "stage_name": f"{len(steps) + 1:02d}_postprocess",
-            }
-        )
+    postprocess = _compose_filter_chain(workflow_config, "postprocess", len(steps))
+    if postprocess is not None:
+        steps.append(postprocess)
 
     return steps
+
+
+def _resolve_processing_steps(config_or_args: dict[str, Any] | argparse.Namespace) -> list[dict[str, Any]]:
+    if isinstance(config_or_args, argparse.Namespace):
+        workflow_config = _default_workflow_config(config_or_args)
+        algorithm = config_or_args.algorithm
+    else:
+        workflow_config = config_or_args
+        algorithm = _resolve_primary_algorithm(workflow_config)
+    return _steps_from_workflow(workflow_config, algorithm)
 
 
 def _resolve_fps_and_multi(
