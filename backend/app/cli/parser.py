@@ -68,10 +68,29 @@ def _add_shared_planning_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--preset", default="medium", help="Encoding preset")
     parser.add_argument("--backend", default="pytorch", choices=["pytorch", "paddle", "onnx"], help="Tensor backend")
     parser.add_argument("--output-dir", default=None, help="Output directory override")
-    parser.add_argument("--multi", type=int, default=2, help="Interpolation multiplier")
-    parser.add_argument("--model", default="4.25", help="RIFE model version")
-    parser.add_argument("--scale", type=float, default=1.0, help="Interpolation scale factor")
-    parser.add_argument("--fp16", action="store_true", help="Enable FP16 inference")
+    parser.add_argument(
+        "--multi",
+        type=int,
+        default=None,
+        help="Interpolation multiplier (falls back to settings.RIFE_DEFAULT_MULTI)",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="RIFE model version (falls back to settings.RIFE_MODEL_VERSION)",
+    )
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=None,
+        help="Interpolation scale factor (falls back to settings.RIFE_SCALE)",
+    )
+    parser.add_argument(
+        "--fp16",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable FP16 inference (falls back to settings.RIFE_FP16)",
+    )
     parser.add_argument("--sr-scale-factor", type=float, default=2.0, help="Super-resolution scale")
     parser.add_argument("--sr-algorithm", default="placeholder", help="Super-resolution algorithm")
 

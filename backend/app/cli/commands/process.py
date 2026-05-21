@@ -55,14 +55,10 @@ def cmd_process(args: argparse.Namespace) -> None:
             details={"input_path": input_path},
         )
     except ResumeConflictError as exc:
-        raise ProcessError(
-            TaskErrorCode.RESUME_CONFLICT,
-            "An existing output was detected; please choose how to proceed.",
-            details={
-                "input_path": input_path,
-                **exc.to_details(),
-            },
-        )
+        # Phase A — ResumeConflictError 已继承 ProcessError 并预置 code+details;
+        # 这里只需把 input_path 注入 details,保持对上层 NDJSON 的对外契约。
+        exc.details.setdefault("input_path", input_path)
+        raise
     except Exception as exc:  # pragma: no cover - defensive boundary
         if isinstance(exc, ProcessError):
             raise
