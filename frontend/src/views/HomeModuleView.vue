@@ -8,7 +8,7 @@ const { recheckEnvironment } = useEnvironmentChecker()
 </script>
 
 <template>
-  <div class="module-stack">
+  <div class="module-stack" data-testid="home-module">
     <section class="panel-surface">
       <div class="panel-head">
         <div class="panel-copy">

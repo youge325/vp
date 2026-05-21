@@ -22,8 +22,8 @@ const isBusy = computed(() => shell.isBootstrapping.value || shell.isChecking.va
 </script>
 
 <template>
-  <div class="app-viewport">
-    <div class="app-shell">
+  <div class="app-viewport" data-testid="app-viewport">
+    <div class="app-shell" data-testid="app-shell">
       <StepRail />
 
       <main class="center-column">
