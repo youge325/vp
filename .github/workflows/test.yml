@@ -114,6 +114,12 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      - name: Regenerate TypeScript types from Rust (ts-rs)
+        run: |
+          New-Item -ItemType Directory -Force -Path "../dist" | Out-Null
+          cargo test --lib --quiet
+        working-directory: frontend/src-tauri
+
       - name: Install Playwright browsers
         run: npx playwright install chromium
         working-directory: frontend
