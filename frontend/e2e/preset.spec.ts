@@ -83,4 +83,43 @@ test.describe('Preset persistence', () => {
     expect(loaded.outputConfig.segmentFrames).toBe(1000)
     expect(loaded.outputConfig.outputDir).toBe(outputDir)
   })
+
+  test('save overwrites existing preset', async ({ tauriPage }) => {
+    const dir1 = 'D:/vp-e2e-preset-test-v1'
+    const dir2 = 'D:/vp-e2e-preset-test-v2'
+
+    // Save first version
+    await tauriPage.evaluate(async (p) => {
+      try {
+        // @ts-expect-error
+        await window.__TAURI_INTERNALS__.invoke('save_workbench_preset', { preset: p })
+      } catch (error: any) {
+        throw new Error(`save_workbench_preset v1 failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
+      }
+    }, buildPreset(dir1))
+
+    // Save second version (overwrite)
+    await tauriPage.evaluate(async (p) => {
+      try {
+        // @ts-expect-error
+        await window.__TAURI_INTERNALS__.invoke('save_workbench_preset', { preset: p })
+      } catch (error: any) {
+        throw new Error(`save_workbench_preset v2 failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
+      }
+    }, buildPreset(dir2))
+
+    // Load and verify overwrite
+    const loaded = await tauriPage.evaluate(async () => {
+      try {
+        // @ts-expect-error
+        return await window.__TAURI_INTERNALS__.invoke('load_workbench_preset')
+      } catch (error: any) {
+        throw new Error(`load_workbench_preset failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
+      }
+    })
+
+    expect(loaded).not.toBeNull()
+    expect(loaded.outputConfig.outputDir).toBe(dir2)
+    expect(loaded.outputConfig.segmentFrames).toBe(1000)
+  })
 })
