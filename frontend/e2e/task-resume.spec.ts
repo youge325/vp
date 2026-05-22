@@ -145,4 +145,110 @@ test.describe('Task resume state', () => {
     expect(result).toHaveProperty('completedChunks')
     expect(result.completedChunks).toBe(0)
   })
+
+  test('start_task with resumeMode auto and existing output emits task-error', async ({ tauriPage }) => {
+    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
+    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
+    const outputPath = `${outputDir}\\vp-e2e-test_processed.mp4`
+
+    // Step 1: Produce output file with force-fresh
+    await tauriPage.evaluate(async (req) => {
+      // @ts-expect-error
+      const internals = window.__TAURI_INTERNALS__
+      // @ts-expect-error
+      window.__E2E_RESUME_EVENT = null
+
+      const handlerId = internals.transformCallback((eventData: any) => {
+        // @ts-expect-error
+        window.__E2E_RESUME_EVENT = eventData.payload
+      })
+
+      // @ts-expect-error
+      window.__E2E_RESUME_UNLISTEN = await internals.invoke('plugin:event|listen', {
+        event: 'task-completed',
+        target: { kind: 'Any' },
+        handler: handlerId,
+      })
+
+      try {
+        // @ts-expect-error
+        await internals.invoke('start_task', { request: req })
+      } catch (error: any) {
+        throw new Error(`start_task failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
+      }
+    }, buildTaskRequest(inputPath, outputDir))
+
+    // Wait for first task to complete
+    await tauriPage.waitForFunction(
+      () => {
+        // @ts-expect-error
+        return window.__E2E_RESUME_EVENT !== null
+      },
+      { timeout: 60000 },
+    )
+
+    expect(existsSync(outputPath)).toBe(true)
+
+    // Cleanup first listener
+    await tauriPage.evaluate(async () => {
+      // @ts-expect-error
+      const internals = window.__TAURI_INTERNALS__
+      // @ts-expect-error
+      await internals.invoke('plugin:event|unlisten', { event: 'task-completed', eventId: window.__E2E_RESUME_UNLISTEN })
+    })
+
+    // Step 2: Listen for task-error and start with auto mode
+    const autoRequest = { ...buildTaskRequest(inputPath, outputDir), resumeMode: 'auto' }
+
+    await tauriPage.evaluate(async (req) => {
+      // @ts-expect-error
+      const internals = window.__TAURI_INTERNALS__
+      // @ts-expect-error
+      window.__E2E_ERROR_EVENT = null
+
+      const handlerId = internals.transformCallback((eventData: any) => {
+        // @ts-expect-error
+        window.__E2E_ERROR_EVENT = eventData.payload
+      })
+
+      // @ts-expect-error
+      window.__E2E_ERROR_UNLISTEN = await internals.invoke('plugin:event|listen', {
+        event: 'task-error',
+        target: { kind: 'Any' },
+        handler: handlerId,
+      })
+
+      try {
+        // @ts-expect-error
+        await internals.invoke('start_task', { request: req })
+      } catch (error: any) {
+        throw new Error(`start_task auto failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
+      }
+    }, autoRequest)
+
+    // Wait for task-error event
+    await tauriPage.waitForFunction(
+      () => {
+        // @ts-expect-error
+        return window.__E2E_ERROR_EVENT !== null
+      },
+      { timeout: 30000 },
+    )
+
+    const errorEvent = await tauriPage.evaluate(() => {
+      // @ts-expect-error
+      return window.__E2E_ERROR_EVENT
+    })
+
+    expect(errorEvent).toHaveProperty('code')
+    expect(errorEvent.code).toBe('resume_conflict')
+
+    // Cleanup
+    await tauriPage.evaluate(async () => {
+      // @ts-expect-error
+      const internals = window.__TAURI_INTERNALS__
+      // @ts-expect-error
+      await internals.invoke('plugin:event|unlisten', { event: 'task-error', eventId: window.__E2E_ERROR_UNLISTEN })
+    })
+  })
 })
