@@ -1,0 +1,103 @@
+name: End-to-End Tests
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/app/**'
+      - 'frontend/**'
+      - '.github/workflows/e2e.yml'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/app/**'
+      - 'frontend/**'
+      - '.github/workflows/e2e.yml'
+
+env:
+  # 统一临时视频路径,避免 ``$env:TEMP``(系统临时目录)与
+  # ``${{ runner.temp }}``(Actions 工作目录)在 self-hosted Windows
+  # runner 上指向不同位置导致的"文件不存在"。
+  E2E_VIDEO_PATH: ${{ runner.temp }}\vp-e2e-test.mp4
+  E2E_OUTPUT_DIR: ${{ runner.temp }}\vp-e2e-output
+
+jobs:
+  # Phase A — CLI 端到端 smoke 测试。覆盖 "python -m app check → info →
+  # process → resume_conflict" 完整数据流,验证 config 解析 → FFmpeg 调用
+  # → NDJSON 输出的协议完整性。纯 CLI 驱动,无需 GUI。
+  e2e-smoke:
+    runs-on: [self-hosted, windows]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup CI runtime environment
+        run: ./scripts/setup-ci-runtime-env.ps1
+
+      - name: Generate synthetic test video
+        run: |
+          ffmpeg -f lavfi -i testsrc=duration=1:size=1280x720:rate=30 `
+                 -f lavfi -i sine=frequency=1000:duration=1 `
+                 -pix_fmt yuv420p -c:v libx264 -c:a aac `
+                 "$env:E2E_VIDEO_PATH" -y
+
+      - name: Run CLI e2e smoke tests
+        run: python -m pytest backend/tests/test_integration/test_cli_process_e2e.py -v
+        env:
+          VP_E2E_INPUT: ${{ env.E2E_VIDEO_PATH }}
+          VP_E2E_OUTPUT_DIR: ${{ env.E2E_OUTPUT_DIR }}
+
+  # Phase A — UI 端到端测试。Playwright + WebView2 CDP 驱动真实 Tauri
+  # 应用,覆盖 Vue 前端 → Tauri command → Python CLI → NDJSON 输出 → 前端
+  # UI 更新的完整链路。
+  e2e-ui:
+    runs-on: [self-hosted, windows]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Regenerate TypeScript types from Rust (ts-rs)
+        run: |
+          New-Item -ItemType Directory -Force -Path "../dist" | Out-Null
+          cargo test --lib --quiet
+        working-directory: frontend/src-tauri
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+        working-directory: frontend
+
+      - name: Generate synthetic test video
+        run: |
+          ffmpeg -f lavfi -i testsrc=duration=1:size=1280x720:rate=30 `
+                 -f lavfi -i sine=frequency=1000:duration=1 `
+                 -pix_fmt yuv420p -c:v libx264 -c:a aac `
+                 "$env:E2E_VIDEO_PATH" -y
+
+      - name: Build Tauri app (release)
+        run: npm run tauri build -- --no-bundle
+        working-directory: frontend
+        env:
+          CI: true
+
+      - name: Run Playwright e2e tests
+        run: npx playwright test e2e/ --reporter=list
+        working-directory: frontend
+        env:
+          VP_E2E_INPUT: ${{ env.E2E_VIDEO_PATH }}
+          VP_E2E_OUTPUT_DIR: ${{ env.E2E_OUTPUT_DIR }}
+          VP_BACKEND_DIR: ${{ github.workspace }}\backend
+          VP_FFMPEG_PATH: D:\ffmpeg-2025-08-11-git-3542260376-full_build\bin\ffmpeg.exe
+          VP_FFPROBE_PATH: D:\ffmpeg-2025-08-11-git-3542260376-full_build\bin\ffprobe.exe
+          VP_RIFE_MODEL_DIR: D:\tmp\vp-e2e-models
