@@ -18,6 +18,30 @@ test.describe('VP Workbench e2e smoke', () => {
     expect(result.result.ffmpeg.available).toBe(true)
   })
 
+  test('check_environment result contains all core schema keys', async ({ tauriPage }) => {
+    const result = await tauriPage.evaluate(async () => {
+      // @ts-expect-error
+      return await window.__TAURI_INTERNALS__.invoke('check_environment', { forceRefresh: true })
+    })
+
+    expect(result).toHaveProperty('result')
+    expect(result.result).toHaveProperty('type')
+    expect(result.result).toHaveProperty('ffmpeg')
+    expect(result.result).toHaveProperty('gpu')
+    expect(result.result).toHaveProperty('tensorBackends')
+    expect(result.result).toHaveProperty('rifeModel')
+    // Optional fields are best-effort; verify them only if present
+    if (result.result.interpolationAlgorithms !== undefined) {
+      expect(Array.isArray(result.result.interpolationAlgorithms)).toBe(true)
+    }
+    if (result.result.superResolutionAlgorithms !== undefined) {
+      expect(Array.isArray(result.result.superResolutionAlgorithms)).toBe(true)
+    }
+    if (result.result.animeProfiles !== undefined) {
+      expect(Array.isArray(result.result.animeProfiles)).toBe(true)
+    }
+  })
+
   test('inspect_video parses synthetic test video', async ({ tauriPage }) => {
     const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
     const info = await tauriPage.evaluate(async (path: string) => {

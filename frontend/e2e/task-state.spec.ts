@@ -173,4 +173,44 @@ test.describe('Task state machine', () => {
 
     await cleanupListeners(tauriPage)
   })
+
+  test('duplicate cancel when already cancelling returns error', async ({ tauriPage }) => {
+    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
+    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
+
+    // Start a task
+    await tauriPage.evaluate(async (req) => {
+      try {
+        // @ts-expect-error
+        await window.__TAURI_INTERNALS__.invoke('start_task', { request: req })
+      } catch (error: any) {
+        throw new Error(`start_task failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
+      }
+    }, buildTaskRequest(inputPath, outputDir))
+
+    // First cancel should succeed (or be ignored if task finished too quickly)
+    await tauriPage.evaluate(async () => {
+      try {
+        // @ts-expect-error
+        await window.__TAURI_INTERNALS__.invoke('cancel_task')
+      } catch {}
+    })
+
+    // Second cancel should be rejected
+    const error = await tauriPage.evaluate(async () => {
+      try {
+        // @ts-expect-error
+        await window.__TAURI_INTERNALS__.invoke('cancel_task')
+        return null
+      } catch (e: any) {
+        return { code: e.code, message: e.message }
+      }
+    })
+
+    // If the task already finished, cancel returns invalid_input (NoActiveTask).
+    // If still cancelling, cancel returns invalid_input (already cancelling).
+    // Either way the code should be invalid_input.
+    expect(error).not.toBeNull()
+    expect(error.code).toBe('invalid_input')
+  })
 })
