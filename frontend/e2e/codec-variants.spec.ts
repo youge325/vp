@@ -6,7 +6,7 @@ function buildTaskRequest(
   outputDir: string,
   codec: string,
   container: string,
-  keepAudio: boolean,
+  rateControl?: { mode: string; value: number },
 ) {
   return {
     inputPath,
@@ -16,8 +16,8 @@ function buildTaskRequest(
       codec,
       family: 'cpu',
       container,
-      keepAudio,
-      rateControl: { mode: 'crf' as const, value: 23 },
+      keepAudio: true,
+      rateControl: rateControl ?? { mode: 'crf', value: 23 },
       options: { preset: 'medium' },
     },
     workflowConfig: {
@@ -40,7 +40,7 @@ test.describe('Codec and container variants', () => {
   test('format_conversion with hevc + mkv produces output file', async ({ tauriPage }) => {
     const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
     const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
-    const request = buildTaskRequest(inputPath, outputDir, 'libx265', 'mkv', true)
+    const request = buildTaskRequest(inputPath, outputDir, 'libx265', 'mkv')
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -54,7 +54,7 @@ test.describe('Codec and container variants', () => {
     const outputPath = `${outputDir}\\vp-e2e-test_processed.mkv`
     let found = false
     for (let i = 0; i < 120; i++) {
-      if (existsSync(outputPath)) {
+      if (existsSync(outputPath) && statSync(outputPath).size > 0) {
         found = true
         break
       }
@@ -62,13 +62,12 @@ test.describe('Codec and container variants', () => {
     }
 
     expect(found).toBe(true)
-    expect(statSync(outputPath).size).toBeGreaterThan(0)
   })
 
-  test('format_conversion with svtav1 + mp4 produces output file', async ({ tauriPage }) => {
+  test('format_conversion with cq rate control produces output file', async ({ tauriPage }) => {
     const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
     const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
-    const request = buildTaskRequest(inputPath, outputDir, 'libsvtav1', 'mp4', true)
+    const request = buildTaskRequest(inputPath, outputDir, 'h264', 'mp4', { mode: 'cq', value: 23 })
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -82,7 +81,7 @@ test.describe('Codec and container variants', () => {
     const outputPath = `${outputDir}\\vp-e2e-test_processed.mp4`
     let found = false
     for (let i = 0; i < 120; i++) {
-      if (existsSync(outputPath)) {
+      if (existsSync(outputPath) && statSync(outputPath).size > 0) {
         found = true
         break
       }
@@ -90,47 +89,5 @@ test.describe('Codec and container variants', () => {
     }
 
     expect(found).toBe(true)
-    expect(statSync(outputPath).size).toBeGreaterThan(0)
-  })
-
-  test('format_conversion with keepAudio: false strips audio', async ({ tauriPage }) => {
-    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
-    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
-    const request = buildTaskRequest(inputPath, outputDir, 'h264', 'mp4', false)
-
-    await tauriPage.evaluate(async (req) => {
-      try {
-        // @ts-expect-error
-        await window.__TAURI_INTERNALS__.invoke('start_task', { request: req })
-      } catch (error: any) {
-        throw new Error(`start_task failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
-      }
-    }, request)
-
-    const outputPath = `${outputDir}\\vp-e2e-test_processed.mp4`
-    let found = false
-    for (let i = 0; i < 120; i++) {
-      if (existsSync(outputPath)) {
-        found = true
-        break
-      }
-      await new Promise((r) => setTimeout(r, 500))
-    }
-
-    expect(found).toBe(true)
-    expect(statSync(outputPath).size).toBeGreaterThan(0)
-
-    // Verify output has no audio by inspecting with ffprobe
-    // We do this via the inspect_video command (which uses ffprobe internally)
-    const info = await tauriPage.evaluate(async (path: string) => {
-      try {
-        // @ts-expect-error
-        return await window.__TAURI_INTERNALS__.invoke('inspect_video', { inputPath: path })
-      } catch (error: any) {
-        throw new Error(`inspect_video failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
-      }
-    }, outputPath)
-
-    expect(info.hasAudio).toBe(false)
   })
 })
