@@ -21,8 +21,12 @@ test.describe('VP Workbench e2e smoke', () => {
   test('inspect_video parses synthetic test video', async ({ tauriPage }) => {
     const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
     const info = await tauriPage.evaluate(async (path: string) => {
-      // @ts-expect-error __TAURI_INTERNALS__ is injected by Tauri runtime
-      return await window.__TAURI_INTERNALS__.invoke('inspect_video', { inputPath: path })
+      try {
+        // @ts-expect-error __TAURI_INTERNALS__ is injected by Tauri runtime
+        return await window.__TAURI_INTERNALS__.invoke('inspect_video', { inputPath: path })
+      } catch (error: any) {
+        throw new Error(`inspect_video failed: ${JSON.stringify({ message: error?.message, code: error?.code, details: error?.details })}`)
+      }
     }, inputPath)
 
     expect(info.frames).toBeGreaterThan(0)
@@ -63,8 +67,12 @@ test.describe('VP Workbench e2e smoke', () => {
 
     // 通过 invoke 直接启动任务，然后轮询输出文件
     await tauriPage.evaluate(async (req) => {
-      // @ts-expect-error __TAURI_INTERNALS__ is injected by Tauri runtime
-      await window.__TAURI_INTERNALS__.invoke('start_task', { request: req })
+      try {
+        // @ts-expect-error __TAURI_INTERNALS__ is injected by Tauri runtime
+        await window.__TAURI_INTERNALS__.invoke('start_task', { request: req })
+      } catch (error: any) {
+        throw new Error(`start_task failed: ${JSON.stringify({ message: error?.message, code: error?.code, details: error?.details })}`)
+      }
     }, taskRequest)
 
     // 等待输出文件出现（最多 60s）
