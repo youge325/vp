@@ -3,6 +3,8 @@ import { spawn } from 'child_process'
 import { Socket } from 'net'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { tmpdir } from 'os'
+import { mkdirSync } from 'fs'
 
 function waitForPort(port: number, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -44,8 +46,15 @@ export async function launchTauriApp(opts: { cdpPort?: number; exePath?: string 
   const __dirname = dirname(fileURLToPath(import.meta.url))
   const projectRoot = resolve(__dirname, '../../..')
 
+  // 每个实例使用独立的日志目录，避免多个 Tauri 进程共享同一个日志文件
+  // 导致 WinError 32（文件被占用）
+  const instanceLogDir = resolve(tmpdir(), `vp-e2e-logs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
+  mkdirSync(instanceLogDir, { recursive: true })
+
   const env = {
     ...process.env,
+    VP_E2E_HEADLESS: '1',
+    VP_LOG_DIR: instanceLogDir,
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${cdpPort} --remote-allow-origins=*`,
     // release 模式下 Tauri 需要这些环境变量来定位资源
     VP_BACKEND_DIR: resolve(projectRoot, 'backend'),

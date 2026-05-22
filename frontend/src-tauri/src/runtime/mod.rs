@@ -93,7 +93,10 @@ pub fn resolve_runtime_paths<R: Runtime>(
     };
 
     let output_dir = app_data_dir.join("output");
-    let log_dir = app_data_dir.join("logs");
+    // E2E 测试中多个实例快速串行启动，共享同一个日志文件会导致
+    // WinError 32（文件被占用）。允许通过 VP_LOG_DIR 环境变量为每个
+    //实例指定独立的日志目录。
+    let log_dir = helpers::env_path("VP_LOG_DIR").unwrap_or_else(|| app_data_dir.join("logs"));
 
     std::fs::create_dir_all(&output_dir)?;
     std::fs::create_dir_all(&log_dir)?;
