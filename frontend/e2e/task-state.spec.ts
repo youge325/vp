@@ -213,4 +213,76 @@ test.describe('Task state machine', () => {
     expect(error).not.toBeNull()
     expect(error.code).toBe('invalid_input')
   })
+
+  test('control_task pause when cancelling returns error', async ({ tauriPage }) => {
+    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
+    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
+
+    // Start and immediately cancel a task
+    await tauriPage.evaluate(async (req) => {
+      try {
+        // @ts-expect-error
+        await window.__TAURI_INTERNALS__.invoke('start_task', { request: req })
+      } catch (error: any) {
+        throw new Error(`start_task failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
+      }
+    }, buildTaskRequest(inputPath, outputDir))
+
+    await tauriPage.evaluate(async () => {
+      try {
+        // @ts-expect-error
+        await window.__TAURI_INTERNALS__.invoke('cancel_task')
+      } catch {}
+    })
+
+    // Pause during cancelling should be rejected
+    const error = await tauriPage.evaluate(async () => {
+      try {
+        // @ts-expect-error
+        await window.__TAURI_INTERNALS__.invoke('control_task', { kind: 'pause' })
+        return null
+      } catch (e: any) {
+        return { code: e.code, message: e.message }
+      }
+    })
+
+    expect(error).not.toBeNull()
+    expect(error.code).toBe('invalid_input')
+  })
+
+  test('control_task resume when cancelling returns error', async ({ tauriPage }) => {
+    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
+    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
+
+    // Start and immediately cancel a task
+    await tauriPage.evaluate(async (req) => {
+      try {
+        // @ts-expect-error
+        await window.__TAURI_INTERNALS__.invoke('start_task', { request: req })
+      } catch (error: any) {
+        throw new Error(`start_task failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
+      }
+    }, buildTaskRequest(inputPath, outputDir))
+
+    await tauriPage.evaluate(async () => {
+      try {
+        // @ts-expect-error
+        await window.__TAURI_INTERNALS__.invoke('cancel_task')
+      } catch {}
+    })
+
+    // Resume during cancelling should be rejected
+    const error = await tauriPage.evaluate(async () => {
+      try {
+        // @ts-expect-error
+        await window.__TAURI_INTERNALS__.invoke('control_task', { kind: 'resume' })
+        return null
+      } catch (e: any) {
+        return { code: e.code, message: e.message }
+      }
+    })
+
+    expect(error).not.toBeNull()
+    expect(error.code).toBe('invalid_input')
+  })
 })
