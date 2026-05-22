@@ -45,6 +45,13 @@ pub fn run() {
                 eprintln!("VP Workbench resource-dir={}", resource_dir.display());
             }
 
+            // E2E 模式下隐藏主窗口，避免测试时反复弹出干扰桌面。
+            if std::env::var("VP_E2E_HEADLESS").is_ok() {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
