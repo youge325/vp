@@ -58,6 +58,8 @@ test.describe('VP Workbench e2e smoke', () => {
     expect(info.width).toBeGreaterThan(0)
     expect(info.height).toBeGreaterThan(0)
     expect(info.videoCodec).toBeTruthy()
+    expect(typeof info.hasAudio).toBe('boolean')
+    expect(info.duration).toBeGreaterThan(0)
   })
 
   test('start_task format_conversion produces output file', async ({ tauriPage }) => {
