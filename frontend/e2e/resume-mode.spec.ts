@@ -1,0 +1,90 @@
+import { test, expect } from './fixtures'
+import { existsSync, statSync, rmSync } from 'fs'
+
+function buildTaskRequest(inputPath: string, outputDir: string, resumeMode?: string) {
+  return {
+    inputPath,
+    outputConfig: { outputDir, openOnComplete: false, segmentFrames: 1000 },
+    decodeConfig: { mode: 'software' as const, hwaccel: '', decoder: 'software', options: {} },
+    encodeConfig: {
+      codec: 'h264',
+      family: 'cpu',
+      container: 'mp4',
+      keepAudio: true,
+      rateControl: { mode: 'crf' as const, value: 23 },
+      options: { preset: 'medium' },
+    },
+    workflowConfig: {
+      fpsMode: 'multi' as const,
+      processOrder: 'super_resolution_then_interpolation' as const,
+      interpolation: {
+        enabled: false, targetFps: 60, multi: 2, algorithm: 'rife', model: '4.25',
+        scale: 1.0, fp16: false, tensorBackend: 'pytorch' as const, engine: 'cuda',
+      },
+      superResolution: { enabled: false, scaleFactor: 2.0, algorithm: 'realesrgan' },
+      anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
+      preprocess: { enabled: false, filters: [] },
+      postprocess: { enabled: false, filters: [] },
+    },
+    resumeMode: resumeMode ?? 'force-fresh',
+  }
+}
+
+async function waitForOutputFile(outputPath: string, maxWaitMs: number = 60000): Promise<boolean> {
+  const interval = 500
+  const iterations = maxWaitMs / interval
+  for (let i = 0; i < iterations; i++) {
+    if (existsSync(outputPath) && statSync(outputPath).size > 0) {
+      return true
+    }
+    await new Promise((r) => setTimeout(r, interval))
+  }
+  return false
+}
+
+test.describe('Resume mode', () => {
+  const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
+  const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
+  const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
+
+  test('start_task with resumeMode auto and no existing output succeeds', async ({ tauriPage }) => {
+    // Ensure no existing output
+    if (existsSync(outFile)) rmSync(outFile)
+
+    const request = buildTaskRequest(inputPath, outputDir, 'auto')
+
+    await tauriPage.evaluate(async (req) => {
+      try {
+        // @ts-expect-error
+        await window.__TAURI_INTERNALS__.invoke('start_task', { request: req })
+      } catch (error: any) {
+        throw new Error(`start_task failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
+      }
+    }, request)
+
+    const found = await waitForOutputFile(outFile)
+    expect(found).toBe(true)
+  })
+
+  test('check_resume_state with resumeMode auto returns resumed false when no checkpoint exists', async ({ tauriPage }) => {
+    if (existsSync(outFile)) rmSync(outFile)
+
+    const request = buildTaskRequest(inputPath, outputDir, 'auto')
+
+    const result = await tauriPage.evaluate(async (req) => {
+      try {
+        // @ts-expect-error
+        return await window.__TAURI_INTERNALS__.invoke('check_resume_state', { request: req })
+      } catch (error: any) {
+        throw new Error(`check_resume_state failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
+      }
+    }, request)
+
+    // format_conversion 路径不返回 resumed 字段（只有 streaming 路径才有）
+    expect(result).not.toHaveProperty('resumed')
+    expect(result).toHaveProperty('completedChunks')
+    expect(result.completedChunks).toBe(0)
+    expect(result).toHaveProperty('finalExists')
+    expect(result.finalExists).toBe(false)
+  })
+})
