@@ -86,4 +86,89 @@ test.describe('Workflow module UI', () => {
     const edgeBoostInput = section.locator('label.field').filter({ hasText: '边缘增强' }).locator('input')
     await expect(edgeBoostInput).toBeVisible({ timeout: 5000 })
   })
+
+  test('switching fpsMode swaps between targetFps input and multi select', async ({ tauriPage }) => {
+    await tauriPage.click('.rail-link:has-text("增强")')
+    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
+
+    const section = tauriPage.locator('section.panel-surface').filter({
+      has: tauriPage.locator('h2', { hasText: '补帧' }),
+    })
+
+    const fpsModeSelect = section.locator('label.field').filter({ hasText: '帧率模式' }).locator('select')
+    await expect(fpsModeSelect).toBeVisible()
+
+    // The interpolation "倍率" select has options '2x' / '4x', which uniquely
+    // distinguishes it from the "帧率模式" select (options '目标 FPS' / '倍率').
+    const multiSelect = section.locator('label.field').filter({
+      has: tauriPage.locator('option', { hasText: '2x' }),
+    }).locator('select')
+    const targetFpsInput = section.locator('label.field').filter({ hasText: '目标 FPS' }).locator('input')
+
+    // Detect current mode by checking which conditional field is visible.
+    const isMultiVisible = await multiSelect.isVisible().catch(() => false)
+
+    if (isMultiVisible) {
+      // Currently multi mode — switch to target
+      await fpsModeSelect.selectOption({ label: '目标 FPS' })
+      await expect(targetFpsInput).toBeVisible({ timeout: 5000 })
+      await expect(multiSelect).not.toBeVisible()
+
+      // Switch back to multi
+      await fpsModeSelect.selectOption({ label: '倍率' })
+      await expect(multiSelect).toBeVisible({ timeout: 5000 })
+      await expect(targetFpsInput).not.toBeVisible()
+    } else {
+      // Currently target mode — switch to multi
+      await fpsModeSelect.selectOption({ label: '倍率' })
+      await expect(multiSelect).toBeVisible({ timeout: 5000 })
+      await expect(targetFpsInput).not.toBeVisible()
+
+      // Switch back to target
+      await fpsModeSelect.selectOption({ label: '目标 FPS' })
+      await expect(targetFpsInput).toBeVisible({ timeout: 5000 })
+      await expect(multiSelect).not.toBeVisible()
+    }
+  })
+
+  test('switching backend to onnx reveals onnx model select and hides regular model', async ({ tauriPage }) => {
+    await tauriPage.click('.rail-link:has-text("增强")')
+    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
+
+    const section = tauriPage.locator('section.panel-surface').filter({
+      has: tauriPage.locator('h2', { hasText: '补帧' }),
+    })
+
+    const backendSelect = section.locator('label.field').filter({ hasText: '后端' }).locator('select')
+    await expect(backendSelect).toBeVisible()
+
+    const options = await backendSelect.locator('option').allTextContents()
+    const onnxOption = options.find((o) => o.toLowerCase().includes('onnx'))
+    if (!onnxOption) {
+      test.skip()
+      return
+    }
+
+    // Ensure we start from a non-ONNX backend so the swap is observable
+    const nonOnnxOption = options.find((o) => !o.toLowerCase().includes('onnx'))
+    if (nonOnnxOption) {
+      await backendSelect.selectOption({ label: nonOnnxOption })
+      await expect(section.locator('label.field').filter({ hasText: '模型' }).locator('select')).toBeVisible({ timeout: 5000 })
+    }
+
+    // Switch to ONNX backend
+    await backendSelect.selectOption({ label: onnxOption })
+
+    const onnxModelSelect = section.locator('label.field').filter({ hasText: 'ONNX 补帧模型' }).locator('select')
+    await expect(onnxModelSelect).toBeVisible({ timeout: 5000 })
+
+    // The regular "模型" select (label exactly "模型", not "ONNX 补帧模型")
+    // is hidden by v-if="!form.isOnnxBackend". Distinguish it by checking
+    // the option content — the regular model select contains options like
+    // '4.25', '4.6' etc., while the ONNX model select contains '未选择'.
+    const regularModelSelect = section.locator('label.field').filter({
+      has: tauriPage.locator('option', { hasText: /4\.25/ }),
+    }).locator('select')
+    await expect(regularModelSelect).not.toBeVisible()
+  })
 })
