@@ -1,0 +1,1 @@
+使用pwsh而非powershell来执行命令行

@@ -91,8 +91,8 @@ export async function launchTauriApp(opts: { cdpPort?: number; exePath?: string 
         // ignore
       }
       proc.kill('SIGKILL')
-      // 等待进程完全退出,避免端口冲突
-      await new Promise((r) => setTimeout(r, 500))
+      // 等待进程（包括 Python 子进程）完全退出并释放端口/文件句柄
+      await new Promise((r) => setTimeout(r, 3000))
     },
   }
 }

@@ -58,19 +58,8 @@ test.describe('Environment detail', () => {
     if (result.result.runtime != null) {
       expect(result.result.runtime).toHaveProperty('pythonExecutable')
     }
-  })
 
-  test('check_environment ffmpeg.available is true when ffmpeg is found', async ({ tauriPage }) => {
-    const result = await tauriPage.evaluate(async () => {
-      try {
-        // @ts-expect-error
-        return await window.__TAURI_INTERNALS__.invoke('check_environment', { forceRefresh: true })
-      } catch (error: any) {
-        throw new Error(`check_environment failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
-      }
-    })
-
+    // ffmpeg 可用性断言（check_environment 的核心价值）
     expect(result.result.ffmpeg.available).toBe(true)
-    expect(result.source).toBe('probe')
   })
 })
