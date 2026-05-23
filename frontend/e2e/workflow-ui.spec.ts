@@ -56,4 +56,34 @@ test.describe('Workflow module UI', () => {
     const algorithmSelect = section.locator('label.field').filter({ hasText: '算法' }).locator('select').first()
     await expect(algorithmSelect).toBeVisible({ timeout: 5000 })
   })
+
+  test('enabling anime reveals anime config fields', async ({ tauriPage }) => {
+    await tauriPage.click('.rail-link:has-text("增强")')
+    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
+
+    // Use `has: h2` for precise section matching.
+    const section = tauriPage.locator('section.panel-surface').filter({
+      has: tauriPage.locator('h2', { hasText: '动漫优化' }),
+    })
+    const toggle = section.locator('.panel-head label.toggle-chip input[type="checkbox"]').first()
+    await expect(toggle).toBeVisible()
+
+    // Ensure anime is off before enabling
+    if (await toggle.isChecked()) {
+      await toggle.click()
+      await expect(toggle).not.toBeChecked()
+    }
+
+    await toggle.click()
+    await expect(toggle).toBeChecked()
+
+    const profileSelect = section.locator('label.field').filter({ hasText: '预设' }).locator('select')
+    await expect(profileSelect).toBeVisible({ timeout: 5000 })
+
+    const denoiseInput = section.locator('label.field').filter({ hasText: '降噪' }).locator('input')
+    await expect(denoiseInput).toBeVisible({ timeout: 5000 })
+
+    const edgeBoostInput = section.locator('label.field').filter({ hasText: '边缘增强' }).locator('input')
+    await expect(edgeBoostInput).toBeVisible({ timeout: 5000 })
+  })
 })
