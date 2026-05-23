@@ -1,6 +1,14 @@
 import { test, expect } from './fixtures'
 
 test.describe('Encode module UI', () => {
+  // Wait for bootstrap environment check to finish before navigating.
+  // The encode module's codec list depends on envStore.checkResult.
+  test.beforeEach(async ({ tauriPage }) => {
+    await expect(
+      tauriPage.locator('.panel-actions button').filter({ hasText: '重新探测' }),
+    ).toBeVisible({ timeout: 30000 })
+  })
+
   test('switching codec select updates container options', async ({ tauriPage }) => {
     await tauriPage.click('.rail-link:has-text("编码")')
     await expect(tauriPage.locator('h2:has-text("编码与输出")')).toBeVisible({ timeout: 5000 })
