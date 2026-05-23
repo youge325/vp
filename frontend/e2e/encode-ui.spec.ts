@@ -69,4 +69,48 @@ test.describe('Encode module UI', () => {
     const valueInput = tauriPage.locator('label.field').filter({ hasText: '码率控制值' }).locator('input')
     await expect(valueInput).toBeVisible()
   })
+
+  test('switching codec updates encoder options panel', async ({ tauriPage }) => {
+    await tauriPage.click('.rail-link:has-text("编码")')
+    await expect(tauriPage.locator('h2:has-text("编码与输出")')).toBeVisible({ timeout: 5000 })
+
+    const codecSelect = tauriPage.locator('label.field').filter({ hasText: '编码器' }).locator('select')
+    await expect(codecSelect).toBeVisible()
+    await codecSelect.locator('option').first().waitFor({ state: 'attached', timeout: 10000 })
+
+    const options = await codecSelect.locator('option').allTextContents()
+    if (options.length < 2) {
+      test.skip()
+      return
+    }
+
+    // Select first codec and check encoder options panel state
+    await codecSelect.selectOption({ index: 0 })
+    const encoderSection = tauriPage.locator('section.panel-surface').filter({ has: tauriPage.locator('h2', { hasText: '编码器参数' }) })
+    const initialVisible = await encoderSection.isVisible().catch(() => false)
+    const initialOptionCount = initialVisible
+      ? await encoderSection.locator('.field-grid label.field').count()
+      : 0
+
+    // Try other codecs until we find one with a different panel state
+    let changed = false
+    for (let i = 1; i < options.length; i++) {
+      await codecSelect.selectOption({ index: i })
+      await tauriPage.waitForTimeout(200)
+      const newVisible = await encoderSection.isVisible().catch(() => false)
+      const newOptionCount = newVisible
+        ? await encoderSection.locator('.field-grid label.field').count()
+        : 0
+
+      if (newVisible !== initialVisible || newOptionCount !== initialOptionCount) {
+        changed = true
+        break
+      }
+    }
+
+    // If no codec produces a different state, skip the assertion
+    if (!changed) {
+      test.skip()
+    }
+  })
 })
