@@ -171,4 +171,59 @@ test.describe('Workflow module UI', () => {
     }).locator('select')
     await expect(regularModelSelect).not.toBeVisible()
   })
+
+  test('switching processOrder select updates the selected value', async ({ tauriPage }) => {
+    await tauriPage.click('.rail-link:has-text("增强")')
+    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
+
+    const section = tauriPage.locator('section.panel-surface').filter({
+      has: tauriPage.locator('h2', { hasText: '超分' }),
+    })
+
+    const processOrderSelect = section.locator('label.field').filter({ hasText: '处理顺序' }).locator('select')
+    await expect(processOrderSelect).toBeVisible()
+
+    const options = await processOrderSelect.locator('option').allTextContents()
+    expect(options.length).toBeGreaterThanOrEqual(2)
+
+    // Select the second option and verify
+    await processOrderSelect.selectOption({ index: 1 })
+    const selectedValue = await processOrderSelect.inputValue()
+    const optionValues = await processOrderSelect.locator('option').all()
+    expect(selectedValue).toBe(await optionValues[1].getAttribute('value'))
+
+    // Switch back to first option
+    await processOrderSelect.selectOption({ index: 0 })
+    const newValue = await processOrderSelect.inputValue()
+    expect(newValue).toBe(await optionValues[0].getAttribute('value'))
+  })
+
+  test('switching superResolution scale select updates the selected value', async ({ tauriPage }) => {
+    await tauriPage.click('.rail-link:has-text("增强")')
+    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
+
+    const section = tauriPage.locator('section.panel-surface').filter({
+      has: tauriPage.locator('h2', { hasText: '超分' }),
+    })
+
+    const scaleSelect = section.locator('label.field').filter({ hasText: '倍率' }).locator('select').first()
+    await expect(scaleSelect).toBeVisible()
+
+    const options = await scaleSelect.locator('option').allTextContents()
+    if (options.length < 2) {
+      test.skip()
+      return
+    }
+
+    // Switch to second option
+    await scaleSelect.selectOption({ index: 1 })
+    const selectedValue = await scaleSelect.inputValue()
+    expect(selectedValue).toBeTruthy()
+
+    // Switch back to first option
+    await scaleSelect.selectOption({ index: 0 })
+    const newValue = await scaleSelect.inputValue()
+    expect(newValue).toBeTruthy()
+    expect(newValue).not.toBe(selectedValue)
+  })
 })

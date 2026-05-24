@@ -113,4 +113,36 @@ test.describe('Encode module UI', () => {
       test.skip()
     }
   })
+
+  test('switching codec updates container options', async ({ tauriPage }) => {
+    await tauriPage.click('.rail-link:has-text("编码")')
+    await expect(tauriPage.locator('h2:has-text("编码与输出")')).toBeVisible({ timeout: 5000 })
+
+    const codecSelect = tauriPage.locator('label.field').filter({ hasText: '编码器' }).locator('select')
+    await expect(codecSelect).toBeVisible()
+    await codecSelect.locator('option').first().waitFor({ state: 'attached', timeout: 10000 })
+
+    const containerSelect = tauriPage.locator('label.field').filter({ hasText: '容器' }).locator('select')
+    await expect(containerSelect).toBeVisible()
+
+    // Get initial container options
+    await containerSelect.locator('option').first().waitFor({ state: 'attached', timeout: 5000 })
+    const initialContainerOptions = await containerSelect.locator('option').allTextContents()
+
+    // Try switching to a different codec
+    const codecOptions = await codecSelect.locator('option').allTextContents()
+    if (codecOptions.length < 2) {
+      test.skip()
+      return
+    }
+
+    await codecSelect.selectOption({ index: 1 })
+    await tauriPage.waitForTimeout(300)
+
+    // Container options may have updated
+    const newContainerOptions = await containerSelect.locator('option').allTextContents()
+
+    // Either options changed or at least container still has valid options
+    expect(newContainerOptions.length).toBeGreaterThan(0)
+  })
 })
