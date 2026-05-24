@@ -226,4 +226,40 @@ test.describe('Workflow module UI', () => {
     expect(newValue).toBeTruthy()
     expect(newValue).not.toBe(selectedValue)
   })
+
+  test('switching interpolation multi select updates the selected value', async ({ tauriPage }) => {
+    await tauriPage.click('.rail-link:has-text("增强")')
+    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
+
+    const section = tauriPage.locator('section.panel-surface').filter({
+      has: tauriPage.locator('h2', { hasText: '补帧' }),
+    })
+
+    // Ensure fpsMode is 'multi' so the "倍率" select is visible
+    const fpsModeSelect = section.locator('label.field').filter({ hasText: '帧率模式' }).locator('select')
+    await expect(fpsModeSelect).toBeVisible()
+    await fpsModeSelect.selectOption({ label: '倍率' })
+
+    const multiSelect = section.locator('label.field').filter({
+      has: tauriPage.locator('option', { hasText: '2x' }),
+    }).locator('select')
+    await expect(multiSelect).toBeVisible({ timeout: 5000 })
+
+    const options = await multiSelect.locator('option').allTextContents()
+    if (options.length < 2) {
+      test.skip()
+      return
+    }
+
+    // Switch to second option
+    await multiSelect.selectOption({ index: 1 })
+    const selectedValue = await multiSelect.inputValue()
+    expect(selectedValue).toBeTruthy()
+
+    // Switch back to first option
+    await multiSelect.selectOption({ index: 0 })
+    const newValue = await multiSelect.inputValue()
+    expect(newValue).toBeTruthy()
+    expect(newValue).not.toBe(selectedValue)
+  })
 })
