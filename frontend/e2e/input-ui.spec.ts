@@ -120,4 +120,61 @@ test.describe('Input module UI', () => {
 
     await expect(dropzone).toBeVisible()
   })
+
+  test('remove button deletes the media row from table', async ({ tauriPage }) => {
+    await tauriPage.click('.rail-link:has-text("输入")')
+    await expect(tauriPage.locator('h2:has-text("批量导入")')).toBeVisible({ timeout: 5000 })
+
+    // Inject two media items
+    const ok = await tauriPage.evaluate(() => {
+      const root = document.querySelector('#app')
+      if (!root) return false
+      const vueApp = (root as any).__vue_app__
+      if (!vueApp) return false
+      const pinia = vueApp.config?.globalProperties?.$pinia
+      if (!pinia?.state?.value?.media) return false
+
+      pinia.state.value.media.mediaItems = [
+        {
+          id: 'remove-test-1',
+          displayName: 'video-a.mp4',
+          inputPath: 'C:/tmp/video-a.mp4',
+          selected: false,
+          inspecting: false,
+          info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264', audioCodec: 'aac', duration: 60, bitrate: 5000 },
+          decodeConfig: { mode: 'software', hwaccel: '', decoder: 'software', options: {} },
+          encodeConfig: { codec: 'h264', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 23 }, options: {} },
+          workflowConfig: { fpsMode: 'multi', processOrder: 'super_resolution_then_interpolation', interpolation: { enabled: false }, superResolution: { enabled: false }, anime: { enabled: false }, preprocess: { enabled: false }, postprocess: { enabled: false } },
+          outputConfig: { outputDir: 'C:/tmp/output', openOnComplete: false, segmentFrames: 1000 },
+        },
+        {
+          id: 'remove-test-2',
+          displayName: 'video-b.mp4',
+          inputPath: 'C:/tmp/video-b.mp4',
+          selected: false,
+          inspecting: false,
+          info: { width: 1280, height: 720, fps: 24, videoCodec: 'hevc', audioCodec: 'aac', duration: 30, bitrate: 3000 },
+          decodeConfig: { mode: 'software', hwaccel: '', decoder: 'software', options: {} },
+          encodeConfig: { codec: 'h264', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 23 }, options: {} },
+          workflowConfig: { fpsMode: 'multi', processOrder: 'super_resolution_then_interpolation', interpolation: { enabled: false }, superResolution: { enabled: false }, anime: { enabled: false }, preprocess: { enabled: false }, postprocess: { enabled: false } },
+          outputConfig: { outputDir: 'C:/tmp/output', openOnComplete: false, segmentFrames: 1000 },
+        },
+      ]
+      pinia.state.value.media.activeItemId = 'remove-test-1'
+      return true
+    })
+    test.skip(!ok, 'Cannot access Pinia media store from evaluate')
+
+    await expect(tauriPage.locator('.table-wrap')).toBeVisible({ timeout: 5000 })
+    const rows = tauriPage.locator('.media-row')
+    await expect(rows).toHaveCount(2)
+
+    // Click remove on the first row
+    const firstRowRemove = rows.first().locator('button.table-action').filter({ hasText: '移除' })
+    await firstRowRemove.click()
+
+    // Now only one row should remain
+    await expect(rows).toHaveCount(1)
+    await expect(tauriPage.locator('.table-primary')).toHaveText('video-b.mp4')
+  })
 })

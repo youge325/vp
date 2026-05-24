@@ -42,4 +42,26 @@ test.describe('Home module content', () => {
       expect(value?.trim().length).toBeGreaterThan(0)
     }
   })
+
+  test('family cards have non-empty titles and values', async ({ tauriPage }) => {
+    await expect(tauriPage.locator('[data-testid="home-module"]')).toBeVisible({ timeout: 5000 })
+
+    // Wait for bootstrap environment check
+    await expect(
+      tauriPage.locator('.panel-actions button').filter({ hasText: '重新探测' }),
+    ).toBeVisible({ timeout: 30000 })
+
+    const summaryBlocks = tauriPage.locator('.summary-grid .summary-block')
+    await expect(summaryBlocks.first()).toBeVisible()
+    const count = await summaryBlocks.count()
+    expect(count).toBeGreaterThan(0)
+
+    for (let i = 0; i < count; i++) {
+      const block = summaryBlocks.nth(i)
+      const title = await block.locator('.summary-block-title').textContent()
+      expect(title?.trim().length).toBeGreaterThan(0)
+      const value = await block.locator('.summary-line').textContent()
+      expect(value?.trim().length).toBeGreaterThan(0)
+    }
+  })
 })
