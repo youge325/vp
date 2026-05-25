@@ -95,7 +95,7 @@ test.describe('Preset apply and loading', () => {
     await tauriPage.click('.rail-link:has-text("编码")')
     await expect(tauriPage.locator('h2:has-text("编码与输出")')).toBeVisible({ timeout: 5000 })
 
-    // Initially false (default before bootstrap)
+    // Read current value (bootstrap may have already set it to true)
     const flagBefore = await tauriPage.evaluate(() => {
       const root = document.querySelector('#app')
       if (!root) return null
@@ -104,19 +104,19 @@ test.describe('Preset apply and loading', () => {
       const pinia = vueApp.config?.globalProperties?.$pinia
       return pinia?.state?.value?.preset?.presetPersistenceReady ?? null
     })
-    expect(flagBefore).toBe(false)
+    expect(flagBefore).not.toBeNull()
 
-    // Toggle to true by directly mutating state
-    const toggled = await tauriPage.evaluate(() => {
+    // Toggle to the opposite value
+    const toggled = await tauriPage.evaluate((targetValue: boolean) => {
       const root = document.querySelector('#app')
       if (!root) return false
       const vueApp = (root as any).__vue_app__
       if (!vueApp) return false
       const pinia = vueApp.config?.globalProperties?.$pinia
       if (!pinia?.state?.value?.preset) return false
-      pinia.state.value.preset.presetPersistenceReady = true
+      pinia.state.value.preset.presetPersistenceReady = targetValue
       return true
-    })
+    }, !flagBefore)
     test.skip(!toggled, 'Cannot access Pinia preset store state from evaluate')
     if (!toggled) throw new Error('unreachable')
 
@@ -128,7 +128,7 @@ test.describe('Preset apply and loading', () => {
       const pinia = vueApp.config?.globalProperties?.$pinia
       return pinia?.state?.value?.preset?.presetPersistenceReady ?? null
     })
-    expect(flagAfter).toBe(true)
+    expect(flagAfter).toBe(!flagBefore)
   })
 
   test('draft preset is applied to newly created media items', async ({ tauriPage }) => {
