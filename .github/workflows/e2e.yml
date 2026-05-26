@@ -92,16 +92,6 @@ jobs:
         env:
           CI: true
 
-      - name: Ensure Tauri executable is in expected location for Playwright
-        run: |
-          $expectedDir = "frontend/src-tauri/target/release"
-          $expectedExe = "$expectedDir/vp-workbench.exe"
-          if (-not (Test-Path -LiteralPath $expectedExe)) {
-            New-Item -ItemType Directory -Force -Path $expectedDir | Out-Null
-            Copy-Item -LiteralPath "$env:CARGO_TARGET_DIR/release/vp-workbench.exe" -Destination $expectedExe -Force
-            Write-Host "Copied executable to expected location: $expectedExe"
-          }
-
       - name: Run Playwright e2e tests
         run: npx playwright test e2e/ --reporter=list
         working-directory: frontend
