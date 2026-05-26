@@ -26,30 +26,27 @@ jobs:
     defaults:
       run:
         shell: pwsh
+    env:
+      CARGO_TARGET_DIR: D:\ci-cache\cargo-target
+      CARGO_HOME: D:\ci-cache\cargo-home
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Cache Cargo build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            frontend/src-tauri/target
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('frontend/src-tauri/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
-
-      - name: Cache Vite build cache
-        uses: actions/cache@v4
-        with:
-          path: frontend/node_modules/.vite
-          key: ${{ runner.os }}-vite-${{ hashFiles('frontend/package-lock.json') }}
-          restore-keys: ${{ runner.os }}-vite-
-
-      - name: Install frontend dependencies
-        run: npm ci
+      - name: Install frontend dependencies (with Vite cache restore)
+        run: |
+          $viteCache = "node_modules/.vite"
+          $localViteCache = "D:/ci-cache/vite-cache"
+          if (Test-Path $viteCache) {
+            New-Item -ItemType Directory -Force -Path $localViteCache | Out-Null
+            robocopy $viteCache $localViteCache /MIR /R:1 /W:1 /MT:8 | Out-Null
+          }
+          npm ci
+          if (Test-Path $localViteCache) {
+            New-Item -ItemType Directory -Force -Path $viteCache | Out-Null
+            robocopy $localViteCache $viteCache /MIR /R:1 /W:1 /MT:8 | Out-Null
+          }
         working-directory: frontend
 
       # Phase D.5.2 — generated TS types are .gitignore'd; ts-rs only
