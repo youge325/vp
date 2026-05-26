@@ -13,6 +13,8 @@ jobs:
     env:
       HTTP_PROXY: http://127.0.0.1:7897
       HTTPS_PROXY: http://127.0.0.1:7897
+      CARGO_TARGET_DIR: D:\ci-cache\cargo-target
+      CARGO_HOME: D:\ci-cache\cargo-home
     defaults:
       run:
         shell: pwsh
@@ -28,8 +30,19 @@ jobs:
           rustc --version
           cargo --version
 
-      - name: Install frontend dependencies
-        run: npm ci
+      - name: Install frontend dependencies (with Vite cache restore)
+        run: |
+          $viteCache = "node_modules/.vite"
+          $localViteCache = "D:/ci-cache/vite-cache"
+          if (Test-Path $viteCache) {
+            New-Item -ItemType Directory -Force -Path $localViteCache | Out-Null
+            robocopy $viteCache $localViteCache /MIR /R:1 /W:1 /MT:8 | Out-Null
+          }
+          npm ci
+          if (Test-Path $localViteCache) {
+            New-Item -ItemType Directory -Force -Path $viteCache | Out-Null
+            robocopy $localViteCache $viteCache /MIR /R:1 /W:1 /MT:8 | Out-Null
+          }
         working-directory: frontend
 
       - name: Setup CI runtime environment
@@ -51,7 +64,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          $releaseDir = "frontend/src-tauri/target/release"
+          $releaseDir = "$env:CARGO_TARGET_DIR/release"
           $staging = "$releaseDir/portable"
           $exeSource = "$releaseDir/vp-workbench.exe"
 
