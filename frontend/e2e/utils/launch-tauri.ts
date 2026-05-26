@@ -40,7 +40,8 @@ function waitForPort(port: number, timeoutMs: number): Promise<void> {
 
 export async function launchTauriApp(opts: { cdpPort?: number; exePath?: string } = {}) {
   const cdpPort = opts.cdpPort ?? 9222
-  const exePath = opts.exePath ?? 'src-tauri/target/release/vp-workbench.exe'
+  const targetDir = process.env.CARGO_TARGET_DIR ?? 'src-tauri/target'
+  const exePath = opts.exePath ?? `${targetDir}/release/vp-workbench.exe`
 
   // 计算项目根目录（相对于 frontend/）
   const __dirname = dirname(fileURLToPath(import.meta.url))
