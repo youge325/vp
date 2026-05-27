@@ -91,6 +91,7 @@ jobs:
         working-directory: frontend
         env:
           CI: true
+          E2E_COVERAGE: 1
 
       - name: Run Playwright e2e tests
         run: npx playwright test e2e/ --reporter=list
@@ -102,3 +103,7 @@ jobs:
           VP_FFMPEG_PATH: D:\ffmpeg-2025-08-11-git-3542260376-full_build\bin\ffmpeg.exe
           VP_FFPROBE_PATH: D:\ffmpeg-2025-08-11-git-3542260376-full_build\bin\ffprobe.exe
           VP_RIFE_MODEL_DIR: D:\tmp\vp-e2e-models
+
+      - name: Generate E2E coverage report (nyc)
+        run: npx nyc report --reporter=text --reporter=html
+        working-directory: frontend
