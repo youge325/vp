@@ -1,10 +1,21 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import istanbul from 'vite-plugin-istanbul'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    ...(process.env.E2E_COVERAGE === '1'
+      ? [istanbul({
+          include: 'src/*',
+          exclude: ['node_modules', 'test/', '**/*.spec.ts', '**/__tests__/**', 'src/types/generated/**'],
+          extension: ['.js', '.ts', '.vue'],
+          forceBuildInstrument: true,
+        })]
+      : []),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

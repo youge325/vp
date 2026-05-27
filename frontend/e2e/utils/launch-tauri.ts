@@ -4,7 +4,7 @@ import { Socket } from 'net'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { tmpdir } from 'os'
-import { mkdirSync } from 'fs'
+import { mkdirSync, writeFileSync } from 'fs'
 
 function waitForPort(port: number, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -86,6 +86,19 @@ export async function launchTauriApp(opts: { cdpPort?: number; exePath?: string 
     context,
     page,
     cleanup: async () => {
+      try {
+        const coverage = await page.evaluate(() => (window as any).__coverage__)
+        if (coverage) {
+          const nycDir = resolve(projectRoot, 'frontend/.nyc_output')
+          mkdirSync(nycDir, { recursive: true })
+          writeFileSync(
+            resolve(nycDir, `coverage-${Date.now()}.json`),
+            JSON.stringify(coverage),
+          )
+        }
+      } catch {
+        // ignore — coverage not available when E2E_COVERAGE is off
+      }
       try {
         await browser.close()
       } catch {

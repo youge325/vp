@@ -25,6 +25,9 @@ src/types/generated/
 # Playwright test output
 test-results/
 
+# Istanbul / nyc coverage output
+.nyc_output/
+
 # Editor directories and files
 .vscode/
 .idea/
