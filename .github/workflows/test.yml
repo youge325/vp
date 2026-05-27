@@ -68,8 +68,8 @@ jobs:
           cargo test --lib --quiet
         working-directory: frontend/src-tauri
 
-      - name: Run frontend tests
-        run: npm run test
+      - name: Run frontend tests with coverage
+        run: npm run test -- --coverage
         working-directory: frontend
 
       # ``npm run build`` runs ``vue-tsc`` first, which is the strictest

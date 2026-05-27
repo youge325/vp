@@ -4,3 +4,16 @@ markers = [
     "paddle: tests that load PaddlePaddle (cudnn-incompatible with torch in same process)",
     "pytorch: tests that load PyTorch (cudnn-incompatible with paddle in same process)",
 ]
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/types/generated/*",
+]
+
+[tool.coverage.report]
+precision = 1
+skip_covered = false
+show_missing = true
