@@ -12,6 +12,11 @@ async function enableSection(tauriPage: any, sectionTitle: string) {
     await expect(toggle).toBeChecked()
   }
 
+  // Clean up any existing filter cards from previous tests
+  while ((await section.locator('.filter-card').count()) > 0) {
+    await section.locator('.filter-card').first().locator('.filter-delete').click()
+  }
+
   return section
 }
 
