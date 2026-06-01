@@ -1,0 +1,21 @@
+name: ARC Linux Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: vp-linux-arc
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Inspect runner
+        run: |
+          uname -a
+          whoami
+          pwd
+          ls -la
+
+      - name: Verify checkout
+        run: test -f README.md
