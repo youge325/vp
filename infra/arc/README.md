@@ -1,12 +1,12 @@
 # Docker Kubernetes 上的 Actions Runner Controller
 
-本目录保存本机 Docker Kubernetes 集群使用的 ARC runner scale set 配置。它会为当前仓库创建一个名为 `vp-linux-arc` 的 Linux 验证 runner：
+本目录保存 Docker Kubernetes 集群使用的 ARC runner scale set 配置。它为当前仓库创建 `vp-linux-arc` Linux runner，用来运行新增的 ARC 影子 workflows：
 
 ```text
 https://github.com/youge325/vp
 ```
 
-现有 Windows workflows 继续使用 `[self-hosted, windows]`，本配置不会迁移或修改它们。
+原有 Windows workflows 保持不变，继续负责现有 Windows CI 与 Windows portable release。新增的 `*-arc.yml` workflows 是并行验证链路，不替代原有 workflows；其中 `build-arc.yml` 和 `release-arc.yml` 只验证 Linux ARC release build，不上传 GitHub Release。
 
 ## 版本与命名
 
@@ -16,7 +16,47 @@ https://github.com/youge325/vp
 - Controller release：`arc`
 - Runner scale set release：`vp-linux-arc`
 - Runner scale set 名称：`vp-linux-arc`
+- Runner image：`ghcr.io/youge325/vp-arc-runner:latest`
 - Labels：`linux`、`arc`、`docker-k8s`
+- Warm runner：`minRunners: 1`
+
+## 自定义 Runner 镜像
+
+自定义镜像定义在 `infra/arc/runner-image/Dockerfile`。镜像基于 `ghcr.io/actions/actions-runner:latest`，预装 Node、Rust/Cargo、Python venv、FFmpeg、Playwright Chromium 依赖、Tauri Linux 构建依赖，并把模型复制到 `/opt/vp/models`。
+
+从仓库根目录构建并推送：
+
+```powershell
+docker buildx build `
+  --file infra/arc/runner-image/Dockerfile `
+  --tag ghcr.io/youge325/vp-arc-runner:latest `
+  --push `
+  .
+```
+
+如果只想先本地验证构建：
+
+```powershell
+docker buildx build `
+  --file infra/arc/runner-image/Dockerfile `
+  --tag ghcr.io/youge325/vp-arc-runner:latest `
+  .
+```
+
+如果 GHCR 推送权限暂时不可用，可先把本地镜像加载到 Docker Desktop kind 集群并依赖 `imagePullPolicy: IfNotPresent` 验证：
+
+```powershell
+kind load docker-image ghcr.io/youge325/vp-arc-runner:latest --name desktop
+```
+
+镜像默认提供这些路径给 ARC workflows 使用：
+
+```text
+VP_PYTHON_EXECUTABLE=/opt/vp/venv/bin/python
+VP_FFMPEG_PATH=/usr/bin/ffmpeg
+VP_FFPROBE_PATH=/usr/bin/ffprobe
+VP_RIFE_MODEL_DIR=/opt/vp/models
+```
 
 ## GitHub App
 
@@ -60,7 +100,7 @@ helm upgrade --install arc `
   --version 0.14.2
 ```
 
-安装 runner scale set：
+安装或升级 runner scale set：
 
 ```powershell
 helm upgrade --install vp-linux-arc `
@@ -97,7 +137,14 @@ kubectl get pods -n arc-runners
 kubectl get autoscalingrunnersets.actions.github.com -n arc-runners
 ```
 
-然后在 GitHub Actions 页面手动触发 `ARC Linux Smoke` workflow。job 分配后应出现一个 runner pod，job 结束后该 pod 会自动回收。
+静态检查新增 ARC workflows：
+
+```powershell
+rg -n "runs-on: vp-linux-arc" .github/workflows/*-arc.yml .github/workflows/arc-linux-smoke.yml
+rg -n "minRunners: 1" infra/arc/runner-scale-set-values.yaml
+```
+
+然后在 GitHub Actions 页面触发 `ARC Linux Smoke`，并观察新增的 `Test Frontend ARC`、`Test Backend ARC`、`End-to-End Tests ARC`、`Build ARC`、`Release ARC` 影子 workflows。
 
 ## 排障
 
@@ -108,6 +155,8 @@ kubectl logs -n arc-systems deploy/arc-gha-rs-controller -c manager
 kubectl get pods -n arc-runners
 kubectl describe autoscalingrunnerset -n arc-runners vp-linux-arc
 ```
+
+如果 runner pod 无法拉取自定义镜像，先确认 GHCR 镜像存在且集群有权限读取。公开镜像通常不需要额外 secret；私有镜像需要为 `arc-runners` namespace 配置 `imagePullSecrets`。
 
 如果 listener 无法认证，请用正确的 App ID、installation ID 和私钥重新创建 `arc-github-app` secret。不要提交这些值。
 

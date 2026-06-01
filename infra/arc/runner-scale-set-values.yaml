@@ -1,4 +1,4 @@
-# Values for the Linux ARC smoke runner scale set.
+# Values for the Linux ARC shadow workflow runner scale set.
 # Chart: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
 # Version: 0.14.2
 
@@ -11,7 +11,7 @@ scaleSetLabels:
   - arc
   - docker-k8s
 
-minRunners: 0
+minRunners: 1
 maxRunners: 2
 
 controllerServiceAccount:
@@ -22,6 +22,7 @@ template:
   spec:
     containers:
       - name: runner
-        image: ghcr.io/actions/actions-runner:latest
+        image: ghcr.io/youge325/vp-arc-runner:latest
+        imagePullPolicy: IfNotPresent
         command:
           - /home/runner/run.sh

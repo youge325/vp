@@ -1,0 +1,72 @@
+name: Test Frontend ARC
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/app/**'
+      - 'frontend/**'
+      - '!frontend/e2e/**'
+      - '.github/workflows/test.yml'
+      - '.github/workflows/test-arc.yml'
+      - 'infra/arc/**'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/app/**'
+      - 'frontend/**'
+      - '!frontend/e2e/**'
+      - '.github/workflows/test.yml'
+      - '.github/workflows/test-arc.yml'
+      - 'infra/arc/**'
+
+permissions:
+  contents: read
+
+jobs:
+  test-frontend-arc:
+    runs-on: vp-linux-arc
+    env:
+      CARGO_TARGET_DIR: /tmp/vp-cargo-target
+      VP_FFMPEG_PATH: /usr/bin/ffmpeg
+      VP_FFPROBE_PATH: /usr/bin/ffprobe
+      VP_RIFE_MODEL_DIR: /opt/vp/models
+      VP_PYTHON_EXECUTABLE: /opt/vp/venv/bin/python
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Verify ARC runtime
+        run: |
+          node --version
+          npm --version
+          python --version
+          rustc --version
+          cargo --version
+          ffmpeg -version | head -n 1
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Regenerate TypeScript types from Rust (ts-rs)
+        run: |
+          mkdir -p ../dist
+          cargo test --lib --quiet
+        working-directory: frontend/src-tauri
+
+      - name: Run frontend tests with coverage
+        run: npm run test -- --coverage
+        working-directory: frontend
+
+      - name: Type-check frontend (vue-tsc + vite build)
+        run: npm run build
+        working-directory: frontend
+
+      - name: TaskErrorCode three-layer consistency check
+        run: python scripts/check_error_code_drift.py
