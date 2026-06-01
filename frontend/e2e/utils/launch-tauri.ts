@@ -3,7 +3,7 @@ import { spawn } from 'child_process'
 import { Socket } from 'net'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { tmpdir } from 'os'
+import { platform, tmpdir } from 'os'
 import { mkdirSync, writeFileSync } from 'fs'
 
 function waitForPort(port: number, timeoutMs: number): Promise<void> {
@@ -41,7 +41,10 @@ function waitForPort(port: number, timeoutMs: number): Promise<void> {
 export async function launchTauriApp(opts: { cdpPort?: number; exePath?: string } = {}) {
   const cdpPort = opts.cdpPort ?? 9222
   const targetDir = process.env.CARGO_TARGET_DIR ?? 'src-tauri/target'
-  const exePath = opts.exePath ?? `${targetDir}/release/vp-workbench.exe`
+  const isWindows = platform() === 'win32'
+  const defaultExeName = isWindows ? 'vp-workbench.exe' : 'vp-workbench'
+  const exePath =
+    opts.exePath ?? process.env.VP_TAURI_EXE_PATH ?? `${targetDir}/release/${defaultExeName}`
 
   // 计算项目根目录（相对于 frontend/）
   const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -52,17 +55,29 @@ export async function launchTauriApp(opts: { cdpPort?: number; exePath?: string 
   const instanceLogDir = resolve(tmpdir(), `vp-e2e-logs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
   mkdirSync(instanceLogDir, { recursive: true })
 
+  const browserDebugEnv = isWindows
+    ? {
+        WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
+          `--remote-debugging-port=${cdpPort} --remote-allow-origins=*`,
+      }
+    : { WEBKIT_INSPECTOR_SERVER: `127.0.0.1:${cdpPort}` }
+
   const env = {
     ...process.env,
+    ...browserDebugEnv,
     VP_E2E_HEADLESS: '1',
     VP_LOG_DIR: instanceLogDir,
-    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${cdpPort} --remote-allow-origins=*`,
     // release 模式下 Tauri 需要这些环境变量来定位资源
     VP_BACKEND_DIR: resolve(projectRoot, 'backend'),
     VP_RUNTIME_ROOT: resolve(projectRoot, 'frontend/src-tauri/resources/runtime'),
-    VP_FFMPEG_PATH: 'D:/ffmpeg-2025-08-11-git-3542260376-full_build/bin/ffmpeg.exe',
-    VP_FFPROBE_PATH: 'D:/ffmpeg-2025-08-11-git-3542260376-full_build/bin/ffprobe.exe',
-    VP_RIFE_MODEL_DIR: 'D:/tmp/vp-e2e-models',
+    VP_FFMPEG_PATH:
+      process.env.VP_FFMPEG_PATH
+      ?? (isWindows ? 'D:/ffmpeg-2025-08-11-git-3542260376-full_build/bin/ffmpeg.exe' : '/usr/bin/ffmpeg'),
+    VP_FFPROBE_PATH:
+      process.env.VP_FFPROBE_PATH
+      ?? (isWindows ? 'D:/ffmpeg-2025-08-11-git-3542260376-full_build/bin/ffprobe.exe' : '/usr/bin/ffprobe'),
+    VP_RIFE_MODEL_DIR:
+      process.env.VP_RIFE_MODEL_DIR ?? (isWindows ? 'D:/tmp/vp-e2e-models' : '/opt/vp/models'),
   }
 
   // 从 frontend/ 目录启动，确保 Tauri 的相对路径解析正确
@@ -70,7 +85,7 @@ export async function launchTauriApp(opts: { cdpPort?: number; exePath?: string 
 
   const proc = spawn(exePath, [], { env, cwd, detached: false })
 
-  // 等待 CDP 端口就绪
+  // 等待 webview 调试端口就绪
   await waitForPort(cdpPort, 30000)
 
   // Playwright attach
