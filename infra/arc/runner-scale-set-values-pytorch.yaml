@@ -1,0 +1,29 @@
+# Values for the Linux ARC PyTorch runner scale set.
+# Chart: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+# Version: 0.14.2
+
+githubConfigUrl: "https://github.com/youge325/vp"
+githubConfigSecret: "arc-github-app"
+
+runnerScaleSetName: "vp-linux-arc-pytorch"
+scaleSetLabels:
+  - linux
+  - arc
+  - docker-k8s
+  - pytorch
+
+minRunners: 1
+maxRunners: 2
+
+controllerServiceAccount:
+  namespace: arc-systems
+  name: arc-gha-rs-controller
+
+template:
+  spec:
+    containers:
+      - name: runner
+        image: ghcr.io/youge325/vp-arc-runner-pytorch:latest
+        imagePullPolicy: IfNotPresent
+        command:
+          - /home/runner/run.sh
