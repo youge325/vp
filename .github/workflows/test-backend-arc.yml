@@ -25,7 +25,7 @@ permissions:
 
 jobs:
   test-backend-pytorch-arc:
-    runs-on: vp-linux-arc
+    runs-on: vp-linux-arc-pytorch
     env:
       PYTHONIOENCODING: utf-8
       VP_TEST_BACKEND: pytorch
@@ -50,7 +50,7 @@ jobs:
         working-directory: backend
 
   test-backend-paddle-arc:
-    runs-on: vp-linux-arc
+    runs-on: vp-linux-arc-paddle
     env:
       PYTHONIOENCODING: utf-8
       VP_TEST_BACKEND: paddle

@@ -1,5 +1,12 @@
 **
 !backend/
+backend/**
 !backend/requirements.txt
 !backend/models/
 !backend/models/**
+!frontend/
+frontend/**
+!frontend/src-tauri/
+frontend/src-tauri/**
+!frontend/src-tauri/Cargo.toml
+!frontend/src-tauri/Cargo.lock
