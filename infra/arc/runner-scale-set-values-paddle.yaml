@@ -21,6 +21,8 @@ controllerServiceAccount:
 
 template:
   spec:
+    nodeSelector:
+      vp.arc/runner-image: paddle
     containers:
       - name: runner
         image: ghcr.io/youge325/vp-arc-runner-paddle:latest

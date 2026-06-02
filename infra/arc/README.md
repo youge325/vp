@@ -16,6 +16,10 @@ https://github.com/youge325/vp
 - Controller release：`arc`
 - Runner scale set releases：`vp-linux-arc`、`vp-linux-arc-pytorch`、`vp-linux-arc-paddle`
 - Runner scale set 名称：`vp-linux-arc`、`vp-linux-arc-pytorch`、`vp-linux-arc-paddle`
+- Runner node selectors：
+  - `vp-linux-arc` -> `vp.arc/runner-image=common`
+  - `vp-linux-arc-pytorch` -> `vp.arc/runner-image=pytorch`
+  - `vp-linux-arc-paddle` -> `vp.arc/runner-image=paddle`
 - Runner images：
   - `ghcr.io/youge325/vp-arc-runner:latest`
   - `ghcr.io/youge325/vp-arc-runner-pytorch:latest`
@@ -77,12 +81,24 @@ docker buildx build --target paddle `
   --tag ghcr.io/youge325/vp-arc-runner-paddle:latest .
 ```
 
-如果 GHCR 推送权限暂时不可用，可先把本地镜像加载到 Docker Desktop kind 集群并依赖 `imagePullPolicy: IfNotPresent` 验证：
+如果 GHCR 推送权限暂时不可用，可先把本地镜像按 worker 加载到 Docker Desktop kind 集群并依赖 `imagePullPolicy: IfNotPresent` 验证。不要把所有镜像加载到所有 worker；每个 worker 只加载自己负责的镜像：
 
 ```powershell
-kind load docker-image ghcr.io/youge325/vp-arc-runner:latest --name desktop
-kind load docker-image ghcr.io/youge325/vp-arc-runner-pytorch:latest --name desktop
-kind load docker-image ghcr.io/youge325/vp-arc-runner-paddle:latest --name desktop
+kubectl label node desktop-worker vp.arc/runner-image=common --overwrite
+kubectl label node desktop-worker3 vp.arc/runner-image=pytorch --overwrite
+kubectl label node desktop-worker2 vp.arc/runner-image=paddle --overwrite
+
+kind load docker-image ghcr.io/youge325/vp-arc-runner:latest --name desktop --nodes desktop-worker
+kind load docker-image ghcr.io/youge325/vp-arc-runner-pytorch:latest --name desktop --nodes desktop-worker3
+kind load docker-image ghcr.io/youge325/vp-arc-runner-paddle:latest --name desktop --nodes desktop-worker2
+```
+
+如果 `kind load` 需要的临时 tar 占用过高，可以逐个 worker 通过管道直接导入到目标节点的 containerd，仍然一次只导入一个镜像：
+
+```powershell
+docker save ghcr.io/youge325/vp-arc-runner:latest | docker exec --privileged -i desktop-worker ctr --namespace=k8s.io images import --all-platforms --digests --snapshotter=overlayfs -
+docker save ghcr.io/youge325/vp-arc-runner-pytorch:latest | docker exec --privileged -i desktop-worker3 ctr --namespace=k8s.io images import --all-platforms --digests --snapshotter=overlayfs -
+docker save ghcr.io/youge325/vp-arc-runner-paddle:latest | docker exec --privileged -i desktop-worker2 ctr --namespace=k8s.io images import --all-platforms --digests --snapshotter=overlayfs -
 ```
 
 镜像默认提供这些路径给 ARC workflows 使用：
@@ -194,9 +210,11 @@ helm template vp-linux-arc-paddle `
 
 ```powershell
 helm list -A
+kubectl get nodes --show-labels
 kubectl get pods -n arc-systems
 kubectl get pods -n arc-runners
 kubectl get autoscalingrunnersets.actions.github.com -n arc-runners
+kubectl get pods -n arc-runners -o wide
 ```
 
 静态检查新增 ARC workflows：
