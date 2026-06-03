@@ -7,6 +7,7 @@ import { platform, tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 
 const driverPort = Number(process.env.VP_TAURI_DRIVER_PORT ?? '4444')
+const nativeDriverPort = Number(process.env.VP_TAURI_NATIVE_DRIVER_PORT ?? '0')
 let driverProcess: ChildProcessWithoutNullStreams | undefined
 const temporaryRunDirs: string[] = []
 
@@ -76,7 +77,7 @@ const waitForPort = async (port: number, host = '127.0.0.1', timeout = 15000) =>
     if (await canConnect(port, host)) {
       return
     }
-        await delay(100)
+    await delay(100)
   }
   throw new Error(`tauri-driver did not listen on ${host}:${port}`)
 }
@@ -149,6 +150,9 @@ export const config = {
     }
 
     const driverArgs = ['--port', String(driverPort)]
+    if (nativeDriverPort > 0) {
+      driverArgs.push('--native-port', String(nativeDriverPort))
+    }
     if (isWindows) {
       const { download } = await import('edgedriver')
       appEnv.VP_EDGE_DRIVER_PATH = appEnv.VP_EDGE_DRIVER_PATH ?? await download()

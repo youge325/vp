@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { existsSync, statSync, rmSync } from 'fs'
+import { join } from 'node:path'
 
 function buildTaskRequest(
   inputPath: string,
@@ -74,7 +75,7 @@ test.describe('Workflow config variants', () => {
 
   test('format_conversion with fpsMode target produces output file', async ({ tauriPage }) => {
     const request = buildTaskRequest(inputPath, outputDir, { fpsMode: 'target' })
-    const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
+    const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
     await removeIfExists(outFile)
 
     await tauriPage.evaluate(async (req) => {
@@ -94,7 +95,7 @@ test.describe('Workflow config variants', () => {
     const request = buildTaskRequest(inputPath, outputDir, {
       processOrder: 'frame_interpolation_then_super_resolution',
     })
-    const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
+    const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
     await removeIfExists(outFile)
 
     await tauriPage.evaluate(async (req) => {

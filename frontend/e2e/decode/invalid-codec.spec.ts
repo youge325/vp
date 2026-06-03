@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { existsSync, rmSync } from 'fs'
+import { join } from 'node:path'
 
 function buildTaskRequest(
   inputPath: string,
@@ -58,7 +59,7 @@ async function removeIfExists(outputPath: string, maxWaitMs: number = 15000): Pr
 test.describe('Invalid codec rejection', () => {
   const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
   const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
-  const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
+  const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
 
   test('start_task with nonexistent codec returns structured task-error event', async ({ tauriPage }) => {
     await removeIfExists(outFile)

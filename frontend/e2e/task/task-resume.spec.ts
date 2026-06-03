@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { existsSync } from 'fs'
+import { join } from 'node:path'
 
 function buildTaskRequest(inputPath: string, outputDir: string) {
   return {
@@ -76,7 +77,7 @@ test.describe('Task resume state', () => {
     const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
     const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
     const request = buildTaskRequest(inputPath, outputDir)
-    const outputPath = `${outputDir}\\vp-e2e-test_processed.mp4`
+    const outputPath = join(outputDir, 'vp-e2e-test_processed.mp4')
 
     // Ensure output file exists by running a task and waiting for completion
     // via the task-completed event to avoid race with force-fresh deletion.
@@ -149,7 +150,7 @@ test.describe('Task resume state', () => {
   test('start_task with resumeMode auto and existing output emits task-error', async ({ tauriPage }) => {
     const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
     const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
-    const outputPath = `${outputDir}\\vp-e2e-test_processed.mp4`
+    const outputPath = join(outputDir, 'vp-e2e-test_processed.mp4')
 
     // Step 1: Produce output file with force-fresh
     await tauriPage.evaluate(async (req) => {
