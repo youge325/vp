@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { existsSync, statSync } from 'fs'
+import { join } from 'node:path'
 
 test.describe('VP Workbench e2e smoke', () => {
   test('app launches and home module renders', async ({ tauriPage }) => {
@@ -102,7 +103,7 @@ test.describe('VP Workbench e2e smoke', () => {
     }, taskRequest)
 
     // 等待输出文件出现（最多 60s）
-    const outputPath = `${outputDir}\\vp-e2e-test_processed.mp4`
+    const outputPath = join(outputDir, 'vp-e2e-test_processed.mp4')
     let outputSize = 0
     for (let i = 0; i < 120; i++) {
       if (existsSync(outputPath)) {

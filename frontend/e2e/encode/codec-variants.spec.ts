@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { existsSync, statSync } from 'fs'
+import { join } from 'node:path'
 
 function buildTaskRequest(
   inputPath: string,
@@ -105,7 +106,7 @@ test.describe('Codec and container variants', () => {
 
     await runTaskAndWait(tauriPage, request)
 
-    const outputPath = `${outputDir}\\vp-e2e-test_processed.mkv`
+    const outputPath = join(outputDir, 'vp-e2e-test_processed.mkv')
     let found = false
     for (let i = 0; i < 120; i++) {
       if (existsSync(outputPath) && statSync(outputPath).size > 0) {
@@ -125,7 +126,7 @@ test.describe('Codec and container variants', () => {
 
     await runTaskAndWait(tauriPage, request)
 
-    const outputPath = `${outputDir}\\vp-e2e-test_processed.mp4`
+    const outputPath = join(outputDir, 'vp-e2e-test_processed.mp4')
     let found = false
     for (let i = 0; i < 120; i++) {
       if (existsSync(outputPath) && statSync(outputPath).size > 0) {

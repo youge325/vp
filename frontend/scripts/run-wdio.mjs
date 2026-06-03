@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { platform } from 'node:os'
+import net from 'node:net'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const rootDir = resolve(scriptDir, '..')
@@ -18,6 +19,40 @@ if (showIndex !== -1) {
 }
 
 const wdioArgs = ['run', './wdio.conf.ts', ...args]
+
+const canListenOnPort = (port, host = '127.0.0.1') => new Promise((resolveListen) => {
+  const server = net.createServer()
+  server.once('error', () => {
+    resolveListen(false)
+  })
+  server.listen(port, host, () => {
+    server.close(() => {
+      resolveListen(true)
+    })
+  })
+})
+
+const findAvailablePort = async (usedPorts) => {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const port = 30000 + Math.floor(Math.random() * 10000)
+    if (usedPorts.has(port)) {
+      continue
+    }
+    if (await canListenOnPort(port)) {
+      usedPorts.add(port)
+      return port
+    }
+  }
+  throw new Error('unable to resolve available WebDriver port')
+}
+
+const reservedPorts = new Set()
+if (!process.env.VP_TAURI_DRIVER_PORT || Number(process.env.VP_TAURI_DRIVER_PORT) <= 0) {
+  process.env.VP_TAURI_DRIVER_PORT = String(await findAvailablePort(reservedPorts))
+}
+if (!process.env.VP_TAURI_NATIVE_DRIVER_PORT || Number(process.env.VP_TAURI_NATIVE_DRIVER_PORT) <= 0) {
+  process.env.VP_TAURI_NATIVE_DRIVER_PORT = String(await findAvailablePort(reservedPorts))
+}
 
 const run = (command, commandArgs) => {
   const result = spawnSync(command, commandArgs, {

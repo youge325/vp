@@ -1,4 +1,6 @@
 import { test, expect } from '../fixtures'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 test.describe('Error handling', () => {
   test('inspect_video on missing file returns structured error', async ({ tauriPage }) => {
@@ -64,7 +66,7 @@ test.describe('Error handling', () => {
 
   test('inspect_video on non-video file returns structured error', async ({ tauriPage }) => {
     const { writeFileSync, unlinkSync } = await import('fs')
-    const notAVideo = 'C:/tmp/vp-e2e-not-a-video.txt'
+    const notAVideo = join(tmpdir(), 'vp-e2e-not-a-video.txt')
     writeFileSync(notAVideo, 'this is not a video file')
 
     const error = await tauriPage.evaluate(async (path: string) => {

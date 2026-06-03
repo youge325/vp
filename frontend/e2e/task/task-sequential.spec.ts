@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { existsSync, statSync, rmSync } from 'fs'
+import { join } from 'node:path'
 
 function buildTaskRequest(inputPath: string, outputDir: string, overrides: { encodeConfig?: Record<string, unknown> } = {}) {
   return {
@@ -106,7 +107,7 @@ async function removeIfExists(outputPath: string, maxWaitMs: number = 15000): Pr
 test.describe('Sequential task execution', () => {
   const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
   const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
-  const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
+  const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
 
   test('two consecutive start_task calls both succeed after state reset', async ({ tauriPage }) => {
     // Clean up any existing output

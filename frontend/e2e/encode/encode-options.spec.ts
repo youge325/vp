@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { existsSync, statSync, rmSync } from 'fs'
+import { join } from 'node:path'
 
 function buildTaskRequest(
   inputPath: string,
@@ -76,7 +77,7 @@ test.describe('Encode options', () => {
     const request = buildTaskRequest(inputPath, outputDir, {
       encodeConfig: { rateControl: { mode: 'qp', value: 23 } },
     })
-    const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
+    const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
     await removeIfExists(outFile)
 
     await tauriPage.evaluate(async (req) => {
@@ -96,7 +97,7 @@ test.describe('Encode options', () => {
     const request = buildTaskRequest(inputPath, outputDir, {
       encodeConfig: { rateControl: { mode: 'bitrate', value: '2000k' } },
     })
-    const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
+    const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
     await removeIfExists(outFile)
 
     await tauriPage.evaluate(async (req) => {
@@ -116,7 +117,7 @@ test.describe('Encode options', () => {
     const request = buildTaskRequest(inputPath, outputDir, {
       encodeConfig: { keepAudio: false },
     })
-    const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
+    const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
     await removeIfExists(outFile)
 
     await tauriPage.evaluate(async (req) => {
@@ -136,7 +137,7 @@ test.describe('Encode options', () => {
     const request = buildTaskRequest(inputPath, outputDir, {
       encodeConfig: { options: { preset: 'fast' } },
     })
-    const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
+    const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
     await removeIfExists(outFile)
 
     await tauriPage.evaluate(async (req) => {
