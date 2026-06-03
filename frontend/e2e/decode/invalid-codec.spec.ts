@@ -34,13 +34,34 @@ function buildTaskRequest(
   }
 }
 
+async function removeIfExists(outputPath: string, maxWaitMs: number = 15000): Promise<void> {
+  const interval = 250
+  const deadline = Date.now() + maxWaitMs
+  let lastError: unknown
+
+  while (Date.now() <= deadline) {
+    if (!existsSync(outputPath)) {
+      return
+    }
+    try {
+      rmSync(outputPath)
+      return
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, interval))
+    }
+  }
+
+  throw lastError
+}
+
 test.describe('Invalid codec rejection', () => {
   const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
   const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
   const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
 
   test('start_task with nonexistent codec returns structured task-error event', async ({ tauriPage }) => {
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     await tauriPage.evaluate(async () => {
       // @ts-expect-error
@@ -112,7 +133,7 @@ test.describe('Invalid codec rejection', () => {
     const request = buildTaskRequest(inputPath, outputDir, 'h264')
     ;(request as any).encodeConfig.container = 'invalid_container_xyz'
 
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     await tauriPage.evaluate(async () => {
       // @ts-expect-error

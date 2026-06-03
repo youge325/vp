@@ -64,8 +64,11 @@ pub fn resolve_runtime_paths<R: Runtime>(
 
     let ffmpeg_path = ffmpeg::resolve_ffmpeg_path(runtime_root.as_ref(), resource_dir.as_ref());
     let ffprobe_path = ffmpeg::resolve_ffprobe_path(runtime_root.as_ref(), resource_dir.as_ref());
-    let model_dir =
-        model::resolve_model_dir(runtime_root.as_ref(), resource_dir.as_ref(), &workspace_root);
+    let model_dir = model::resolve_model_dir(
+        runtime_root.as_ref(),
+        resource_dir.as_ref(),
+        &workspace_root,
+    );
     let tensorrt_dir = model::resolve_tensorrt_dir(runtime_root.as_ref(), resource_dir.as_ref());
 
     require_release_bundle_artifacts(&ffmpeg_path, &ffprobe_path, &model_dir)?;
@@ -79,15 +82,19 @@ pub fn resolve_runtime_paths<R: Runtime>(
     //   错误链路里看不到"为什么是这个路径",诊断成本高。release 下
     //   ``app_local_data_dir`` 本就稳定指向 ``%LOCALAPPDATA%\<bundle-id>``,
     //   失败大概率是 Tauri 初始化破损,fail-loudly 反而干净。
-    let app_data_dir = match app.path().app_local_data_dir() {
-        Ok(path) => path,
-        Err(error) => {
-            if cfg!(debug_assertions) {
-                workspace_root.join(".tmp").join("app-data")
-            } else {
-                return Err(ShellError::RuntimeResolution(format!(
-                    "Unable to resolve app local data dir: {error}",
-                )));
+    let app_data_dir = if let Some(path) = helpers::env_path("VP_APP_DATA_DIR") {
+        path
+    } else {
+        match app.path().app_local_data_dir() {
+            Ok(path) => path,
+            Err(error) => {
+                if cfg!(debug_assertions) {
+                    workspace_root.join(".tmp").join("app-data")
+                } else {
+                    return Err(ShellError::RuntimeResolution(format!(
+                        "Unable to resolve app local data dir: {error}",
+                    )));
+                }
             }
         }
     };
@@ -134,15 +141,10 @@ fn resolve_backend_dir(
         resource_backend,
         dev_backend_dir,
     ])
-    .ok_or_else(|| {
-        ShellError::RuntimeResolution("Unable to locate backend directory.".to_string())
-    })
+    .ok_or_else(|| ShellError::RuntimeResolution("Unable to locate backend directory.".to_string()))
 }
 
-fn resolve_runtime_root(
-    frontend_dir: &Path,
-    resource_dir: Option<&PathBuf>,
-) -> Option<PathBuf> {
+fn resolve_runtime_root(frontend_dir: &Path, resource_dir: Option<&PathBuf>) -> Option<PathBuf> {
     let dev_runtime_root = if cfg!(debug_assertions) {
         Some(
             frontend_dir

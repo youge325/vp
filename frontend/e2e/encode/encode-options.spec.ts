@@ -47,6 +47,27 @@ async function waitForOutputFile(outputPath: string, maxWaitMs: number = 60000):
   return false
 }
 
+async function removeIfExists(outputPath: string, maxWaitMs: number = 15000): Promise<void> {
+  const interval = 250
+  const deadline = Date.now() + maxWaitMs
+  let lastError: unknown
+
+  while (Date.now() <= deadline) {
+    if (!existsSync(outputPath)) {
+      return
+    }
+    try {
+      rmSync(outputPath)
+      return
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, interval))
+    }
+  }
+
+  throw lastError
+}
+
 test.describe('Encode options', () => {
   const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
   const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
@@ -56,7 +77,7 @@ test.describe('Encode options', () => {
       encodeConfig: { rateControl: { mode: 'qp', value: 23 } },
     })
     const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -76,7 +97,7 @@ test.describe('Encode options', () => {
       encodeConfig: { rateControl: { mode: 'bitrate', value: '2000k' } },
     })
     const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -96,7 +117,7 @@ test.describe('Encode options', () => {
       encodeConfig: { keepAudio: false },
     })
     const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -116,7 +137,7 @@ test.describe('Encode options', () => {
       encodeConfig: { options: { preset: 'fast' } },
     })
     const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     await tauriPage.evaluate(async (req) => {
       try {

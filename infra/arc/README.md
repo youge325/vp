@@ -29,7 +29,7 @@ https://github.com/youge325/vp
 
 ## 自定义 Runner 镜像
 
-自定义镜像定义在 `infra/arc/runner-image/Dockerfile`。镜像基于 `ghcr.io/actions/actions-runner:latest`，预装 Node、Rust/Cargo、Python venv、FFmpeg、Playwright Chromium 依赖、Tauri Linux 构建依赖，并把模型复制到 `/opt/vp/models`。镜像按 TUNA Ubuntu 24.04 DEB822 源格式配置 apt，Python venv 默认使用清华 PyPI 镜像源，Cargo 使用 USTC crates.io sparse registry 镜像。
+自定义镜像定义在 `infra/arc/runner-image/Dockerfile`。镜像基于 `ghcr.io/actions/actions-runner:latest`，预装 Node、Rust/Cargo、Python venv、FFmpeg、WebKitGTK WebDriver、Tauri WebDriver、Tauri Linux 构建依赖，并把模型复制到 `/opt/vp/models`。镜像按 TUNA Ubuntu 24.04 DEB822 源格式配置 apt，Python venv 默认使用清华 PyPI 镜像源，Cargo 使用 USTC crates.io sparse registry 镜像。
 
 镜像里的包源访问策略：
 
@@ -42,7 +42,7 @@ https://github.com/youge325/vp
 
 Dockerfile 提供三个 build targets：
 
-- `common`：通用 runner，安装 backend 基础依赖、`onnxruntime-gpu`、ONNX、OpenCV、Playwright、Rust/Cargo。
+- `common`：通用 runner，安装 backend 基础依赖、`onnxruntime-gpu`、ONNX、OpenCV、WebKitGTK WebDriver、Tauri WebDriver、Rust/Cargo。
 - `pytorch`：继承 `common`，使用 `pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu132` 安装 PyTorch。
 - `paddle`：继承 `common`，使用 `python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu129/` 安装 Paddle。
 
@@ -99,6 +99,19 @@ kind load docker-image ghcr.io/youge325/vp-arc-runner-paddle:latest --name deskt
 docker save ghcr.io/youge325/vp-arc-runner:latest | docker exec --privileged -i desktop-worker ctr --namespace=k8s.io images import --all-platforms --digests --snapshotter=overlayfs -
 docker save ghcr.io/youge325/vp-arc-runner-pytorch:latest | docker exec --privileged -i desktop-worker3 ctr --namespace=k8s.io images import --all-platforms --digests --snapshotter=overlayfs -
 docker save ghcr.io/youge325/vp-arc-runner-paddle:latest | docker exec --privileged -i desktop-worker2 ctr --namespace=k8s.io images import --all-platforms --digests --snapshotter=overlayfs -
+```
+
+若当前 `desktop` kind 集群还没有 Paddle 专用 worker，可运行脚本新增 `desktop-worker2`，只给该节点导入 Paddle runner 镜像，并安装或升级 `vp-linux-arc-paddle` scale set：
+
+```powershell
+.\infra\arc\scripts\ensure-paddle-worker.ps1
+```
+
+脚本不会重建 kind 集群，也不会向其它 worker 导入 Paddle 镜像。失败时只需要清理新建的 `desktop-worker2` 容器和 Kubernetes node，不要动 `desktop-control-plane` 与现有 worker：
+
+```powershell
+kubectl delete node desktop-worker2 --ignore-not-found
+docker rm -f desktop-worker2
 ```
 
 镜像默认提供这些路径给 ARC workflows 使用：
@@ -215,6 +228,7 @@ kubectl get pods -n arc-systems
 kubectl get pods -n arc-runners
 kubectl get autoscalingrunnersets.actions.github.com -n arc-runners
 kubectl get pods -n arc-runners -o wide
+docker exec desktop-worker2 ctr --namespace=k8s.io images ls | Select-String vp-arc-runner-paddle
 ```
 
 静态检查新增 ARC workflows：

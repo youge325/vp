@@ -103,16 +103,17 @@ test.describe('VP Workbench e2e smoke', () => {
 
     // 等待输出文件出现（最多 60s）
     const outputPath = `${outputDir}\\vp-e2e-test_processed.mp4`
-    let found = false
+    let outputSize = 0
     for (let i = 0; i < 120; i++) {
       if (existsSync(outputPath)) {
-        found = true
-        break
+        outputSize = statSync(outputPath).size
+        if (outputSize > 0) {
+          break
+        }
       }
       await new Promise((r) => setTimeout(r, 500))
     }
 
-    expect(found).toBe(true)
-    expect(statSync(outputPath).size).toBeGreaterThan(0)
+    expect(outputSize).toBeGreaterThan(0)
   })
 })

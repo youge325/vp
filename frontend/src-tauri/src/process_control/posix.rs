@@ -28,7 +28,11 @@ pub fn set_process_tree_suspended(
                 Err(ProcessControlError::Os(err))
             };
         }
-        let signal = if suspend { libc::SIGSTOP } else { libc::SIGCONT };
+        let signal = if suspend {
+            libc::SIGSTOP
+        } else {
+            libc::SIGCONT
+        };
         let result = libc::kill(-pgid, signal);
         if result < 0 {
             return Err(ProcessControlError::Os(io::Error::last_os_error()));

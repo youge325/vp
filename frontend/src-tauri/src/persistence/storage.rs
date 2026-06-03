@@ -49,9 +49,14 @@ struct WorkbenchPresetEntry {
 /// Phase C.2.2:从 ``std::fs::create_dir_all`` 改为 ``tokio::fs``,避免
 /// ``#[tauri::command] async fn`` 在 tokio runtime 上阻塞。
 pub async fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, ShellError> {
-    let dir = app.path().app_local_data_dir().map_err(|error| {
-        ShellError::Persistence(format!("Unable to resolve app data directory: {error}"))
-    })?;
+    let dir = env::var_os("VP_APP_DATA_DIR")
+        .map(PathBuf::from)
+        .map(Ok)
+        .unwrap_or_else(|| {
+            app.path().app_local_data_dir().map_err(|error| {
+                ShellError::Persistence(format!("Unable to resolve app data directory: {error}"))
+            })
+        })?;
     fs::create_dir_all(&dir).await.map_err(|error| {
         ShellError::Persistence(format!(
             "Unable to create app data directory {}: {error}",
@@ -81,8 +86,8 @@ pub fn current_timestamp() -> Result<String, ShellError> {
 pub async fn build_environment_fingerprint(
     paths: &ResolvedRuntimePaths,
 ) -> Result<String, ShellError> {
-    let model_version =
-        env::var("VP_RIFE_MODEL_VERSION").unwrap_or_else(|_| DEFAULT_RIFE_MODEL_VERSION.to_string());
+    let model_version = env::var("VP_RIFE_MODEL_VERSION")
+        .unwrap_or_else(|_| DEFAULT_RIFE_MODEL_VERSION.to_string());
     let default_model_path = paths
         .model_dir
         .as_ref()
@@ -111,7 +116,9 @@ pub async fn load_environment_cache(
         return None;
     }
 
-    let raw = fs::read_to_string(environment_cache_path(base_dir)).await.ok()?;
+    let raw = fs::read_to_string(environment_cache_path(base_dir))
+        .await
+        .ok()?;
     let entry = serde_json::from_str::<EnvironmentCacheEntry>(&raw).ok()?;
     if entry.schema_version != ENVIRONMENT_CACHE_SCHEMA_VERSION {
         return None;
@@ -209,9 +216,7 @@ async fn atomic_write_bytes(path: &Path, data: &[u8]) -> Result<(), ShellError> 
         Ok(())
     })
     .await
-    .map_err(|error| {
-        ShellError::Persistence(format!("Persistence task join failed: {error}"))
-    })??;
+    .map_err(|error| ShellError::Persistence(format!("Persistence task join failed: {error}")))??;
 
     Ok(())
 }
@@ -232,7 +237,9 @@ pub async fn save_environment_cache(
 }
 
 pub async fn load_workbench_preset(base_dir: &Path) -> Option<WorkbenchPreset> {
-    let raw = fs::read_to_string(workbench_preset_path(base_dir)).await.ok()?;
+    let raw = fs::read_to_string(workbench_preset_path(base_dir))
+        .await
+        .ok()?;
     let entry = serde_json::from_str::<WorkbenchPresetEntry>(&raw).ok()?;
     if entry.schema_version != WORKBENCH_PRESET_SCHEMA_VERSION {
         return None;
@@ -452,7 +459,9 @@ mod tests {
         let dir = temp_dir("preset");
         let preset = sample_preset();
 
-        save_workbench_preset(&dir, &preset).await.expect("save preset");
+        save_workbench_preset(&dir, &preset)
+            .await
+            .expect("save preset");
 
         let loaded = load_workbench_preset(&dir).await.expect("load preset");
         assert_eq!(loaded.decode_config.decoder.as_deref(), Some("hevc_cuvid"));

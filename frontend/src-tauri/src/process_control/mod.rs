@@ -16,15 +16,15 @@ use std::fmt;
 use std::io;
 use std::sync::Arc;
 
-#[cfg(target_os = "windows")]
-mod windows;
 #[cfg(not(target_os = "windows"))]
 mod posix;
-
 #[cfg(target_os = "windows")]
-use windows as imp;
+mod windows;
+
 #[cfg(not(target_os = "windows"))]
 use posix as imp;
+#[cfg(target_os = "windows")]
+use windows as imp;
 
 /// Typed failure surface for [`ProcessController`] operations.
 ///

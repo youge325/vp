@@ -187,7 +187,10 @@ mod tests {
         let error = ShellError::BackendNoJson;
         let value = serde_json::to_value(&error).expect("serializable");
         assert_eq!(value["code"], "backend_no_json");
-        assert!(value["message"].as_str().unwrap().contains("did not emit JSON"));
+        assert!(value["message"]
+            .as_str()
+            .unwrap()
+            .contains("did not emit JSON"));
     }
 
     #[test]
@@ -198,7 +201,10 @@ mod tests {
         };
         let value = serde_json::to_value(&error).expect("serializable");
         assert_eq!(value["code"], "backend_envelope");
-        assert!(value["message"].as_str().unwrap().contains("ffmpeg not found"));
+        assert!(value["message"]
+            .as_str()
+            .unwrap()
+            .contains("ffmpeg not found"));
     }
 
     #[test]
@@ -213,7 +219,10 @@ mod tests {
         let error = ShellError::BackendProbeFailed("dll load failed".into());
         let value = serde_json::to_value(&error).expect("serializable");
         assert_eq!(value["code"], "backend_probe_failed");
-        assert!(value["message"].as_str().unwrap().contains("dll load failed"));
+        assert!(value["message"]
+            .as_str()
+            .unwrap()
+            .contains("dll load failed"));
     }
 
     #[test]
@@ -240,10 +249,7 @@ mod tests {
 
     #[test]
     fn open_location_routes_to_io_code_and_keeps_message() {
-        let inner = std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Explorer launcher missing",
-        );
+        let inner = std::io::Error::new(std::io::ErrorKind::NotFound, "Explorer launcher missing");
         let error = ShellError::OpenLocation(inner);
         let value = serde_json::to_value(&error).expect("serializable");
         assert_eq!(value["code"], "io_error");

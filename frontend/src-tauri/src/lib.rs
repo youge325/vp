@@ -1,20 +1,25 @@
-pub mod models;
-pub mod protocol;
-pub mod error;
 mod commands_manifest;
 mod dialogs;
+pub mod error;
+pub mod models;
 mod persistence;
 mod process_control;
+pub mod protocol;
 mod runtime;
 mod services;
 mod tasks;
 
 use std::error::Error as StdError;
 
-use tauri::Manager;
+use tauri::{Manager, PhysicalPosition, PhysicalSize};
 
 use crate::runtime::resolve_runtime_paths;
 use crate::tasks::TaskState;
+
+fn is_e2e_headless() -> bool {
+    std::env::var("VP_E2E_HEADLESS").is_ok()
+        || std::env::args().any(|arg| arg == "--vp-e2e-headless")
+}
 
 pub fn run() {
     let result = tauri::Builder::default()
@@ -45,13 +50,19 @@ pub fn run() {
                 eprintln!("VP Workbench resource-dir={}", resource_dir.display());
             }
 
-            // tauri.conf.json 中窗口默认 visible:false，防止启动时闪现。
-            // 正常使用时在 setup 中显式 show()；E2E 测试设置 VP_E2E_HEADLESS
-            // 后保持隐藏，避免反复弹出干扰桌面。
+            // tauri.conf.json keeps the window hidden initially. In E2E mode,
+            // WebDriver/WebView2 may still request focus later, so park the
+            // window off-screen before keeping it hidden.
             if let Some(window) = app.get_webview_window("main") {
-                if std::env::var("VP_E2E_HEADLESS").is_ok() {
-                    let _ = window.hide();
+                if is_e2e_headless() {
+                    let _ = window.set_skip_taskbar(true);
+                    let _ = window.set_size(PhysicalSize::new(1280, 860));
+                    let _ = window.set_position(PhysicalPosition::new(-32000, -32000));
+                    let _ = window.show();
                 } else {
+                    let _ = window.set_focusable(true);
+                    let _ = window.set_skip_taskbar(false);
+                    let _ = window.center();
                     let _ = window.show();
                 }
             }

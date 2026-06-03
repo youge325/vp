@@ -42,6 +42,27 @@ async function waitForOutputFile(outputPath: string, maxWaitMs: number = 60000):
   return false
 }
 
+async function removeIfExists(outputPath: string, maxWaitMs: number = 15000): Promise<void> {
+  const interval = 250
+  const deadline = Date.now() + maxWaitMs
+  let lastError: unknown
+
+  while (Date.now() <= deadline) {
+    if (!existsSync(outputPath)) {
+      return
+    }
+    try {
+      rmSync(outputPath)
+      return
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, interval))
+    }
+  }
+
+  throw lastError
+}
+
 test.describe('Resume mode', () => {
   const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
   const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
@@ -49,7 +70,7 @@ test.describe('Resume mode', () => {
 
   test('start_task with resumeMode auto and no existing output succeeds', async ({ tauriPage }) => {
     // Ensure no existing output
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     const request = buildTaskRequest(inputPath, outputDir, 'auto')
 
@@ -67,7 +88,7 @@ test.describe('Resume mode', () => {
   })
 
   test('check_resume_state with resumeMode auto returns resumed false when no checkpoint exists', async ({ tauriPage }) => {
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     const request = buildTaskRequest(inputPath, outputDir, 'auto')
 

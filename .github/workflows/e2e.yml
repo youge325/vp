@@ -75,8 +75,12 @@ jobs:
           cargo test --lib --quiet
         working-directory: frontend/src-tauri
 
-      - name: Install Playwright browsers
-        run: npx playwright install chromium
+      - name: Install Tauri WebDriver
+        run: |
+          if (-not (Get-Command tauri-driver -ErrorAction SilentlyContinue)) {
+            cargo install tauri-driver --locked
+          }
+          tauri-driver --help | Select-Object -First 5
         working-directory: frontend
 
       - name: Generate synthetic test video
@@ -93,8 +97,8 @@ jobs:
           CI: true
           E2E_COVERAGE: 1
 
-      - name: Run Playwright e2e tests
-        run: npx playwright test e2e/ --reporter=list
+      - name: Run WebDriverIO e2e tests
+        run: npm run e2e
         working-directory: frontend
         env:
           VP_E2E_INPUT: ${{ runner.temp }}\vp-e2e-test.mp4

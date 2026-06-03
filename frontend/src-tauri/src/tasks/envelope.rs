@@ -1,7 +1,9 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::models::{ResumeStatusPayload, TaskCompletedPayload, TaskErrorPayload, TaskProgressPayload};
+use crate::models::{
+    ResumeStatusPayload, TaskCompletedPayload, TaskErrorPayload, TaskProgressPayload,
+};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -101,7 +103,10 @@ mod tests {
     fn rejects_unknown_variant() {
         let line = r#"{"type":"unknown","payload":42}"#;
         let result: Result<NdjsonEnvelope, _> = serde_json::from_str(line);
-        assert!(result.is_err(), "unknown variant should fail to deserialize");
+        assert!(
+            result.is_err(),
+            "unknown variant should fail to deserialize"
+        );
     }
 
     // ------------------------------------------------------------------
@@ -151,11 +156,14 @@ mod tests {
     fn integration_classifies_success_stream() {
         // Models a happy-path task: a few progress beats then completion.
         let stream = concat!(
-            r#"{"type":"progress","current":10,"total":100,"percent":10.0,"stage":"Decoding","stageIndex":1,"stageTotal":2}"#, "\n",
+            r#"{"type":"progress","current":10,"total":100,"percent":10.0,"stage":"Decoding","stageIndex":1,"stageTotal":2}"#,
+            "\n",
             "[VP_PROGRESS] 10% 10/100\n",
             "Loading model from /opt/models/rife.onnx\n",
-            r#"{"type":"progress","current":50,"total":100,"percent":50.0,"stage":"Encoding","stageIndex":2,"stageTotal":2}"#, "\n",
-            r#"{"type":"completed","outputPath":"D:/out.mp4","processedFrames":100,"timeSeconds":4.2}"#, "\n",
+            r#"{"type":"progress","current":50,"total":100,"percent":50.0,"stage":"Encoding","stageIndex":2,"stageTotal":2}"#,
+            "\n",
+            r#"{"type":"completed","outputPath":"D:/out.mp4","processedFrames":100,"timeSeconds":4.2}"#,
+            "\n",
         );
 
         let classifications: Vec<_> = stream.lines().map(classify_line).collect();
@@ -163,8 +171,8 @@ mod tests {
             classifications,
             vec![
                 LineClassification::Progress,
-                LineClassification::Log,        // VP_PROGRESS terminal bar
-                LineClassification::Log,        // free-form log line
+                LineClassification::Log, // VP_PROGRESS terminal bar
+                LineClassification::Log, // free-form log line
                 LineClassification::Progress,
                 LineClassification::Completed,
             ],
@@ -177,10 +185,13 @@ mod tests {
         // Models a resume path that subsequently fails — error envelope must
         // still be picked up after the resume_status frame.
         let stream = concat!(
-            r#"{"type":"resume_status","resumed":true,"completedChunks":2,"completedOutputFrames":200,"startSourceFrame":120,"totalOutputFrames":500}"#, "\n",
-            r#"{"type":"progress","current":210,"total":500,"percent":42.0,"stage":"Encoding","stageIndex":1,"stageTotal":1}"#, "\n",
+            r#"{"type":"resume_status","resumed":true,"completedChunks":2,"completedOutputFrames":200,"startSourceFrame":120,"totalOutputFrames":500}"#,
+            "\n",
+            r#"{"type":"progress","current":210,"total":500,"percent":42.0,"stage":"Encoding","stageIndex":1,"stageTotal":1}"#,
+            "\n",
             "[VP_PROGRESS] 42% 210/500\n",
-            r#"{"type":"error","code":"missing_model","message":"weight file missing","details":{"path":"/opt/models/missing.pkl"}}"#, "\n",
+            r#"{"type":"error","code":"missing_model","message":"weight file missing","details":{"path":"/opt/models/missing.pkl"}}"#,
+            "\n",
         );
 
         let classifications: Vec<_> = stream.lines().map(classify_line).collect();

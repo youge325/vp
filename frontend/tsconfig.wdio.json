@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": ["node", "@wdio/globals/types", "@wdio/mocha-framework"],
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "strict": false,
+    "erasableSyntaxOnly": false
+  },
+  "include": ["wdio.conf.ts", "e2e/fixtures.ts", "e2e/utils/**/*.ts"]
+}

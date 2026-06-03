@@ -3,7 +3,6 @@ FROM ghcr.io/actions/actions-runner:latest AS common
 ARG DEBIAN_FRONTEND=noninteractive
 ARG DIRECT_NO_PROXY="localhost,127.0.0.1,::1,mirrors.tuna.tsinghua.edu.cn,mirrors6.tuna.tsinghua.edu.cn,mirrors.ustc.edu.cn,cmcc.mirrors.ustc.edu.cn,www.paddlepaddle.org.cn,download.pytorch.org,security.ubuntu.com,deb.nodesource.com,sh.rustup.rs,static.rust-lang.org"
 ARG NODE_MAJOR=24
-ARG PLAYWRIGHT_VERSION=1.60.0
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -12,7 +11,6 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     CARGO_NET_RETRY=10 \
     NO_PROXY=${DIRECT_NO_PROXY} \
     no_proxy=${DIRECT_NO_PROXY} \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     VP_FFMPEG_PATH=/usr/bin/ffmpeg \
     VP_FFPROBE_PATH=/usr/bin/ffprobe \
     VP_PYTHON_EXECUTABLE=/opt/vp/venv/bin/python \
@@ -85,6 +83,7 @@ RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*git-core* \
       python3 \
       python3-pip \
       python3-venv \
+      webkit2gtk-driver \
       xz-utils \
       xvfb \
       build-essential \
@@ -98,7 +97,7 @@ RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*git-core* \
     && vp-direct apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /opt/vp /ms-playwright \
+RUN mkdir -p /opt/vp \
     && python3 -m venv /opt/vp/venv \
     && vp-direct /opt/vp/venv/bin/python -m pip config set global.index-url https://mirrors6.tuna.tsinghua.edu.cn/pypi/web/simple \
     && vp-direct /opt/vp/venv/bin/python -m pip install --upgrade pip setuptools wheel
@@ -111,13 +110,12 @@ RUN vp-direct /opt/vp/venv/bin/pip install -r /tmp/backend-requirements.txt pyte
 COPY backend/models /opt/vp/models
 COPY frontend/src-tauri/Cargo.toml frontend/src-tauri/Cargo.lock /tmp/vp-src-tauri/
 
-RUN npx --yes "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium \
-    && mkdir -p /tmp/vp-src-tauri/src/bin \
+RUN mkdir -p /tmp/vp-src-tauri/src/bin \
     && printf 'fn main() {}\n' > /tmp/vp-src-tauri/src/main.rs \
     && printf 'fn main() {}\n' > /tmp/vp-src-tauri/src/bin/dump_schema.rs \
     && touch /tmp/vp-src-tauri/src/lib.rs \
-    && chown -R runner:runner /opt/vp /ms-playwright /home/runner /tmp/vp-src-tauri \
-    && chmod -R a+rX /opt/vp/models /ms-playwright
+    && chown -R runner:runner /opt/vp /home/runner /tmp/vp-src-tauri \
+    && chmod -R a+rX /opt/vp/models
 
 USER runner
 
@@ -138,12 +136,15 @@ RUN mkdir -p /home/runner/.cargo \
     && vp-direct curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
     && sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain stable \
     && rm -f /tmp/rustup-init.sh \
+    && vp-direct cargo install tauri-driver --locked \
     && cd /tmp/vp-src-tauri \
     && vp-direct cargo fetch --locked \
     && cd / \
     && rm -rf /tmp/vp-src-tauri \
     && rustc --version \
     && cargo --version \
+    && tauri-driver --help | head -n 5 \
+    && (WebKitWebDriver --version || WebKitWebDriver --help | head -n 5) \
     && node --version \
     && python --version \
     && ffmpeg -version | head -n 1

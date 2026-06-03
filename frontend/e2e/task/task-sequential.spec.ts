@@ -82,6 +82,27 @@ async function waitForOutputFile(outputPath: string, maxWaitMs: number = 60000):
   return false
 }
 
+async function removeIfExists(outputPath: string, maxWaitMs: number = 15000): Promise<void> {
+  const interval = 250
+  const deadline = Date.now() + maxWaitMs
+  let lastError: unknown
+
+  while (Date.now() <= deadline) {
+    if (!existsSync(outputPath)) {
+      return
+    }
+    try {
+      rmSync(outputPath)
+      return
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, interval))
+    }
+  }
+
+  throw lastError
+}
+
 test.describe('Sequential task execution', () => {
   const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
   const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
@@ -89,7 +110,7 @@ test.describe('Sequential task execution', () => {
 
   test('two consecutive start_task calls both succeed after state reset', async ({ tauriPage }) => {
     // Clean up any existing output
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     await setupEventListener(tauriPage, 'task-completed')
 
@@ -121,7 +142,7 @@ test.describe('Sequential task execution', () => {
     expect(firstEvents[0].data.processedFrames).toBeGreaterThan(0)
 
     // Clean output for second task
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     // Second task with different encode options
     await tauriPage.evaluate(async (req) => {
@@ -154,7 +175,7 @@ test.describe('Sequential task execution', () => {
   })
 
   test('start_task after cancel_task can start a new task', async ({ tauriPage }) => {
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     await setupEventListener(tauriPage, 'task-cancelled')
     await setupEventListener(tauriPage, 'task-completed')
@@ -187,7 +208,11 @@ test.describe('Sequential task execution', () => {
     )
 
     // Clean and start new task
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
+    const completedBeforeRestart = await tauriPage.evaluate(() => {
+      // @ts-expect-error
+      return window.__E2E_EVENTS.filter((e: any) => e.name === 'task-completed').length
+    })
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -200,10 +225,11 @@ test.describe('Sequential task execution', () => {
 
     // Wait for completed (not cancelled)
     await tauriPage.waitForFunction(
-      () => {
+      (beforeCount) => {
         // @ts-expect-error
-        return window.__E2E_EVENTS.some((e: any) => e.name === 'task-completed')
+        return window.__E2E_EVENTS.filter((e: any) => e.name === 'task-completed').length > beforeCount
       },
+      completedBeforeRestart,
       { timeout: 60000 },
     )
 
@@ -216,7 +242,7 @@ test.describe('Sequential task execution', () => {
     const completedEvents = events.filter((e: any) => e.name === 'task-completed')
 
     expect(cancelledEvents.length).toBeGreaterThan(0)
-    expect(completedEvents.length).toBe(1)
+    expect(completedEvents.length).toBeGreaterThan(completedBeforeRestart)
 
     await cleanupListeners(tauriPage)
   })

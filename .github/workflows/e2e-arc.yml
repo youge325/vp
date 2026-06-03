@@ -74,9 +74,17 @@ jobs:
           cargo test --lib --quiet
         working-directory: frontend/src-tauri
 
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium
-        working-directory: frontend
+      - name: Verify Tauri WebDriver runtime
+        run: |
+          tauri-driver --help | head -n 5
+          if command -v WebKitWebDriver >/dev/null 2>&1; then
+            WebKitWebDriver --version || WebKitWebDriver --help | head -n 5
+          elif command -v webkit2gtk-driver >/dev/null 2>&1; then
+            webkit2gtk-driver --version || webkit2gtk-driver --help | head -n 5
+          else
+            echo "WebKitGTK WebDriver binary was not found" >&2
+            exit 1
+          fi
 
       - name: Generate synthetic test video
         run: |
@@ -92,8 +100,8 @@ jobs:
           CI: true
           E2E_COVERAGE: 1
 
-      - name: Run Playwright e2e tests
-        run: xvfb-run -a npx playwright test e2e/ --reporter=list
+      - name: Run WebDriverIO e2e tests
+        run: xvfb-run -a npm run e2e
         working-directory: frontend
         env:
           VP_TAURI_EXE_PATH: ${{ env.CARGO_TARGET_DIR }}/release/vp-workbench

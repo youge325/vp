@@ -51,7 +51,10 @@ pub enum TaskStatePhase {
     /// ``started_at`` is observability-only — the watchdog may use it
     /// to escalate (e.g. SIGKILL) if the child ignores SIGTERM for
     /// too long. ``finish`` is the only legal transition.
-    Cancelling { handle: TaskHandle, started_at: Instant },
+    Cancelling {
+        handle: TaskHandle,
+        started_at: Instant,
+    },
 }
 
 impl Default for TaskStatePhase {
@@ -174,7 +177,10 @@ mod tests {
     #[tokio::test]
     async fn try_start_transitions_idle_to_running() {
         let state = TaskState::default();
-        state.try_start(make_handle()).await.expect("idle accepts start");
+        state
+            .try_start(make_handle())
+            .await
+            .expect("idle accepts start");
         assert!(state.current_handle().await.is_ok());
     }
 

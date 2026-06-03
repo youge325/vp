@@ -128,10 +128,7 @@ pub async fn run_single_cli_command<R: Runtime>(
                 let _ = stdin.write_all(payload.as_bytes()).await;
                 let _ = stdin.flush().await;
             }
-            child
-                .wait_with_output()
-                .await
-                .map_err(ShellError::Spawn)?
+            child.wait_with_output().await.map_err(ShellError::Spawn)?
         }
     };
 
@@ -140,13 +137,15 @@ pub async fn run_single_cli_command<R: Runtime>(
     let last_json = parse_last_json_line(&stdout);
 
     if !output.status.success() {
-        return Ok(match last_json.as_ref().and_then(try_parse_error_envelope) {
-            Some(envelope) => CliOutcome::FailedWithEnvelope(envelope),
-            None => CliOutcome::FailedWithoutEnvelope(format!(
-                "Backend command failed: {}",
-                stderr.trim().trim_matches('"')
-            )),
-        });
+        return Ok(
+            match last_json.as_ref().and_then(try_parse_error_envelope) {
+                Some(envelope) => CliOutcome::FailedWithEnvelope(envelope),
+                None => CliOutcome::FailedWithoutEnvelope(format!(
+                    "Backend command failed: {}",
+                    stderr.trim().trim_matches('"')
+                )),
+            },
+        );
     }
 
     last_json
