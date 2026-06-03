@@ -52,13 +52,34 @@ async function waitForOutputFile(outputPath: string, maxWaitMs: number = 60000):
   return false
 }
 
+async function removeIfExists(outputPath: string, maxWaitMs: number = 15000): Promise<void> {
+  const interval = 250
+  const deadline = Date.now() + maxWaitMs
+  let lastError: unknown
+
+  while (Date.now() <= deadline) {
+    if (!existsSync(outputPath)) {
+      return
+    }
+    try {
+      rmSync(outputPath)
+      return
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, interval))
+    }
+  }
+
+  throw lastError
+}
+
 test.describe('Decode config options', () => {
   const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
   const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
   const outFile = `${outputDir}\\vp-e2e-test_processed.mp4`
 
   test('format_conversion with decode options passed through produces output file', async ({ tauriPage }) => {
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     const request = buildTaskRequest(inputPath, outputDir, {
       options: { threads: 4 },
@@ -78,7 +99,7 @@ test.describe('Decode config options', () => {
   })
 
   test('format_conversion with empty decode options produces output file', async ({ tauriPage }) => {
-    if (existsSync(outFile)) rmSync(outFile)
+    await removeIfExists(outFile)
 
     const request = buildTaskRequest(inputPath, outputDir, {
       options: {},

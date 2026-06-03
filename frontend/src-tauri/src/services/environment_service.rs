@@ -28,19 +28,22 @@ async fn check_environment_impl<R: Runtime>(
     paths: ResolvedRuntimePaths,
     force_refresh: bool,
 ) -> Result<EnvironmentCheckPayload, ShellError> {
-    let fingerprint = persistence::build_environment_fingerprint(&paths).await.ok();
+    let fingerprint = persistence::build_environment_fingerprint(&paths)
+        .await
+        .ok();
     let app_data_dir = persistence::app_data_dir(&app).await.ok();
 
     if let (Some(data_dir), Some(fingerprint)) = (app_data_dir.as_deref(), fingerprint.as_deref()) {
         if let Some(cached) =
             persistence::load_environment_cache(data_dir, fingerprint, force_refresh).await
         {
-            let result =
-                serde_json::from_value::<EnvironmentCheckResult>(cached.result).map_err(|error| {
+            let result = serde_json::from_value::<EnvironmentCheckResult>(cached.result).map_err(
+                |error| {
                     ShellError::SchemaValidation(format!(
                         "Unable to deserialize cached environment check: {error}"
                     ))
-                })?;
+                },
+            )?;
             return Ok(EnvironmentCheckPayload {
                 result,
                 source: String::from("cache"),

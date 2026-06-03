@@ -12,9 +12,7 @@ use std::path::PathBuf;
 
 use crate::error::ShellError;
 
-use super::helpers::{
-    env_path, find_in_system_path, first_existing_file, platform_python_binary,
-};
+use super::helpers::{env_path, find_in_system_path, first_existing_file, platform_python_binary};
 
 const MISSING_PYTHON_MESSAGE: &str =
     "Python executable not found. Set VP_PYTHON_EXECUTABLE, install Python in your system PATH, or bundle resources/runtime/python/.";

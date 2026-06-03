@@ -123,7 +123,10 @@ mod tests {
     #[test]
     fn directory_if_contains_returns_none_for_missing_child() {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        assert_eq!(directory_if_contains(&manifest_dir, "this-does-not-exist"), None);
+        assert_eq!(
+            directory_if_contains(&manifest_dir, "this-does-not-exist"),
+            None
+        );
     }
 
     #[test]

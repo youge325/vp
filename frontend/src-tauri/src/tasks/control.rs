@@ -31,10 +31,7 @@ pub async fn cancel_running_task(state: &TaskState) -> Result<(), ShellError> {
     Ok(())
 }
 
-pub async fn send_task_control(
-    state: &TaskState,
-    kind: TaskControlKind,
-) -> Result<(), ShellError> {
+pub async fn send_task_control(state: &TaskState, kind: TaskControlKind) -> Result<(), ShellError> {
     // Phase 5d — ``current_handle`` returns the active handle even in
     // the ``Cancelling`` phase so an in-flight pause/resume from the
     // UI lands cleanly during the cancel window; the early reject for

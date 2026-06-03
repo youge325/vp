@@ -13,7 +13,7 @@ test.describe('Enhance interpolation parameters', () => {
     await expect(section.locator('label.field').filter({ hasText: '后端' })).toBeVisible({ timeout: 5000 })
     await expect(section.locator('label.field').filter({ hasText: '算法' })).toBeVisible()
     await expect(section.locator('label.field').filter({ hasText: '帧率模式' })).toBeVisible()
-    await expect(section.locator('label.field').filter({ hasText: 'Scale' })).toBeVisible()
+    await expect(section.locator('input[type="number"][min="0.25"][max="1"][step="0.05"]')).toBeVisible()
     await expect(section.locator('label.field').filter({ hasText: '精度' })).toBeVisible()
   })
 
@@ -86,7 +86,7 @@ test.describe('Enhance interpolation parameters', () => {
     await expect(targetFpsInput).toHaveValue('120')
 
     // Modify scale
-    const scaleInput = section.locator('label.field').filter({ hasText: 'Scale' }).locator('input[type="number"]')
+    const scaleInput = section.locator('input[type="number"][min="0.25"][max="1"][step="0.05"]')
     await expect(scaleInput).toBeVisible()
     await scaleInput.fill('0.5')
     await scaleInput.blur()

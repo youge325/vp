@@ -180,7 +180,9 @@ fn set_threads_suspended(
                         unsafe {
                             let _ = CloseHandle(snapshot);
                         }
-                        return Err(last_error.unwrap_or(ProcessControlError::NoControllableThreads));
+                        return Err(
+                            last_error.unwrap_or(ProcessControlError::NoControllableThreads)
+                        );
                     }
                 }
             }

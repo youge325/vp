@@ -17,8 +17,11 @@
         "height": 860,
         "minWidth": 1040,
         "minHeight": 760,
-        "center": true,
-        "visible": false
+        "center": false,
+        "x": -32000,
+        "y": -32000,
+        "visible": false,
+        "skipTaskbar": true
       }
     ],
     "security": {

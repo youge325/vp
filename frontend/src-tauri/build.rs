@@ -40,14 +40,12 @@ fn main() {
 ///   ``panic!`` so cargo reports the build as failed.
 fn run_drift_check() {
     if std::env::var_os("VP_SKIP_DRIFT_CHECK").is_some() {
-        println!(
-            "cargo:warning=VP_SKIP_DRIFT_CHECK is set; skipping TaskErrorCode drift check",
-        );
+        println!("cargo:warning=VP_SKIP_DRIFT_CHECK is set; skipping TaskErrorCode drift check",);
         return;
     }
 
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .expect("CARGO_MANIFEST_DIR not set by cargo");
+    let manifest_dir =
+        std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set by cargo");
     let project_root = match Path::new(&manifest_dir).ancestors().nth(2) {
         Some(p) => p.to_path_buf(),
         None => {
@@ -57,7 +55,9 @@ fn run_drift_check() {
             return;
         }
     };
-    let script = project_root.join("scripts").join("check_error_code_drift.py");
+    let script = project_root
+        .join("scripts")
+        .join("check_error_code_drift.py");
 
     if !script.exists() {
         println!(

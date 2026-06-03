@@ -11,12 +11,12 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::models::{TaskCancelledPayload, TaskCancelledReason, TaskErrorPayload};
-use crate::process_control::{ProcessController, ProcessControlError};
+use crate::process_control::{ProcessControlError, ProcessController};
 use crate::protocol::TaskEventName;
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
 use crate::tasks::readers::ProgressBeat;
-use crate::tasks::{TaskControlKind, TaskControlMessage, TaskState};
 use crate::tasks::stderr::StderrCapture;
+use crate::tasks::{TaskControlKind, TaskControlMessage, TaskState};
 
 const DEFAULT_STALL_TIMEOUT_SECS: u64 = 600;
 const DEFAULT_WATCHDOG_POLL_INTERVAL_SECS: u64 = 5;
@@ -321,7 +321,10 @@ mod tests {
         let stash = env::var(STALL_TIMEOUT_ENV).ok();
         env::remove_var(STALL_TIMEOUT_ENV);
         let timeout = parse_stall_timeout();
-        assert_eq!(timeout, Some(Duration::from_secs(DEFAULT_STALL_TIMEOUT_SECS)));
+        assert_eq!(
+            timeout,
+            Some(Duration::from_secs(DEFAULT_STALL_TIMEOUT_SECS))
+        );
         if let Some(value) = stash {
             env::set_var(STALL_TIMEOUT_ENV, value);
         }
@@ -368,22 +371,14 @@ mod tests {
             }
         }
         let mut paused = false;
-        assert!(handle_pause_resume(
-            &NoopController,
-            1,
-            TaskControlKind::Pause,
-            &mut paused,
-        )
-        .is_ok());
+        assert!(
+            handle_pause_resume(&NoopController, 1, TaskControlKind::Pause, &mut paused,).is_ok()
+        );
         assert!(paused);
         // Second pause is a no-op, still Ok.
-        assert!(handle_pause_resume(
-            &NoopController,
-            1,
-            TaskControlKind::Pause,
-            &mut paused,
-        )
-        .is_ok());
+        assert!(
+            handle_pause_resume(&NoopController, 1, TaskControlKind::Pause, &mut paused,).is_ok()
+        );
         assert!(paused);
     }
 

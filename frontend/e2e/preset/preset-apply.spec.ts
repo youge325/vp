@@ -233,6 +233,7 @@ test.describe('Preset apply and loading', () => {
       if (!pinia?.state?.value?.preset?.draftPreset?.encodeConfig) return false
 
       const draft = pinia.state.value.preset.draftPreset
+      draft.encodeConfig.codec = 'h264'
       const originalContainer = draft.encodeConfig.container
       const originalCodec = draft.encodeConfig.codec
 

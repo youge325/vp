@@ -52,17 +52,24 @@ async function setWorkflowEnabled(tauriPage: any, config: { interpolation?: bool
     const pinia = vueApp.config?.globalProperties?.$pinia
     if (!pinia) return false
 
-    // useWorkbenchEditor reads from activeItem.workflowConfig or preset draft.
-    // Try activeItem first (if any), then fall back to preset draft.
-    const media = pinia.state.value.media
-    const preset = pinia.state.value.preset
-    const activeItem = media?.mediaItems?.find((item: any) => item.id === media?.activeItemId)
-    const wf = activeItem?.workflowConfig ?? preset?.draftPreset?.workflowConfig
-    if (!wf) return false
+    const apply = (wf: any) => {
+      if (cfg.interpolation !== undefined) wf.interpolation.enabled = cfg.interpolation
+      if (cfg.superResolution !== undefined) wf.superResolution.enabled = cfg.superResolution
+      if (cfg.anime !== undefined) wf.anime.enabled = cfg.anime
+    }
 
-    if (cfg.interpolation !== undefined) wf.interpolation.enabled = cfg.interpolation
-    if (cfg.superResolution !== undefined) wf.superResolution.enabled = cfg.superResolution
-    if (cfg.anime !== undefined) wf.anime.enabled = cfg.anime
+    const mediaStore = pinia._s?.get('media')
+    const presetStore = pinia._s?.get('preset')
+    const activeItem = mediaStore?.activeItem
+    if (activeItem) {
+      const next = structuredClone(activeItem.workflowConfig)
+      apply(next)
+      mediaStore.replaceItemConfig(activeItem.id, { workflowConfig: next })
+      return true
+    }
+
+    if (!presetStore?.patchWorkflow) return false
+    presetStore.patchWorkflow(apply)
     return true
   }, config)
 }
@@ -110,18 +117,19 @@ test.describe('Step rail state', () => {
   test('workflow label reflects enabled stages', async ({ tauriPage }) => {
     await expect(tauriPage.locator('[data-testid="home-module"]')).toBeVisible({ timeout: 5000 })
 
-    // Default: all stages disabled → label should be "转码"
+    // Default preset enables interpolation, so the workflow starts as "补帧".
     const footerChips = tauriPage.locator('.rail-footer-chip')
-    await expect(footerChips.filter({ hasText: '转码' })).toBeVisible()
+    const workflowChip = footerChips.first()
+    await expect(workflowChip).toContainText('补帧')
 
     // Enable interpolation + superResolution
     const ok = await setWorkflowEnabled(tauriPage, { interpolation: true, superResolution: true })
     test.skip(!ok, 'Cannot access Pinia workbench editor from evaluate')
 
-    await expect(footerChips.filter({ hasText: '补帧 / 超分' })).toBeVisible()
+    await expect(workflowChip).toContainText('补帧 / 超分')
 
-    // Reset
-    await setWorkflowEnabled(tauriPage, { interpolation: false, superResolution: false, anime: false })
+    // Reset to the default preset shape for later tests in this session.
+    await setWorkflowEnabled(tauriPage, { interpolation: true, superResolution: false, anime: false })
   })
 
   test('task status label reflects batch running state', async ({ tauriPage }) => {
