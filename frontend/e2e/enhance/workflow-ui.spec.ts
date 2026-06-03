@@ -1,5 +1,37 @@
 import { test, expect } from '../fixtures'
 
+const readInterpolationFieldLabels = async (tauriPage: any): Promise<string[]> => {
+  return await tauriPage.evaluate(() => {
+    const section = Array.from(document.querySelectorAll('section.panel-surface'))
+      .find((candidate) => candidate.querySelector('h2')?.textContent?.includes('补帧'))
+    if (!section) {
+      return []
+    }
+    return Array.from(section.querySelectorAll('label.field > span'))
+      .map((label) => label.textContent?.trim() ?? '')
+      .filter(Boolean)
+  })
+}
+
+const waitForInterpolationFields = async (
+  tauriPage: any,
+  expectedPresent: string[],
+  expectedAbsent: string[] = [],
+) => {
+  await tauriPage.waitForFunction(({ present, absent }) => {
+    const section = Array.from(document.querySelectorAll('section.panel-surface'))
+      .find((candidate) => candidate.querySelector('h2')?.textContent?.includes('补帧'))
+    if (!section) {
+      return false
+    }
+    const labels = Array.from(section.querySelectorAll('label.field > span'))
+      .map((label) => label.textContent?.trim() ?? '')
+      .filter(Boolean)
+    return present.every((label) => labels.includes(label))
+      && absent.every((label) => !labels.includes(label))
+  }, { present: expectedPresent, absent: expectedAbsent }, { timeout: 5000 })
+}
+
 test.describe('Workflow module UI', () => {
   test('enabling interpolation reveals interpolation config panel', async ({ tauriPage }) => {
     await tauriPage.click('.rail-link:has-text("增强")')
@@ -153,23 +185,19 @@ test.describe('Workflow module UI', () => {
     const nonOnnxOption = options.find((o) => !o.toLowerCase().includes('onnx'))
     if (nonOnnxOption) {
       await backendSelect.selectOption({ label: nonOnnxOption })
-      await expect(section.locator('label.field').filter({ hasText: '模型' }).locator('select')).toBeVisible({ timeout: 5000 })
+      await waitForInterpolationFields(tauriPage, ['模型'], ['ONNX 补帧模型'])
     }
 
     // Switch to ONNX backend
     await backendSelect.selectOption({ label: onnxOption })
+    await waitForInterpolationFields(tauriPage, ['ONNX 补帧模型'], ['模型'])
 
     const onnxModelSelect = section.locator('label.field').filter({ hasText: 'ONNX 补帧模型' }).locator('select')
-    await expect(onnxModelSelect).toBeVisible({ timeout: 5000 })
+    await onnxModelSelect.waitFor({ state: 'attached', timeout: 5000 })
 
-    // The regular "模型" select (label exactly "模型", not "ONNX 补帧模型")
-    // is hidden by v-if="!form.isOnnxBackend". Distinguish it by checking
-    // the option content — the regular model select contains options like
-    // '4.25', '4.6' etc., while the ONNX model select contains '未选择'.
-    const regularModelSelect = section.locator('label.field').filter({
-      has: tauriPage.locator('option', { hasText: /4\.25/ }),
-    }).locator('select')
-    await expect(regularModelSelect).not.toBeVisible()
+    const labels = await readInterpolationFieldLabels(tauriPage)
+    expect(labels).toContain('ONNX 补帧模型')
+    expect(labels).not.toContain('模型')
   })
 
   test('switching processOrder select updates the selected value', async ({ tauriPage }) => {
