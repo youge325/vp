@@ -101,6 +101,7 @@ jobs:
           E2E_COVERAGE: 1
 
       - name: Run WebDriverIO e2e tests
+        timeout-minutes: 25
         run: xvfb-run -a npm run e2e
         working-directory: frontend
         env:
