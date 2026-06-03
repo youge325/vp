@@ -1,13 +1,35 @@
 import { test, expect } from '../fixtures'
+import type { TauriPage } from '../utils/wdio-tauri'
+
+const waitForHomeProbe = async (tauriPage: TauriPage) => {
+  await tauriPage.waitForFunction(() => {
+    const hasProbeButton = Array.from(document.querySelectorAll('.panel-actions button'))
+      .some((button) => (button.textContent ?? '').includes('重新探测'))
+    return hasProbeButton
+      && document.querySelectorAll('.stats-grid .stat-card').length === 4
+      && document.querySelectorAll('.chip-row .tag').length === 4
+  }, { timeout: 30000 })
+}
+
+const waitForSummaryBlocks = async (tauriPage: TauriPage) => {
+  await tauriPage.waitForFunction(() => {
+    const blocks = Array.from(document.querySelectorAll('.summary-grid .summary-block'))
+    return blocks.length > 0 && blocks.every((block) => {
+      const title = block.querySelector('.summary-block-title')?.textContent?.trim() ?? ''
+      const value = block.querySelector('.summary-line')?.textContent?.trim() ?? ''
+      return title.length > 0 && value.length > 0
+    })
+  }, { timeout: 30000 })
+
+  return tauriPage.locator('.summary-grid .summary-block')
+}
 
 test.describe('Home module content', () => {
   test('environment stats and capability cards render after probe', async ({ tauriPage }) => {
     await expect(tauriPage.locator('[data-testid="home-module"]')).toBeVisible({ timeout: 5000 })
 
     // Wait for bootstrap environment check to complete
-    await expect(
-      tauriPage.locator('.panel-actions button').filter({ hasText: '重新探测' }),
-    ).toBeVisible({ timeout: 30000 })
+    await waitForHomeProbe(tauriPage)
 
     // stats-grid should have 4 stat cards
     const statCards = tauriPage.locator('.stats-grid .stat-card')
@@ -30,8 +52,7 @@ test.describe('Home module content', () => {
     await expect(chipTags.nth(3)).toContainText('最近真实探测:')
 
     // familyCards encoding capability summary
-    const summaryBlocks = tauriPage.locator('.summary-grid .summary-block')
-    await expect(summaryBlocks.first()).toBeVisible()
+    const summaryBlocks = await waitForSummaryBlocks(tauriPage)
     const summaryCount = await summaryBlocks.count()
     expect(summaryCount).toBeGreaterThan(0)
 
@@ -43,25 +64,4 @@ test.describe('Home module content', () => {
     }
   })
 
-  test('family cards have non-empty titles and values', async ({ tauriPage }) => {
-    await expect(tauriPage.locator('[data-testid="home-module"]')).toBeVisible({ timeout: 5000 })
-
-    // Wait for bootstrap environment check
-    await expect(
-      tauriPage.locator('.panel-actions button').filter({ hasText: '重新探测' }),
-    ).toBeVisible({ timeout: 30000 })
-
-    const summaryBlocks = tauriPage.locator('.summary-grid .summary-block')
-    await expect(summaryBlocks.first()).toBeVisible()
-    const count = await summaryBlocks.count()
-    expect(count).toBeGreaterThan(0)
-
-    for (let i = 0; i < count; i++) {
-      const block = summaryBlocks.nth(i)
-      const title = await block.locator('.summary-block-title').textContent()
-      expect(title?.trim().length).toBeGreaterThan(0)
-      const value = await block.locator('.summary-line').textContent()
-      expect(value?.trim().length).toBeGreaterThan(0)
-    }
-  })
 })

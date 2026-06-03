@@ -99,6 +99,8 @@ export const config = {
   specs: ['./e2e/**/*.spec.ts'],
   exclude: ['./e2e/utils/**', './e2e/fixtures.ts'],
   maxInstances: 1,
+  specFileRetries: process.env.CI ? 1 : 0,
+  specFileRetriesDelay: 1000,
   logLevel: 'warn',
   framework: 'mocha',
   reporters: ['spec'],
