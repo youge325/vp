@@ -15,7 +15,7 @@ import argparse
 
 from app.cli.commands._process_execution import execute_plan, finalize_and_emit
 from app.cli.commands._process_planning import build_plan
-from app.cli.commands._process_validation import ensure_input_and_ffmpeg, load_configs
+from app.cli.commands._process_validation import ensure_input_and_ffmpeg, load_runtime_configs
 from app.cli.defaults import _resolve_primary_algorithm
 from app.errors import ProcessError, ResumeConflictError, TaskErrorCode
 
@@ -23,17 +23,15 @@ from app.errors import ProcessError, ResumeConflictError, TaskErrorCode
 def cmd_process(args: argparse.Namespace) -> None:
     input_path: str = args.input
     ffmpeg = ensure_input_and_ffmpeg(input_path)
-    decode_config, encode_config, workflow_config, output_config = load_configs(args)
+    configs = load_runtime_configs(args)
 
     plan = build_plan(
         args=args,
         input_path=input_path,
         ffmpeg=ffmpeg,
-        decode_config=decode_config,
-        encode_config=encode_config,
-        workflow_config=workflow_config,
-        output_config=output_config,
+        configs=configs,
     )
+    configs = plan.runtime_configs
 
     resume_mode = getattr(args, "resume_mode", "auto")
     try:
@@ -41,10 +39,7 @@ def cmd_process(args: argparse.Namespace) -> None:
             ffmpeg=ffmpeg,
             input_path=input_path,
             plan=plan,
-            decode_config=decode_config,
-            encode_config=encode_config,
-            workflow_config=workflow_config,
-            output_config=output_config,
+            configs=configs,
             resume_mode=resume_mode,
         )
         finalize_and_emit(ffmpeg=ffmpeg, plan=plan, result=result, elapsed=elapsed)
@@ -67,7 +62,7 @@ def cmd_process(args: argparse.Namespace) -> None:
             {
                 "input_path": input_path,
                 "output_path": plan.output_path,
-                "algorithm": _resolve_primary_algorithm(workflow_config),
+                "algorithm": _resolve_primary_algorithm(configs.workflow_json),
                 "processing_steps": [step.algorithm_type for step in plan.processing_steps],
             }
         )
