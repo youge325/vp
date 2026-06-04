@@ -225,14 +225,14 @@ CancellationToken 是手实现的（非 tokio_util），包含：
 ```mermaid
 sequenceDiagram
     participant Frontend
-    participant Rust as pause/resume_task
+    participant Rust as control_task
     participant State as TaskState
     participant Handle as TaskHandle
     participant Control as control_tx
     participant Process as ProcessController
     participant Python as Python 子进程
 
-    Frontend->>Rust: pause_task()
+    Frontend->>Rust: control_task({kind:"pause"})
     Rust->>State: current_handle()
     State-->>Rust: Ok(handle)
     Rust->>Control: 发送 TaskControlMessage {kind: Pause}
@@ -240,7 +240,7 @@ sequenceDiagram
     Process-->>Rust: Ok(())
     Rust-->>Frontend: Ok(())
 
-    Frontend->>Rust: resume_task()
+    Frontend->>Rust: control_task({kind:"resume"})
     Rust->>Control: 发送 TaskControlMessage {kind: Resume}
     Control-->>Process: ResumeThread (Win32)
     Process-->>Rust: Ok(())

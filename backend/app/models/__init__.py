@@ -6,7 +6,7 @@ field names, types and defaults stay in sync with the Rust source of truth.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -26,8 +26,18 @@ class _CamelBase(BaseModel):
     )
 
 
+DecodeModeValue = Literal["software", "hardware"]
+FpsModeValue = Literal["multi", "target"]
+ProcessOrderValue = Literal[
+    "super_resolution_then_interpolation",
+    "frame_interpolation_then_super_resolution",
+]
+TensorBackendValue = Literal["pytorch", "paddle", "onnx"]
+RateControlModeValue = Literal["crf", "cq", "qp", "bitrate"]
+
+
 class DecodeConfig(_CamelBase):
-    mode: str
+    mode: DecodeModeValue
     hwaccel: str | None = None
     hwaccel_device: str | None = None
     decoder: str | None = None
@@ -43,7 +53,7 @@ class InterpolationConfig(_CamelBase):
     onnx_model: str | None = None
     scale: float
     fp16: bool
-    tensor_backend: str
+    tensor_backend: TensorBackendValue
     engine: str = "cuda"
 
 
@@ -78,8 +88,8 @@ class PostprocessConfig(_CamelBase):
 
 
 class WorkflowConfig(_CamelBase):
-    fps_mode: str
-    process_order: str
+    fps_mode: FpsModeValue
+    process_order: ProcessOrderValue
     interpolation: InterpolationConfig
     super_resolution: SuperResolutionConfig
     anime: AnimeConfig
@@ -88,7 +98,7 @@ class WorkflowConfig(_CamelBase):
 
 
 class RateControlConfig(_CamelBase):
-    mode: str
+    mode: RateControlModeValue
     value: Any
 
 

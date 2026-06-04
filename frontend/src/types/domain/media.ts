@@ -1,7 +1,13 @@
 // 领域层 — 媒体项与任务错误模型。
 
-import type { TaskErrorPayload } from '@/types/generated/TaskErrorPayload'
-import type { DecodeConfig, EncodeConfig, OutputConfig, WorkbenchPreset, WorkflowConfig } from '../protocol'
+import type {
+  DecodeConfig,
+  EncodeConfig,
+  OutputConfig,
+  TaskErrorPayload,
+  WorkbenchPreset,
+  WorkflowConfig,
+} from '../protocol'
 import type { ResumeStatus } from './batch'
 import type { TaskStatus } from './workflow'
 

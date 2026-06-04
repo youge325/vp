@@ -131,7 +131,7 @@ export async function safeInvoke<T>(command: string, args?: Record<string, unkno
 | `env.ts` | `check_environment` |
 | `media.ts` | `pick_inputs` / `inspect_video` |
 | `preset.ts` | `load_workbench_preset` / `save_workbench_preset` / `pick_output_directory` |
-| `task.ts` | `start_task` / `cancel_task` / `pause_task` / `resume_task` / `check_resume_state` / `open_output_location` |
+| `task.ts` | `start_task` / `cancel_task` / `control_task`（`kind: "pause" | "resume"`）/ `check_resume_state` / `open_output_location` |
 
 ### 事件监听
 
