@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from app.cli.runtime_configs import RuntimeConfigs
 from app.cli.defaults import (
     _model_path,
     _processing_needs_interpolation,
@@ -36,6 +37,7 @@ class ProcessingPlan:
 
     output_path: str
     output_dir: str
+    runtime_configs: RuntimeConfigs
     processing_steps: list[ProcessingStep]
     tensor_backend_name: str
     final_output_fps: float | None
@@ -144,18 +146,19 @@ def _verify_model_availability(
 def _resolve_output_paths(
     args: argparse.Namespace,
     input_path: str,
-    output_config: dict[str, Any],
-    encode_config: dict[str, Any],
+    configs: RuntimeConfigs,
 ) -> tuple[str, str]:
     """Pick the (output_dir, output_path) pair, materialising parents on disk."""
     # Phase 18 — Pydantic ``OutputConfig`` validator 保证 outputDir 必填非空,
     # 这里不再 ``or settings.OUTPUT_DIR`` 兜底;若 dict 来源绕过 Pydantic
     # (CLI defaults 路径),直接 KeyError → 立即 fail 暴露上游 bug。
-    output_dir = output_config["outputDir"]
+    output_dir = configs.output.output_dir
+    if not output_dir:
+        raise_error(TaskErrorCode.INVALID_CONFIG, "outputDir is required.")
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     Path(settings.RIFE_MODEL_DIR).mkdir(parents=True, exist_ok=True)
 
-    container = str(encode_config.get("container") or "mp4")
+    container = configs.encode.container or "mp4"
     if args.output:
         output_path = args.output
         Path(output_path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
@@ -197,19 +200,17 @@ def build_plan(
     args: argparse.Namespace,
     input_path: str,
     ffmpeg: FFmpegWrapper,
-    decode_config: dict[str, Any],
-    encode_config: dict[str, Any],
-    workflow_config: dict[str, Any],
-    output_config: dict[str, Any],
+    configs: RuntimeConfigs,
 ) -> ProcessingPlan:
     """Compose the full ``ProcessingPlan`` for execution."""
+    workflow_config = configs.workflow_json
     processing_steps = _resolve_processing_steps(workflow_config)
-    tensor_backend_name = workflow_config["interpolation"].get("tensorBackend", args.backend)
+    tensor_backend_name = configs.workflow.interpolation.tensor_backend or args.backend
 
     _verify_super_resolution_backend(workflow_config, tensor_backend_name)
     _verify_model_availability(workflow_config, processing_steps, tensor_backend_name)
 
-    output_dir, output_path = _resolve_output_paths(args, input_path, output_config, encode_config)
+    output_dir, output_path = _resolve_output_paths(args, input_path, configs)
 
     # Phase D.6.3 — multi 写回 + final_output_fps 推导收敛到 defaults helper,
     # 与 cmd_inspect_output 共享一份"不 mutate 原 dict"的语义。
@@ -218,6 +219,7 @@ def build_plan(
         ffmpeg,
         input_path,
     )
+    configs = configs.with_workflow_json(workflow_config)
 
     expected_output_frames = _resolve_expected_output_frames(
         ffmpeg=ffmpeg,
@@ -248,6 +250,7 @@ def build_plan(
     return ProcessingPlan(
         output_path=output_path,
         output_dir=output_dir,
+        runtime_configs=configs,
         processing_steps=processing_steps,
         tensor_backend_name=tensor_backend_name,
         final_output_fps=final_output_fps,
