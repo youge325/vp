@@ -30,8 +30,7 @@ graph LR
 | `check_resume_state` | `async fn(TaskRequest) -> Result<Value, ShellError>` | 续传预检 |
 | `start_task` | `async fn(TaskRequest) -> Result<(), ShellError>` | 启动处理任务 |
 | `cancel_task` | `async fn() -> Result<(), ShellError>` | 取消任务 |
-| `pause_task` | `async fn() -> Result<(), ShellError>` | 暂停任务 |
-| `resume_task` | `async fn() -> Result<(), ShellError>` | 恢复任务 |
+| `control_task` | `async fn(TaskControlKind) -> Result<(), ShellError>` | 暂停或恢复任务（`kind: "pause" | "resume"`） |
 | `open_output_location` | `async fn(String) -> Result<(), ShellError>` | 打开输出目录 |
 
 所有命令体均为 `async fn`；对话框命令使用 `rfd::AsyncFileDialog` 避免阻塞 tokio runtime。

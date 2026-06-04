@@ -88,6 +88,20 @@ def _type_token(prop_schema: dict) -> str:
     return str(t)
 
 
+def _enum_values(prop_schema: dict) -> set[str] | None:
+    """Return string enum values when the schema constrains a field by enum."""
+    if "enum" in prop_schema:
+        return {str(value) for value in prop_schema["enum"]}
+    if "anyOf" in prop_schema:
+        values: set[str] = set()
+        for branch in prop_schema["anyOf"]:
+            branch_values = _enum_values(branch)
+            if branch_values is not None:
+                values.update(branch_values)
+        return values or None
+    return None
+
+
 @pytest.mark.parametrize("schema_name,model_cls", _MODEL_MAP.items())
 def test_property_names_and_types_match(schema_name: str, model_cls: type) -> None:
     rust_path = SCHEMA_DIR / f"{schema_name}.schema.json"
@@ -111,6 +125,10 @@ def test_property_names_and_types_match(schema_name: str, model_cls: type) -> No
         rust_req = _is_required(rust_schema, name)
         py_req = _is_required(py_schema, name)
         assert rust_req == py_req, f"Required mismatch for {schema_name}.{name}: rust={rust_req} vs py={py_req}"
+
+        rust_enum = _enum_values(rust_props[name])
+        py_enum = _enum_values(py_props[name])
+        assert rust_enum == py_enum, f"Enum mismatch for {schema_name}.{name}: rust={rust_enum} vs py={py_enum}"
 
 
 def test_task_error_codes_match_rust() -> None:
