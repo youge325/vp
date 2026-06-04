@@ -13,6 +13,12 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from app.planning.processing_steps import (
+    ProcessingStep,
+    ProcessingStepInput,
+    normalize_processing_steps,
+    processing_steps_to_jsonable,
+)
 from app.utils.ffmpeg import FFmpegWrapper
 
 
@@ -20,9 +26,9 @@ from app.utils.ffmpeg import FFmpegWrapper
 class StagePlan:
     """Resolved processing layout for the streaming executor."""
 
-    pre_steps: list[dict[str, Any]]
-    interpolation_step: dict[str, Any] | None
-    post_steps: list[dict[str, Any]]
+    pre_steps: list[ProcessingStep]
+    interpolation_step: ProcessingStep | None
+    post_steps: list[ProcessingStep]
     total_output_frames: int
     total_encoded_frames: int
     total_pairs: int
@@ -72,16 +78,17 @@ def estimate_encoded_output_frames(
 
 
 def build_stage_plan(
-    processing_steps: list[dict[str, Any]],
+    processing_steps: list[ProcessingStepInput],
     source_frames: int,
     *,
     source_duration: float,
     output_fps: float | None,
 ) -> StagePlan:
     """Derive a ``StagePlan`` from the requested pipeline steps and source metadata."""
+    steps = normalize_processing_steps(processing_steps)
     interpolation_index = None
-    for index, step in enumerate(processing_steps):
-        if step["algorithm_type"] == "frame_interpolation":
+    for index, step in enumerate(steps):
+        if step.algorithm_type == "frame_interpolation":
             interpolation_index = index
             break
 
@@ -92,7 +99,7 @@ def build_stage_plan(
             output_fps=output_fps,
         )
         return StagePlan(
-            pre_steps=processing_steps,
+            pre_steps=steps,
             interpolation_step=None,
             post_steps=[],
             total_output_frames=source_frames,
@@ -100,8 +107,8 @@ def build_stage_plan(
             total_pairs=max(source_frames - 1, 0),
         )
 
-    interpolation_step = processing_steps[interpolation_index]
-    multi = int(interpolation_step["algorithm_kwargs"].get("multi") or 2)
+    interpolation_step = steps[interpolation_index]
+    multi = int(interpolation_step.algorithm_kwargs.get("multi") or 2)
     if source_frames < 2:
         total_output_frames = source_frames
         total_pairs = 0
@@ -115,9 +122,9 @@ def build_stage_plan(
     )
 
     return StagePlan(
-        pre_steps=processing_steps[:interpolation_index],
+        pre_steps=steps[:interpolation_index],
         interpolation_step=interpolation_step,
-        post_steps=processing_steps[interpolation_index + 1 :],
+        post_steps=steps[interpolation_index + 1 :],
         total_output_frames=total_output_frames,
         total_encoded_frames=total_encoded_frames,
         total_pairs=total_pairs,
@@ -132,7 +139,7 @@ def build_signature(
     encode_config: dict[str, Any],
     workflow_config: dict[str, Any],
     output_config: dict[str, Any],
-    processing_steps: list[dict[str, Any]],
+    processing_steps: list[ProcessingStepInput],
     video_info: dict[str, Any],
 ) -> str:
     """Return a deterministic SHA-256 signature for the processing configuration."""
@@ -148,7 +155,7 @@ def build_signature(
         "output_config": {
             "segmentFrames": max(1, int(output_config.get("segmentFrames") or 1000)),
         },
-        "processing_steps": processing_steps,
+        "processing_steps": processing_steps_to_jsonable(processing_steps),
         "video_info": {
             "width": video_info["width"],
             "height": video_info["height"],

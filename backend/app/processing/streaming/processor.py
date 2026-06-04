@@ -17,13 +17,14 @@ from __future__ import annotations
 
 import queue
 import threading
+from dataclasses import dataclass
 from typing import Any, Callable, Iterator
 
 import numpy as np
 
 from app.algorithms.factory import AlgorithmFactory
 from app.algorithms.tensor_backend import get_tensor_backend
-from app.planning import StagePlan
+from app.planning import ProcessingStep, StagePlan
 from app.processing.streaming._tensor_chain import run_tensor_chain
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import (
@@ -37,6 +38,20 @@ from app.processing.streaming.queues import (
     _queue_put,
     _queue_put_nowait,
 )
+
+
+@dataclass(slots=True)
+class _StepAlgorithm:
+    step: ProcessingStep
+    backend: Any
+    algorithm: Any
+
+
+@dataclass(slots=True)
+class _PipelineAlgorithms:
+    pre: list[_StepAlgorithm]
+    interpolation: _StepAlgorithm | None
+    post: list[_StepAlgorithm]
 
 
 def _processor_worker(
@@ -85,12 +100,8 @@ def _processor_worker(
         _queue_put_nowait(encode_queue, _ENCODE_END)
 
 
-def _initialize_algorithms(stage_plan: StagePlan, tensor_backend_name: str) -> dict[str, Any]:
-    algorithms: dict[str, Any] = {
-        "single": [],
-        "post": [],
-        "interpolation": None,
-    }
+def _initialize_algorithms(stage_plan: StagePlan, tensor_backend_name: str) -> _PipelineAlgorithms:
+    algorithms = _PipelineAlgorithms(pre=[], interpolation=None, post=[])
 
     # Re-use a single backend instance across all algorithms in the pipeline.
     # This avoids redundant DLL registration and repeated ``import onnxruntime``
@@ -99,30 +110,31 @@ def _initialize_algorithms(stage_plan: StagePlan, tensor_backend_name: str) -> d
 
     for step in stage_plan.pre_steps:
         algorithm = AlgorithmFactory.create(
-            algorithm_type=step["algorithm_type"],
+            algorithm_type=step.algorithm_type,
             tensor_backend=shared_backend,
             tensor_backend_name=tensor_backend_name,
-            **step["algorithm_kwargs"],
+            **step.algorithm_kwargs,
         )
-        algorithms["single"].append((step, shared_backend, algorithm))
+        algorithms.pre.append(_StepAlgorithm(step=step, backend=shared_backend, algorithm=algorithm))
 
     if stage_plan.interpolation_step is not None:
+        step = stage_plan.interpolation_step
         algorithm = AlgorithmFactory.create(
-            algorithm_type=stage_plan.interpolation_step["algorithm_type"],
+            algorithm_type=step.algorithm_type,
             tensor_backend=shared_backend,
             tensor_backend_name=tensor_backend_name,
-            **stage_plan.interpolation_step["algorithm_kwargs"],
+            **step.algorithm_kwargs,
         )
-        algorithms["interpolation"] = (shared_backend, algorithm)
+        algorithms.interpolation = _StepAlgorithm(step=step, backend=shared_backend, algorithm=algorithm)
 
     for step in stage_plan.post_steps:
         algorithm = AlgorithmFactory.create(
-            algorithm_type=step["algorithm_type"],
+            algorithm_type=step.algorithm_type,
             tensor_backend=shared_backend,
             tensor_backend_name=tensor_backend_name,
-            **step["algorithm_kwargs"],
+            **step.algorithm_kwargs,
         )
-        algorithms["post"].append((step, shared_backend, algorithm))
+        algorithms.post.append(_StepAlgorithm(step=step, backend=shared_backend, algorithm=algorithm))
 
     return algorithms
 
@@ -130,7 +142,7 @@ def _initialize_algorithms(stage_plan: StagePlan, tensor_backend_name: str) -> d
 def _process_single_frame_stream(
     *,
     stage_plan: StagePlan,
-    algorithms: dict[str, Any],
+    algorithms: _PipelineAlgorithms,
     progress_callbacks: list[Callable[[int, int], None]],
     source_frames: int,
     resume_output_frames: int,
@@ -144,7 +156,7 @@ def _process_single_frame_stream(
 
     for item in _drain_decoded(decode_queue, stop_event):
         frame = _apply_pre_steps(
-            pre_algorithms=algorithms["single"],
+            pre_algorithms=algorithms.pre,
             progress_callbacks=progress_callbacks,
             item=item,
             source_frames=source_frames,
@@ -186,7 +198,7 @@ def _process_single_frame_stream(
 def _process_interpolated_stream(
     *,
     stage_plan: StagePlan,
-    algorithms: dict[str, Any],
+    algorithms: _PipelineAlgorithms,
     progress_callbacks: list[Callable[[int, int], None]],
     source_frames: int,
     resume_output_frames: int,
@@ -202,16 +214,20 @@ def _process_interpolated_stream(
     pre_count = len(stage_plan.pre_steps)
     interpolation_callback = progress_callbacks[pre_count]
     post_callbacks = progress_callbacks[pre_count + 1 :]
-    interpolation_backend, interpolation_algorithm = algorithms["interpolation"]
-    multi = int(interpolation_step["algorithm_kwargs"].get("multi") or 2)
+    interpolation = algorithms.interpolation
+    if interpolation is None:
+        raise RuntimeError("Interpolation algorithm is required for interpolated processing.")
+    interpolation_backend = interpolation.backend
+    interpolation_algorithm = interpolation.algorithm
+    multi = int(interpolation_step.algorithm_kwargs.get("multi") or 2)
 
     # Phase 11 — 提前抽出 post 链路的 (backend, algorithm) 列表,供
     # ``run_tensor_chain`` 单 H2D + 单 D2H 路径复用;所有 post step 在
     # _initialize_algorithms 中绑定的是同一个 ``shared_backend``,所以
     # 取第 0 个就代表整条链。
-    post_steps = algorithms["post"]
-    post_algorithm_objs = [algorithm for (_, _, algorithm) in post_steps]
-    post_backend = post_steps[0][1] if post_steps else None
+    post_steps = algorithms.post
+    post_algorithm_objs = [entry.algorithm for entry in post_steps]
+    post_backend = post_steps[0].backend if post_steps else None
     total_output_frames_denominator = max(stage_plan.total_output_frames, 1)
 
     # Phase 11 — ``previous`` 多带一个 prev_tensor 槽位,下一轮直接复用上一轮的
@@ -224,7 +240,7 @@ def _process_interpolated_stream(
 
     for item in _drain_decoded(decode_queue, stop_event):
         current_frame = _apply_pre_steps(
-            pre_algorithms=algorithms["single"],
+            pre_algorithms=algorithms.pre,
             progress_callbacks=progress_callbacks,
             item=item,
             source_frames=source_frames,
@@ -361,7 +377,7 @@ def _drain_decoded(
 
 def _apply_pre_steps(
     *,
-    pre_algorithms: list[tuple[dict[str, Any], Any, Any]],
+    pre_algorithms: list[_StepAlgorithm],
     progress_callbacks: list[Callable[[int, int], None]],
     item: DecodedFrame,
     source_frames: int,
@@ -374,8 +390,8 @@ def _apply_pre_steps(
     """
     frame = item.frame
     with metrics.timed("process"):
-        for step_index, (_, backend, algorithm) in enumerate(pre_algorithms):
-            frame = _run_single_frame_algorithm(backend, algorithm, frame)
+        for step_index, entry in enumerate(pre_algorithms):
+            frame = _run_single_frame_algorithm(entry.backend, entry.algorithm, frame)
             progress_callbacks[step_index](item.source_index + 1, max(source_frames, 1))
     return frame
 

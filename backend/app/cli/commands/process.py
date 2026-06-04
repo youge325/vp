@@ -68,7 +68,7 @@ def cmd_process(args: argparse.Namespace) -> None:
                 "input_path": input_path,
                 "output_path": plan.output_path,
                 "algorithm": _resolve_primary_algorithm(workflow_config),
-                "processing_steps": [step["algorithm_type"] for step in plan.processing_steps],
+                "processing_steps": [step.algorithm_type for step in plan.processing_steps],
             }
         )
         raise pe

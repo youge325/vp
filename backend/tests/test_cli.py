@@ -13,6 +13,12 @@ from app.cli.defaults import (
     _resolve_processing_steps,
 )
 from app.config import settings
+from app.planning import (
+    ProcessingStep,
+    build_signature,
+    normalize_processing_steps,
+    processing_steps_to_jsonable,
+)
 
 
 class _FakeFFmpeg:
@@ -73,9 +79,9 @@ def _make_workflow_config(**overrides):
 def test_resolve_processing_steps_interpolation_mode():
     steps = _resolve_processing_steps(_make_workflow_config())
 
-    assert [step["algorithm_type"] for step in steps] == ["frame_interpolation"]
-    assert steps[0]["algorithm_kwargs"]["multi"] == 2
-    assert steps[0]["stage_name"] == "01_frame_interpolation"
+    assert [step.algorithm_type for step in steps] == ["frame_interpolation"]
+    assert steps[0].algorithm_kwargs["multi"] == 2
+    assert steps[0].stage_name == "01_frame_interpolation"
 
 
 def test_resolve_processing_steps_combined_order():
@@ -90,12 +96,12 @@ def test_resolve_processing_steps_combined_order():
         )
     )
 
-    assert [step["algorithm_type"] for step in steps] == [
+    assert [step.algorithm_type for step in steps] == [
         "frame_interpolation",
         "super_resolution",
     ]
-    assert steps[0]["algorithm_kwargs"]["model_version"] == "4.25"
-    assert steps[1]["algorithm_kwargs"]["scale_factor"] == 2.0
+    assert steps[0].algorithm_kwargs["model_version"] == "4.25"
+    assert steps[1].algorithm_kwargs["scale_factor"] == 2.0
 
 
 def test_resolve_processing_steps_format_conversion_skips_frame_filters():
@@ -115,6 +121,89 @@ def test_resolve_processing_steps_format_conversion_skips_frame_filters():
     )
 
     assert steps == []
+
+
+def test_processing_step_json_shape_matches_legacy_mapping():
+    step = ProcessingStep(
+        algorithm_type="frame_interpolation",
+        algorithm_kwargs={"multi": 2, "model_version": "4.25"},
+        stage_name="01_frame_interpolation",
+    )
+
+    assert processing_steps_to_jsonable([step]) == [
+        {
+            "algorithm_type": "frame_interpolation",
+            "algorithm_kwargs": {"multi": 2, "model_version": "4.25"},
+            "stage_name": "01_frame_interpolation",
+        }
+    ]
+
+
+def test_normalize_processing_steps_accepts_typed_and_legacy_mapping():
+    typed = ProcessingStep(
+        algorithm_type="super_resolution",
+        algorithm_kwargs={"scale_factor": 2},
+        stage_name="01_super_resolution",
+    )
+    legacy = {
+        "algorithm_type": "frame_filter_chain",
+        "algorithm_kwargs": {"filters": []},
+        "stage_name": "02_postprocess",
+    }
+
+    steps = normalize_processing_steps([typed, legacy])
+
+    assert steps[0] is typed
+    assert steps[1].algorithm_type == "frame_filter_chain"
+    assert steps[1].algorithm_kwargs == {"filters": []}
+    assert steps[1].stage_name == "02_postprocess"
+
+
+def test_typed_processing_steps_keep_signature_compatible_with_legacy_mapping(tmp_path):
+    input_path = tmp_path / "input.mp4"
+    output_path = tmp_path / "out.mp4"
+    input_path.write_bytes(b"video")
+    legacy_steps = [
+        {
+            "algorithm_type": "frame_interpolation",
+            "algorithm_kwargs": {"multi": 2, "model_version": "4.25", "scale": 1.0, "fp16": False},
+            "stage_name": "01_frame_interpolation",
+        }
+    ]
+    typed_steps = normalize_processing_steps(legacy_steps)
+    decode_config = {"mode": "software", "decoder": "software", "options": {}}
+    encode_config = {"codec": "libx264", "container": "mp4", "keepAudio": True}
+    workflow_config = _make_workflow_config()
+    output_config = {"outputDir": str(tmp_path), "openOnComplete": False, "segmentFrames": 1000}
+    video_info = {
+        "width": 1280,
+        "height": 720,
+        "source_fps": 30.0,
+        "source_frames": 60,
+    }
+
+    legacy_signature = build_signature(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        decode_config=decode_config,
+        encode_config=encode_config,
+        workflow_config=workflow_config,
+        output_config=output_config,
+        processing_steps=legacy_steps,
+        video_info=video_info,
+    )
+    typed_signature = build_signature(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        decode_config=decode_config,
+        encode_config=encode_config,
+        workflow_config=workflow_config,
+        output_config=output_config,
+        processing_steps=typed_steps,
+        video_info=video_info,
+    )
+
+    assert typed_signature == legacy_signature
 
 
 def test_default_output_config_includes_segment_frames_and_json_override():
