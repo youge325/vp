@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import settings
+from app.planning import AlgorithmType, ProcessingStep, ProcessingStepInput, normalize_processing_steps
 from app.utils.ffmpeg import FFmpegWrapper
 
 PROCESS_ORDER_MAP = {
@@ -40,8 +41,8 @@ def _model_path(model_version: str | None = None) -> Path:
     return Path(settings.RIFE_MODEL_DIR) / f"flownet_v{version}.pkl"
 
 
-def _processing_needs_interpolation(processing_steps: list[dict[str, Any]]) -> bool:
-    return any(step["algorithm_type"] == "frame_interpolation" for step in processing_steps)
+def _processing_needs_interpolation(processing_steps: list[ProcessingStepInput]) -> bool:
+    return any(step.algorithm_type == "frame_interpolation" for step in normalize_processing_steps(processing_steps))
 
 
 def _default_decode_config() -> dict[str, Any]:
@@ -136,7 +137,7 @@ def _resolve_primary_algorithm(workflow_config: dict[str, Any]) -> str:
     return "format_conversion"
 
 
-def _build_algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: str) -> dict[str, Any]:
+def _build_algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: AlgorithmType) -> dict[str, Any]:
     interpolation = workflow_config["interpolation"]
     super_resolution = workflow_config["superResolution"]
     if algorithm_type == "frame_interpolation":
@@ -160,7 +161,7 @@ def _build_algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: str
     return {}
 
 
-def _resolve_algorithm_types(workflow_config: dict[str, Any], algorithm: str) -> list[str]:
+def _resolve_algorithm_types(workflow_config: dict[str, Any], algorithm: str) -> list[AlgorithmType]:
     enable_interpolation = bool(workflow_config["interpolation"]["enabled"])
     enable_super_resolution = bool(workflow_config["superResolution"]["enabled"])
 
@@ -175,20 +176,20 @@ def _resolve_algorithm_types(workflow_config: dict[str, Any], algorithm: str) ->
     return [algorithm]
 
 
-def _compose_filter_chain(workflow_config: dict[str, Any], kind: str, existing_count: int) -> dict[str, Any] | None:
+def _compose_filter_chain(workflow_config: dict[str, Any], kind: str, existing_count: int) -> ProcessingStep | None:
     section = workflow_config.get(kind, {})
     if not section.get("enabled"):
         return None
-    return {
-        "algorithm_type": "frame_filter_chain",
-        "algorithm_kwargs": {"filters": section["filters"]},
-        "stage_name": f"{existing_count + 1:02d}_{kind}",
-    }
+    return ProcessingStep(
+        algorithm_type="frame_filter_chain",
+        algorithm_kwargs={"filters": section["filters"]},
+        stage_name=f"{existing_count + 1:02d}_{kind}",
+    )
 
 
-def _steps_from_workflow(workflow_config: dict[str, Any], algorithm: str) -> list[dict[str, Any]]:
+def _steps_from_workflow(workflow_config: dict[str, Any], algorithm: str) -> list[ProcessingStep]:
     algorithm_types = _resolve_algorithm_types(workflow_config, algorithm)
-    steps: list[dict[str, Any]] = []
+    steps: list[ProcessingStep] = []
 
     preprocess = _compose_filter_chain(workflow_config, "preprocess", len(steps))
     if preprocess is not None:
@@ -196,11 +197,11 @@ def _steps_from_workflow(workflow_config: dict[str, Any], algorithm: str) -> lis
 
     for algorithm_type in algorithm_types:
         steps.append(
-            {
-                "algorithm_type": algorithm_type,
-                "algorithm_kwargs": _build_algorithm_kwargs(workflow_config, algorithm_type),
-                "stage_name": f"{len(steps) + 1:02d}_{algorithm_type}",
-            }
+            ProcessingStep(
+                algorithm_type=algorithm_type,
+                algorithm_kwargs=_build_algorithm_kwargs(workflow_config, algorithm_type),
+                stage_name=f"{len(steps) + 1:02d}_{algorithm_type}",
+            )
         )
 
     postprocess = _compose_filter_chain(workflow_config, "postprocess", len(steps))
@@ -210,7 +211,7 @@ def _steps_from_workflow(workflow_config: dict[str, Any], algorithm: str) -> lis
     return steps
 
 
-def _resolve_processing_steps(config_or_args: dict[str, Any] | argparse.Namespace) -> list[dict[str, Any]]:
+def _resolve_processing_steps(config_or_args: dict[str, Any] | argparse.Namespace) -> list[ProcessingStep]:
     if isinstance(config_or_args, argparse.Namespace):
         workflow_config = _default_workflow_config(config_or_args)
         algorithm = config_or_args.algorithm
@@ -276,7 +277,7 @@ def _resolve_expected_output_frames(
     ffmpeg: FFmpegWrapper,
     input_path: str,
     workflow_config: dict[str, Any],
-    processing_steps: list[dict[str, Any]],
+    processing_steps: list[ProcessingStepInput],
     final_output_fps: float | None,
 ) -> int:
     source_frames = ffmpeg.get_frame_count(input_path)

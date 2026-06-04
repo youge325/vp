@@ -14,12 +14,15 @@ from typing import Any, Callable
 
 from app.errors import ResumeConflictError
 from app.planning import (
+    ProcessingStepInput,
     ResumeMode,
     ResumeState,
     SegmentManifest,
     StagePlan,
     build_signature,
     build_stage_plan,
+    normalize_processing_steps,
+    processing_steps_to_jsonable,
     resolve_video_info,
 )
 from app.processing.streaming.decoder import _decoder_worker
@@ -48,7 +51,7 @@ def process_video_streaming(
     encode_config: dict[str, Any],
     workflow_config: dict[str, Any],
     output_config: dict[str, Any],
-    processing_steps: list[dict[str, Any]],
+    processing_steps: list[ProcessingStepInput],
     tensor_backend_name: str,
     progress_callbacks: list[Callable[[int, int], None]],
     output_fps: float | None = None,
@@ -61,9 +64,10 @@ def process_video_streaming(
         # Standalone caller (tests, smoke scripts) — keep the call site
         # simple by self-provisioning metrics that nobody reads.
         metrics = PipelineMetrics()
+    resolved_steps = normalize_processing_steps(processing_steps)
     video_info = resolve_video_info(ffmpeg, input_path)
     stage_plan = build_stage_plan(
-        processing_steps,
+        resolved_steps,
         video_info["source_frames"],
         source_duration=video_info["duration"],
         output_fps=output_fps,
@@ -75,7 +79,7 @@ def process_video_streaming(
         encode_config=encode_config,
         workflow_config=workflow_config,
         output_config=output_config,
-        processing_steps=processing_steps,
+        processing_steps=resolved_steps,
         video_info=video_info,
     )
     config_snapshot = _build_config_snapshot(
@@ -85,7 +89,7 @@ def process_video_streaming(
         encode_config=encode_config,
         workflow_config=workflow_config,
         output_config=output_config,
-        processing_steps=processing_steps,
+        processing_steps=resolved_steps,
         video_info=video_info,
     )
 
@@ -159,7 +163,7 @@ def _build_config_snapshot(
     encode_config: dict[str, Any],
     workflow_config: dict[str, Any],
     output_config: dict[str, Any],
-    processing_steps: list[dict[str, Any]],
+    processing_steps: list[ProcessingStepInput],
     video_info: dict[str, Any],
 ) -> dict[str, Any]:
     """Capture the parameters that determine signature + behaviour for a run."""
@@ -172,7 +176,7 @@ def _build_config_snapshot(
         "output_config": {
             "segmentFrames": max(1, int(output_config.get("segmentFrames") or 1000)),
         },
-        "processing_steps": processing_steps,
+        "processing_steps": processing_steps_to_jsonable(processing_steps),
         "video_info": {
             "width": video_info["width"],
             "height": video_info["height"],
@@ -299,7 +303,7 @@ def _resolved_stream_fps(source_fps: float, stage_plan: StagePlan) -> float:
     interpolation_step = stage_plan.interpolation_step
     if interpolation_step is None:
         return source_fps
-    multi = int(interpolation_step["algorithm_kwargs"].get("multi") or 2)
+    multi = int(interpolation_step.algorithm_kwargs.get("multi") or 2)
     return source_fps * multi
 
 
@@ -329,9 +333,9 @@ def _resolved_output_dimensions(
         return width, height
 
     for step in [*stage_plan.pre_steps, *stage_plan.post_steps]:
-        if step["algorithm_type"] != "super_resolution":
+        if step.algorithm_type != "super_resolution":
             continue
-        kwargs = step["algorithm_kwargs"]
+        kwargs = step.algorithm_kwargs
         if not kwargs.get("onnx_model"):
             continue
         scale_factor = float(kwargs.get("scale_factor") or 1.0)
