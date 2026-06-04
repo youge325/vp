@@ -2,7 +2,7 @@
 
 ## Tauri Command 面
 
-Rust 层通过 `#[tauri::command]` 暴露 12 个命令，前端通过 `@tauri-apps/api/core` 的 `invoke()` 调用。
+Rust 层通过 `#[tauri::command]` 暴露 11 个命令，前端通过 `@tauri-apps/api/core` 的 `invoke()` 调用。
 
 ### Command 清单
 
@@ -17,8 +17,7 @@ Rust 层通过 `#[tauri::command]` 暴露 12 个命令，前端通过 `@tauri-ap
 | `check_resume_state` | `(request: TaskRequest) -> Result<Value, ShellError>` | 预检查输出文件和续传 sidecar 状态 | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
 | `start_task` | `(request: TaskRequest) -> Result<(), ShellError>` | 启动 Python 处理子进程 | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
 | `cancel_task` | `() -> Result<(), ShellError>` | 取消当前运行任务（协作式） | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
-| `pause_task` | `() -> Result<(), ShellError>` | 暂停当前运行任务 | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
-| `resume_task` | `() -> Result<(), ShellError>` | 恢复当前暂停任务 | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
+| `control_task` | `(kind: TaskControlKind) -> Result<(), ShellError>` | 暂停或恢复当前运行任务（`pause` / `resume`） | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
 | `open_output_location` | `(path: String) -> Result<(), ShellError>` | 用系统默认程序打开输出目录 | [`dialogs.rs`](../frontend/src-tauri/src/dialogs.rs) |
 
 所有命令体均为 `async fn`；对话框命令使用 `rfd::AsyncFileDialog` 避免阻塞 tokio runtime。
@@ -31,7 +30,7 @@ Rust 层通过 `#[tauri::command]` 暴露 12 个命令，前端通过 `@tauri-ap
 pub const APP_COMMAND_NAMES: &[&str] = &[
     "pick_inputs",
     "pick_output_directory",
-    // ... 12 个命令
+    // ... 11 个命令
 ];
 ```
 

@@ -34,7 +34,7 @@ graph TB
     end
 
     subgraph RS["Rust 桌面外壳层 (Tauri v2)"]
-        R1["12 个 Tauri Commands"]
+        R1["11 个 Tauri Commands"]
         R2["数据模型 (models/) + ts-rs 生成"]
         R3["任务管理 (tasks/)"]
         R4["运行时解析 (runtime/)"]
