@@ -17,9 +17,9 @@ from typing import Any
 
 import numpy as np
 
-from app.planning import StagePlan
+from app.planning import ProcessingStep, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.processor import _process_interpolated_stream
+from app.processing.streaming.processor import _PipelineAlgorithms, _StepAlgorithm, _process_interpolated_stream
 from app.processing.streaming.queues import (
     DecodedFrame,
     EncodedFrame,
@@ -76,17 +76,31 @@ def _drain_encode_queue(encode_queue: queue.Queue[Any]) -> list[Any]:
 
 
 def _build_stage_plan(*, multi: int, total_output_frames: int) -> StagePlan:
+    interpolation_step = ProcessingStep(
+        algorithm_type="frame_interpolation",
+        algorithm_kwargs={"multi": multi},
+        stage_name="interp",
+    )
     return StagePlan(
         pre_steps=[],
-        interpolation_step={
-            "algorithm_type": "frame_interpolation",
-            "algorithm_kwargs": {"multi": multi},
-            "stage_name": "interp",
-        },
+        interpolation_step=interpolation_step,
         post_steps=[],
         total_output_frames=total_output_frames,
         total_encoded_frames=total_output_frames,
         total_pairs=max(total_output_frames // multi - 1, 1),
+    )
+
+
+def _build_algorithms(backend: _CountingBackend) -> _PipelineAlgorithms:
+    step = ProcessingStep(
+        algorithm_type="frame_interpolation",
+        algorithm_kwargs={"multi": 2},
+        stage_name="interp",
+    )
+    return _PipelineAlgorithms(
+        pre=[],
+        interpolation=_StepAlgorithm(step=step, backend=backend, algorithm=_MidpointInterpolation()),
+        post=[],
     )
 
 
@@ -101,11 +115,7 @@ def test_prev_tensor_is_reused_across_consecutive_pairs() -> None:
     output_total = source_count * multi - (multi - 1)  # 7 = 4 源帧 + 3 中间帧
 
     backend = _CountingBackend()
-    algorithms = {
-        "single": [],
-        "interpolation": (backend, _MidpointInterpolation()),
-        "post": [],
-    }
+    algorithms = _build_algorithms(backend)
     stage_plan = _build_stage_plan(multi=multi, total_output_frames=output_total)
 
     decode_queue: queue.Queue[Any] = queue.Queue()
@@ -154,11 +164,7 @@ def test_prev_tensor_is_reused_across_consecutive_pairs() -> None:
 def test_single_source_frame_does_not_trigger_h2d() -> None:
     """仅 1 个源帧:never 进入插值循环,故首帧的 lazy H2D 也不应触发。"""
     backend = _CountingBackend()
-    algorithms = {
-        "single": [],
-        "interpolation": (backend, _MidpointInterpolation()),
-        "post": [],
-    }
+    algorithms = _build_algorithms(backend)
     stage_plan = _build_stage_plan(multi=2, total_output_frames=1)
 
     decode_queue: queue.Queue[Any] = queue.Queue()
@@ -192,11 +198,7 @@ def test_higher_multi_does_not_inflate_h2d_count() -> None:
     output_total = (source_count - 1) * multi + 1
 
     backend = _CountingBackend()
-    algorithms = {
-        "single": [],
-        "interpolation": (backend, _MidpointInterpolation()),
-        "post": [],
-    }
+    algorithms = _build_algorithms(backend)
     stage_plan = _build_stage_plan(multi=multi, total_output_frames=output_total)
 
     decode_queue: queue.Queue[Any] = queue.Queue()

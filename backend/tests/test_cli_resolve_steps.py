@@ -42,10 +42,10 @@ def test_preprocess_prepended_before_interpolation():
         }
     )
     steps = _resolve_processing_steps(config)
-    assert [s["algorithm_type"] for s in steps] == ["frame_filter_chain", "frame_interpolation"]
-    assert steps[0]["algorithm_kwargs"]["filters"][0]["kind"] == "scale"
-    assert steps[0]["stage_name"] == "01_preprocess"
-    assert steps[1]["stage_name"] == "02_frame_interpolation"
+    assert [s.algorithm_type for s in steps] == ["frame_filter_chain", "frame_interpolation"]
+    assert steps[0].algorithm_kwargs["filters"][0]["kind"] == "scale"
+    assert steps[0].stage_name == "01_preprocess"
+    assert steps[1].stage_name == "02_frame_interpolation"
 
 
 def test_postprocess_appended_after_interpolation():
@@ -56,10 +56,10 @@ def test_postprocess_appended_after_interpolation():
         }
     )
     steps = _resolve_processing_steps(config)
-    assert [s["algorithm_type"] for s in steps] == ["frame_interpolation", "frame_filter_chain"]
-    assert steps[1]["algorithm_kwargs"]["filters"][0]["kind"] == "sharpen"
-    assert steps[0]["stage_name"] == "01_frame_interpolation"
-    assert steps[1]["stage_name"] == "02_postprocess"
+    assert [s.algorithm_type for s in steps] == ["frame_interpolation", "frame_filter_chain"]
+    assert steps[1].algorithm_kwargs["filters"][0]["kind"] == "sharpen"
+    assert steps[0].stage_name == "01_frame_interpolation"
+    assert steps[1].stage_name == "02_postprocess"
 
 
 def test_both_pre_and_postprocess():
@@ -74,20 +74,20 @@ def test_both_pre_and_postprocess():
         },
     )
     steps = _resolve_processing_steps(config)
-    assert [s["algorithm_type"] for s in steps] == [
+    assert [s.algorithm_type for s in steps] == [
         "frame_filter_chain",
         "frame_interpolation",
         "frame_filter_chain",
     ]
-    assert steps[0]["stage_name"] == "01_preprocess"
-    assert steps[1]["stage_name"] == "02_frame_interpolation"
-    assert steps[2]["stage_name"] == "03_postprocess"
+    assert steps[0].stage_name == "01_preprocess"
+    assert steps[1].stage_name == "02_frame_interpolation"
+    assert steps[2].stage_name == "03_postprocess"
 
 
 def test_disabled_pre_post_not_included():
     config = _make_workflow_config()
     steps = _resolve_processing_steps(config)
-    assert all(s["algorithm_type"] != "frame_filter_chain" for s in steps)
+    assert all(s.algorithm_type != "frame_filter_chain" for s in steps)
 
 
 def test_preprocess_with_super_resolution_combined():
@@ -100,7 +100,7 @@ def test_preprocess_with_super_resolution_combined():
         },
     )
     steps = _resolve_processing_steps(config)
-    assert [s["algorithm_type"] for s in steps] == [
+    assert [s.algorithm_type for s in steps] == [
         "frame_filter_chain",
         "super_resolution",
         "frame_interpolation",
@@ -127,5 +127,5 @@ def test_postprocess_with_format_conversion():
     steps = _resolve_processing_steps(config)
     # format_conversion with no interpolation/sr gives empty algorithm_types,
     # postprocess should still be appended
-    assert [s["algorithm_type"] for s in steps] == ["frame_filter_chain"]
-    assert steps[0]["stage_name"] == "01_postprocess"
+    assert [s.algorithm_type for s in steps] == ["frame_filter_chain"]
+    assert steps[0].stage_name == "01_postprocess"

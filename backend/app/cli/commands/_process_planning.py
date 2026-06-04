@@ -22,6 +22,7 @@ from app.cli.defaults import (
 )
 from app.config import settings
 from app.errors import TaskErrorCode, raise_error
+from app.planning import ProcessingStep
 from app.processing.streaming.metrics import PipelineMetrics
 from app.protocol.reporter import CliProgressReporter
 from app.utils.ffmpeg import FFmpegWrapper
@@ -35,7 +36,7 @@ class ProcessingPlan:
 
     output_path: str
     output_dir: str
-    processing_steps: list[dict[str, Any]]
+    processing_steps: list[ProcessingStep]
     tensor_backend_name: str
     final_output_fps: float | None
     expected_output_frames: int
@@ -50,18 +51,18 @@ def _get_onnx_model_name(config: dict[str, Any]) -> str | None:
 
 def _validate_onnx_models_for_workflow(
     workflow_config: dict[str, Any],
-    processing_steps: list[dict[str, Any]],
+    processing_steps: list[ProcessingStep],
     tensor_backend_name: str,
 ) -> None:
     if tensor_backend_name != "onnx":
         return
 
     for step in processing_steps:
-        if step["algorithm_type"] == "frame_interpolation":
+        if step.algorithm_type == "frame_interpolation":
             model_name = _get_onnx_model_name(workflow_config["interpolation"])
             algorithm = workflow_config["interpolation"].get("algorithm", "rife")
             resolve_onnx_model_path("interpolation", algorithm, model_name, model_root=settings.RIFE_MODEL_DIR)
-        elif step["algorithm_type"] == "super_resolution":
+        elif step.algorithm_type == "super_resolution":
             model_name = _get_onnx_model_name(workflow_config["superResolution"])
             algorithm = workflow_config["superResolution"].get("algorithm", "placeholder")
             resolve_onnx_model_path("super_resolution", algorithm, model_name, model_root=settings.RIFE_MODEL_DIR)
@@ -92,7 +93,7 @@ def _make_stage_progress_callback(
 
 def _verify_model_availability(
     workflow_config: dict[str, Any],
-    processing_steps: list[dict[str, Any]],
+    processing_steps: list[ProcessingStep],
     tensor_backend_name: str,
 ) -> None:
     """Per-backend model existence guard.
@@ -239,7 +240,7 @@ def build_plan(
             reporter=progress_reporter,
             stage_index=stage_index,
             stage_total=len(processing_steps),
-            stage_name=step.get("stage_name") or step.get("algorithm_type") or f"stage_{stage_index}",
+            stage_name=step.stage_name or step.algorithm_type or f"stage_{stage_index}",
         )
         for stage_index, step in enumerate(processing_steps, start=1)
     ]
