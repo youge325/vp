@@ -17,9 +17,10 @@ Phase D.3.1 — ``load_configs`` 现在支持两种 wire 格式:
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import sys
-from typing import Any
+from typing import Any, TypeVar
 
 from app.cli.defaults import (
     _default_decode_config,
@@ -27,10 +28,13 @@ from app.cli.defaults import (
     _default_output_config,
     _default_workflow_config,
 )
+from app.cli.runtime_configs import RuntimeConfigs
 from app.errors import TaskErrorCode, raise_error
 from app.models import DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig
 from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.file_utils import validate_input_path
+
+ConfigModel = TypeVar("ConfigModel", DecodeConfig, EncodeConfig, WorkflowConfig, OutputConfig)
 
 
 def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
@@ -43,26 +47,51 @@ def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, An
     return merged
 
 
-def _load_json_arg(
+def _validate_config_section(
     raw_value: str | None,
     default: dict[str, Any],
-    model_cls: type,
-) -> dict[str, Any]:
-    """Parse + deep-merge + Pydantic-validate a ``--*-config-json`` arg."""
-    if not raw_value:
-        return default
-    try:
-        payload = json.loads(raw_value)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid JSON payload: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError("JSON payload must be an object.")
-    merged = _deep_merge(default, payload)
+    model_cls: type[ConfigModel],
+) -> tuple[ConfigModel, dict[str, Any]]:
+    """Parse + deep-merge + Pydantic-validate one config section.
+
+    ``legacy`` intentionally mirrors the old ``_load_json_arg`` shape:
+    defaults without an override keep their original dict shape, while an
+    explicit JSON payload round-trips through Pydantic and gains model
+    defaults. Output config is the exception: even the default path must
+    validate so missing outputDir fails loudly.
+    """
+    has_override = bool(raw_value)
+    if has_override:
+        try:
+            payload = json.loads(raw_value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON payload: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("JSON payload must be an object.")
+        merged = _deep_merge(default, payload)
+    else:
+        merged = copy.deepcopy(default)
+
     try:
         validated = model_cls.model_validate(merged)
     except Exception as exc:
         raise ValueError(f"Config validation failed for {model_cls.__name__}: {exc}") from exc
-    return validated.model_dump(by_alias=True)
+
+    if isinstance(validated, OutputConfig) and not validated.output_dir:
+        raise ValueError("Config validation failed for OutputConfig: outputDir is required.")
+
+    legacy = validated.model_dump(by_alias=True) if has_override else merged
+    return validated, legacy
+
+
+def _load_json_arg(
+    raw_value: str | None,
+    default: dict[str, Any],
+    model_cls: type[ConfigModel],
+) -> dict[str, Any]:
+    """Compatibility wrapper returning only the legacy camelCase dict."""
+    _model, legacy = _validate_config_section(raw_value, default, model_cls)
+    return legacy
 
 
 def ensure_input_and_ffmpeg(input_path: str) -> FFmpegWrapper:
@@ -151,24 +180,51 @@ def collect_config_sections(args: argparse.Namespace) -> dict[str, str | None]:
     }
 
 
-def load_configs(
-    args: argparse.Namespace,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Materialise the four config dicts from CLI JSON args or stdin.
+def load_runtime_configs(args: argparse.Namespace) -> RuntimeConfigs:
+    """Materialise typed runtime configs from CLI JSON args or stdin.
 
-    Returns ``(decode_config, encode_config, workflow_config, output_config)``
-    — all camelCase, all Pydantic-validated. ``ValueError`` from any
-    sub-call is caught and re-emitted as ``INVALID_CONFIG`` so the frontend
-    sees a typed error rather than a stack trace.
+    The returned bundle carries Pydantic models for internal code and the
+    legacy camelCase dict snapshots for existing wire/FFmpeg/signature
+    boundaries. ``ValueError`` from any sub-call is caught and re-emitted
+    as ``INVALID_CONFIG`` so the frontend sees a typed error rather than a
+    stack trace.
     """
     sections = collect_config_sections(args)
     try:
-        decode_config = _load_json_arg(sections["decode"], _default_decode_config(), DecodeConfig)
-        encode_config = _load_json_arg(sections["encode"], _default_encode_config(args), EncodeConfig)
-        workflow_config = _load_json_arg(sections["workflow"], _default_workflow_config(args), WorkflowConfig)
-        output_config = _load_json_arg(sections["output"], _default_output_config(args), OutputConfig)
+        decode, decode_json = _validate_config_section(sections["decode"], _default_decode_config(), DecodeConfig)
+        encode, encode_json = _validate_config_section(
+            sections["encode"],
+            _default_encode_config(args),
+            EncodeConfig,
+        )
+        workflow, workflow_json = _validate_config_section(
+            sections["workflow"],
+            _default_workflow_config(args),
+            WorkflowConfig,
+        )
+        output, output_json = _validate_config_section(
+            sections["output"],
+            _default_output_config(args),
+            OutputConfig,
+        )
     except ValueError as exc:
         raise_error(TaskErrorCode.INVALID_CONFIG, str(exc))
         raise  # unreachable; appeases the type-checker
 
-    return decode_config, encode_config, workflow_config, output_config
+    return RuntimeConfigs(
+        decode=decode,
+        encode=encode,
+        workflow=workflow,
+        output=output,
+        decode_json=decode_json,
+        encode_json=encode_json,
+        workflow_json=workflow_json,
+        output_json=output_json,
+    )
+
+
+def load_configs(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Compatibility wrapper returning legacy config dicts."""
+    return load_runtime_configs(args).legacy_tuple()

@@ -18,7 +18,7 @@ from pathlib import Path
 
 from app.cli.commands._process_validation import (
     ensure_input_and_ffmpeg,
-    load_configs,
+    load_runtime_configs,
 )
 from app.cli.defaults import (
     _resolve_processing_steps,
@@ -38,14 +38,15 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     input_path = args.input
     ffmpeg = ensure_input_and_ffmpeg(input_path)
 
-    decode_config, encode_config, workflow_config, output_config = load_configs(args)
+    configs = load_runtime_configs(args)
+    workflow_config = configs.workflow_json
 
     processing_steps = _resolve_processing_steps(workflow_config)
 
     # Phase 18 — Pydantic ``OutputConfig`` validator 保证 outputDir 必填非空,
     # 这里不再 ``or settings.OUTPUT_DIR`` 兜底。
-    output_dir = output_config["outputDir"]
-    container = str(encode_config.get("container") or "mp4")
+    output_dir = configs.output.output_dir
+    container = configs.encode.container or "mp4"
     if args.output:
         output_path = args.output
     else:
@@ -56,6 +57,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
         ffmpeg,
         input_path,
     )
+    configs = configs.with_workflow_json(workflow_config)
 
     video_info = resolve_video_info(ffmpeg, input_path)
     stage_plan = build_stage_plan(
@@ -66,6 +68,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     )
 
     if processing_steps:
+        decode_config, encode_config, workflow_config, output_config = configs.legacy_tuple()
         signature = build_signature(
             input_path=input_path,
             output_path=output_path,

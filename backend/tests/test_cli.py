@@ -6,13 +6,14 @@ import json
 import pytest
 
 from app.cli import build_parser, cmd_check
-from app.cli.commands._process_validation import _load_json_arg
+from app.cli.commands._process_validation import _load_json_arg, load_configs, load_runtime_configs
 from app.cli.defaults import (
     _default_output_config,
     _resolve_expected_output_frames,
     _resolve_processing_steps,
 )
 from app.config import settings
+from app.errors import ProcessError, TaskErrorCode
 from app.planning import (
     ProcessingStep,
     build_signature,
@@ -45,6 +46,36 @@ class _FakeCheckFFmpeg:
 
     def discover_capabilities(self, _gpu_adapters):
         return {"hwaccels": [], "encoderProfiles": [], "decoderProfiles": []}
+
+
+def _make_runtime_args(**overrides):
+    values = {
+        "config_stdin": False,
+        "decode_config_json": None,
+        "workflow_config_json": None,
+        "encode_config_json": None,
+        "output_config_json": None,
+        "algorithm": "frame_interpolation",
+        "enable_interpolation": False,
+        "enable_super_resolution": False,
+        "process_order": "super_resolution_then_interpolation",
+        "fps": 60.0,
+        "fps_mode": "multi",
+        "target_fps": 60.0,
+        "codec": "libx264",
+        "crf": 18,
+        "preset": "medium",
+        "backend": "pytorch",
+        "output_dir": "D:/output",
+        "multi": None,
+        "model": None,
+        "scale": None,
+        "fp16": None,
+        "sr_scale_factor": 2.0,
+        "sr_algorithm": "placeholder",
+    }
+    values.update(overrides)
+    return argparse.Namespace(**values)
 
 
 def _make_workflow_config(**overrides):
@@ -203,6 +234,90 @@ def test_typed_processing_steps_keep_signature_compatible_with_legacy_mapping(tm
         video_info=video_info,
     )
 
+    assert typed_signature == legacy_signature
+
+
+def test_load_runtime_configs_returns_typed_models_and_legacy_shape():
+    configs = load_runtime_configs(_make_runtime_args(output_dir="D:/typed-output"))
+
+    assert configs.decode.mode == "software"
+    assert configs.workflow.interpolation.tensor_backend == "pytorch"
+    assert configs.output.output_dir == "D:/typed-output"
+
+    decode_config, encode_config, workflow_config, output_config = configs.legacy_tuple()
+    assert decode_config["mode"] == "software"
+    assert "hwaccelDevice" not in decode_config
+    assert encode_config["keepAudio"] is True
+    assert workflow_config["interpolation"]["tensorBackend"] == "pytorch"
+    assert output_config["outputDir"] == "D:/typed-output"
+
+
+def test_load_configs_keeps_legacy_tuple_interface():
+    decode_config, encode_config, workflow_config, output_config = load_configs(
+        _make_runtime_args(output_dir="D:/legacy-output")
+    )
+
+    assert decode_config["decoder"] == "software"
+    assert encode_config["rateControl"] == {"mode": "crf", "value": 18}
+    assert workflow_config["processOrder"] == "super_resolution_then_interpolation"
+    assert output_config["outputDir"] == "D:/legacy-output"
+
+
+def test_load_runtime_configs_rejects_missing_output_dir():
+    with pytest.raises(ProcessError) as exc_info:
+        load_runtime_configs(_make_runtime_args(output_dir=None))
+
+    assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
+    assert "outputDir" in exc_info.value.message
+
+
+def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
+    input_path = tmp_path / "input.mp4"
+    output_path = tmp_path / "out.mp4"
+    input_path.write_bytes(b"video")
+    configs = load_runtime_configs(_make_runtime_args(output_dir=str(tmp_path)))
+    workflow_config = {
+        **configs.workflow_json,
+        "interpolation": {**configs.workflow_json["interpolation"], "multi": 3},
+    }
+    updated = configs.with_workflow_json(workflow_config)
+    processing_steps = [
+        ProcessingStep(
+            algorithm_type="frame_interpolation",
+            algorithm_kwargs={"multi": 3, "model_version": "4.25", "scale": 1.0, "fp16": False},
+            stage_name="01_frame_interpolation",
+        )
+    ]
+    video_info = {
+        "width": 1280,
+        "height": 720,
+        "source_fps": 30.0,
+        "source_frames": 60,
+    }
+    decode_config, encode_config, typed_workflow_config, output_config = updated.legacy_tuple()
+
+    typed_signature = build_signature(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        decode_config=decode_config,
+        encode_config=encode_config,
+        workflow_config=typed_workflow_config,
+        output_config=output_config,
+        processing_steps=processing_steps,
+        video_info=video_info,
+    )
+    legacy_signature = build_signature(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        decode_config=decode_config,
+        encode_config=encode_config,
+        workflow_config=workflow_config,
+        output_config=output_config,
+        processing_steps=processing_steps,
+        video_info=video_info,
+    )
+
+    assert updated.workflow.interpolation.multi == 3
     assert typed_signature == legacy_signature
 
 
