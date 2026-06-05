@@ -27,6 +27,12 @@ from app.models import (
     SuperResolutionConfig,
     WorkflowConfig,
 )
+from app.protocol.payloads import (
+    ResumeStatusPayload,
+    TaskCompletedPayload,
+    TaskErrorPayload,
+    TaskProgressPayload,
+)
 
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "frontend" / "src-tauri" / "schemas"
 
@@ -42,6 +48,18 @@ _MODEL_MAP: dict[str, type] = {
     "rate_control_config": RateControlConfig,
     "super_resolution_config": SuperResolutionConfig,
     "workflow_config": WorkflowConfig,
+}
+
+_PAYLOAD_MODEL_MAP: dict[str, type] = {
+    "resume_status_payload": ResumeStatusPayload,
+    "task_completed_payload": TaskCompletedPayload,
+    "task_error_payload": TaskErrorPayload,
+    "task_progress_payload": TaskProgressPayload,
+}
+
+_FREEFORM_PAYLOAD_PROPS: dict[str, set[str]] = {
+    "task_error_payload": {"details"},
+    "task_progress_payload": {"metrics"},
 }
 
 
@@ -102,13 +120,18 @@ def _enum_values(prop_schema: dict) -> set[str] | None:
     return None
 
 
-@pytest.mark.parametrize("schema_name,model_cls", _MODEL_MAP.items())
-def test_property_names_and_types_match(schema_name: str, model_cls: type) -> None:
+def _assert_schema_matches_python_model(
+    schema_name: str,
+    model_cls: type,
+    *,
+    freeform_props: set[str] | None = None,
+) -> None:
     rust_path = SCHEMA_DIR / f"{schema_name}.schema.json"
     assert rust_path.exists(), f"Rust schema missing: {rust_path}"
 
     rust_schema = json.loads(rust_path.read_text(encoding="utf-8"))
     py_schema = model_cls.model_json_schema()
+    freeform_props = freeform_props or set()
 
     rust_props = _collect_props(rust_schema)
     py_props = _collect_props(py_schema)
@@ -118,17 +141,34 @@ def test_property_names_and_types_match(schema_name: str, model_cls: type) -> No
     )
 
     for name in rust_props:
-        rust_type = _type_token(rust_props[name])
-        py_type = _type_token(py_props[name])
-        assert rust_type == py_type, f"Type mismatch for {schema_name}.{name}: rust={rust_type} vs py={py_type}"
-
         rust_req = _is_required(rust_schema, name)
         py_req = _is_required(py_schema, name)
         assert rust_req == py_req, f"Required mismatch for {schema_name}.{name}: rust={rust_req} vs py={py_req}"
 
+        if name in freeform_props:
+            continue
+
+        rust_type = _type_token(rust_props[name])
+        py_type = _type_token(py_props[name])
+        assert rust_type == py_type, f"Type mismatch for {schema_name}.{name}: rust={rust_type} vs py={py_type}"
+
         rust_enum = _enum_values(rust_props[name])
         py_enum = _enum_values(py_props[name])
         assert rust_enum == py_enum, f"Enum mismatch for {schema_name}.{name}: rust={rust_enum} vs py={py_enum}"
+
+
+@pytest.mark.parametrize("schema_name,model_cls", _MODEL_MAP.items())
+def test_property_names_and_types_match(schema_name: str, model_cls: type) -> None:
+    _assert_schema_matches_python_model(schema_name, model_cls)
+
+
+@pytest.mark.parametrize("schema_name,model_cls", _PAYLOAD_MODEL_MAP.items())
+def test_ndjson_payload_schema_matches_rust(schema_name: str, model_cls: type) -> None:
+    _assert_schema_matches_python_model(
+        schema_name,
+        model_cls,
+        freeform_props=_FREEFORM_PAYLOAD_PROPS.get(schema_name),
+    )
 
 
 def test_task_error_codes_match_rust() -> None:
