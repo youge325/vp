@@ -12,6 +12,13 @@ import json
 from enum import Enum
 from typing import Any
 
+from app.protocol.payloads import (
+    ResumeStatusPayload,
+    TaskCompletedPayload,
+    TaskErrorPayload,
+    TaskProgressPayload,
+)
+
 
 # SSOT for NDJSON wire names. Cross-language drift is gated by
 # ``scripts/check_error_code_drift.py`` (Phase 9):
@@ -62,21 +69,19 @@ class NdjsonEmitter:
         stage_total: int,
         metrics: dict[str, Any] | None = None,
     ) -> None:
-        payload: dict[str, Any] = {
-            "current": current,
-            "total": total,
-            "percent": percent,
-            "stage": stage,
-            "stageIndex": stage_index,
-            "stageTotal": stage_total,
-        }
-        # Phase D.2.3 — pipeline observability rides along on the progress
-        # frame. Fields land under ``metrics`` so the existing top-level
-        # schema stays untouched and Rust / older clients can ignore the
-        # bag entirely.
-        if metrics:
-            payload["metrics"] = metrics
-        self._emit(NdjsonEventType.PROGRESS, payload)
+        payload = TaskProgressPayload(
+            current=current,
+            total=total,
+            percent=percent,
+            stage=stage,
+            stage_index=stage_index,
+            stage_total=stage_total,
+            # Phase D.2.3 — pipeline observability rides along on the
+            # progress frame. Empty snapshots keep the old "field absent"
+            # wire shape.
+            metrics=metrics if metrics else None,
+        )
+        self._emit(NdjsonEventType.PROGRESS, payload.to_wire())
 
     def completed(
         self,
@@ -84,14 +89,12 @@ class NdjsonEmitter:
         processed_frames: int,
         time_seconds: float,
     ) -> None:
-        self._emit(
-            NdjsonEventType.COMPLETED,
-            {
-                "outputPath": output_path,
-                "processedFrames": processed_frames,
-                "timeSeconds": time_seconds,
-            },
+        payload = TaskCompletedPayload(
+            output_path=output_path,
+            processed_frames=processed_frames,
+            time_seconds=time_seconds,
         )
+        self._emit(NdjsonEventType.COMPLETED, payload.to_wire())
 
     def error(
         self,
@@ -99,14 +102,8 @@ class NdjsonEmitter:
         message: str,
         details: dict[str, Any] | None = None,
     ) -> None:
-        self._emit(
-            NdjsonEventType.ERROR,
-            {
-                "code": code,
-                "message": message,
-                "details": details or {},
-            },
-        )
+        payload = TaskErrorPayload(code=code, message=message, details=details or {})
+        self._emit(NdjsonEventType.ERROR, payload.to_wire())
 
     def resume_status(
         self,
@@ -116,16 +113,14 @@ class NdjsonEmitter:
         start_source_frame: int,
         total_output_frames: int,
     ) -> None:
-        self._emit(
-            NdjsonEventType.RESUME_STATUS,
-            {
-                "resumed": resumed,
-                "completedChunks": completed_chunks,
-                "completedOutputFrames": completed_output_frames,
-                "startSourceFrame": start_source_frame,
-                "totalOutputFrames": total_output_frames,
-            },
+        payload = ResumeStatusPayload(
+            resumed=resumed,
+            completed_chunks=completed_chunks,
+            completed_output_frames=completed_output_frames,
+            start_source_frame=start_source_frame,
+            total_output_frames=total_output_frames,
         )
+        self._emit(NdjsonEventType.RESUME_STATUS, payload.to_wire())
 
     def resume_inspection(self, **kwargs: Any) -> None:
         self._emit(NdjsonEventType.RESUME_INSPECTION, kwargs)
