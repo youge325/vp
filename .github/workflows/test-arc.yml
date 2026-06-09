@@ -29,6 +29,7 @@ permissions:
 
 jobs:
   test-frontend-arc:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
     runs-on: vp-linux-arc
     env:
       CARGO_TARGET_DIR: /tmp/vp-cargo-target

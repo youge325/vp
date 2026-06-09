@@ -27,6 +27,7 @@ permissions:
 
 jobs:
   e2e-smoke-arc:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
     runs-on: vp-linux-arc
     env:
       PYTHONIOENCODING: utf-8
@@ -52,6 +53,7 @@ jobs:
           VP_E2E_OUTPUT_DIR: ${{ runner.temp }}/vp-e2e-output
 
   build-e2e-app-arc:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
     runs-on: vp-linux-arc
     env:
       CARGO_TARGET_DIR: /tmp/vp-cargo-target
@@ -91,6 +93,7 @@ jobs:
           retention-days: 1
 
   e2e-ui-arc:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
     runs-on: vp-linux-arc
     needs: build-e2e-app-arc
     env:

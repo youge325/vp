@@ -25,6 +25,7 @@ permissions:
 
 jobs:
   test-backend-pytorch-arc:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
     runs-on: vp-linux-arc-pytorch
     env:
       PYTHONIOENCODING: utf-8
@@ -50,6 +51,7 @@ jobs:
         working-directory: backend
 
   test-backend-paddle-arc:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
     runs-on: vp-linux-arc-paddle
     env:
       PYTHONIOENCODING: utf-8

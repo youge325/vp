@@ -23,6 +23,7 @@ permissions:
 
 jobs:
   e2e-smoke:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
     runs-on: [self-hosted, windows]
     defaults:
       run:
@@ -47,6 +48,7 @@ jobs:
           VP_E2E_OUTPUT_DIR: ${{ runner.temp }}\vp-e2e-output
 
   build-e2e-app:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
     runs-on: [self-hosted, windows]
     defaults:
       run:
@@ -95,6 +97,7 @@ jobs:
           retention-days: 1
 
   e2e-ui:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
     runs-on: [self-hosted, windows]
     needs: build-e2e-app
     defaults:
