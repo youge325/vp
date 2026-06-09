@@ -1,4 +1,4 @@
-name: Test Frontend
+name: Windows Test Frontend
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -1,4 +1,4 @@
-name: Release ARC
+name: Linux Release
 
 on:
   push:

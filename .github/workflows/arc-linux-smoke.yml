@@ -1,4 +1,4 @@
-name: ARC Linux Smoke
+name: Linux ARC Smoke
 
 on:
   workflow_dispatch:
