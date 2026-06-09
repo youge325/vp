@@ -170,7 +170,9 @@ ONNX 引擎默认走 CUDA EP。启用 TensorRT EP：
 
 | 工作流 | 触发条件 | 职责 |
 |--------|----------|------|
-| `build.yml` | push/PR 到 main/master/develop | Windows 自托管构建，生成便携包 zip |
+| `e2e.yml` | push/PR 修改 backend/app/ 或 frontend/ | Windows CLI smoke + 非 task 文件夹 UI E2E |
+| `e2e-arc.yml` | push/PR 修改 backend/app/ 或 frontend/ | ARC CLI smoke + 非 task 文件夹 UI E2E |
+| `e2e-task.yml` | push/PR 修改 backend/app/ 或 frontend/ | Windows/ARC task 文件夹 UI E2E |
 | `release.yml` | push v* 标签 | 构建并发布到 GitHub Release |
 | `test-backend.yml` | push/PR 修改 backend/ | PyTorch 和 Paddle 后端测试 |
 | `test.yml` | push/PR 修改 backend/app/ 或 frontend/ | 前端测试 + 类型检查 + 错误码一致性检查 |

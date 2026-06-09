@@ -108,7 +108,7 @@ jobs:
           if ($totalSize -ge 1GB) { $tSizeStr = "{0:N2} GB" -f ($totalSize / 1GB) } elseif ($totalSize -ge 1MB) { $tSizeStr = "{0:N1} MB" -f ($totalSize / 1MB) } else { $tSizeStr = "$totalSize bytes" }
           Write-Host "Total staging size: $tSizeStr"
 
-          # Create zip using tar.exe (same as build.yml, no 7zip dependency)
+          # Create zip using tar.exe so the release path has no 7zip dependency.
           $version = $env:GITHUB_REF_NAME -replace '^v',''
           $zipBaseName = "VP-Workbench-${version}-windows-x64"
           $zipPath = "$releaseDir/$zipBaseName.zip"
