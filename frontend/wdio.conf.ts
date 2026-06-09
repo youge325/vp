@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import net from 'node:net'
-import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { platform, tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 
@@ -20,6 +20,7 @@ const useOffscreenWindow = process.env.VP_E2E_OFFSCREEN_WINDOW === '1'
 const hiddenEdgeDriverSource = resolve(process.cwd(), 'e2e', 'utils', 'hidden-msedgedriver.rs')
 const hiddenEdgeDriverPath = resolve(process.cwd(), 'node_modules', '.cache', 'vp-e2e', 'hidden-msedgedriver.exe')
 const delay = (ms: number) => new Promise<void>((resolveDelay) => setTimeout(resolveDelay, ms))
+const versionPattern = /^\d+\.\d+\.\d+\.\d+$/
 
 const createRunDir = (label: string) => {
   const dir = resolve(tmpdir(), `vp-e2e-${label}-${process.pid}-${randomUUID()}`)
@@ -69,6 +70,46 @@ const ensureHiddenEdgeDriver = () => {
     throw new Error(`failed to build hidden EdgeDriver launcher: rustc exited with ${result.status}`)
   }
   return hiddenEdgeDriverPath
+}
+
+const compareVersions = (left: string, right: string) => {
+  const leftParts = left.split('.').map(Number)
+  const rightParts = right.split('.').map(Number)
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    const delta = (leftParts[index] ?? 0) - (rightParts[index] ?? 0)
+    if (delta !== 0) {
+      return delta
+    }
+  }
+  return 0
+}
+
+const findInstalledWebView2Version = () => {
+  const roots = [
+    process.env['ProgramFiles(x86)'],
+    process.env['PROGRAMFILES(X86)'],
+    process.env.ProgramFiles,
+    process.env.PROGRAMFILES,
+    process.env.LOCALAPPDATA,
+  ]
+
+  const versions = new Set<string>()
+  for (const root of roots) {
+    if (!root) {
+      continue
+    }
+    const applicationDir = resolve(root, 'Microsoft', 'EdgeWebView', 'Application')
+    if (!existsSync(applicationDir)) {
+      continue
+    }
+    for (const entry of readdirSync(applicationDir, { withFileTypes: true })) {
+      if (entry.isDirectory() && versionPattern.test(entry.name)) {
+        versions.add(entry.name)
+      }
+    }
+  }
+
+  return [...versions].sort(compareVersions).at(-1)
 }
 
 const waitForPort = async (port: number, host = '127.0.0.1', timeout = 15000) => {
@@ -155,7 +196,13 @@ export const config = {
     }
     if (isWindows) {
       const { download } = await import('edgedriver')
-      appEnv.VP_EDGE_DRIVER_PATH = appEnv.VP_EDGE_DRIVER_PATH ?? await download()
+      const edgeDriverVersion = appEnv.VP_EDGE_DRIVER_VERSION
+        ?? appEnv.EDGEDRIVER_VERSION
+        ?? findInstalledWebView2Version()
+      appEnv.VP_EDGE_DRIVER_PATH = appEnv.VP_EDGE_DRIVER_PATH ?? await download(edgeDriverVersion)
+      if (edgeDriverVersion) {
+        process.stdout.write(`Using EdgeDriver for WebView2 ${edgeDriverVersion}\n`)
+      }
       driverArgs.push('--native-driver', ensureHiddenEdgeDriver())
     }
 
