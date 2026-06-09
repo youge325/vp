@@ -199,7 +199,10 @@ export const config = {
       const edgeDriverVersion = appEnv.VP_EDGE_DRIVER_VERSION
         ?? appEnv.EDGEDRIVER_VERSION
         ?? findInstalledWebView2Version()
-      appEnv.VP_EDGE_DRIVER_PATH = appEnv.VP_EDGE_DRIVER_PATH ?? await download(edgeDriverVersion)
+      const edgeDriverCacheDir = edgeDriverVersion
+        ? resolve(process.cwd(), 'node_modules', '.cache', 'vp-e2e', 'edgedriver', edgeDriverVersion)
+        : undefined
+      appEnv.VP_EDGE_DRIVER_PATH = appEnv.VP_EDGE_DRIVER_PATH ?? await download(edgeDriverVersion, edgeDriverCacheDir)
       if (edgeDriverVersion) {
         process.stdout.write(`Using EdgeDriver for WebView2 ${edgeDriverVersion}\n`)
       }
