@@ -1,4 +1,4 @@
-name: Test Backend ARC
+name: Linux Test Backend
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

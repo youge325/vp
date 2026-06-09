@@ -1,4 +1,4 @@
-name: End-to-End Task Tests
+name: Windows + Linux End-to-End Task Tests
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

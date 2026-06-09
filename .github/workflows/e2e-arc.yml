@@ -1,4 +1,4 @@
-name: End-to-End Tests ARC
+name: Linux End-to-End Tests
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
