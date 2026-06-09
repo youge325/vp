@@ -3,6 +3,9 @@ name: ARC Linux Smoke
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   smoke:
     runs-on: vp-linux-arc

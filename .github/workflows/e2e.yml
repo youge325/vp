@@ -18,6 +18,9 @@ on:
       - 'frontend/**'
       - '.github/workflows/e2e.yml'
 
+permissions:
+  contents: read
+
 jobs:
   e2e-smoke:
     runs-on: [self-hosted, windows]

@@ -20,6 +20,9 @@ on:
       - '!frontend/e2e/**'
       - '.github/workflows/test.yml'
 
+permissions:
+  contents: read
+
 jobs:
   test-frontend:
     runs-on: [self-hosted, windows]
