@@ -8,15 +8,15 @@ export const presetIpc = {
     if (!isTauriRuntime()) {
       return Promise.resolve(null)
     }
-    return safeInvoke<WorkbenchPreset | null>('load_workbench_preset')
+    return safeInvoke('load_workbench_preset')
   },
   save(preset: WorkbenchPreset): Promise<void> {
     if (!isTauriRuntime()) {
       return Promise.resolve()
     }
-    return safeInvoke<void>('save_workbench_preset', { preset })
+    return safeInvoke('save_workbench_preset', { preset })
   },
   pickOutputDirectory(): Promise<string | null> {
-    return safeInvoke<string | null>('pick_output_directory')
+    return safeInvoke('pick_output_directory')
   },
 }

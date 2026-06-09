@@ -49,13 +49,22 @@ Tauri v2 的权限系统要求每个 command 在 ACL 中显式声明。权限文
 [`frontend/src/lib/ipc/client.ts`](../frontend/src/lib/ipc/client.ts)：
 
 ```typescript
+export type IpcCommand = typeof IPC_COMMAND_NAMES[number]
+
 export class InvokeError extends Error {
   readonly code: string
   readonly details: Record<string, unknown> | null
 }
 
-export async function safeInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T>
+export async function safeInvoke<C extends IpcCommand>(
+  command: C,
+  ...args: IpcInvokeArgs<C> extends undefined ? [] : [args: IpcInvokeArgs<C>]
+): Promise<IpcInvokeResult<C>>
 ```
+
+`frontend/src/lib/ipc/contract.ts` 是前端命令契约表：命令名、参数对象和返回类型在
+TypeScript 编译期绑定，`scripts/check_architecture_contracts.py` 会把它与 Rust
+`commands_manifest.rs`、Tauri permissions 和 endpoint 层 `safeInvoke()` 调用一起比对。
 
 调用方按 `code` 路由：
 

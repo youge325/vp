@@ -5,9 +5,9 @@ import { safeInvoke } from '../client'
 
 export const mediaIpc = {
   pickInputs(): Promise<string[]> {
-    return safeInvoke<string[]>('pick_inputs')
+    return safeInvoke('pick_inputs')
   },
   inspect(inputPath: string): Promise<VideoInfoResult> {
-    return safeInvoke<VideoInfoResult>('inspect_video', { input_path: inputPath })
+    return safeInvoke('inspect_video', { input_path: inputPath })
   },
 }

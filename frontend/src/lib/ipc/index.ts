@@ -1,6 +1,8 @@
 // IPC 协议层入口 — barrel re-export。
 
 export { isTauriRuntime, safeInvoke } from './client'
+export { IPC_COMMAND_NAMES } from './contract'
+export type { IpcCommand, IpcCommandArgs, IpcCommandResult, TaskControlKind } from './contract'
 export { listenTaskEvents } from './events'
 export type { TaskEventHandlers, UnlistenFn } from './events'
 

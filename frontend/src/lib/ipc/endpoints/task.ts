@@ -6,21 +6,21 @@ import { safeInvoke } from '../client'
 
 export const taskIpc = {
   start(request: TaskRequest): Promise<void> {
-    return safeInvoke<void>('start_task', { request })
+    return safeInvoke('start_task', { request })
   },
   checkResume(request: TaskRequest): Promise<ResumeInspectionResult> {
-    return safeInvoke<ResumeInspectionResult>('check_resume_state', { request })
+    return safeInvoke('check_resume_state', { request })
   },
   cancel(): Promise<void> {
-    return safeInvoke<void>('cancel_task')
+    return safeInvoke('cancel_task')
   },
   pause(): Promise<void> {
-    return safeInvoke<void>('control_task', { kind: 'pause' })
+    return safeInvoke('control_task', { kind: 'pause' })
   },
   resume(): Promise<void> {
-    return safeInvoke<void>('control_task', { kind: 'resume' })
+    return safeInvoke('control_task', { kind: 'resume' })
   },
   openOutputLocation(path: string): Promise<void> {
-    return safeInvoke<void>('open_output_location', { path })
+    return safeInvoke('open_output_location', { path })
   },
 }

@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 COMMANDS_MANIFEST = ROOT / "frontend" / "src-tauri" / "src" / "commands_manifest.rs"
 DEFAULT_PERMISSIONS = ROOT / "frontend" / "src-tauri" / "permissions" / "default.toml"
 IPC_ENDPOINT_DIR = ROOT / "frontend" / "src" / "lib" / "ipc" / "endpoints"
+IPC_CONTRACT = ROOT / "frontend" / "src" / "lib" / "ipc" / "contract.ts"
 FRONTEND_SRC = ROOT / "frontend" / "src"
 DOC_ROOT = ROOT / "docs"
 README = ROOT / "README.md"
@@ -78,10 +79,19 @@ def _collect_frontend_invoke_commands() -> set[str]:
     return commands
 
 
+def _collect_typed_ipc_contract_commands() -> set[str]:
+    text = _read(IPC_CONTRACT)
+    match = re.search(r"IPC_COMMAND_NAMES\s*=\s*\[(?P<body>.*?)\]\s*as\s+const", text, re.DOTALL)
+    if not match:
+        raise RuntimeError("could not parse IPC_COMMAND_NAMES in frontend IPC contract")
+    return set(re.findall(r"['\"]([a-z_]+)['\"]", match.group("body")))
+
+
 def _check_command_surface(issues: list[str]) -> None:
     manifest = _collect_manifest_commands()
     permissions = _collect_permission_commands()
     invokes = _collect_frontend_invoke_commands()
+    contract = _collect_typed_ipc_contract_commands()
 
     expected_permissions = {_allow_token(command) for command in manifest}
     raw_permission_tokens = set(re.findall(r'"(allow-[a-z-]+)"', _read(DEFAULT_PERMISSIONS)))
@@ -103,6 +113,12 @@ def _check_command_surface(issues: list[str]) -> None:
         issues.append(
             "frontend IPC endpoint safeInvoke commands drift from command manifest: "
             f"only-in-manifest={sorted(manifest - invokes)}, only-in-frontend={sorted(invokes - manifest)}"
+        )
+
+    if contract != manifest:
+        issues.append(
+            "frontend typed IPC contract commands drift from command manifest: "
+            f"only-in-manifest={sorted(manifest - contract)}, only-in-contract={sorted(contract - manifest)}"
         )
 
 
