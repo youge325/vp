@@ -11,6 +11,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 import { normalizeError } from '@/services/error/normalize'
 import { TASK_ERROR_CODES } from '@/types/protocol/errors'
+import type { IpcCommand, IpcInvokeArgs, IpcInvokeResult } from './contract'
 
 const BROWSER_RUNTIME_MESSAGE =
   'Desktop-only commands are unavailable in browser preview. Run `npm run tauri:dev`.'
@@ -64,12 +65,16 @@ function normalizeInvokeError(error: unknown): Error {
   return new InvokeError(task.code, task.message, task.details ?? null)
 }
 
-export async function safeInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+export async function safeInvoke<C extends IpcCommand>(
+  command: C,
+  ...args: IpcInvokeArgs<C> extends undefined ? [] : [args: IpcInvokeArgs<C>]
+): Promise<IpcInvokeResult<C>> {
   if (!isTauriRuntime()) {
     throw new Error(BROWSER_RUNTIME_MESSAGE)
   }
   try {
-    return await invoke<T>(command, args)
+    const invokeArgs = args[0] as Record<string, unknown> | undefined
+    return await invoke<IpcInvokeResult<C>>(command, invokeArgs)
   } catch (error) {
     throw normalizeInvokeError(error)
   }

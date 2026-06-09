@@ -5,6 +5,6 @@ import { safeInvoke } from '../client'
 
 export const envIpc = {
   check(forceRefresh = false): Promise<EnvironmentCheckPayload> {
-    return safeInvoke<EnvironmentCheckPayload>('check_environment', { forceRefresh })
+    return safeInvoke('check_environment', { forceRefresh })
   },
 }

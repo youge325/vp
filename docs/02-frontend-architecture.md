@@ -109,15 +109,21 @@ graph TB
 [`frontend/src/lib/ipc/client.ts`](../frontend/src/lib/ipc/client.ts) 封装所有 Tauri `invoke()` 调用：
 
 ```typescript
+export type IpcCommand = typeof IPC_COMMAND_NAMES[number]
+
 export class InvokeError extends Error {
   readonly code: string
   readonly details: Record<string, unknown> | null
   // ...
 }
 
-export async function safeInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T>
+export async function safeInvoke<C extends IpcCommand>(
+  command: C,
+  ...args: IpcInvokeArgs<C> extends undefined ? [] : [args: IpcInvokeArgs<C>]
+): Promise<IpcInvokeResult<C>>
 ```
 
+- `contract.ts` 集中声明 11 个命令的参数与返回类型，endpoint 调用按命令名自动推导
 - `isTauriRuntime()` 检测 `window.__TAURI_INTERNALS__`，区分桌面运行和浏览器预览模式
 - `normalizeInvokeError()` 处理 Rust 序列化的 `{ code, message }`，包装为 `InvokeError`
 - Tauri 权限拒绝错误（`not allowed` / `Command not found`）会附加开发者提示
