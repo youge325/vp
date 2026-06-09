@@ -84,11 +84,10 @@ _PY_MEMBER_PATTERN = re.compile(
     r"^\s+[A-Z_]+\s*=\s*\"(?P<code>[a-z_]+)\"",
     re.MULTILINE,
 )
-# TS:    union 字符串字面量:每一段 ``"snake_case"`` 用 ``|`` 串联
-_TS_LITERAL_PATTERN = re.compile(r"\"(?P<code>[a-z0-9_-]+)\"")
-_TS_UNION_HEADER_PATTERN = re.compile(
-    r"export type (?P<name>[A-Z][A-Za-z0-9]+)\s*=\s*(?P<body>(?:\"[^\"]+\"\s*\|?\s*)+);",
-)
+# TS:    union 字符串字面量:每一段 ``"snake_case"`` 用 ``|`` 串联。
+#        这里避免用单个大正则吞完整 union,防止畸形输入触发回溯放大。
+_TS_TYPE_NAME_PATTERN = re.compile(r"[A-Z][A-Za-z0-9]+")
+_TS_UNION_LITERAL_PATTERN = re.compile(r"\"(?P<code>[a-z0-9_-]+)\"")
 
 # Phase 9 — Python ``class NdjsonEventType(str, Enum):`` block. Anchored on
 # the class name so we don't confuse it with ``class TaskErrorCode``.
@@ -200,13 +199,33 @@ def _collect_python_codes(text: str) -> set[str]:
 
 def _collect_ts_codes_from_task_error_code_file(text: str) -> set[str]:
     """从 ts-rs 生成的 TaskErrorCode union 字符串字面量集合提取 codes。"""
-    union_lines = [line for line in text.splitlines() if " = " in line and "TaskErrorCode" in line]
-    if not union_lines:
-        _fail_parse("no `export type TaskErrorCode = ...` declaration found in TaskErrorCode.ts")
-    codes = set(_TS_LITERAL_PATTERN.findall(union_lines[0]))
-    if not codes:
-        _fail_parse("TaskErrorCode union literal extracted no codes")
-    return codes
+    for statement in text.split(";"):
+        parsed = _parse_ts_string_union_export(statement)
+        if parsed and parsed[0] == "TaskErrorCode":
+            return parsed[1]
+    _fail_parse("no `export type TaskErrorCode = ...` declaration found in TaskErrorCode.ts")
+
+
+def _parse_ts_string_union_export(statement: str) -> tuple[str, set[str]] | None:
+    """Parse one ``export type Foo = "a" | "b"`` statement without a backtracking regex."""
+    prefix = "export type "
+    export_start = statement.find(prefix)
+    if export_start < 0:
+        return None
+    stripped = statement[export_start:].strip()
+    name_part, separator, body = stripped[len(prefix) :].partition("=")
+    if separator != "=":
+        return None
+    name = name_part.strip()
+    if not _TS_TYPE_NAME_PATTERN.fullmatch(name):
+        return None
+    literals: set[str] = set()
+    for member in body.split("|"):
+        match = _TS_UNION_LITERAL_PATTERN.fullmatch(member.strip())
+        if not match:
+            return None
+        literals.add(match.group("code"))
+    return (name, literals) if literals else None
 
 
 def _collect_python_ndjson_event_types(text: str) -> set[str]:
@@ -287,10 +306,10 @@ def _scan_ts_string_enums(generated_dir: Path) -> dict[str, set[str]]:
     discovered: dict[str, set[str]] = {}
     for ts_file in sorted(generated_dir.glob("*.ts")):
         text = ts_file.read_text(encoding="utf-8")
-        for match in _TS_UNION_HEADER_PATTERN.finditer(text):
-            literals = set(_TS_LITERAL_PATTERN.findall(match.group("body")))
-            if literals:
-                discovered[match.group("name")] = literals
+        for statement in text.split(";"):
+            parsed = _parse_ts_string_union_export(statement)
+            if parsed:
+                discovered[parsed[0]] = parsed[1]
     return discovered
 
 

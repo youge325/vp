@@ -16,6 +16,9 @@ on:
       - 'backend/**'
       - '.github/workflows/test-backend.yml'
 
+permissions:
+  contents: read
+
 jobs:
   test-backend-pytorch:
     runs-on: [self-hosted, windows]
