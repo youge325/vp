@@ -69,6 +69,46 @@ async function cleanupListeners(tauriPage: any) {
   })
 }
 
+async function taskEventCount(tauriPage: any, eventName: string) {
+  return await tauriPage.evaluate((name: string) => {
+    // @ts-expect-error
+    return (window.__E2E_EVENTS || []).filter((e: any) => e.name === name).length
+  }, eventName) as number
+}
+
+async function invokeCancelTask(tauriPage: any) {
+  return await tauriPage.evaluate(async () => {
+    try {
+      // @ts-expect-error
+      await window.__TAURI_INTERNALS__.invoke('cancel_task')
+      return true
+    } catch {
+      return false
+    }
+  }) as boolean
+}
+
+async function waitForTaskCancelledAfter(tauriPage: any, previousCount: number) {
+  await tauriPage.waitForFunction(
+    (count: number) => {
+      // @ts-expect-error
+      return (window.__E2E_EVENTS || []).filter((e: any) => e.name === 'task-cancelled').length > count
+    },
+    previousCount,
+    { timeout: 30000 },
+  )
+}
+
+async function cancelTaskAndWait(tauriPage: any) {
+  await setupEventListener(tauriPage, 'task-cancelled')
+  const previousCount = await taskEventCount(tauriPage, 'task-cancelled')
+  const cancelStarted = await invokeCancelTask(tauriPage)
+  if (cancelStarted) {
+    await waitForTaskCancelledAfter(tauriPage, previousCount)
+  }
+  await cleanupListeners(tauriPage)
+}
+
 test.describe('Task state machine', () => {
   test('start_task rejects double-start when task is running', async ({ tauriPage }) => {
     const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
@@ -99,13 +139,7 @@ test.describe('Task state machine', () => {
     expect(error).not.toBeNull()
     expect(error.code).toBe('invalid_input')
 
-    // Cleanup: cancel the running task
-    await tauriPage.evaluate(async () => {
-      try {
-        // @ts-expect-error
-        await window.__TAURI_INTERNALS__.invoke('cancel_task')
-      } catch {}
-    })
+    await cancelTaskAndWait(tauriPage)
   })
 
   test('cancel_task on running task emits task-cancelled event', async ({ tauriPage }) => {
@@ -171,7 +205,7 @@ test.describe('Task state machine', () => {
       }
     }, buildTaskRequest(inputPath, outputDir))
 
-    await cleanupListeners(tauriPage)
+    await cancelTaskAndWait(tauriPage)
   })
 
   test('duplicate cancel when already cancelling returns error', async ({ tauriPage }) => {
@@ -188,13 +222,9 @@ test.describe('Task state machine', () => {
       }
     }, buildTaskRequest(inputPath, outputDir))
 
-    // First cancel should succeed (or be ignored if task finished too quickly)
-    await tauriPage.evaluate(async () => {
-      try {
-        // @ts-expect-error
-        await window.__TAURI_INTERNALS__.invoke('cancel_task')
-      } catch {}
-    })
+    await setupEventListener(tauriPage, 'task-cancelled')
+    const previousCount = await taskEventCount(tauriPage, 'task-cancelled')
+    const firstCancelStarted = await invokeCancelTask(tauriPage)
 
     // Second cancel should be rejected
     const error = await tauriPage.evaluate(async () => {
@@ -212,6 +242,10 @@ test.describe('Task state machine', () => {
     // Either way the code should be invalid_input.
     expect(error).not.toBeNull()
     expect(error.code).toBe('invalid_input')
+    if (firstCancelStarted) {
+      await waitForTaskCancelledAfter(tauriPage, previousCount)
+    }
+    await cleanupListeners(tauriPage)
   })
 
   test('control_task pause when cancelling returns error', async ({ tauriPage }) => {
@@ -228,12 +262,9 @@ test.describe('Task state machine', () => {
       }
     }, buildTaskRequest(inputPath, outputDir))
 
-    await tauriPage.evaluate(async () => {
-      try {
-        // @ts-expect-error
-        await window.__TAURI_INTERNALS__.invoke('cancel_task')
-      } catch {}
-    })
+    await setupEventListener(tauriPage, 'task-cancelled')
+    const previousCount = await taskEventCount(tauriPage, 'task-cancelled')
+    const firstCancelStarted = await invokeCancelTask(tauriPage)
 
     // Pause during cancelling should be rejected
     const error = await tauriPage.evaluate(async () => {
@@ -248,6 +279,10 @@ test.describe('Task state machine', () => {
 
     expect(error).not.toBeNull()
     expect(error.code).toBe('invalid_input')
+    if (firstCancelStarted) {
+      await waitForTaskCancelledAfter(tauriPage, previousCount)
+    }
+    await cleanupListeners(tauriPage)
   })
 
   test('control_task resume when cancelling returns error', async ({ tauriPage }) => {
@@ -264,12 +299,9 @@ test.describe('Task state machine', () => {
       }
     }, buildTaskRequest(inputPath, outputDir))
 
-    await tauriPage.evaluate(async () => {
-      try {
-        // @ts-expect-error
-        await window.__TAURI_INTERNALS__.invoke('cancel_task')
-      } catch {}
-    })
+    await setupEventListener(tauriPage, 'task-cancelled')
+    const previousCount = await taskEventCount(tauriPage, 'task-cancelled')
+    const firstCancelStarted = await invokeCancelTask(tauriPage)
 
     // Resume during cancelling should be rejected
     const error = await tauriPage.evaluate(async () => {
@@ -284,5 +316,9 @@ test.describe('Task state machine', () => {
 
     expect(error).not.toBeNull()
     expect(error.code).toBe('invalid_input')
+    if (firstCancelStarted) {
+      await waitForTaskCancelledAfter(tauriPage, previousCount)
+    }
+    await cleanupListeners(tauriPage)
   })
 })
