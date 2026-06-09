@@ -22,6 +22,11 @@ const hiddenEdgeDriverPath = resolve(process.cwd(), 'node_modules', '.cache', 'v
 const delay = (ms: number) => new Promise<void>((resolveDelay) => setTimeout(resolveDelay, ms))
 const versionPattern = /^\d+\.\d+\.\d+\.\d+$/
 
+const splitSpecPatterns = (value: string | undefined) => value
+  ?.split(/[\n,;]/)
+  .map((entry) => entry.trim())
+  .filter((entry) => entry.length > 0)
+
 const createRunDir = (label: string) => {
   const dir = resolve(tmpdir(), `vp-e2e-${label}-${process.pid}-${randomUUID()}`)
   mkdirSync(dir, { recursive: true })
@@ -137,8 +142,8 @@ const canConnect = (port: number, host: string) => new Promise<boolean>((resolve
 
 export const config = {
   runner: 'local',
-  specs: ['./e2e/**/*.spec.ts'],
-  exclude: ['./e2e/utils/**', './e2e/fixtures.ts'],
+  specs: splitSpecPatterns(process.env.VP_E2E_SPECS) ?? ['./e2e/**/*.spec.ts'],
+  exclude: ['./e2e/utils/**', './e2e/fixtures.ts', ...(splitSpecPatterns(process.env.VP_E2E_EXCLUDE) ?? [])],
   maxInstances: 1,
   logLevel: 'warn',
   framework: 'mocha',

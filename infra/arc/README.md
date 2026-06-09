@@ -6,7 +6,7 @@
 https://github.com/youge325/vp
 ```
 
-原有 Windows workflows 保持不变，继续负责现有 Windows CI 与 Windows portable release。新增的 `*-arc.yml` workflows 是并行验证链路，不替代原有 workflows；其中 `build-arc.yml` 和 `release-arc.yml` 只验证 Linux ARC release build，不上传 GitHub Release。
+原有 Windows workflows 保持不变，继续负责现有 Windows CI 与 Windows portable release。新增的 `*-arc.yml` workflows 是并行验证链路，不替代原有 workflows；其中 `release-arc.yml` 只验证 Linux ARC release build，不上传 GitHub Release。
 
 ## 版本与命名
 
@@ -239,7 +239,7 @@ rg -n "vp-linux-arc-pytorch|vp-linux-arc-paddle" .github/workflows/test-backend-
 rg -n "minRunners: 1" infra/arc/runner-scale-set-values*.yaml
 ```
 
-然后在 GitHub Actions 页面触发 `ARC Linux Smoke`，并观察新增的 `Test Frontend ARC`、`Test Backend ARC`、`End-to-End Tests ARC`、`Build ARC`、`Release ARC` 影子 workflows。
+然后在 GitHub Actions 页面触发 `ARC Linux Smoke`，并观察新增的 `Test Frontend ARC`、`Test Backend ARC`、`End-to-End Tests ARC`、`End-to-End Task Tests`、`Release ARC` 影子 workflows。
 
 ## 排障
 
