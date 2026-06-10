@@ -51,6 +51,12 @@ jobs:
       - name: Prepare bundled Windows runtime
         run: ./scripts/prepare-windows-runtime.ps1 -SkipPython
 
+      - name: Regenerate TypeScript types from Rust (ts-rs)
+        run: |
+          New-Item -ItemType Directory -Force -Path "../dist" | Out-Null
+          cargo test --lib --quiet
+        working-directory: frontend/src-tauri
+
       - name: Build Tauri App (no installer)
         run: npm run tauri build -- --no-bundle
         working-directory: frontend
