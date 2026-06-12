@@ -272,7 +272,7 @@ def load_rife_model(
     torch_device = torch.device(device)
     dtype = torch.half if fp16 else torch.float
 
-    if model_dir is None:
+    if not model_dir:
         model_dir = get_model_dir()
 
     weight_path = os.path.join(model_dir, f"flownet_v{model_version}.pkl")
