@@ -20,12 +20,10 @@ import threading
 from dataclasses import dataclass
 from typing import Any, Callable, Iterator
 
-import numpy as np
-
 from app.algorithms.factory import AlgorithmFactory
 from app.algorithms.tensor_backend import get_tensor_backend
 from app.planning import ProcessingStep, StagePlan
-from app.processing.streaming._tensor_chain import run_tensor_chain
+from app.processing.streaming.frame_payload import FramePayload
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import (
     DecodedFrame,
@@ -151,11 +149,11 @@ def _process_single_frame_stream(
     stop_event: threading.Event,
     metrics: PipelineMetrics,
 ) -> None:
-    held: tuple[int, np.ndarray] | None = None
+    held: tuple[int, FramePayload] | None = None
     output_index = resume_output_frames
 
     for item in _drain_decoded(decode_queue, stop_event):
-        frame = _apply_pre_steps(
+        payload = _apply_pre_steps(
             pre_algorithms=algorithms.pre,
             progress_callbacks=progress_callbacks,
             item=item,
@@ -164,31 +162,33 @@ def _process_single_frame_stream(
         )
 
         if held is None:
-            held = (item.source_index, frame)
+            held = (item.source_index, payload)
             continue
 
-        _held_source_index, held_frame = held
-        _queue_put(
-            encode_queue,
-            EncodedFrame(output_index=output_index, frame=held_frame),
-            stop_event,
+        _held_source_index, held_payload = held
+        _emit_encoded_payload(
+            encode_queue=encode_queue,
+            output_index=output_index,
+            payload=held_payload,
+            stop_event=stop_event,
+            metrics=metrics,
         )
-        metrics.set_queue_depth("encode", encode_queue.qsize())
         output_index += 1
         _queue_put(
             encode_queue,
             SegmentBoundary(next_source_frame=item.source_index),
             stop_event,
         )
-        held = (item.source_index, frame)
+        held = (item.source_index, payload)
 
     if held is not None:
-        _queue_put(
-            encode_queue,
-            EncodedFrame(output_index=output_index, frame=held[1]),
-            stop_event,
+        _emit_encoded_payload(
+            encode_queue=encode_queue,
+            output_index=output_index,
+            payload=held[1],
+            stop_event=stop_event,
+            metrics=metrics,
         )
-        metrics.set_queue_depth("encode", encode_queue.qsize())
         output_index += 1
 
     _emit_stream_end(encode_queue, source_frames, stop_event)
@@ -221,25 +221,16 @@ def _process_interpolated_stream(
     interpolation_algorithm = interpolation.algorithm
     multi = int(interpolation_step.algorithm_kwargs.get("multi") or 2)
 
-    # Phase 11 — 提前抽出 post 链路的 (backend, algorithm) 列表,供
-    # ``run_tensor_chain`` 单 H2D + 单 D2H 路径复用;所有 post step 在
-    # _initialize_algorithms 中绑定的是同一个 ``shared_backend``,所以
-    # 取第 0 个就代表整条链。
-    post_steps = algorithms.post
-    post_algorithm_objs = [entry.algorithm for entry in post_steps]
-    post_backend = post_steps[0].backend if post_steps else None
     total_output_frames_denominator = max(stage_plan.total_output_frames, 1)
 
-    # Phase 11 — ``previous`` 多带一个 prev_tensor 槽位,下一轮直接复用上一轮的
-    # ``current_tensor``,把每对相邻帧的 H2D 拷贝从 2 次降到 1 次(首帧 lazy,
-    # 末帧无下一轮所以不会浪费)。第三项允许 ``None``:首帧入时还没用上,
-    # 真正进入插值循环时再 lazy 转换。
-    previous: tuple[int, np.ndarray, Any | None] | None = None
+    # Keep payloads across adjacent pairs so the current tensor uploaded for
+    # this pair becomes the previous tensor for the next pair.
+    previous: tuple[int, FramePayload] | None = None
     output_index = resume_output_frames
     total_pairs = max(source_frames - 1, 1)
 
     for item in _drain_decoded(decode_queue, stop_event):
-        current_frame = _apply_pre_steps(
+        current_payload = _apply_pre_steps(
             pre_algorithms=algorithms.pre,
             progress_callbacks=progress_callbacks,
             item=item,
@@ -248,41 +239,37 @@ def _process_interpolated_stream(
         )
 
         if previous is None:
-            previous = (item.source_index, current_frame, None)
+            previous = (item.source_index, current_payload)
             continue
 
-        prev_source_index, prev_frame, prev_tensor_cached = previous
+        prev_source_index, prev_payload = previous
         interpolation_callback(prev_source_index + 1, total_pairs)
 
-        group_frames = [prev_frame]
+        group_payloads = [prev_payload]
         with metrics.timed("interpolate"):
-            # Phase 11 — prev_tensor 复用上一轮的 current_tensor;仅首对帧需
-            # 要 lazy H2D(``prev_tensor_cached is None`` 时)。
-            if prev_tensor_cached is None:
-                prev_tensor = interpolation_backend.numpy_to_tensor(prev_frame)
-            else:
-                prev_tensor = prev_tensor_cached
-            current_tensor = interpolation_backend.numpy_to_tensor(current_frame)
+            prev_tensor = prev_payload.ensure_tensor(interpolation_backend, metrics)
+            current_tensor = current_payload.ensure_tensor(interpolation_backend, metrics)
             for mid_index in range(1, multi):
                 timestep = mid_index / multi
                 mid_tensor = interpolation_algorithm.process_frame_pair(prev_tensor, current_tensor, timestep=timestep)
-                group_frames.append(interpolation_backend.tensor_to_numpy(mid_tensor))
+                group_payloads.append(FramePayload.from_tensor(mid_tensor, interpolation_backend))
 
-        for frame in group_frames:
-            processed_output = _run_post_chain(
-                post_backend=post_backend,
-                post_algorithm_objs=post_algorithm_objs,
+        for payload in group_payloads:
+            processed_payload = _apply_post_steps(
+                post_algorithms=algorithms.post,
                 post_callbacks=post_callbacks,
-                frame=frame,
+                payload=payload,
                 output_index=output_index,
                 total_output_frames_denominator=total_output_frames_denominator,
+                metrics=metrics,
             )
-            _queue_put(
-                encode_queue,
-                EncodedFrame(output_index=output_index, frame=processed_output),
-                stop_event,
+            _emit_encoded_payload(
+                encode_queue=encode_queue,
+                output_index=output_index,
+                payload=processed_payload,
+                stop_event=stop_event,
+                metrics=metrics,
             )
-            metrics.set_queue_depth("encode", encode_queue.qsize())
             output_index += 1
 
         _queue_put(
@@ -290,70 +277,110 @@ def _process_interpolated_stream(
             SegmentBoundary(next_source_frame=item.source_index),
             stop_event,
         )
-        previous = (item.source_index, current_frame, current_tensor)
+        previous = (item.source_index, current_payload)
 
     if previous is not None:
-        final_frame = previous[1]
-        final_output = _run_post_chain(
-            post_backend=post_backend,
-            post_algorithm_objs=post_algorithm_objs,
+        final_payload = previous[1]
+        final_output = _apply_post_steps(
+            post_algorithms=algorithms.post,
             post_callbacks=post_callbacks,
-            frame=final_frame,
+            payload=final_payload,
             output_index=output_index,
             total_output_frames_denominator=total_output_frames_denominator,
+            metrics=metrics,
         )
-        _queue_put(
-            encode_queue,
-            EncodedFrame(output_index=output_index, frame=final_output),
-            stop_event,
+        _emit_encoded_payload(
+            encode_queue=encode_queue,
+            output_index=output_index,
+            payload=final_output,
+            stop_event=stop_event,
+            metrics=metrics,
         )
-        metrics.set_queue_depth("encode", encode_queue.qsize())
         output_index += 1
 
     _emit_stream_end(encode_queue, source_frames, stop_event)
 
 
-def _run_post_chain(
+def _apply_post_steps(
     *,
-    post_backend: Any,
-    post_algorithm_objs: list[Any],
+    post_algorithms: list[_StepAlgorithm],
     post_callbacks: list[Callable[[int, int], None]],
-    frame: np.ndarray,
+    payload: FramePayload,
     output_index: int,
     total_output_frames_denominator: int,
-) -> np.ndarray:
-    """Apply the post chain to a single frame with single H2D + single D2H.
-
-    Phase 11 — 等价语义改写原 line 236-240 / 256-263 的内联 post 循环。
-
-    - 空 post(``post_algorithm_objs == []`` / ``post_backend is None``):
-      ``run_tensor_chain`` 直接 return frame,我们也不调任何 callback
-      (原代码同样不进 for 循环,无 callback 触发)。
-    - 单步 post:等价于 1 次 H2D + 1 次 D2H,与 ``_run_single_frame_algorithm`` 同。
-    - 多步 post:中间无 numpy↔tensor 转换,GPU 上一路流转。
-
-    callback 在每步 ``process_frame`` 完成后立即调用,保留原"逐 step emit
-    NDJSON progress"的节奏(reporter 节流会自然合并近距离的同 percent 调用,
-    所以 NDJSON 帧密度与原实现近似)。
-    """
-    if post_backend is None or not post_algorithm_objs:
-        return frame
-
-    def emit_step(step_index: int) -> None:
-        post_callbacks[step_index](output_index + 1, total_output_frames_denominator)
-
-    return run_tensor_chain(
-        post_backend,
-        post_algorithm_objs,
-        frame,
-        step_callback=emit_step,
+    metrics: PipelineMetrics,
+) -> FramePayload:
+    """Apply post steps while preserving tensor payloads across tensor stages."""
+    return _apply_stage_chain(
+        algorithms=post_algorithms,
+        progress_callbacks=post_callbacks,
+        payload=payload,
+        progress_current=output_index + 1,
+        progress_total=total_output_frames_denominator,
+        metrics=metrics,
     )
 
 
-def _run_single_frame_algorithm(backend: Any, algorithm: Any, frame: np.ndarray) -> np.ndarray:
-    tensor = backend.numpy_to_tensor(frame)
-    processed = algorithm.process_frame(tensor)
-    return backend.tensor_to_numpy(processed)
+def _apply_stage_chain(
+    *,
+    algorithms: list[_StepAlgorithm],
+    progress_callbacks: list[Callable[[int, int], None]],
+    payload: FramePayload,
+    progress_current: int,
+    progress_total: int,
+    metrics: PipelineMetrics,
+) -> FramePayload:
+    """Run CPU and tensor stages in order, converting only at explicit boundaries."""
+    if not algorithms:
+        return payload
+
+    with metrics.timed("process"):
+        for step_index, entry in enumerate(algorithms):
+            payload = _run_stage(entry, payload, metrics)
+            if step_index < len(progress_callbacks):
+                progress_callbacks[step_index](progress_current, progress_total)
+    return payload
+
+
+def _run_stage(entry: _StepAlgorithm, payload: FramePayload, metrics: PipelineMetrics) -> FramePayload:
+    if _is_cpu_frame_stage(entry):
+        return _run_cpu_frame_stage(entry, payload, metrics)
+    return _run_tensor_frame_stage(entry, payload, metrics)
+
+
+def _is_cpu_frame_stage(entry: _StepAlgorithm) -> bool:
+    return entry.step.algorithm_type == "frame_filter_chain"
+
+
+def _run_cpu_frame_stage(entry: _StepAlgorithm, payload: FramePayload, metrics: PipelineMetrics) -> FramePayload:
+    process_numpy = getattr(entry.algorithm, "process_numpy", None)
+    if not callable(process_numpy):
+        raise RuntimeError(f"CPU frame stage '{entry.step.algorithm_type}' does not implement process_numpy().")
+    frame = payload.ensure_numpy(metrics)
+    return FramePayload.from_numpy(process_numpy(frame))
+
+
+def _run_tensor_frame_stage(entry: _StepAlgorithm, payload: FramePayload, metrics: PipelineMetrics) -> FramePayload:
+    tensor = payload.ensure_tensor(entry.backend, metrics)
+    processed = entry.algorithm.process_frame(tensor)
+    return FramePayload.from_tensor(processed, entry.backend)
+
+
+def _emit_encoded_payload(
+    *,
+    encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object],
+    output_index: int,
+    payload: FramePayload,
+    stop_event: threading.Event,
+    metrics: PipelineMetrics,
+) -> None:
+    frame = payload.ensure_numpy(metrics)
+    _queue_put(
+        encode_queue,
+        EncodedFrame(output_index=output_index, frame=frame),
+        stop_event,
+    )
+    metrics.set_queue_depth("encode", encode_queue.qsize())
 
 
 def _drain_decoded(
@@ -382,18 +409,20 @@ def _apply_pre_steps(
     item: DecodedFrame,
     source_frames: int,
     metrics: PipelineMetrics,
-) -> np.ndarray:
+) -> FramePayload:
     """Run every pre-step algorithm on a decoded frame, reporting per-step progress.
 
     Progress denominator is fixed at ``max(source_frames, 1)`` so the NDJSON
     percent always reflects source-frame coverage regardless of pipeline shape.
     """
-    frame = item.frame
-    with metrics.timed("process"):
-        for step_index, entry in enumerate(pre_algorithms):
-            frame = _run_single_frame_algorithm(entry.backend, entry.algorithm, frame)
-            progress_callbacks[step_index](item.source_index + 1, max(source_frames, 1))
-    return frame
+    return _apply_stage_chain(
+        algorithms=pre_algorithms,
+        progress_callbacks=progress_callbacks,
+        payload=FramePayload.from_numpy(item.frame),
+        progress_current=item.source_index + 1,
+        progress_total=max(source_frames, 1),
+        metrics=metrics,
+    )
 
 
 def _emit_stream_end(

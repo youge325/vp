@@ -56,9 +56,15 @@ class FrameFilterChainAlgorithm(IAlgorithm):
                 raise ValueError(f"Filter step '{kind}' missing params dict.")
 
     def process_frame(self, frame: Any, **kwargs: Any) -> Any:
+        if self._tensor_backend is None:
+            return self.process_numpy(frame)
         np_frame = self._tensor_backend.tensor_to_numpy(frame)
-        np_frame = self._apply_filters(np_frame)
+        np_frame = self.process_numpy(np_frame)
         return self._tensor_backend.numpy_to_tensor(np_frame)
+
+    def process_numpy(self, frame: np.ndarray) -> np.ndarray:
+        """Apply the OpenCV filter chain directly on a CPU numpy frame."""
+        return self._apply_filters(frame)
 
     def process_frame_batch(self, frames: list[Any], **kwargs: Any) -> list[Any]:
         return [self.process_frame(f) for f in frames]
