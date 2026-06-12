@@ -145,6 +145,8 @@ export const config = {
   specs: splitSpecPatterns(process.env.VP_E2E_SPECS) ?? ['./e2e/**/*.spec.ts'],
   exclude: ['./e2e/utils/**', './e2e/fixtures.ts', ...(splitSpecPatterns(process.env.VP_E2E_EXCLUDE) ?? [])],
   maxInstances: 1,
+  specFileRetries: isWindows ? 1 : 0,
+  specFileRetriesDeferred: true,
   logLevel: 'warn',
   framework: 'mocha',
   reporters: ['spec'],

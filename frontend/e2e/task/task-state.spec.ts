@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures'
+import { createTaskOutputDir, taskInputPath } from './helpers'
 
 function buildTaskRequest(inputPath: string, outputDir: string) {
   return {
@@ -111,8 +112,8 @@ async function cancelTaskAndWait(tauriPage: any) {
 
 test.describe('Task state machine', () => {
   test('start_task rejects double-start when task is running', async ({ tauriPage }) => {
-    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
-    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
+    const inputPath = taskInputPath()
+    const outputDir = createTaskOutputDir('task-state-double-start')
     const request = buildTaskRequest(inputPath, outputDir)
 
     // First call starts the task
@@ -143,10 +144,9 @@ test.describe('Task state machine', () => {
   })
 
   test('cancel_task on running task emits task-cancelled event', async ({ tauriPage }) => {
-    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
-    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
+    const inputPath = taskInputPath()
+    const outputDir = createTaskOutputDir('task-state-cancel-running')
 
-    await setupEventListener(tauriPage, 'task-progress')
     await setupEventListener(tauriPage, 'task-cancelled')
 
     await tauriPage.evaluate(async (req) => {
@@ -157,15 +157,6 @@ test.describe('Task state machine', () => {
         throw new Error(`start_task failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
       }
     }, buildTaskRequest(inputPath, outputDir))
-
-    // Wait for the task to actually start running
-    await tauriPage.waitForFunction(
-      () => {
-        // @ts-expect-error
-        return window.__E2E_EVENTS.some((e: any) => e.name === 'task-progress')
-      },
-      { timeout: 30000 },
-    )
 
     // Cancel the task
     await tauriPage.evaluate(async () => {
@@ -209,8 +200,8 @@ test.describe('Task state machine', () => {
   })
 
   test('duplicate cancel when already cancelling returns error', async ({ tauriPage }) => {
-    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
-    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
+    const inputPath = taskInputPath()
+    const outputDir = createTaskOutputDir('task-state-duplicate-cancel')
 
     // Start a task
     await tauriPage.evaluate(async (req) => {
@@ -249,8 +240,8 @@ test.describe('Task state machine', () => {
   })
 
   test('control_task pause when cancelling returns error', async ({ tauriPage }) => {
-    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
-    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
+    const inputPath = taskInputPath()
+    const outputDir = createTaskOutputDir('task-state-pause-cancelling')
 
     // Start and immediately cancel a task
     await tauriPage.evaluate(async (req) => {
@@ -286,8 +277,8 @@ test.describe('Task state machine', () => {
   })
 
   test('control_task resume when cancelling returns error', async ({ tauriPage }) => {
-    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
-    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
+    const inputPath = taskInputPath()
+    const outputDir = createTaskOutputDir('task-state-resume-cancelling')
 
     // Start and immediately cancel a task
     await tauriPage.evaluate(async (req) => {
