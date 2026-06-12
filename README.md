@@ -34,12 +34,13 @@
 - `control_task`（合并 pause / resume；前端通过 `{ kind: "pause" | "resume" }` 区分）
 - `open_output_location`
 
-后端 CLI 只保留下面四个入口:
+后端 CLI 只保留下面五个入口:
 
 - `python -m app check`
 - `python -m app info --input <video>`
 - `python -m app process --input <video> ...`
 - `python -m app inspect-output --input <video> ...`（由 Tauri 主机在启动 `process` 前做续传预检）
+- `python -m app benchmark ...`（开发 / CI 性能回归门禁）
 
 ## 开发文档
 
@@ -63,6 +64,13 @@
 
 ```powershell
 python -m pytest backend\tests -q
+```
+
+### 后端 Benchmark
+
+```powershell
+cd backend
+python -m app benchmark --report-json ../test-results/benchmark-report.json --report-markdown ../test-results/benchmark-report.md
 ```
 
 ### 前端依赖安装

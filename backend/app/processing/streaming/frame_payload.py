@@ -8,6 +8,7 @@ converts at most once per cached representation.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any
 
 import numpy as np
@@ -39,10 +40,12 @@ class FramePayload:
         if self._numpy_frame is None:
             raise RuntimeError("FramePayload has neither tensor nor numpy data.")
 
+        started_at = time.perf_counter()
         self._tensor = backend.numpy_to_tensor(self._numpy_frame)
+        elapsed = time.perf_counter() - started_at
         self._tensor_backend = backend
         if metrics is not None:
-            metrics.record_transfer("h2d")
+            metrics.record_transfer("h2d", seconds=elapsed)
         return self._tensor
 
     def ensure_numpy(self, metrics: PipelineMetrics | None = None) -> np.ndarray:
@@ -52,9 +55,11 @@ class FramePayload:
         if self._tensor is None or self._tensor_backend is None:
             raise RuntimeError("FramePayload has neither numpy data nor a tensor backend.")
 
+        started_at = time.perf_counter()
         self._numpy_frame = self._tensor_backend.tensor_to_numpy(self._tensor)
+        elapsed = time.perf_counter() - started_at
         if metrics is not None:
-            metrics.record_transfer("d2h")
+            metrics.record_transfer("d2h", seconds=elapsed)
         return self._numpy_frame
 
     def has_tensor_for(self, backend: Any) -> bool:

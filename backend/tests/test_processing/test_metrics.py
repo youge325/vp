@@ -26,12 +26,13 @@ def test_snapshot_empty_pipeline_has_no_fps() -> None:
 def test_record_transfer_counts_host_device_edges() -> None:
     metrics = PipelineMetrics()
     metrics.record_transfer("h2d")
-    metrics.record_transfer("h2d", 2)
+    metrics.record_transfer("h2d", 2, seconds=0.25)
     metrics.record_transfer("d2h")
 
     snapshot = metrics.snapshot()
 
     assert snapshot["transferCounts"] == {"h2d": 3, "d2h": 1}
+    assert snapshot["transferDurationsSeconds"] == {"h2d": 0.25, "d2h": 0.0}
 
 
 def test_set_queue_depth_clamps_negative_to_zero() -> None:

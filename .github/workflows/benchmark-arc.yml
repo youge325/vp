@@ -1,0 +1,78 @@
+name: Linux Benchmark Backend
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/app/algorithms/**'
+      - 'backend/app/benchmark/**'
+      - 'backend/app/cli/**'
+      - 'backend/app/processing/**'
+      - 'backend/benchmarks/**'
+      - '.github/workflows/benchmark-arc.yml'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/app/algorithms/**'
+      - 'backend/app/benchmark/**'
+      - 'backend/app/cli/**'
+      - 'backend/app/processing/**'
+      - 'backend/benchmarks/**'
+      - '.github/workflows/benchmark-arc.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark-pytorch-arc:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
+    runs-on: vp-linux-arc-pytorch
+    env:
+      PYTHONIOENCODING: utf-8
+      VP_TEST_BACKEND: pytorch
+      VP_FFMPEG_PATH: /usr/bin/ffmpeg
+      VP_FFPROBE_PATH: /usr/bin/ffprobe
+      VP_RIFE_MODEL_DIR: /opt/vp/models
+      VP_PYTHON_EXECUTABLE: /opt/vp/venv/bin/python
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Verify ARC runtime
+        run: |
+          python --version
+          python -m pip --version
+          ffmpeg -version | head -n 1
+          test -d "$VP_RIFE_MODEL_DIR"
+
+      - name: Run benchmark regression check
+        run: |
+          mkdir -p ../test-results
+          python -m app benchmark \
+            --baseline benchmarks/baselines/linux-arc-pytorch.json \
+            --report-json ../test-results/benchmark-report.json \
+            --report-markdown ../test-results/benchmark-report.md \
+            --work-dir ../test-results/benchmark-work
+        working-directory: backend
+
+      - name: Add benchmark summary
+        if: always()
+        run: |
+          if [ -f test-results/benchmark-report.md ]; then
+            cat test-results/benchmark-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-benchmark-report
+          path: |
+            test-results/benchmark-report.json
+            test-results/benchmark-report.md
+          if-no-files-found: warn

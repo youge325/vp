@@ -30,6 +30,7 @@ vp/
 | 命令 | 用途 |
 |------|------|
 | `cd backend && python -m pytest tests -q` | 运行 Python 测试 |
+| `cd backend && python -m app benchmark --report-json ../test-results/benchmark-report.json --report-markdown ../test-results/benchmark-report.md` | 运行后端 benchmark 回归检查 |
 | `cd frontend && npm install` | 安装前端依赖 |
 | `cd frontend && npm run test` | 运行前端单元测试 |
 | `cd frontend && npm run build` | 前端生产构建 |
