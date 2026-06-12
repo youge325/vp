@@ -12,8 +12,10 @@ from app.utils import dll_paths
 
 
 @pytest.fixture(autouse=True)
-def _reset_registry():
+def _reset_registry(monkeypatch):
     dll_paths.reset_registry_for_tests()
+    monkeypatch.delenv("VP_OPENCV_BIN_DIR", raising=False)
+    monkeypatch.delenv("VP_OPENCV_DIR", raising=False)
     yield
     dll_paths.reset_registry_for_tests()
 
@@ -120,6 +122,47 @@ def test_extra_paths_are_registered_after_settings(tmp_path: Path, monkeypatch):
     registered = dll_paths.register_native_dll_paths(extra=[extra_dir])
     assert [Path(p) for p in captured] == [extra_dir.resolve()]
     assert registered == [extra_dir.resolve()]
+
+
+def test_registers_opencv_bin_dir_from_env(tmp_path: Path, monkeypatch):
+    if not sys.platform.startswith("win"):
+        pytest.skip("Windows-only behaviour")
+
+    opencv_bin = tmp_path / "opencv" / "bin"
+    opencv_bin.mkdir(parents=True)
+    monkeypatch.delenv("VP_TENSORRT_DIR", raising=False)
+    monkeypatch.delenv("CUDA_PATH", raising=False)
+    monkeypatch.setenv("VP_OPENCV_BIN_DIR", str(opencv_bin))
+    monkeypatch.setattr(dll_paths, "_scan_common_tensorrt_roots", lambda: [])
+
+    captured: list[str] = []
+    monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
+
+    registered = dll_paths.register_native_dll_paths()
+    assert [Path(p) for p in captured] == [opencv_bin.resolve()]
+    assert registered == [opencv_bin.resolve()]
+
+
+def test_registers_opencv_root_bin_candidates_from_env(tmp_path: Path, monkeypatch):
+    if not sys.platform.startswith("win"):
+        pytest.skip("Windows-only behaviour")
+
+    root = tmp_path / "opencv"
+    direct_bin = root / "bin"
+    vc_bin = root / "build" / "x64" / "vc17" / "bin"
+    direct_bin.mkdir(parents=True)
+    vc_bin.mkdir(parents=True)
+    monkeypatch.delenv("VP_TENSORRT_DIR", raising=False)
+    monkeypatch.delenv("CUDA_PATH", raising=False)
+    monkeypatch.setenv("VP_OPENCV_DIR", str(root))
+    monkeypatch.setattr(dll_paths, "_scan_common_tensorrt_roots", lambda: [])
+
+    captured: list[str] = []
+    monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
+
+    registered = dll_paths.register_native_dll_paths()
+    assert [Path(p) for p in captured] == [direct_bin.resolve(), vc_bin.resolve()]
+    assert registered == [direct_bin.resolve(), vc_bin.resolve()]
 
 
 def test_registers_directory_into_path_for_legacy_loader(tmp_path: Path, monkeypatch):

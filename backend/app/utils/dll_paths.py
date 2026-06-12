@@ -102,6 +102,38 @@ def _candidate_dirs(tensorrt_dir: str | None = None) -> list[Path]:
         if cuda_bin.is_dir():
             candidates.append(cuda_bin)
 
+    candidates.extend(_opencv_candidate_dirs())
+
+    return candidates
+
+
+def _opencv_candidate_dirs() -> list[Path]:
+    """Return explicit OpenCV DLL directories from environment settings."""
+    candidates: list[Path] = []
+
+    opencv_bin_dir = os.environ.get("VP_OPENCV_BIN_DIR", "").strip()
+    if opencv_bin_dir:
+        candidates.append(Path(opencv_bin_dir).expanduser())
+
+    opencv_root = os.environ.get("VP_OPENCV_DIR", "").strip()
+    if not opencv_root:
+        return candidates
+
+    root = Path(opencv_root).expanduser()
+    root_candidates = [
+        root / "bin",
+        root / "build" / "bin",
+    ]
+    root_candidates.extend(sorted(root.glob("x64/vc*/bin")))
+    root_candidates.extend(sorted(root.glob("build/x64/vc*/bin")))
+    root_candidates.extend(sorted(root.glob("install/x64/vc*/bin")))
+    candidates.extend(root_candidates)
+    if not any(path.is_dir() for path in root_candidates):
+        logger.warning(
+            "VP_OPENCV_DIR=%s does not contain a known OpenCV bin directory; "
+            "set VP_OPENCV_BIN_DIR to the exact directory if cv2 still fails to import.",
+            opencv_root,
+        )
     return candidates
 
 
