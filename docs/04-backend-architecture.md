@@ -2,7 +2,7 @@
 
 ## CLI 入口
 
-后端提供 4 个 CLI 子命令：
+后端提供 5 个 CLI 子命令：
 
 | 子命令 | 职责 | 对应 Tauri Command |
 |--------|------|-------------------|
@@ -10,6 +10,7 @@
 | `python -m app info --input <video>` | 探测视频元数据 | `inspect_video` |
 | `python -m app process --input <video> ...` | 执行处理流水线 | `start_task` |
 | `python -m app inspect-output --input <video> ...` | 续传预检 | `check_resume_state` |
+| `python -m app benchmark ...` | 端到端补帧性能回归检查 | GitHub Actions / 本地开发 |
 
 ### 双层兜底
 

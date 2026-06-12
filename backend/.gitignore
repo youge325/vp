@@ -17,6 +17,7 @@ env/
 # Backend runtime output
 logs/
 output/
+.benchmark-work/
 
 # Local model weights
 models/*.pkl

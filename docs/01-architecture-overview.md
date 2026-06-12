@@ -43,7 +43,7 @@ graph TB
     end
 
     subgraph PY["Python 算法层"]
-        P1["CLI 入口 (4 个子命令)"]
+        P1["CLI 入口 (5 个子命令)"]
         P2["配置体系 (config.py + models/)"]
         P3["处理规划 (planning/)"]
         P4["流式执行器 (processing/streaming/)"]

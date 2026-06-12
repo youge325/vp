@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 
 from app.cli.commands.check import cmd_check
+from app.cli.commands.benchmark import cmd_benchmark
 from app.cli.commands.info import cmd_info
 from app.cli.commands.inspect_output import cmd_inspect_output
 from app.cli.commands.process import cmd_process
@@ -134,5 +135,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     check_parser = subcommands.add_parser("check", help="Inspect runtime availability")
     check_parser.set_defaults(func=cmd_check)
+
+    benchmark_parser = subcommands.add_parser("benchmark", help="Run backend benchmark regression checks")
+    benchmark_parser.add_argument("--scenario", default="interpolation-e2e-cpu-transfer")
+    benchmark_parser.add_argument("--baseline", default=None, help="Baseline JSON path")
+    benchmark_parser.add_argument("--threshold", type=float, default=0.15, help="Relative regression threshold")
+    benchmark_parser.add_argument("--report-json", default=None, help="Write JSON report to this path")
+    benchmark_parser.add_argument("--report-markdown", default=None, help="Write Markdown report to this path")
+    benchmark_parser.add_argument("--work-dir", default=None, help="Benchmark scratch directory")
+    benchmark_parser.add_argument("--update-baseline", action="store_true", help="Overwrite the baseline with this run")
+    benchmark_parser.add_argument("--warmup-runs", type=int, default=1)
+    benchmark_parser.add_argument("--runs", type=int, default=3)
+    benchmark_parser.add_argument("--width", type=int, default=640)
+    benchmark_parser.add_argument("--height", type=int, default=360)
+    benchmark_parser.add_argument("--fps", type=int, default=24)
+    benchmark_parser.add_argument("--frames", type=int, default=96)
+    benchmark_parser.add_argument("--multi", type=int, default=2)
+    benchmark_parser.add_argument("--backend", default="pytorch", choices=["pytorch"])
+    benchmark_parser.add_argument("--model", default="4.25")
+    benchmark_parser.set_defaults(func=cmd_benchmark)
 
     return parser

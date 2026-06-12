@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "name": "interpolation-e2e-cpu-transfer",
+  "baselineNote": "Bootstrap baseline. Regenerate on vp-linux-arc-pytorch with `python -m app benchmark --update-baseline` after the benchmark job is calibrated.",
+  "workload": {
+    "scenario": "interpolation-e2e-cpu-transfer",
+    "width": 640,
+    "height": 360,
+    "fps": 24,
+    "frames": 96,
+    "multi": 2,
+    "backend": "pytorch",
+    "model": "4.25"
+  },
+  "warmupRuns": [],
+  "runs": [],
+  "summary": {
+    "median": {
+      "wallTimeSeconds": 3600.0,
+      "completedTimeSeconds": 3600.0,
+      "processedFrames": 191,
+      "throughputFps": 0.01,
+      "stageDurationsSeconds": {
+        "decode": 3600.0,
+        "interpolate": 3600.0
+      },
+      "transferCounts": {
+        "h2d": 96,
+        "d2h": 95
+      },
+      "transferDurationsSeconds": {
+        "h2d": 3600.0,
+        "d2h": 3600.0
+      }
+    }
+  }
+}

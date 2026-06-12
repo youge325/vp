@@ -12,13 +12,14 @@ Phase D.6.1 — 旧版本的 re-export 墙(70 行)被拆除。所有下划线前
     - ``app.cli.commands._process_planning``:模型路径与 ONNX 校验
     - ``app.cli.commands._process_execution``:format-conversion / resume
 
-本模块只保留 4 个 ``cmd_*`` handler、``main`` 入口、``build_parser`` 与
+本模块只保留核心 ``cmd_*`` handler、``main`` 入口、``build_parser`` 与
 两个枚举映射,对外承诺最小公共面。
 """
 
 from __future__ import annotations
 
 from app.cli.commands.check import cmd_check
+from app.cli.commands.benchmark import cmd_benchmark
 from app.cli.commands.info import cmd_info
 from app.cli.commands.inspect_output import cmd_inspect_output
 from app.cli.commands.process import cmd_process
@@ -30,6 +31,7 @@ __all__ = [
     "main",
     "build_parser",
     "cmd_check",
+    "cmd_benchmark",
     "cmd_info",
     "cmd_process",
     "cmd_inspect_output",
