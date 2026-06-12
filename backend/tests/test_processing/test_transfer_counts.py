@@ -7,6 +7,7 @@ import threading
 from typing import Any
 
 import numpy as np
+import pytest
 
 from app.planning import ProcessingStep, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
@@ -50,6 +51,39 @@ class _AddCpuFilter:
 
     def process_numpy(self, frame: np.ndarray) -> np.ndarray:
         return _add(frame, self.value)
+
+
+class _AddTensorFilter(_AddCpuFilter):
+    def can_process_tensor(self, backend: Any) -> bool:
+        del backend
+        return True
+
+    def process_tensor(self, tensor: dict[str, Any], backend: Any) -> dict[str, Any]:
+        del backend
+        return {"tensor": _add(tensor["tensor"], self.value)}
+
+
+class _TensorOnlyFilter:
+    def __init__(self, value: int = 1) -> None:
+        self.value = value
+
+    def can_process_tensor(self, backend: Any) -> bool:
+        del backend
+        return True
+
+    def process_tensor(self, tensor: dict[str, Any], backend: Any) -> dict[str, Any]:
+        del backend
+        return {"tensor": _add(tensor["tensor"], self.value)}
+
+    def process_numpy(self, frame: np.ndarray) -> np.ndarray:
+        del frame
+        raise AssertionError("tensor-only filter should not be executed as a CPU stage")
+
+
+class _UnsupportedTensorFilter(_AddCpuFilter):
+    def can_process_tensor(self, backend: Any) -> bool:
+        del backend
+        return False
 
 
 class _MidpointInterpolation:
@@ -204,20 +238,105 @@ def test_cpu_only_filter_chain_does_not_touch_tensor_backend() -> None:
     assert metrics.snapshot()["transferCounts"] == {"h2d": 0, "d2h": 0}
 
 
-def test_cpu_filter_between_tensor_stages_is_the_only_boundary() -> None:
+def test_legacy_cpu_filter_between_tensor_stages_fails_without_roundtrip() -> None:
     backend = _CountingBackend()
     pre = [
         _step_algorithm(backend, "anime_optimization", _AddTensor(1)),
         _step_algorithm(backend, "frame_filter_chain", _AddCpuFilter(2)),
         _step_algorithm(backend, "super_resolution", _AddTensor(3)),
     ]
+    metrics = PipelineMetrics()
+    stage_plan = StagePlan(
+        pre_steps=[entry.step for entry in pre],
+        interpolation_step=None,
+        post_steps=[],
+        total_output_frames=1,
+        total_encoded_frames=1,
+        total_pairs=0,
+    )
+
+    with pytest.raises(RuntimeError, match="does not support tensor processing"):
+        _process_single_frame_stream(
+            stage_plan=stage_plan,
+            algorithms=_PipelineAlgorithms(pre=pre, interpolation=None, post=[]),
+            progress_callbacks=[lambda *_: None for _ in pre],
+            source_frames=1,
+            resume_output_frames=0,
+            decode_queue=_decoded_queue([10]),
+            encode_queue=queue.Queue(),
+            stop_event=threading.Event(),
+            metrics=metrics,
+        )
+
+    assert backend.to_tensor_calls == 1
+    assert backend.to_numpy_calls == 0
+    assert metrics.snapshot()["transferCounts"] == {"h2d": 1, "d2h": 0}
+
+
+def test_tensor_capable_filter_between_tensor_stages_stays_on_tensor() -> None:
+    backend = _CountingBackend()
+    pre = [
+        _step_algorithm(backend, "anime_optimization", _AddTensor(1)),
+        _step_algorithm(backend, "frame_filter_chain", _AddTensorFilter(2)),
+        _step_algorithm(backend, "super_resolution", _AddTensor(3)),
+    ]
 
     backend, metrics, values = _run_single(pre=pre, source_values=[10])
 
     assert values == [16]
-    assert backend.to_tensor_calls == 2
-    assert backend.to_numpy_calls == 2
-    assert metrics.snapshot()["transferCounts"] == {"h2d": 2, "d2h": 2}
+    assert backend.to_tensor_calls == 1
+    assert backend.to_numpy_calls == 1
+    assert metrics.snapshot()["transferCounts"] == {"h2d": 1, "d2h": 1}
+
+
+def test_tensor_capable_pre_filter_uploads_once_before_tensor_stage() -> None:
+    backend = _CountingBackend()
+    pre = [
+        _step_algorithm(backend, "frame_filter_chain", _AddTensorFilter(2)),
+        _step_algorithm(backend, "super_resolution", _AddTensor(3)),
+    ]
+
+    backend, metrics, values = _run_single(pre=pre, source_values=[10])
+
+    assert values == [15]
+    assert backend.to_tensor_calls == 1
+    assert backend.to_numpy_calls == 1
+    assert metrics.snapshot()["transferCounts"] == {"h2d": 1, "d2h": 1}
+
+
+def test_unsupported_filter_in_tensor_chain_fails_without_roundtrip() -> None:
+    backend = _CountingBackend()
+    pre = [
+        _step_algorithm(backend, "anime_optimization", _AddTensor(1)),
+        _step_algorithm(backend, "frame_filter_chain", _UnsupportedTensorFilter(2)),
+        _step_algorithm(backend, "super_resolution", _AddTensor(3)),
+    ]
+    metrics = PipelineMetrics()
+    stage_plan = StagePlan(
+        pre_steps=[entry.step for entry in pre],
+        interpolation_step=None,
+        post_steps=[],
+        total_output_frames=1,
+        total_encoded_frames=1,
+        total_pairs=0,
+    )
+
+    with pytest.raises(RuntimeError, match="does not support tensor processing"):
+        _process_single_frame_stream(
+            stage_plan=stage_plan,
+            algorithms=_PipelineAlgorithms(pre=pre, interpolation=None, post=[]),
+            progress_callbacks=[lambda *_: None for _ in pre],
+            source_frames=1,
+            resume_output_frames=0,
+            decode_queue=_decoded_queue([10]),
+            encode_queue=queue.Queue(),
+            stop_event=threading.Event(),
+            metrics=metrics,
+        )
+
+    assert backend.to_tensor_calls == 1
+    assert backend.to_numpy_calls == 0
+    assert metrics.snapshot()["transferCounts"] == {"h2d": 1, "d2h": 0}
 
 
 def test_tensor_pre_stage_flows_into_interpolation_without_reupload() -> None:
@@ -238,9 +357,45 @@ def test_tensor_pre_stage_flows_into_interpolation_without_reupload() -> None:
     assert metrics.snapshot()["transferCounts"] == {"h2d": 2, "d2h": 3}
 
 
+def test_tensor_capable_pre_filter_flows_into_interpolation_without_cpu_boundary() -> None:
+    backend = _CountingBackend()
+    pre = [_step_algorithm(backend, "frame_filter_chain", _TensorOnlyFilter(10))]
+
+    metrics, values = _run_interpolated(
+        backend=backend,
+        pre=pre,
+        post=[],
+        source_values=[0, 100],
+        multi=2,
+    )
+
+    assert values == [10, 60, 110]
+    assert backend.to_tensor_calls == 2
+    assert backend.to_numpy_calls == 3
+    assert metrics.snapshot()["transferCounts"] == {"h2d": 2, "d2h": 3}
+
+
 def test_interpolated_midframes_enter_tensor_post_chain_without_roundtrip() -> None:
     backend = _CountingBackend()
     post = [_step_algorithm(backend, "super_resolution", _AddTensor(1))]
+
+    metrics, values = _run_interpolated(
+        backend=backend,
+        pre=[],
+        post=post,
+        source_values=[0, 100],
+        multi=2,
+    )
+
+    assert values == [1, 51, 101]
+    assert backend.to_tensor_calls == 2
+    assert backend.to_numpy_calls == 3
+    assert metrics.snapshot()["transferCounts"] == {"h2d": 2, "d2h": 3}
+
+
+def test_interpolated_midframes_enter_tensor_filter_post_chain_without_roundtrip() -> None:
+    backend = _CountingBackend()
+    post = [_step_algorithm(backend, "frame_filter_chain", _AddTensorFilter(1))]
 
     metrics, values = _run_interpolated(
         backend=backend,

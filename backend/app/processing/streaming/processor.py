@@ -158,6 +158,7 @@ def _process_single_frame_stream(
             progress_callbacks=progress_callbacks,
             item=item,
             source_frames=source_frames,
+            has_tensor_stage_after_chain=False,
             metrics=metrics,
         )
 
@@ -235,6 +236,7 @@ def _process_interpolated_stream(
             progress_callbacks=progress_callbacks,
             item=item,
             source_frames=source_frames,
+            has_tensor_stage_after_chain=True,
             metrics=metrics,
         )
 
@@ -317,6 +319,7 @@ def _apply_post_steps(
         payload=payload,
         progress_current=output_index + 1,
         progress_total=total_output_frames_denominator,
+        has_tensor_stage_after_chain=False,
         metrics=metrics,
     )
 
@@ -328,6 +331,7 @@ def _apply_stage_chain(
     payload: FramePayload,
     progress_current: int,
     progress_total: int,
+    has_tensor_stage_after_chain: bool,
     metrics: PipelineMetrics,
 ) -> FramePayload:
     """Run CPU and tensor stages in order, converting only at explicit boundaries."""
@@ -336,20 +340,72 @@ def _apply_stage_chain(
 
     with metrics.timed("process"):
         for step_index, entry in enumerate(algorithms):
-            payload = _run_stage(entry, payload, metrics)
+            payload = _run_stage(
+                entry,
+                payload,
+                metrics,
+                prefer_tensor=_should_prefer_tensor_stage(
+                    entry=entry,
+                    payload=payload,
+                    remaining=algorithms[step_index + 1 :],
+                    has_tensor_stage_after_chain=has_tensor_stage_after_chain,
+                ),
+            )
             if step_index < len(progress_callbacks):
                 progress_callbacks[step_index](progress_current, progress_total)
     return payload
 
 
-def _run_stage(entry: _StepAlgorithm, payload: FramePayload, metrics: PipelineMetrics) -> FramePayload:
+def _run_stage(
+    entry: _StepAlgorithm,
+    payload: FramePayload,
+    metrics: PipelineMetrics,
+    *,
+    prefer_tensor: bool,
+) -> FramePayload:
     if _is_cpu_frame_stage(entry):
-        return _run_cpu_frame_stage(entry, payload, metrics)
+        return _run_frame_filter_stage(entry, payload, metrics, prefer_tensor=prefer_tensor)
     return _run_tensor_frame_stage(entry, payload, metrics)
 
 
 def _is_cpu_frame_stage(entry: _StepAlgorithm) -> bool:
     return entry.step.algorithm_type == "frame_filter_chain"
+
+
+def _should_prefer_tensor_stage(
+    *,
+    entry: _StepAlgorithm,
+    payload: FramePayload,
+    remaining: list[_StepAlgorithm],
+    has_tensor_stage_after_chain: bool,
+) -> bool:
+    if not _is_cpu_frame_stage(entry):
+        return True
+    if payload.has_tensor_for(entry.backend):
+        return True
+    return any(not _is_cpu_frame_stage(next_entry) for next_entry in remaining) or has_tensor_stage_after_chain
+
+
+def _run_frame_filter_stage(
+    entry: _StepAlgorithm,
+    payload: FramePayload,
+    metrics: PipelineMetrics,
+    *,
+    prefer_tensor: bool,
+) -> FramePayload:
+    if prefer_tensor:
+        can_process_tensor = getattr(entry.algorithm, "can_process_tensor", None)
+        if not callable(can_process_tensor) or not can_process_tensor(entry.backend):
+            raise RuntimeError(
+                f"Frame filter stage '{entry.step.algorithm_type}' does not support tensor processing "
+                "in this tensor chain."
+            )
+        process_tensor = getattr(entry.algorithm, "process_tensor", None)
+        if not callable(process_tensor):
+            raise RuntimeError(f"Tensor frame stage '{entry.step.algorithm_type}' does not implement process_tensor().")
+        tensor = payload.ensure_tensor(entry.backend, metrics)
+        return FramePayload.from_tensor(process_tensor(tensor, entry.backend), entry.backend)
+    return _run_cpu_frame_stage(entry, payload, metrics)
 
 
 def _run_cpu_frame_stage(entry: _StepAlgorithm, payload: FramePayload, metrics: PipelineMetrics) -> FramePayload:
@@ -408,6 +464,7 @@ def _apply_pre_steps(
     progress_callbacks: list[Callable[[int, int], None]],
     item: DecodedFrame,
     source_frames: int,
+    has_tensor_stage_after_chain: bool,
     metrics: PipelineMetrics,
 ) -> FramePayload:
     """Run every pre-step algorithm on a decoded frame, reporting per-step progress.
@@ -421,6 +478,7 @@ def _apply_pre_steps(
         payload=FramePayload.from_numpy(item.frame),
         progress_current=item.source_index + 1,
         progress_total=max(source_frames, 1),
+        has_tensor_stage_after_chain=has_tensor_stage_after_chain,
         metrics=metrics,
     )
 

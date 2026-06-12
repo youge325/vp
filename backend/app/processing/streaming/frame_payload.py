@@ -34,11 +34,7 @@ class FramePayload:
     def ensure_tensor(self, backend: Any, metrics: PipelineMetrics | None = None) -> Any:
         """Return the backend tensor, uploading from numpy lazily if needed."""
         if self._tensor is not None:
-            if self._tensor_backend is not backend:
-                raise RuntimeError(
-                    "FramePayload tensor backend mismatch: cached tensor belongs to "
-                    f"{_backend_label(self._tensor_backend)}, requested {_backend_label(backend)}."
-                )
+            self._ensure_backend_matches(backend)
             return self._tensor
         if self._numpy_frame is None:
             raise RuntimeError("FramePayload has neither tensor nor numpy data.")
@@ -60,6 +56,21 @@ class FramePayload:
         if metrics is not None:
             metrics.record_transfer("d2h")
         return self._numpy_frame
+
+    def has_tensor_for(self, backend: Any) -> bool:
+        """Return whether a tensor for *backend* is already cached."""
+        if self._tensor is None:
+            return False
+        self._ensure_backend_matches(backend)
+        return True
+
+    def _ensure_backend_matches(self, backend: Any) -> None:
+        if self._tensor_backend is backend:
+            return
+        raise RuntimeError(
+            "FramePayload tensor backend mismatch: cached tensor belongs to "
+            f"{_backend_label(self._tensor_backend)}, requested {_backend_label(backend)}."
+        )
 
 
 def _backend_label(backend: Any) -> str:

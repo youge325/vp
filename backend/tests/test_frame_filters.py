@@ -17,9 +17,21 @@ class _FakeTensorBackend:
     def tensor_to_numpy(self, tensor: np.ndarray) -> np.ndarray:
         return tensor
 
+    def get_name(self) -> str:
+        return "fake"
+
+
+class _FakePyTorchBackend(_FakeTensorBackend):
+    def get_name(self) -> str:
+        return "pytorch"
+
 
 def _make_algorithm(filters: list[dict]) -> FrameFilterChainAlgorithm:
     return FrameFilterChainAlgorithm(tensor_backend=_FakeTensorBackend(), filters=filters)
+
+
+def _make_pytorch_algorithm(filters: list[dict]) -> FrameFilterChainAlgorithm:
+    return FrameFilterChainAlgorithm(tensor_backend=_FakePyTorchBackend(), filters=filters)
 
 
 def test_validate_empty_filters():
@@ -314,3 +326,66 @@ def test_get_description():
     )
     assert "scale" in algo.get_description()
     assert "sharpen" in algo.get_description()
+
+
+def test_can_process_tensor_accepts_supported_pytorch_filters():
+    algo = _make_pytorch_algorithm(
+        [
+            {"kind": "scale", "enabled": True, "params": {"mode": "factor", "factor": 0.5}},
+            {"kind": "crop", "enabled": True, "params": {"x": 0, "y": 0, "width": 4, "height": 4}},
+            {"kind": "pad", "enabled": True, "params": {"top": 1, "bottom": 1, "left": 1, "right": 1}},
+            {"kind": "sharpen", "enabled": True, "params": {"amount": 0.0}},
+            {"kind": "color", "enabled": True, "params": {"brightness": 0.1, "contrast": 1.0}},
+        ]
+    )
+
+    assert algo.can_process_tensor(_FakePyTorchBackend()) is True
+
+
+def test_can_process_tensor_rejects_nonzero_denoise():
+    algo = _make_pytorch_algorithm(
+        [
+            {"kind": "denoise", "enabled": True, "params": {"strength": 10, "colorStrength": 10}},
+        ]
+    )
+
+    assert algo.can_process_tensor(_FakePyTorchBackend()) is False
+
+
+def test_process_tensor_scale_crop_pad_color_preserves_tensor_contract():
+    torch = pytest.importorskip("torch")
+    tensor = torch.full((1, 3, 8, 10), 0.25, dtype=torch.float32)
+    algo = _make_pytorch_algorithm(
+        [
+            {"kind": "scale", "enabled": True, "params": {"mode": "resolution", "width": 6, "height": 4}},
+            {"kind": "crop", "enabled": True, "params": {"x": 1, "y": 1, "width": 4, "height": 2}},
+            {
+                "kind": "pad",
+                "enabled": True,
+                "params": {"top": 1, "bottom": 1, "left": 2, "right": 0, "color": "#ff0000"},
+            },
+            {"kind": "color", "enabled": True, "params": {"brightness": 0.2, "contrast": 1.1, "saturation": 1.0}},
+        ]
+    )
+
+    out = algo.process_tensor(tensor, _FakePyTorchBackend())
+
+    assert tuple(out.shape) == (1, 3, 4, 6)
+    assert out.dtype == tensor.dtype
+    assert out.device == tensor.device
+    assert float(out.min()) >= 0.0
+    assert float(out.max()) <= 1.0
+    assert out[:, 0, 0, 0].item() > out[:, 1, 0, 0].item()
+
+
+def test_process_tensor_rejects_unsupported_filter_without_cpu_fallback():
+    torch = pytest.importorskip("torch")
+    tensor = torch.full((1, 3, 8, 10), 0.25, dtype=torch.float32)
+    algo = _make_pytorch_algorithm(
+        [
+            {"kind": "denoise", "enabled": True, "params": {"strength": 10, "colorStrength": 10}},
+        ]
+    )
+
+    with pytest.raises(RuntimeError, match="does not support tensor processing"):
+        algo.process_tensor(tensor, _FakePyTorchBackend())
