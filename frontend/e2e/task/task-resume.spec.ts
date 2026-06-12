@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures'
 import { existsSync } from 'fs'
-import { join } from 'node:path'
+import { createTaskOutputDir, taskInputPath, taskOutputPath } from './helpers'
 
 function buildTaskRequest(inputPath: string, outputDir: string) {
   return {
@@ -40,8 +40,8 @@ function buildTaskRequest(inputPath: string, outputDir: string) {
 
 test.describe('Task resume state', () => {
   test('check_resume_state for fresh video returns format_conversion metadata', async ({ tauriPage }) => {
-    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
-    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
+    const inputPath = taskInputPath()
+    const outputDir = createTaskOutputDir('task-resume-fresh')
     const request = buildTaskRequest(inputPath, outputDir)
 
     const result = await tauriPage.evaluate(async (req) => {
@@ -74,10 +74,10 @@ test.describe('Task resume state', () => {
   })
 
   test('check_resume_state when output exists returns finalExists: true', async ({ tauriPage }) => {
-    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
-    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
+    const inputPath = taskInputPath()
+    const outputDir = createTaskOutputDir('task-resume-existing')
     const request = buildTaskRequest(inputPath, outputDir)
-    const outputPath = join(outputDir, 'vp-e2e-test_processed.mp4')
+    const outputPath = taskOutputPath(outputDir)
 
     // Ensure output file exists by running a task and waiting for completion
     // via the task-completed event to avoid race with force-fresh deletion.
@@ -148,9 +148,9 @@ test.describe('Task resume state', () => {
   })
 
   test('start_task with resumeMode auto and existing output emits task-error', async ({ tauriPage }) => {
-    const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
-    const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
-    const outputPath = join(outputDir, 'vp-e2e-test_processed.mp4')
+    const inputPath = taskInputPath()
+    const outputDir = createTaskOutputDir('task-resume-conflict')
+    const outputPath = taskOutputPath(outputDir)
 
     // Step 1: Produce output file with force-fresh
     await tauriPage.evaluate(async (req) => {
