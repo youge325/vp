@@ -43,6 +43,7 @@ class _MetricsState:
 
     queue_depths: dict[str, int] = field(default_factory=dict)
     stage_durations: dict[str, float] = field(default_factory=dict)
+    transfer_counts: dict[str, int] = field(default_factory=lambda: {"h2d": 0, "d2h": 0})
     processed_frames: int = 0
     started_at: float = field(default_factory=time.time)
 
@@ -91,6 +92,19 @@ class PipelineMetrics:
         with self._lock:
             self._state.stage_durations[stage] = self._state.stage_durations.get(stage, 0.0) + max(float(seconds), 0.0)
 
+    # ------- host/device transfers -------
+
+    def record_transfer(self, kind: str, count: int = 1) -> None:
+        """Increment a host/device transfer counter.
+
+        ``kind`` is intentionally tiny and stable: ``h2d`` for host-to-device
+        uploads and ``d2h`` for device-to-host downloads.
+        """
+        if kind not in {"h2d", "d2h"}:
+            raise ValueError(f"Unknown transfer kind: {kind!r}")
+        with self._lock:
+            self._state.transfer_counts[kind] = self._state.transfer_counts.get(kind, 0) + max(int(count), 0)
+
     # ------- frame throughput -------
 
     def record_processed_frames(self, count: int = 1) -> None:
@@ -115,6 +129,7 @@ class PipelineMetrics:
             return {
                 "queueDepths": dict(self._state.queue_depths),
                 "stageDurationsSeconds": {name: round(value, 4) for name, value in self._state.stage_durations.items()},
+                "transferCounts": dict(self._state.transfer_counts),
                 "processedFrames": processed,
                 "measuredFps": round(measured_fps, 2) if measured_fps is not None else None,
                 "elapsedSeconds": round(elapsed, 3),

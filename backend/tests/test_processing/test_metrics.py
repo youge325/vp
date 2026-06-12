@@ -19,7 +19,19 @@ def test_snapshot_empty_pipeline_has_no_fps() -> None:
     assert snapshot["measuredFps"] is None
     assert snapshot["queueDepths"] == {}
     assert snapshot["stageDurationsSeconds"] == {}
+    assert snapshot["transferCounts"] == {"h2d": 0, "d2h": 0}
     assert snapshot["elapsedSeconds"] >= 0.0
+
+
+def test_record_transfer_counts_host_device_edges() -> None:
+    metrics = PipelineMetrics()
+    metrics.record_transfer("h2d")
+    metrics.record_transfer("h2d", 2)
+    metrics.record_transfer("d2h")
+
+    snapshot = metrics.snapshot()
+
+    assert snapshot["transferCounts"] == {"h2d": 3, "d2h": 1}
 
 
 def test_set_queue_depth_clamps_negative_to_zero() -> None:
