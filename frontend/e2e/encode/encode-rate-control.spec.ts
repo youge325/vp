@@ -1,144 +1,199 @@
 import { test, expect } from '../fixtures'
 
-function createMediaItem(id: string, displayName: string, overrides?: Partial<Record<string, unknown>>) {
-  return {
-    id,
-    displayName,
-    inputPath: `C:/tmp/${displayName}`,
-    selected: true,
-    inspecting: false,
-    info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264', audioCodec: 'aac', duration: 60, bitrate: 5000 },
-    decodeConfig: { mode: 'software', hwaccel: '', decoder: 'software', options: {} },
-    encodeConfig: { codec: 'h264', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf' as const, value: 23 }, options: {} },
-    workflowConfig: { fpsMode: 'multi', processOrder: 'super_resolution_then_interpolation', interpolation: { enabled: false }, superResolution: { enabled: false }, anime: { enabled: false }, preprocess: { enabled: false }, postprocess: { enabled: false } },
-    outputConfig: { outputDir: 'C:/tmp/output', openOnComplete: false, segmentFrames: 1000 },
-    ...overrides,
-  }
-}
+const makeNumberOption = (name: string, defaultValue: number) => ({
+  name,
+  label: name,
+  type: 'number',
+  defaultValue,
+  choices: [],
+  min: 0,
+  max: 51,
+})
 
-async function injectMediaItems(tauriPage: any, items: unknown[]): Promise<boolean> {
-  return await tauriPage.evaluate((data: unknown[]) => {
+const makeProfile = (
+  name: string,
+  label: string,
+  family: string,
+  rateControlModes: Array<{ mode: string; label: string; defaultValue: number; unit: string }>,
+  options: Array<Record<string, unknown>>,
+) => ({
+  name,
+  label,
+  family,
+  codec: 'h264',
+  available: true,
+  pixelFormats: [],
+  hardwareDevices: [],
+  options,
+  rateControlModes,
+})
+
+const CONTROLLED_PROFILES = [
+  makeProfile(
+    'libx264',
+    'CPU H.264',
+    'cpu',
+    [
+      { mode: 'crf', label: 'CRF', defaultValue: 19, unit: 'CRF' },
+      { mode: 'bitrate', label: 'Bitrate', defaultValue: 8, unit: 'Mbps' },
+    ],
+    [makeNumberOption('crf', 19)],
+  ),
+  makeProfile(
+    'h264_nvenc',
+    'NVENC H.264',
+    'nvidia',
+    [
+      { mode: 'cq', label: 'CQ', defaultValue: 21, unit: 'CQ' },
+      { mode: 'bitrate', label: 'Bitrate', defaultValue: 8, unit: 'Mbps' },
+    ],
+    [makeNumberOption('cq', 21)],
+  ),
+  makeProfile(
+    'h264_qsv',
+    'QSV H.264',
+    'intel',
+    [
+      { mode: 'qp', label: 'QP', defaultValue: 25, unit: 'QP' },
+      { mode: 'bitrate', label: 'Bitrate', defaultValue: 8, unit: 'Mbps' },
+    ],
+    [makeNumberOption('qp', 25)],
+  ),
+]
+
+async function installEncodeProfiles(
+  tauriPage: any,
+  profiles: unknown[] = CONTROLLED_PROFILES,
+): Promise<boolean> {
+  return await tauriPage.evaluate((encoderProfiles: unknown[]) => {
     const root = document.querySelector('#app')
     if (!root) return false
     const vueApp = (root as any).__vue_app__
     if (!vueApp) return false
     const pinia = vueApp.config?.globalProperties?.$pinia
-    if (!pinia?.state?.value?.media) return false
+    const state = pinia?.state?.value
+    if (!state?.env?.env || !state?.preset?.draftPreset) return false
 
-    pinia.state.value.media.mediaItems = data
-    if (data.length > 0 && !pinia.state.value.media.activeItemId) {
-      pinia.state.value.media.activeItemId = (data[0] as any).id ?? null
+    state.env.env.checkResult = {
+      type: 'check',
+      ffmpeg: {
+        available: true,
+        version: 'e2e',
+        path: 'ffmpeg',
+        ffprobePath: 'ffprobe',
+        hwaccels: [],
+        encoderProfiles,
+        decoderProfiles: [],
+      },
+      gpu: { available: false, devices: [], adapters: [] },
+      tensorBackends: { pytorch: false, paddle: false, onnx: false },
+      tensorEngines: {},
+      backendDeviceSupport: {},
+      onnxRuntime: { available: false, providers: [] },
+      rifeModel: { available: false },
+      interpolationAlgorithms: [],
+      superResolutionAlgorithms: [],
+      animeProfiles: [],
+    }
+
+    state.preset.draftPreset.encodeConfig = {
+      codec: 'libx264',
+      family: 'cpu',
+      container: 'mp4',
+      keepAudio: true,
+      rateControl: { mode: 'crf', value: 19 },
+      options: {},
+    }
+    state.preset.draftPreset.outputConfig = {
+      outputDir: 'C:/tmp/output',
+      openOnComplete: false,
+      segmentFrames: 1000,
     }
     return true
-  }, items)
+  }, profiles)
 }
 
-async function clearMediaItems(tauriPage: any): Promise<void> {
-  await tauriPage.evaluate(() => {
-    const root = document.querySelector('#app')
-    const vueApp = (root as any)?.__vue_app__
-    if (vueApp) {
-      const pinia = vueApp.config?.globalProperties?.$pinia
-      if (pinia?.state?.value?.media) {
-        pinia.state.value.media.mediaItems = []
-        pinia.state.value.media.activeItemId = null
-      }
-    }
-  })
+async function openEncodeModule(tauriPage: any): Promise<void> {
+  await tauriPage.click('.rail-link:has-text("编码")')
+  await expect(tauriPage.locator('h2:has-text("编码与输出")')).toBeVisible({ timeout: 5000 })
+}
+
+const encoderSelect = (tauriPage: any) =>
+  tauriPage.locator('label.field').filter({ hasText: '编码器' }).locator('select')
+
+const modeField = (tauriPage: any) =>
+  tauriPage.locator('label.field').filter({ hasText: '码率控制模式' })
+
+const valueField = (tauriPage: any) =>
+  tauriPage.locator('label.field').filter({ hasText: '码率控制值' })
+
+async function expectRateControlState(
+  tauriPage: any,
+  labels: string[],
+  mode: string,
+  value: string,
+  unit: string,
+): Promise<void> {
+  const modeSelect = modeField(tauriPage).locator('select')
+  const valueInput = valueField(tauriPage).locator('input')
+
+  await expect(modeSelect).toHaveValue(mode, { timeout: 5000 })
+  await expect(valueInput).toHaveValue(value, { timeout: 5000 })
+  await expect(valueField(tauriPage).locator('.field-hint')).toHaveText(`单位: ${unit}`, { timeout: 5000 })
+  expect(await modeSelect.locator('option').allTextContents()).toEqual(labels)
 }
 
 test.describe('Encode module rate control', () => {
-  test('rate control mode select has three options', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("编码")')
-    await expect(tauriPage.locator('h2:has-text("编码与输出")')).toBeVisible({ timeout: 5000 })
+  test('switching encoder updates supported mode, value and unit', async ({ tauriPage }) => {
+    const ok = await installEncodeProfiles(tauriPage)
+    test.skip(!ok, 'Cannot access Pinia stores from evaluate')
 
-    const modeSelect = tauriPage.locator('label.field').filter({ hasText: '码率控制模式' }).locator('select')
-    await expect(modeSelect).toBeVisible()
+    await openEncodeModule(tauriPage)
 
-    const options = await modeSelect.locator('option').allTextContents()
-    expect(options).toContain('CRF')
-    expect(options).toContain('QP')
-    expect(options).toContain('Bitrate')
+    const codecSelect = encoderSelect(tauriPage)
+    await expect(codecSelect).toBeVisible({ timeout: 5000 })
+
+    await expectRateControlState(tauriPage, ['CRF', 'Bitrate'], 'crf', '19', 'CRF')
+
+    await codecSelect.selectOption({ label: 'NVENC H.264' })
+    await expectRateControlState(tauriPage, ['CQ', 'Bitrate'], 'cq', '21', 'CQ')
+
+    await codecSelect.selectOption({ label: 'QSV H.264' })
+    await expectRateControlState(tauriPage, ['QP', 'Bitrate'], 'qp', '25', 'QP')
   })
 
-  test('switching mode updates the selected value', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("编码")')
-    await expect(tauriPage.locator('h2:has-text("编码与输出")')).toBeVisible({ timeout: 5000 })
+  test('switching rate control mode updates value and unit', async ({ tauriPage }) => {
+    const ok = await installEncodeProfiles(tauriPage)
+    test.skip(!ok, 'Cannot access Pinia stores from evaluate')
 
-    const modeSelect = tauriPage.locator('label.field').filter({ hasText: '码率控制模式' }).locator('select')
-    await expect(modeSelect).toBeVisible()
+    await openEncodeModule(tauriPage)
 
-    // Switch to QP
-    await modeSelect.selectOption({ label: 'QP' })
-    const qpValue = await modeSelect.inputValue()
-    expect(qpValue).toBeTruthy()
+    const modeSelect = modeField(tauriPage).locator('select')
+    await expect(modeSelect).toBeVisible({ timeout: 5000 })
 
-    // Switch to Bitrate
     await modeSelect.selectOption({ label: 'Bitrate' })
-    const bitrateValue = await modeSelect.inputValue()
-    expect(bitrateValue).toBeTruthy()
-    expect(bitrateValue).not.toBe(qpValue)
+    await expectRateControlState(tauriPage, ['CRF', 'Bitrate'], 'bitrate', '8', 'Mbps')
 
-    // Switch back to CRF
     await modeSelect.selectOption({ label: 'CRF' })
-    const crfValue = await modeSelect.inputValue()
-    expect(crfValue).toBeTruthy()
+    await expectRateControlState(tauriPage, ['CRF', 'Bitrate'], 'crf', '19', 'CRF')
   })
 
-  test('rate control value input accepts new values', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("编码")')
-    await expect(tauriPage.locator('h2:has-text("编码与输出")')).toBeVisible({ timeout: 5000 })
-
-    const valueInput = tauriPage.locator('label.field').filter({ hasText: '码率控制值' }).locator('input')
-    await expect(valueInput).toBeVisible()
-
-    await valueInput.fill('28')
-    await valueInput.blur()
-    await expect(valueInput).toHaveValue('28')
-  })
-
-  test('rate control value persists after mode switch', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("编码")')
-    await expect(tauriPage.locator('h2:has-text("编码与输出")')).toBeVisible({ timeout: 5000 })
-
-    const modeSelect = tauriPage.locator('label.field').filter({ hasText: '码率控制模式' }).locator('select')
-    const valueInput = tauriPage.locator('label.field').filter({ hasText: '码率控制值' }).locator('input')
-
-    await expect(modeSelect).toBeVisible()
-    await expect(valueInput).toBeVisible()
-
-    // Set a custom value
-    await valueInput.fill('18')
-    await valueInput.blur()
-    await expect(valueInput).toHaveValue('18')
-
-    // Switch mode
-    await modeSelect.selectOption({ label: 'QP' })
-
-    // Switch back to CRF
-    await modeSelect.selectOption({ label: 'CRF' })
-
-    // Value should still be 18 (stored in preset/individual item config)
-    await expect(valueInput).toHaveValue('18')
-  })
-
-  test('rate control value reflects active item config', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("输入")')
-    await expect(tauriPage.locator('h2:has-text("批量导入")')).toBeVisible({ timeout: 5000 })
-
-    const ok = await injectMediaItems(tauriPage, [
-      createMediaItem('rate-test-1', 'video-a.mp4', {
-        encodeConfig: { codec: 'h264', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf' as const, value: 15 }, options: {} },
-      }),
+  test('empty rateControlModes disables mode and value controls', async ({ tauriPage }) => {
+    const ok = await installEncodeProfiles(tauriPage, [
+      makeProfile('libx264', 'CPU H.264', 'cpu', [], [makeNumberOption('crf', 19)]),
     ])
-    test.skip(!ok, 'Cannot access Pinia media store from evaluate')
+    test.skip(!ok, 'Cannot access Pinia stores from evaluate')
 
-    await tauriPage.click('.rail-link:has-text("编码")')
-    await expect(tauriPage.locator('h2:has-text("编码与输出")')).toBeVisible({ timeout: 5000 })
+    await openEncodeModule(tauriPage)
 
-    const valueInput = tauriPage.locator('label.field').filter({ hasText: '码率控制值' }).locator('input')
-    await expect(valueInput).toHaveValue('15')
+    const modeSelect = modeField(tauriPage).locator('select')
+    const valueInput = valueField(tauriPage).locator('input')
 
-    await clearMediaItems(tauriPage)
+    await expect(modeSelect).toBeDisabled({ timeout: 5000 })
+    await expect(valueInput).toBeDisabled({ timeout: 5000 })
+    await expect(modeField(tauriPage).locator('.field-hint')).toHaveText(
+      '未探测到可用码率控制模式',
+      { timeout: 5000 },
+    )
   })
 })

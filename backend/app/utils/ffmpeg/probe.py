@@ -20,6 +20,27 @@ from ._run import run_ffmpeg_command
 
 logger = get_logger(__name__)
 
+RATE_CONTROL_PROBE_ORDER = ("crf", "cq", "qp")
+RATE_CONTROL_LABELS = {
+    "crf": "CRF",
+    "cq": "CQ",
+    "qp": "QP",
+    "bitrate": "Bitrate",
+}
+RATE_CONTROL_DEFAULTS = {
+    "crf": 18,
+    "cq": 23,
+    "qp": 23,
+    "bitrate": 8,
+}
+RATE_CONTROL_UNITS = {
+    "crf": "CRF",
+    "cq": "CQ",
+    "qp": "QP",
+    "bitrate": "Mbps",
+}
+RATE_CONTROL_PROBE_SOURCE = "color=size=256x256:rate=1"
+
 
 def _probe_cache_key(input_path: str) -> tuple[str, int, int] | None:
     """Build the cache key for ``video_info_cache`` lookups.
@@ -279,6 +300,116 @@ def parse_codec_profile(
         "hardwareDevices": hardware_devices,
         "options": options,
     }
+
+
+def _find_option(options: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
+    return next((option for option in options if option.get("name") == name), None)
+
+
+def _rate_control_default(mode: str, option: dict[str, Any] | None) -> Any:
+    default = option.get("defaultValue") if option else None
+    if default is not None and not (isinstance(default, str) and not default.strip()):
+        if isinstance(default, (int, float)) and not isinstance(default, bool) and default <= 0:
+            return RATE_CONTROL_DEFAULTS[mode]
+        return default
+    return RATE_CONTROL_DEFAULTS[mode]
+
+
+def _rate_control_probe_args(mode: str, value: Any) -> list[str]:
+    if mode == "bitrate":
+        return ["-b:v", "8M"]
+    return [f"-{mode}", str(value)]
+
+
+def _pixel_format_probe_args(options: list[dict[str, Any]]) -> list[str]:
+    pix_fmt = _find_option(options, "pix_fmt")
+    if not pix_fmt:
+        return []
+    value = pix_fmt.get("defaultValue")
+    if value is None or (isinstance(value, str) and not value.strip()):
+        choices = pix_fmt.get("choices") if isinstance(pix_fmt.get("choices"), list) else []
+        value = choices[0].get("value") if choices and isinstance(choices[0], dict) else None
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return []
+    return ["-pix_fmt", str(value)]
+
+
+def _rate_control_candidates(options: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for mode in RATE_CONTROL_PROBE_ORDER:
+        option = _find_option(options, mode)
+        if option is None:
+            continue
+        candidates.append(
+            {
+                "mode": mode,
+                "label": RATE_CONTROL_LABELS[mode],
+                "defaultValue": _rate_control_default(mode, option),
+                "unit": RATE_CONTROL_UNITS[mode],
+            }
+        )
+
+    candidates.append(
+        {
+            "mode": "bitrate",
+            "label": RATE_CONTROL_LABELS["bitrate"],
+            "defaultValue": RATE_CONTROL_DEFAULTS["bitrate"],
+            "unit": RATE_CONTROL_UNITS["bitrate"],
+        }
+    )
+    return candidates
+
+
+def _verify_rate_control_mode(
+    ffmpeg_path: str,
+    codec: str,
+    options: list[dict[str, Any]],
+    mode: dict[str, Any],
+) -> bool:
+    cmd = [
+        ffmpeg_path,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        RATE_CONTROL_PROBE_SOURCE,
+        "-frames:v",
+        "1",
+        "-an",
+        "-c:v",
+        codec,
+    ]
+    cmd.extend(_rate_control_probe_args(str(mode["mode"]), mode["defaultValue"]))
+    cmd.extend(_pixel_format_probe_args(options))
+    cmd.extend(["-f", "null", "-"])
+    try:
+        run_ffmpeg_command(cmd, timeout=30)
+    except Exception as exc:  # pragma: no cover - exact FFmpeg errors vary by build
+        logger.debug(
+            "Rate control probe failed for encoder %s mode %s: %s",
+            codec,
+            mode["mode"],
+            exc,
+        )
+        return False
+    return True
+
+
+def probe_rate_control_modes(
+    ffmpeg_path: str,
+    codec: str,
+    options: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    modes = [
+        mode
+        for mode in _rate_control_candidates(options)
+        if _verify_rate_control_mode(ffmpeg_path, codec, options, mode)
+    ]
+    if not modes:
+        logger.debug("No rate control modes passed FFmpeg verification for encoder %s", codec)
+    return modes
 
 
 def is_available(ffmpeg_path: str) -> bool:

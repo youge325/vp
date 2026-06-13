@@ -2,6 +2,7 @@
 // 这些类型源自后端运行时探测,不是 UI 衍生类型。
 
 import type { CodecFamily } from './workflow'
+import type { RateControlMode } from './workflow'
 
 export type CapabilityValue = string | number | boolean
 export type CapabilityOptionType = 'boolean' | 'number' | 'string' | 'choice'
@@ -32,5 +33,14 @@ export interface CodecProfileSpec {
   options: CapabilityOptionSpec[]
 }
 
-export interface EncoderProfileSpec extends CodecProfileSpec {}
+export interface RateControlModeSpec {
+  mode: RateControlMode
+  label: string
+  defaultValue: number | string
+  unit: string
+}
+
+export interface EncoderProfileSpec extends CodecProfileSpec {
+  rateControlModes?: RateControlModeSpec[]
+}
 export interface DecoderProfileSpec extends CodecProfileSpec {}

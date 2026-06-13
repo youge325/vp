@@ -1,5 +1,6 @@
 """FFmpeg wrapper capability and argument tests."""
 
+import subprocess
 from types import MethodType
 
 import pytest
@@ -191,3 +192,115 @@ Encoder hevc_nvenc [NVIDIA NVENC hevc encoder]:
             "software",
             "hevc_cuvid",
         ]
+
+    def test_probe_rate_control_modes_verifies_candidates_with_ffmpeg(self, monkeypatch):
+        wrapper = FFmpegWrapper(ffmpeg_path="ffmpeg")
+        calls: list[list[str]] = []
+
+        def fake_run(cmd: list[str], *, timeout: int = 3600):
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr("app.utils.ffmpeg.probe.run_ffmpeg_command", fake_run)
+
+        modes = wrapper.probe_rate_control_modes(
+            "libx264",
+            [
+                {"name": "crf", "defaultValue": 19},
+                {"name": "qp", "defaultValue": 22},
+            ],
+        )
+
+        assert [mode["mode"] for mode in modes] == ["crf", "qp", "bitrate"]
+        assert modes[0] == {"mode": "crf", "label": "CRF", "defaultValue": 19, "unit": "CRF"}
+        assert modes[1] == {"mode": "qp", "label": "QP", "defaultValue": 22, "unit": "QP"}
+        assert modes[2] == {"mode": "bitrate", "label": "Bitrate", "defaultValue": 8, "unit": "Mbps"}
+
+        assert len(calls) == 3
+        assert ["-crf", "19"] in [calls[0][index : index + 2] for index in range(len(calls[0]) - 1)]
+        assert ["-qp", "22"] in [calls[1][index : index + 2] for index in range(len(calls[1]) - 1)]
+        assert ["-b:v", "8M"] in [calls[2][index : index + 2] for index in range(len(calls[2]) - 1)]
+        assert "color=size=256x256:rate=1" in calls[0]
+        assert all("-f" in call and "lavfi" in call and "null" in call for call in calls)
+
+    def test_probe_rate_control_modes_drops_failed_modes_without_fallback(self, monkeypatch):
+        wrapper = FFmpegWrapper(ffmpeg_path="ffmpeg")
+
+        def fake_run(cmd: list[str], *, timeout: int = 3600):
+            if "-cq" in cmd:
+                raise RuntimeError("unsupported cq")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr("app.utils.ffmpeg.probe.run_ffmpeg_command", fake_run)
+
+        modes = wrapper.probe_rate_control_modes(
+            "h264_nvenc",
+            [
+                {"name": "cq", "defaultValue": 21},
+                {"name": "qp", "defaultValue": 25},
+            ],
+        )
+
+        assert [mode["mode"] for mode in modes] == ["qp", "bitrate"]
+
+    def test_probe_rate_control_modes_uses_ui_defaults_for_unset_encoder_defaults(self, monkeypatch):
+        wrapper = FFmpegWrapper(ffmpeg_path="ffmpeg")
+
+        monkeypatch.setattr(
+            "app.utils.ffmpeg.probe.run_ffmpeg_command",
+            lambda cmd, *, timeout=3600: subprocess.CompletedProcess(cmd, 0, "", ""),
+        )
+
+        modes = wrapper.probe_rate_control_modes(
+            "h264_nvenc",
+            [
+                {"name": "cq", "defaultValue": 0},
+                {"name": "qp", "defaultValue": -1},
+            ],
+        )
+
+        assert modes[0] == {"mode": "cq", "label": "CQ", "defaultValue": 23, "unit": "CQ"}
+        assert modes[1] == {"mode": "qp", "label": "QP", "defaultValue": 23, "unit": "QP"}
+
+    def test_probe_rate_control_modes_returns_empty_when_every_probe_fails(self, monkeypatch):
+        wrapper = FFmpegWrapper(ffmpeg_path="ffmpeg")
+
+        def fake_run(cmd: list[str], *, timeout: int = 3600):
+            raise RuntimeError("encoder cannot be opened")
+
+        monkeypatch.setattr("app.utils.ffmpeg.probe.run_ffmpeg_command", fake_run)
+
+        modes = wrapper.probe_rate_control_modes(
+            "broken_encoder",
+            [{"name": "crf", "defaultValue": 18}],
+        )
+
+        assert modes == []
+
+    def test_discover_capabilities_includes_rate_control_modes(self, monkeypatch):
+        wrapper = FFmpegWrapper(ffmpeg_path="ffmpeg")
+
+        wrapper.list_codec_names = MethodType(
+            lambda self, mode: ["libx264"] if mode == "encoders" else [],
+            wrapper,
+        )
+        wrapper.list_hwaccels = MethodType(lambda self: [], wrapper)
+        wrapper.describe_codec = MethodType(
+            lambda self, mode, name: """
+Encoder libx264 [libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10]:
+    Supported pixel formats: yuv420p
+  -crf               <float>      E..V....... (from -1 to 51) (default 19)
+""",
+            wrapper,
+        )
+
+        monkeypatch.setattr(
+            "app.utils.ffmpeg.probe.run_ffmpeg_command",
+            lambda cmd, *, timeout=3600: subprocess.CompletedProcess(cmd, 0, "", ""),
+        )
+
+        capabilities = wrapper.discover_capabilities([])
+
+        profile = capabilities["encoderProfiles"][0]
+        assert profile["name"] == "libx264"
+        assert [mode["mode"] for mode in profile["rateControlModes"]] == ["crf", "bitrate"]
