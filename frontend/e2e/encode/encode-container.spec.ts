@@ -62,15 +62,23 @@ test.describe('Encode container switching', () => {
     expect(options.length).toBeGreaterThanOrEqual(1)
   })
 
-  test('rate control mode select has expected options', async ({ tauriPage }) => {
+  test('rate control mode select reflects probed availability', async ({ tauriPage }) => {
     await tauriPage.click('.rail-link:has-text("编码")')
     await expect(tauriPage.locator('h2:has-text("编码与输出")')).toBeVisible({ timeout: 5000 })
 
-    const rateControlSelect = tauriPage.locator('label.field').filter({ hasText: '码率控制模式' }).locator('select')
+    const rateControlField = tauriPage.locator('label.field').filter({ hasText: '码率控制模式' })
+    const rateControlSelect = rateControlField.locator('select')
     await expect(rateControlSelect).toBeVisible({ timeout: 5000 })
 
     const options = await rateControlSelect.locator('option').allTextContents()
-    expect(options).toContain('CRF')
-    expect(options).toContain('Bitrate')
+    if (options.length === 0) {
+      await expect(rateControlSelect).toBeDisabled({ timeout: 5000 })
+      await expect(rateControlField.locator('.field-hint')).toHaveText('未探测到可用码率控制模式', {
+        timeout: 5000,
+      })
+      return
+    }
+
+    expect(options.every((option) => option.trim().length > 0)).toBe(true)
   })
 })
