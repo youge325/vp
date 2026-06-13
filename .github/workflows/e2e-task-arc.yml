@@ -1,0 +1,137 @@
+name: Linux End-to-End Task Tests
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/app/**'
+      - 'frontend/**'
+      - '.github/workflows/e2e-task.yml'
+      - '.github/workflows/e2e-task-arc.yml'
+      - 'infra/arc/**'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/app/**'
+      - 'frontend/**'
+      - '.github/workflows/e2e-task.yml'
+      - '.github/workflows/e2e-task-arc.yml'
+      - 'infra/arc/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build-e2e-task-app-arc:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
+    runs-on: vp-linux-arc
+    env:
+      CARGO_TARGET_DIR: /tmp/vp-cargo-target
+      PYTHONIOENCODING: utf-8
+      VP_FFMPEG_PATH: /usr/bin/ffmpeg
+      VP_FFPROBE_PATH: /usr/bin/ffprobe
+      VP_RIFE_MODEL_DIR: /opt/vp/models
+      VP_PYTHON_EXECUTABLE: /opt/vp/venv/bin/python
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install frontend dependencies
+        run: |
+          npm ci
+          npm install --include=optional --no-audit --no-fund
+        working-directory: frontend
+
+      - name: Regenerate TypeScript types from Rust (ts-rs)
+        run: |
+          mkdir -p ../dist
+          cargo test --lib --quiet
+        working-directory: frontend/src-tauri
+
+      - name: Build Tauri app (release)
+        run: npm run tauri build -- --no-bundle
+        working-directory: frontend
+        env:
+          CI: true
+          E2E_COVERAGE: 1
+
+      - name: Upload E2E task app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vp-e2e-task-app-linux-arc
+          path: ${{ env.CARGO_TARGET_DIR }}/release/vp-workbench
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
+
+  e2e-task-ui-arc:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
+    runs-on: vp-linux-arc
+    needs: build-e2e-task-app-arc
+    env:
+      PYTHONIOENCODING: utf-8
+      VP_FFMPEG_PATH: /usr/bin/ffmpeg
+      VP_FFPROBE_PATH: /usr/bin/ffprobe
+      VP_RIFE_MODEL_DIR: /opt/vp/models
+      VP_PYTHON_EXECUTABLE: /opt/vp/venv/bin/python
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install frontend dependencies
+        run: |
+          npm ci
+          npm install --include=optional --no-audit --no-fund
+        working-directory: frontend
+
+      - name: Verify Tauri WebDriver runtime
+        run: |
+          tauri-driver --help | head -n 5
+          if command -v WebKitWebDriver >/dev/null 2>&1; then
+            WebKitWebDriver --version || WebKitWebDriver --help | head -n 5
+          elif command -v webkit2gtk-driver >/dev/null 2>&1; then
+            webkit2gtk-driver --version || webkit2gtk-driver --help | head -n 5
+          else
+            echo "WebKitGTK WebDriver binary was not found" >&2
+            exit 1
+          fi
+
+      - name: Download E2E task app artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: vp-e2e-task-app-linux-arc
+          path: ${{ runner.temp }}/vp-e2e-app
+
+      - name: Verify E2E task app artifact
+        run: |
+          app="${RUNNER_TEMP}/vp-e2e-app/vp-workbench"
+          chmod +x "$app"
+          test -x "$app"
+          ls -lh "$app"
+
+      - name: Generate synthetic test video
+        run: |
+          ffmpeg -f lavfi -i testsrc=duration=1:size=1280x720:rate=30 \
+                 -f lavfi -i sine=frequency=1000:duration=1 \
+                 -pix_fmt yuv420p -c:v libx264 -c:a aac \
+                 "${RUNNER_TEMP}/vp-e2e-test.mp4" -y
+
+      - name: Run WebDriverIO task e2e tests
+        timeout-minutes: 25
+        run: xvfb-run -a npm run e2e
+        working-directory: frontend
+        env:
+          VP_E2E_SPECS: './e2e/task/**/*.spec.ts'
+          VP_TAURI_EXE_PATH: ${{ runner.temp }}/vp-e2e-app/vp-workbench
+          VP_E2E_INPUT: ${{ runner.temp }}/vp-e2e-test.mp4
+          VP_E2E_OUTPUT_DIR: ${{ runner.temp }}/vp-e2e-output
+          VP_BACKEND_DIR: ${{ github.workspace }}/backend
+          VP_RUNTIME_ROOT: ${{ github.workspace }}/frontend/src-tauri/resources/runtime
+
+      - name: Generate E2E coverage report (nyc)
+        run: npx nyc report --reporter=text --reporter=html
+        working-directory: frontend
