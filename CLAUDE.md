@@ -1,2 +1,1 @@
-使用pwsh而非powershell来执行命令行
-命令行使用python而不是python3
+@AGENTS.md
