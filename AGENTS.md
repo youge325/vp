@@ -27,7 +27,7 @@ Python 目标版本为 3.12，使用 Ruff：行宽 120、空格缩进、双引�
 
 ## Commit 与 Pull Request 规范
 
-近期提交使用简短祈使句主题，通常为英文句首大写，例如 `Fix benchmark model directory fallback`、`Add backend benchmark regression system`。保持每个 commit 聚焦于单一层面或单一问题。仓库所有者进行开发时，不提交 PR；本地验证通过后直接推送到 `main` 分支。非所有者或协作分支仍应提交 PR，说明影响的 backend/frontend/Rust 范围，列出已执行的验证命令，关联相关 issue；涉及 UI 的改动需提供截图或录屏。单独说明生成文件变更，尤其是 Tauri schema 和 ts-rs 生成的 TypeScript 类型。
+近期提交使用简短祈使句主题，通常为英文句首大写，例如 `Fix benchmark model directory fallback`、`Add backend benchmark regression system`。保持每个 commit 聚焦于单一层面或单一问题。开发时直接在 `main` 分支提交并推送；不要创建新分支，也不要创建 PR。本地验证通过后再推送，并在提交说明或交付说明中列出已执行的验证命令。涉及 UI 的改动需提供截图或录屏。单独说明生成文件变更，尤其是 Tauri schema 和 ts-rs 生成的 TypeScript 类型。
 
 ## 安全与配置提示
 
