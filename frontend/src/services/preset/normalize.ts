@@ -6,6 +6,11 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { CapabilityValue } from '@/types/domain/capability'
 import { createDefaultDecodeConfig, createDefaultEncodeConfig } from './defaults'
 import { getVisibleDecoderProfiles, getVisibleEncoderProfiles } from './profile-picker'
+import {
+  hasRateControlModes,
+  resolveRateControlForMode,
+  resolveRateControlForProfile,
+} from './rate-control'
 
 export function seedProfileOptions(
   profile: { options: Array<{ name: string; defaultValue?: CapabilityValue | null; choices: Array<{ value: CapabilityValue }>; type: string }> } | null,
@@ -137,10 +142,17 @@ export function normalizeEncodeConfig(
       ...config,
       codec: candidate.name,
       family,
-      rateControl: defaultRateControlValue(family),
+      rateControl: resolveRateControlForProfile(candidate) ?? defaultRateControlValue(family),
       options: seedProfileOptions(candidate, config.options),
     }
   }
+
+  const normalizedRateControl =
+    hasRateControlModes(matchedProfile)
+      ? resolveRateControlForMode(matchedProfile, config.rateControl.mode)
+        ?? resolveRateControlForProfile(matchedProfile)
+        ?? config.rateControl
+      : config.rateControl
 
   return {
     ...config,
@@ -148,6 +160,7 @@ export function normalizeEncodeConfig(
       matchedProfile.family === 'nvidia' || matchedProfile.family === 'intel'
         ? matchedProfile.family
         : 'cpu',
+    rateControl: normalizedRateControl,
     options: seedProfileOptions(matchedProfile, config.options),
   }
 }

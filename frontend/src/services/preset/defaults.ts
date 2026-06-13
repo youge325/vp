@@ -11,6 +11,7 @@ import {
   pickDefaultSuperResolutionAlgorithm,
 } from './enhance-rules'
 import { pickPreferredDecoderProfile, pickPreferredEncoderProfile } from './profile-picker'
+import { resolveRateControlForProfile } from './rate-control'
 
 export function createDefaultWorkflowConfig(): WorkflowConfig {
   return {
@@ -107,7 +108,7 @@ export function createDefaultEncodeConfig(env: EnvironmentCheckResult | null): E
     family,
     container: 'mp4',
     keepAudio: true,
-    rateControl: {
+    rateControl: resolveRateControlForProfile(profile) ?? {
       mode: family === 'cpu' ? 'crf' : family === 'nvidia' ? 'cq' : 'qp',
       value: family === 'cpu' ? 18 : 23,
     },

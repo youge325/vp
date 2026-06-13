@@ -17,6 +17,7 @@ const props = defineProps<{
   error?: string | null
   spanTwo?: boolean
   placeholder?: string
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -51,6 +52,7 @@ function handleInput(event: Event): void {
       :max="max"
       :step="step"
       :placeholder="placeholder"
+      :disabled="disabled"
       @input="handleInput"
     />
   </BaseField>

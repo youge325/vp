@@ -16,6 +16,10 @@ import type { RateControlMode } from '@/types/domain/workflow'
 const {
   visibleEncoderProfiles,
   encoderOptions,
+  rateControlOptions,
+  rateControlDisabled,
+  rateControlModeHint,
+  rateControlValueHint,
   setEncodeProfile,
   setRateControlMode,
   setRateControlValue,
@@ -40,13 +44,6 @@ const containerOptions = computed(() =>
 const codecOptions = computed(() =>
   visibleEncoderProfiles.value.map((profile) => ({ value: profile.name, label: profile.label })),
 )
-
-const RATE_CONTROL_OPTIONS = [
-  { value: 'crf', label: 'CRF' },
-  { value: 'cq', label: 'CQ' },
-  { value: 'qp', label: 'QP' },
-  { value: 'bitrate', label: 'Bitrate' },
-] as const
 
 function handleRateControlModeChange(value: string): void {
   setRateControlMode(value as RateControlMode)
@@ -131,7 +128,9 @@ async function handlePickOutputDirectory(): Promise<void> {
         <BaseSelect
           label="码率控制模式"
           :model-value="editorConfig.encodeConfig.rateControl.mode"
-          :options="RATE_CONTROL_OPTIONS"
+          :options="rateControlOptions"
+          :hint="rateControlModeHint"
+          :disabled="rateControlDisabled"
           @update:model-value="handleRateControlModeChange"
         />
 
@@ -139,6 +138,8 @@ async function handlePickOutputDirectory(): Promise<void> {
           label="码率控制值"
           :model-value="Number(editorConfig.encodeConfig.rateControl.value)"
           :min="0"
+          :hint="rateControlValueHint"
+          :disabled="rateControlDisabled"
           @update:model-value="setRateControlValue"
         />
 

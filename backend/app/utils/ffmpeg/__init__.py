@@ -258,6 +258,9 @@ class FFmpegWrapper:
     def parse_avoptions(self, help_text: str) -> list[dict[str, Any]]:
         return _probe.parse_avoptions(help_text)
 
+    def probe_rate_control_modes(self, codec: str, options: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return _probe.probe_rate_control_modes(self.ffmpeg_path, codec, options)
+
     def discover_capabilities(self, gpu_adapters: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         """Discover FFmpeg capabilities, using instance methods so callers can mock them in tests."""
         adapters = gpu_adapters or []
@@ -272,13 +275,13 @@ class FFmpegWrapper:
                 continue
             if candidate["family"] != "cpu" and candidate["family"] not in available_vendors:
                 continue
-            encoder_profiles.append(
-                _probe.parse_codec_profile(
-                    "encoder",
-                    candidate,
-                    self.describe_codec("encoder", candidate["name"]),
-                )
+            profile = _probe.parse_codec_profile(
+                "encoder",
+                candidate,
+                self.describe_codec("encoder", candidate["name"]),
             )
+            profile["rateControlModes"] = self.probe_rate_control_modes(profile["name"], profile["options"])
+            encoder_profiles.append(profile)
 
         decoder_profiles: list[dict[str, Any]] = [
             {
