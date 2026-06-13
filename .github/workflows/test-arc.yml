@@ -52,7 +52,9 @@ jobs:
           ffmpeg -version | head -n 1
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm install --include=optional --no-audit --no-fund
         working-directory: frontend
 
       - name: Regenerate TypeScript types from Rust (ts-rs)
