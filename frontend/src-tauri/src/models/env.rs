@@ -140,6 +140,16 @@ pub struct AlgorithmInfo {
     pub models: Vec<String>,
     #[serde(default)]
     pub onnx_models: Vec<String>,
+    #[serde(default)]
+    pub scale_factors: Vec<u32>,
+    #[serde(default)]
+    pub default_num_frames: Option<u32>,
+    #[serde(default)]
+    pub weight_url: Option<String>,
+    #[serde(default)]
+    pub weight_path: Option<String>,
+    #[serde(default)]
+    pub weight_available: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]

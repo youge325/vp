@@ -35,8 +35,14 @@ class FramePayload:
     def ensure_tensor(self, backend: Any, metrics: PipelineMetrics | None = None) -> Any:
         """Return the backend tensor, uploading from numpy lazily if needed."""
         if self._tensor is not None:
-            self._ensure_backend_matches(backend)
-            return self._tensor
+            if self._tensor_backend is backend:
+                return self._tensor
+            # A later stage may use a different tensor runtime (for example
+            # ONNX RIFE followed by Paddle VSR). Bridge through the cached
+            # numpy representation instead of failing on the backend mismatch.
+            self.ensure_numpy(metrics)
+            self._tensor = None
+            self._tensor_backend = None
         if self._numpy_frame is None:
             raise RuntimeError("FramePayload has neither tensor nor numpy data.")
 
@@ -66,8 +72,7 @@ class FramePayload:
         """Return whether a tensor for *backend* is already cached."""
         if self._tensor is None:
             return False
-        self._ensure_backend_matches(backend)
-        return True
+        return self._tensor_backend is backend
 
     def _ensure_backend_matches(self, backend: Any) -> None:
         if self._tensor_backend is backend:

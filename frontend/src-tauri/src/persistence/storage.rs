@@ -13,6 +13,11 @@ use crate::error::ShellError;
 use crate::models::WorkbenchPreset;
 use crate::runtime::ResolvedRuntimePaths;
 
+// Phase 22 — bumped from 3 to 4 because ``AlgorithmInfo`` now carries
+// PaddleGAN VSR weight metadata and six new Paddle super-resolution
+// algorithms. Skipping older caches forces a fresh ``python -m app check``
+// so the UI can show the new algorithms and weight status immediately.
+//
 // Phase 8 — bumped from 2 to 3. ``AlgorithmInfo`` gained the
 // ``tensorBackends`` field, and ``#[serde(default)]`` makes old
 // cache entries (which lack the field) silently deserialize with
@@ -22,7 +27,7 @@ use crate::runtime::ResolvedRuntimePaths;
 // Bumping the version forces ``load_environment_cache`` to skip
 // the stale file and re-run ``python -m app check``, whose fresh
 // output now carries ``tensorBackends`` end-to-end.
-const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 3;
+const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 4;
 const WORKBENCH_PRESET_SCHEMA_VERSION: u32 = 1;
 const ENVIRONMENT_CACHE_FILE: &str = "environment-cache.json";
 const WORKBENCH_PRESET_FILE: &str = "workbench-preset.json";
@@ -359,6 +364,10 @@ mod tests {
                     scale_factor: 2.0,
                     algorithm: "placeholder".to_string(),
                     onnx_model: None,
+                    tensor_backend: TensorBackend::Onnx,
+                    engine: "cuda".to_string(),
+                    num_frames: 10,
+                    auto_download_weights: true,
                 },
                 anime: AnimeConfig {
                     enabled: false,

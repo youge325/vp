@@ -136,6 +136,24 @@
             "null"
           ],
           "default": null
+        },
+        "tensorBackend": {
+          "$ref": "#/$defs/TensorBackend",
+          "default": "onnx"
+        },
+        "engine": {
+          "type": "string",
+          "default": "cuda"
+        },
+        "numFrames": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 10
+        },
+        "autoDownloadWeights": {
+          "type": "boolean",
+          "default": true
         }
       },
       "required": [

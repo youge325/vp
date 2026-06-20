@@ -5,13 +5,9 @@
 // 让 caller 只剩一行声明。
 
 import { computed, type ComputedRef } from 'vue'
+import type { AlgorithmInfo } from '@/types/domain/env'
 
-export interface AlgorithmSpec {
-  name: string
-  tensorBackends: string[]
-  models: string[]
-  onnxModels?: string[]
-}
+export type AlgorithmSpec = AlgorithmInfo
 
 export interface AlgorithmLens {
   algorithms: ComputedRef<AlgorithmSpec[]>

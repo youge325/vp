@@ -15,8 +15,28 @@ import {
   pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
 } from '@/services/preset/enhance-rules'
+import type { AlgorithmInfo } from '@/types/domain/env'
 import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/domain/workflow'
 import type { WorkflowConfig } from '@/types/protocol'
+
+const PADDLEGAN_VSR_ALGORITHMS = new Set([
+  'ppmsvsr',
+  'ppmsvsr-large',
+  'edvr',
+  'basicvsr',
+  'iconvsr',
+  'basicvsr-plus-plus',
+])
+
+const TENSOR_BACKENDS: TensorBackend[] = ['pytorch', 'paddle', 'onnx']
+
+function isTensorBackend(value: string): value is TensorBackend {
+  return TENSOR_BACKENDS.includes(value as TensorBackend)
+}
+
+function isPaddleGanVsr(algorithm: AlgorithmInfo | undefined): boolean {
+  return Boolean(algorithm && PADDLEGAN_VSR_ALGORITHMS.has(algorithm.name))
+}
 
 export function useEnhanceForm() {
   const envStore = useEnvStore()
@@ -32,27 +52,94 @@ export function useEnhanceForm() {
   // 没有 ``tensorBackends`` 字段的旧缓存(Phase 8 之前持久化的)
   // 退化为 ``[]``,这里 ``.includes(backend)`` 返回 false,意味着
   // "未声明支持 = 不显示";比错显示安全。
-  const backend = computed(() => workflow.value.interpolation.tensorBackend)
+  const interpolationBackendValue = computed(() => workflow.value.interpolation.tensorBackend as TensorBackend)
+  const superResolutionBackendValue = computed(() => workflow.value.superResolution.tensorBackend as TensorBackend)
 
   const interpolation = createAlgorithmLens(
     computed(() => envStore.env.checkResult?.interpolationAlgorithms ?? []),
     computed(() => workflow.value.interpolation.algorithm),
-    backend,
+    interpolationBackendValue,
   )
 
+  const superResolutionAlgorithmSpecs = computed(() => envStore.env.checkResult?.superResolutionAlgorithms ?? [])
   const superResolution = createAlgorithmLens(
-    computed(() => envStore.env.checkResult?.superResolutionAlgorithms ?? []),
+    superResolutionAlgorithmSpecs,
     computed(() => workflow.value.superResolution.algorithm),
-    backend,
+    superResolutionBackendValue,
   )
 
   const animeProfiles = computed(() => envStore.env.checkResult?.animeProfiles ?? [])
-  const isOnnxBackend = computed(() => backend.value === 'onnx')
+  const isInterpolationOnnxBackend = computed(() => interpolationBackendValue.value === 'onnx')
+  const isSuperResolutionOnnxBackend = computed(() => superResolutionBackendValue.value === 'onnx')
+  const currentSuperResolutionAlgorithm = computed(() =>
+    superResolutionAlgorithmSpecs.value.find((a) => a.name === workflow.value.superResolution.algorithm),
+  )
+  const isPaddleGanSuperResolution = computed(() => isPaddleGanVsr(currentSuperResolutionAlgorithm.value))
+
+  function findSuperResolutionAlgorithm(name: string): AlgorithmInfo | undefined {
+    return superResolutionAlgorithmSpecs.value.find((a) => a.name === name)
+  }
+
+  function pickSupportedBackend(algorithm: AlgorithmInfo | undefined, fallback: TensorBackend): TensorBackend {
+    if (!algorithm) return fallback
+    if (algorithm.tensorBackends.includes(fallback)) return fallback
+    return algorithm.tensorBackends.find(isTensorBackend) ?? fallback
+  }
+
+  function applySuperResolutionAlgorithmDefaults(config: WorkflowConfig, algorithm: AlgorithmInfo | undefined): void {
+    if (!algorithm) return
+
+    if (isPaddleGanVsr(algorithm)) {
+      config.superResolution.tensorBackend = 'paddle'
+      config.superResolution.scaleFactor = 4
+      config.superResolution.onnxModel = ''
+      config.superResolution.numFrames = algorithm.defaultNumFrames ?? config.superResolution.numFrames ?? 10
+      return
+    }
+
+    if (algorithm.scaleFactors?.length && !algorithm.scaleFactors.includes(config.superResolution.scaleFactor)) {
+      config.superResolution.scaleFactor = algorithm.scaleFactors[0] ?? config.superResolution.scaleFactor
+    }
+
+    if (config.superResolution.tensorBackend === 'onnx') {
+      config.superResolution.onnxModel = fallbackSuperResolutionOnnxModel(
+        envStore.env.checkResult,
+        config.superResolution.algorithm,
+        config.superResolution.onnxModel,
+      )
+    }
+  }
+
+  function preferOnnxInterpolationForPaddleSuperResolution(config: WorkflowConfig): void {
+    if (
+      !config.interpolation.enabled ||
+      !config.superResolution.enabled ||
+      config.superResolution.tensorBackend !== 'paddle' ||
+      config.interpolation.tensorBackend !== 'pytorch'
+    ) {
+      return
+    }
+
+    const backend: TensorBackend = 'onnx'
+    const algorithm = pickDefaultInterpolationAlgorithm(envStore.env.checkResult, backend)
+    config.interpolation.tensorBackend = backend
+    config.interpolation.engine = pickDefaultEngine(envStore.env.checkResult, backend) ?? config.interpolation.engine
+    config.interpolation.algorithm = algorithm
+    config.interpolation.model = pickDefaultInterpolationModel(envStore.env.checkResult, algorithm)
+    config.interpolation.onnxModel = fallbackInterpolationOnnxModel(
+      envStore.env.checkResult,
+      algorithm,
+      '',
+    )
+  }
 
   // ── 纯字段 lens(读写同一处) ────────────────────────────────────────────
-  const interpolationEnabled = field(
-    (c) => c.interpolation.enabled,
-    (c, v: boolean) => { c.interpolation.enabled = v },
+  const interpolationEnabled = effect<boolean>(
+    () => workflow.value.interpolation.enabled,
+    (value) => patchWorkflow((c) => {
+      c.interpolation.enabled = value
+      preferOnnxInterpolationForPaddleSuperResolution(c)
+    }),
   )
   const interpolationEngine = field(
     (c) => (c.interpolation.engine as InferenceEngine) ?? 'cuda',
@@ -86,21 +173,36 @@ export function useEnhanceForm() {
     (c) => c.interpolation.fp16,
     (c, v: boolean) => { c.interpolation.fp16 = v },
   )
-  const superResolutionEnabled = field(
-    (c) => c.superResolution.enabled,
-    (c, v: boolean) => { c.superResolution.enabled = v },
+  const superResolutionEnabled = effect<boolean>(
+    () => workflow.value.superResolution.enabled,
+    (value) => patchWorkflow((c) => {
+      c.superResolution.enabled = value
+      preferOnnxInterpolationForPaddleSuperResolution(c)
+    }),
   )
-  const superResolutionScale = field(
-    (c) => c.superResolution.scaleFactor,
-    (c, v: number) => { c.superResolution.scaleFactor = v },
+  const superResolutionEngine = field(
+    (c) => (c.superResolution.engine as InferenceEngine) ?? 'cuda',
+    (c, v: InferenceEngine) => { c.superResolution.engine = v },
   )
-  const superResolutionAlgorithm = field(
-    (c) => c.superResolution.algorithm,
-    (c, v: string) => { c.superResolution.algorithm = v },
+  const superResolutionScale = effect<number>(
+    () => workflow.value.superResolution.scaleFactor,
+    (value) => patchWorkflow((c) => {
+      c.superResolution.scaleFactor = isPaddleGanVsr(findSuperResolutionAlgorithm(c.superResolution.algorithm))
+        ? 4
+        : value
+    }),
   )
   const superResolutionOnnxModel = field(
     (c) => c.superResolution.onnxModel ?? '',
     (c, v: string) => { c.superResolution.onnxModel = v },
+  )
+  const superResolutionNumFrames = field(
+    (c) => c.superResolution.numFrames ?? 10,
+    (c, v: number) => { c.superResolution.numFrames = v },
+  )
+  const superResolutionAutoDownloadWeights = field(
+    (c) => c.superResolution.autoDownloadWeights ?? true,
+    (c, v: boolean) => { c.superResolution.autoDownloadWeights = v },
   )
   const processOrder = field(
     (c) => c.processOrder as ProcessOrder,
@@ -143,28 +245,40 @@ export function useEnhanceForm() {
         c.interpolation.model = pickDefaultInterpolationModel(envStore.env.checkResult, next)
       }
 
-      const superResolutionSupportsCurrent = envStore.env.checkResult?.superResolutionAlgorithms
-        ?.find((a) => a.name === c.superResolution.algorithm)
-        ?.tensorBackends?.includes(value) ?? false
-      if (!superResolutionSupportsCurrent) {
-        c.superResolution.algorithm = pickDefaultSuperResolutionAlgorithm(
-          envStore.env.checkResult,
-          value,
-        )
-      }
-
       if (value === 'onnx') {
         c.interpolation.onnxModel = fallbackInterpolationOnnxModel(
           envStore.env.checkResult,
           c.interpolation.algorithm,
           c.interpolation.onnxModel,
         )
+      }
+    }),
+  )
+
+  const superResolutionBackend = effect<TensorBackend>(
+    () => workflow.value.superResolution.tensorBackend as TensorBackend,
+    (value) => patchWorkflow((c) => {
+      c.superResolution.tensorBackend = value
+      c.superResolution.engine = pickDefaultEngine(envStore.env.checkResult, value) ?? c.superResolution.engine
+
+      const supportsCurrent = findSuperResolutionAlgorithm(c.superResolution.algorithm)
+        ?.tensorBackends?.includes(value) ?? false
+      if (!supportsCurrent) {
+        c.superResolution.algorithm = pickDefaultSuperResolutionAlgorithm(envStore.env.checkResult, value)
+      }
+
+      const algorithm = findSuperResolutionAlgorithm(c.superResolution.algorithm)
+      applySuperResolutionAlgorithmDefaults(c, algorithm)
+
+      if (value === 'onnx') {
         c.superResolution.onnxModel = fallbackSuperResolutionOnnxModel(
           envStore.env.checkResult,
           c.superResolution.algorithm,
           c.superResolution.onnxModel,
         )
       }
+
+      preferOnnxInterpolationForPaddleSuperResolution(c)
     }),
   )
 
@@ -176,6 +290,19 @@ export function useEnhanceForm() {
     }),
   )
 
+  const superResolutionAlgorithm = effect<string>(
+    () => workflow.value.superResolution.algorithm,
+    (value) => patchWorkflow((c) => {
+      c.superResolution.algorithm = value
+      const algorithm = findSuperResolutionAlgorithm(value)
+      const backend = pickSupportedBackend(algorithm, c.superResolution.tensorBackend as TensorBackend)
+      c.superResolution.tensorBackend = backend
+      c.superResolution.engine = pickDefaultEngine(envStore.env.checkResult, backend) ?? c.superResolution.engine
+      applySuperResolutionAlgorithmDefaults(c, algorithm)
+      preferOnnxInterpolationForPaddleSuperResolution(c)
+    }),
+  )
+
   return reactive({
     interpolationOnnxModels: interpolation.onnxModels,
     superResolutionOnnxModels: superResolution.onnxModels,
@@ -183,7 +310,11 @@ export function useEnhanceForm() {
     superResolutionAlgorithms: superResolution.algorithms,
     animeProfiles,
     interpolationModels: interpolation.models,
-    isOnnxBackend,
+    isOnnxBackend: isInterpolationOnnxBackend,
+    isInterpolationOnnxBackend,
+    isSuperResolutionOnnxBackend,
+    isPaddleGanSuperResolution,
+    currentSuperResolutionAlgorithm,
     interpolationEnabled,
     interpolationBackend,
     interpolationEngine,
@@ -196,9 +327,13 @@ export function useEnhanceForm() {
     interpolationScale,
     interpolationFp16,
     superResolutionEnabled,
+    superResolutionBackend,
+    superResolutionEngine,
     superResolutionScale,
     superResolutionAlgorithm,
     superResolutionOnnxModel,
+    superResolutionNumFrames,
+    superResolutionAutoDownloadWeights,
     processOrder,
     animeEnabled,
     animeProfile,

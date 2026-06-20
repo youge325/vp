@@ -73,3 +73,15 @@ class IAlgorithm(ABC):
         倍率含义：2x = 每对帧生成 1 个中间帧，4x = 每对帧生成 3 个中间帧。
         """
         return 2
+
+    # ------------------------------------------------------------------
+    # 帧序列处理接口（视频超分算法需要实现）
+    # ------------------------------------------------------------------
+
+    def needs_frame_sequence(self) -> bool:
+        """是否需要整段或多帧序列处理模式。"""
+        return False
+
+    def process_frame_sequence(self, frames: list[Any], **kwargs) -> list[Any]:
+        """处理帧序列，默认逐帧调用 ``process_frame``。"""
+        return [self.process_frame(frame, **kwargs) for frame in frames]

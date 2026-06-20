@@ -68,7 +68,19 @@ def _processor_worker(
     try:
         algorithms = _initialize_algorithms(stage_plan, tensor_backend_name)
 
-        if stage_plan.interpolation_step is None:
+        if _pipeline_needs_sequence(algorithms):
+            _process_sequence_stream(
+                stage_plan=stage_plan,
+                algorithms=algorithms,
+                progress_callbacks=progress_callbacks,
+                source_frames=source_frames,
+                resume_output_frames=resume_output_frames,
+                decode_queue=decode_queue,
+                encode_queue=encode_queue,
+                stop_event=stop_event,
+                metrics=metrics,
+            )
+        elif stage_plan.interpolation_step is None:
             _process_single_frame_stream(
                 stage_plan=stage_plan,
                 algorithms=algorithms,
@@ -101,40 +113,74 @@ def _processor_worker(
 def _initialize_algorithms(stage_plan: StagePlan, tensor_backend_name: str) -> _PipelineAlgorithms:
     algorithms = _PipelineAlgorithms(pre=[], interpolation=None, post=[])
 
-    # Re-use a single backend instance across all algorithms in the pipeline.
-    # This avoids redundant DLL registration and repeated ``import onnxruntime``
-    # when multiple steps share the same tensor backend.
-    shared_backend = get_tensor_backend(tensor_backend_name)
+    backend_cache: dict[str, Any] = {}
 
     for step in stage_plan.pre_steps:
+        step_backend_name = _step_tensor_backend_name(step, tensor_backend_name)
+        backend = _get_cached_backend(backend_cache, step_backend_name)
         algorithm = AlgorithmFactory.create(
             algorithm_type=step.algorithm_type,
-            tensor_backend=shared_backend,
-            tensor_backend_name=tensor_backend_name,
-            **step.algorithm_kwargs,
+            tensor_backend=backend,
+            tensor_backend_name=step_backend_name,
+            **_algorithm_kwargs_for_create(step),
         )
-        algorithms.pre.append(_StepAlgorithm(step=step, backend=shared_backend, algorithm=algorithm))
+        algorithms.pre.append(_StepAlgorithm(step=step, backend=backend, algorithm=algorithm))
 
     if stage_plan.interpolation_step is not None:
         step = stage_plan.interpolation_step
+        step_backend_name = _step_tensor_backend_name(step, tensor_backend_name)
+        backend = _get_cached_backend(backend_cache, step_backend_name)
         algorithm = AlgorithmFactory.create(
             algorithm_type=step.algorithm_type,
-            tensor_backend=shared_backend,
-            tensor_backend_name=tensor_backend_name,
-            **step.algorithm_kwargs,
+            tensor_backend=backend,
+            tensor_backend_name=step_backend_name,
+            **_algorithm_kwargs_for_create(step),
         )
-        algorithms.interpolation = _StepAlgorithm(step=step, backend=shared_backend, algorithm=algorithm)
+        algorithms.interpolation = _StepAlgorithm(step=step, backend=backend, algorithm=algorithm)
 
     for step in stage_plan.post_steps:
+        step_backend_name = _step_tensor_backend_name(step, tensor_backend_name)
+        backend = _get_cached_backend(backend_cache, step_backend_name)
         algorithm = AlgorithmFactory.create(
             algorithm_type=step.algorithm_type,
-            tensor_backend=shared_backend,
-            tensor_backend_name=tensor_backend_name,
-            **step.algorithm_kwargs,
+            tensor_backend=backend,
+            tensor_backend_name=step_backend_name,
+            **_algorithm_kwargs_for_create(step),
         )
-        algorithms.post.append(_StepAlgorithm(step=step, backend=shared_backend, algorithm=algorithm))
+        algorithms.post.append(_StepAlgorithm(step=step, backend=backend, algorithm=algorithm))
 
     return algorithms
+
+
+def _step_tensor_backend_name(step: ProcessingStep, default_backend_name: str) -> str:
+    return str(step.algorithm_kwargs.get("tensor_backend") or default_backend_name)
+
+
+def _algorithm_kwargs_for_create(step: ProcessingStep) -> dict[str, Any]:
+    return {key: value for key, value in step.algorithm_kwargs.items() if key != "tensor_backend"}
+
+
+def _get_cached_backend(cache: dict[str, Any], backend_name: str) -> Any:
+    if backend_name not in cache:
+        cache[backend_name] = get_tensor_backend(backend_name)
+    return cache[backend_name]
+
+
+def _pipeline_needs_sequence(algorithms: _PipelineAlgorithms) -> bool:
+    return any(_entry_needs_sequence(entry) for entry in _ordered_algorithm_entries(algorithms))
+
+
+def _entry_needs_sequence(entry: _StepAlgorithm) -> bool:
+    needs_sequence = getattr(entry.algorithm, "needs_frame_sequence", None)
+    return callable(needs_sequence) and bool(needs_sequence())
+
+
+def _ordered_algorithm_entries(algorithms: _PipelineAlgorithms) -> list[_StepAlgorithm]:
+    entries = list(algorithms.pre)
+    if algorithms.interpolation is not None:
+        entries.append(algorithms.interpolation)
+    entries.extend(algorithms.post)
+    return entries
 
 
 def _process_single_frame_stream(
@@ -301,6 +347,145 @@ def _process_interpolated_stream(
         output_index += 1
 
     _emit_stream_end(encode_queue, source_frames, stop_event)
+
+
+def _process_sequence_stream(
+    *,
+    stage_plan: StagePlan,
+    algorithms: _PipelineAlgorithms,
+    progress_callbacks: list[Callable[[int, int], None]],
+    source_frames: int,
+    resume_output_frames: int,
+    decode_queue: queue.Queue[DecodedFrame | object],
+    encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object],
+    stop_event: threading.Event,
+    metrics: PipelineMetrics,
+) -> None:
+    """Run a pipeline containing at least one frame-sequence algorithm.
+
+    PaddleGAN VSR models need temporal context, so this path gathers the
+    current decoded span and applies the resolved stages in order. Pipelines
+    without sequence stages continue to use the streaming per-frame paths.
+    """
+    payloads = [FramePayload.from_numpy(item.frame) for item in _drain_decoded(decode_queue, stop_event)]
+    entries = _ordered_algorithm_entries(algorithms)
+
+    for stage_index, entry in enumerate(entries):
+        callback = progress_callbacks[stage_index] if stage_index < len(progress_callbacks) else None
+        if _entry_needs_sequence(entry):
+            payloads = _run_sequence_stage(
+                entry=entry,
+                payloads=payloads,
+                callback=callback,
+                metrics=metrics,
+            )
+            continue
+        if entry.algorithm.needs_frame_pairs():
+            payloads = _run_interpolation_sequence_stage(
+                entry=entry,
+                payloads=payloads,
+                callback=callback,
+                metrics=metrics,
+            )
+            continue
+        payloads = _run_per_frame_sequence_stage(
+            entry=entry,
+            payloads=payloads,
+            callback=callback,
+            metrics=metrics,
+        )
+
+    output_index = resume_output_frames
+    for payload in payloads:
+        _emit_encoded_payload(
+            encode_queue=encode_queue,
+            output_index=output_index,
+            payload=payload,
+            stop_event=stop_event,
+            metrics=metrics,
+        )
+        output_index += 1
+
+    _emit_stream_end(encode_queue, source_frames, stop_event)
+    del stage_plan
+
+
+def _run_sequence_stage(
+    *,
+    entry: _StepAlgorithm,
+    payloads: list[FramePayload],
+    callback: Callable[[int, int], None] | None,
+    metrics: PipelineMetrics,
+) -> list[FramePayload]:
+    frames = [payload.ensure_numpy(metrics) for payload in payloads]
+    with metrics.timed("process"):
+        output_frames = entry.algorithm.process_frame_sequence(frames)
+    output_payloads = [FramePayload.from_numpy(frame) for frame in output_frames]
+    _emit_stage_progress(callback, len(output_payloads))
+    return output_payloads
+
+
+def _run_interpolation_sequence_stage(
+    *,
+    entry: _StepAlgorithm,
+    payloads: list[FramePayload],
+    callback: Callable[[int, int], None] | None,
+    metrics: PipelineMetrics,
+) -> list[FramePayload]:
+    if len(payloads) < 2:
+        _emit_stage_progress(callback, len(payloads))
+        return payloads
+
+    multi = int(entry.algorithm.get_interpolation_multi())
+    output_payloads: list[FramePayload] = []
+    total_pairs = max(len(payloads) - 1, 1)
+    with metrics.timed("interpolate"):
+        for pair_index in range(len(payloads) - 1):
+            prev_payload = payloads[pair_index]
+            current_payload = payloads[pair_index + 1]
+            prev_tensor = prev_payload.ensure_tensor(entry.backend, metrics)
+            current_tensor = current_payload.ensure_tensor(entry.backend, metrics)
+            output_payloads.append(prev_payload)
+            for mid_index in range(1, multi):
+                timestep = mid_index / multi
+                mid_tensor = entry.algorithm.process_frame_pair(prev_tensor, current_tensor, timestep=timestep)
+                output_payloads.append(FramePayload.from_tensor(mid_tensor, entry.backend))
+            if callback is not None:
+                callback(pair_index + 1, total_pairs)
+    output_payloads.append(payloads[-1])
+    return output_payloads
+
+
+def _run_per_frame_sequence_stage(
+    *,
+    entry: _StepAlgorithm,
+    payloads: list[FramePayload],
+    callback: Callable[[int, int], None] | None,
+    metrics: PipelineMetrics,
+) -> list[FramePayload]:
+    output_payloads: list[FramePayload] = []
+    total = len(payloads)
+    with metrics.timed("process"):
+        for index, payload in enumerate(payloads):
+            output_payloads.append(
+                _run_stage(
+                    entry,
+                    payload,
+                    metrics,
+                    prefer_tensor=not _is_cpu_frame_stage(entry),
+                )
+            )
+            if callback is not None:
+                callback(index + 1, total)
+    return output_payloads
+
+
+def _emit_stage_progress(callback: Callable[[int, int], None] | None, total: int) -> None:
+    if callback is None:
+        return
+    denominator = max(total, 1)
+    for current in range(1, total + 1):
+        callback(current, denominator)
 
 
 def _apply_post_steps(

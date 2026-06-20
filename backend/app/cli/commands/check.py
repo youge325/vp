@@ -14,6 +14,7 @@ from app.config import settings
 from app.processing.anime_optimization import SUPPORTED_PROFILES as ANIME_PROFILES
 from app.processing.interpolation import SUPPORTED_ALGORITHMS as INTERPOLATION_ALGORITHMS
 from app.processing.super_resolution import SUPPORTED_ALGORITHMS as SR_ALGORITHMS
+from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS, resolve_weight_path
 from app.protocol import ndjson
 from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.onnx_models import scan_onnx_models
@@ -81,9 +82,18 @@ def cmd_check(_args: argparse.Namespace) -> None:
         {**alg, "onnxModels": onnx_models.get("interpolation", {}).get(alg["name"], [])}
         for alg in INTERPOLATION_ALGORITHMS
     ]
-    super_resolution_algorithms_payload = [
-        {**alg, "onnxModels": onnx_models.get("super_resolution", {}).get(alg["name"], [])} for alg in SR_ALGORITHMS
-    ]
+    super_resolution_algorithms_payload = []
+    for alg in SR_ALGORITHMS:
+        payload = {**alg, "onnxModels": onnx_models.get("super_resolution", {}).get(alg["name"], [])}
+        if alg["name"] in PADDLEGAN_VSR_SPECS:
+            weight_path = resolve_weight_path(alg["name"])
+            payload.update(
+                {
+                    "weightPath": str(weight_path),
+                    "weightAvailable": weight_path.is_file() and weight_path.stat().st_size > 0,
+                }
+            )
+        super_resolution_algorithms_payload.append(payload)
 
     ndjson.check(
         ffmpeg={

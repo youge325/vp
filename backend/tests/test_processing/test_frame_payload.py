@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-import pytest
 
 from app.processing.streaming.frame_payload import FramePayload
 from app.processing.streaming.metrics import PipelineMetrics
@@ -74,10 +73,16 @@ def test_tensor_output_does_not_reuse_source_numpy() -> None:
     assert backend.to_numpy_calls == 1
 
 
-def test_backend_mismatch_fails_loudly() -> None:
+def test_backend_mismatch_bridges_through_numpy() -> None:
     backend_a = _CountingBackend("a")
     backend_b = _CountingBackend("b")
-    payload = FramePayload.from_tensor({"tensor": np.zeros((1, 1, 3), dtype=np.uint8)}, backend_a)
+    metrics = PipelineMetrics()
+    frame = np.full((1, 1, 3), 11, dtype=np.uint8)
+    payload = FramePayload.from_tensor({"tensor": frame}, backend_a)
 
-    with pytest.raises(RuntimeError, match="backend mismatch"):
-        payload.ensure_tensor(backend_b)
+    result = payload.ensure_tensor(backend_b, metrics)
+
+    np.testing.assert_array_equal(result["tensor"], frame)
+    assert backend_a.to_numpy_calls == 1
+    assert backend_b.to_tensor_calls == 1
+    assert metrics.snapshot()["transferCounts"] == {"h2d": 1, "d2h": 1}

@@ -5,6 +5,8 @@ from typing import Any
 import numpy as np
 
 from app.algorithms.base import IAlgorithm
+from app.algorithms.paddle.paddlegan_vsr.runner import PaddleGanVsrRunner
+from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
 from app.utils.onnx_models import create_onnx_session, resolve_onnx_model_path
 from app.algorithms.tensor_backend import ITensorBackend
 
@@ -15,6 +17,17 @@ SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
     # PyTorch / Paddle 路径返回 NotImplementedError。
     {"name": "placeholder", "tensorBackends": ["onnx"], "models": []},
     {"name": "realesrgan-plan", "tensorBackends": ["onnx"], "models": []},
+    *[
+        {
+            "name": spec.model_id,
+            "tensorBackends": ["paddle"],
+            "models": ["x4"],
+            "scaleFactors": [4],
+            "defaultNumFrames": spec.default_num_frames,
+            "weightUrl": spec.url,
+        }
+        for spec in PADDLEGAN_VSR_SPECS.values()
+    ],
 ]
 
 
@@ -37,12 +50,17 @@ class SuperResolutionAlgorithm(IAlgorithm):
         self._onnx_model = kwargs.get("onnx_model")
         self._model_dir = kwargs.get("model_dir", "")
         self._engine = kwargs.get("engine", "cuda")
+        self._num_frames = int(kwargs.get("num_frames") or kwargs.get("numFrames") or 10)
+        self._auto_download_weights = bool(kwargs.get("auto_download_weights", kwargs.get("autoDownloadWeights", True)))
         self._session = None
         self._input_name = ""
         self._output_name = ""
+        self._paddlegan_runner = None
 
     def process_frame(self, frame: Any, **kwargs) -> Any:
         """处理单帧；ONNX 后端运行 image-to-image 超分，其它后端拒绝执行。"""
+        if self._is_paddlegan_vsr():
+            raise NotImplementedError("PaddleGAN VSR requires frame-sequence processing.")
         if self._backend_name() != "onnx":
             raise NotImplementedError(
                 "Super-resolution is only implemented on the ONNX tensor backend; "
@@ -101,11 +119,33 @@ class SuperResolutionAlgorithm(IAlgorithm):
     def _backend_name(self) -> str:
         return self._tensor_backend.get_name() if self._tensor_backend is not None else "numpy"
 
+    def _is_paddlegan_vsr(self) -> bool:
+        return self._algorithm_name in PADDLEGAN_VSR_SPECS
+
+    def _ensure_paddlegan_runner(self):
+        if self._paddlegan_runner is None:
+            self._paddlegan_runner = PaddleGanVsrRunner(
+                model_id=self._algorithm_name,
+                num_frames=self._num_frames,
+                auto_download_weights=self._auto_download_weights,
+            )
+        return self._paddlegan_runner
+
     def process_frame_batch(self, frames: list[Any], **kwargs) -> list[Any]:
         """逐帧处理批量输入。"""
         return [self.process_frame(frame, **kwargs) for frame in frames]
 
+    def needs_frame_sequence(self) -> bool:
+        return self._is_paddlegan_vsr()
+
+    def process_frame_sequence(self, frames: list[Any], **kwargs) -> list[Any]:
+        if not self._is_paddlegan_vsr():
+            return super().process_frame_sequence(frames, **kwargs)
+        return self._ensure_paddlegan_runner().process_frames(frames)
+
     def get_name(self) -> str:
+        if self._is_paddlegan_vsr():
+            return f"视频超分辨率算法(PaddleGAN {self._algorithm_name})"
         if self._backend_name() == "onnx":
             return f"超分辨率算法(ONNX {self._onnx_model or '未选择'})"
         return "超分辨率算法(占位)"
@@ -117,11 +157,15 @@ class SuperResolutionAlgorithm(IAlgorithm):
         正常路径应该在 ``_process_planning._verify_super_resolution_backend``
         提前拦截;此处是第二道防线,防止单独调用算法时静默 no-op。
         """
+        if self._is_paddlegan_vsr():
+            return self._backend_name() == "paddle" and float(self._scale_factor) == 4.0
         if self._backend_name() != "onnx":
             return False
         return bool(self._onnx_model)
 
     def get_description(self) -> str:
+        if self._is_paddlegan_vsr():
+            return f"基于 PaddleGAN 的 4x 视频超分辨率处理({self._algorithm_name})。"
         if self._backend_name() == "onnx":
             return f"基于 ONNX Runtime 的 {self._scale_factor:g}x 视频超分辨率处理。"
         return (

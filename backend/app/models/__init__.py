@@ -62,6 +62,10 @@ class SuperResolutionConfig(_CamelBase):
     scale_factor: float
     algorithm: str
     onnx_model: str | None = None
+    tensor_backend: TensorBackendValue = "onnx"
+    engine: str = "cuda"
+    num_frames: int = 10
+    auto_download_weights: bool = True
 
 
 class AnimeConfig(_CamelBase):

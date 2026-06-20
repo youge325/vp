@@ -34,6 +34,10 @@ export function createDefaultWorkflowConfig(): WorkflowConfig {
       scaleFactor: 2,
       algorithm: 'placeholder',
       onnxModel: '',
+      tensorBackend: 'onnx',
+      engine: 'cuda',
+      numFrames: 10,
+      autoDownloadWeights: true,
     },
     anime: {
       enabled: false,
@@ -128,9 +132,10 @@ export function createDefaultWorkbenchPreset(env: EnvironmentCheckResult | null)
   const algorithm = pickDefaultInterpolationAlgorithm(env, interpolationBackend)
   workflowConfig.interpolation.algorithm = algorithm
   workflowConfig.interpolation.model = pickDefaultInterpolationModel(env, algorithm)
+  const superResolutionBackend = workflowConfig.superResolution.tensorBackend
   workflowConfig.superResolution.algorithm = pickDefaultSuperResolutionAlgorithm(
     env,
-    interpolationBackend,
+    superResolutionBackend,
   )
   workflowConfig.anime.profile = pickDefaultAnimeProfile(env)
 
@@ -144,6 +149,8 @@ export function createDefaultWorkbenchPreset(env: EnvironmentCheckResult | null)
   const vendor = env?.gpu?.adapters?.[0]?.vendor
   const backend = workflowConfig.interpolation.tensorBackend
   const engines = (env?.tensorEngines as Record<string, string[]> | undefined)?.[backend] ?? []
+  const superResolutionEngines =
+    (env?.tensorEngines as Record<string, string[]> | undefined)?.[superResolutionBackend] ?? []
   if (vendor === 'hygon') {
     workflowConfig.interpolation.engine = engines.includes('dcu') ? 'dcu' : (engines[0] as InferenceEngine) ?? 'cuda'
   } else if (vendor === 'nvidia') {
@@ -151,6 +158,7 @@ export function createDefaultWorkbenchPreset(env: EnvironmentCheckResult | null)
   } else {
     workflowConfig.interpolation.engine = (engines[0] as InferenceEngine) ?? 'cuda'
   }
+  workflowConfig.superResolution.engine = (superResolutionEngines[0] as InferenceEngine) ?? 'cuda'
 
   return {
     decodeConfig: createDefaultDecodeConfig(env),

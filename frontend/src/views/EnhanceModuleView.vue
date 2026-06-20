@@ -10,8 +10,11 @@ import BaseToggle from '@/components/forms/BaseToggle.vue'
 import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/domain/workflow'
 
 const form = useEnhanceForm()
-const { visibleBackends, availableEngines, showEngineSelector } = useGpuCapabilities(
+const interpolationCapabilities = useGpuCapabilities(
   toRef(form, 'interpolationBackend')
+)
+const superResolutionCapabilities = useGpuCapabilities(
+  toRef(form, 'superResolutionBackend')
 )
 const { targetLabel, caption } = useEditingScope('enhance')
 
@@ -25,11 +28,15 @@ const { targetLabel, caption } = useEditingScope('enhance')
 // CapabilityOptionField 内部对 choice value 的 ``String(...)`` cast 是镜像关系。
 
 const backendOptions = computed(() =>
-  visibleBackends.value.map((value) => ({ value, label: BACKEND_LABELS[value] })),
+  interpolationCapabilities.visibleBackends.value.map((value) => ({ value, label: BACKEND_LABELS[value] })),
 )
 
-const engineOptions = computed(() =>
-  availableEngines.value.map((value) => ({ value, label: ENGINE_LABELS[value] || value })),
+const interpolationEngineOptions = computed(() =>
+  interpolationCapabilities.availableEngines.value.map((value) => ({ value, label: ENGINE_LABELS[value] || value })),
+)
+
+const superResolutionEngineOptions = computed(() =>
+  superResolutionCapabilities.availableEngines.value.map((value) => ({ value, label: ENGINE_LABELS[value] || value })),
 )
 
 const interpolationAlgorithmOptions = computed(() =>
@@ -84,6 +91,14 @@ function setInterpolationEngine(value: string): void {
   form.interpolationEngine = value as InferenceEngine
 }
 
+function setSuperResolutionBackend(value: string): void {
+  form.superResolutionBackend = value as TensorBackend
+}
+
+function setSuperResolutionEngine(value: string): void {
+  form.superResolutionEngine = value as InferenceEngine
+}
+
 function setFpsMode(value: string): void {
   form.fpsMode = value as FpsMode
 }
@@ -131,10 +146,10 @@ function setProcessOrder(value: string): void {
         />
 
         <BaseSelect
-          v-if="showEngineSelector"
+          v-if="interpolationCapabilities.showEngineSelector.value"
           label="推理引擎"
           :model-value="form.interpolationEngine"
-          :options="engineOptions"
+          :options="interpolationEngineOptions"
           @update:model-value="setInterpolationEngine"
         />
 
@@ -146,7 +161,7 @@ function setProcessOrder(value: string): void {
         />
 
         <BaseSelect
-          v-if="!form.isOnnxBackend"
+          v-if="!form.isInterpolationOnnxBackend"
           label="模型"
           :model-value="form.interpolationModel"
           :options="interpolationModelOptions"
@@ -154,7 +169,7 @@ function setProcessOrder(value: string): void {
         />
 
         <BaseSelect
-          v-if="form.isOnnxBackend"
+          v-if="form.isInterpolationOnnxBackend"
           label="ONNX 补帧模型"
           :model-value="form.interpolationOnnxModel"
           :options="interpolationOnnxOptions"
@@ -218,10 +233,18 @@ function setProcessOrder(value: string): void {
 
       <div class="field-grid field-grid-2">
         <BaseSelect
-          label="倍率"
-          :model-value="String(form.superResolutionScale)"
-          :options="MULTI_OPTIONS"
-          @update:model-value="setSuperResolutionScale"
+          label="后端"
+          :model-value="form.superResolutionBackend"
+          :options="backendOptions"
+          @update:model-value="setSuperResolutionBackend"
+        />
+
+        <BaseSelect
+          v-if="superResolutionCapabilities.showEngineSelector.value"
+          label="推理引擎"
+          :model-value="form.superResolutionEngine"
+          :options="superResolutionEngineOptions"
+          @update:model-value="setSuperResolutionEngine"
         />
 
         <BaseSelect
@@ -232,7 +255,15 @@ function setProcessOrder(value: string): void {
         />
 
         <BaseSelect
-          v-if="form.isOnnxBackend"
+          label="倍率"
+          :model-value="String(form.superResolutionScale)"
+          :options="MULTI_OPTIONS"
+          :disabled="form.isPaddleGanSuperResolution"
+          @update:model-value="setSuperResolutionScale"
+        />
+
+        <BaseSelect
+          v-if="form.isSuperResolutionOnnxBackend"
           label="ONNX 超分模型"
           :model-value="form.superResolutionOnnxModel"
           :options="superResolutionOnnxOptions"
@@ -241,6 +272,23 @@ function setProcessOrder(value: string): void {
             ? '未找到 ONNX 模型，请将 .onnx 文件放入 models/super_resolution 目录'
             : undefined"
           @update:model-value="(v) => (form.superResolutionOnnxModel = v)"
+        />
+
+        <BaseNumber
+          v-if="form.isPaddleGanSuperResolution"
+          label="帧块数"
+          :model-value="form.superResolutionNumFrames"
+          :min="1"
+          :max="100"
+          @update:model-value="(v) => (form.superResolutionNumFrames = v)"
+        />
+
+        <BaseToggle
+          v-if="form.isPaddleGanSuperResolution"
+          label="权重"
+          chip-text="自动下载"
+          :model-value="form.superResolutionAutoDownloadWeights"
+          @update:model-value="(v) => (form.superResolutionAutoDownloadWeights = v)"
         />
 
         <BaseSelect
