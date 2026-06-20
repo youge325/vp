@@ -96,6 +96,10 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
             "scaleFactor": args.sr_scale_factor,
             "algorithm": args.sr_algorithm,
             "onnxModel": "",
+            "tensorBackend": "onnx",
+            "engine": "cuda",
+            "numFrames": 10,
+            "autoDownloadWeights": True,
         },
         "anime": {
             "enabled": enable_anime,
@@ -155,6 +159,15 @@ def _build_algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: Alg
             "sr_algorithm": super_resolution["algorithm"],
             "onnx_model": super_resolution.get("onnxModel") or super_resolution.get("onnx_model"),
             "engine": super_resolution.get("engine") or "cuda",
+            "tensor_backend": super_resolution.get("tensorBackend")
+            or super_resolution.get("tensor_backend")
+            or interpolation.get("tensorBackend")
+            or interpolation.get("tensor_backend"),
+            "num_frames": super_resolution.get("numFrames") or super_resolution.get("num_frames"),
+            "auto_download_weights": super_resolution.get(
+                "autoDownloadWeights",
+                super_resolution.get("auto_download_weights", True),
+            ),
         }
     if algorithm_type == "frame_filter_chain":
         return {}

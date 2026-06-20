@@ -433,3 +433,15 @@ def test_check_reports_onnx_runtime_and_model_lists(tmp_path, monkeypatch, capsy
     assert rife_alg["onnxModels"] == ["interp.onnx"]
     placeholder_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "placeholder")
     assert placeholder_alg["onnxModels"] == ["sr.onnx"]
+    ppmsvsr_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "ppmsvsr")
+    assert ppmsvsr_alg["tensorBackends"] == ["paddle"]
+    assert ppmsvsr_alg["models"] == ["x4"]
+    assert ppmsvsr_alg["scaleFactors"] == [4]
+    assert ppmsvsr_alg["defaultNumFrames"] == 10
+    assert ppmsvsr_alg["weightUrl"].endswith("PP-MSVSR_reds_x4.pdparams")
+    assert ppmsvsr_alg["weightPath"].endswith(
+        "backend\\models\\super_resolution\\paddlegan\\ppmsvsr\\PP-MSVSR_reds_x4.pdparams"
+    ) or ppmsvsr_alg["weightPath"].endswith(
+        "backend/models/super_resolution/paddlegan/ppmsvsr/PP-MSVSR_reds_x4.pdparams"
+    )
+    assert ppmsvsr_alg["weightAvailable"] is False

@@ -329,17 +329,19 @@ def _resolved_output_dimensions(
 ) -> tuple[int, int]:
     width = int(video_info["width"])
     height = int(video_info["height"])
-    if tensor_backend_name != "onnx":
-        return width, height
+    from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
 
     for step in [*stage_plan.pre_steps, *stage_plan.post_steps]:
         if step.algorithm_type != "super_resolution":
             continue
         kwargs = step.algorithm_kwargs
-        if not kwargs.get("onnx_model"):
+        sr_algorithm = str(kwargs.get("sr_algorithm") or "")
+        is_paddlegan_vsr = sr_algorithm in PADDLEGAN_VSR_SPECS
+        if not is_paddlegan_vsr and not kwargs.get("onnx_model"):
             continue
         scale_factor = float(kwargs.get("scale_factor") or 1.0)
         width = max(1, int(round(width * scale_factor)))
         height = max(1, int(round(height * scale_factor)))
 
+    del tensor_backend_name
     return width, height

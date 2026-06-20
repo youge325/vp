@@ -171,26 +171,66 @@ def _verify_super_resolution_backend(
     workflow_config: dict[str, Any],
     tensor_backend_name: str,
 ) -> None:
-    """Reject SR + non-ONNX combinations before the pipeline silently no-ops.
+    """Reject unsupported SR/backend combinations before execution.
 
     Phase D.1.1 — ``SuperResolutionAlgorithm.process_frame`` only implements
     the ONNX path; pytorch / paddle backends return frames unchanged. Catching
     the invalid combo here surfaces ``INVALID_CONFIG`` to the frontend
     instead of letting the task complete with un-upscaled output.
     """
-    if not workflow_config.get("superResolution", {}).get("enabled"):
+    super_resolution = workflow_config.get("superResolution", {})
+    if not super_resolution.get("enabled"):
         return
-    if tensor_backend_name == "onnx":
+    algorithm = str(super_resolution.get("algorithm") or "placeholder")
+    sr_backend = str(
+        super_resolution.get("tensorBackend") or super_resolution.get("tensor_backend") or tensor_backend_name
+    )
+
+    from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
+
+    if algorithm in PADDLEGAN_VSR_SPECS:
+        scale_factor = float(super_resolution.get("scaleFactor") or super_resolution.get("scale_factor") or 1.0)
+        if scale_factor != 4.0:
+            raise_error(
+                TaskErrorCode.INVALID_CONFIG,
+                f"PaddleGAN VSR models are fixed 4x super-resolution models; got {scale_factor:g}x.",
+                details={"algorithm": algorithm, "scale_factor": scale_factor},
+            )
+        if sr_backend != "paddle":
+            raise_error(
+                TaskErrorCode.INVALID_CONFIG,
+                f"PaddleGAN VSR requires the Paddle tensor backend; got '{sr_backend}'.",
+                details={"algorithm": algorithm, "tensor_backend": sr_backend},
+            )
+        interpolation = workflow_config.get("interpolation", {})
+        interpolation_backend = str(
+            interpolation.get("tensorBackend") or interpolation.get("tensor_backend") or tensor_backend_name
+        )
+        if interpolation.get("enabled") and interpolation_backend != "onnx":
+            raise_error(
+                TaskErrorCode.INVALID_CONFIG,
+                (
+                    "PaddleGAN VSR uses Paddle and cannot run in the same task with "
+                    f"RIFE on {interpolation_backend}. Use ONNX for RIFE when combining PyTorch/Paddle workloads."
+                ),
+                details={
+                    "super_resolution_backend": "paddle",
+                    "interpolation_backend": interpolation_backend,
+                },
+            )
+        return
+
+    if sr_backend == "onnx":
         return
     raise_error(
         TaskErrorCode.INVALID_CONFIG,
         (
             "Super-resolution requires the ONNX tensor backend; "
-            f"got '{tensor_backend_name}'. Switch the tensor backend to onnx "
+            f"got '{sr_backend}'. Switch the tensor backend to onnx "
             "or disable super-resolution."
         ),
         details={
-            "tensor_backend": tensor_backend_name,
+            "tensor_backend": sr_backend,
             "super_resolution_enabled": True,
         },
     )

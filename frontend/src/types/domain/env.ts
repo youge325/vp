@@ -23,6 +23,18 @@ export interface ResourceSummary {
   [key: string]: string | boolean | number | null | undefined
 }
 
+export interface AlgorithmInfo {
+  name: string
+  tensorBackends: string[]
+  models: string[]
+  onnxModels?: string[]
+  scaleFactors?: number[]
+  defaultNumFrames?: number | null
+  weightUrl?: string | null
+  weightPath?: string | null
+  weightAvailable?: boolean | null
+}
+
 export interface EnvironmentCheckResult {
   type: 'check'
   ffmpeg: {
@@ -69,8 +81,8 @@ export interface EnvironmentCheckResult {
   // 旧缓存反序列化时 ``tensorBackends`` 不存在 → 退化为 ``[]``,
   // 在 ``useEnhanceForm`` 的 ``.includes(backend)`` 上返回 false
   // (不显示),比错显示安全。
-  interpolationAlgorithms?: { name: string; tensorBackends: string[]; models: string[]; onnxModels?: string[] }[]
-  superResolutionAlgorithms?: { name: string; tensorBackends: string[]; models: string[]; onnxModels?: string[] }[]
+  interpolationAlgorithms?: AlgorithmInfo[]
+  superResolutionAlgorithms?: AlgorithmInfo[]
   animeProfiles?: string[]
   runtime?: {
     mode?: string

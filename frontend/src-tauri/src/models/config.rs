@@ -94,6 +94,18 @@ fn default_engine() -> String {
     "cuda".to_string()
 }
 
+fn default_super_resolution_backend() -> TensorBackend {
+    TensorBackend::Onnx
+}
+
+fn default_num_frames() -> u32 {
+    10
+}
+
+fn default_auto_download_weights() -> bool {
+    true
+}
+
 fn default_interpolation_algorithm() -> String {
     "rife".to_string()
 }
@@ -108,6 +120,14 @@ pub struct SuperResolutionConfig {
     #[serde(default)]
     #[ts(optional)]
     pub onnx_model: Option<String>,
+    #[serde(default = "default_super_resolution_backend")]
+    pub tensor_backend: TensorBackend,
+    #[serde(default = "default_engine")]
+    pub engine: String,
+    #[serde(default = "default_num_frames")]
+    pub num_frames: u32,
+    #[serde(default = "default_auto_download_weights")]
+    pub auto_download_weights: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]

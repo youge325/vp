@@ -141,6 +141,10 @@ mod tests {
                     scale_factor: 2.0,
                     algorithm: "placeholder".to_string(),
                     onnx_model: None,
+                    tensor_backend: TensorBackend::Onnx,
+                    engine: "cuda".to_string(),
+                    num_frames: 10,
+                    auto_download_weights: true,
                 },
                 anime: AnimeConfig {
                     enabled: false,
