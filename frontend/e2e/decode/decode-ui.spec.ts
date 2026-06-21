@@ -108,6 +108,9 @@ const hardwareDeviceSelect = (tauriPage: any) =>
 const deviceNumberField = (tauriPage: any) =>
   tauriPage.locator('label.field').filter({ hasText: '设备编号' })
 
+const deviceNumberValue = (tauriPage: any) =>
+  deviceNumberField(tauriPage).locator('.readonly-value')
+
 async function setDraftHwaccelDevice(tauriPage: any, value: string): Promise<void> {
   await tauriPage.evaluate((nextValue: string) => {
     const root = document.querySelector('#app')
@@ -154,17 +157,19 @@ test.describe('Decode module UI', () => {
     expect(options.length).toBeGreaterThan(0)
   })
 
-  test('switching decoder profile updates hardware device options without showing device number input', async ({ tauriPage }) => {
+  test('switching decoder profile updates hardware device options without manual device number input', async ({ tauriPage }) => {
     const ok = await installDecodeProfiles(tauriPage)
     test.skip(!ok, 'Cannot access Pinia stores from evaluate')
 
     await openDecodeModule(tauriPage)
 
-    await expect(deviceNumberField(tauriPage)).toHaveCount(0)
+    await expect(deviceNumberValue(tauriPage)).toHaveText('FFmpeg 自动选择')
+    await expect(deviceNumberField(tauriPage).locator('input')).toHaveCount(0)
     await expectHardwareDeviceState(tauriPage, ['CUDA', 'D3D11VA'], 'cuda')
 
     await decoderSelect(tauriPage).selectOption({ label: 'QSV H.265' })
     await expectHardwareDeviceState(tauriPage, ['QSV'], 'qsv')
+    await expect(deviceNumberValue(tauriPage)).toHaveText('FFmpeg 自动选择')
     expect(await getDraftHwaccelDevice(tauriPage)).toBe('')
 
     await decoderSelect(tauriPage).selectOption({ label: 'NVDEC H.264' })

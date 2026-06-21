@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useDecodeForm } from '@/composables/forms/useDecodeForm'
 import { useWorkbenchEditor, useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
+import BaseField from '@/components/forms/BaseField.vue'
 import BaseSelect from '@/components/forms/BaseSelect.vue'
 import CapabilityOptionField from '@/components/forms/CapabilityOptionField.vue'
 
@@ -34,7 +35,7 @@ const decoderProfileOptions = computed(() =>
         <span class="panel-badge">{{ targetLabel }}</span>
       </div>
 
-      <div class="field-grid field-grid-2">
+      <div class="field-grid field-grid-3">
         <BaseSelect
           label="解码方案"
           :model-value="currentDecoderProfile?.name ?? 'software'"
@@ -49,6 +50,10 @@ const decoderProfileOptions = computed(() =>
           :options="decoderHardwareDeviceOptions"
           @update:model-value="setDecodeHwaccel"
         />
+
+        <BaseField v-if="decoderHardwareDeviceOptions.length > 0" label="设备编号">
+          <div class="readonly-value">FFmpeg 自动选择</div>
+        </BaseField>
       </div>
 
       <div class="chip-row">
@@ -71,3 +76,16 @@ const decoderProfileOptions = computed(() =>
     </section>
   </div>
 </template>
+
+<style scoped>
+.readonly-value {
+  align-items: center;
+  background: var(--panel-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  display: flex;
+  min-height: 38px;
+  padding: 0 12px;
+}
+</style>
