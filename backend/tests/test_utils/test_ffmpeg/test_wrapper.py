@@ -198,7 +198,7 @@ Encoder hevc_nvenc [NVIDIA NVENC hevc encoder]:
 
         capabilities = wrapper.discover_capabilities(gpu_adapters=[{"vendor": "nvidia", "device_type": "discrete"}])
 
-        assert capabilities["hwaccels"] == ["cuda", "qsv"]
+        assert capabilities["hwaccels"] == ["cuda"]
         assert [profile["name"] for profile in capabilities["encoderProfiles"]] == ["hevc_nvenc"]
         assert [profile["name"] for profile in capabilities["decoderProfiles"]] == [
             "software",
@@ -538,8 +538,46 @@ Decoder h264_cuvid [NVIDIA CUVID H.264 decoder]:
         capabilities = wrapper.discover_capabilities(gpu_adapters=[{"vendor": "nvidia", "device_type": "discrete"}])
 
         profile = capabilities["decoderProfiles"][1]
+        assert capabilities["hwaccels"] == ["cuda"]
         assert profile["name"] == "h264_cuvid"
         assert profile["hardwareDevices"] == ["cuda"]
         assert profile["hardwareDeviceOptions"] == {"cuda": [{"value": "0", "label": "0"}]}
         assert probe_calls == [("h264_cuvid", "h264", ["cuda", "qsv"], ["cuda", "qsv"], {"libx264"})]
         assert option_probe_calls == [("h264_cuvid", "h264", ["cuda"], {"libx264"})]
+
+    def test_discover_capabilities_returns_only_verified_hwaccels(self):
+        wrapper = FFmpegWrapper(ffmpeg_path="ffmpeg")
+
+        wrapper.list_codec_names = MethodType(
+            lambda self, mode: ["libx264"] if mode == "encoders" else ["h264_cuvid", "hevc_qsv"],
+            wrapper,
+        )
+        wrapper.list_hwaccels = MethodType(lambda self: ["cuda", "qsv", "amf"], wrapper)
+        wrapper.describe_codec = MethodType(
+            lambda self, mode, name: f"""
+Decoder {name}
+    Supported hardware devices: {"cuda" if name == "h264_cuvid" else "qsv"}
+""",
+            wrapper,
+        )
+        wrapper.probe_decoder_hardware_devices = MethodType(
+            lambda self, decoder, codec, candidates, hwaccels, encoder_names, probe_dir=None, sample_cache=None: [
+                device for device in candidates if device == "cuda"
+            ],
+            wrapper,
+        )
+        wrapper.probe_decoder_hardware_device_options = MethodType(
+            lambda self, decoder, codec, devices, encoder_names, probe_dir=None, sample_cache=None: {
+                device: [{"value": "0", "label": "0"}] for device in devices
+            },
+            wrapper,
+        )
+
+        capabilities = wrapper.discover_capabilities(
+            gpu_adapters=[
+                {"vendor": "nvidia", "device_type": "discrete"},
+                {"vendor": "intel", "device_type": "integrated"},
+            ]
+        )
+
+        assert capabilities["hwaccels"] == ["cuda"]

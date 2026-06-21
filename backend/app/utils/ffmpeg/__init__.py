@@ -337,6 +337,7 @@ class FFmpegWrapper:
                 "options": [],
             }
         ]
+        verified_hwaccels: list[str] = []
         decoder_sample_cache: dict[str, str | None] = {}
         with tempfile.TemporaryDirectory(prefix="vp-decoder-probe-") as decoder_probe_dir:
             for candidate in _constants.DECODER_CANDIDATES:
@@ -358,6 +359,9 @@ class FFmpegWrapper:
                     probe_dir=decoder_probe_dir,
                     sample_cache=decoder_sample_cache,
                 )
+                for device in profile["hardwareDevices"]:
+                    if device not in verified_hwaccels:
+                        verified_hwaccels.append(device)
                 profile["hardwareDeviceOptions"] = self.probe_decoder_hardware_device_options(
                     profile["name"],
                     profile["codec"],
@@ -369,7 +373,7 @@ class FFmpegWrapper:
                 decoder_profiles.append(profile)
 
         return {
-            "hwaccels": hwaccels,
+            "hwaccels": verified_hwaccels,
             "encoderProfiles": encoder_profiles,
             "decoderProfiles": decoder_profiles,
         }
