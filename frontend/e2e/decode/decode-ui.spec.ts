@@ -202,8 +202,8 @@ test.describe('Decode module UI', () => {
       return
     }
 
-    // The second field-grid (index 1) only renders when decoderOptions.length > 0
-    const optionPanel = section.locator('div.field-grid.field-grid-2').nth(1)
+    // The decoder option grid only renders when decoderOptions.length > 0.
+    const optionPanel = section.locator('div.field-grid.field-grid-2').first()
 
     // Try to find a profile that shows the panel (non-software) and one that hides it
     const softwareOption = options.find((o) => o.toLowerCase().includes('software') || o.includes('软件'))
