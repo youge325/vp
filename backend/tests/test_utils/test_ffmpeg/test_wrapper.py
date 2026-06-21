@@ -346,7 +346,7 @@ Encoder libx264 [libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10]:
             "-f",
             "lavfi",
             "-i",
-            "testsrc2=size=64x64:rate=1",
+            "testsrc2=size=256x256:rate=1",
         ]
         assert ["-c:v", "libx264"] in [calls[0][index : index + 2] for index in range(len(calls[0]) - 1)]
 
