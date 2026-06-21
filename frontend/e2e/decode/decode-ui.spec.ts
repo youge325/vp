@@ -1,5 +1,125 @@
 import { test, expect } from '../fixtures'
 
+const makeOption = (name: string, defaultValue: string) => ({
+  name,
+  label: name,
+  type: 'string',
+  defaultValue,
+  choices: [],
+  min: null,
+  max: null,
+})
+
+const makeProfile = (
+  name: string,
+  label: string,
+  family: string,
+  codec: string,
+  hardwareDevices: string[],
+  options: Array<Record<string, unknown>> = [],
+) => ({
+  name,
+  label,
+  family,
+  codec,
+  available: true,
+  pixelFormats: [],
+  hardwareDevices,
+  options,
+})
+
+const CONTROLLED_PROFILES = [
+  makeProfile('software', 'Software Decode', 'software', 'any', []),
+  makeProfile('h264_cuvid', 'NVDEC H.264', 'nvidia', 'h264', ['cuda', 'd3d11va'], [
+    makeOption('resize', '1920x1080'),
+  ]),
+  makeProfile('hevc_qsv', 'QSV H.265', 'intel', 'hevc', ['qsv'], [
+    makeOption('load_plugin', 'hevc_hw'),
+  ]),
+]
+
+async function installDecodeProfiles(
+  tauriPage: any,
+  profiles: unknown[] = CONTROLLED_PROFILES,
+  decodeConfig: Record<string, unknown> = {
+    mode: 'hardware',
+    hwaccel: 'cuda',
+    hwaccelDevice: '0',
+    decoder: 'h264_cuvid',
+    options: {},
+  },
+): Promise<boolean> {
+  return await tauriPage.evaluate(({
+    decoderProfiles,
+    decodeConfig,
+  }: {
+    decoderProfiles: unknown[]
+    decodeConfig: Record<string, unknown>
+  }) => {
+    const root = document.querySelector('#app')
+    if (!root) return false
+    const vueApp = (root as any).__vue_app__
+    if (!vueApp) return false
+    const pinia = vueApp.config?.globalProperties?.$pinia
+    const state = pinia?.state?.value
+    if (!state?.env?.env || !state?.preset?.draftPreset) return false
+
+    state.env.env.checkResult = {
+      type: 'check',
+      ffmpeg: {
+        available: true,
+        version: 'e2e',
+        path: 'ffmpeg',
+        ffprobePath: 'ffprobe',
+        hwaccels: ['cuda', 'qsv', 'd3d11va'],
+        encoderProfiles: [],
+        decoderProfiles,
+      },
+      gpu: { available: true, devices: ['GPU'], adapters: [] },
+      tensorBackends: { pytorch: false, paddle: false, onnx: false },
+      tensorEngines: {},
+      backendDeviceSupport: {},
+      onnxRuntime: { available: false, providers: [] },
+      rifeModel: { available: false },
+      interpolationAlgorithms: [],
+      superResolutionAlgorithms: [],
+      animeProfiles: [],
+    }
+
+    state.preset.draftPreset.decodeConfig = decodeConfig
+    return true
+  }, { decoderProfiles: profiles, decodeConfig })
+}
+
+async function openDecodeModule(tauriPage: any): Promise<void> {
+  await tauriPage.click('.rail-link:has-text("解码")')
+  await expect(tauriPage.locator('h2:has-text("解码设置")')).toBeVisible({ timeout: 5000 })
+}
+
+const decoderSelect = (tauriPage: any) =>
+  tauriPage.locator('label.field').filter({ hasText: '解码方案' }).locator('select')
+
+const hardwareDeviceField = (tauriPage: any) =>
+  tauriPage.locator('label.field').filter({ hasText: '硬件设备' })
+
+const hardwareDeviceSelect = (tauriPage: any) =>
+  hardwareDeviceField(tauriPage).locator('select')
+
+const deviceNumberInput = (tauriPage: any) =>
+  tauriPage.locator('label.field').filter({ hasText: '设备编号' }).locator('input')
+
+async function expectHardwareDeviceState(
+  tauriPage: any,
+  labels: string[],
+  value: string,
+  deviceNumber: string,
+): Promise<void> {
+  const select = hardwareDeviceSelect(tauriPage)
+  await expect(select).toHaveValue(value, { timeout: 5000 })
+  expect(await select.locator('option').allTextContents()).toEqual(labels)
+  await expect(deviceNumberInput(tauriPage)).toHaveValue(deviceNumber, { timeout: 5000 })
+}
+
 test.describe('Decode module UI', () => {
   test('decoder profile select exists and has options', async ({ tauriPage }) => {
     await tauriPage.click('.rail-link:has-text("解码")')
@@ -14,20 +134,52 @@ test.describe('Decode module UI', () => {
     expect(options.length).toBeGreaterThan(0)
   })
 
-  test('hwaccel device input is visible and fillable', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("解码")')
-    await expect(tauriPage.locator('h2:has-text("解码设置")')).toBeVisible({ timeout: 5000 })
+  test('switching decoder profile updates hardware device options and clears device number', async ({ tauriPage }) => {
+    const ok = await installDecodeProfiles(tauriPage)
+    test.skip(!ok, 'Cannot access Pinia stores from evaluate')
 
-    const hwaccelInput = tauriPage.locator('label.field').filter({ hasText: '硬件设备' }).locator('input')
-    await expect(hwaccelInput).toBeVisible()
-    await expect(hwaccelInput).toHaveAttribute('placeholder', '留空则使用默认设备')
+    await openDecodeModule(tauriPage)
 
-    // Type a device name and verify the value changed
-    await hwaccelInput.fill('cuda')
-    await expect(hwaccelInput).toHaveValue('cuda')
+    await expectHardwareDeviceState(tauriPage, ['CUDA', 'D3D11VA'], 'cuda', '0')
 
-    await hwaccelInput.fill('')
-    await expect(hwaccelInput).toHaveValue('')
+    await decoderSelect(tauriPage).selectOption({ label: 'QSV H.265' })
+    await expectHardwareDeviceState(tauriPage, ['QSV'], 'qsv', '')
+
+    await deviceNumberInput(tauriPage).fill('1')
+    await expect(deviceNumberInput(tauriPage)).toHaveValue('1')
+
+    await decoderSelect(tauriPage).selectOption({ label: 'NVDEC H.264' })
+    await expectHardwareDeviceState(tauriPage, ['CUDA', 'D3D11VA'], 'cuda', '')
+
+    await deviceNumberInput(tauriPage).fill('2')
+    await hardwareDeviceSelect(tauriPage).selectOption({ label: 'D3D11VA' })
+    await expectHardwareDeviceState(tauriPage, ['CUDA', 'D3D11VA'], 'd3d11va', '')
+  })
+
+  test('empty hardware device list disables device selector', async ({ tauriPage }) => {
+    const ok = await installDecodeProfiles(
+      tauriPage,
+      [
+        makeProfile('software', 'Software Decode', 'software', 'any', []),
+        makeProfile('av1_cuvid', 'NVDEC AV1', 'nvidia', 'av1', []),
+      ],
+      {
+        mode: 'hardware',
+        hwaccel: '',
+        hwaccelDevice: '',
+        decoder: 'av1_cuvid',
+        options: {},
+      },
+    )
+    test.skip(!ok, 'Cannot access Pinia stores from evaluate')
+
+    await openDecodeModule(tauriPage)
+
+    await expect(hardwareDeviceSelect(tauriPage)).toBeDisabled({ timeout: 5000 })
+    await expect(hardwareDeviceField(tauriPage).locator('.field-hint')).toHaveText(
+      '未探测到可用硬件设备',
+      { timeout: 5000 },
+    )
   })
 
   test('switching decoder profile shows or hides capability options panel', async ({ tauriPage }) => {

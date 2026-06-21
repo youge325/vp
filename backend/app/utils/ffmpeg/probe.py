@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from app.utils.logger import get_logger
@@ -40,6 +42,12 @@ RATE_CONTROL_UNITS = {
     "bitrate": "Mbps",
 }
 RATE_CONTROL_PROBE_SOURCE = "color=size=256x256:rate=1"
+DECODER_HARDWARE_PROBE_SOURCE = "testsrc2=size=64x64:rate=1"
+DECODER_HARDWARE_SAMPLE_ENCODERS = {
+    "h264": ("libx264", "h264_nvenc", "h264_qsv"),
+    "hevc": ("libx265", "hevc_nvenc", "hevc_qsv"),
+    "av1": ("libaom-av1", "libsvtav1", "av1_nvenc", "av1_qsv"),
+}
 
 
 def _probe_cache_key(input_path: str) -> tuple[str, int, int] | None:
@@ -410,6 +418,161 @@ def probe_rate_control_modes(
     if not modes:
         logger.debug("No rate control modes passed FFmpeg verification for encoder %s", codec)
     return modes
+
+
+def _unique_in_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        unique.append(value)
+    return unique
+
+
+def _decoder_hardware_candidates(hardware_devices: list[str], hwaccels: list[str]) -> list[str]:
+    available = set(hwaccels)
+    return [device for device in _unique_in_order(hardware_devices) if device in available]
+
+
+def _decoder_sample_encoder_candidates(codec: str, encoder_names: set[str]) -> list[str]:
+    return [encoder for encoder in DECODER_HARDWARE_SAMPLE_ENCODERS.get(codec, ()) if encoder in encoder_names]
+
+
+def _decoder_probe_sample_path(probe_dir: str, codec: str) -> str:
+    return str(Path(probe_dir) / f"vp_decoder_probe_{codec}.mkv")
+
+
+def _ensure_decoder_probe_sample(
+    ffmpeg_path: str,
+    codec: str,
+    encoder_names: set[str],
+    probe_dir: str,
+    sample_cache: dict[str, str | None],
+) -> str | None:
+    cache_key = codec.lower()
+    if cache_key in sample_cache:
+        return sample_cache[cache_key]
+
+    encoders = _decoder_sample_encoder_candidates(cache_key, encoder_names)
+    if not encoders:
+        logger.debug("No FFmpeg encoder is available to generate decoder probe sample for codec %s", codec)
+        sample_cache[cache_key] = None
+        return None
+
+    sample_path = _decoder_probe_sample_path(probe_dir, cache_key)
+    for encoder in encoders:
+        cmd = [
+            ffmpeg_path,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            DECODER_HARDWARE_PROBE_SOURCE,
+            "-frames:v",
+            "1",
+            "-an",
+            "-c:v",
+            encoder,
+            "-pix_fmt",
+            "yuv420p",
+            sample_path,
+        ]
+        try:
+            run_ffmpeg_command(cmd, timeout=30)
+            sample_cache[cache_key] = sample_path
+            return sample_path
+        except Exception as exc:  # pragma: no cover - exact FFmpeg errors vary by build
+            logger.debug(
+                "Failed to generate decoder probe sample for codec %s with encoder %s: %s",
+                codec,
+                encoder,
+                exc,
+            )
+
+    sample_cache[cache_key] = None
+    return None
+
+
+def _verify_decoder_hardware_device(
+    ffmpeg_path: str,
+    decoder: str,
+    device: str,
+    sample_path: str,
+) -> bool:
+    cmd = [
+        ffmpeg_path,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-hwaccel",
+        device,
+        "-c:v",
+        decoder,
+        "-i",
+        sample_path,
+        "-frames:v",
+        "1",
+        "-f",
+        "null",
+        "-",
+    ]
+    try:
+        run_ffmpeg_command(cmd, timeout=30)
+    except Exception as exc:  # pragma: no cover - exact FFmpeg errors vary by build
+        logger.debug(
+            "Decoder hardware probe failed for decoder %s device %s: %s",
+            decoder,
+            device,
+            exc,
+        )
+        return False
+    return True
+
+
+def probe_decoder_hardware_devices(
+    ffmpeg_path: str,
+    decoder: str,
+    codec: str,
+    hardware_devices: list[str],
+    hwaccels: list[str],
+    encoder_names: set[str],
+    probe_dir: str | None = None,
+    sample_cache: dict[str, str | None] | None = None,
+) -> list[str]:
+    candidates = _decoder_hardware_candidates(hardware_devices, hwaccels)
+    if not candidates:
+        return []
+
+    if probe_dir is None:
+        with tempfile.TemporaryDirectory(prefix="vp-decoder-probe-") as temp_dir:
+            return probe_decoder_hardware_devices(
+                ffmpeg_path,
+                decoder,
+                codec,
+                hardware_devices,
+                hwaccels,
+                encoder_names,
+                probe_dir=temp_dir,
+                sample_cache={},
+            )
+
+    cache = sample_cache if sample_cache is not None else {}
+    sample_path = _ensure_decoder_probe_sample(ffmpeg_path, codec, encoder_names, probe_dir, cache)
+    if sample_path is None:
+        logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
+        return []
+
+    devices = [
+        device for device in candidates if _verify_decoder_hardware_device(ffmpeg_path, decoder, device, sample_path)
+    ]
+    if not devices:
+        logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
+    return devices
 
 
 def is_available(ffmpeg_path: str) -> bool:

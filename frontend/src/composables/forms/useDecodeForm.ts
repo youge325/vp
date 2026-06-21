@@ -7,7 +7,7 @@ import {
   getVisibleDecoderProfiles,
 } from '@/services/preset/profile-picker'
 import {
-  inferHwaccelForProfile,
+  resolveDecoderHwaccel,
   seedProfileOptions,
 } from '@/services/preset/normalize'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
@@ -28,6 +28,21 @@ export function useDecodeForm() {
     ) ?? null,
   )
   const decoderOptions = computed(() => currentDecoderProfile.value?.options ?? [])
+  const decoderHardwareDeviceOptions = computed(() =>
+    (currentDecoderProfile.value?.hardwareDevices ?? []).map((device) => ({
+      value: device,
+      label: device.toUpperCase(),
+    })),
+  )
+  const decoderHardwareDeviceHint = computed(() => {
+    if (currentDecoderProfile.value?.family === 'software') {
+      return '软件解码不需要硬件设备'
+    }
+    if (decoderHardwareDeviceOptions.value.length === 0) {
+      return '未探测到可用硬件设备'
+    }
+    return undefined
+  })
 
   function setDecodeProfile(profileName: string): void {
     const allProfiles = getVisibleDecoderProfiles(envStore.env.checkResult, '')
@@ -42,9 +57,17 @@ export function useDecodeForm() {
         return
       }
       config.mode = 'hardware'
-      config.hwaccel = inferHwaccelForProfile(profile)
+      config.hwaccel = resolveDecoderHwaccel(profile)
+      config.hwaccelDevice = ''
       config.decoder = profile.name
       config.options = seedProfileOptions(profile, config.options)
+    })
+  }
+
+  function setDecodeHwaccel(value: string): void {
+    patchDecode((config: DecodeConfig) => {
+      config.hwaccel = value
+      config.hwaccelDevice = ''
     })
   }
 
@@ -68,7 +91,10 @@ export function useDecodeForm() {
     visibleDecoderProfiles,
     currentDecoderProfile,
     decoderOptions,
+    decoderHardwareDeviceOptions,
+    decoderHardwareDeviceHint,
     setDecodeProfile,
+    setDecodeHwaccel,
     setDecodeHwaccelDevice,
     setDecodeOption,
     getDecodeOption,

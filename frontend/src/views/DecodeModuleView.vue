@@ -10,7 +10,10 @@ const {
   visibleDecoderProfiles,
   currentDecoderProfile,
   decoderOptions,
+  decoderHardwareDeviceOptions,
+  decoderHardwareDeviceHint,
   setDecodeProfile,
+  setDecodeHwaccel,
   setDecodeHwaccelDevice,
   setDecodeOption,
   getDecodeOption,
@@ -34,7 +37,7 @@ const decoderProfileOptions = computed(() =>
         <span class="panel-badge">{{ targetLabel }}</span>
       </div>
 
-      <div class="field-grid field-grid-2">
+      <div class="field-grid field-grid-3">
         <BaseSelect
           label="解码方案"
           :model-value="currentDecoderProfile?.name ?? 'software'"
@@ -42,11 +45,21 @@ const decoderProfileOptions = computed(() =>
           @update:model-value="setDecodeProfile"
         />
 
-        <BaseField label="硬件设备">
+        <BaseSelect
+          label="硬件设备"
+          :model-value="editorConfig.decodeConfig.hwaccel ?? ''"
+          :options="decoderHardwareDeviceOptions"
+          :disabled="decoderHardwareDeviceOptions.length === 0"
+          :hint="decoderHardwareDeviceHint"
+          @update:model-value="setDecodeHwaccel"
+        />
+
+        <BaseField label="设备编号">
           <input
             :value="editorConfig.decodeConfig.hwaccelDevice"
             type="text"
             placeholder="留空则使用默认设备"
+            :disabled="!editorConfig.decodeConfig.hwaccel"
             @input="setDecodeHwaccelDevice(($event.target as HTMLInputElement).value)"
           />
         </BaseField>
