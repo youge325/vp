@@ -21,24 +21,6 @@ export function resolvePrimaryMode(item: Pick<MediaItem, 'workflowConfig'>): Wor
   return 'format_conversion'
 }
 
-export type WorkflowStage = 'decode' | 'preprocess' | 'enhance' | 'postprocess' | 'encode'
-
-const STAGE_PRESET_CAPTIONS: Record<WorkflowStage, string> = {
-  decode: '启动探测完成后即可直接设置解码策略,后续新导入的视频会继承这些默认值。',
-  preprocess: '预处理滤镜链会在解码之后、增强之前执行,可用来缩放帧尺寸等。',
-  enhance: '增强参数可以在导入前先配置好,新导入的视频会直接继承这些默认设置。',
-  postprocess: '后处理滤镜链会在增强之后、编码之前执行,可用来锐化、降噪或缩放到目标分辨率。',
-  encode: '编码与输出参数会保存为默认预设,后续导入的新文件会直接继承这些设置。',
-}
-
-const STAGE_NON_PRESET_CAPTIONS: Record<WorkflowStage, string> = {
-  decode: '当前修改会同步到激活文件与所有已勾选文件,解码器参数来自 FFmpeg 能力探测。',
-  preprocess: '当前修改会同步到激活文件与所有已勾选文件。',
-  enhance: '当前修改会同步到激活文件与所有已勾选文件,方便批量套用增强流程。',
-  postprocess: '当前修改会同步到激活文件与所有已勾选文件。',
-  encode: '当前修改会同步到激活文件与所有已勾选文件,适合批量统一编码策略。',
-}
-
 export function getWorkflowSummaryLabel(item: MediaItem): string {
   const labels = [
     item.workflowConfig.interpolation.enabled ? '补帧' : null,
@@ -89,17 +71,14 @@ export function getTaskStatusLabel(batch: BatchState, currentItemStatus: string 
 export function getEditingScopeLabel(
   isPresetMode: boolean,
   selectionCount: number,
-  stage: WorkflowStage = 'enhance',
-): { targetLabel: string; caption: string } {
+): { targetLabel: string } {
   if (isPresetMode) {
     return {
-      targetLabel: '默认预设(后续导入会继承)',
-      caption: STAGE_PRESET_CAPTIONS[stage],
+      targetLabel: '默认预设',
     }
   }
   return {
     targetLabel: `作用于 ${selectionCount} 个文件`,
-    caption: STAGE_NON_PRESET_CAPTIONS[stage],
   }
 }
 

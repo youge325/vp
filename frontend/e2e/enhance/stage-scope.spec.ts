@@ -87,10 +87,9 @@ test.describe('Stage module scope and badge', () => {
     await expect(tauriPage.locator('h2:has-text("预处理")')).toBeVisible({ timeout: 5000 })
 
     const badge = tauriPage.locator('.panel-badge')
-    await expect(badge).toHaveText('默认预设(后续导入会继承)')
+    await expect(badge).toHaveText('默认预设')
 
-    const caption = tauriPage.locator('.panel-copy .panel-caption')
-    await expect(caption).toContainText('预处理滤镜链会在解码之后、增强之前执行')
+    await expect(tauriPage.locator('.panel-copy .panel-caption')).toHaveCount(0)
   })
 
   test('postprocess panel badge shows file count when active item exists', async ({ tauriPage }) => {
@@ -103,13 +102,12 @@ test.describe('Stage module scope and badge', () => {
     const badge = tauriPage.locator('.panel-badge')
     await expect(badge).toHaveText('作用于 1 个文件')
 
-    const caption = tauriPage.locator('.panel-copy .panel-caption')
-    await expect(caption).toContainText('当前修改会同步到激活文件与所有已勾选文件')
+    await expect(tauriPage.locator('.panel-copy .panel-caption')).toHaveCount(0)
 
     await clearMediaItems(tauriPage)
   })
 
-  test('pipeline position caption appears only when enabled', async ({ tauriPage }) => {
+  test('filter section appears without pipeline caption when enabled', async ({ tauriPage }) => {
     await tauriPage.click('.rail-link:has-text("预处理")')
     await expect(tauriPage.locator('h2:has-text("预处理")')).toBeVisible({ timeout: 5000 })
 
@@ -121,17 +119,16 @@ test.describe('Stage module scope and badge', () => {
     const toggle = tauriPage.locator('label.field.toggle-field').filter({ hasText: '启用预处理' }).locator('input[type="checkbox"]')
     await toggle.click()
 
-    // Now filter section and pipeline caption are visible
+    // Now filter section is visible without explanatory copy
     await expect(filterSection).toBeVisible()
-    const pipelineCaption = filterSection.locator('.panel-caption').first()
-    await expect(pipelineCaption).toHaveText('位于 解码 → 增强 之间')
+    await expect(filterSection.locator('.panel-caption')).toHaveCount(0)
 
     // Toggle off again
     await toggle.click()
     await expect(filterSection).not.toBeVisible()
   })
 
-  test('postprocess pipeline caption shows correct position', async ({ tauriPage }) => {
+  test('postprocess filter section appears without pipeline caption', async ({ tauriPage }) => {
     await tauriPage.click('.rail-link:has-text("后处理")')
     await expect(tauriPage.locator('h2:has-text("后处理")')).toBeVisible({ timeout: 5000 })
 
@@ -140,8 +137,7 @@ test.describe('Stage module scope and badge', () => {
 
     const filterSection = tauriPage.locator('.filter-section')
     await expect(filterSection).toBeVisible()
-    const pipelineCaption = filterSection.locator('.panel-caption').first()
-    await expect(pipelineCaption).toHaveText('位于 增强 → 编码 之间')
+    await expect(filterSection.locator('.panel-caption')).toHaveCount(0)
   })
 
   test('panel badge updates when selection count changes', async ({ tauriPage }) => {

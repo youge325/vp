@@ -2,8 +2,7 @@
 // Phase 7b — Shared scaffold for the pre-/post-process stage views.
 //
 // ``PreprocessModuleView`` and ``PostprocessModuleView`` used to be
-// 38-line copies of each other that differed in three string
-// fields (stage name, panel title, pipeline-position caption).
+// copies of each other that differed in stage name and panel title.
 // They keep their own router entries (so deep links and breadcrumbs
 // still work) but defer to this component for the actual layout.
 //
@@ -23,13 +22,10 @@ type Stage = 'preprocess' | 'postprocess'
 const props = defineProps<{ stage: Stage }>()
 
 const { enabled, filters } = useFilterChainForm(props.stage)
-const { targetLabel, caption } = useEditingScope(props.stage)
+const { targetLabel } = useEditingScope()
 
 const title = computed(() => (props.stage === 'preprocess' ? '预处理' : '后处理'))
 const toggleLabel = computed(() => (props.stage === 'preprocess' ? '启用预处理' : '启用后处理'))
-const pipelinePosition = computed(() =>
-  props.stage === 'preprocess' ? '位于 解码 → 增强 之间' : '位于 增强 → 编码 之间',
-)
 </script>
 
 <template>
@@ -38,7 +34,6 @@ const pipelinePosition = computed(() =>
       <div class="panel-head">
         <div class="panel-copy">
           <h2>{{ title }}</h2>
-          <p class="panel-caption">{{ caption }}</p>
         </div>
         <span class="panel-badge">{{ targetLabel }}</span>
       </div>
@@ -48,7 +43,6 @@ const pipelinePosition = computed(() =>
       </div>
 
       <div v-if="enabled" class="filter-section">
-        <p class="panel-caption">{{ pipelinePosition }}</p>
         <FilterChainEditor v-model="filters" />
       </div>
     </section>

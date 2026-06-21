@@ -17,7 +17,7 @@ const {
 } = useDecodeForm()
 
 const { editorConfig } = useWorkbenchEditor()
-const { targetLabel, caption } = useEditingScope('decode')
+const { targetLabel } = useEditingScope()
 
 const decoderProfileOptions = computed(() =>
   visibleDecoderProfiles.value.map((profile) => ({ value: profile.name, label: profile.label })),
@@ -30,7 +30,6 @@ const decoderProfileOptions = computed(() =>
       <div class="panel-head">
         <div class="panel-copy">
           <h2>解码设置</h2>
-          <p class="panel-caption">{{ caption }}</p>
         </div>
         <span class="panel-badge">{{ targetLabel }}</span>
       </div>

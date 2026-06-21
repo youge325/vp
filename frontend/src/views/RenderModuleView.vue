@@ -35,7 +35,6 @@ function handleResolveConflict(action: ResumeConflictAction): void {
       <div class="panel-head">
         <div class="panel-copy">
           <h2>批处理队列</h2>
-          <p class="panel-caption">渲染页现在只保留批次控制和运行日志。任务结束后不会保留结果历史。</p>
         </div>
 
         <div class="panel-actions">

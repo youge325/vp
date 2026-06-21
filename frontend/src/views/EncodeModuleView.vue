@@ -34,7 +34,7 @@ const {
 
 const { pickOutputDirectory } = useOutputPicker()
 const { editorConfig } = useWorkbenchEditor()
-const { targetLabel, caption } = useEditingScope('encode')
+const { targetLabel } = useEditingScope()
 const encodeIssue = useOperationIssue('encode')
 
 const containerOptions = computed(() =>
@@ -65,7 +65,6 @@ async function handlePickOutputDirectory(): Promise<void> {
       <div class="panel-head">
         <div class="panel-copy">
           <h2>编码与输出</h2>
-          <p class="panel-caption">{{ caption }}</p>
         </div>
 
         <div class="panel-actions">
@@ -81,7 +80,6 @@ async function handlePickOutputDirectory(): Promise<void> {
       <div class="panel-head">
         <div class="panel-copy">
           <h2>输出配置</h2>
-          <p class="panel-caption">编码器选项来自环境探测结果，会根据当前机器与 FFmpeg 的实际支持情况动态显示。</p>
         </div>
       </div>
 
@@ -169,7 +167,6 @@ async function handlePickOutputDirectory(): Promise<void> {
       <div class="panel-head">
         <div class="panel-copy">
           <h2>编码器参数</h2>
-          <p class="panel-caption">这里展示的是当前编码器从 `ffmpeg -h encoder=` 探测到的可调参数。</p>
         </div>
       </div>
 
