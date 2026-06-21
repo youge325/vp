@@ -34,7 +34,7 @@ import {
   cloneOutputConfig,
   cloneWorkflowConfig,
 } from '@/services/preset/clone'
-import { getEditingScopeLabel, type WorkflowStage } from '@/services/format/labels'
+import { getEditingScopeLabel } from '@/services/format/labels'
 import type { DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig } from '@/types/protocol'
 import type { MediaItem } from '@/types/domain/media'
 
@@ -118,17 +118,16 @@ export function useWorkbenchEditor() {
   }
 }
 
-export function useEditingScope(stage: WorkflowStage) {
+export function useEditingScope() {
   const mediaStore = useMediaStore()
   const isPresetMode = computed(() => !mediaStore.activeItem)
 
   const label = computed(() =>
-    getEditingScopeLabel(isPresetMode.value, mediaStore.selectedIds.length || 1, stage),
+    getEditingScopeLabel(isPresetMode.value, mediaStore.selectedIds.length || 1),
   )
 
   return {
     isPresetMode,
     targetLabel: computed(() => label.value.targetLabel),
-    caption: computed(() => label.value.caption),
   }
 }

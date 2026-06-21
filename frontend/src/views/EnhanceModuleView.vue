@@ -16,7 +16,7 @@ const interpolationCapabilities = useGpuCapabilities(
 const superResolutionCapabilities = useGpuCapabilities(
   toRef(form, 'superResolutionBackend')
 )
-const { targetLabel, caption } = useEditingScope('enhance')
+const { targetLabel } = useEditingScope()
 
 // Phase 14.2 — 把所有 select 选项一次性 computed 化,模板里只剩 BaseSelect
 // + props,跟 Decode/Encode 视觉对齐。原 EnhanceModuleView 里 8+ 个原生
@@ -122,7 +122,6 @@ function setProcessOrder(value: string): void {
       <div class="panel-head">
         <div class="panel-copy">
           <h2>增强流程</h2>
-          <p class="panel-caption">{{ caption }}</p>
         </div>
         <span class="panel-badge">{{ targetLabel }}</span>
       </div>

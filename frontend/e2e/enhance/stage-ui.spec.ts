@@ -24,8 +24,7 @@ test.describe('Stage module UI', () => {
     await expect(toggle).toBeChecked()
     await expect(filterSection).toBeVisible({ timeout: 5000 })
 
-    // Verify pipeline position caption is shown
-    await expect(tauriPage.locator('.filter-section .panel-caption').filter({ hasText: '位于 解码 → 增强 之间' })).toBeVisible()
+    await expect(tauriPage.locator('.filter-section .panel-caption')).toHaveCount(0)
   })
 
   test('enabling postprocess toggle reveals filter section', async ({ tauriPage }) => {
@@ -47,6 +46,6 @@ test.describe('Stage module UI', () => {
     await expect(toggle).toBeChecked()
     await expect(filterSection).toBeVisible({ timeout: 5000 })
 
-    await expect(tauriPage.locator('.filter-section .panel-caption').filter({ hasText: '位于 增强 → 编码 之间' })).toBeVisible()
+    await expect(tauriPage.locator('.filter-section .panel-caption')).toHaveCount(0)
   })
 })

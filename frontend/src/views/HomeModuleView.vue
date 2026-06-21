@@ -13,7 +13,6 @@ const { recheckEnvironment } = useEnvironmentChecker()
       <div class="panel-head">
         <div class="panel-copy">
           <h2>启动探测</h2>
-          <p class="panel-caption">应用启动后会优先读取本机缓存的能力探测；只有缓存失效或你手动重新探测时，才会再次执行真实探测。</p>
         </div>
 
         <div class="panel-actions">
@@ -43,7 +42,6 @@ const { recheckEnvironment } = useEnvironmentChecker()
       <div class="panel-head">
         <div class="panel-copy">
           <h2>编码能力</h2>
-          <p class="panel-caption">这里展示当前机器真实可用的编码器家族，解码、增强、编码页面会直接复用这些探测结果。</p>
         </div>
       </div>
 
