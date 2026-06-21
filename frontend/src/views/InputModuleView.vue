@@ -64,7 +64,6 @@ async function reinspectSelection(): Promise<void> {
       <div class="panel-head">
         <div class="panel-copy">
           <h2>批量导入</h2>
-          <p class="panel-caption">导入后会自动读取素材信息。复选框用于后续页面批量套用设置，激活行用于切换当前素材。</p>
         </div>
 
         <div class="panel-actions">
@@ -86,7 +85,6 @@ async function reinspectSelection(): Promise<void> {
         @dragleave="handleDragLeave"
       >
         <strong>拖放视频到这里，或使用"批量导入"按钮</strong>
-        <p>支持多文件导入，导入后自动探测分辨率、帧率、音频与视频编码。</p>
       </div>
 
       <IssueBanner :issue="inputIssue" title="批量导入失败" />
@@ -96,13 +94,11 @@ async function reinspectSelection(): Promise<void> {
       <div class="panel-head">
         <div class="panel-copy">
           <h2>素材列表</h2>
-          <p class="panel-caption">点击行切换激活文件；勾选后的文件会在后续页面一起接收批量设置。</p>
         </div>
       </div>
 
       <div v-if="mediaStore.mediaItems.length === 0" class="empty-state">
         <strong>还没有素材</strong>
-        <p>前往上方批量导入后，这里会显示每个文件的元数据、流程摘要和任务状态。</p>
       </div>
 
       <div v-else class="table-wrap">
