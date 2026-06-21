@@ -42,7 +42,7 @@ RATE_CONTROL_UNITS = {
     "bitrate": "Mbps",
 }
 RATE_CONTROL_PROBE_SOURCE = "color=size=256x256:rate=1"
-DECODER_HARDWARE_PROBE_SOURCE = "testsrc2=size=64x64:rate=1"
+DECODER_HARDWARE_PROBE_SOURCE = "testsrc2=size=256x256:rate=1"
 DECODER_HARDWARE_SAMPLE_ENCODERS = {
     "h264": ("libx264", "h264_nvenc", "h264_qsv"),
     "hevc": ("libx265", "hevc_nvenc", "hevc_qsv"),
