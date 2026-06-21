@@ -34,15 +34,6 @@ export function useDecodeForm() {
       label: device.toUpperCase(),
     })),
   )
-  const decoderHardwareDeviceHint = computed(() => {
-    if (currentDecoderProfile.value?.family === 'software') {
-      return '软件解码不需要硬件设备'
-    }
-    if (decoderHardwareDeviceOptions.value.length === 0) {
-      return '未探测到可用硬件设备'
-    }
-    return undefined
-  })
 
   function setDecodeProfile(profileName: string): void {
     const allProfiles = getVisibleDecoderProfiles(envStore.env.checkResult, '')
@@ -86,7 +77,6 @@ export function useDecodeForm() {
     currentDecoderProfile,
     decoderOptions,
     decoderHardwareDeviceOptions,
-    decoderHardwareDeviceHint,
     setDecodeProfile,
     setDecodeHwaccel,
     setDecodeOption,
