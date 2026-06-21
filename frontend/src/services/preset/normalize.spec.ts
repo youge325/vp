@@ -74,7 +74,7 @@ describe('resolveDecoderHwaccel', () => {
 })
 
 describe('normalizeDecodeConfig decoder hardware devices', () => {
-  it('preserves supported cached hwaccel and device number', () => {
+  it('preserves supported cached hwaccel but clears cached device number', () => {
     const env = makeEnv([
       decoderProfile('software', 'Software Decode', 'software', 'any', []),
       decoderProfile('h264_cuvid', 'NVDEC H.264', 'nvidia', 'h264', ['d3d11va', 'cuda']),
@@ -84,7 +84,7 @@ describe('normalizeDecodeConfig decoder hardware devices', () => {
       mode: 'hardware',
       decoder: 'h264_cuvid',
       hwaccel: 'cuda',
-      hwaccelDevice: '0',
+      hwaccelDevice: '',
       options: { resize: '1920x1080' },
     })
   })

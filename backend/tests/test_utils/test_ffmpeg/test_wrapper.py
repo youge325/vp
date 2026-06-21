@@ -356,6 +356,7 @@ Encoder libx264 [libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10]:
             for call in verify_calls
         )
         assert all("-f" in call and "null" in call for call in verify_calls)
+        assert all("-hwaccel_device" not in call for call in verify_calls)
 
     def test_probe_decoder_hardware_devices_drops_failed_devices_without_fallback(self, monkeypatch):
         wrapper = FFmpegWrapper(ffmpeg_path="ffmpeg")

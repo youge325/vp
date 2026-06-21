@@ -83,7 +83,7 @@ export function normalizeDecodeConfig(
       ...config,
       mode: 'hardware',
       hwaccel,
-      hwaccelDevice: hwaccel && hwaccel === config.hwaccel ? config.hwaccelDevice : '',
+      hwaccelDevice: '',
       decoder: matchedVisible.name,
       options: seedProfileOptions(matchedVisible, config.options),
     }

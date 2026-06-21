@@ -103,6 +103,12 @@ describe('useDecodeForm decoder hardware devices', () => {
     expect(presetStore.draftPreset.decodeConfig.hwaccelDevice).toBe('')
   })
 
+  it('does not expose a manual hardware device number setter', () => {
+    const form = useDecodeForm()
+
+    expect('setDecodeHwaccelDevice' in form).toBe(false)
+  })
+
   it('exposes an empty device list for profiles without verified devices', () => {
     const form = useDecodeForm()
 
