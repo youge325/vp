@@ -3,6 +3,7 @@ import {
   getVisibleEncoderProfiles,
   getVisibleDecoderProfiles,
   pickPreferredEncoderProfile,
+  pickPreferredDecoderProfile,
 } from './profile-picker'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 
@@ -57,5 +58,64 @@ describe('getVisibleDecoderProfiles', () => {
     const profiles = getVisibleDecoderProfiles(env, 'hevc')
     expect(profiles).toHaveLength(1)
     expect(profiles[0].name).toBe('hevc')
+  })
+
+  it('filters out hardware decoder profiles without verified hardware devices', () => {
+    const env = makeEnv({
+      ffmpeg: {
+        decoderProfiles: [
+          { name: 'software', available: true, family: 'software', codec: 'any', label: 'Software', options: [] },
+          {
+            name: 'hevc_cuvid',
+            available: true,
+            family: 'nvidia',
+            codec: 'hevc',
+            label: 'NVDEC HEVC',
+            hardwareDevices: [],
+            options: [],
+          },
+          {
+            name: 'h264_cuvid',
+            available: true,
+            family: 'nvidia',
+            codec: 'h264',
+            label: 'NVDEC H264',
+            hardwareDevices: ['cuda'],
+            options: [],
+          },
+        ],
+        encoderProfiles: [],
+        hwaccels: ['cuda'],
+      },
+    } as any)
+
+    expect(getVisibleDecoderProfiles(env, 'hevc').map((profile) => profile.name)).toEqual(['software'])
+    expect(getVisibleDecoderProfiles(env, 'h264').map((profile) => profile.name)).toEqual([
+      'software',
+      'h264_cuvid',
+    ])
+  })
+
+  it('falls back to software when the matching hardware decoder has no verified devices', () => {
+    const env = makeEnv({
+      ffmpeg: {
+        decoderProfiles: [
+          { name: 'software', available: true, family: 'software', codec: 'any', label: 'Software', options: [] },
+          {
+            name: 'hevc_cuvid',
+            available: true,
+            family: 'nvidia',
+            codec: 'hevc',
+            label: 'NVDEC HEVC',
+            hardwareDevices: [],
+            options: [],
+          },
+        ],
+        encoderProfiles: [],
+        hwaccels: ['cuda'],
+      },
+    } as any)
+
+    expect(pickPreferredDecoderProfile(env, 'hevc')?.name).toBe('software')
   })
 })

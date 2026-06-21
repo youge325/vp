@@ -1,7 +1,7 @@
 // 视图 form-binding — 解码模块。
 // 把"切换 profile / 调 hwaccel / 编辑 option"封装成纯方法,业务规则下沉到 services。
 
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useEnvStore } from '@/stores/env'
 import {
   getVisibleDecoderProfiles,
@@ -43,6 +43,28 @@ export function useDecodeForm() {
       currentDecoderProfile.value,
       editorConfig.value.decodeConfig.hwaccel ?? '',
     ),
+  )
+
+  watch(
+    [
+      () => envStore.env.checkResult,
+      currentDecoderProfile,
+      () => editorConfig.value.decodeConfig.mode,
+      () => editorConfig.value.decodeConfig.decoder,
+    ],
+    ([checkResult, profile, mode]) => {
+      if (!checkResult || mode !== 'hardware' || (profile && profile.family !== 'software')) {
+        return
+      }
+      patchDecode((config: DecodeConfig) => {
+        config.mode = 'software'
+        config.hwaccel = ''
+        config.hwaccelDevice = ''
+        config.decoder = 'software'
+        config.options = {}
+      })
+    },
+    { immediate: true },
   )
 
   function setDecodeProfile(profileName: string): void {
