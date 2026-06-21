@@ -28,6 +28,9 @@ export function getVisibleDecoderProfiles(
     if (!profile.available) {
       return false
     }
+    if (profile.family !== 'software' && profile.hardwareDevices.length === 0) {
+      return false
+    }
     return profile.codec === 'any' || !codec || profile.codec === codec
   })
 }

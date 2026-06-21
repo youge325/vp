@@ -70,15 +70,15 @@ describe('createDefaultDecodeConfig decoder hardware devices', () => {
     })
   })
 
-  it('does not infer cuda or qsv when the selected decoder profile has no verified devices', () => {
+  it('falls back to software when the selected decoder profile has no verified devices', () => {
     const env = makeEnv([
       decoderProfile('software', 'Software Decode', 'software', 'any', []),
       decoderProfile('h264_cuvid', 'NVDEC H.264', 'nvidia', 'h264', []),
     ])
 
     expect(createDefaultDecodeConfig(env, 'h264')).toMatchObject({
-      mode: 'hardware',
-      decoder: 'h264_cuvid',
+      mode: 'software',
+      decoder: 'software',
       hwaccel: '',
       hwaccelDevice: '',
     })

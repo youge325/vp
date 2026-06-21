@@ -1,3 +1,4 @@
+import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -130,12 +131,38 @@ describe('useDecodeForm decoder hardware devices', () => {
     expect(presetStore.draftPreset.decodeConfig.hwaccelDevice).toBe('1')
   })
 
-  it('exposes an empty device list for profiles without verified devices', () => {
+  it('falls back to software when selecting a profile without verified devices', () => {
     const form = useDecodeForm()
 
     form.setDecodeProfile('av1_cuvid')
 
     expect(form.decoderHardwareDeviceOptions.value).toEqual([])
-    expect(usePresetStore().draftPreset.decodeConfig.hwaccel).toBe('')
+    expect(usePresetStore().draftPreset.decodeConfig).toMatchObject({
+      mode: 'software',
+      hwaccel: '',
+      hwaccelDevice: '',
+      decoder: 'software',
+    })
+  })
+
+  it('normalizes a stale hardware decoder without verified devices back to software', async () => {
+    const presetStore = usePresetStore()
+    presetStore.patchDecode((config) => {
+      config.mode = 'hardware'
+      config.hwaccel = ''
+      config.hwaccelDevice = ''
+      config.decoder = 'av1_cuvid'
+      config.options = {}
+    })
+
+    useDecodeForm()
+    await nextTick()
+
+    expect(presetStore.draftPreset.decodeConfig).toMatchObject({
+      mode: 'software',
+      hwaccel: '',
+      hwaccelDevice: '',
+      decoder: 'software',
+    })
   })
 })
