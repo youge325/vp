@@ -176,7 +176,7 @@ test.describe('Decode module UI', () => {
     expect(await getDraftHwaccelDevice(tauriPage)).toBe('')
   })
 
-  test('empty hardware device list disables device selector', async ({ tauriPage }) => {
+  test('empty hardware device list hides device selector', async ({ tauriPage }) => {
     const ok = await installDecodeProfiles(
       tauriPage,
       [
@@ -195,11 +195,8 @@ test.describe('Decode module UI', () => {
 
     await openDecodeModule(tauriPage)
 
-    await expect(hardwareDeviceSelect(tauriPage)).toBeDisabled({ timeout: 5000 })
-    await expect(hardwareDeviceField(tauriPage).locator('.field-hint')).toHaveText(
-      '未探测到可用硬件设备',
-      { timeout: 5000 },
-    )
+    await expect(hardwareDeviceField(tauriPage)).toHaveCount(0)
+    await expect(deviceNumberField(tauriPage)).toHaveCount(0)
   })
 
   test('switching decoder profile shows or hides capability options panel', async ({ tauriPage }) => {

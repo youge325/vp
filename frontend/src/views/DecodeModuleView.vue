@@ -10,7 +10,6 @@ const {
   currentDecoderProfile,
   decoderOptions,
   decoderHardwareDeviceOptions,
-  decoderHardwareDeviceHint,
   setDecodeProfile,
   setDecodeHwaccel,
   setDecodeOption,
@@ -44,11 +43,10 @@ const decoderProfileOptions = computed(() =>
         />
 
         <BaseSelect
+          v-if="decoderHardwareDeviceOptions.length > 0"
           label="硬件设备"
           :model-value="editorConfig.decodeConfig.hwaccel ?? ''"
           :options="decoderHardwareDeviceOptions"
-          :disabled="decoderHardwareDeviceOptions.length === 0"
-          :hint="decoderHardwareDeviceHint"
           @update:model-value="setDecodeHwaccel"
         />
       </div>
