@@ -5,7 +5,7 @@ import type { DecodeConfig, EncodeConfig } from '@/types/protocol'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { CapabilityValue } from '@/types/domain/capability'
 import { createDefaultDecodeConfig, createDefaultEncodeConfig } from './defaults'
-import { resolveDecoderHwaccel } from './decode-hardware'
+import { resolveDecoderHwaccel, resolveDecoderHwaccelDevice } from './decode-hardware'
 import { getVisibleDecoderProfiles, getVisibleEncoderProfiles } from './profile-picker'
 import {
   hasRateControlModes,
@@ -83,7 +83,7 @@ export function normalizeDecodeConfig(
       ...config,
       mode: 'hardware',
       hwaccel,
-      hwaccelDevice: '',
+      hwaccelDevice: resolveDecoderHwaccelDevice(matchedVisible, hwaccel, config.hwaccelDevice),
       decoder: matchedVisible.name,
       options: seedProfileOptions(matchedVisible, config.options),
     }
@@ -99,7 +99,7 @@ export function normalizeDecodeConfig(
       ...config,
       mode: 'hardware',
       hwaccel,
-      hwaccelDevice: '',
+      hwaccelDevice: resolveDecoderHwaccelDevice(remappedProfile, hwaccel),
       decoder: remappedProfile.name,
       options: seedProfileOptions(remappedProfile, config.options),
     }

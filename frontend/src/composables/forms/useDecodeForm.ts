@@ -10,6 +10,10 @@ import {
   resolveDecoderHwaccel,
   seedProfileOptions,
 } from '@/services/preset/normalize'
+import {
+  getDecoderHwaccelDeviceOptions,
+  resolveDecoderHwaccelDevice,
+} from '@/services/preset/decode-hardware'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import { getOptionValue, coerceOptionValue } from '@/services/preset/options'
 import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
@@ -34,6 +38,12 @@ export function useDecodeForm() {
       label: device.toUpperCase(),
     })),
   )
+  const decoderHardwareDeviceNumberOptions = computed(() =>
+    getDecoderHwaccelDeviceOptions(
+      currentDecoderProfile.value,
+      editorConfig.value.decodeConfig.hwaccel ?? '',
+    ),
+  )
 
   function setDecodeProfile(profileName: string): void {
     const allProfiles = getVisibleDecoderProfiles(envStore.env.checkResult, '')
@@ -48,8 +58,9 @@ export function useDecodeForm() {
         return
       }
       config.mode = 'hardware'
-      config.hwaccel = resolveDecoderHwaccel(profile)
-      config.hwaccelDevice = ''
+      const hwaccel = resolveDecoderHwaccel(profile)
+      config.hwaccel = hwaccel
+      config.hwaccelDevice = resolveDecoderHwaccelDevice(profile, hwaccel)
       config.decoder = profile.name
       config.options = seedProfileOptions(profile, config.options)
     })
@@ -58,7 +69,17 @@ export function useDecodeForm() {
   function setDecodeHwaccel(value: string): void {
     patchDecode((config: DecodeConfig) => {
       config.hwaccel = value
-      config.hwaccelDevice = ''
+      config.hwaccelDevice = resolveDecoderHwaccelDevice(currentDecoderProfile.value, value)
+    })
+  }
+
+  function setDecodeHwaccelDevice(value: string): void {
+    patchDecode((config: DecodeConfig) => {
+      config.hwaccelDevice = resolveDecoderHwaccelDevice(
+        currentDecoderProfile.value,
+        config.hwaccel ?? '',
+        value,
+      )
     })
   }
 
@@ -77,8 +98,10 @@ export function useDecodeForm() {
     currentDecoderProfile,
     decoderOptions,
     decoderHardwareDeviceOptions,
+    decoderHardwareDeviceNumberOptions,
     setDecodeProfile,
     setDecodeHwaccel,
+    setDecodeHwaccelDevice,
     setDecodeOption,
     getDecodeOption,
     coerceOptionValue,
