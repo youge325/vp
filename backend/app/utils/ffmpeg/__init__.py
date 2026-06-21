@@ -283,6 +283,25 @@ class FFmpegWrapper:
             sample_cache=sample_cache,
         )
 
+    def probe_decoder_hardware_device_options(
+        self,
+        decoder: str,
+        codec: str,
+        devices: list[str],
+        encoder_names: set[str],
+        probe_dir: str | None = None,
+        sample_cache: dict[str, str | None] | None = None,
+    ) -> dict[str, list[dict[str, str]]]:
+        return _probe.probe_decoder_hardware_device_options(
+            self.ffmpeg_path,
+            decoder,
+            codec,
+            devices,
+            encoder_names,
+            probe_dir=probe_dir,
+            sample_cache=sample_cache,
+        )
+
     def discover_capabilities(self, gpu_adapters: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         """Discover FFmpeg capabilities, using instance methods so callers can mock them in tests."""
         adapters = gpu_adapters or []
@@ -314,6 +333,7 @@ class FFmpegWrapper:
                 "available": True,
                 "pixelFormats": [],
                 "hardwareDevices": [],
+                "hardwareDeviceOptions": {},
                 "options": [],
             }
         ]
@@ -334,6 +354,14 @@ class FFmpegWrapper:
                     profile["codec"],
                     profile["hardwareDevices"],
                     hwaccels,
+                    encoder_names,
+                    probe_dir=decoder_probe_dir,
+                    sample_cache=decoder_sample_cache,
+                )
+                profile["hardwareDeviceOptions"] = self.probe_decoder_hardware_device_options(
+                    profile["name"],
+                    profile["codec"],
+                    profile["hardwareDevices"],
                     encoder_names,
                     probe_dir=decoder_probe_dir,
                     sample_cache=decoder_sample_cache,

@@ -48,6 +48,7 @@ DECODER_HARDWARE_SAMPLE_ENCODERS = {
     "hevc": ("libx265", "hevc_nvenc", "hevc_qsv"),
     "av1": ("libaom-av1", "libsvtav1", "av1_nvenc", "av1_qsv"),
 }
+DECODER_HARDWARE_DEVICE_PROBE_VALUES = tuple(str(index) for index in range(8))
 
 
 def _probe_cache_key(input_path: str) -> tuple[str, int, int] | None:
@@ -534,6 +535,46 @@ def _verify_decoder_hardware_device(
     return True
 
 
+def _verify_decoder_hardware_device_option(
+    ffmpeg_path: str,
+    decoder: str,
+    device: str,
+    device_value: str,
+    sample_path: str,
+) -> bool:
+    cmd = [
+        ffmpeg_path,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-hwaccel",
+        device,
+        "-hwaccel_device",
+        device_value,
+        "-c:v",
+        decoder,
+        "-i",
+        sample_path,
+        "-frames:v",
+        "1",
+        "-f",
+        "null",
+        "-",
+    ]
+    try:
+        run_ffmpeg_command(cmd, timeout=30)
+    except Exception as exc:  # pragma: no cover - exact FFmpeg errors vary by build
+        logger.debug(
+            "Decoder hardware device option probe failed for decoder %s device %s value %s: %s",
+            decoder,
+            device,
+            device_value,
+            exc,
+        )
+        return False
+    return True
+
+
 def probe_decoder_hardware_devices(
     ffmpeg_path: str,
     decoder: str,
@@ -573,6 +614,53 @@ def probe_decoder_hardware_devices(
     if not devices:
         logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
     return devices
+
+
+def probe_decoder_hardware_device_options(
+    ffmpeg_path: str,
+    decoder: str,
+    codec: str,
+    devices: list[str],
+    encoder_names: set[str],
+    probe_dir: str | None = None,
+    sample_cache: dict[str, str | None] | None = None,
+) -> dict[str, list[dict[str, str]]]:
+    if not devices:
+        return {}
+
+    if probe_dir is None:
+        with tempfile.TemporaryDirectory(prefix="vp-decoder-probe-") as temp_dir:
+            return probe_decoder_hardware_device_options(
+                ffmpeg_path,
+                decoder,
+                codec,
+                devices,
+                encoder_names,
+                probe_dir=temp_dir,
+                sample_cache={},
+            )
+
+    cache = sample_cache if sample_cache is not None else {}
+    sample_path = _ensure_decoder_probe_sample(ffmpeg_path, codec, encoder_names, probe_dir, cache)
+    if sample_path is None:
+        logger.debug("No decoder hardware device options passed FFmpeg verification for decoder %s", decoder)
+        return {device: [] for device in devices}
+
+    options_by_device: dict[str, list[dict[str, str]]] = {}
+    for device in devices:
+        options = [
+            {"value": value, "label": value}
+            for value in DECODER_HARDWARE_DEVICE_PROBE_VALUES
+            if _verify_decoder_hardware_device_option(ffmpeg_path, decoder, device, value, sample_path)
+        ]
+        if not options:
+            logger.debug(
+                "No decoder hardware device options passed FFmpeg verification for decoder %s device %s",
+                decoder,
+                device,
+            )
+        options_by_device[device] = options
+    return options_by_device
 
 
 def is_available(ffmpeg_path: str) -> bool:

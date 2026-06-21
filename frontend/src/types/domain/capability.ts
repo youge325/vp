@@ -40,7 +40,14 @@ export interface RateControlModeSpec {
   unit: string
 }
 
+export interface HardwareDeviceOptionSpec {
+  value: string
+  label: string
+}
+
 export interface EncoderProfileSpec extends CodecProfileSpec {
   rateControlModes?: RateControlModeSpec[]
 }
-export interface DecoderProfileSpec extends CodecProfileSpec {}
+export interface DecoderProfileSpec extends CodecProfileSpec {
+  hardwareDeviceOptions?: Record<string, HardwareDeviceOptionSpec[]>
+}

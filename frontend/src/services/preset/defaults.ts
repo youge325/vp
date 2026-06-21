@@ -10,7 +10,7 @@ import {
   pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
 } from './enhance-rules'
-import { resolveDecoderHwaccel } from './decode-hardware'
+import { resolveDecoderHwaccel, resolveDecoderHwaccelDevice } from './decode-hardware'
 import { pickPreferredDecoderProfile, pickPreferredEncoderProfile } from './profile-picker'
 import { resolveRateControlForProfile } from './rate-control'
 
@@ -84,10 +84,11 @@ export function createDefaultDecodeConfig(
     }
   }
 
+  const hwaccel = resolveDecoderHwaccel(decoder)
   return {
     mode: 'hardware',
-    hwaccel: resolveDecoderHwaccel(decoder),
-    hwaccelDevice: '',
+    hwaccel,
+    hwaccelDevice: resolveDecoderHwaccelDevice(decoder, hwaccel),
     decoder: decoder.name,
     options: {},
   }

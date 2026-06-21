@@ -189,6 +189,12 @@ Encoder hevc_nvenc [NVIDIA NVENC hevc encoder]:
             ),
             wrapper,
         )
+        wrapper.probe_decoder_hardware_device_options = MethodType(
+            lambda self, decoder, codec, devices, encoder_names, probe_dir=None, sample_cache=None: {
+                device: [{"value": "0", "label": "0"}] for device in devices
+            },
+            wrapper,
+        )
 
         capabilities = wrapper.discover_capabilities(gpu_adapters=[{"vendor": "nvidia", "device_type": "discrete"}])
 
@@ -358,6 +364,69 @@ Encoder libx264 [libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10]:
         assert all("-f" in call and "null" in call for call in verify_calls)
         assert all("-hwaccel_device" not in call for call in verify_calls)
 
+    def test_probe_decoder_hardware_device_options_verifies_candidates_with_ffmpeg(self, monkeypatch):
+        wrapper = FFmpegWrapper(ffmpeg_path="ffmpeg")
+        calls: list[list[str]] = []
+
+        def fake_run(cmd: list[str], *, timeout: int = 3600):
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr("app.utils.ffmpeg.probe.DECODER_HARDWARE_DEVICE_PROBE_VALUES", ("0", "1"))
+        monkeypatch.setattr("app.utils.ffmpeg.probe.run_ffmpeg_command", fake_run)
+
+        options = wrapper.probe_decoder_hardware_device_options(
+            "h264_cuvid",
+            "h264",
+            ["cuda", "qsv"],
+            {"libx264"},
+        )
+
+        assert options == {
+            "cuda": [{"value": "0", "label": "0"}, {"value": "1", "label": "1"}],
+            "qsv": [{"value": "0", "label": "0"}, {"value": "1", "label": "1"}],
+        }
+        assert len(calls) == 5
+
+        verify_calls = calls[1:]
+        assert [["-hwaccel", "cuda"], ["-hwaccel", "cuda"], ["-hwaccel", "qsv"], ["-hwaccel", "qsv"]] == [
+            call[index : index + 2]
+            for call in verify_calls
+            for index in range(len(call) - 1)
+            if call[index] == "-hwaccel"
+        ]
+        assert [
+            ["-hwaccel_device", "0"],
+            ["-hwaccel_device", "1"],
+            ["-hwaccel_device", "0"],
+            ["-hwaccel_device", "1"],
+        ] == [
+            call[index : index + 2]
+            for call in verify_calls
+            for index in range(len(call) - 1)
+            if call[index] == "-hwaccel_device"
+        ]
+
+    def test_probe_decoder_hardware_device_options_drops_failed_values_without_fallback(self, monkeypatch):
+        wrapper = FFmpegWrapper(ffmpeg_path="ffmpeg")
+
+        def fake_run(cmd: list[str], *, timeout: int = 3600):
+            if "-hwaccel_device" in cmd and cmd[cmd.index("-hwaccel_device") + 1] == "1":
+                raise RuntimeError("unsupported device index")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr("app.utils.ffmpeg.probe.DECODER_HARDWARE_DEVICE_PROBE_VALUES", ("0", "1"))
+        monkeypatch.setattr("app.utils.ffmpeg.probe.run_ffmpeg_command", fake_run)
+
+        options = wrapper.probe_decoder_hardware_device_options(
+            "h264_cuvid",
+            "h264",
+            ["cuda"],
+            {"libx264"},
+        )
+
+        assert options == {"cuda": [{"value": "0", "label": "0"}]}
+
     def test_probe_decoder_hardware_devices_drops_failed_devices_without_fallback(self, monkeypatch):
         wrapper = FFmpegWrapper(ffmpeg_path="ffmpeg")
 
@@ -422,6 +491,7 @@ Encoder libx264 [libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10]:
     def test_discover_capabilities_includes_decoder_hardware_devices(self):
         wrapper = FFmpegWrapper(ffmpeg_path="ffmpeg")
         probe_calls: list[tuple[str, str, list[str], list[str], set[str]]] = []
+        option_probe_calls: list[tuple[str, str, list[str], set[str]]] = []
 
         wrapper.list_codec_names = MethodType(
             lambda self, mode: ["libx264"] if mode == "encoders" else ["h264_cuvid"],
@@ -451,9 +521,25 @@ Decoder h264_cuvid [NVIDIA CUVID H.264 decoder]:
 
         wrapper.probe_decoder_hardware_devices = MethodType(fake_probe, wrapper)
 
+        def fake_option_probe(
+            self,
+            decoder,
+            codec,
+            devices,
+            encoder_names,
+            probe_dir=None,
+            sample_cache=None,
+        ):
+            option_probe_calls.append((decoder, codec, list(devices), set(encoder_names)))
+            return {"cuda": [{"value": "0", "label": "0"}]}
+
+        wrapper.probe_decoder_hardware_device_options = MethodType(fake_option_probe, wrapper)
+
         capabilities = wrapper.discover_capabilities(gpu_adapters=[{"vendor": "nvidia", "device_type": "discrete"}])
 
         profile = capabilities["decoderProfiles"][1]
         assert profile["name"] == "h264_cuvid"
         assert profile["hardwareDevices"] == ["cuda"]
+        assert profile["hardwareDeviceOptions"] == {"cuda": [{"value": "0", "label": "0"}]}
         assert probe_calls == [("h264_cuvid", "h264", ["cuda", "qsv"], ["cuda", "qsv"], {"libx264"})]
+        assert option_probe_calls == [("h264_cuvid", "h264", ["cuda"], {"libx264"})]

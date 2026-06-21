@@ -5,6 +5,7 @@ import { useDecodeForm } from './useDecodeForm'
 import { useEnvStore } from '@/stores/env'
 import { usePresetStore } from '@/stores/preset'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { HardwareDeviceOptionSpec } from '@/types/domain/capability'
 
 const stringOption = (name: string, defaultValue: string) => ({
   name,
@@ -22,6 +23,7 @@ const decoderProfile = (
   family: 'software' | 'nvidia' | 'intel',
   codec: string,
   hardwareDevices: string[],
+  hardwareDeviceOptions: Record<string, HardwareDeviceOptionSpec[]> = {},
   options = [stringOption('resize', '1920x1080')],
 ) => ({
   name,
@@ -31,6 +33,7 @@ const decoderProfile = (
   available: true,
   pixelFormats: [],
   hardwareDevices,
+  hardwareDeviceOptions,
   options,
 })
 
@@ -41,9 +44,17 @@ const makeEnv = (): EnvironmentCheckResult => ({
     hwaccels: ['cuda', 'qsv', 'd3d11va'],
     encoderProfiles: [],
     decoderProfiles: [
-      decoderProfile('software', 'Software Decode', 'software', 'any', [], []),
-      decoderProfile('h264_cuvid', 'NVDEC H.264', 'nvidia', 'h264', ['cuda', 'd3d11va']),
-      decoderProfile('hevc_qsv', 'QSV H.265', 'intel', 'hevc', ['qsv'], [stringOption('load_plugin', 'hevc_hw')]),
+      decoderProfile('software', 'Software Decode', 'software', 'any', [], {}, []),
+      decoderProfile('h264_cuvid', 'NVDEC H.264', 'nvidia', 'h264', ['cuda', 'd3d11va'], {
+        cuda: [
+          { value: '0', label: '0' },
+          { value: '1', label: '1' },
+        ],
+        d3d11va: [{ value: 'd3d11-0', label: 'D3D11 0' }],
+      }),
+      decoderProfile('hevc_qsv', 'QSV H.265', 'intel', 'hevc', ['qsv'], {
+        qsv: [{ value: 'qsv0', label: 'QSV 0' }],
+      }, [stringOption('load_plugin', 'hevc_hw')]),
       decoderProfile('av1_cuvid', 'NVDEC AV1', 'nvidia', 'av1', []),
     ],
   },
@@ -66,7 +77,7 @@ describe('useDecodeForm decoder hardware devices', () => {
     )
   })
 
-  it('switches decoder profile to the first verified hardware device and clears the old device number', () => {
+  it('switches decoder profile to the first verified hardware device and probed device number', () => {
     const presetStore = usePresetStore()
     presetStore.patchDecode((config) => {
       config.mode = 'hardware'
@@ -82,13 +93,13 @@ describe('useDecodeForm decoder hardware devices', () => {
     expect(presetStore.draftPreset.decodeConfig).toMatchObject({
       mode: 'hardware',
       hwaccel: 'qsv',
-      hwaccelDevice: '',
+      hwaccelDevice: 'qsv0',
       decoder: 'hevc_qsv',
       options: { load_plugin: 'hevc_hw' },
     })
   })
 
-  it('clears the device number when the hardware device type changes', () => {
+  it('switches the device number to the first probed option when the hardware device type changes', () => {
     const presetStore = usePresetStore()
     const form = useDecodeForm()
 
@@ -100,13 +111,23 @@ describe('useDecodeForm decoder hardware devices', () => {
     form.setDecodeHwaccel('d3d11va')
 
     expect(presetStore.draftPreset.decodeConfig.hwaccel).toBe('d3d11va')
-    expect(presetStore.draftPreset.decodeConfig.hwaccelDevice).toBe('')
+    expect(presetStore.draftPreset.decodeConfig.hwaccelDevice).toBe('d3d11-0')
   })
 
-  it('does not expose a manual hardware device number setter', () => {
+  it('exposes probed device number options and applies the selected option', () => {
+    const presetStore = usePresetStore()
     const form = useDecodeForm()
 
-    expect('setDecodeHwaccelDevice' in form).toBe(false)
+    form.setDecodeProfile('h264_cuvid')
+
+    expect(form.decoderHardwareDeviceNumberOptions.value).toEqual([
+      { value: '0', label: '0' },
+      { value: '1', label: '1' },
+    ])
+
+    form.setDecodeHwaccelDevice('1')
+
+    expect(presetStore.draftPreset.decodeConfig.hwaccelDevice).toBe('1')
   })
 
   it('exposes an empty device list for profiles without verified devices', () => {

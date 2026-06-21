@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { normalizeDecodeConfig, resolveDecoderHwaccel } from './normalize'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { DecodeConfig } from '@/types/protocol'
+import type { HardwareDeviceOptionSpec } from '@/types/domain/capability'
 
 const decoderProfile = (
   name: string,
@@ -10,6 +11,7 @@ const decoderProfile = (
   family: 'software' | 'nvidia' | 'intel',
   codec: string,
   hardwareDevices: string[],
+  hardwareDeviceOptions: Record<string, HardwareDeviceOptionSpec[]> = {},
 ) => ({
   name,
   label,
@@ -18,6 +20,7 @@ const decoderProfile = (
   available: true,
   pixelFormats: [],
   hardwareDevices,
+  hardwareDeviceOptions,
   options: [
     {
       name: 'resize',
@@ -74,32 +77,56 @@ describe('resolveDecoderHwaccel', () => {
 })
 
 describe('normalizeDecodeConfig decoder hardware devices', () => {
-  it('preserves supported cached hwaccel but clears cached device number', () => {
+  it('preserves supported cached hwaccel and supported probed device number', () => {
     const env = makeEnv([
       decoderProfile('software', 'Software Decode', 'software', 'any', []),
-      decoderProfile('h264_cuvid', 'NVDEC H.264', 'nvidia', 'h264', ['d3d11va', 'cuda']),
+      decoderProfile('h264_cuvid', 'NVDEC H.264', 'nvidia', 'h264', ['d3d11va', 'cuda'], {
+        cuda: [
+          { value: '0', label: '0' },
+          { value: '1', label: '1' },
+        ],
+        d3d11va: [{ value: 'd3d11-0', label: 'D3D11 0' }],
+      }),
     ])
 
     expect(normalizeDecodeConfig(baseDecodeConfig(), env, 'h264')).toMatchObject({
       mode: 'hardware',
       decoder: 'h264_cuvid',
       hwaccel: 'cuda',
-      hwaccelDevice: '',
+      hwaccelDevice: '0',
       options: { resize: '1920x1080' },
+    })
+  })
+
+  it('resets unsupported cached device number to the first probed option', () => {
+    const env = makeEnv([
+      decoderProfile('software', 'Software Decode', 'software', 'any', []),
+      decoderProfile('h264_cuvid', 'NVDEC H.264', 'nvidia', 'h264', ['cuda'], {
+        cuda: [{ value: '1', label: '1' }],
+      }),
+    ])
+
+    expect(normalizeDecodeConfig(baseDecodeConfig(), env, 'h264')).toMatchObject({
+      mode: 'hardware',
+      decoder: 'h264_cuvid',
+      hwaccel: 'cuda',
+      hwaccelDevice: '1',
     })
   })
 
   it('resets unsupported cached hwaccel to the first verified device and clears the old device number', () => {
     const env = makeEnv([
       decoderProfile('software', 'Software Decode', 'software', 'any', []),
-      decoderProfile('h264_cuvid', 'NVDEC H.264', 'nvidia', 'h264', ['d3d11va']),
+      decoderProfile('h264_cuvid', 'NVDEC H.264', 'nvidia', 'h264', ['d3d11va'], {
+        d3d11va: [{ value: 'd3d11-0', label: 'D3D11 0' }],
+      }),
     ])
 
     expect(normalizeDecodeConfig(baseDecodeConfig(), env, 'h264')).toMatchObject({
       mode: 'hardware',
       decoder: 'h264_cuvid',
       hwaccel: 'd3d11va',
-      hwaccelDevice: '',
+      hwaccelDevice: 'd3d11-0',
     })
   })
 
