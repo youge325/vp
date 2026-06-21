@@ -5,12 +5,15 @@ import type { DecodeConfig, EncodeConfig } from '@/types/protocol'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { CapabilityValue } from '@/types/domain/capability'
 import { createDefaultDecodeConfig, createDefaultEncodeConfig } from './defaults'
+import { resolveDecoderHwaccel } from './decode-hardware'
 import { getVisibleDecoderProfiles, getVisibleEncoderProfiles } from './profile-picker'
 import {
   hasRateControlModes,
   resolveRateControlForMode,
   resolveRateControlForProfile,
 } from './rate-control'
+
+export { resolveDecoderHwaccel } from './decode-hardware'
 
 export function seedProfileOptions(
   profile: { options: Array<{ name: string; defaultValue?: CapabilityValue | null; choices: Array<{ value: CapabilityValue }>; type: string }> } | null,
@@ -37,19 +40,6 @@ export function seedProfileOptions(
     next[option.name] = option.type === 'boolean' ? false : ''
   }
   return next
-}
-
-export function inferHwaccelForProfile(profile: { family: string } | null): string {
-  if (!profile) {
-    return ''
-  }
-  if (profile.family === 'nvidia') {
-    return 'cuda'
-  }
-  if (profile.family === 'intel') {
-    return 'qsv'
-  }
-  return ''
 }
 
 export function defaultRateControlValue(family: EncodeConfig['family']): EncodeConfig['rateControl'] {
@@ -88,11 +78,12 @@ export function normalizeDecodeConfig(
       }
     }
 
+    const hwaccel = resolveDecoderHwaccel(matchedVisible, config.hwaccel)
     return {
       ...config,
       mode: 'hardware',
-      hwaccel: inferHwaccelForProfile(matchedVisible),
-      hwaccelDevice: config.hwaccelDevice,
+      hwaccel,
+      hwaccelDevice: hwaccel && hwaccel === config.hwaccel ? config.hwaccelDevice : '',
       decoder: matchedVisible.name,
       options: seedProfileOptions(matchedVisible, config.options),
     }
@@ -103,11 +94,12 @@ export function normalizeDecodeConfig(
     ? visibleProfiles.find((profile) => profile.family === currentProfile.family) ?? null
     : null
   if (remappedProfile && remappedProfile.family !== 'software') {
+    const hwaccel = resolveDecoderHwaccel(remappedProfile)
     return {
       ...config,
       mode: 'hardware',
-      hwaccel: inferHwaccelForProfile(remappedProfile),
-      hwaccelDevice: config.hwaccelDevice,
+      hwaccel,
+      hwaccelDevice: '',
       decoder: remappedProfile.name,
       options: seedProfileOptions(remappedProfile, config.options),
     }

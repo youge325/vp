@@ -10,6 +10,7 @@ import {
   pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
 } from './enhance-rules'
+import { resolveDecoderHwaccel } from './decode-hardware'
 import { pickPreferredDecoderProfile, pickPreferredEncoderProfile } from './profile-picker'
 import { resolveRateControlForProfile } from './rate-control'
 
@@ -85,7 +86,7 @@ export function createDefaultDecodeConfig(
 
   return {
     mode: 'hardware',
-    hwaccel: decoder.family === 'nvidia' ? 'cuda' : 'qsv',
+    hwaccel: resolveDecoderHwaccel(decoder),
     hwaccelDevice: '',
     decoder: decoder.name,
     options: {},

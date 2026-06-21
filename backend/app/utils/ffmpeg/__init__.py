@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import tempfile
 from typing import Any, Callable
 
 from app.utils.logger import get_logger
@@ -261,6 +262,27 @@ class FFmpegWrapper:
     def probe_rate_control_modes(self, codec: str, options: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return _probe.probe_rate_control_modes(self.ffmpeg_path, codec, options)
 
+    def probe_decoder_hardware_devices(
+        self,
+        decoder: str,
+        codec: str,
+        hardware_devices: list[str],
+        hwaccels: list[str],
+        encoder_names: set[str],
+        probe_dir: str | None = None,
+        sample_cache: dict[str, str | None] | None = None,
+    ) -> list[str]:
+        return _probe.probe_decoder_hardware_devices(
+            self.ffmpeg_path,
+            decoder,
+            codec,
+            hardware_devices,
+            hwaccels,
+            encoder_names,
+            probe_dir=probe_dir,
+            sample_cache=sample_cache,
+        )
+
     def discover_capabilities(self, gpu_adapters: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         """Discover FFmpeg capabilities, using instance methods so callers can mock them in tests."""
         adapters = gpu_adapters or []
@@ -295,18 +317,28 @@ class FFmpegWrapper:
                 "options": [],
             }
         ]
-        for candidate in _constants.DECODER_CANDIDATES:
-            if candidate["name"] not in decoder_names:
-                continue
-            if candidate["family"] not in available_vendors:
-                continue
-            decoder_profiles.append(
-                _probe.parse_codec_profile(
+        decoder_sample_cache: dict[str, str | None] = {}
+        with tempfile.TemporaryDirectory(prefix="vp-decoder-probe-") as decoder_probe_dir:
+            for candidate in _constants.DECODER_CANDIDATES:
+                if candidate["name"] not in decoder_names:
+                    continue
+                if candidate["family"] not in available_vendors:
+                    continue
+                profile = _probe.parse_codec_profile(
                     "decoder",
                     candidate,
                     self.describe_codec("decoder", candidate["name"]),
                 )
-            )
+                profile["hardwareDevices"] = self.probe_decoder_hardware_devices(
+                    profile["name"],
+                    profile["codec"],
+                    profile["hardwareDevices"],
+                    hwaccels,
+                    encoder_names,
+                    probe_dir=decoder_probe_dir,
+                    sample_cache=decoder_sample_cache,
+                )
+                decoder_profiles.append(profile)
 
         return {
             "hwaccels": hwaccels,
