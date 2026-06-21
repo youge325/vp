@@ -71,12 +71,6 @@ export function useDecodeForm() {
     })
   }
 
-  function setDecodeHwaccelDevice(value: string): void {
-    patchDecode((config: DecodeConfig) => {
-      config.hwaccelDevice = value
-    })
-  }
-
   function setDecodeOption(name: string, value: CapabilityValue): void {
     patchDecode((config: DecodeConfig) => {
       config.options = { ...config.options, [name]: value }
@@ -95,7 +89,6 @@ export function useDecodeForm() {
     decoderHardwareDeviceHint,
     setDecodeProfile,
     setDecodeHwaccel,
-    setDecodeHwaccelDevice,
     setDecodeOption,
     getDecodeOption,
     coerceOptionValue,

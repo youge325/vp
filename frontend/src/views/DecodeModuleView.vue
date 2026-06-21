@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { useDecodeForm } from '@/composables/forms/useDecodeForm'
 import { useWorkbenchEditor, useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
-import BaseField from '@/components/forms/BaseField.vue'
 import BaseSelect from '@/components/forms/BaseSelect.vue'
 import CapabilityOptionField from '@/components/forms/CapabilityOptionField.vue'
 
@@ -14,7 +13,6 @@ const {
   decoderHardwareDeviceHint,
   setDecodeProfile,
   setDecodeHwaccel,
-  setDecodeHwaccelDevice,
   setDecodeOption,
   getDecodeOption,
 } = useDecodeForm()
@@ -37,7 +35,7 @@ const decoderProfileOptions = computed(() =>
         <span class="panel-badge">{{ targetLabel }}</span>
       </div>
 
-      <div class="field-grid field-grid-3">
+      <div class="field-grid field-grid-2">
         <BaseSelect
           label="解码方案"
           :model-value="currentDecoderProfile?.name ?? 'software'"
@@ -53,16 +51,6 @@ const decoderProfileOptions = computed(() =>
           :hint="decoderHardwareDeviceHint"
           @update:model-value="setDecodeHwaccel"
         />
-
-        <BaseField label="设备编号">
-          <input
-            :value="editorConfig.decodeConfig.hwaccelDevice"
-            type="text"
-            placeholder="留空则使用默认设备"
-            :disabled="!editorConfig.decodeConfig.hwaccel"
-            @input="setDecodeHwaccelDevice(($event.target as HTMLInputElement).value)"
-          />
-        </BaseField>
       </div>
 
       <div class="chip-row">
