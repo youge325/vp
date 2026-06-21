@@ -47,6 +47,15 @@
     "webdriverio": "^9.27.2"
   },
   "overrides": {
-    "serialize-javascript": "^7.0.5"
+    "serialize-javascript": "^7.0.5",
+    "cheerio": {
+      "undici": "7.28.0"
+    },
+    "webdriver": {
+      "undici": "6.27.0"
+    },
+    "@istanbuljs/load-nyc-config": {
+      "js-yaml": "4.2.0"
+    }
   }
 }
