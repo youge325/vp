@@ -36,10 +36,10 @@ jobs:
 
       - name: Generate synthetic test video
         run: |
-          ffmpeg -f lavfi -i testsrc=duration=1:size=1280x720:rate=30 `
-                 -f lavfi -i sine=frequency=1000:duration=1 `
-                 -pix_fmt yuv420p -c:v libx264 -c:a aac `
-                 "${{ runner.temp }}\vp-e2e-test.mp4" -y
+          & $env:VP_FFMPEG_PATH -f lavfi -i testsrc=duration=1:size=1280x720:rate=30 `
+                                -f lavfi -i sine=frequency=1000:duration=1 `
+                                -pix_fmt yuv420p -c:v libx264 -c:a aac `
+                                "${{ runner.temp }}\vp-e2e-test.mp4" -y
 
       - name: Run CLI e2e smoke tests
         run: python -m pytest backend/tests/test_integration/test_cli_process_e2e.py -v

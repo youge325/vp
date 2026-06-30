@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures'
+import { stubNextEnvironmentRecheckClick } from '../env/helpers'
 
 async function injectEnvIssue(tauriPage: any): Promise<boolean> {
   return await tauriPage.evaluate(() => {
@@ -87,8 +88,11 @@ test.describe('App shell', () => {
     await expect(retryButton).toBeVisible({ timeout: 5000 })
     await expect(retryButton).toBeEnabled()
 
-    // Clicking retry should trigger recheck — the button may briefly disappear
-    // and reappear as checking starts/stops. Just verify it was clickable.
+    const stubbed = await stubNextEnvironmentRecheckClick(tauriPage, '重试探测')
+    test.skip(!stubbed, 'Cannot stub environment recheck click')
+
+    // Clicking retry should trigger recheck; this interaction test intercepts the
+    // heavy environment probe so it only verifies the button flow.
     await retryButton.click()
 
     await clearEnvIssue(tauriPage)

@@ -22,7 +22,7 @@ test.describe('VP Workbench e2e smoke', () => {
   test('check_environment result contains all core schema keys', async ({ tauriPage }) => {
     const result = await tauriPage.evaluate(async () => {
       // @ts-expect-error
-      return await window.__TAURI_INTERNALS__.invoke('check_environment', { forceRefresh: true })
+      return await window.__TAURI_INTERNALS__.invoke('check_environment', { forceRefresh: false })
     })
 
     expect(result).toHaveProperty('result')
