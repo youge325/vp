@@ -10,7 +10,12 @@ import numpy as np
 import pytest
 
 from app.planning import SegmentManifest, build_signature
+from app.processing.streaming.queues import EncodedFrame, StreamEnd
 from app.processing.streaming import process_video_streaming
+from app.processing.streaming.worker_pipeline import (
+    boundary_schedule_for_stage_plan,
+    build_stage_worker_plans,
+)
 
 
 class _IdentityBackend:
@@ -213,6 +218,74 @@ def _install_video_frames_rename_hook(monkeypatch: pytest.MonkeyPatch, wrapper: 
     monkeypatch.setattr(encoder_module.os, "replace", tracking_replace)
 
 
+def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_worker_pipeline(**kwargs):
+        ffmpeg = kwargs["ffmpeg"]
+        stage_plan = kwargs["stage_plan"]
+        video_info = kwargs["video_info"]
+        resume_state = kwargs["resume_state"]
+        encode_queue = kwargs["encode_queue"]
+        start = resume_state.start_source_frame
+        frames = [frame.copy() for frame in ffmpeg._source_frames[start:]]
+
+        plans = build_stage_worker_plans(
+            stage_plan=stage_plan,
+            tensor_backend_name=kwargs["tensor_backend_name"],
+            source_width=video_info["width"],
+            source_height=video_info["height"],
+            source_frame_count=len(frames),
+        )
+        for plan in plans:
+            frames = _apply_fake_stage(plan.config.stage, frames, plan.config.output_width, plan.config.output_height)
+
+        schedule = boundary_schedule_for_stage_plan(
+            stage_plan=stage_plan,
+            start_source_frame=start,
+            source_frames=video_info["source_frames"],
+        )
+        output_index = resume_state.completed_output_frames
+        for emitted_count, frame in enumerate(frames, start=1):
+            encode_queue.put(EncodedFrame(output_index=output_index, frame=frame))
+            output_index += 1
+            next_source_frame = schedule.get(emitted_count)
+            if next_source_frame is not None:
+                from app.processing.streaming.queues import SegmentBoundary
+
+                encode_queue.put(SegmentBoundary(next_source_frame=next_source_frame))
+        encode_queue.put(StreamEnd(next_source_frame=video_info["source_frames"]))
+
+    monkeypatch.setattr("app.processing.streaming.pipeline.run_stage_worker_pipeline", fake_worker_pipeline)
+
+
+def _apply_fake_stage(step, frames: list[np.ndarray], output_width: int, output_height: int) -> list[np.ndarray]:
+    if step.algorithm_type == "frame_interpolation":
+        if len(frames) < 2:
+            return [frame.copy() for frame in frames]
+        multi = int(step.algorithm_kwargs.get("multi") or 2)
+        output: list[np.ndarray] = []
+        for index in range(len(frames) - 1):
+            prev = frames[index]
+            cur = frames[index + 1]
+            output.append(prev.copy())
+            for mid_index in range(1, multi):
+                timestep = mid_index / multi
+                output.append(
+                    np.rint(prev.astype(np.float32) + (cur.astype(np.float32) - prev) * timestep).astype(np.uint8)
+                )
+        output.append(frames[-1].copy())
+        return output
+    if step.algorithm_type == "super_resolution" and frames and frames[0].shape[:2] != (output_height, output_width):
+        return [_resize_nearest(frame, output_width=output_width, output_height=output_height) for frame in frames]
+    return [frame.copy() for frame in frames]
+
+
+def _resize_nearest(frame: np.ndarray, *, output_width: int, output_height: int) -> np.ndarray:
+    height, width, _channels = frame.shape
+    y_indexes = np.minimum((np.arange(output_height) * height / output_height).astype(int), height - 1)
+    x_indexes = np.minimum((np.arange(output_width) * width / output_width).astype(int), width - 1)
+    return frame[y_indexes][:, x_indexes].copy()
+
+
 def _workspace(name: str) -> Path:
     root = Path("D:/Lenovo/vp/.tmp/test_streaming") / name
     if root.exists():
@@ -313,15 +386,7 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
     wrapper.video_frames[str(Path(first_segment))] = [_frame(0), _frame(50)]
 
     _install_video_frames_rename_hook(monkeypatch, wrapper)
-    monkeypatch.setattr("app.processing.streaming.processor.get_tensor_backend", lambda _name: _IdentityBackend())
-
-    def fake_create(*, algorithm_type: str, **kwargs):
-        del kwargs
-        if algorithm_type == "frame_interpolation":
-            return _MidpointInterpolationAlgorithm()
-        return _IdentityAlgorithm()
-
-    monkeypatch.setattr("app.processing.streaming.processor.AlgorithmFactory.create", fake_create)
+    _install_fake_stage_worker_pipeline(monkeypatch)
 
     result = process_video_streaming(
         ffmpeg=wrapper,
@@ -356,15 +421,7 @@ def test_streaming_pipeline_keeps_sidecar_when_finalization_fails(monkeypatch):
     decode_config = {"mode": "software", "decoder": "software", "options": {}}
 
     _install_video_frames_rename_hook(monkeypatch, wrapper)
-    monkeypatch.setattr("app.processing.streaming.processor.get_tensor_backend", lambda _name: _IdentityBackend())
-
-    def fake_create(*, algorithm_type: str, **kwargs):
-        del kwargs
-        if algorithm_type == "frame_interpolation":
-            return _MidpointInterpolationAlgorithm()
-        return _IdentityAlgorithm()
-
-    monkeypatch.setattr("app.processing.streaming.processor.AlgorithmFactory.create", fake_create)
+    _install_fake_stage_worker_pipeline(monkeypatch)
 
     def fail_finalize(**kwargs):
         del kwargs
@@ -404,15 +461,7 @@ def test_streaming_pipeline_reports_final_encoded_frames_when_resampling(monkeyp
     decode_config = {"mode": "software", "decoder": "software", "options": {}}
 
     _install_video_frames_rename_hook(monkeypatch, wrapper)
-    monkeypatch.setattr("app.processing.streaming.processor.get_tensor_backend", lambda _name: _IdentityBackend())
-
-    def fake_create(*, algorithm_type: str, **kwargs):
-        del kwargs
-        if algorithm_type == "frame_interpolation":
-            return _MidpointInterpolationAlgorithm()
-        return _IdentityAlgorithm()
-
-    monkeypatch.setattr("app.processing.streaming.processor.AlgorithmFactory.create", fake_create)
+    _install_fake_stage_worker_pipeline(monkeypatch)
 
     result = process_video_streaming(
         ffmpeg=wrapper,
@@ -484,10 +533,7 @@ def test_streaming_pipeline_uses_scaled_encoder_dimensions_for_onnx_super_resolu
     output_config = {"outputDir": "", "openOnComplete": False, "segmentFrames": 2}
 
     _install_video_frames_rename_hook(monkeypatch, wrapper)
-    monkeypatch.setattr("app.processing.streaming.processor.get_tensor_backend", lambda _name: _IdentityBackend())
-    monkeypatch.setattr(
-        "app.processing.streaming.processor.AlgorithmFactory.create", lambda **_kwargs: _IdentityAlgorithm()
-    )
+    _install_fake_stage_worker_pipeline(monkeypatch)
 
     process_video_streaming(
         ffmpeg=wrapper,
@@ -503,6 +549,49 @@ def test_streaming_pipeline_uses_scaled_encoder_dimensions_for_onnx_super_resolu
     )
 
     assert wrapper.encoder_dimensions[0] == (2, 2)
+
+
+def test_streaming_pipeline_uses_stage_worker_pipeline_for_processing_steps(monkeypatch):
+    source_frames = [_frame(7)]
+    wrapper = _FakeFFmpegWrapper(source_frames)
+    workspace = _workspace("stage_worker_dispatch")
+    input_path = workspace / "input.mp4"
+    output_path = workspace / "output" / "demo_processed.mp4"
+    input_path.write_bytes(b"input")
+
+    workflow_config, encode_config, _processing_steps, output_config = _workflow_config(segment_frames=2)
+    processing_steps = [
+        {
+            "algorithm_type": "super_resolution",
+            "algorithm_kwargs": {"scale_factor": 1.0, "sr_algorithm": "placeholder"},
+            "stage_name": "01_super_resolution",
+        }
+    ]
+    calls = []
+
+    def fake_worker_pipeline(**kwargs):
+        calls.append(kwargs["stage_plan"])
+        kwargs["encode_queue"].put(EncodedFrame(output_index=0, frame=_frame(9)))
+        kwargs["encode_queue"].put(StreamEnd(next_source_frame=1))
+
+    _install_video_frames_rename_hook(monkeypatch, wrapper)
+    monkeypatch.setattr("app.processing.streaming.pipeline.run_stage_worker_pipeline", fake_worker_pipeline)
+
+    process_video_streaming(
+        ffmpeg=wrapper,
+        input_path=str(input_path),
+        output_path=str(output_path),
+        decode_config={"mode": "software", "decoder": "software", "options": {}},
+        encode_config=encode_config,
+        workflow_config=workflow_config,
+        output_config=output_config,
+        processing_steps=processing_steps,
+        tensor_backend_name="onnx",
+        progress_callbacks=[lambda *_args: None],
+    )
+
+    assert len(calls) == 1
+    assert [int(frame[0, 0, 0]) for frame in wrapper.video_frames[str(output_path)]] == [9]
 
 
 def test_legacy_processing_modules_are_removed():

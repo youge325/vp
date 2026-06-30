@@ -25,16 +25,14 @@ from app.planning import (
     processing_steps_to_jsonable,
     resolve_video_info,
 )
-from app.processing.streaming.decoder import _decoder_worker
 from app.processing.streaming.encoder import _encoder_worker, _finalize_segmented_output
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.processor import _processor_worker
 from app.processing.streaming.queues import (
-    DecodedFrame,
     EncodedFrame,
     SegmentBoundary,
     StreamEnd,
 )
+from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
 from app.protocol import ndjson
 from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.logger import get_logger
@@ -207,69 +205,34 @@ def _run_streaming_pipeline(
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
     metrics: PipelineMetrics,
 ) -> int:
-    decode_queue: queue.Queue[DecodedFrame | object] = queue.Queue(maxsize=100)
     encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object] = queue.Queue(maxsize=8)
     error_queue: queue.Queue[BaseException] = queue.Queue()
     stop_event = threading.Event()
 
-    thread_args = {
-        "decode_queue": decode_queue,
-        "encode_queue": encode_queue,
-        "error_queue": error_queue,
-        "stop_event": stop_event,
-        "metrics": metrics,
-    }
-
-    threads = [
-        threading.Thread(
-            target=_decoder_worker,
-            name="vp-decoder",
-            kwargs={
-                **thread_args,
-                "ffmpeg": ffmpeg,
-                "input_path": input_path,
-                "decode_config": decode_config,
-                "width": video_info["width"],
-                "height": video_info["height"],
-                "start_source_frame": resume_state.start_source_frame,
-                "source_frames": video_info["source_frames"],
-            },
-            daemon=True,
-        ),
-        threading.Thread(
-            target=_processor_worker,
-            name="vp-processor",
-            kwargs={
-                **thread_args,
-                "stage_plan": stage_plan,
-                "tensor_backend_name": tensor_backend_name,
-                "progress_callbacks": progress_callbacks,
-                "source_frames": video_info["source_frames"],
-                "resume_output_frames": resume_state.completed_output_frames,
-            },
-            daemon=True,
-        ),
-        threading.Thread(
-            target=_encoder_worker,
-            name="vp-encoder",
-            kwargs={
-                **thread_args,
-                "ffmpeg": ffmpeg,
-                "encode_config": encode_config,
-                "manifest": manifest,
-                "signature": signature,
-                "width": output_width,
-                "height": output_height,
-                "fps": _resolved_stream_fps(video_info["source_fps"], stage_plan),
-                "output_fps": output_fps,
-                "segment_frames": segment_frames,
-                "resume_state": resume_state,
-                "output_path": output_path,
-                "encode_progress_callback": encode_progress_callback,
-            },
-            daemon=True,
-        ),
-    ]
+    encoder_thread = threading.Thread(
+        target=_encoder_worker,
+        name="vp-encoder",
+        kwargs={
+            "decode_queue": queue.Queue(maxsize=1),
+            "encode_queue": encode_queue,
+            "error_queue": error_queue,
+            "stop_event": stop_event,
+            "metrics": metrics,
+            "ffmpeg": ffmpeg,
+            "encode_config": encode_config,
+            "manifest": manifest,
+            "signature": signature,
+            "width": output_width,
+            "height": output_height,
+            "fps": _resolved_stream_fps(video_info["source_fps"], stage_plan),
+            "output_fps": output_fps,
+            "segment_frames": segment_frames,
+            "resume_state": resume_state,
+            "output_path": output_path,
+            "encode_progress_callback": encode_progress_callback,
+        },
+        daemon=True,
+    )
 
     _emit_resume_status_event(
         resume_state=resume_state,
@@ -285,11 +248,22 @@ def _run_streaming_pipeline(
             "continue",
         )
 
-    for worker in threads:
-        worker.start()
-
-    for worker in threads:
-        worker.join()
+    encoder_thread.start()
+    run_stage_worker_pipeline(
+        ffmpeg=ffmpeg,
+        input_path=input_path,
+        decode_config=decode_config,
+        stage_plan=stage_plan,
+        tensor_backend_name=tensor_backend_name,
+        progress_callbacks=progress_callbacks,
+        video_info=video_info,
+        resume_state=resume_state,
+        encode_queue=encode_queue,
+        error_queue=error_queue,
+        stop_event=stop_event,
+        metrics=metrics,
+    )
+    encoder_thread.join()
 
     if not error_queue.empty():
         raise error_queue.get()

@@ -12,6 +12,7 @@ from app.cli.commands.benchmark import cmd_benchmark
 from app.cli.commands.info import cmd_info
 from app.cli.commands.inspect_output import cmd_inspect_output
 from app.cli.commands.process import cmd_process
+from app.cli.commands.stage_worker import cmd_stage_worker
 from app.cli.defaults import PROCESS_ORDER_MAP
 
 
@@ -132,6 +133,13 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_output_parser.add_argument("--output", default=None, help="Optional explicit output file path")
     _add_shared_planning_args(inspect_output_parser)
     inspect_output_parser.set_defaults(func=cmd_inspect_output)
+
+    stage_worker_parser = subcommands.add_parser(
+        "stage-worker",
+        help=argparse.SUPPRESS,
+    )
+    stage_worker_parser.add_argument("--config-json", required=True, help=argparse.SUPPRESS)
+    stage_worker_parser.set_defaults(func=cmd_stage_worker)
 
     check_parser = subcommands.add_parser("check", help="Inspect runtime availability")
     check_parser.set_defaults(func=cmd_check)
