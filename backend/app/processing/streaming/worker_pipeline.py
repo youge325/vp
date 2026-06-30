@@ -376,7 +376,7 @@ def _drain_final_worker_output(
         source_frames=source_frames,
     )
     try:
-        while not stop_event.is_set():
+        while not stop_event.is_set() and emitted_count < final_plan.output_frame_count:
             frame = read_rgb_frame(
                 final_stdout,
                 width=final_plan.config.output_width,

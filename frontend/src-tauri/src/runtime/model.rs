@@ -71,7 +71,9 @@ pub(super) fn resolve_tensorrt_dir(
 /// 检查 ``$MODEL_DIR/<DEFAULT_RIFE_MODEL_FILENAME>`` 是否真实存在。
 pub(super) fn has_default_rife_model(model_dir: Option<&PathBuf>) -> bool {
     model_dir
-        .map(|path| path.join(DEFAULT_RIFE_MODEL_FILENAME).is_file())
+        .map(|path| path.join(DEFAULT_RIFE_MODEL_FILENAME))
+        .and_then(|path| path.metadata().ok())
+        .map(|metadata| metadata.is_file() && metadata.len() > 0)
         .unwrap_or(false)
 }
 
@@ -174,5 +176,31 @@ mod tests {
         let guard = EnvGuard::capture();
         guard.set("");
         assert_eq!(resolve_tensorrt_dir(None, None), None);
+    }
+
+    #[test]
+    fn has_default_rife_model_returns_false_when_file_is_missing() {
+        let temp = tempfile::tempdir().unwrap();
+        let model_dir = temp.path().to_path_buf();
+
+        assert!(!has_default_rife_model(Some(&model_dir)));
+    }
+
+    #[test]
+    fn has_default_rife_model_returns_false_for_empty_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let model_dir = temp.path().to_path_buf();
+        std::fs::File::create(model_dir.join(DEFAULT_RIFE_MODEL_FILENAME)).unwrap();
+
+        assert!(!has_default_rife_model(Some(&model_dir)));
+    }
+
+    #[test]
+    fn has_default_rife_model_returns_true_for_non_empty_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let model_dir = temp.path().to_path_buf();
+        std::fs::write(model_dir.join(DEFAULT_RIFE_MODEL_FILENAME), b"weights").unwrap();
+
+        assert!(has_default_rife_model(Some(&model_dir)));
     }
 }

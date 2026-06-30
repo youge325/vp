@@ -130,9 +130,9 @@ def get_model_dir() -> str:
     if env_model_dir:
         return os.path.abspath(os.path.expandvars(os.path.expanduser(env_model_dir)))
 
-    # 相对于 backend/app/algorithms/rife/ → backend/models/
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    model_dir = os.path.join(backend_dir, "models")
+    from app.config import settings
+
+    model_dir = settings.RIFE_MODEL_DIR
     os.makedirs(model_dir, exist_ok=True)
     return model_dir
 

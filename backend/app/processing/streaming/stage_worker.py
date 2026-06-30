@@ -177,7 +177,7 @@ def _create_algorithm(stage: ProcessingStep, backend: Any) -> Any:
         algorithm_type=stage.algorithm_type,
         tensor_backend=backend,
         tensor_backend_name=_backend_name(backend),
-        **stage.algorithm_kwargs,
+        **_algorithm_kwargs_for_create(stage),
     )
 
 
@@ -205,6 +205,10 @@ def _backend_name(backend: Any) -> str:
     if callable(get_name):
         return str(get_name())
     return "numpy"
+
+
+def _algorithm_kwargs_for_create(stage: ProcessingStep) -> dict[str, Any]:
+    return {key: value for key, value in stage.algorithm_kwargs.items() if key != "tensor_backend"}
 
 
 def _algorithm_needs_sequence(algorithm: Any) -> bool:

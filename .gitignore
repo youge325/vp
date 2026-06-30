@@ -44,3 +44,4 @@ ehthumbs.db
 # Large ML model files
 /backend/models/**/*.onnx
 /backend/models/**/*.pkl
+/backend/models/**/*.pdparams

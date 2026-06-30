@@ -173,9 +173,9 @@ def _verify_super_resolution_backend(
 ) -> None:
     """Reject unsupported SR/backend combinations before execution.
 
-    Phase D.1.1 — ``SuperResolutionAlgorithm.process_frame`` only implements
-    the ONNX path; pytorch / paddle backends return frames unchanged. Catching
-    the invalid combo here surfaces ``INVALID_CONFIG`` to the frontend
+    Phase D.1.1 — image-to-image SR is implemented through ONNX, while
+    PaddleGAN VSR is implemented as a Paddle frame-sequence stage. Catching
+    unsupported combinations here surfaces ``INVALID_CONFIG`` to the frontend
     instead of letting the task complete with un-upscaled output.
     """
     super_resolution = workflow_config.get("superResolution", {})
@@ -206,12 +206,12 @@ def _verify_super_resolution_backend(
         interpolation_backend = str(
             interpolation.get("tensorBackend") or interpolation.get("tensor_backend") or tensor_backend_name
         )
-        if interpolation.get("enabled") and interpolation_backend != "onnx":
+        if interpolation.get("enabled") and interpolation_backend == "paddle":
             raise_error(
                 TaskErrorCode.INVALID_CONFIG,
                 (
-                    "PaddleGAN VSR uses Paddle and cannot run in the same task with "
-                    f"RIFE on {interpolation_backend}. Use ONNX for RIFE when combining PyTorch/Paddle workloads."
+                    "RIFE interpolation does not support the Paddle tensor backend. "
+                    "Use PyTorch or ONNX for interpolation when combining it with PaddleGAN VSR."
                 ),
                 details={
                     "super_resolution_backend": "paddle",

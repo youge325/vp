@@ -1,7 +1,18 @@
 from __future__ import annotations
 
+import io
+import queue
+import threading
+
+import numpy as np
+
 from app.planning import ProcessingStep, build_stage_plan
+from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.queues import EncodedFrame
+from app.processing.streaming.stage_worker import StageWorkerConfig
 from app.processing.streaming.worker_pipeline import (
+    StageWorkerPlan,
+    _drain_final_worker_output,
     boundary_schedule_for_stage_plan,
     build_stage_worker_plans,
     parse_stage_event_line,
@@ -120,3 +131,48 @@ def test_boundary_schedule_matches_single_frame_output_groups() -> None:
     )
 
     assert schedule == {1: 2, 2: 3}
+
+
+def test_drain_final_worker_output_stops_after_expected_frame_count() -> None:
+    step = ProcessingStep(
+        algorithm_type="super_resolution",
+        algorithm_kwargs={"scale_factor": 1.0},
+        stage_name="01_super_resolution",
+    )
+    stage_plan = build_stage_plan([step], 1, source_duration=1.0, output_fps=None)
+    final_plan = StageWorkerPlan(
+        config=StageWorkerConfig(
+            stage=step,
+            stage_index=1,
+            stage_total=1,
+            stage_name="01_super_resolution",
+            input_width=1,
+            input_height=1,
+            output_width=1,
+            output_height=1,
+            input_frame_count=1,
+            tensor_backend_name="onnx",
+        ),
+        output_frame_count=1,
+    )
+    final_stdout = io.BytesIO(np.array([[[1, 2, 3]]], dtype=np.uint8).tobytes() + b"tail")
+    encode_queue: queue.Queue = queue.Queue()
+    error_queue: queue.Queue[BaseException] = queue.Queue()
+    stop_event = threading.Event()
+
+    _drain_final_worker_output(
+        final_stdout=final_stdout,
+        final_plan=final_plan,
+        stage_plan=stage_plan,
+        resume_state=type("ResumeState", (), {"completed_output_frames": 0, "start_source_frame": 0})(),
+        source_frames=1,
+        encode_queue=encode_queue,
+        error_queue=error_queue,
+        stop_event=stop_event,
+        metrics=PipelineMetrics(),
+    )
+
+    assert error_queue.empty()
+    item = encode_queue.get_nowait()
+    assert isinstance(item, EncodedFrame)
+    assert int(item.frame[0, 0, 0]) == 1

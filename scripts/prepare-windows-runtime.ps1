@@ -171,9 +171,14 @@ function Resolve-ModelSource {
         $resolvedDir = (Resolve-Path -LiteralPath $resolvedDir).Path
     }
 
-    $defaultModel = Join-Path (Join-Path (Join-Path $resolvedDir "interpolation") "rife") "rife_v4.25.onnx"
-    if (-not ((Test-Path -LiteralPath $defaultModel -PathType Leaf) -and ((Get-Item -LiteralPath $defaultModel).Length -gt 0))) {
-        throw "Default model is missing. Expected interpolation/rife/rife_v4.25.onnx under $resolvedDir. Set VP_RELEASE_MODEL_DIR to a directory containing it."
+    $defaultPytorchModel = Join-Path $resolvedDir "flownet_v4.25.pkl"
+    if (-not ((Test-Path -LiteralPath $defaultPytorchModel -PathType Leaf) -and ((Get-Item -LiteralPath $defaultPytorchModel).Length -gt 0))) {
+        throw "Default PyTorch RIFE model is missing. Expected non-empty flownet_v4.25.pkl under $resolvedDir. Set VP_RELEASE_MODEL_DIR to a directory containing it."
+    }
+
+    $defaultOnnxModel = Join-Path (Join-Path (Join-Path $resolvedDir "interpolation") "rife") "rife_v4.25.onnx"
+    if (-not ((Test-Path -LiteralPath $defaultOnnxModel -PathType Leaf) -and ((Get-Item -LiteralPath $defaultOnnxModel).Length -gt 0))) {
+        throw "Default ONNX RIFE model is missing. Expected non-empty interpolation/rife/rife_v4.25.onnx under $resolvedDir. Set VP_RELEASE_MODEL_DIR to a directory containing it."
     }
     return $resolvedDir
 }
@@ -493,10 +498,24 @@ function Copy-ModelFiles {
         [string]$DestinationDir
     )
 
-    Write-Step "Copying ONNX model files"
+    Write-Step "Copying model files"
     $bytes = [int64]0
     $linked = 0
     $copied = 0
+
+    $defaultPytorchModel = Join-Path $SourceDir "flownet_v4.25.pkl"
+    if (-not ((Test-Path -LiteralPath $defaultPytorchModel -PathType Leaf) -and ((Get-Item -LiteralPath $defaultPytorchModel).Length -gt 0))) {
+        throw "Default PyTorch RIFE model is missing: $defaultPytorchModel"
+    }
+    $pytorchModel = Get-Item -LiteralPath $defaultPytorchModel
+    $result = Copy-FileFast -Source $pytorchModel.FullName -Destination (Join-Path $DestinationDir $pytorchModel.Name)
+    $bytes += [int64]$pytorchModel.Length
+    if ($result -eq "linked") {
+        $linked += 1
+    } else {
+        $copied += 1
+    }
+    Write-Step "model $($pytorchModel.Name) complete: $(Format-ByteSize $pytorchModel.Length), $result"
 
     # Copy top-level ONNX models (legacy layout)
     $onnxModels = Get-ChildItem -LiteralPath $SourceDir -Filter "*.onnx" -File
@@ -541,10 +560,10 @@ function Copy-ModelFiles {
 
     $totalModels = $linked + $copied
     if ($totalModels -eq 0) {
-        throw "No ONNX model files found in $SourceDir"
+        throw "No model files found in $SourceDir"
     }
 
-    Write-Step "ONNX models complete: hardlinks=$linked, copies=$copied, total=$(Format-ByteSize $bytes)"
+    Write-Step "Model files complete: hardlinks=$linked, copies=$copied, total=$(Format-ByteSize $bytes)"
 }
 
 function Optimize-PythonRuntime {
@@ -692,15 +711,16 @@ Copy-ModelFiles -SourceDir $modelSourceDir -DestinationDir $modelsOut
 
 $destFfmpeg = Join-Path $ffmpegOut "ffmpeg.exe"
 $destFfprobe = Join-Path $ffmpegOut "ffprobe.exe"
-$destDefaultModel = Join-Path (Join-Path (Join-Path $modelsOut "interpolation") "rife") "rife_v4.25.onnx"
-$requiredFiles = @($destFfmpeg, $destFfprobe, $destDefaultModel)
+$destDefaultPytorchModel = Join-Path $modelsOut "flownet_v4.25.pkl"
+$destDefaultOnnxModel = Join-Path (Join-Path (Join-Path $modelsOut "interpolation") "rife") "rife_v4.25.onnx"
+$requiredFiles = @($destFfmpeg, $destFfprobe, $destDefaultPytorchModel, $destDefaultOnnxModel)
 if (-not $SkipPython) {
     $destPythonExe = Join-Path $pythonOut "python.exe"
     $requiredFiles = @($destPythonExe) + $requiredFiles
 }
 foreach ($required in $requiredFiles) {
-    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-        throw "Runtime validation failed; missing $required"
+    if (-not ((Test-Path -LiteralPath $required -PathType Leaf) -and ((Get-Item -LiteralPath $required).Length -gt 0))) {
+        throw "Runtime validation failed; missing or empty $required"
     }
 }
 
