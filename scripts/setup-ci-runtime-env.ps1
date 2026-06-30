@@ -107,17 +107,20 @@ function Resolve-ModelDir {
             continue
         }
 
-        $defaultModel = Join-Path (Join-Path (Join-Path $path "interpolation") "rife") "rife_v4.25.onnx"
+        $defaultPytorchModel = Join-Path $path "flownet_v4.25.pkl"
+        $defaultOnnxModel = Join-Path (Join-Path (Join-Path $path "interpolation") "rife") "rife_v4.25.onnx"
         if ((Test-Path -LiteralPath $path -PathType Container) -and
-            (Test-Path -LiteralPath $defaultModel -PathType Leaf) -and
-            ((Get-Item -LiteralPath $defaultModel).Length -gt 0)) {
+            (Test-Path -LiteralPath $defaultPytorchModel -PathType Leaf) -and
+            ((Get-Item -LiteralPath $defaultPytorchModel).Length -gt 0) -and
+            (Test-Path -LiteralPath $defaultOnnxModel -PathType Leaf) -and
+            ((Get-Item -LiteralPath $defaultOnnxModel).Length -gt 0)) {
             return (Resolve-Path -LiteralPath $path).Path
         }
 
         $checked.Add("$($candidate.Label): $path")
     }
 
-    throw "Unable to locate RIFE model weights. Expected non-empty interpolation/rife/rife_v4.25.onnx. Checked: $($checked -join '; ')"
+    throw "Unable to locate RIFE model weights. Expected non-empty flownet_v4.25.pkl and interpolation/rife/rife_v4.25.onnx. Checked: $($checked -join '; ')"
 }
 
 function Find-FfmpegPairInDir {
@@ -204,7 +207,8 @@ Write-Host "CI runtime environment resolved:"
 Write-Host "  python root:   $($pythonSource.Root)"
 Write-Host "  python exe:    $($pythonSource.Exe)"
 Write-Host "  model dir:     $modelDir"
-Write-Host "  default model: $(Join-Path (Join-Path (Join-Path $modelDir 'interpolation') 'rife') 'rife_v4.25.onnx')"
+Write-Host "  pytorch model: $(Join-Path $modelDir 'flownet_v4.25.pkl')"
+Write-Host "  onnx model:    $(Join-Path (Join-Path (Join-Path $modelDir 'interpolation') 'rife') 'rife_v4.25.onnx')"
 Write-Host "  ffmpeg dir:    $($ffmpegSource.Dir)"
 Write-Host "  ffmpeg:        $($ffmpegSource.Ffmpeg)"
 Write-Host "  ffprobe:       $($ffmpegSource.Ffprobe)"

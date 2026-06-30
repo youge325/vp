@@ -12,6 +12,7 @@ from app.processing.streaming.stage_worker import (
     read_rgb_frame,
     run_stage_worker_stream,
 )
+from app.processing.streaming import stage_worker
 
 
 class _IdentityBackend:
@@ -184,3 +185,46 @@ def test_sequence_stage_buffers_all_input_frames_before_writing_output() -> None
 
     frames = _frames_from_bytes(output.getvalue(), count=3)
     assert [int(frame[0, 0, 0]) for frame in frames] == [11, 12, 13]
+
+
+def test_stage_worker_uses_stage_tensor_backend_without_passing_it_to_algorithm(monkeypatch) -> None:
+    output = io.BytesIO()
+    captured = {}
+
+    def fake_create(*, algorithm_type, tensor_backend, tensor_backend_name, **kwargs):
+        captured["algorithm_type"] = algorithm_type
+        captured["tensor_backend"] = tensor_backend
+        captured["tensor_backend_name"] = tensor_backend_name
+        captured["kwargs"] = kwargs
+        return _SequenceAlgorithm()
+
+    monkeypatch.setattr(stage_worker.AlgorithmFactory, "create", staticmethod(fake_create))
+    config = StageWorkerConfig(
+        stage=ProcessingStep(
+            algorithm_type="super_resolution",
+            algorithm_kwargs={"sr_algorithm": "ppmsvsr", "tensor_backend": "paddle"},
+            stage_name="01_super_resolution",
+        ),
+        stage_index=1,
+        stage_total=1,
+        stage_name="01_super_resolution",
+        input_width=1,
+        input_height=1,
+        output_width=1,
+        output_height=1,
+        input_frame_count=1,
+        tensor_backend_name="paddle",
+    )
+
+    run_stage_worker_stream(
+        config,
+        _stream_of([_frame(1)]),
+        output,
+        backend_factory=lambda _name: _IdentityBackend(),
+        event_sink=lambda _event: None,
+    )
+
+    assert captured["algorithm_type"] == "super_resolution"
+    assert captured["tensor_backend"].get_name() == "identity"
+    assert captured["tensor_backend_name"] == "identity"
+    assert captured["kwargs"] == {"sr_algorithm": "ppmsvsr"}
