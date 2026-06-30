@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -394,6 +395,35 @@ def test_process_parser_rejects_removed_temp_override_flag():
 
     with pytest.raises(SystemExit):
         parser.parse_args(["process", "--input", "demo.mp4", removed_flag, "D:/temp"])
+
+
+def test_stage_worker_parser_requires_config_json():
+    parser = build_parser()
+    args = parser.parse_args(["stage-worker", "--config-json", "stage.json"])
+
+    assert args.command == "stage-worker"
+    assert args.config_json == "stage.json"
+    assert callable(args.func)
+
+
+def test_stage_worker_main_does_not_run_global_algorithm_startup(monkeypatch):
+    import importlib
+
+    cli_main = importlib.import_module("app.cli.main")
+    calls = []
+
+    class _Parser:
+        def parse_args(self):
+            return SimpleNamespace(command="stage-worker", func=lambda _args: calls.append("func"))
+
+    monkeypatch.setattr(cli_main, "build_parser", lambda: _Parser())
+    monkeypatch.setattr(cli_main, "setup_logging", lambda: calls.append("logging"))
+    monkeypatch.setattr(cli_main, "register_default_algorithms", lambda: calls.append("register"), raising=False)
+    monkeypatch.setattr(cli_main, "register_native_dll_paths", lambda: calls.append("dll"), raising=False)
+
+    cli_main.main()
+
+    assert calls == ["logging", "func"]
 
 
 def test_resource_summary_omits_legacy_temp_override_key():
