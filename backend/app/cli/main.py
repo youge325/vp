@@ -13,7 +13,7 @@ PyTorch / Paddle / ONNX runtime DLL loading isolated by process.
 from __future__ import annotations
 
 from app.cli.parser import build_parser
-from app.errors import ProcessError, TaskErrorCode, raise_error
+from app.errors import ProcessError, TaskErrorCode, error_code_to_wire, raise_error
 from app.utils.logger import get_logger, setup_logging
 
 logger = get_logger(__name__)
@@ -38,7 +38,7 @@ def main() -> None:
         logger.exception("Unhandled backend CLI failure")
         pe = ProcessError.from_exception(exc)
         raise_error(
-            pe.code,
+            error_code_to_wire(pe.code),
             pe.message,
             details={**pe.details, "exception": exc.__class__.__name__},
         )

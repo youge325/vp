@@ -8,6 +8,7 @@ from app.algorithms.base import IAlgorithm
 from app.algorithms.paddle.paddlegan_vsr.runner import PaddleGanVsrRunner
 from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
 from app.utils.onnx_models import create_onnx_session, resolve_onnx_model_path
+from app.utils.model_metrics import get_paddlegan_model_detail
 from app.algorithms.tensor_backend import ITensorBackend
 
 
@@ -24,7 +25,7 @@ SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
             "models": ["x4"],
             "scaleFactors": [4],
             "defaultNumFrames": spec.default_num_frames,
-            "weightUrl": spec.url,
+            "modelDetails": [get_paddlegan_model_detail(spec.model_id)],
         }
         for spec in PADDLEGAN_VSR_SPECS.values()
     ],
@@ -51,7 +52,6 @@ class SuperResolutionAlgorithm(IAlgorithm):
         self._model_dir = kwargs.get("model_dir", "")
         self._engine = kwargs.get("engine", "cuda")
         self._num_frames = int(kwargs.get("num_frames") or kwargs.get("numFrames") or 10)
-        self._auto_download_weights = bool(kwargs.get("auto_download_weights", kwargs.get("autoDownloadWeights", True)))
         self._session = None
         self._input_name = ""
         self._output_name = ""
@@ -127,7 +127,6 @@ class SuperResolutionAlgorithm(IAlgorithm):
             self._paddlegan_runner = PaddleGanVsrRunner(
                 model_id=self._algorithm_name,
                 num_frames=self._num_frames,
-                auto_download_weights=self._auto_download_weights,
             )
         return self._paddlegan_runner
 
@@ -141,7 +140,10 @@ class SuperResolutionAlgorithm(IAlgorithm):
     def process_frame_sequence(self, frames: list[Any], **kwargs) -> list[Any]:
         if not self._is_paddlegan_vsr():
             return super().process_frame_sequence(frames, **kwargs)
-        return self._ensure_paddlegan_runner().process_frames(frames)
+        return self._ensure_paddlegan_runner().process_frames(
+            frames,
+            progress_callback=kwargs.get("progress_callback"),
+        )
 
     def get_name(self) -> str:
         if self._is_paddlegan_vsr():

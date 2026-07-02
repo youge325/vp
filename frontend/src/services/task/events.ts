@@ -24,6 +24,12 @@ import type {
 import type { MediaTaskState } from '@/types/domain/media'
 import type { ResumeStatus } from '@/types/domain/batch'
 
+const STAGE_PROGRESS_KEY_RE = /^\[VP_PROGRESS\]\s+\[(\d+\/\d+\s+[^\]]+)\]/
+
+function progressStageKey(line: string): string | null {
+  return STAGE_PROGRESS_KEY_RE.exec(line)?.[1] ?? null
+}
+
 export function createIdleTaskState(): MediaTaskState {
   return {
     status: 'idle',
@@ -34,7 +40,24 @@ export function createIdleTaskState(): MediaTaskState {
 
 export function appendTaskLog(state: MediaTaskState, payload: TaskLogPayload): MediaTaskState {
   const isProgressLine = payload.message.startsWith(TERMINAL_PROGRESS_PREFIX)
+  const incomingStageKey = isProgressLine ? progressStageKey(payload.message) : null
   const lastLog = state.logs[state.logs.length - 1] ?? ''
+
+  if (incomingStageKey) {
+    const existingIndex = state.logs.findIndex((line) => progressStageKey(line) === incomingStageKey)
+    if (existingIndex >= 0) {
+      const logs = [...state.logs]
+      logs[existingIndex] = payload.message
+      return {
+        ...state,
+        logs: logs.slice(-300),
+      }
+    }
+    return {
+      ...state,
+      logs: [...state.logs, payload.message].slice(-300),
+    }
+  }
 
   if (isProgressLine && lastLog.startsWith(TERMINAL_PROGRESS_PREFIX)) {
     return {

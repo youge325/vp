@@ -40,6 +40,11 @@ def scan_onnx_models(model_root: str | Path | None = None) -> dict[str, dict[str
     return {kind: _scan_kind_dir(get_onnx_model_dir(kind, model_root)) for kind in ONNX_MODEL_SUBDIRS}
 
 
+def scan_onnx_model_details(model_root: str | Path | None = None) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    """Analyze ONNX model files grouped by kind and algorithm subdir."""
+    return {kind: _scan_kind_details(get_onnx_model_dir(kind, model_root)) for kind in ONNX_MODEL_SUBDIRS}
+
+
 def resolve_onnx_model_path(
     kind: OnnxModelKind,
     algorithm: str,
@@ -114,6 +119,30 @@ def _scan_kind_dir(kind_dir: Path) -> dict[str, list[str]]:
         )
         if files:
             result[alg_dir.name] = files
+    return result
+
+
+def _scan_kind_details(kind_dir: Path) -> dict[str, list[dict[str, Any]]]:
+    """Scan and analyze a kind directory without changing ``scan_onnx_models``."""
+    if not kind_dir.is_dir():
+        return {}
+
+    from app.utils.model_metrics import analyze_onnx_model
+
+    result: dict[str, list[dict[str, Any]]] = {}
+    for alg_dir in sorted(kind_dir.iterdir(), key=lambda p: p.name.casefold()):
+        if not alg_dir.is_dir() or not is_safe_algorithm_name(alg_dir.name):
+            continue
+        details = [
+            analyze_onnx_model(item, name=item.name, label=item.name)
+            for item in sorted(alg_dir.iterdir(), key=lambda p: p.name.casefold())
+            if item.is_file()
+            and item.suffix.lower() == ".onnx"
+            and item.stat().st_size > 0
+            and is_safe_onnx_basename(item.name)
+        ]
+        if details:
+            result[alg_dir.name] = details
     return result
 
 

@@ -144,7 +144,7 @@ mod tests {
                     tensor_backend: TensorBackend::Onnx,
                     engine: "cuda".to_string(),
                     num_frames: 10,
-                    auto_download_weights: true,
+                    auto_download_weights: false,
                 },
                 anime: AnimeConfig {
                     enabled: false,

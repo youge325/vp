@@ -175,3 +175,37 @@ def test_output_dir_consistency_flags_python_missing_validator() -> None:
     )
     issues = module._diff_output_dir_optional_consistency(rust_text, py_text)
     assert any("Python" in issue and "min_length=1" in issue for issue in issues), issues
+
+
+def test_error_code_wire_scan_allows_normalized_helpers() -> None:
+    """Error envelopes may only pass code values through the wire normalizers."""
+    module = _load_module()
+    text = """
+def emit(process_error, exc, pe):
+    payload = {"type": "error", "code": error_code_to_wire(process_error.code)}
+    payload2 = {"type": "error", "code": _wire_error_code(exc.code)}
+    raise_error(error_code_to_wire(pe.code), pe.message)
+    ProcessError(error_code_to_wire("TaskErrorCode.MISSING_MODEL"), "worker failed")
+"""
+
+    assert module._scan_python_error_code_wire_misuse("sample.py", text) == []
+
+
+def test_error_code_wire_scan_flags_enum_repr_leaks() -> None:
+    """Regression guard for ``TaskErrorCode.MISSING_MODEL`` leaking over NDJSON."""
+    module = _load_module()
+    text = """
+def emit(process_error, exc, pe, event):
+    payload = {"type": "error", "code": str(process_error.code)}
+    payload2 = {"type": "error", "code": exc.code}
+    raise_error(pe.code, pe.message)
+    ProcessError(str(event.get("code") or "process_failed"), "worker failed")
+"""
+
+    issues = module._scan_python_error_code_wire_misuse("sample.py", text)
+
+    assert len(issues) == 4
+    assert any("dict['code']" in issue and "str(...code...)" in issue for issue in issues)
+    assert any("dict['code']" in issue and "direct .code" in issue for issue in issues)
+    assert any("raise_error" in issue and "direct .code" in issue for issue in issues)
+    assert any("ProcessError" in issue and "str(...)" in issue for issue in issues)

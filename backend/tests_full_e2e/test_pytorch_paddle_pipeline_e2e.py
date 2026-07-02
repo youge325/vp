@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -19,6 +20,7 @@ import pytest
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_DIR.parent
 PADDLEGAN_WEIGHT = BACKEND_DIR / "models" / "super_resolution" / "paddlegan" / "ppmsvsr" / "PP-MSVSR_reds_x4.pdparams"
+TERMINAL_PROGRESS_FPS_RE = re.compile(r"\|\s+\d+\.\d fps\s+\|")
 
 
 def _run_python_probe(module_name: str) -> None:
@@ -107,6 +109,10 @@ def _last_json_line(stdout: str) -> dict:
     return lines[-1]
 
 
+def _terminal_progress_lines(stderr: str) -> list[str]:
+    return [line for line in stderr.splitlines() if line.startswith("[VP_PROGRESS]")]
+
+
 def _process_config(output_dir: Path) -> dict:
     return {
         "workflow": {
@@ -176,6 +182,29 @@ def test_cli_process_runs_real_pytorch_interpolation_then_paddlegan_super_resolu
     events = _json_lines(proc.stdout)
     progress_stages = {event.get("stage") for event in events if event.get("type") == "progress"}
     assert {"01_frame_interpolation", "02_super_resolution"}.issubset(progress_stages)
+    super_resolution_progress = [
+        event for event in events if event.get("type") == "progress" and event.get("stage") == "02_super_resolution"
+    ]
+    assert any(event.get("current") for event in super_resolution_progress), (
+        f"No non-zero super-resolution progress event found in stdout:\n{proc.stdout}"
+    )
+    terminal_progress = _terminal_progress_lines(proc.stderr)
+    assert any("[1/2 01_frame_interpolation]" in line for line in terminal_progress), (
+        f"No interpolation terminal progress line found in stderr:\n{proc.stderr}"
+    )
+    assert any("[2/2 02_super_resolution]" in line for line in terminal_progress), (
+        f"No super-resolution terminal progress line found in stderr:\n{proc.stderr}"
+    )
+    assert any("[1/2 01_frame_interpolation]" in line and "100.0%" in line for line in terminal_progress), (
+        f"No completed interpolation terminal progress line found in stderr:\n{proc.stderr}"
+    )
+    assert any("[2/2 02_super_resolution]" in line and "100.0%" in line for line in terminal_progress), (
+        f"No completed super-resolution terminal progress line found in stderr:\n{proc.stderr}"
+    )
+    nonzero_terminal_progress = [line for line in terminal_progress if not re.search(r"\s0/\d+\s", line)]
+    assert nonzero_terminal_progress, f"No non-zero terminal progress lines found in stderr:\n{proc.stderr}"
+    assert all("--.- fps" not in line for line in nonzero_terminal_progress)
+    assert any(TERMINAL_PROGRESS_FPS_RE.search(line) for line in nonzero_terminal_progress)
 
     completed = events[-1]
     assert completed.get("type") == "completed"

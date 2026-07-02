@@ -32,7 +32,7 @@ from app.processing.streaming.queues import (
     SegmentBoundary,
     StreamEnd,
 )
-from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
+from app.processing.streaming.worker_pipeline import run_stage_file_pipeline, run_stage_worker_pipeline
 from app.protocol import ndjson
 from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.logger import get_logger
@@ -102,13 +102,19 @@ def process_video_streaming(
         )
 
     resume_state = decision.state
+    use_stage_file_pipeline = _should_use_stage_file_pipeline(stage_plan)
+    resume_source_frames = (
+        _stage_file_resume_source_frames(stage_plan, int(video_info["source_frames"]))
+        if use_stage_file_pipeline
+        else int(video_info["source_frames"])
+    )
     output_width, output_height = _resolved_output_dimensions(
         video_info=video_info,
         stage_plan=stage_plan,
         tensor_backend_name=tensor_backend_name,
     )
 
-    if resume_state.start_source_frame >= video_info["source_frames"]:
+    if resume_state.start_source_frame >= resume_source_frames:
         completed_output_frames = resume_state.completed_output_frames
     else:
         completed_output_frames = _run_streaming_pipeline(
@@ -205,6 +211,28 @@ def _run_streaming_pipeline(
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
     metrics: PipelineMetrics,
 ) -> int:
+    if _should_use_stage_file_pipeline(stage_plan):
+        _emit_resume_status_event(
+            resume_state=resume_state,
+            total_output_frames=stage_plan.total_encoded_frames,
+        )
+        return run_stage_file_pipeline(
+            ffmpeg=ffmpeg,
+            input_path=input_path,
+            decode_config=decode_config,
+            encode_config=encode_config,
+            manifest=manifest,
+            stage_plan=stage_plan,
+            tensor_backend_name=tensor_backend_name,
+            progress_callbacks=progress_callbacks,
+            video_info=video_info,
+            resume_state=resume_state,
+            segment_frames=segment_frames,
+            output_path=output_path,
+            output_fps=output_fps,
+            metrics=metrics,
+        )
+
     encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object] = queue.Queue(maxsize=8)
     error_queue: queue.Queue[BaseException] = queue.Queue()
     stop_event = threading.Event()
@@ -271,6 +299,41 @@ def _run_streaming_pipeline(
     del signature
     completed_segments = manifest.read_completed_segments()
     return sum(segment.frame_count for segment in completed_segments)
+
+
+def _should_use_stage_file_pipeline(stage_plan: StagePlan) -> bool:
+    for step in _stage_steps(stage_plan):
+        if step.algorithm_type == "frame_interpolation":
+            return True
+        if step.algorithm_type != "super_resolution":
+            continue
+        try:
+            from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
+        except Exception:
+            continue
+        if str(step.algorithm_kwargs.get("sr_algorithm") or "") in PADDLEGAN_VSR_SPECS:
+            return True
+    return False
+
+
+def _stage_file_resume_source_frames(stage_plan: StagePlan, source_frames: int) -> int:
+    """Return the source-frame domain used by the final staged manifest."""
+    current_frames = max(int(source_frames), 0)
+    steps = _stage_steps(stage_plan)
+    for step in steps[:-1]:
+        if step.algorithm_type != "frame_interpolation" or current_frames < 2:
+            continue
+        multi = int(step.algorithm_kwargs.get("multi") or 2)
+        current_frames = current_frames + (current_frames - 1) * (multi - 1)
+    return current_frames
+
+
+def _stage_steps(stage_plan: StagePlan) -> list[Any]:
+    return [
+        *stage_plan.pre_steps,
+        *([stage_plan.interpolation_step] if stage_plan.interpolation_step else []),
+        *stage_plan.post_steps,
+    ]
 
 
 def _resolved_stream_fps(source_fps: float, stage_plan: StagePlan) -> float:

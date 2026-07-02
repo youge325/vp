@@ -6,7 +6,7 @@ import argparse
 import sys
 import traceback
 
-from app.errors import ProcessError
+from app.errors import ProcessError, error_code_to_wire
 from app.processing.streaming.stage_worker import (
     StageWorkerConfig,
     emit_stage_event,
@@ -33,7 +33,7 @@ def cmd_stage_worker(args: argparse.Namespace) -> None:
         emit_stage_event(
             {
                 "type": "error",
-                "code": str(process_error.code),
+                "code": error_code_to_wire(process_error.code),
                 "message": process_error.message,
                 "details": {
                     **process_error.details,

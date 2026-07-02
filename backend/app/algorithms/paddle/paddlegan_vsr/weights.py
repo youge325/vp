@@ -1,11 +1,9 @@
-"""Fixed PaddleGAN VSR weight locations and download helpers."""
+"""Fixed PaddleGAN VSR weight locations."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
-from urllib.request import urlretrieve
 
 from app.config import settings
 from app.errors import TaskErrorCode, raise_error
@@ -19,9 +17,9 @@ class PaddleGanVsrSpec:
     display_name: str
     subdir: str
     filename: str
-    url: str
     sequence_mode: str
     default_num_frames: int
+    auxiliary_filenames: tuple[str, ...] = ()
 
 
 PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
@@ -30,25 +28,24 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
         display_name="PP-MSVSR",
         subdir="ppmsvsr",
         filename="PP-MSVSR_reds_x4.pdparams",
-        url="https://paddlegan.bj.bcebos.com/models/PP-MSVSR_reds_x4.pdparams",
         sequence_mode="recurrent",
         default_num_frames=10,
+        auxiliary_filenames=("modified_spynet_tiny.pdparams",),
     ),
     "ppmsvsr-large": PaddleGanVsrSpec(
         model_id="ppmsvsr-large",
         display_name="PP-MSVSR-L",
         subdir="ppmsvsr-large",
         filename="PP-MSVSR-L_reds_x4.pdparams",
-        url="https://paddlegan.bj.bcebos.com/models/PP-MSVSR-L_reds_x4.pdparams",
         sequence_mode="recurrent",
         default_num_frames=10,
+        auxiliary_filenames=("modified_spynet.pdparams",),
     ),
     "edvr": PaddleGanVsrSpec(
         model_id="edvr",
         display_name="EDVR",
         subdir="edvr",
         filename="EDVR_L_w_tsa_SRx4.pdparams",
-        url="https://paddlegan.bj.bcebos.com/models/EDVR_L_w_tsa_SRx4.pdparams",
         sequence_mode="window",
         default_num_frames=5,
     ),
@@ -57,31 +54,32 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
         display_name="BasicVSR",
         subdir="basicvsr",
         filename="BasicVSR_reds_x4.pdparams",
-        url="https://paddlegan.bj.bcebos.com/models/BasicVSR_reds_x4.pdparams",
         sequence_mode="recurrent",
         default_num_frames=10,
+        auxiliary_filenames=("spynet.pdparams",),
     ),
     "iconvsr": PaddleGanVsrSpec(
         model_id="iconvsr",
         display_name="IconVSR",
         subdir="iconvsr",
         filename="IconVSR_reds_x4.pdparams",
-        url="https://paddlegan.bj.bcebos.com/models/IconVSR_reds_x4.pdparams",
         sequence_mode="recurrent",
         default_num_frames=10,
+        auxiliary_filenames=("spynet.pdparams", "edvrm.pdparams"),
     ),
     "basicvsr-plus-plus": PaddleGanVsrSpec(
         model_id="basicvsr-plus-plus",
         display_name="BasicVSR++",
         subdir="basicvsr-plus-plus",
         filename="BasicVSR++_reds_x4.pdparams",
-        url="https://paddlegan.bj.bcebos.com/models/BasicVSR%2B%2B_reds_x4.pdparams",
         sequence_mode="recurrent",
         default_num_frames=10,
+        auxiliary_filenames=("spynet.pdparams",),
     ),
 }
 
-Downloader = Callable[[str, Path], None]
+
+DISABLED_PADDLEGAN_VSR_MODELS: dict[str, tuple[str, ...]] = {}
 
 
 def fixed_weight_root() -> Path:
@@ -105,43 +103,52 @@ def resolve_weight_path(model_id: str) -> Path:
     return fixed_weight_root() / spec.subdir / spec.filename
 
 
-def _default_downloader(url: str, destination: Path) -> None:
-    urlretrieve(url, destination)
+def resolve_auxiliary_weight_path(filename: str) -> Path:
+    return fixed_weight_root() / "_auxiliary" / filename
 
 
 def ensure_weight_file(
     model_id: str,
     *,
-    auto_download: bool,
-    downloader: Downloader | None = None,
+    auto_download: bool | None = None,
 ) -> Path:
-    """Return a usable weight path, downloading into the fixed cache when allowed."""
-    spec = get_spec(model_id)
+    """Return a usable local weight path.
+
+    ``auto_download`` is accepted for backward-compatible configs but is ignored.
+    All PaddleGAN VSR weights must be pre-provisioned under ``fixed_weight_root``.
+    """
+    get_spec(model_id)
     target = resolve_weight_path(model_id)
     if target.is_file() and target.stat().st_size > 0:
         return target
 
-    if not auto_download:
-        raise_error(
-            TaskErrorCode.MISSING_MODEL,
-            f"PaddleGAN VSR weight is missing: {target}",
-            details={"model": model_id, "path": str(target), "url": spec.url},
-        )
+    raise_error(
+        TaskErrorCode.MISSING_MODEL,
+        f"PaddleGAN VSR weight is missing: {target}",
+        details={"model": model_id, "path": str(target)},
+    )
 
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = target.with_suffix(f"{target.suffix}.tmp")
-    tmp_path.unlink(missing_ok=True)
-    download = downloader or _default_downloader
-    try:
-        download(spec.url, tmp_path)
-        if not tmp_path.is_file() or tmp_path.stat().st_size <= 0:
-            raise RuntimeError(f"Downloaded file is empty: {tmp_path}")
-        tmp_path.replace(target)
-    except Exception as exc:
-        tmp_path.unlink(missing_ok=True)
-        raise_error(
-            TaskErrorCode.MISSING_MODEL,
-            f"Failed to download PaddleGAN VSR weight for {model_id}: {exc}",
-            details={"model": model_id, "url": spec.url, "path": str(target)},
-        )
-    return target
+
+def ensure_auxiliary_weight_file(model_id: str, filename: str) -> Path:
+    target = resolve_auxiliary_weight_path(filename)
+    if target.is_file() and target.stat().st_size > 0:
+        return target
+
+    raise_error(
+        TaskErrorCode.MISSING_MODEL,
+        f"PaddleGAN auxiliary weight is missing: {target}",
+        details={"model": model_id, "path": str(target)},
+    )
+
+
+def ensure_paddlegan_vsr_weights(
+    model_id: str,
+    *,
+    auto_download: bool | None = None,
+) -> Path:
+    """Validate all local weights required by a PaddleGAN VSR model."""
+    main_weight = ensure_weight_file(model_id, auto_download=auto_download)
+    spec = get_spec(model_id)
+    for filename in spec.auxiliary_filenames:
+        ensure_auxiliary_weight_file(model_id, filename)
+    return main_weight

@@ -7,13 +7,13 @@ PaddleGAN VSR algorithm.
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Callable, Sequence
 
 import numpy as np
 
 from app.algorithms.paddle.paddlegan_vsr.weights import (
     PADDLEGAN_VSR_SPECS,
-    ensure_weight_file,
+    ensure_paddlegan_vsr_weights,
     get_spec,
 )
 
@@ -21,21 +21,25 @@ from app.algorithms.paddle.paddlegan_vsr.weights import (
 class PaddleGanVsrRunner:
     """Runs one PaddleGAN video super-resolution model over an RGB frame sequence."""
 
-    def __init__(self, *, model_id: str, num_frames: int, auto_download_weights: bool):
+    def __init__(self, *, model_id: str, num_frames: int):
         self.model_id = model_id
         self.spec = get_spec(model_id)
         self.num_frames = max(1, int(num_frames or self.spec.default_num_frames))
-        self.auto_download_weights = auto_download_weights
         self._paddle = None
         self._model = None
 
-    def process_frames(self, input_frames: Sequence[np.ndarray]) -> list[np.ndarray]:
+    def process_frames(
+        self,
+        input_frames: Sequence[np.ndarray],
+        *,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[np.ndarray]:
         if not input_frames:
             return []
         model = self._ensure_model()
         if self.spec.sequence_mode == "window":
-            return self._process_window_model(model, input_frames)
-        return self._process_recurrent_model(model, input_frames)
+            return self._process_window_model(model, input_frames, progress_callback=progress_callback)
+        return self._process_recurrent_model(model, input_frames, progress_callback=progress_callback)
 
     def _ensure_model(self):
         if self._model is not None:
@@ -43,7 +47,7 @@ class PaddleGanVsrRunner:
 
         paddle = self._ensure_paddle()
         model = _build_model(self.model_id)
-        weight_path = ensure_weight_file(self.model_id, auto_download=self.auto_download_weights)
+        weight_path = ensure_paddlegan_vsr_weights(self.model_id)
         state = paddle.load(str(weight_path))
         if isinstance(state, dict) and "generator" in state:
             state = state["generator"]
@@ -62,9 +66,16 @@ class PaddleGanVsrRunner:
         self._paddle = paddle
         return paddle
 
-    def _process_recurrent_model(self, model, input_frames: Sequence[np.ndarray]) -> list[np.ndarray]:
+    def _process_recurrent_model(
+        self,
+        model,
+        input_frames: Sequence[np.ndarray],
+        *,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[np.ndarray]:
         paddle = self._ensure_paddle()
         output_frames: list[np.ndarray] = []
+        total = len(input_frames)
         with paddle.no_grad():
             for start in range(0, len(input_frames), self.num_frames):
                 chunk = list(input_frames[start : start + self.num_frames])
@@ -73,17 +84,28 @@ class PaddleGanVsrRunner:
                 if isinstance(output, (list, tuple)):
                     output = output[-1]
                 output_frames.extend(_sequence_tensor_to_frames(output))
+                if progress_callback is not None:
+                    progress_callback(min(len(output_frames), total), total)
         return output_frames
 
-    def _process_window_model(self, model, input_frames: Sequence[np.ndarray]) -> list[np.ndarray]:
+    def _process_window_model(
+        self,
+        model,
+        input_frames: Sequence[np.ndarray],
+        *,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[np.ndarray]:
         paddle = self._ensure_paddle()
         output_frames: list[np.ndarray] = []
+        total = len(input_frames)
         with paddle.no_grad():
             for index in range(len(input_frames)):
                 neighbors = [input_frames[i] for i in _edvr_neighbor_indexes(index, len(input_frames))]
                 tensor = self._frames_to_tensor(neighbors)
                 output = model(tensor)
                 output_frames.extend(_image_tensor_to_frames(output))
+                if progress_callback is not None:
+                    progress_callback(min(len(output_frames), total), total)
         return output_frames
 
     def _frames_to_tensor(self, frames: Sequence[np.ndarray]):

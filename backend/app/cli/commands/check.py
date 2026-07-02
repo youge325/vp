@@ -17,7 +17,7 @@ from app.processing.super_resolution import SUPPORTED_ALGORITHMS as SR_ALGORITHM
 from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS, resolve_weight_path
 from app.protocol import ndjson
 from app.utils.ffmpeg import FFmpegWrapper
-from app.utils.onnx_models import scan_onnx_models
+from app.utils.onnx_models import scan_onnx_model_details, scan_onnx_models
 from app.utils.system_probe import list_gpu_adapters
 
 
@@ -35,6 +35,7 @@ def cmd_check(_args: argparse.Namespace) -> None:
     default_model_path = Path(settings.RIFE_MODEL_DIR) / "interpolation" / "rife" / "rife_v4.25.onnx"
     default_model_available = default_model_path.is_file() and default_model_path.stat().st_size > 0
     onnx_models = scan_onnx_models(settings.RIFE_MODEL_DIR)
+    onnx_model_details = scan_onnx_model_details(settings.RIFE_MODEL_DIR)
     ffmpeg_capabilities = (
         ffmpeg.discover_capabilities(gpu_adapters)
         if ffmpeg_available
@@ -79,12 +80,20 @@ def cmd_check(_args: argparse.Namespace) -> None:
     }
 
     interpolation_algorithms_payload = [
-        {**alg, "onnxModels": onnx_models.get("interpolation", {}).get(alg["name"], [])}
+        {
+            **alg,
+            "onnxModels": onnx_models.get("interpolation", {}).get(alg["name"], []),
+            "onnxModelDetails": onnx_model_details.get("interpolation", {}).get(alg["name"], []),
+        }
         for alg in INTERPOLATION_ALGORITHMS
     ]
     super_resolution_algorithms_payload = []
     for alg in SR_ALGORITHMS:
-        payload = {**alg, "onnxModels": onnx_models.get("super_resolution", {}).get(alg["name"], [])}
+        payload = {
+            **alg,
+            "onnxModels": onnx_models.get("super_resolution", {}).get(alg["name"], []),
+            "onnxModelDetails": onnx_model_details.get("super_resolution", {}).get(alg["name"], []),
+        }
         if alg["name"] in PADDLEGAN_VSR_SPECS:
             weight_path = resolve_weight_path(alg["name"])
             payload.update(

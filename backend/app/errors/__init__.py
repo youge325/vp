@@ -12,7 +12,7 @@ import warnings as _warnings
 from typing import Any
 
 from app.errors._bootstrap import infer_error_code
-from app.errors._codes import TaskErrorCode
+from app.errors._codes import TaskErrorCode, error_code_to_wire
 
 
 class ProcessError(Exception):
@@ -144,5 +144,6 @@ __all__ = [
     "ResumeConflictError",
     "TaskErrorCode",
     "emit_error",
+    "error_code_to_wire",
     "raise_error",
 ]

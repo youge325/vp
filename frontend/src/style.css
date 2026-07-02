@@ -762,6 +762,32 @@ a:focus-visible {
   font-size: 12px;
 }
 
+.model-metric-grid {
+  margin-top: 16px;
+  padding-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.model-metric-item {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.model-metric-item span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.model-metric-item strong {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
 .task-console {
   min-height: 0;
   display: flex;
@@ -1025,7 +1051,8 @@ a:focus-visible {
 
   .field-grid-2,
   .field-grid-3,
-  .stats-grid-4 {
+  .stats-grid-4,
+  .model-metric-grid {
     grid-template-columns: 1fr;
   }
 

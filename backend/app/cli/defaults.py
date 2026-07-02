@@ -99,7 +99,7 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
             "tensorBackend": "onnx",
             "engine": "cuda",
             "numFrames": 10,
-            "autoDownloadWeights": True,
+            "autoDownloadWeights": False,
         },
         "anime": {
             "enabled": enable_anime,
@@ -164,10 +164,6 @@ def _build_algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: Alg
             or interpolation.get("tensorBackend")
             or interpolation.get("tensor_backend"),
             "num_frames": super_resolution.get("numFrames") or super_resolution.get("num_frames"),
-            "auto_download_weights": super_resolution.get(
-                "autoDownloadWeights",
-                super_resolution.get("auto_download_weights", True),
-            ),
         }
     if algorithm_type == "frame_filter_chain":
         return {}

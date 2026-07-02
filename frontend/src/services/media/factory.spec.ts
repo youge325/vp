@@ -17,7 +17,7 @@ const mockPreset: WorkbenchPreset = {
       tensorBackend: 'onnx',
       engine: 'cuda',
       numFrames: 10,
-      autoDownloadWeights: true,
+      autoDownloadWeights: false,
     },
     anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
     preprocess: { enabled: false, filters: [] },

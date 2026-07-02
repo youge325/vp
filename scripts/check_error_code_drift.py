@@ -35,8 +35,10 @@ Python ``NdjsonEventType`` 是 Python emit 的全集(stream 长任务 + oneshot
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
+import warnings
 from pathlib import Path
 
 # Force UTF-8 on stdout/stderr so Chinese fix-it tips & arrow glyphs (↔)
@@ -56,6 +58,7 @@ RUST_ENVELOPE_PATH = ROOT / "frontend" / "src-tauri" / "src" / "tasks" / "envelo
 PY_PATH = ROOT / "backend" / "app" / "errors" / "_codes.py"
 PY_PROTOCOL_PATH = ROOT / "backend" / "app" / "protocol" / "__init__.py"
 PY_MODELS_PATH = ROOT / "backend" / "app" / "models" / "__init__.py"
+BACKEND_APP_DIR = ROOT / "backend" / "app"
 TS_GENERATED_DIR = ROOT / "frontend" / "src" / "types" / "generated"
 TS_TASK_ERROR_CODE_PATH = TS_GENERATED_DIR / "TaskErrorCode.ts"
 
@@ -352,6 +355,81 @@ def _diff_output_dir_optional_consistency(rust_config_text: str, py_models_text:
     return issues
 
 
+def _call_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
+def _contains_code_attribute(node: ast.AST) -> bool:
+    return any(isinstance(child, ast.Attribute) and child.attr == "code" for child in ast.walk(node))
+
+
+def _wire_normalizer_name(node: ast.AST) -> str | None:
+    if not isinstance(node, ast.Call):
+        return None
+    name = _call_name(node.func)
+    if name in {"error_code_to_wire", "_wire_error_code"}:
+        return name
+    return None
+
+
+def _describe_forbidden_wire_code_expr(node: ast.AST) -> str | None:
+    if _wire_normalizer_name(node):
+        return None
+    if isinstance(node, ast.Call) and _call_name(node.func) == "str":
+        return "str(...code...)" if _contains_code_attribute(node) else "str(...)"
+    if isinstance(node, ast.Attribute) and node.attr == "code":
+        return "direct .code"
+    return None
+
+
+def _scan_python_error_code_wire_misuse(filename: str, text: str) -> list[str]:
+    """Find Python code paths that can leak enum reprs over the NDJSON wire."""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            tree = ast.parse(text, filename=filename)
+    except SyntaxError as exc:
+        _fail_parse(f"could not parse Python source for error-code wire scan: {filename}: {exc}")
+
+    issues: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values, strict=False):
+                if not isinstance(key, ast.Constant) or key.value != "code":
+                    continue
+                problem = _describe_forbidden_wire_code_expr(value)
+                if problem:
+                    issues.append(
+                        f"{filename}:{value.lineno}: dict['code'] uses {problem}; "
+                        "wrap task error codes with error_code_to_wire(...) or _wire_error_code(...)",
+                    )
+            continue
+
+        if isinstance(node, ast.Call):
+            name = _call_name(node.func)
+            if name not in {"ProcessError", "raise_error", "emit_error"} or not node.args:
+                continue
+            problem = _describe_forbidden_wire_code_expr(node.args[0])
+            if problem:
+                issues.append(
+                    f"{filename}:{node.args[0].lineno}: {name}(...) first code argument uses {problem}; "
+                    "wrap task error codes with error_code_to_wire(...)",
+                )
+    return issues
+
+
+def _scan_backend_error_code_wire_misuse() -> list[str]:
+    issues: list[str] = []
+    for path in sorted(BACKEND_APP_DIR.rglob("*.py")):
+        rel = path.relative_to(ROOT).as_posix()
+        issues.extend(_scan_python_error_code_wire_misuse(rel, _read(path)))
+    return issues
+
+
 def _diff_task_error_code(rust: set[str], python: set[str], ts: set[str]) -> list[str]:
     issues: list[str] = []
     only_rust = rust - python
@@ -431,6 +509,10 @@ def main() -> int:
     # Phase 18 — outputDir 三层必填一致性。
     output_dir_issues = _diff_output_dir_optional_consistency(rust_config_text, py_models_text)
     issues.extend(output_dir_issues)
+
+    # PaddleGAN stage-worker regression — any Python error envelope crossing
+    # into Rust must serialize enum codes through the wire normalizers.
+    issues.extend(_scan_backend_error_code_wire_misuse())
 
     if issues:
         sys.stderr.write("[check-error-code-drift] DRIFT DETECTED:\n")

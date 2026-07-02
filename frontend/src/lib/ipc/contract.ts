@@ -33,7 +33,7 @@ export interface IpcCommandArgs {
   check_environment: { forceRefresh: boolean }
   load_workbench_preset: undefined
   save_workbench_preset: { preset: WorkbenchPreset }
-  inspect_video: { input_path: string }
+  inspect_video: { inputPath: string }
   check_resume_state: { request: TaskRequest }
   start_task: { request: TaskRequest }
   cancel_task: undefined

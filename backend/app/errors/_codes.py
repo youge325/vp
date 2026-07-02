@@ -9,6 +9,7 @@ JSON schema.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any
 
 
 class TaskErrorCode(str, Enum):
@@ -36,3 +37,30 @@ class TaskErrorCode(str, Enum):
 
 
 ALL_CODES = frozenset(code.value for code in TaskErrorCode)
+
+
+def error_code_to_wire(code: Any) -> str:
+    """Return a Rust-schema-safe snake_case task error code.
+
+    Internal Python code sometimes carries ``TaskErrorCode`` enum values and
+    older worker paths accidentally serialized ``str(enum)`` values such as
+    ``"TaskErrorCode.MISSING_MODEL"``. The NDJSON wire protocol must always
+    use the enum value string, and unknown values degrade to ``process_failed``
+    rather than producing an IPC schema mismatch in the Tauri host.
+    """
+    if isinstance(code, TaskErrorCode):
+        return code.value
+
+    if isinstance(code, str):
+        stripped = code.strip()
+        if stripped in ALL_CODES:
+            return stripped
+        prefix = f"{TaskErrorCode.__name__}."
+        if stripped.startswith(prefix):
+            enum_name = stripped[len(prefix) :]
+            try:
+                return TaskErrorCode[enum_name].value
+            except KeyError:
+                return TaskErrorCode.PROCESS_FAILED.value
+
+    return TaskErrorCode.PROCESS_FAILED.value

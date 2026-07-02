@@ -102,6 +102,35 @@ pub struct RifeModel {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
+pub struct ModelMetricInfo {
+    #[serde(default)]
+    pub parameter_count: Option<u64>,
+    #[serde(default)]
+    pub parameter_bytes: Option<u64>,
+    #[serde(default)]
+    pub gflops_per_megapixel: Option<f64>,
+    #[serde(default)]
+    pub activation_bytes_per_megapixel: Option<f64>,
+    #[serde(default)]
+    pub input_modulo: Option<u32>,
+    #[serde(default)]
+    pub analysis_status: String,
+    #[serde(default)]
+    pub analysis_notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub struct ModelVariantInfo {
+    pub name: String,
+    pub label: String,
+    pub metrics: ModelMetricInfo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct RuntimeInfo {
     #[serde(default)]
     pub mode: Option<String>,
@@ -141,11 +170,13 @@ pub struct AlgorithmInfo {
     #[serde(default)]
     pub onnx_models: Vec<String>,
     #[serde(default)]
+    pub model_details: Vec<ModelVariantInfo>,
+    #[serde(default)]
+    pub onnx_model_details: Vec<ModelVariantInfo>,
+    #[serde(default)]
     pub scale_factors: Vec<u32>,
     #[serde(default)]
     pub default_num_frames: Option<u32>,
-    #[serde(default)]
-    pub weight_url: Option<String>,
     #[serde(default)]
     pub weight_path: Option<String>,
     #[serde(default)]

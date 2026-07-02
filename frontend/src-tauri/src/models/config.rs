@@ -103,7 +103,7 @@ fn default_num_frames() -> u32 {
 }
 
 fn default_auto_download_weights() -> bool {
-    true
+    false
 }
 
 fn default_interpolation_algorithm() -> String {

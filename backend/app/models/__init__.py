@@ -65,7 +65,7 @@ class SuperResolutionConfig(_CamelBase):
     tensor_backend: TensorBackendValue = "onnx"
     engine: str = "cuda"
     num_frames: int = 10
-    auto_download_weights: bool = True
+    auto_download_weights: bool = False
 
 
 class AnimeConfig(_CamelBase):
