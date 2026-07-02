@@ -61,3 +61,17 @@ def test_rife_declares_pytorch_and_onnx_but_not_paddle():
         "RIFE declared paddle support but there is no paddle implementation; "
         "this would re-introduce the very bug Phase 8 fixed."
     )
+
+
+def test_builtin_models_expose_metric_details():
+    """内置模型必须随算法元数据暴露参数量 / 计算量 / 显存估算基线。"""
+    rife = next(entry for entry in INTERPOLATION_ALGORITHMS if entry["name"] == "rife")
+    assert len(rife["modelDetails"]) == len(rife["models"])
+    assert {detail["name"] for detail in rife["modelDetails"]} == set(rife["models"])
+    assert all(detail["metrics"]["parameterCount"] for detail in rife["modelDetails"])
+
+    paddlegan_entries = [entry for entry in SR_ALGORITHMS if entry["tensorBackends"] == ["paddle"]]
+    assert paddlegan_entries
+    for entry in paddlegan_entries:
+        assert entry["modelDetails"][0]["name"] == "x4"
+        assert entry["modelDetails"][0]["metrics"]["parameterCount"]

@@ -13,6 +13,21 @@ use crate::error::ShellError;
 use crate::models::WorkbenchPreset;
 use crate::runtime::ResolvedRuntimePaths;
 
+// Phase 25 — bumped from 6 to 7 because ``AlgorithmInfo`` now carries
+// model metric metadata (built-in modelDetails plus ONNX modelDetails).
+// Older caches deserialize but leave the UI without parameter/FLOPs/VRAM
+// data, so force a fresh ``python -m app check`` after upgrading.
+//
+// Phase 24 — bumped from 5 to 6 because all PaddleGAN VSR auxiliary
+// weights are now pre-provisioned and the full six-model VSR set is
+// exposed again. Skipping v5 caches prevents the two-model subset from
+// lingering in the UI.
+//
+// Phase 23 — bumped from 4 to 5 because PaddleGAN VSR exposure was
+// tightened to models whose required auxiliary weights are available.
+// Skipping older caches prevents removed PaddleGAN algorithms from
+// lingering in the UI after an application update.
+//
 // Phase 22 — bumped from 3 to 4 because ``AlgorithmInfo`` now carries
 // PaddleGAN VSR weight metadata and six new Paddle super-resolution
 // algorithms. Skipping older caches forces a fresh ``python -m app check``
@@ -27,7 +42,7 @@ use crate::runtime::ResolvedRuntimePaths;
 // Bumping the version forces ``load_environment_cache`` to skip
 // the stale file and re-run ``python -m app check``, whose fresh
 // output now carries ``tensorBackends`` end-to-end.
-const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 4;
+const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 7;
 const WORKBENCH_PRESET_SCHEMA_VERSION: u32 = 1;
 const ENVIRONMENT_CACHE_FILE: &str = "environment-cache.json";
 const WORKBENCH_PRESET_FILE: &str = "workbench-preset.json";
@@ -308,7 +323,8 @@ async fn describe_path(path: Option<&Path>) -> Value {
 mod tests {
     use super::{
         environment_cache_path, load_environment_cache, load_workbench_preset,
-        save_environment_cache, save_workbench_preset, workbench_preset_path, WorkbenchPresetEntry,
+        save_environment_cache, save_workbench_preset, workbench_preset_path,
+        EnvironmentCacheEntry, WorkbenchPresetEntry,
     };
     use crate::models::{
         AnimeConfig, DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig,
@@ -367,7 +383,7 @@ mod tests {
                     tensor_backend: TensorBackend::Onnx,
                     engine: "cuda".to_string(),
                     num_frames: 10,
-                    auto_download_weights: true,
+                    auto_download_weights: false,
                 },
                 anime: AnimeConfig {
                     enabled: false,
@@ -435,6 +451,38 @@ mod tests {
         .expect("write env cache");
 
         let entry = load_environment_cache(&dir, "fingerprint-b", false).await;
+        assert!(entry.is_none());
+    }
+
+    #[tokio::test]
+    async fn invalidates_environment_cache_with_schema_version_five() {
+        let dir = temp_dir("env-schema-v5");
+        let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
+            schema_version: 5,
+            checked_at: "2026-04-23T11:00:00Z".to_string(),
+            fingerprint: "fingerprint-a".to_string(),
+            result: json!({"type":"check", "superResolutionAlgorithms":[{"name":"basicvsr"}]}),
+        })
+        .expect("serialize env cache");
+        fs::write(environment_cache_path(&dir), payload).expect("write env cache");
+
+        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
+        assert!(entry.is_none());
+    }
+
+    #[tokio::test]
+    async fn invalidates_environment_cache_with_schema_version_six() {
+        let dir = temp_dir("env-schema-v6");
+        let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
+            schema_version: 6,
+            checked_at: "2026-07-02T11:00:00Z".to_string(),
+            fingerprint: "fingerprint-a".to_string(),
+            result: json!({"type":"check", "interpolationAlgorithms":[{"name":"rife"}]}),
+        })
+        .expect("serialize env cache");
+        fs::write(environment_cache_path(&dir), payload).expect("write env cache");
+
+        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
         assert!(entry.is_none());
     }
 

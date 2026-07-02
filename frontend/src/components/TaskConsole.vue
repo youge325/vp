@@ -24,11 +24,11 @@ const progressPercent = computed(() => {
 
 // Phase D.4.8 — watch length instead of the array contents. The previous
 // `deep: true` watcher fired on every progress-line replacement
-// (`[VP_PROGRESS]` overwrites the last entry roughly once per backend
-// percent tick) and forced a full panel reconcile every time. Listening
-// to `length` means we only scroll on append, which is the visible
-// behaviour the user actually cares about; progress-line tail updates
-// keep the user's scroll position intact.
+// (`[VP_PROGRESS]` updates the matching stage line roughly once per
+// backend percent tick) and forced a full panel reconcile every time.
+// Listening to `length` means we only scroll on append, which is the
+// visible behaviour the user actually cares about; progress-line tail
+// updates keep the user's scroll position intact.
 watch(
   () => logs.value.length,
   async () => {

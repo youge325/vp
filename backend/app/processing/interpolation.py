@@ -13,6 +13,7 @@ from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
 from app.algorithms.pytorch.rife.model_loader import SUPPORTED_MODELS as _RIFE_MODELS
 from app.algorithms.pytorch.rife.onnx_solver import RIFEONNXSolver
+from app.utils.model_metrics import get_rife_model_details
 
 if TYPE_CHECKING:
     from app.algorithms.pytorch.rife.solver import RIFESolver
@@ -28,6 +29,7 @@ SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
         "name": "rife",
         "tensorBackends": ["pytorch", "onnx"],
         "models": list(_RIFE_MODELS),
+        "modelDetails": get_rife_model_details(),
     },
 ]
 

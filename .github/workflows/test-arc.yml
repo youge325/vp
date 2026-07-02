@@ -73,3 +73,6 @@ jobs:
 
       - name: TaskErrorCode three-layer consistency check
         run: python scripts/check_error_code_drift.py
+
+      - name: Architecture contracts check
+        run: python scripts/check_architecture_contracts.py

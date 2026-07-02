@@ -11,11 +11,39 @@ def _emit(payload: dict) -> None:
 
 
 try:
-    from app.errors import ProcessError
+    from app.errors import ProcessError, error_code_to_wire
     from app.errors._bootstrap import infer_error_code
 except Exception:  # pragma: no cover - defensive bootstrap boundary
     ProcessError = None
+    error_code_to_wire = None
     infer_error_code = None
+
+
+def _wire_error_code(code: object) -> str:
+    if error_code_to_wire is not None:
+        return error_code_to_wire(code)
+    if isinstance(code, str) and code in {
+        "missing_ffmpeg",
+        "missing_model",
+        "missing_tensor_backend",
+        "missing_python_dependency",
+        "cancelled",
+        "process_failed",
+        "spawn_failed",
+        "runtime_panic",
+        "invalid_input",
+        "invalid_config",
+        "resume_conflict",
+        "io_error",
+        "schema_mismatch",
+        "persistence_failed",
+        "backend_no_json",
+        "backend_envelope",
+        "controller_unavailable",
+        "backend_probe_failed",
+    }:
+        return code
+    return "process_failed"
 
 
 def _bootstrap_error_code(exc: BaseException) -> str:
@@ -50,7 +78,7 @@ def _run() -> None:
     try:
         from app.cli import main
     except Exception as exc:  # pragma: no cover - defensive bootstrap boundary
-        code = _bootstrap_error_code(exc)
+        code = _wire_error_code(_bootstrap_error_code(exc))
         _emit(
             {
                 "type": "error",
@@ -70,7 +98,7 @@ def _run() -> None:
         _emit(
             {
                 "type": "error",
-                "code": exc.code,
+                "code": _wire_error_code(exc.code),
                 "message": exc.message,
                 "details": exc.details,
             }
@@ -82,7 +110,7 @@ def _run() -> None:
             _emit(
                 {
                     "type": "error",
-                    "code": pe.code,
+                    "code": _wire_error_code(pe.code),
                     "message": pe.message,
                     "details": pe.details,
                 }
@@ -91,7 +119,7 @@ def _run() -> None:
             _emit(
                 {
                     "type": "error",
-                    "code": _bootstrap_error_code(exc),
+                    "code": _wire_error_code(_bootstrap_error_code(exc)),
                     "message": str(exc) or exc.__class__.__name__,
                     "details": {
                         "exception": exc.__class__.__name__,

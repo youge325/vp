@@ -7,6 +7,8 @@ import { BACKEND_LABELS, ENGINE_LABELS } from '@/config/gpu-labels'
 import BaseNumber from '@/components/forms/BaseNumber.vue'
 import BaseSelect from '@/components/forms/BaseSelect.vue'
 import BaseToggle from '@/components/forms/BaseToggle.vue'
+import { modelOptionLabel } from '@/services/model-metrics'
+import type { ModelVariantInfo } from '@/types/domain/env'
 import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/domain/workflow'
 
 const form = useEnhanceForm()
@@ -44,7 +46,10 @@ const interpolationAlgorithmOptions = computed(() =>
 )
 
 const interpolationModelOptions = computed(() =>
-  form.interpolationModels.map((model) => ({ value: model, label: model })),
+  form.interpolationModels.map((model) => ({
+    value: model,
+    label: modelOptionLabel(model, findDetail(form.interpolationModelDetails, model)),
+  })),
 )
 
 // ONNX 模型空列表的情况:仍然渲染 select(disabled),options 里只有占位
@@ -52,7 +57,10 @@ const interpolationModelOptions = computed(() =>
 // 替换掉原视图末尾的 ``<span class="field-hint">``。
 const interpolationOnnxOptions = computed(() => [
   { value: '', label: '未选择' },
-  ...form.interpolationOnnxModels.map((model) => ({ value: model, label: model })),
+  ...form.interpolationOnnxModels.map((model) => ({
+    value: model,
+    label: modelOptionLabel(model, findDetail(form.interpolationOnnxModelDetails, model)),
+  })),
 ])
 
 const FPS_MODE_OPTIONS = [
@@ -66,12 +74,18 @@ const MULTI_OPTIONS = [
 ] as const
 
 const superResolutionAlgorithmOptions = computed(() =>
-  form.superResolutionAlgorithms.map((alg) => ({ value: alg.name, label: alg.name })),
+  form.superResolutionAlgorithms.map((alg) => ({
+    value: alg.name,
+    label: modelOptionLabel(alg.name, alg.modelDetails?.[0]),
+  })),
 )
 
 const superResolutionOnnxOptions = computed(() => [
   { value: '', label: '未选择' },
-  ...form.superResolutionOnnxModels.map((model) => ({ value: model, label: model })),
+  ...form.superResolutionOnnxModels.map((model) => ({
+    value: model,
+    label: modelOptionLabel(model, findDetail(form.superResolutionOnnxModelDetails, model)),
+  })),
 ])
 
 const PROCESS_ORDER_OPTIONS = [
@@ -82,6 +96,10 @@ const PROCESS_ORDER_OPTIONS = [
 const animeProfileOptions = computed(() =>
   form.animeProfiles.map((profile) => ({ value: profile, label: profile })),
 )
+
+function findDetail(details: ModelVariantInfo[], name: string): ModelVariantInfo | undefined {
+  return details.find((detail) => detail.name === name)
+}
 
 function setInterpolationBackend(value: string): void {
   form.interpolationBackend = value as TensorBackend
@@ -219,6 +237,13 @@ function setProcessOrder(value: string): void {
           @update:model-value="(v) => (form.interpolationFp16 = v)"
         />
       </div>
+
+      <div class="model-metric-grid" aria-label="补帧模型指标">
+        <div v-for="row in form.interpolationMetricRows" :key="row.label" class="model-metric-item">
+          <span>{{ row.label }}</span>
+          <strong>{{ row.value }}</strong>
+        </div>
+      </div>
     </section>
 
     <section class="panel-surface">
@@ -282,14 +307,6 @@ function setProcessOrder(value: string): void {
           @update:model-value="(v) => (form.superResolutionNumFrames = v)"
         />
 
-        <BaseToggle
-          v-if="form.isPaddleGanSuperResolution"
-          label="权重"
-          chip-text="自动下载"
-          :model-value="form.superResolutionAutoDownloadWeights"
-          @update:model-value="(v) => (form.superResolutionAutoDownloadWeights = v)"
-        />
-
         <BaseSelect
           label="处理顺序"
           span-two
@@ -297,6 +314,13 @@ function setProcessOrder(value: string): void {
           :options="PROCESS_ORDER_OPTIONS"
           @update:model-value="setProcessOrder"
         />
+      </div>
+
+      <div class="model-metric-grid" aria-label="超分模型指标">
+        <div v-for="row in form.superResolutionMetricRows" :key="row.label" class="model-metric-item">
+          <span>{{ row.label }}</span>
+          <strong>{{ row.value }}</strong>
+        </div>
       </div>
     </section>
 

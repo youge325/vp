@@ -451,6 +451,13 @@ def test_check_reports_onnx_runtime_and_model_lists(tmp_path, monkeypatch, capsy
     )
     monkeypatch.setattr("app.cli.commands.check.list_gpu_adapters", lambda: [])
     monkeypatch.setattr(settings, "RIFE_MODEL_DIR", str(model_dir))
+    paddlegan_weight = tmp_path / "paddlegan" / "ppmsvsr" / "PP-MSVSR_reds_x4.pdparams"
+    monkeypatch.setattr(
+        "app.cli.commands.check.resolve_weight_path",
+        lambda model_id: paddlegan_weight
+        if model_id == "ppmsvsr"
+        else tmp_path / "paddlegan" / model_id / f"{model_id}.pdparams",
+    )
 
     cmd_check(argparse.Namespace())
 
@@ -461,17 +468,29 @@ def test_check_reports_onnx_runtime_and_model_lists(tmp_path, monkeypatch, capsy
 
     rife_alg = next(a for a in payload["interpolationAlgorithms"] if a["name"] == "rife")
     assert rife_alg["onnxModels"] == ["interp.onnx"]
+    assert rife_alg["modelDetails"]
+    assert rife_alg["modelDetails"][0]["metrics"]["parameterCount"] is not None
+    assert rife_alg["onnxModelDetails"][0]["name"] == "interp.onnx"
+    assert rife_alg["onnxModelDetails"][0]["metrics"]["analysisStatus"] == "unknown"
     placeholder_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "placeholder")
     assert placeholder_alg["onnxModels"] == ["sr.onnx"]
+    assert placeholder_alg["onnxModelDetails"][0]["name"] == "sr.onnx"
+    sr_names = {a["name"] for a in payload["superResolutionAlgorithms"]}
+    assert {
+        "ppmsvsr",
+        "ppmsvsr-large",
+        "edvr",
+        "basicvsr",
+        "iconvsr",
+        "basicvsr-plus-plus",
+    }.issubset(sr_names)
     ppmsvsr_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "ppmsvsr")
     assert ppmsvsr_alg["tensorBackends"] == ["paddle"]
     assert ppmsvsr_alg["models"] == ["x4"]
     assert ppmsvsr_alg["scaleFactors"] == [4]
     assert ppmsvsr_alg["defaultNumFrames"] == 10
-    assert ppmsvsr_alg["weightUrl"].endswith("PP-MSVSR_reds_x4.pdparams")
-    assert ppmsvsr_alg["weightPath"].endswith(
-        "backend\\models\\super_resolution\\paddlegan\\ppmsvsr\\PP-MSVSR_reds_x4.pdparams"
-    ) or ppmsvsr_alg["weightPath"].endswith(
-        "backend/models/super_resolution/paddlegan/ppmsvsr/PP-MSVSR_reds_x4.pdparams"
-    )
+    assert ppmsvsr_alg["modelDetails"][0]["name"] == "x4"
+    assert ppmsvsr_alg["modelDetails"][0]["metrics"]["parameterCount"] is not None
+    assert "weightUrl" not in ppmsvsr_alg
+    assert ppmsvsr_alg["weightPath"] == str(paddlegan_weight)
     assert ppmsvsr_alg["weightAvailable"] is False

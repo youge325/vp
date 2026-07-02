@@ -2,9 +2,11 @@
 // 环境探测响应归一化 — 兼容 snake_case / camelCase,补全数组默认值。
 
 import type {
+  AlgorithmInfo,
   EnvironmentCheckPayload,
   EnvironmentCheckResult,
   GpuAdapter,
+  ModelVariantInfo,
 } from '@/types/domain/env'
 
 export function normalizeGpuAdapter(adapter: Record<string, unknown>): GpuAdapter {
@@ -14,6 +16,33 @@ export function normalizeGpuAdapter(adapter: Record<string, unknown>): GpuAdapte
     deviceType: (adapter.deviceType ?? adapter.device_type ?? 'other') as GpuAdapter['deviceType'],
     adapterCompatibility: String(adapter.adapterCompatibility ?? adapter.adapter_compatibility ?? ''),
     driverVersion: String(adapter.driverVersion ?? adapter.driver_version ?? ''),
+  }
+}
+
+function normalizeModelVariant(raw: ModelVariantInfo): ModelVariantInfo {
+  const metrics = raw.metrics ?? {
+    analysisStatus: 'unknown',
+    analysisNotes: [],
+  }
+  return {
+    ...raw,
+    metrics: {
+      ...metrics,
+      analysisStatus: metrics.analysisStatus ?? 'unknown',
+      analysisNotes: metrics.analysisNotes ?? [],
+    },
+  }
+}
+
+function normalizeAlgorithmInfo(raw: AlgorithmInfo): AlgorithmInfo {
+  return {
+    ...raw,
+    tensorBackends: raw.tensorBackends ?? [],
+    models: raw.models ?? [],
+    onnxModels: raw.onnxModels ?? [],
+    modelDetails: (raw.modelDetails ?? []).map(normalizeModelVariant),
+    onnxModelDetails: (raw.onnxModelDetails ?? []).map(normalizeModelVariant),
+    scaleFactors: raw.scaleFactors ?? [],
   }
 }
 
@@ -55,6 +84,8 @@ export function normalizeCheckResult(raw: EnvironmentCheckResult): EnvironmentCh
       ...(raw.onnxRuntime ?? {}),
       providers: raw.onnxRuntime?.providers ?? [],
     },
+    interpolationAlgorithms: (raw.interpolationAlgorithms ?? []).map(normalizeAlgorithmInfo),
+    superResolutionAlgorithms: (raw.superResolutionAlgorithms ?? []).map(normalizeAlgorithmInfo),
   }
 }
 

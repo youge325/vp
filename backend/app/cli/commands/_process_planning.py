@@ -76,7 +76,7 @@ def _make_stage_progress_callback(
     stage_index: int,
     stage_total: int,
     stage_name: str,
-) -> Callable[[int, int], None]:
+) -> Callable[..., None]:
     """Build a progress callback that pins this stage's identity into the reporter.
 
     Phase C.1.3 — each step gets its own closure so the reporter knows
@@ -86,9 +86,14 @@ def _make_stage_progress_callback(
     denominator for percent calculation.
     """
 
-    def callback(current: int, _total: int) -> None:
-        reporter.set_stage(stage_name, stage_index, stage_total)
-        reporter.update(current)
+    def callback(current: int, total: int, **kwargs: Any) -> None:
+        reporter.set_stage(stage_name, stage_index, stage_total, total_frames=total)
+        reporter.update(
+            current,
+            total_frames=total,
+            force=bool(kwargs.get("force") or False),
+            heartbeat=bool(kwargs.get("heartbeat") or False),
+        )
 
     return callback
 
@@ -105,6 +110,23 @@ def _verify_model_availability(
     ``resolve_onnx_model_path``. Both paths emit ``MISSING_MODEL`` on
     failure.
     """
+    from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS, ensure_paddlegan_vsr_weights
+
+    for step in processing_steps:
+        if step.algorithm_type != "super_resolution":
+            continue
+        sr_algorithm = str(step.algorithm_kwargs.get("sr_algorithm") or "")
+        if sr_algorithm in PADDLEGAN_VSR_SPECS:
+            super_resolution = workflow_config.get("superResolution", {})
+            ensure_paddlegan_vsr_weights(
+                sr_algorithm,
+                auto_download=bool(
+                    super_resolution.get("autoDownloadWeights")
+                    or super_resolution.get("auto_download_weights")
+                    or False
+                ),
+            )
+
     if _processing_needs_interpolation(processing_steps):
         if tensor_backend_name == "onnx":
             try:
@@ -186,8 +208,22 @@ def _verify_super_resolution_backend(
         super_resolution.get("tensorBackend") or super_resolution.get("tensor_backend") or tensor_backend_name
     )
 
-    from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
+    from app.algorithms.paddle.paddlegan_vsr.weights import DISABLED_PADDLEGAN_VSR_MODELS, PADDLEGAN_VSR_SPECS
 
+    if algorithm in DISABLED_PADDLEGAN_VSR_MODELS:
+        missing = DISABLED_PADDLEGAN_VSR_MODELS[algorithm]
+        raise_error(
+            TaskErrorCode.INVALID_CONFIG,
+            (
+                f"PaddleGAN VSR model '{algorithm}' is unavailable because required auxiliary "
+                f"weights are not available: {', '.join(missing)}."
+            ),
+            details={
+                "algorithm": algorithm,
+                "missingAuxiliaryWeights": list(missing),
+                "available": sorted(PADDLEGAN_VSR_SPECS),
+            },
+        )
     if algorithm in PADDLEGAN_VSR_SPECS:
         scale_factor = float(super_resolution.get("scaleFactor") or super_resolution.get("scale_factor") or 1.0)
         if scale_factor != 4.0:

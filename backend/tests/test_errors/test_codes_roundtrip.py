@@ -18,7 +18,7 @@ import pytest
 import app.__main__ as app_main
 from app.errors import ProcessError
 from app.errors._bootstrap import infer_error_code
-from app.errors._codes import ALL_CODES, TaskErrorCode
+from app.errors._codes import ALL_CODES, TaskErrorCode, error_code_to_wire
 
 
 @pytest.mark.parametrize("code", list(TaskErrorCode))
@@ -75,6 +75,34 @@ def test_infer_error_code_defaults_to_process_failed() -> None:
 def test_all_codes_match_enum() -> None:
     """The ``ALL_CODES`` frozenset must exactly enumerate the enum values."""
     assert ALL_CODES == {code.value for code in TaskErrorCode}
+
+
+@pytest.mark.parametrize(
+    ("raw_code", "expected_code"),
+    [
+        (TaskErrorCode.MISSING_MODEL, TaskErrorCode.MISSING_MODEL.value),
+        (TaskErrorCode.MISSING_MODEL.value, TaskErrorCode.MISSING_MODEL.value),
+        ("TaskErrorCode.MISSING_MODEL", TaskErrorCode.MISSING_MODEL.value),
+        ("not_a_real_code", TaskErrorCode.PROCESS_FAILED.value),
+        (None, TaskErrorCode.PROCESS_FAILED.value),
+    ],
+)
+def test_error_code_to_wire_normalizes_enums_values_and_legacy_strings(raw_code: object, expected_code: str) -> None:
+    """Wire serialization must never leak ``TaskErrorCode.NAME`` to Rust."""
+    assert error_code_to_wire(raw_code) == expected_code
+
+
+@pytest.mark.parametrize(
+    ("raw_code", "expected_code"),
+    [
+        (TaskErrorCode.MISSING_MODEL, TaskErrorCode.MISSING_MODEL.value),
+        ("TaskErrorCode.MISSING_MODEL", TaskErrorCode.MISSING_MODEL.value),
+        ("not_a_real_code", TaskErrorCode.PROCESS_FAILED.value),
+    ],
+)
+def test_main_wire_error_code_uses_same_normalization(raw_code: object, expected_code: str) -> None:
+    """Top-level ``python -m app`` envelopes must use Rust-safe wire codes."""
+    assert app_main._wire_error_code(raw_code) == expected_code
 
 
 def test_all_inferred_codes_are_in_enum() -> None:

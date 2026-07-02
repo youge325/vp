@@ -20,9 +20,12 @@ COMMANDS_MANIFEST = ROOT / "frontend" / "src-tauri" / "src" / "commands_manifest
 DEFAULT_PERMISSIONS = ROOT / "frontend" / "src-tauri" / "permissions" / "default.toml"
 IPC_ENDPOINT_DIR = ROOT / "frontend" / "src" / "lib" / "ipc" / "endpoints"
 IPC_CONTRACT = ROOT / "frontend" / "src" / "lib" / "ipc" / "contract.ts"
+TAURI_SRC = ROOT / "frontend" / "src-tauri" / "src"
 FRONTEND_SRC = ROOT / "frontend" / "src"
 DOC_ROOT = ROOT / "docs"
 README = ROOT / "README.md"
+PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
+ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 
 
 def _read(path: Path) -> str:
@@ -57,6 +60,54 @@ def _allow_token(command: str) -> str:
     return f"allow-{command.replace('_', '-')}"
 
 
+def _snake_to_camel(name: str) -> str:
+    head, *tail = name.split("_")
+    return head + "".join(part[:1].upper() + part[1:] for part in tail)
+
+
+def _find_matching(text: str, start: int, open_char: str, close_char: str) -> int:
+    depth = 0
+    for index in range(start, len(text)):
+        char = text[index]
+        if char == open_char:
+            depth += 1
+        elif char == close_char:
+            depth -= 1
+            if depth == 0:
+                return index
+    raise RuntimeError(f"could not find matching {close_char!r}")
+
+
+def _split_top_level_commas(text: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+    depth = 0
+    pairs = {"<": ">", "(": ")", "[": "]", "{": "}"}
+    closers = set(pairs.values())
+    for index, char in enumerate(text):
+        if char in pairs:
+            depth += 1
+        elif char in closers:
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(text[start:index].strip())
+            start = index + 1
+    tail = text[start:].strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _is_tauri_injected_param(type_name: str) -> bool:
+    type_name = type_name.strip()
+    return (
+        type_name.startswith("AppHandle")
+        or type_name.startswith("State<")
+        or type_name.startswith("tauri::AppHandle")
+        or type_name.startswith("tauri::State<")
+    )
+
+
 def _collect_manifest_commands() -> set[str]:
     text = _read(COMMANDS_MANIFEST)
     match = re.search(r"APP_COMMAND_NAMES:\s*&\[&str\]\s*=\s*&\[(?P<body>.*?)\];", text, re.DOTALL)
@@ -87,11 +138,75 @@ def _collect_typed_ipc_contract_commands() -> set[str]:
     return set(re.findall(r"['\"]([a-z_]+)['\"]", match.group("body")))
 
 
+def _collect_rust_command_args() -> dict[str, set[str]]:
+    command_args: dict[str, set[str]] = {}
+    command_attr = re.compile(r"^\s*#\s*\[\s*tauri::command\s*\]", re.MULTILINE)
+    function_decl = re.compile(r"(?:#\[[^\]]+\]\s*)*pub\s+(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)")
+
+    for path in sorted(TAURI_SRC.rglob("*.rs")):
+        text = _read(path)
+        for attr_match in command_attr.finditer(text):
+            fn_match = function_decl.search(text, attr_match.end())
+            if not fn_match:
+                raise RuntimeError(f"could not parse tauri command function after attr in {_rel(path)}")
+            command = fn_match.group(1)
+            args_start = text.find("(", fn_match.end())
+            if args_start < 0:
+                raise RuntimeError(f"could not parse args for tauri command `{command}` in {_rel(path)}")
+            args_end = _find_matching(text, args_start, "(", ")")
+            args = set()
+            for param in _split_top_level_commas(text[args_start + 1 : args_end]):
+                if ":" not in param:
+                    continue
+                raw_name, raw_type = param.split(":", 1)
+                name = raw_name.strip().removeprefix("mut ").strip()
+                type_name = raw_type.strip()
+                if _is_tauri_injected_param(type_name):
+                    continue
+                args.add(_snake_to_camel(name) if "_" in name else name)
+            command_args[command] = args
+
+    return command_args
+
+
+def _collect_typed_ipc_contract_args() -> dict[str, set[str]]:
+    text = _read(IPC_CONTRACT)
+    match = re.search(r"export\s+interface\s+IpcCommandArgs\s*\{", text)
+    if not match:
+        raise RuntimeError("could not parse IpcCommandArgs in frontend IPC contract")
+    body_start = text.find("{", match.start())
+    body_end = _find_matching(text, body_start, "{", "}")
+    body = text[body_start + 1 : body_end]
+    command_args: dict[str, set[str]] = {}
+
+    for line in body.splitlines():
+        line = line.strip().rstrip(",;")
+        if not line:
+            continue
+        match = re.match(r"([a-z_]+):\s*(.+)$", line)
+        if not match:
+            raise RuntimeError(f"could not parse IpcCommandArgs line: {line}")
+        command, value = match.groups()
+        value = value.strip()
+        if value == "undefined":
+            command_args[command] = set()
+            continue
+        if value.startswith("{") and value.endswith("}"):
+            command_args[command] = set(re.findall(r"\b([A-Za-z_$][A-Za-z0-9_$]*)\s*:", value))
+            continue
+        raise RuntimeError(f"unsupported IpcCommandArgs shape for `{command}`: {value}")
+
+    return command_args
+
+
 def _check_command_surface(issues: list[str]) -> None:
     manifest = _collect_manifest_commands()
     permissions = _collect_permission_commands()
     invokes = _collect_frontend_invoke_commands()
     contract = _collect_typed_ipc_contract_commands()
+    rust_args = _collect_rust_command_args()
+    rust_commands = set(rust_args)
+    contract_args = _collect_typed_ipc_contract_args()
 
     expected_permissions = {_allow_token(command) for command in manifest}
     raw_permission_tokens = set(re.findall(r'"(allow-[a-z-]+)"', _read(DEFAULT_PERMISSIONS)))
@@ -109,6 +224,12 @@ def _check_command_surface(issues: list[str]) -> None:
             f"only-in-permissions={sorted(permissions - manifest)}"
         )
 
+    if rust_commands != manifest:
+        issues.append(
+            "tauri command functions drift from command manifest: "
+            f"only-in-manifest={sorted(manifest - rust_commands)}, only-in-rust={sorted(rust_commands - manifest)}"
+        )
+
     if invokes != manifest:
         issues.append(
             "frontend IPC endpoint safeInvoke commands drift from command manifest: "
@@ -120,6 +241,13 @@ def _check_command_surface(issues: list[str]) -> None:
             "frontend typed IPC contract commands drift from command manifest: "
             f"only-in-manifest={sorted(manifest - contract)}, only-in-contract={sorted(contract - manifest)}"
         )
+
+    for command in sorted(manifest & set(rust_args) & set(contract_args)):
+        if rust_args[command] != contract_args[command]:
+            issues.append(
+                f"IPC command args drift for `{command}`: "
+                f"rust={sorted(rust_args[command])}, contract={sorted(contract_args[command])}"
+            )
 
 
 def _check_docs_do_not_reference_legacy_commands(issues: list[str]) -> None:
@@ -159,6 +287,68 @@ def _check_ui_and_store_ipc_boundary(issues: list[str]) -> None:
             issues.append(f"direct IPC access in UI/store layer: {_rel(path)}")
 
 
+def _collect_python_dict_keys(text: str, symbol: str) -> set[str]:
+    assignment = text.find(symbol)
+    if assignment < 0:
+        raise RuntimeError(f"could not find `{symbol}`")
+    body_start = text.find("{", assignment)
+    if body_start < 0:
+        raise RuntimeError(f"could not find dict body for `{symbol}`")
+    body_end = _find_matching(text, body_start, "{", "}")
+    body = text[body_start + 1 : body_end]
+    return set(re.findall(r"['\"]([a-z0-9-]+)['\"]\s*:", body))
+
+
+def _collect_backend_paddlegan_enabled_models() -> set[str]:
+    return _collect_python_dict_keys(_read(PADDLEGAN_WEIGHTS), "PADDLEGAN_VSR_SPECS")
+
+
+def _collect_backend_paddlegan_disabled_models() -> set[str]:
+    return _collect_python_dict_keys(_read(PADDLEGAN_WEIGHTS), "DISABLED_PADDLEGAN_VSR_MODELS")
+
+
+def _collect_frontend_paddlegan_models() -> set[str]:
+    text = _read(ENHANCE_FORM)
+    match = re.search(r"PADDLEGAN_VSR_ALGORITHMS\s*=\s*new\s+Set\s*\((?P<body>\[[\s\S]*?\])\)", text)
+    if not match:
+        raise RuntimeError("could not parse PADDLEGAN_VSR_ALGORITHMS in useEnhanceForm.ts")
+    return set(re.findall(r"['\"]([a-z0-9-]+)['\"]", match.group("body")))
+
+
+def _diff_paddlegan_vsr_contract(
+    backend_enabled: set[str],
+    backend_disabled: set[str],
+    frontend_models: set[str],
+) -> list[str]:
+    issues: list[str] = []
+    only_backend = backend_enabled - frontend_models
+    only_frontend = frontend_models - backend_enabled
+    if only_backend or only_frontend:
+        issues.append(
+            "PaddleGAN VSR backend/frontend model exposure drift: "
+            f"only-in-backend={sorted(only_backend)}, only-in-frontend={sorted(only_frontend)}"
+        )
+
+    enabled_disabled_overlap = backend_enabled & backend_disabled
+    if enabled_disabled_overlap:
+        issues.append(f"PaddleGAN VSR models cannot be both enabled and disabled: {sorted(enabled_disabled_overlap)}")
+
+    frontend_disabled_overlap = frontend_models & backend_disabled
+    if frontend_disabled_overlap:
+        issues.append(f"Frontend re-exposes disabled PaddleGAN VSR models: {sorted(frontend_disabled_overlap)}")
+    return issues
+
+
+def _check_paddlegan_vsr_contract(issues: list[str]) -> None:
+    issues.extend(
+        _diff_paddlegan_vsr_contract(
+            _collect_backend_paddlegan_enabled_models(),
+            _collect_backend_paddlegan_disabled_models(),
+            _collect_frontend_paddlegan_models(),
+        )
+    )
+
+
 def main() -> int:
     issues: list[str] = []
     try:
@@ -166,6 +356,7 @@ def main() -> int:
         _check_docs_do_not_reference_legacy_commands(issues)
         _check_generated_type_import_boundary(issues)
         _check_ui_and_store_ipc_boundary(issues)
+        _check_paddlegan_vsr_contract(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2

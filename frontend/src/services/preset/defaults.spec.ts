@@ -48,7 +48,7 @@ describe('createDefaultWorkflowConfig PaddleGAN SR fields', () => {
     expect(workflow.superResolution.tensorBackend).toBe('onnx')
     expect(workflow.superResolution.engine).toBe('cuda')
     expect(workflow.superResolution.numFrames).toBe(10)
-    expect(workflow.superResolution.autoDownloadWeights).toBe(true)
+    expect(workflow.superResolution.autoDownloadWeights).toBe(false)
   })
 })
 

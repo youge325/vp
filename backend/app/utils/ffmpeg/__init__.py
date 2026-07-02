@@ -112,6 +112,7 @@ class FFmpegWrapper:
         height: int,
         decode_config: dict[str, Any] | None = None,
         start_frame: int = 0,
+        frame_count: int | None = None,
     ) -> list[str]:
         decode_input_args = self.build_decode_input_args(input_path, decode_config)
         return build_rawvideo_decode_command(
@@ -121,6 +122,7 @@ class FFmpegWrapper:
             height=height,
             decode_input_args=decode_input_args,
             start_frame=start_frame,
+            frame_count=frame_count,
         )
 
     def build_rawvideo_encode_command(
@@ -152,6 +154,7 @@ class FFmpegWrapper:
         height: int,
         decode_config: dict[str, Any] | None = None,
         start_frame: int = 0,
+        frame_count: int | None = None,
     ) -> RawVideoReader:
         decode_input_args = self.build_decode_input_args(input_path, decode_config)
         return open_rawvideo_decoder(
@@ -161,6 +164,7 @@ class FFmpegWrapper:
             height=height,
             decode_input_args=decode_input_args,
             start_frame=start_frame,
+            frame_count=frame_count,
         )
 
     def open_rawvideo_encoder(

@@ -143,6 +143,7 @@ def build_rawvideo_decode_command(
     height: int,
     decode_input_args: list[str],
     start_frame: int = 0,
+    frame_count: int | None = None,
 ) -> list[str]:
     """Build FFmpeg command for rawvideo decoding."""
     if width <= 0 or height <= 0:
@@ -151,7 +152,10 @@ def build_rawvideo_decode_command(
     cmd.extend(decode_input_args)
     if start_frame > 0:
         cmd.extend(["-vf", f"select=gte(n\\,{start_frame})"])
-    cmd.extend(["-map", "0:v:0", "-pix_fmt", "rgb24", "-f", "rawvideo", "-vsync", "0", "-"])
+    cmd.extend(["-map", "0:v:0", "-pix_fmt", "rgb24", "-f", "rawvideo", "-vsync", "0"])
+    if frame_count is not None and frame_count > 0:
+        cmd.extend(["-frames:v", str(int(frame_count))])
+    cmd.append("-")
     return cmd
 
 
@@ -199,6 +203,7 @@ def open_rawvideo_decoder(
     height: int,
     decode_input_args: list[str],
     start_frame: int = 0,
+    frame_count: int | None = None,
 ) -> RawVideoReader:
     """Open a rawvideo decoder pipe."""
     cmd = build_rawvideo_decode_command(
@@ -208,6 +213,7 @@ def open_rawvideo_decoder(
         height=height,
         decode_input_args=decode_input_args,
         start_frame=start_frame,
+        frame_count=frame_count,
     )
     process = subprocess.Popen(
         cmd,

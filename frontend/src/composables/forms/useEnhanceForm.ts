@@ -7,6 +7,7 @@ import { useEnvStore } from '@/stores/env'
 import { createDraftEditor } from '@/composables/forms/lens'
 import { createAlgorithmLens } from '@/composables/forms/enhance-lens'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
+import { estimateModelRuntimeMetrics, metricRows } from '@/services/model-metrics'
 import {
   fallbackInterpolationOnnxModel,
   fallbackSuperResolutionOnnxModel,
@@ -40,7 +41,7 @@ function isPaddleGanVsr(algorithm: AlgorithmInfo | undefined): boolean {
 
 export function useEnhanceForm() {
   const envStore = useEnvStore()
-  const { editorConfig, patchWorkflow } = useWorkbenchEditor()
+  const { activeItem, editorConfig, patchWorkflow } = useWorkbenchEditor()
 
   const workflow = computed(() => editorConfig.value.workflowConfig)
   const { field, effect } = createDraftEditor<WorkflowConfig>(
@@ -71,10 +72,77 @@ export function useEnhanceForm() {
   const animeProfiles = computed(() => envStore.env.checkResult?.animeProfiles ?? [])
   const isInterpolationOnnxBackend = computed(() => interpolationBackendValue.value === 'onnx')
   const isSuperResolutionOnnxBackend = computed(() => superResolutionBackendValue.value === 'onnx')
+  const currentInterpolationAlgorithm = interpolation.current
   const currentSuperResolutionAlgorithm = computed(() =>
     superResolutionAlgorithmSpecs.value.find((a) => a.name === workflow.value.superResolution.algorithm),
   )
   const isPaddleGanSuperResolution = computed(() => isPaddleGanVsr(currentSuperResolutionAlgorithm.value))
+  const interpolationModelDetails = computed(() => currentInterpolationAlgorithm.value?.modelDetails ?? [])
+  const interpolationOnnxModelDetails = computed(() => currentInterpolationAlgorithm.value?.onnxModelDetails ?? [])
+  const superResolutionModelDetails = computed(() => currentSuperResolutionAlgorithm.value?.modelDetails ?? [])
+  const superResolutionOnnxModelDetails = computed(() => currentSuperResolutionAlgorithm.value?.onnxModelDetails ?? [])
+  const currentInterpolationModelDetail = computed(() => {
+    if (isInterpolationOnnxBackend.value) {
+      const selected = workflow.value.interpolation.onnxModel ?? ''
+      return interpolationOnnxModelDetails.value.find((detail) => detail.name === selected)
+    }
+    return interpolationModelDetails.value.find((detail) => detail.name === workflow.value.interpolation.model)
+  })
+  const currentSuperResolutionModelDetail = computed(() => {
+    if (isSuperResolutionOnnxBackend.value) {
+      const selected = workflow.value.superResolution.onnxModel ?? ''
+      return superResolutionOnnxModelDetails.value.find((detail) => detail.name === selected)
+    }
+    return superResolutionModelDetails.value[0]
+  })
+  const activeVideoDimensions = computed(() => {
+    const info = activeItem.value?.info
+    if (!info) return null
+    return { width: info.width, height: info.height }
+  })
+  const interpolationInputDimensions = computed(() => {
+    const video = activeVideoDimensions.value
+    if (!video) return null
+    if (
+      workflow.value.superResolution.enabled &&
+      workflow.value.processOrder === 'super_resolution_then_interpolation'
+    ) {
+      const scale = workflow.value.superResolution.scaleFactor || 1
+      return {
+        width: Math.max(1, Math.round(video.width * scale)),
+        height: Math.max(1, Math.round(video.height * scale)),
+      }
+    }
+    return video
+  })
+  const interpolationRuntimeEstimate = computed(() =>
+    estimateModelRuntimeMetrics(
+      currentInterpolationModelDetail.value,
+      interpolationInputDimensions.value,
+      {
+        scale: workflow.value.interpolation.scale || 1,
+        precisionBytes: workflow.value.interpolation.fp16 ? 2 : 4,
+        temporalFrames: 1,
+      },
+    ),
+  )
+  const superResolutionRuntimeEstimate = computed(() =>
+    estimateModelRuntimeMetrics(
+      currentSuperResolutionModelDetail.value,
+      activeVideoDimensions.value,
+      {
+        scale: 1,
+        precisionBytes: 4,
+        temporalFrames: isPaddleGanSuperResolution.value ? workflow.value.superResolution.numFrames ?? 10 : 1,
+      },
+    ),
+  )
+  const interpolationMetricRows = computed(() =>
+    metricRows(currentInterpolationModelDetail.value, interpolationRuntimeEstimate.value),
+  )
+  const superResolutionMetricRows = computed(() =>
+    metricRows(currentSuperResolutionModelDetail.value, superResolutionRuntimeEstimate.value),
+  )
 
   function findSuperResolutionAlgorithm(name: string): AlgorithmInfo | undefined {
     return superResolutionAlgorithmSpecs.value.find((a) => a.name === name)
@@ -200,10 +268,6 @@ export function useEnhanceForm() {
     (c) => c.superResolution.numFrames ?? 10,
     (c, v: number) => { c.superResolution.numFrames = v },
   )
-  const superResolutionAutoDownloadWeights = field(
-    (c) => c.superResolution.autoDownloadWeights ?? true,
-    (c, v: boolean) => { c.superResolution.autoDownloadWeights = v },
-  )
   const processOrder = field(
     (c) => c.processOrder as ProcessOrder,
     (c, v: ProcessOrder) => { c.processOrder = v },
@@ -310,6 +374,16 @@ export function useEnhanceForm() {
     superResolutionAlgorithms: superResolution.algorithms,
     animeProfiles,
     interpolationModels: interpolation.models,
+    interpolationModelDetails,
+    interpolationOnnxModelDetails,
+    superResolutionModelDetails,
+    superResolutionOnnxModelDetails,
+    currentInterpolationModelDetail,
+    currentSuperResolutionModelDetail,
+    interpolationRuntimeEstimate,
+    superResolutionRuntimeEstimate,
+    interpolationMetricRows,
+    superResolutionMetricRows,
     isOnnxBackend: isInterpolationOnnxBackend,
     isInterpolationOnnxBackend,
     isSuperResolutionOnnxBackend,
@@ -333,7 +407,6 @@ export function useEnhanceForm() {
     superResolutionAlgorithm,
     superResolutionOnnxModel,
     superResolutionNumFrames,
-    superResolutionAutoDownloadWeights,
     processOrder,
     animeEnabled,
     animeProfile,

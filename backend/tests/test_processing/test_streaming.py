@@ -255,6 +255,7 @@ def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None
         encode_queue.put(StreamEnd(next_source_frame=video_info["source_frames"]))
 
     monkeypatch.setattr("app.processing.streaming.pipeline.run_stage_worker_pipeline", fake_worker_pipeline)
+    monkeypatch.setattr("app.processing.streaming.pipeline._should_use_stage_file_pipeline", lambda _stage_plan: False)
 
 
 def _apply_fake_stage(step, frames: list[np.ndarray], output_width: int, output_height: int) -> list[np.ndarray]:

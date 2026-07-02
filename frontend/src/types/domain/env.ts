@@ -23,14 +23,33 @@ export interface ResourceSummary {
   [key: string]: string | boolean | number | null | undefined
 }
 
+export type ModelAnalysisStatus = 'ok' | 'partial' | 'unknown' | string
+
+export interface ModelMetricInfo {
+  parameterCount?: number | null
+  parameterBytes?: number | null
+  gflopsPerMegapixel?: number | null
+  activationBytesPerMegapixel?: number | null
+  inputModulo?: number | null
+  analysisStatus: ModelAnalysisStatus
+  analysisNotes: string[]
+}
+
+export interface ModelVariantInfo {
+  name: string
+  label: string
+  metrics: ModelMetricInfo
+}
+
 export interface AlgorithmInfo {
   name: string
   tensorBackends: string[]
   models: string[]
   onnxModels?: string[]
+  modelDetails?: ModelVariantInfo[]
+  onnxModelDetails?: ModelVariantInfo[]
   scaleFactors?: number[]
   defaultNumFrames?: number | null
-  weightUrl?: string | null
   weightPath?: string | null
   weightAvailable?: boolean | null
 }

@@ -8,6 +8,6 @@ export const mediaIpc = {
     return safeInvoke('pick_inputs')
   },
   inspect(inputPath: string): Promise<VideoInfoResult> {
-    return safeInvoke('inspect_video', { input_path: inputPath })
+    return safeInvoke('inspect_video', { inputPath })
   },
 }

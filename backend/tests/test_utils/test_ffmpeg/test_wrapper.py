@@ -113,6 +113,7 @@ Encoder hevc_nvenc [NVIDIA NVENC hevc encoder]:
             height=1080,
             decode_config={"mode": "software", "decoder": "software", "options": {}},
             start_frame=25,
+            frame_count=1000,
         )
         encode_cmd = wrapper.build_rawvideo_encode_command(
             "output.mp4",
@@ -126,6 +127,8 @@ Encoder hevc_nvenc [NVIDIA NVENC hevc encoder]:
         assert decode_cmd[:3] == ["ffmpeg", "-hide_banner", "-loglevel"]
         assert "-vf" in decode_cmd
         assert "select=gte(n\\,25)" in decode_cmd
+        assert "-frames:v" in decode_cmd
+        assert "1000" in decode_cmd
         assert decode_cmd[-1] == "-"
 
         assert encode_cmd[:3] == ["ffmpeg", "-hide_banner", "-loglevel"]

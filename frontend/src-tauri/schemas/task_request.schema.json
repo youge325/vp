@@ -228,7 +228,7 @@
         },
         "autoDownloadWeights": {
           "type": "boolean",
-          "default": true
+          "default": false
         }
       },
       "required": [

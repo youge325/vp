@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import sys
+import threading
 from typing import Any, BinaryIO, Callable, Mapping
 
 import numpy as np
@@ -24,6 +25,7 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.processor import _StepAlgorithm, _is_cpu_frame_stage, _run_stage
 
 STAGE_EVENT_PREFIX = "VP_STAGE_EVENT "
+SEQUENCE_STAGE_HEARTBEAT_SECONDS = 30.0
 
 
 class RawVideoFrameError(RuntimeError):
@@ -44,6 +46,7 @@ class StageWorkerConfig:
     output_height: int
     input_frame_count: int
     tensor_backend_name: str
+    output_frame_count: int | None = None
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "StageWorkerConfig":
@@ -61,6 +64,7 @@ class StageWorkerConfig:
             output_height=int(value("outputHeight", "output_height")),
             input_frame_count=int(value("inputFrameCount", "input_frame_count")),
             tensor_backend_name=str(value("tensorBackendName", "tensor_backend_name")),
+            output_frame_count=int(payload.get("outputFrameCount") or payload.get("output_frame_count") or 0) or None,
         )
 
     @classmethod
@@ -83,6 +87,7 @@ class StageWorkerConfig:
             "outputHeight": self.output_height,
             "inputFrameCount": self.input_frame_count,
             "tensorBackendName": self.tensor_backend_name,
+            "outputFrameCount": self.output_frame_count,
         }
 
 
@@ -233,8 +238,15 @@ def _read_declared_frames(config: StageWorkerConfig, input_stream: BinaryIO) -> 
     return frames
 
 
-def _progress_event(config: StageWorkerConfig, current: int, total: int) -> dict[str, Any]:
-    return {
+def _progress_event(
+    config: StageWorkerConfig,
+    current: int,
+    total: int,
+    *,
+    heartbeat: bool = False,
+    force: bool = False,
+) -> dict[str, Any]:
+    event = {
         "type": "progress",
         "stageName": config.stage_name,
         "stageIndex": config.stage_index,
@@ -242,6 +254,11 @@ def _progress_event(config: StageWorkerConfig, current: int, total: int) -> dict
         "current": current,
         "total": total,
     }
+    if heartbeat:
+        event["heartbeat"] = True
+    if force:
+        event["force"] = True
+    return event
 
 
 def _run_sequence_stage(
@@ -254,12 +271,70 @@ def _run_sequence_stage(
 ) -> int:
     del metrics
     frames = _read_declared_frames(config, input_stream)
-    output_frames = algorithm.process_frame_sequence(frames)
+    total = max(int(config.output_frame_count or config.input_frame_count or len(frames)), 1)
+    progress_state = _StageProgressState()
+    event_sink(_progress_event(config, 0, total, force=True))
+    stop_heartbeat, heartbeat_thread = _start_sequence_stage_heartbeat(config, event_sink, total, progress_state)
+
+    def sequence_progress(current: int, progress_total: int | None = None) -> None:
+        progress_state.current = max(progress_state.current, max(int(current), 0))
+        resolved_total = max(int(progress_total or total), 1)
+        progress_state.total = resolved_total
+        event_sink(
+            _progress_event(
+                config,
+                progress_state.current,
+                resolved_total,
+                force=progress_state.current >= resolved_total,
+            )
+        )
+
+    try:
+        output_frames = algorithm.process_frame_sequence(frames, progress_callback=sequence_progress)
+    finally:
+        stop_heartbeat.set()
+        heartbeat_thread.join(timeout=1)
     total = max(len(output_frames), 1)
+    emit_write_progress = progress_state.current <= 0
     for index, frame in enumerate(output_frames, start=1):
         write_rgb_frame(output_stream, frame, width=config.output_width, height=config.output_height)
-        event_sink(_progress_event(config, index, total))
+        if emit_write_progress:
+            event_sink(_progress_event(config, index, total, force=index >= total))
+    if not emit_write_progress:
+        event_sink(_progress_event(config, total, total, force=True))
     return len(output_frames)
+
+
+@dataclass(slots=True)
+class _StageProgressState:
+    current: int = 0
+    total: int = 1
+
+
+def _start_sequence_stage_heartbeat(
+    config: StageWorkerConfig,
+    event_sink: EventSink,
+    total: int,
+    progress_state: _StageProgressState,
+) -> tuple[threading.Event, threading.Thread]:
+    stop_event = threading.Event()
+    progress_state.total = max(int(total), 1)
+
+    def run() -> None:
+        while not stop_event.wait(max(float(SEQUENCE_STAGE_HEARTBEAT_SECONDS), 0.001)):
+            event_sink(
+                _progress_event(
+                    config,
+                    progress_state.current,
+                    progress_state.total,
+                    heartbeat=True,
+                    force=True,
+                )
+            )
+
+    thread = threading.Thread(target=run, name=f"vp-stage-worker-heartbeat-{config.stage_index}", daemon=True)
+    thread.start()
+    return stop_event, thread
 
 
 def _run_interpolation_stage(
