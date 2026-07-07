@@ -15,14 +15,27 @@ describe('appendTaskLog', () => {
     expect(logs).toEqual([stage1, stage2])
   })
 
-  it('replaces the matching stage progress line in place', () => {
+  it('moves the matching stage progress line to the tail', () => {
     const oldStage1 = '[VP_PROGRESS] [1/2 01_frame_interpolation]  50.0% 1/2'
     const stage2 = '[VP_PROGRESS] [2/2 02_super_resolution]   0.0% 0/5'
     const nextStage1 = '[VP_PROGRESS] [1/2 01_frame_interpolation] 100.0% 2/2'
 
     const logs = appendLine([oldStage1, stage2], nextStage1)
 
-    expect(logs).toEqual([nextStage1, stage2])
+    expect(logs).toEqual([stage2, nextStage1])
+  })
+
+  it('keeps the latest matching stage progress after later lifecycle logs', () => {
+    const oldProgress = '[VP_PROGRESS] [1/2 01_super_resolution] [------------------------] 0.0% 0/6723'
+    const tensorRtLog =
+      '22:03:49 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +
+      '[VP_TRT] TensorRT READY outputs=fetch_name_0,fetch_name_1'
+    const plainLog = '22:03:50 [INFO] app.utils.ffmpeg: muxer ready'
+    const nextProgress = '[VP_PROGRESS] [1/2 01_super_resolution] [#-----------------------] 2.5% 165/6723'
+
+    const logs = appendLine([oldProgress, tensorRtLog, plainLog], nextProgress)
+
+    expect(logs).toEqual([tensorRtLog, plainLog, nextProgress])
   })
 
   it('keeps legacy unkeyed progress replacement behavior', () => {
