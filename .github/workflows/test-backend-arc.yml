@@ -5,20 +5,7 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  push:
-    branches: [main, master, develop]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/test-backend.yml'
-      - '.github/workflows/test-backend-arc.yml'
-      - 'infra/arc/**'
-  pull_request:
-    branches: [main, master, develop]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/test-backend.yml'
-      - '.github/workflows/test-backend-arc.yml'
-      - 'infra/arc/**'
+  workflow_dispatch:
 
 permissions:
   contents: read
