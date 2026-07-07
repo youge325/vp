@@ -12,6 +12,7 @@ import {
   estimateCombinedPeakVram,
   estimateModelRuntimeMetrics,
   metricRows,
+  resolveMetricsForEngine,
 } from '@/services/model-metrics'
 import {
   fallbackInterpolationOnnxModel,
@@ -52,16 +53,13 @@ function fixedRuntimeFrameCount(algorithm: AlgorithmInfo | undefined): number | 
 
 export function useEnhanceForm() {
   const envStore = useEnvStore()
-  const { activeItem, editorConfig, patchWorkflow, patchWorkflowAndPreset } = useWorkbenchEditor()
+  const { activeItem, editorConfig, patchWorkflowAndPreset } = useWorkbenchEditor()
 
   const workflow = computed(() => editorConfig.value.workflowConfig)
+  const patchEnhanceWorkflow = patchWorkflowAndPreset
   const { field, effect } = createDraftEditor<WorkflowConfig>(
     () => workflow.value,
-    patchWorkflow,
-  )
-  const { field: persistentField } = createDraftEditor<WorkflowConfig>(
-    () => workflow.value,
-    patchWorkflowAndPreset,
+    patchEnhanceWorkflow,
   )
 
   // Phase 8 — 算法下拉列表按当前选中的 tensorBackend 过滤。
@@ -110,8 +108,14 @@ export function useEnhanceForm() {
     }
     return superResolutionModelDetails.value[0]
   })
+  const currentInterpolationRuntimeDetail = computed(() =>
+    resolveMetricsForEngine(currentInterpolationModelDetail.value, workflow.value.interpolation.engine),
+  )
+  const currentSuperResolutionRuntimeDetail = computed(() =>
+    resolveMetricsForEngine(currentSuperResolutionModelDetail.value, workflow.value.superResolution.engine),
+  )
   const superResolutionRuntimeFrameCount = computed(() =>
-    currentSuperResolutionModelDetail.value?.metrics.runtimeFrameCount ?? null,
+    currentSuperResolutionRuntimeDetail.value?.metrics.runtimeFrameCount ?? null,
   )
   const isSuperResolutionInputFramesEditable = computed(() =>
     isPaddleGanSuperResolution.value && currentSuperResolutionAlgorithm.value?.sequenceMode !== 'window',
@@ -145,7 +149,7 @@ export function useEnhanceForm() {
   })
   const interpolationRuntimeEstimate = computed(() =>
     estimateModelRuntimeMetrics(
-      currentInterpolationModelDetail.value,
+      currentInterpolationRuntimeDetail.value,
       interpolationInputDimensions.value,
       {
         scale: workflow.value.interpolation.scale || 1,
@@ -156,7 +160,7 @@ export function useEnhanceForm() {
   )
   const superResolutionRuntimeEstimate = computed(() =>
     estimateModelRuntimeMetrics(
-      currentSuperResolutionModelDetail.value,
+      currentSuperResolutionRuntimeDetail.value,
       activeVideoDimensions.value,
       {
         scale: 1,
@@ -167,10 +171,10 @@ export function useEnhanceForm() {
     ),
   )
   const interpolationMetricRows = computed(() =>
-    metricRows(currentInterpolationModelDetail.value, interpolationRuntimeEstimate.value),
+    metricRows(currentInterpolationRuntimeDetail.value, interpolationRuntimeEstimate.value),
   )
   const superResolutionMetricRows = computed(() =>
-    metricRows(currentSuperResolutionModelDetail.value, superResolutionRuntimeEstimate.value),
+    metricRows(currentSuperResolutionRuntimeDetail.value, superResolutionRuntimeEstimate.value),
   )
   const combinedPeakVramBytes = computed(() => {
     if (!workflow.value.interpolation.enabled || !workflow.value.superResolution.enabled) {
@@ -245,7 +249,7 @@ export function useEnhanceForm() {
   // ── 纯字段 lens(读写同一处) ────────────────────────────────────────────
   const interpolationEnabled = effect<boolean>(
     () => workflow.value.interpolation.enabled,
-    (value) => patchWorkflow((c) => {
+    (value) => patchEnhanceWorkflow((c) => {
       c.interpolation.enabled = value
       preferOnnxInterpolationForPaddleSuperResolution(c)
     }),
@@ -284,7 +288,7 @@ export function useEnhanceForm() {
   )
   const superResolutionEnabled = effect<boolean>(
     () => workflow.value.superResolution.enabled,
-    (value) => patchWorkflow((c) => {
+    (value) => patchEnhanceWorkflow((c) => {
       c.superResolution.enabled = value
       preferOnnxInterpolationForPaddleSuperResolution(c)
     }),
@@ -295,7 +299,7 @@ export function useEnhanceForm() {
   )
   const superResolutionScale = effect<number>(
     () => workflow.value.superResolution.scaleFactor,
-    (value) => patchWorkflow((c) => {
+    (value) => patchEnhanceWorkflow((c) => {
       c.superResolution.scaleFactor = isPaddleGanVsr(findSuperResolutionAlgorithm(c.superResolution.algorithm))
         ? 4
         : value
@@ -307,16 +311,16 @@ export function useEnhanceForm() {
   )
   const superResolutionNumFrames = effect<number>(
     () => fixedRuntimeFrameCount(currentSuperResolutionAlgorithm.value) ?? workflow.value.superResolution.numFrames ?? 10,
-    (value) => patchWorkflow((c) => {
+    (value) => patchEnhanceWorkflow((c) => {
       const algorithm = findSuperResolutionAlgorithm(c.superResolution.algorithm)
       c.superResolution.numFrames = fixedRuntimeFrameCount(algorithm) ?? value
     }),
   )
-  const processOrder = persistentField(
+  const processOrder = field(
     (c) => c.processOrder as ProcessOrder,
     (c, v: ProcessOrder) => { c.processOrder = v },
   )
-  const animeEnabled = persistentField(
+  const animeEnabled = field(
     (c) => c.anime.enabled,
     (c, v: boolean) => { c.anime.enabled = v },
   )
@@ -336,7 +340,7 @@ export function useEnhanceForm() {
   // ── 复合 setter(切换时联动其他字段) ────────────────────────────────────
   const interpolationBackend = effect<TensorBackend>(
     () => workflow.value.interpolation.tensorBackend as TensorBackend,
-    (value) => patchWorkflow((c) => {
+    (value) => patchEnhanceWorkflow((c) => {
       c.interpolation.tensorBackend = value
       c.interpolation.engine = pickDefaultEngine(envStore.env.checkResult, value) ?? c.interpolation.engine
 
@@ -365,7 +369,7 @@ export function useEnhanceForm() {
 
   const superResolutionBackend = effect<TensorBackend>(
     () => workflow.value.superResolution.tensorBackend as TensorBackend,
-    (value) => patchWorkflow((c) => {
+    (value) => patchEnhanceWorkflow((c) => {
       c.superResolution.tensorBackend = value
       c.superResolution.engine = pickDefaultEngine(envStore.env.checkResult, value) ?? c.superResolution.engine
 
@@ -392,7 +396,7 @@ export function useEnhanceForm() {
 
   const interpolationAlgorithm = effect<string>(
     () => workflow.value.interpolation.algorithm,
-    (value) => patchWorkflow((c) => {
+    (value) => patchEnhanceWorkflow((c) => {
       c.interpolation.algorithm = value
       c.interpolation.model = pickDefaultInterpolationModel(envStore.env.checkResult, value)
     }),
@@ -400,7 +404,7 @@ export function useEnhanceForm() {
 
   const superResolutionAlgorithm = effect<string>(
     () => workflow.value.superResolution.algorithm,
-    (value) => patchWorkflow((c) => {
+    (value) => patchEnhanceWorkflow((c) => {
       c.superResolution.algorithm = value
       const algorithm = findSuperResolutionAlgorithm(value)
       const backend = pickSupportedBackend(algorithm, c.superResolution.tensorBackend as TensorBackend)
@@ -424,6 +428,8 @@ export function useEnhanceForm() {
     superResolutionOnnxModelDetails,
     currentInterpolationModelDetail,
     currentSuperResolutionModelDetail,
+    currentInterpolationRuntimeDetail,
+    currentSuperResolutionRuntimeDetail,
     interpolationRuntimeEstimate,
     superResolutionRuntimeEstimate,
     interpolationMetricRows,

@@ -52,7 +52,12 @@ describe('usePresetSync', () => {
     const presetStore = usePresetStore()
     presetStore.patchWorkflow((workflow) => {
       workflow.processOrder = 'frame_interpolation_then_super_resolution'
+      workflow.interpolation.engine = 'tensorrt'
+      workflow.superResolution.engine = 'tensorrt'
       workflow.anime.enabled = true
+      workflow.anime.profile = 'line-art'
+      workflow.anime.denoise = 24
+      workflow.anime.edgeBoost = 36
     })
 
     const sync = usePresetSync()
@@ -62,8 +67,17 @@ describe('usePresetSync', () => {
     expect(saveMock.mock.calls[0]?.[0]).toMatchObject({
       workflowConfig: {
         processOrder: 'frame_interpolation_then_super_resolution',
+        interpolation: {
+          engine: 'tensorrt',
+        },
+        superResolution: {
+          engine: 'tensorrt',
+        },
         anime: {
           enabled: true,
+          profile: 'line-art',
+          denoise: 24,
+          edgeBoost: 36,
         },
       },
     })

@@ -69,12 +69,14 @@ def test_builtin_models_expose_metric_details():
     assert len(rife["modelDetails"]) == len(rife["models"])
     assert {detail["name"] for detail in rife["modelDetails"]} == set(rife["models"])
     assert all(detail["metrics"]["parameterCount"] for detail in rife["modelDetails"])
+    assert all(detail["metrics"]["engineMetrics"]["tensorrt"] for detail in rife["modelDetails"])
 
     paddlegan_entries = [entry for entry in SR_ALGORITHMS if entry["tensorBackends"] == ["paddle"]]
     assert paddlegan_entries
     for entry in paddlegan_entries:
         assert entry["modelDetails"][0]["name"] == "x4"
         assert entry["modelDetails"][0]["metrics"]["parameterCount"]
+        assert entry["modelDetails"][0]["metrics"]["engineMetrics"]["tensorrt"]
         assert entry["sequenceMode"] in {"recurrent", "window"}
 
 

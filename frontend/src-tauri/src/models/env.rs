@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -102,6 +104,26 @@ pub struct RifeModel {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
+pub struct ModelEngineMetricInfo {
+    #[serde(default)]
+    pub gflops_per_megapixel: Option<f64>,
+    #[serde(default)]
+    pub activation_bytes_per_megapixel: Option<f64>,
+    #[serde(default)]
+    pub runtime_overhead_bytes: Option<u64>,
+    #[serde(default)]
+    pub runtime_frame_count: Option<u32>,
+    #[serde(default)]
+    pub input_modulo: Option<u32>,
+    #[serde(default)]
+    pub analysis_status: String,
+    #[serde(default)]
+    pub analysis_notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct ModelMetricInfo {
     #[serde(default)]
     pub parameter_count: Option<u64>,
@@ -121,6 +143,8 @@ pub struct ModelMetricInfo {
     pub analysis_status: String,
     #[serde(default)]
     pub analysis_notes: Vec<String>,
+    #[serde(default)]
+    pub engine_metrics: HashMap<String, ModelEngineMetricInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]

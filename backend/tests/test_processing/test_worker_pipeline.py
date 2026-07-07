@@ -106,6 +106,36 @@ def test_parse_stage_event_line_returns_json_event_only_for_prefixed_lines() -> 
     assert parse_stage_event_line("ordinary stderr") is None
 
 
+def test_read_worker_stderr_forwards_tensorrt_lifecycle_logs_to_parent_stderr(capsys) -> None:
+    stderr = io.BytesIO(
+        b"[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x128x128\n"
+        b"ordinary worker stderr\n"
+        b'VP_STAGE_EVENT {"type":"progress","stageIndex":1,"current":1,"total":5}\n'
+    )
+    handle = SimpleNamespace(
+        process=SimpleNamespace(stderr=stderr),
+        plan=SimpleNamespace(config=SimpleNamespace(stage_index=1)),
+        stderr_tail=deque(maxlen=20),
+    )
+    progress_calls: list[tuple[int, int]] = []
+
+    _read_worker_stderr(
+        handle,
+        [lambda current, total, **_kwargs: progress_calls.append((current, total))],
+        queue.Queue(),
+        threading.Event(),
+    )
+
+    captured = capsys.readouterr()
+    assert "[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x128x128" in captured.err
+    assert "ordinary worker stderr" not in captured.err
+    assert progress_calls == [(1, 5)]
+    assert list(handle.stderr_tail) == [
+        "[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x128x128",
+        "ordinary worker stderr",
+    ]
+
+
 def test_interpolation_stage_chunks_use_lookahead_and_skip_duplicate_boundary() -> None:
     step = ProcessingStep(
         algorithm_type="frame_interpolation",

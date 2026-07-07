@@ -25,6 +25,25 @@ import type { MediaTaskState } from '@/types/domain/media'
 import type { ResumeStatus } from '@/types/domain/batch'
 
 const STAGE_PROGRESS_KEY_RE = /^\[VP_PROGRESS\]\s+\[(\d+\/\d+\s+[^\]]+)\]/
+const TENSORRT_LOG_PREFIX = '[VP_TRT]'
+
+export type TaskLogLineKind = 'progress' | 'tensorrt' | 'default'
+
+export function classifyTaskLogLine(line: string): TaskLogLineKind {
+  if (line.startsWith(TERMINAL_PROGRESS_PREFIX)) {
+    return 'progress'
+  }
+  if (line.startsWith(TENSORRT_LOG_PREFIX)) {
+    return 'tensorrt'
+  }
+  return 'default'
+}
+
+export function displayTaskLogLine(line: string): string {
+  return classifyTaskLogLine(line) === 'tensorrt'
+    ? line.slice(TENSORRT_LOG_PREFIX.length).trimStart()
+    : line
+}
 
 function progressStageKey(line: string): string | null {
   return STAGE_PROGRESS_KEY_RE.exec(line)?.[1] ?? null

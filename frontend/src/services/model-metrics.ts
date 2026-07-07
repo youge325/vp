@@ -1,4 +1,5 @@
 import type { ModelVariantInfo } from '@/types/domain/env'
+import type { InferenceEngine } from '@/types/domain/workflow'
 
 export interface VideoDimensions {
   width: number
@@ -37,6 +38,43 @@ function padToModulo(value: number, modulo: number | null | undefined): number {
     return normalized
   }
   return Math.ceil(normalized / modulo) * modulo
+}
+
+export function resolveMetricsForEngine(
+  detail: ModelVariantInfo | null | undefined,
+  engine: InferenceEngine | string | null | undefined,
+): ModelVariantInfo | null {
+  if (!detail) return null
+  if (engine !== 'tensorrt') return detail
+
+  const override = detail.metrics.engineMetrics?.tensorrt
+  const memoryFieldsFromOverride = Boolean(
+    override &&
+    (Object.prototype.hasOwnProperty.call(override, 'activationBytesPerMegapixel') ||
+      Object.prototype.hasOwnProperty.call(override, 'runtimeOverheadBytes')),
+  )
+
+  return {
+    ...detail,
+    metrics: {
+      ...detail.metrics,
+      gflopsPerMegapixel: override?.gflopsPerMegapixel ?? detail.metrics.gflopsPerMegapixel ?? null,
+      activationBytesPerMegapixel: memoryFieldsFromOverride
+        ? override?.activationBytesPerMegapixel ?? null
+        : null,
+      runtimeOverheadBytes: memoryFieldsFromOverride
+        ? override?.runtimeOverheadBytes ?? null
+        : null,
+      runtimeFrameCount: override?.runtimeFrameCount ?? detail.metrics.runtimeFrameCount ?? null,
+      inputModulo: override?.inputModulo ?? detail.metrics.inputModulo ?? null,
+      analysisStatus: override?.analysisStatus ?? (memoryFieldsFromOverride ? detail.metrics.analysisStatus : 'unknown'),
+      analysisNotes: override?.analysisNotes ?? (
+        memoryFieldsFromOverride
+          ? detail.metrics.analysisNotes
+          : ['TensorRT memory metrics are not calibrated for this model.']
+      ),
+    },
+  }
 }
 
 export function formatParameterCount(value: number | null | undefined): string {
@@ -99,7 +137,8 @@ export function estimateModelRuntimeMetrics(
   const precisionScale = precisionBytes / 4
 
   const gflops = gflopsPerMegapixel === null ? null : gflopsPerMegapixel * megapixels
-  const vramBytes = activationBytesPerMegapixel === null && parameterBytes === null && runtimeOverheadBytes === null
+  const hasRuntimeMemoryMetric = activationBytesPerMegapixel !== null || runtimeOverheadBytes !== null
+  const vramBytes = !hasRuntimeMemoryMetric
     ? null
     : (runtimeOverheadBytes ?? 0) +
       (parameterBytes ?? 0) * precisionScale +

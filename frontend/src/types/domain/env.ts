@@ -25,6 +25,16 @@ export interface ResourceSummary {
 
 export type ModelAnalysisStatus = 'ok' | 'partial' | 'unknown' | string
 
+export interface ModelEngineMetricInfo {
+  gflopsPerMegapixel?: number | null
+  activationBytesPerMegapixel?: number | null
+  runtimeOverheadBytes?: number | null
+  runtimeFrameCount?: number | null
+  inputModulo?: number | null
+  analysisStatus?: ModelAnalysisStatus
+  analysisNotes?: string[]
+}
+
 export interface ModelMetricInfo {
   parameterCount?: number | null
   parameterBytes?: number | null
@@ -35,6 +45,7 @@ export interface ModelMetricInfo {
   inputModulo?: number | null
   analysisStatus: ModelAnalysisStatus
   analysisNotes: string[]
+  engineMetrics?: Record<string, ModelEngineMetricInfo>
 }
 
 export interface ModelVariantInfo {

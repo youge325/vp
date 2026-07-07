@@ -11,6 +11,7 @@
 /.coverage.*
 /htmlcov/
 /_test_result.txt
+/test-results/
 /pytest-cache-files-*/
 .claude/settings.local.json
 __pycache__/

@@ -199,28 +199,38 @@ def _compile_with_tensorrt_if_available(
     label: str,
     fp16: bool,
 ) -> "nn.Module":
-    """Wrap ``module`` with ``torch.compile(backend='tensorrt')`` when possible.
+    """Wrap ``module`` with ``torch.compile(backend='tensorrt')``.
 
-    Falls back to the un-compiled module with a warning if the
-    ``torch_tensorrt`` extra isn't installed — the original CUDA path
-    keeps working in either case.
+    A requested TensorRT engine must actually use TensorRT. Missing
+    dependencies or compile errors are surfaced instead of falling back to
+    CUDA, so diagnostics cannot count fallback as a TensorRT pass.
     """
     import torch
 
+    from app.utils.dll_paths import register_native_dll_paths
+
+    register_native_dll_paths()
     if importlib.util.find_spec("torch_tensorrt") is None:
-        logger.warning(
-            "请求 TensorRT 引擎但未找到 torch_tensorrt,回退到 CUDA 推理。请安装 torch-tensorrt 以启用 TensorRT 加速。"
+        raise RuntimeError(
+            "RIFE PyTorch TensorRT engine requires torch_tensorrt, but the package is not importable. "
+            "Install a torch-tensorrt wheel compatible with the current PyTorch runtime."
         )
-        return module
+    import torch_tensorrt  # noqa: F401
+
     logger.info(f"正在使用 torch_tensorrt 编译 {label} 模型...")
-    return torch.compile(
-        module,
-        backend="tensorrt",
-        options={
-            "truncate_long_and_double": True,
-            "precision": "fp16" if fp16 else "fp32",
-        },
-    )
+    try:
+        return torch.compile(
+            module,
+            backend="tensorrt",
+            options={
+                "truncate_long_and_double": True,
+                "precision": "fp16" if fp16 else "fp32",
+                "require_full_compilation": True,
+                "pass_through_build_failures": True,
+            },
+        )
+    except Exception as exc:
+        raise RuntimeError(f"Failed to compile {label} with torch_tensorrt.") from exc
 
 
 def load_rife_model(

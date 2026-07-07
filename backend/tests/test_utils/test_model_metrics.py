@@ -49,6 +49,7 @@ def test_analyze_onnx_model_counts_parameters_and_estimates_conv_flops(tmp_path:
     assert detail["metrics"]["activationBytesPerMegapixel"] is not None
     assert detail["metrics"]["analysisStatus"] == "ok"
     assert detail["metrics"]["analysisNotes"] == []
+    assert detail["metrics"]["engineMetrics"] == {}
 
 
 def test_analyze_onnx_model_keeps_parameters_when_dynamic_shapes_hide_flops(tmp_path: Path) -> None:
@@ -62,6 +63,7 @@ def test_analyze_onnx_model_keeps_parameters_when_dynamic_shapes_hide_flops(tmp_
     assert detail["metrics"]["activationBytesPerMegapixel"] is None
     assert detail["metrics"]["analysisStatus"] == "partial"
     assert detail["metrics"]["analysisNotes"]
+    assert detail["metrics"]["engineMetrics"] == {}
 
 
 def test_analyze_onnx_model_returns_unknown_for_invalid_files(tmp_path: Path) -> None:
@@ -85,6 +87,10 @@ def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
     assert rife_425["metrics"]["parameterCount"] == 5_670_892
     assert rife_425["metrics"]["runtimeOverheadBytes"] == pytest.approx(38_000_000, rel=0.02)
     assert rife_425["metrics"]["activationBytesPerMegapixel"] == pytest.approx(694_800_000, rel=0.01)
+    rife_425_trt = rife_425["metrics"]["engineMetrics"]["tensorrt"]
+    assert rife_425_trt["runtimeOverheadBytes"] is not None
+    assert rife_425_trt["activationBytesPerMegapixel"] is not None
+    assert rife_425_trt["gflopsPerMegapixel"] == rife_425["metrics"]["gflopsPerMegapixel"]
 
     ppmsvsr = get_paddlegan_model_detail("ppmsvsr")
     assert ppmsvsr["name"] == "x4"
@@ -96,6 +102,10 @@ def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
     assert ppmsvsr["metrics"]["runtimeOverheadBytes"] == pytest.approx(2_391_117_604, rel=0.001)
     assert ppmsvsr["metrics"]["activationBytesPerMegapixel"] == pytest.approx(1_981_031_424, rel=0.001)
     assert ppmsvsr["metrics"]["gflopsPerMegapixel"] is not None
+    ppmsvsr_trt = ppmsvsr["metrics"]["engineMetrics"]["tensorrt"]
+    assert ppmsvsr_trt["runtimeOverheadBytes"] is not None
+    assert ppmsvsr_trt["activationBytesPerMegapixel"] is not None
+    assert ppmsvsr_trt["gflopsPerMegapixel"] == ppmsvsr["metrics"]["gflopsPerMegapixel"]
 
     edvr = get_paddlegan_model_detail("edvr")
     assert edvr["metrics"]["parameterCount"] == 20_633_827
@@ -103,6 +113,7 @@ def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
     assert edvr["metrics"]["runtimeFrameCount"] == 5
     assert edvr["metrics"]["runtimeOverheadBytes"] == pytest.approx(84_074_752, rel=0.001)
     assert edvr["metrics"]["activationBytesPerMegapixel"] == pytest.approx(7_300_784_570, rel=0.001)
+    assert edvr["metrics"]["engineMetrics"]["tensorrt"]["runtimeFrameCount"] == 5
 
     for model_id, parameter_count in {
         "ppmsvsr-large": 7_417_197,
@@ -115,3 +126,5 @@ def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
         assert detail["metrics"]["runtimeOverheadBytes"]
         assert detail["metrics"]["activationBytesPerMegapixel"]
         assert detail["metrics"]["runtimeFrameCount"] is None
+        assert detail["metrics"]["engineMetrics"]["tensorrt"]["runtimeOverheadBytes"] is not None
+        assert detail["metrics"]["engineMetrics"]["tensorrt"]["activationBytesPerMegapixel"]

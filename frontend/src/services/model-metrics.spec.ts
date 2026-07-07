@@ -7,6 +7,7 @@ import {
   formatGflops,
   formatParameterCount,
   modelOptionLabel,
+  resolveMetricsForEngine,
 } from './model-metrics'
 import type { ModelVariantInfo } from '@/types/domain/env'
 
@@ -42,6 +43,55 @@ describe('model metric formatting', () => {
 })
 
 describe('estimateModelRuntimeMetrics', () => {
+  it('uses TensorRT engine metrics for memory while keeping theoretical FLOPs', () => {
+    const cudaDetail = detail({
+      gflopsPerMegapixel: 18.5,
+      activationBytesPerMegapixel: 694_800_000,
+      runtimeOverheadBytes: 38_000_000,
+      engineMetrics: {
+        tensorrt: {
+          gflopsPerMegapixel: 18.5,
+          activationBytesPerMegapixel: 260_000_000,
+          runtimeOverheadBytes: 42_000_000,
+          analysisStatus: 'ok',
+          analysisNotes: ['TensorRT calibrated'],
+        },
+      },
+    } as Partial<ModelVariantInfo['metrics']>)
+    const trtDetail = resolveMetricsForEngine(cudaDetail, 'tensorrt')
+    const estimate = estimateModelRuntimeMetrics(
+      trtDetail,
+      { width: 640, height: 288 },
+      { scale: 1, precisionBytes: 4, temporalFrames: 1 },
+    )
+
+    expect(estimate?.gflops).toBeCloseTo(3.79, 2)
+    expect(formatBytes(estimate?.vramBytes)).toBe('107.4 MiB')
+  })
+
+  it('does not reuse CUDA activation memory when TensorRT lacks calibration', () => {
+    const cudaDetail = detail({
+      engineMetrics: {
+        tensorrt: {
+          runtimeOverheadBytes: null,
+          activationBytesPerMegapixel: null,
+          analysisStatus: 'unknown',
+          analysisNotes: ['TensorRT memory is not calibrated'],
+        },
+      },
+    } as Partial<ModelVariantInfo['metrics']>)
+
+    const trtDetail = resolveMetricsForEngine(cudaDetail, 'tensorrt')
+    const estimate = estimateModelRuntimeMetrics(
+      trtDetail,
+      { width: 640, height: 288 },
+      { scale: 1, precisionBytes: 4, temporalFrames: 1 },
+    )
+
+    expect(estimate?.gflops).toBeCloseTo(3.79, 2)
+    expect(estimate?.vramBytes).toBeNull()
+  })
+
   it('uses padded scaled resolution for current FLOPs and calibrated VRAM estimates', () => {
     const estimate = estimateModelRuntimeMetrics(
       detail(),

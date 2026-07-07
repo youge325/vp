@@ -501,7 +501,6 @@ class BasicVSRNet(nn.Layer):
         """
 
         n, t, c, h, w = lrs.shape
-        t = paddle.to_tensor(t)
         assert h >= 64 and w >= 64, f"The height and width of inputs should be at least 64, but got {h} and {w}."
 
         # check whether the input is an extended sequence
@@ -525,7 +524,7 @@ class BasicVSRNet(nn.Layer):
             feat_prop = self.backward_resblocks(feat_prop)
 
             outputs.append(feat_prop)
-        outputs = outputs[::-1]
+        outputs = [outputs[index] for index in range(len(outputs) - 1, -1, -1)]
 
         # forward-time propagation and upsampling
         feat_prop = paddle.zeros_like(feat_prop)

@@ -51,6 +51,9 @@ _RIFE_PARAMETER_COUNTS: dict[str, int] = {
 }
 
 _RIFE_RUNTIME_OVERHEAD_BYTES = 38_000_000
+_RIFE_TENSORRT_RUNTIME_OVERHEAD_BYTES = 11_000_000
+_RIFE_TENSORRT_ACTIVATION_BYTES_PER_MEGAPIXEL = 125_000_000.0
+_RIFE_TENSORRT_ACTIVATION_SCALE = 0.18
 _RIFE_ACTIVATION_BYTES_PER_MEGAPIXEL: dict[str, float] = {
     "4.0": 353_125_260.0,
     "4.1": 353_125_260.0,
@@ -90,6 +93,25 @@ _RIFE_ACTIVATION_BYTES_PER_MEGAPIXEL: dict[str, float] = {
     "4.26.heavy": 1_524_014_497.0,
 }
 
+_RIFE_TENSORRT_CALIBRATED_METRICS: dict[str, dict[str, Any]] = {
+    "4.25": {
+        "runtime_overhead_bytes": 10_922_014,
+        "activation_bytes_per_megapixel": 124_878_049.0,
+        "analysis_status": "ok",
+        "analysis_notes": [
+            "TensorRT fp32 memory calibrated with torch.cuda max_memory_reserved on 128x128 and 640x288 inputs.",
+        ],
+    },
+    "4.25.lite": {
+        "runtime_overhead_bytes": 11_090_318,
+        "activation_bytes_per_megapixel": 124_878_049.0,
+        "analysis_status": "ok",
+        "analysis_notes": [
+            "TensorRT fp32 memory calibrated with torch.cuda max_memory_reserved on 128x128 and 640x288 inputs.",
+        ],
+    },
+}
+
 _PADDLEGAN_MODEL_METRICS: dict[str, dict[str, Any]] = {
     "ppmsvsr": {
         "label": "PP-MSVSR",
@@ -97,9 +119,14 @@ _PADDLEGAN_MODEL_METRICS: dict[str, dict[str, Any]] = {
         "gflops_per_megapixel": 120.0,
         "runtime_overhead_bytes": 2_391_117_604,
         "activation_bytes_per_megapixel": 1_981_031_424.0,
+        "tensorrt_runtime_overhead_bytes": 0,
+        "tensorrt_activation_bytes_per_megapixel": 3_688_504_346.0,
         "runtime_frame_count": None,
         "analysis_notes": [
             "Calibrated with Paddle CUDA max_memory_reserved on 640x288 input; upper-envelope fit covers 1/2/5/10 frame chunks.",
+        ],
+        "tensorrt_analysis_notes": [
+            "TensorRT fp32 memory calibrated with Paddle max_memory_reserved on 128x128 and 640x288 inputs, 5-frame chunks.",
         ],
     },
     "ppmsvsr-large": {
@@ -108,9 +135,14 @@ _PADDLEGAN_MODEL_METRICS: dict[str, dict[str, Any]] = {
         "gflops_per_megapixel": 180.0,
         "runtime_overhead_bytes": 4_038_214_561,
         "activation_bytes_per_megapixel": 3_286_435_185.0,
+        "tensorrt_runtime_overhead_bytes": 0,
+        "tensorrt_activation_bytes_per_megapixel": 7_318_741_553.0,
         "runtime_frame_count": None,
         "analysis_notes": [
             "Calibrated with Paddle CUDA max_memory_reserved on 640x288 input; 10-frame chunk exhausted an 8GB GPU, fit covers 1/2/5 frame chunks.",
+        ],
+        "tensorrt_analysis_notes": [
+            "TensorRT fp32 memory calibrated with Paddle max_memory_reserved on 128x128 and 640x288 inputs, 5-frame chunks.",
         ],
     },
     "edvr": {
@@ -119,9 +151,14 @@ _PADDLEGAN_MODEL_METRICS: dict[str, dict[str, Any]] = {
         "gflops_per_megapixel": 240.0,
         "runtime_overhead_bytes": 84_074_752,
         "activation_bytes_per_megapixel": 7_300_784_570.0,
+        "tensorrt_runtime_overhead_bytes": 0,
+        "tensorrt_activation_bytes_per_megapixel": 6_071_083_459.0,
         "runtime_frame_count": 5,
         "analysis_notes": [
             "EDVR uses a fixed 5-frame neighbor window; calibrated with Paddle CUDA max_memory_reserved on 640x288 input.",
+        ],
+        "tensorrt_analysis_notes": [
+            "EDVR TensorRT memory calibrated with Paddle max_memory_reserved on 128x128 and 640x288 inputs; runtime frame count remains 5.",
         ],
     },
     "basicvsr": {
@@ -130,9 +167,14 @@ _PADDLEGAN_MODEL_METRICS: dict[str, dict[str, Any]] = {
         "gflops_per_megapixel": 95.0,
         "runtime_overhead_bytes": 3_106_340_292,
         "activation_bytes_per_megapixel": 616_089_236.0,
+        "tensorrt_runtime_overhead_bytes": 0,
+        "tensorrt_activation_bytes_per_megapixel": 4_601_300_352.0,
         "runtime_frame_count": None,
         "analysis_notes": [
             "Calibrated with Paddle CUDA max_memory_reserved on 640x288 input; upper-envelope fit covers 1/2/5/10 frame chunks.",
+        ],
+        "tensorrt_analysis_notes": [
+            "TensorRT fp32 memory calibrated with Paddle max_memory_reserved on 128x128 and 640x288 inputs, 5-frame chunks.",
         ],
     },
     "iconvsr": {
@@ -141,9 +183,14 @@ _PADDLEGAN_MODEL_METRICS: dict[str, dict[str, Any]] = {
         "gflops_per_megapixel": 130.0,
         "runtime_overhead_bytes": 3_685_021_892,
         "activation_bytes_per_megapixel": 831_528_333.0,
+        "tensorrt_runtime_overhead_bytes": 0,
+        "tensorrt_activation_bytes_per_megapixel": 5_640_527_435.0,
         "runtime_frame_count": None,
         "analysis_notes": [
             "Calibrated with Paddle CUDA max_memory_reserved on 640x288 input; 1/2 frame chunks are below IconVSR's runtime indexing window.",
+        ],
+        "tensorrt_analysis_notes": [
+            "TensorRT fp32 memory calibrated with Paddle max_memory_reserved on 128x128 and 640x288 inputs, 5-frame chunks.",
         ],
     },
     "basicvsr-plus-plus": {
@@ -152,9 +199,14 @@ _PADDLEGAN_MODEL_METRICS: dict[str, dict[str, Any]] = {
         "gflops_per_megapixel": 150.0,
         "runtime_overhead_bytes": 4_627_868_420,
         "activation_bytes_per_megapixel": 947_124_479.0,
+        "tensorrt_runtime_overhead_bytes": 0,
+        "tensorrt_activation_bytes_per_megapixel": 7_484_010_352.0,
         "runtime_frame_count": None,
         "analysis_notes": [
             "Calibrated with Paddle CUDA max_memory_reserved on 640x288 input; upper-envelope fit covers 1/2/5/10 frame chunks.",
+        ],
+        "tensorrt_analysis_notes": [
+            "TensorRT fp32 memory calibrated with Paddle max_memory_reserved on 128x128 and 640x288 inputs, 5-frame chunks.",
         ],
     },
 }
@@ -187,10 +239,33 @@ def _metrics(
     input_modulo: int | None,
     analysis_status: AnalysisStatus,
     analysis_notes: list[str] | None = None,
+    engine_metrics: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "parameterCount": parameter_count,
         "parameterBytes": parameter_bytes,
+        "gflopsPerMegapixel": gflops_per_megapixel,
+        "activationBytesPerMegapixel": activation_bytes_per_megapixel,
+        "runtimeOverheadBytes": runtime_overhead_bytes,
+        "runtimeFrameCount": runtime_frame_count,
+        "inputModulo": input_modulo,
+        "analysisStatus": analysis_status,
+        "analysisNotes": analysis_notes or [],
+        "engineMetrics": engine_metrics or {},
+    }
+
+
+def _engine_metric(
+    *,
+    gflops_per_megapixel: float | None = None,
+    activation_bytes_per_megapixel: float | None = None,
+    runtime_overhead_bytes: int | None = None,
+    runtime_frame_count: int | None = None,
+    input_modulo: int | None = None,
+    analysis_status: AnalysisStatus = "unknown",
+    analysis_notes: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
         "gflopsPerMegapixel": gflops_per_megapixel,
         "activationBytesPerMegapixel": activation_bytes_per_megapixel,
         "runtimeOverheadBytes": runtime_overhead_bytes,
@@ -215,11 +290,42 @@ def _rife_gflops_per_megapixel(version: str, parameter_count: int) -> float:
     return round((parameter_count / 300_000) * multiplier, 3)
 
 
+def _rife_tensorrt_engine_metric(version: str, gflops_per_megapixel: float) -> dict[str, Any]:
+    calibrated = _RIFE_TENSORRT_CALIBRATED_METRICS.get(version)
+    if calibrated is not None:
+        return _engine_metric(
+            gflops_per_megapixel=gflops_per_megapixel,
+            activation_bytes_per_megapixel=float(calibrated["activation_bytes_per_megapixel"]),
+            runtime_overhead_bytes=int(calibrated["runtime_overhead_bytes"]),
+            runtime_frame_count=None,
+            input_modulo=MODEL_SPECS[version].modulo,
+            analysis_status=str(calibrated["analysis_status"]),
+            analysis_notes=list(calibrated["analysis_notes"]),
+        )
+
+    activation = max(
+        _RIFE_TENSORRT_ACTIVATION_BYTES_PER_MEGAPIXEL,
+        _RIFE_ACTIVATION_BYTES_PER_MEGAPIXEL[version] * _RIFE_TENSORRT_ACTIVATION_SCALE,
+    )
+    return _engine_metric(
+        gflops_per_megapixel=gflops_per_megapixel,
+        activation_bytes_per_megapixel=round(activation),
+        runtime_overhead_bytes=_RIFE_TENSORRT_RUNTIME_OVERHEAD_BYTES,
+        runtime_frame_count=None,
+        input_modulo=MODEL_SPECS[version].modulo,
+        analysis_status="partial",
+        analysis_notes=[
+            "TensorRT memory estimated from representative RIFE TensorRT calibration; this model was not individually compiled.",
+        ],
+    )
+
+
 def get_rife_model_details() -> list[dict[str, Any]]:
     """Return static metric details for built-in RIFE model versions."""
     details: list[dict[str, Any]] = []
     for version in SUPPORTED_MODELS:
         parameter_count = _RIFE_PARAMETER_COUNTS[version]
+        gflops_per_megapixel = _rife_gflops_per_megapixel(version, parameter_count)
         details.append(
             _variant(
                 version,
@@ -227,12 +333,15 @@ def get_rife_model_details() -> list[dict[str, Any]]:
                 _metrics(
                     parameter_count=parameter_count,
                     parameter_bytes=parameter_count * 4,
-                    gflops_per_megapixel=_rife_gflops_per_megapixel(version, parameter_count),
+                    gflops_per_megapixel=gflops_per_megapixel,
                     activation_bytes_per_megapixel=_RIFE_ACTIVATION_BYTES_PER_MEGAPIXEL[version],
                     runtime_overhead_bytes=_RIFE_RUNTIME_OVERHEAD_BYTES,
                     runtime_frame_count=None,
                     input_modulo=MODEL_SPECS[version].modulo,
                     analysis_status="ok",
+                    engine_metrics={
+                        "tensorrt": _rife_tensorrt_engine_metric(version, gflops_per_megapixel),
+                    },
                 ),
             )
         )
@@ -256,6 +365,17 @@ def get_paddlegan_model_detail(model_id: str) -> dict[str, Any]:
             input_modulo=4,
             analysis_status="ok",
             analysis_notes=list(metric["analysis_notes"]),
+            engine_metrics={
+                "tensorrt": _engine_metric(
+                    gflops_per_megapixel=float(metric["gflops_per_megapixel"]),
+                    activation_bytes_per_megapixel=float(metric["tensorrt_activation_bytes_per_megapixel"]),
+                    runtime_overhead_bytes=int(metric["tensorrt_runtime_overhead_bytes"]),
+                    runtime_frame_count=metric["runtime_frame_count"],
+                    input_modulo=4,
+                    analysis_status="ok",
+                    analysis_notes=list(metric["tensorrt_analysis_notes"]),
+                ),
+            },
         ),
     )
 
