@@ -5,22 +5,7 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  push:
-    branches: [main, master, develop]
-    paths:
-      - 'backend/app/**'
-      - 'frontend/**'
-      - '.github/workflows/e2e-task.yml'
-      - '.github/workflows/e2e-task-arc.yml'
-      - 'infra/arc/**'
-  pull_request:
-    branches: [main, master, develop]
-    paths:
-      - 'backend/app/**'
-      - 'frontend/**'
-      - '.github/workflows/e2e-task.yml'
-      - '.github/workflows/e2e-task-arc.yml'
-      - 'infra/arc/**'
+  workflow_dispatch:
 
 permissions:
   contents: read

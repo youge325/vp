@@ -5,24 +5,7 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  push:
-    branches: [main, master, develop]
-    paths:
-      - 'backend/app/algorithms/**'
-      - 'backend/app/benchmark/**'
-      - 'backend/app/cli/**'
-      - 'backend/app/processing/**'
-      - 'backend/benchmarks/**'
-      - '.github/workflows/benchmark-arc.yml'
-  pull_request:
-    branches: [main, master, develop]
-    paths:
-      - 'backend/app/algorithms/**'
-      - 'backend/app/benchmark/**'
-      - 'backend/app/cli/**'
-      - 'backend/app/processing/**'
-      - 'backend/benchmarks/**'
-      - '.github/workflows/benchmark-arc.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
