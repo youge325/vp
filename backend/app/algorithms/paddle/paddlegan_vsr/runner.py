@@ -214,6 +214,7 @@ class _PaddleGanTensorRtPredictor:
         self.sequence_mode = sequence_mode
         self.num_frames = max(1, int(num_frames))
         self._cache: dict[tuple[int, int, int], tuple[Any, str, list[str]]] = {}
+        self._logged_reuse_keys: set[tuple[int, int, int]] = set()
 
     def run(self, tensor: Any) -> np.ndarray:
         shape = _shape_list(tensor)
@@ -246,7 +247,9 @@ class _PaddleGanTensorRtPredictor:
         key = (runtime_frames, height, width)
         shape_text = _format_shape([1, runtime_frames, 3, height, width])
         if key in self._cache:
-            _emit_tensorrt_log(f"REUSE PaddleGAN {self.model_id} shape={shape_text}")
+            if key not in self._logged_reuse_keys:
+                _emit_tensorrt_log(f"REUSE PaddleGAN {self.model_id} shape={shape_text}")
+                self._logged_reuse_keys.add(key)
             return self._cache[key]
 
         prefix = _tensorrt_model_prefix(self.model_id, max_frames=runtime_frames, height=height, width=width)
