@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { useMediaRunState } from '@/stores/mediaRunState'
-import { classifyTaskLogLine, displayTaskLogLine } from '@/services/task/events'
+import { displayTaskLogLine } from '@/services/task/events'
 
 const { consoleTaskItem, batch, batchTotal } = useTaskOrchestrator()
 const runStateStore = useMediaRunState()
@@ -22,10 +22,6 @@ const progressPercent = computed(() => {
   }
   return Math.min(100, Math.round((done.value / total.value) * 100))
 })
-
-function logLineClass(line: string): string[] {
-  return classifyTaskLogLine(line) === 'tensorrt' ? ['log-line-trt'] : []
-}
 
 // Phase D.4.8 — watch length instead of the array contents. The previous
 // `deep: true` watcher fired on every progress-line replacement
@@ -60,7 +56,7 @@ watch(
       </span>
     </div>
     <div ref="terminalRef" class="log-panel log-panel-terminal">
-      <p v-for="(line, index) in logs" :key="index" class="log-line" :class="logLineClass(line)">
+      <p v-for="(line, index) in logs" :key="index" class="log-line">
         <span>{{ displayTaskLogLine(line) }}</span>
       </p>
     </div>
