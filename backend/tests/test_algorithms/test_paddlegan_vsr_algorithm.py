@@ -331,6 +331,7 @@ def test_paddlegan_tensorrt_predictor_logs_in_process_reuse(capsys):
     predictor._cache[(5, 288, 640)] = ("predictor", "input", ["output"])
 
     assert predictor._ensure_predictor([1, 5, 3, 288, 640]) == ("predictor", "input", ["output"])
+    assert predictor._ensure_predictor([1, 5, 3, 288, 640]) == ("predictor", "input", ["output"])
 
     stderr = capsys.readouterr().err
-    assert "[VP_TRT] REUSE PaddleGAN ppmsvsr shape=1x5x3x288x640" in stderr
+    assert stderr.count("[VP_TRT] REUSE PaddleGAN ppmsvsr shape=1x5x3x288x640") == 1
