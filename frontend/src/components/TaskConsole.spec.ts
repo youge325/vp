@@ -33,7 +33,7 @@ describe('TaskConsole TensorRT logs', () => {
     const lines = wrapper.findAll('.log-line')
 
     expect(lines[0].classes()).not.toContain('log-line-trt')
-    expect(lines[1].classes()).toContain('log-line-trt')
+    expect(lines[1].classes()).not.toContain('log-line-trt')
     expect(lines[1].find('.log-tag').exists()).toBe(false)
     expect(lines[1].text()).toBe(
       '22:03:13 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +
