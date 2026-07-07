@@ -15,6 +15,7 @@ many times only registers each directory once.
 from __future__ import annotations
 
 import os
+import site
 import sys
 from pathlib import Path
 from typing import Iterable
@@ -92,9 +93,16 @@ def _candidate_dirs(tensorrt_dir: str | None = None) -> list[Path]:
                 tensorrt_dir,
             )
     else:
-        # When VP_TENSORRT_DIR is unset, try common install locations.
-        # _scan_common_tensorrt_roots() caches results and only logs on first scan.
-        candidates.extend(_scan_common_tensorrt_roots())
+        package_dirs = _python_package_dll_dirs()
+        if package_dirs:
+            candidates.extend(package_dirs)
+        else:
+            # When VP_TENSORRT_DIR is unset, try common install locations.
+            # _scan_common_tensorrt_roots() caches results and only logs on first scan.
+            candidates.extend(_scan_common_tensorrt_roots())
+
+    if tensorrt_dir:
+        candidates.extend(_python_package_dll_dirs())
 
     cuda_path = os.environ.get("CUDA_PATH", "").strip()
     if cuda_path:
@@ -105,6 +113,24 @@ def _candidate_dirs(tensorrt_dir: str | None = None) -> list[Path]:
     candidates.extend(_opencv_candidate_dirs())
 
     return candidates
+
+
+def _python_package_dll_dirs() -> list[Path]:
+    """Return DLL directories installed by pip TensorRT packages."""
+    roots: list[Path] = []
+    seen: set[str] = set()
+    for raw_root in [*site.getsitepackages(), site.getusersitepackages(), *sys.path]:
+        if not raw_root:
+            continue
+        root = Path(raw_root)
+        for candidate in (root / "tensorrt_libs", root / "tensorrt_rtx_libs", root / "torch_tensorrt" / "lib"):
+            key = str(candidate.resolve(strict=False)).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            if candidate.is_dir():
+                roots.append(candidate)
+    return roots
 
 
 def _opencv_candidate_dirs() -> list[Path]:

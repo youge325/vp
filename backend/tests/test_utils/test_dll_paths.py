@@ -16,6 +16,7 @@ def _reset_registry(monkeypatch):
     dll_paths.reset_registry_for_tests()
     monkeypatch.delenv("VP_OPENCV_BIN_DIR", raising=False)
     monkeypatch.delenv("VP_OPENCV_DIR", raising=False)
+    monkeypatch.setattr(dll_paths, "_python_package_dll_dirs", lambda: [], raising=False)
     yield
     dll_paths.reset_registry_for_tests()
 
@@ -85,6 +86,57 @@ def test_unset_tensorrt_dir_skips_silently(monkeypatch):
 
     assert dll_paths.register_native_dll_paths() == []
     assert captured == []
+
+
+def test_registers_pip_tensorrt_package_dll_dirs(tmp_path: Path, monkeypatch):
+    if not sys.platform.startswith("win"):
+        pytest.skip("Windows-only behaviour")
+
+    trt_libs = tmp_path / "tensorrt_libs"
+    trt_rtx_libs = tmp_path / "tensorrt_rtx_libs"
+    torch_trt_lib = tmp_path / "torch_tensorrt" / "lib"
+    trt_libs.mkdir()
+    trt_rtx_libs.mkdir()
+    torch_trt_lib.mkdir(parents=True)
+    monkeypatch.delenv("VP_TENSORRT_DIR", raising=False)
+    monkeypatch.delenv("CUDA_PATH", raising=False)
+    monkeypatch.setattr(dll_paths, "_scan_common_tensorrt_roots", lambda: [])
+    monkeypatch.setattr(
+        dll_paths,
+        "_python_package_dll_dirs",
+        lambda: [trt_libs, trt_rtx_libs, torch_trt_lib],
+        raising=False,
+    )
+
+    captured: list[str] = []
+    monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
+
+    registered = dll_paths.register_native_dll_paths()
+
+    assert [Path(p) for p in captured] == [trt_libs.resolve(), trt_rtx_libs.resolve(), torch_trt_lib.resolve()]
+    assert registered == [trt_libs.resolve(), trt_rtx_libs.resolve(), torch_trt_lib.resolve()]
+
+
+def test_pip_tensorrt_dirs_skip_auto_discovered_roots(tmp_path: Path, monkeypatch):
+    if not sys.platform.startswith("win"):
+        pytest.skip("Windows-only behaviour")
+
+    auto_root = tmp_path / "TensorRT-10" / "bin"
+    trt_libs = tmp_path / "site-packages" / "tensorrt_libs"
+    auto_root.mkdir(parents=True)
+    trt_libs.mkdir(parents=True)
+    monkeypatch.delenv("VP_TENSORRT_DIR", raising=False)
+    monkeypatch.delenv("CUDA_PATH", raising=False)
+    monkeypatch.setattr(dll_paths, "_scan_common_tensorrt_roots", lambda: [auto_root])
+    monkeypatch.setattr(dll_paths, "_python_package_dll_dirs", lambda: [trt_libs])
+
+    captured: list[str] = []
+    monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
+
+    registered = dll_paths.register_native_dll_paths()
+
+    assert [Path(p) for p in captured] == [trt_libs.resolve()]
+    assert registered == [trt_libs.resolve()]
 
 
 def test_picks_up_cuda_path_when_present(tmp_path: Path, monkeypatch):

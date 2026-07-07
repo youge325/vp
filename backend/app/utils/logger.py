@@ -77,6 +77,8 @@ def _cleanup_old_startup_logs(log_dir: Path, keep_count: int, current_log_file: 
                 path.unlink()
             except FileNotFoundError:
                 continue
+            except OSError:
+                continue
 
 
 def setup_logging(

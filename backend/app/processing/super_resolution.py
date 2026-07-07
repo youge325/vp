@@ -128,6 +128,7 @@ class SuperResolutionAlgorithm(IAlgorithm):
             self._paddlegan_runner = PaddleGanVsrRunner(
                 model_id=self._algorithm_name,
                 num_frames=self._num_frames,
+                engine=self._engine,
             )
         return self._paddlegan_runner
 

@@ -35,6 +35,8 @@ from app.processing.streaming.stage_worker import (
 )
 from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
+TENSORRT_LOG_PREFIX = "[VP_TRT]"
+
 
 @dataclass(frozen=True, slots=True)
 class StageWorkerPlan:
@@ -760,6 +762,8 @@ def _read_worker_stderr(
         event = parse_stage_event_line(line)
         if event is None:
             handle.stderr_tail.append(line)
+            if line.startswith(TENSORRT_LOG_PREFIX):
+                print(line, file=sys.stderr, flush=True)
             continue
         if event.get("type") == "progress":
             callback_index = int(event.get("stageIndex") or handle.plan.config.stage_index) - 1

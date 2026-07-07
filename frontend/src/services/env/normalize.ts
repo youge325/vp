@@ -6,6 +6,7 @@ import type {
   EnvironmentCheckPayload,
   EnvironmentCheckResult,
   GpuAdapter,
+  ModelEngineMetricInfo,
   ModelVariantInfo,
 } from '@/types/domain/env'
 
@@ -27,6 +28,7 @@ function normalizeModelVariant(raw: ModelVariantInfo): ModelVariantInfo {
   const metricRecord = metrics as typeof metrics & {
     runtime_overhead_bytes?: number | null
     runtime_frame_count?: number | null
+    engine_metrics?: Record<string, ModelEngineMetricInfo>
   }
   return {
     ...raw,
@@ -36,8 +38,38 @@ function normalizeModelVariant(raw: ModelVariantInfo): ModelVariantInfo {
       runtimeFrameCount: metrics.runtimeFrameCount ?? metricRecord.runtime_frame_count ?? null,
       analysisStatus: metrics.analysisStatus ?? 'unknown',
       analysisNotes: metrics.analysisNotes ?? [],
+      engineMetrics: normalizeEngineMetrics(metrics.engineMetrics ?? metricRecord.engine_metrics ?? {}),
     },
   }
+}
+
+function normalizeEngineMetrics(
+  raw: Record<string, ModelEngineMetricInfo> | undefined,
+): Record<string, ModelEngineMetricInfo> {
+  const normalized: Record<string, ModelEngineMetricInfo> = {}
+  for (const [engine, metrics] of Object.entries(raw ?? {})) {
+    const record = metrics as ModelEngineMetricInfo & {
+      gflops_per_megapixel?: number | null
+      activation_bytes_per_megapixel?: number | null
+      runtime_overhead_bytes?: number | null
+      runtime_frame_count?: number | null
+      input_modulo?: number | null
+      analysis_status?: string
+      analysis_notes?: string[]
+    }
+    normalized[engine] = {
+      ...metrics,
+      gflopsPerMegapixel: metrics.gflopsPerMegapixel ?? record.gflops_per_megapixel ?? null,
+      activationBytesPerMegapixel:
+        metrics.activationBytesPerMegapixel ?? record.activation_bytes_per_megapixel ?? null,
+      runtimeOverheadBytes: metrics.runtimeOverheadBytes ?? record.runtime_overhead_bytes ?? null,
+      runtimeFrameCount: metrics.runtimeFrameCount ?? record.runtime_frame_count ?? null,
+      inputModulo: metrics.inputModulo ?? record.input_modulo ?? null,
+      analysisStatus: metrics.analysisStatus ?? record.analysis_status ?? 'unknown',
+      analysisNotes: metrics.analysisNotes ?? record.analysis_notes ?? [],
+    }
+  }
+  return normalized
 }
 
 function normalizeAlgorithmInfo(raw: AlgorithmInfo): AlgorithmInfo {

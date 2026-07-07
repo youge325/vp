@@ -20,7 +20,7 @@ function makeEnv(): EnvironmentCheckResult {
     },
     gpu: { available: true, devices: ['GPU'], adapters: [], cudaAvailable: true },
     tensorBackends: { pytorch: true, paddle: true, onnx: true },
-    tensorEngines: { pytorch: ['cuda'], paddle: ['cuda'], onnx: ['cuda'] },
+    tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda', 'tensorrt'], onnx: ['cuda', 'tensorrt'] },
     onnxRuntime: { available: true, providers: ['CUDAExecutionProvider'] },
     rifeModel: { available: true, version: '4.25', path: 'models/interpolation/rife/rife_v4.25.onnx' },
     interpolationAlgorithms: [
@@ -62,6 +62,12 @@ function makeEnv(): EnvironmentCheckResult {
           },
         ],
       },
+      {
+        name: 'rife-lite',
+        tensorBackends: ['pytorch'],
+        models: ['lite'],
+        onnxModels: [],
+      },
     ],
     superResolutionAlgorithms: [
       { name: 'placeholder', tensorBackends: ['onnx'], models: [], onnxModels: ['sr_x2.onnx'] },
@@ -86,6 +92,16 @@ function makeEnv(): EnvironmentCheckResult {
               inputModulo: 4,
               analysisStatus: 'ok',
               analysisNotes: [],
+              engineMetrics: {
+                tensorrt: {
+                  gflopsPerMegapixel: 120,
+                  activationBytesPerMegapixel: 3688504346,
+                  runtimeOverheadBytes: 0,
+                  runtimeFrameCount: null,
+                  analysisStatus: 'ok',
+                  analysisNotes: ['TensorRT calibrated'],
+                },
+              },
             },
           },
         ],
@@ -301,6 +317,114 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     expect(buildTaskRequest(second).workflowConfig.superResolution.numFrames).toBe(5)
   })
 
+  it('persists all enhance page edits while applying them to every selected media item', () => {
+    const mediaStore = useMediaStore()
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.interpolation.enabled = false
+      workflow.interpolation.tensorBackend = 'pytorch'
+      workflow.interpolation.engine = 'cuda'
+      workflow.interpolation.algorithm = 'rife'
+      workflow.interpolation.model = '4.25'
+      workflow.interpolation.onnxModel = ''
+      workflow.fpsMode = 'target'
+      workflow.interpolation.targetFps = 60
+      workflow.interpolation.multi = 2
+      workflow.interpolation.scale = 1
+      workflow.interpolation.fp16 = false
+      workflow.superResolution.enabled = false
+      workflow.superResolution.tensorBackend = 'onnx'
+      workflow.superResolution.engine = 'cuda'
+      workflow.superResolution.algorithm = 'placeholder'
+      workflow.superResolution.scaleFactor = 2
+      workflow.superResolution.onnxModel = ''
+      workflow.superResolution.numFrames = 10
+      workflow.processOrder = 'super_resolution_then_interpolation'
+      workflow.anime.enabled = false
+      workflow.anime.profile = 'clean-lines'
+      workflow.anime.denoise = 10
+      workflow.anime.edgeBoost = 15
+    })
+    const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
+    const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
+    mediaStore.appendItems([first, second])
+
+    const form = useEnhanceForm()
+    form.interpolationEnabled = true
+    form.interpolationAlgorithm = 'rife-lite'
+    form.interpolationModel = 'lite'
+    form.interpolationEngine = 'tensorrt'
+    form.targetFps = 72
+    form.fpsMode = 'multi'
+    form.interpolationMulti = 4
+    form.interpolationScale = 0.5
+    form.interpolationFp16 = true
+
+    expect(first.workflowConfig.interpolation.algorithm).toBe('rife-lite')
+    expect(second.workflowConfig.interpolation.algorithm).toBe('rife-lite')
+    expect(presetStore.draftPreset.workflowConfig.interpolation.algorithm).toBe('rife-lite')
+    expect(first.workflowConfig.interpolation.model).toBe('lite')
+    expect(second.workflowConfig.interpolation.model).toBe('lite')
+    expect(presetStore.draftPreset.workflowConfig.interpolation.model).toBe('lite')
+
+    form.interpolationBackend = 'onnx'
+    form.interpolationEngine = 'tensorrt'
+    form.interpolationOnnxModel = 'rife_v4.25.onnx'
+
+    expect(first.workflowConfig.interpolation.onnxModel).toBe('rife_v4.25.onnx')
+    expect(second.workflowConfig.interpolation.onnxModel).toBe('rife_v4.25.onnx')
+    expect(presetStore.draftPreset.workflowConfig.interpolation.onnxModel).toBe('rife_v4.25.onnx')
+
+    form.superResolutionEnabled = true
+    form.superResolutionScale = 4
+    form.superResolutionOnnxModel = 'sr_x2.onnx'
+
+    expect(first.workflowConfig.superResolution.onnxModel).toBe('sr_x2.onnx')
+    expect(second.workflowConfig.superResolution.onnxModel).toBe('sr_x2.onnx')
+    expect(presetStore.draftPreset.workflowConfig.superResolution.onnxModel).toBe('sr_x2.onnx')
+
+    form.superResolutionBackend = 'paddle'
+    form.superResolutionAlgorithm = 'ppmsvsr'
+    form.superResolutionEngine = 'tensorrt'
+    form.superResolutionNumFrames = 5
+    form.processOrder = 'frame_interpolation_then_super_resolution'
+    form.animeEnabled = true
+    form.animeProfile = 'clean-lines'
+    form.animeDenoise = 24
+    form.animeEdgeBoost = 36
+
+    for (const workflow of [
+      first.workflowConfig,
+      second.workflowConfig,
+      presetStore.draftPreset.workflowConfig,
+      buildTaskRequest(second).workflowConfig,
+    ]) {
+      expect(workflow.interpolation.enabled).toBe(true)
+      expect(workflow.interpolation.tensorBackend).toBe('onnx')
+      expect(workflow.interpolation.engine).toBe('tensorrt')
+      expect(workflow.interpolation.algorithm).toBe('rife')
+      expect(workflow.interpolation.model).toBe('4.25')
+      expect(workflow.interpolation.onnxModel).toBe('rife_v4.25.onnx')
+      expect(workflow.fpsMode).toBe('multi')
+      expect(workflow.interpolation.targetFps).toBe(72)
+      expect(workflow.interpolation.multi).toBe(4)
+      expect(workflow.interpolation.scale).toBe(0.5)
+      expect(workflow.interpolation.fp16).toBe(true)
+      expect(workflow.superResolution.enabled).toBe(true)
+      expect(workflow.superResolution.tensorBackend).toBe('paddle')
+      expect(workflow.superResolution.engine).toBe('tensorrt')
+      expect(workflow.superResolution.algorithm).toBe('ppmsvsr')
+      expect(workflow.superResolution.scaleFactor).toBe(4)
+      expect(workflow.superResolution.onnxModel).toBe('')
+      expect(workflow.superResolution.numFrames).toBe(5)
+      expect(workflow.processOrder).toBe('frame_interpolation_then_super_resolution')
+      expect(workflow.anime.enabled).toBe(true)
+      expect(workflow.anime.profile).toBe('clean-lines')
+      expect(workflow.anime.denoise).toBe(24)
+      expect(workflow.anime.edgeBoost).toBe(36)
+    }
+  })
+
   it('persists process order while applying it to every selected media item', () => {
     const mediaStore = useMediaStore()
     const presetStore = usePresetStore()
@@ -337,7 +461,7 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     expect(presetStore.draftPreset.workflowConfig.anime.enabled).toBe(true)
   })
 
-  it('keeps anime detail edits scoped to selected media items', () => {
+  it('persists anime detail edits while applying them to selected media items', () => {
     const mediaStore = useMediaStore()
     const presetStore = usePresetStore()
     presetStore.patchWorkflow((workflow) => {
@@ -356,8 +480,8 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     expect(second.workflowConfig.anime.profile).toBe('line-art')
     expect(first.workflowConfig.anime.denoise).toBe(24)
     expect(second.workflowConfig.anime.denoise).toBe(24)
-    expect(presetStore.draftPreset.workflowConfig.anime.profile).toBe('clean-lines')
-    expect(presetStore.draftPreset.workflowConfig.anime.denoise).toBe(10)
+    expect(presetStore.draftPreset.workflowConfig.anime.profile).toBe('line-art')
+    expect(presetStore.draftPreset.workflowConfig.anime.denoise).toBe(24)
   })
 
   it('applies EDVR fixed window defaults to every selected media item', () => {
@@ -382,6 +506,8 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     expect(second.workflowConfig.superResolution.algorithm).toBe('edvr')
     expect(second.workflowConfig.superResolution.numFrames).toBe(5)
     expect(buildTaskRequest(second).workflowConfig.superResolution.numFrames).toBe(5)
+    expect(presetStore.draftPreset.workflowConfig.superResolution.algorithm).toBe('edvr')
+    expect(presetStore.draftPreset.workflowConfig.superResolution.numFrames).toBe(5)
   })
 
   it('exposes selected model details and current-video runtime estimates', () => {
@@ -442,5 +568,35 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     expect(form.interpolationMetricRows[2].value).toBe('1.96 GiB')
     expect(form.superResolutionMetricRows[2].value).toBe('5.63 GiB')
     expect(form.combinedVramMetricRows[0].value).toBe('5.63 GiB')
+  })
+
+  it('uses selected TensorRT engine metrics for super-resolution memory estimates', () => {
+    const mediaStore = useMediaStore()
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.superResolution.enabled = true
+      workflow.superResolution.tensorBackend = 'paddle'
+      workflow.superResolution.engine = 'tensorrt'
+      workflow.superResolution.algorithm = 'ppmsvsr'
+      workflow.superResolution.scaleFactor = 4
+      workflow.superResolution.numFrames = 5
+    })
+    const item = createMediaItem('/video/tai-chi.mp4', presetStore.draftPreset)
+    mediaStore.appendItems([item])
+    mediaStore.setItemInfo(item.id, {
+      type: 'info',
+      fps: 27,
+      frames: 120,
+      duration: 4.4,
+      width: 640,
+      height: 288,
+      hasAudio: true,
+      videoCodec: 'h264',
+    })
+
+    const form = useEnhanceForm()
+
+    expect(form.superResolutionMetricRows[1].value).toBe('22.1 GFLOPs')
+    expect(form.superResolutionMetricRows[2].value).toBe('3.17 GiB')
   })
 })

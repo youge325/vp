@@ -9,8 +9,8 @@ pub use config::{
 };
 pub use env::{
     AlgorithmInfo, BackendDeviceSupport, EnvironmentCheckPayload, EnvironmentCheckResult,
-    FfmpegInfo, GpuInfo, ModelMetricInfo, ModelVariantInfo, OnnxRuntimeInfo, RifeModel,
-    RuntimeInfo, TensorBackends, TensorEngines,
+    FfmpegInfo, GpuInfo, ModelEngineMetricInfo, ModelMetricInfo, ModelVariantInfo, OnnxRuntimeInfo,
+    RifeModel, RuntimeInfo, TensorBackends, TensorEngines,
 };
 pub use task::{
     ResumeStatusPayload, TaskCancelledPayload, TaskCancelledReason, TaskCompletedPayload,

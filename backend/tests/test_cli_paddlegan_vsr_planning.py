@@ -104,7 +104,7 @@ def test_paddlegan_vsr_step_carries_super_resolution_runtime_fields():
             "scaleFactor": 4.0,
             "algorithm": "ppmsvsr",
             "tensorBackend": "paddle",
-            "engine": "cuda",
+            "engine": "tensorrt",
             "numFrames": 8,
             "autoDownloadWeights": True,
         },
@@ -121,11 +121,23 @@ def test_paddlegan_vsr_step_carries_super_resolution_runtime_fields():
         "scale_factor": 4.0,
         "sr_algorithm": "ppmsvsr",
         "onnx_model": None,
-        "engine": "cuda",
+        "engine": "tensorrt",
         "tensor_backend": "paddle",
         "num_frames": 8,
     }
     assert "auto_download_weights" not in steps[0].algorithm_kwargs
+
+    stage_plan = build_stage_plan(steps, 12, source_duration=1.0, output_fps=None)
+    worker_plan = build_stage_worker_plans(
+        stage_plan=stage_plan,
+        tensor_backend_name="paddle",
+        source_width=64,
+        source_height=64,
+        source_frame_count=12,
+    )[0]
+    parsed = StageWorkerConfig.from_mapping(worker_plan.config.to_jsonable())
+
+    assert parsed.stage.algorithm_kwargs["engine"] == "tensorrt"
 
 
 def test_pytorch_interpolation_plus_paddlegan_super_resolution_builds_isolated_stage_backends():

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appendTaskLog, createIdleTaskState } from './events'
+import { appendTaskLog, classifyTaskLogLine, createIdleTaskState } from './events'
 
 function appendLine(logs: string[], message: string): string[] {
   return appendTaskLog({ ...createIdleTaskState(), logs }, { message }).logs
@@ -29,5 +29,26 @@ describe('appendTaskLog', () => {
     const logs = appendLine(['regular log', '[VP_PROGRESS] 10%'], '[VP_PROGRESS] 20%')
 
     expect(logs).toEqual(['regular log', '[VP_PROGRESS] 20%'])
+  })
+
+  it('keeps TensorRT lifecycle logs as ordinary append-only lines', () => {
+    const logs = appendLine(
+      ['regular log', '[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640'],
+      '[VP_TRT] READY outputs=output',
+    )
+
+    expect(logs).toEqual([
+      'regular log',
+      '[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640',
+      '[VP_TRT] READY outputs=output',
+    ])
+  })
+})
+
+describe('classifyTaskLogLine', () => {
+  it('classifies progress, TensorRT, and default log lines', () => {
+    expect(classifyTaskLogLine('[VP_PROGRESS] [1/2 stage] 10%')).toBe('progress')
+    expect(classifyTaskLogLine('[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640')).toBe('tensorrt')
+    expect(classifyTaskLogLine('plain backend stderr')).toBe('default')
   })
 })
