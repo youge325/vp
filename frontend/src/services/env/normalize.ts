@@ -24,10 +24,16 @@ function normalizeModelVariant(raw: ModelVariantInfo): ModelVariantInfo {
     analysisStatus: 'unknown',
     analysisNotes: [],
   }
+  const metricRecord = metrics as typeof metrics & {
+    runtime_overhead_bytes?: number | null
+    runtime_frame_count?: number | null
+  }
   return {
     ...raw,
     metrics: {
       ...metrics,
+      runtimeOverheadBytes: metrics.runtimeOverheadBytes ?? metricRecord.runtime_overhead_bytes ?? null,
+      runtimeFrameCount: metrics.runtimeFrameCount ?? metricRecord.runtime_frame_count ?? null,
       analysisStatus: metrics.analysisStatus ?? 'unknown',
       analysisNotes: metrics.analysisNotes ?? [],
     },
@@ -35,6 +41,7 @@ function normalizeModelVariant(raw: ModelVariantInfo): ModelVariantInfo {
 }
 
 function normalizeAlgorithmInfo(raw: AlgorithmInfo): AlgorithmInfo {
+  const record = raw as AlgorithmInfo & { sequence_mode?: string | null }
   return {
     ...raw,
     tensorBackends: raw.tensorBackends ?? [],
@@ -43,6 +50,7 @@ function normalizeAlgorithmInfo(raw: AlgorithmInfo): AlgorithmInfo {
     modelDetails: (raw.modelDetails ?? []).map(normalizeModelVariant),
     onnxModelDetails: (raw.onnxModelDetails ?? []).map(normalizeModelVariant),
     scaleFactors: raw.scaleFactors ?? [],
+    sequenceMode: raw.sequenceMode ?? record.sequence_mode ?? null,
   }
 }
 

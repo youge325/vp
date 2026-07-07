@@ -11,8 +11,8 @@ import type { WorkbenchPreset } from '@/types/protocol'
 
 // Phase 16 — useOutputPicker spec(IO 错误路由到 issueStore('encode'))。
 //
-// Phase 17 — 成功路径锁双轨语义:有 activeItem → 写 item.outputConfig;
-// 无 activeItem → 写 preset.draftPreset.outputConfig。原先直调
+// Phase 17 — 成功路径锁双轨语义:有 activeItem → 写 active + selected
+// items 的 outputConfig;无 activeItem → 写 preset.draftPreset.outputConfig。原先直调
 // ``presetStore.patchOutput`` 在激活素材态下是真 bug —— view 优先读
 // activeItem 的 outputDir,preset 的写入根本不可见。
 
@@ -78,8 +78,8 @@ describe('useOutputPicker', () => {
     expect(issueStore.operationIssue).toBeNull()
   })
 
-  // Phase 17 — 真 bug 回归护栏。激活素材态下点选择目录,**必须**写到
-  // item.outputConfig 而不是 preset.draftPreset,否则 EncodeModuleView 的
+  // Phase 17 — 真 bug 回归护栏。激活素材态下点选择目录,**必须**至少写到
+  // active item.outputConfig 而不是 preset.draftPreset,否则 EncodeModuleView 的
   // editorConfig.outputConfig.outputDir 优先读 item,用户看不到变化。
   it('writes the chosen path to the active item when one exists', async () => {
     pickMock.mockResolvedValueOnce('D:/out/picked-item')

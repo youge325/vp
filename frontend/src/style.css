@@ -771,6 +771,12 @@ a:focus-visible {
   border-top: 1px solid var(--border);
 }
 
+.model-metric-grid-compact {
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
 .model-metric-item {
   min-width: 0;
   display: grid;

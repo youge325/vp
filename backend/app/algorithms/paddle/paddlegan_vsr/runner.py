@@ -7,7 +7,11 @@ PaddleGAN VSR algorithm.
 
 from __future__ import annotations
 
-from typing import Callable, Sequence
+import json
+import os
+from pathlib import Path
+import time
+from typing import Any, Callable, Sequence
 
 import numpy as np
 
@@ -16,6 +20,8 @@ from app.algorithms.paddle.paddlegan_vsr.weights import (
     ensure_paddlegan_vsr_weights,
     get_spec,
 )
+
+TRACE_ENV_VAR = "VP_PADDLEGAN_VSR_TRACE_PATH"
 
 
 class PaddleGanVsrRunner:
@@ -36,10 +42,43 @@ class PaddleGanVsrRunner:
     ) -> list[np.ndarray]:
         if not input_frames:
             return []
+        trace_path = _trace_path()
+        trace_chunks: list[dict[str, Any]] | None = [] if trace_path else None
+        trace_started_at = time.time()
+        if trace_path:
+            _reset_paddle_peak(self._ensure_paddle())
+
         model = self._ensure_model()
         if self.spec.sequence_mode == "window":
-            return self._process_window_model(model, input_frames, progress_callback=progress_callback)
-        return self._process_recurrent_model(model, input_frames, progress_callback=progress_callback)
+            output_frames = self._process_window_model(
+                model,
+                input_frames,
+                progress_callback=progress_callback,
+                trace_chunks=trace_chunks,
+            )
+        else:
+            output_frames = self._process_recurrent_model(
+                model,
+                input_frames,
+                progress_callback=progress_callback,
+                trace_chunks=trace_chunks,
+            )
+        if trace_path:
+            _write_trace(
+                trace_path,
+                {
+                    "event": "process_frames",
+                    "modelId": self.model_id,
+                    "sequenceMode": self.spec.sequence_mode,
+                    "configuredNumFrames": self.num_frames,
+                    "inputFrameCount": len(input_frames),
+                    "outputFrameCount": len(output_frames),
+                    "chunks": trace_chunks or [],
+                    "elapsedSeconds": round(time.time() - trace_started_at, 6),
+                    **_paddle_memory_snapshot(self._ensure_paddle()),
+                },
+            )
+        return output_frames
 
     def _ensure_model(self):
         if self._model is not None:
@@ -72,6 +111,7 @@ class PaddleGanVsrRunner:
         input_frames: Sequence[np.ndarray],
         *,
         progress_callback: Callable[[int, int], None] | None = None,
+        trace_chunks: list[dict[str, Any]] | None = None,
     ) -> list[np.ndarray]:
         paddle = self._ensure_paddle()
         output_frames: list[np.ndarray] = []
@@ -83,6 +123,15 @@ class PaddleGanVsrRunner:
                 output = model(tensor)
                 if isinstance(output, (list, tuple)):
                     output = output[-1]
+                if trace_chunks is not None:
+                    _sync_paddle(paddle)
+                    trace_chunks.append(
+                        {
+                            "chunkFrameCount": len(chunk),
+                            "inputShape": _shape_list(tensor),
+                            "outputShape": _shape_list(output),
+                        }
+                    )
                 output_frames.extend(_sequence_tensor_to_frames(output))
                 if progress_callback is not None:
                     progress_callback(min(len(output_frames), total), total)
@@ -94,6 +143,7 @@ class PaddleGanVsrRunner:
         input_frames: Sequence[np.ndarray],
         *,
         progress_callback: Callable[[int, int], None] | None = None,
+        trace_chunks: list[dict[str, Any]] | None = None,
     ) -> list[np.ndarray]:
         paddle = self._ensure_paddle()
         output_frames: list[np.ndarray] = []
@@ -103,6 +153,15 @@ class PaddleGanVsrRunner:
                 neighbors = [input_frames[i] for i in _edvr_neighbor_indexes(index, len(input_frames))]
                 tensor = self._frames_to_tensor(neighbors)
                 output = model(tensor)
+                if trace_chunks is not None:
+                    _sync_paddle(paddle)
+                    trace_chunks.append(
+                        {
+                            "chunkFrameCount": len(neighbors),
+                            "inputShape": _shape_list(tensor),
+                            "outputShape": _shape_list(output),
+                        }
+                    )
                 output_frames.extend(_image_tensor_to_frames(output))
                 if progress_callback is not None:
                     progress_callback(min(len(output_frames), total), total)
@@ -183,3 +242,56 @@ def _edvr_neighbor_indexes(index: int, length: int, window_size: int = 5) -> lis
         return []
     radius = window_size // 2
     return [min(max(index + offset, 0), length - 1) for offset in range(-radius, radius + 1)]
+
+
+def _trace_path() -> Path | None:
+    value = os.environ.get(TRACE_ENV_VAR)
+    if not value:
+        return None
+    return Path(value)
+
+
+def _write_trace(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        handle.write("\n")
+
+
+def _shape_list(value: Any) -> list[int] | None:
+    shape = getattr(value, "shape", None)
+    if shape is None:
+        return None
+    return [int(dim) for dim in shape]
+
+
+def _reset_paddle_peak(paddle: Any) -> None:
+    for name in ("reset_max_memory_reserved", "reset_max_memory_allocated"):
+        fn = getattr(getattr(paddle.device, "cuda", None), name, None)
+        if callable(fn):
+            fn()
+
+
+def _paddle_memory_snapshot(paddle: Any) -> dict[str, int | None]:
+    _sync_paddle(paddle)
+
+    def call(name: str) -> int | None:
+        fn = getattr(getattr(paddle.device, "cuda", None), name, None)
+        if not callable(fn):
+            return None
+        return int(fn())
+
+    return {
+        "maxMemoryReservedBytes": call("max_memory_reserved"),
+        "maxMemoryAllocatedBytes": call("max_memory_allocated"),
+    }
+
+
+def _sync_paddle(paddle: Any) -> None:
+    device_sync = getattr(getattr(paddle, "device", None), "synchronize", None)
+    if callable(device_sync):
+        device_sync()
+        return
+    cuda_sync = getattr(getattr(paddle.device, "cuda", None), "synchronize", None)
+    if callable(cuda_sync):
+        cuda_sync()

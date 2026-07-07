@@ -25,6 +25,7 @@ SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
             "models": ["x4"],
             "scaleFactors": [4],
             "defaultNumFrames": spec.default_num_frames,
+            "sequenceMode": spec.sequence_mode,
             "modelDetails": [get_paddlegan_model_detail(spec.model_id)],
         }
         for spec in PADDLEGAN_VSR_SPECS.values()

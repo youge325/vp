@@ -489,8 +489,15 @@ def test_check_reports_onnx_runtime_and_model_lists(tmp_path, monkeypatch, capsy
     assert ppmsvsr_alg["models"] == ["x4"]
     assert ppmsvsr_alg["scaleFactors"] == [4]
     assert ppmsvsr_alg["defaultNumFrames"] == 10
+    assert ppmsvsr_alg["sequenceMode"] == "recurrent"
     assert ppmsvsr_alg["modelDetails"][0]["name"] == "x4"
     assert ppmsvsr_alg["modelDetails"][0]["metrics"]["parameterCount"] is not None
+    assert ppmsvsr_alg["modelDetails"][0]["metrics"]["runtimeFrameCount"] is None
     assert "weightUrl" not in ppmsvsr_alg
     assert ppmsvsr_alg["weightPath"] == str(paddlegan_weight)
     assert ppmsvsr_alg["weightAvailable"] is False
+
+    edvr_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "edvr")
+    assert edvr_alg["sequenceMode"] == "window"
+    assert edvr_alg["defaultNumFrames"] == 5
+    assert edvr_alg["modelDetails"][0]["metrics"]["runtimeFrameCount"] == 5

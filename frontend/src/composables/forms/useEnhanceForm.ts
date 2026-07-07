@@ -7,7 +7,12 @@ import { useEnvStore } from '@/stores/env'
 import { createDraftEditor } from '@/composables/forms/lens'
 import { createAlgorithmLens } from '@/composables/forms/enhance-lens'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
-import { estimateModelRuntimeMetrics, metricRows } from '@/services/model-metrics'
+import {
+  combinedVramMetricRows,
+  estimateCombinedPeakVram,
+  estimateModelRuntimeMetrics,
+  metricRows,
+} from '@/services/model-metrics'
 import {
   fallbackInterpolationOnnxModel,
   fallbackSuperResolutionOnnxModel,
@@ -39,14 +44,24 @@ function isPaddleGanVsr(algorithm: AlgorithmInfo | undefined): boolean {
   return Boolean(algorithm && PADDLEGAN_VSR_ALGORITHMS.has(algorithm.name))
 }
 
+function fixedRuntimeFrameCount(algorithm: AlgorithmInfo | undefined): number | null {
+  if (algorithm?.sequenceMode !== 'window') return null
+  const count = algorithm.modelDetails?.[0]?.metrics.runtimeFrameCount ?? algorithm.defaultNumFrames ?? null
+  return typeof count === 'number' && Number.isFinite(count) ? Math.max(1, Math.round(count)) : null
+}
+
 export function useEnhanceForm() {
   const envStore = useEnvStore()
-  const { activeItem, editorConfig, patchWorkflow } = useWorkbenchEditor()
+  const { activeItem, editorConfig, patchWorkflow, patchWorkflowAndPreset } = useWorkbenchEditor()
 
   const workflow = computed(() => editorConfig.value.workflowConfig)
   const { field, effect } = createDraftEditor<WorkflowConfig>(
     () => workflow.value,
     patchWorkflow,
+  )
+  const { field: persistentField } = createDraftEditor<WorkflowConfig>(
+    () => workflow.value,
+    patchWorkflowAndPreset,
   )
 
   // Phase 8 — 算法下拉列表按当前选中的 tensorBackend 过滤。
@@ -95,6 +110,19 @@ export function useEnhanceForm() {
     }
     return superResolutionModelDetails.value[0]
   })
+  const superResolutionRuntimeFrameCount = computed(() =>
+    currentSuperResolutionModelDetail.value?.metrics.runtimeFrameCount ?? null,
+  )
+  const isSuperResolutionInputFramesEditable = computed(() =>
+    isPaddleGanSuperResolution.value && currentSuperResolutionAlgorithm.value?.sequenceMode !== 'window',
+  )
+  const superResolutionFixedWindowRows = computed(() => {
+    if (!isPaddleGanSuperResolution.value || isSuperResolutionInputFramesEditable.value) {
+      return []
+    }
+    const count = fixedRuntimeFrameCount(currentSuperResolutionAlgorithm.value)
+    return count ? [{ label: '邻帧窗口', value: `${count} 帧（固定）` }] : []
+  })
   const activeVideoDimensions = computed(() => {
     const info = activeItem.value?.info
     if (!info) return null
@@ -133,7 +161,8 @@ export function useEnhanceForm() {
       {
         scale: 1,
         precisionBytes: 4,
-        temporalFrames: isPaddleGanSuperResolution.value ? workflow.value.superResolution.numFrames ?? 10 : 1,
+        temporalFrames: isSuperResolutionInputFramesEditable.value ? workflow.value.superResolution.numFrames ?? 10 : 1,
+        runtimeFrameCount: superResolutionRuntimeFrameCount.value,
       },
     ),
   )
@@ -142,6 +171,17 @@ export function useEnhanceForm() {
   )
   const superResolutionMetricRows = computed(() =>
     metricRows(currentSuperResolutionModelDetail.value, superResolutionRuntimeEstimate.value),
+  )
+  const combinedPeakVramBytes = computed(() => {
+    if (!workflow.value.interpolation.enabled || !workflow.value.superResolution.enabled) {
+      return null
+    }
+    return estimateCombinedPeakVram(interpolationRuntimeEstimate.value, superResolutionRuntimeEstimate.value)
+  })
+  const combinedVramRows = computed(() =>
+    workflow.value.interpolation.enabled && workflow.value.superResolution.enabled
+      ? combinedVramMetricRows(combinedPeakVramBytes.value)
+      : [],
   )
 
   function findSuperResolutionAlgorithm(name: string): AlgorithmInfo | undefined {
@@ -161,7 +201,8 @@ export function useEnhanceForm() {
       config.superResolution.tensorBackend = 'paddle'
       config.superResolution.scaleFactor = 4
       config.superResolution.onnxModel = ''
-      config.superResolution.numFrames = algorithm.defaultNumFrames ?? config.superResolution.numFrames ?? 10
+      config.superResolution.numFrames =
+        fixedRuntimeFrameCount(algorithm) ?? algorithm.defaultNumFrames ?? config.superResolution.numFrames ?? 10
       return
     }
 
@@ -264,15 +305,18 @@ export function useEnhanceForm() {
     (c) => c.superResolution.onnxModel ?? '',
     (c, v: string) => { c.superResolution.onnxModel = v },
   )
-  const superResolutionNumFrames = field(
-    (c) => c.superResolution.numFrames ?? 10,
-    (c, v: number) => { c.superResolution.numFrames = v },
+  const superResolutionNumFrames = effect<number>(
+    () => fixedRuntimeFrameCount(currentSuperResolutionAlgorithm.value) ?? workflow.value.superResolution.numFrames ?? 10,
+    (value) => patchWorkflow((c) => {
+      const algorithm = findSuperResolutionAlgorithm(c.superResolution.algorithm)
+      c.superResolution.numFrames = fixedRuntimeFrameCount(algorithm) ?? value
+    }),
   )
-  const processOrder = field(
+  const processOrder = persistentField(
     (c) => c.processOrder as ProcessOrder,
     (c, v: ProcessOrder) => { c.processOrder = v },
   )
-  const animeEnabled = field(
+  const animeEnabled = persistentField(
     (c) => c.anime.enabled,
     (c, v: boolean) => { c.anime.enabled = v },
   )
@@ -384,6 +428,12 @@ export function useEnhanceForm() {
     superResolutionRuntimeEstimate,
     interpolationMetricRows,
     superResolutionMetricRows,
+    combinedPeakVramBytes,
+    combinedVramMetricRows: combinedVramRows,
+    isSuperResolutionInputFramesEditable,
+    superResolutionInputFramesLabel: '每块输入帧数',
+    superResolutionInputFramesHint: '每次送入超分模型的连续输入帧数，会影响显存；不是邻帧窗口。',
+    superResolutionFixedWindowRows,
     isOnnxBackend: isInterpolationOnnxBackend,
     isInterpolationOnnxBackend,
     isSuperResolutionOnnxBackend,

@@ -47,6 +47,28 @@ describe('usePresetSync', () => {
     expect(issueStore.operationIssue).toBeNull()
   })
 
+  it('saves persisted enhance preferences in the workflow preset payload', async () => {
+    saveMock.mockResolvedValueOnce(undefined)
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.processOrder = 'frame_interpolation_then_super_resolution'
+      workflow.anime.enabled = true
+    })
+
+    const sync = usePresetSync()
+    await sync.persistDraft()
+
+    expect(saveMock).toHaveBeenCalledOnce()
+    expect(saveMock.mock.calls[0]?.[0]).toMatchObject({
+      workflowConfig: {
+        processOrder: 'frame_interpolation_then_super_resolution',
+        anime: {
+          enabled: true,
+        },
+      },
+    })
+  })
+
   it('routes PersistenceFailed errors to the preset operation issue surface', async () => {
     saveMock.mockRejectedValueOnce(
       new InvokeError(TASK_ERROR_CODES.PersistenceFailed, 'disk is full'),

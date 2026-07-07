@@ -332,7 +332,7 @@ def test_stage_worker_uses_stage_tensor_backend_without_passing_it_to_algorithm(
     config = StageWorkerConfig(
         stage=ProcessingStep(
             algorithm_type="super_resolution",
-            algorithm_kwargs={"sr_algorithm": "ppmsvsr", "tensor_backend": "paddle"},
+            algorithm_kwargs={"sr_algorithm": "ppmsvsr", "tensor_backend": "paddle", "num_frames": 5},
             stage_name="01_super_resolution",
         ),
         stage_index=1,
@@ -357,7 +357,7 @@ def test_stage_worker_uses_stage_tensor_backend_without_passing_it_to_algorithm(
     assert captured["algorithm_type"] == "super_resolution"
     assert captured["tensor_backend"].get_name() == "identity"
     assert captured["tensor_backend_name"] == "identity"
-    assert captured["kwargs"] == {"sr_algorithm": "ppmsvsr"}
+    assert captured["kwargs"] == {"sr_algorithm": "ppmsvsr", "num_frames": 5}
 
 
 def test_stage_worker_error_event_uses_wire_error_code(monkeypatch, capsys) -> None:

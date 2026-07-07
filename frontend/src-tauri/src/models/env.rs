@@ -112,6 +112,10 @@ pub struct ModelMetricInfo {
     #[serde(default)]
     pub activation_bytes_per_megapixel: Option<f64>,
     #[serde(default)]
+    pub runtime_overhead_bytes: Option<u64>,
+    #[serde(default)]
+    pub runtime_frame_count: Option<u32>,
+    #[serde(default)]
     pub input_modulo: Option<u32>,
     #[serde(default)]
     pub analysis_status: String,
@@ -177,6 +181,8 @@ pub struct AlgorithmInfo {
     pub scale_factors: Vec<u32>,
     #[serde(default)]
     pub default_num_frames: Option<u32>,
+    #[serde(default)]
+    pub sequence_mode: Option<String>,
     #[serde(default)]
     pub weight_path: Option<String>,
     #[serde(default)]

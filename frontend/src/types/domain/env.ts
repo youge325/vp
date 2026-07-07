@@ -30,6 +30,8 @@ export interface ModelMetricInfo {
   parameterBytes?: number | null
   gflopsPerMegapixel?: number | null
   activationBytesPerMegapixel?: number | null
+  runtimeOverheadBytes?: number | null
+  runtimeFrameCount?: number | null
   inputModulo?: number | null
   analysisStatus: ModelAnalysisStatus
   analysisNotes: string[]
@@ -50,6 +52,7 @@ export interface AlgorithmInfo {
   onnxModelDetails?: ModelVariantInfo[]
   scaleFactors?: number[]
   defaultNumFrames?: number | null
+  sequenceMode?: 'recurrent' | 'window' | string | null
   weightPath?: string | null
   weightAvailable?: boolean | null
 }

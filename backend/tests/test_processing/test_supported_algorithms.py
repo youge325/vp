@@ -75,3 +75,18 @@ def test_builtin_models_expose_metric_details():
     for entry in paddlegan_entries:
         assert entry["modelDetails"][0]["name"] == "x4"
         assert entry["modelDetails"][0]["metrics"]["parameterCount"]
+        assert entry["sequenceMode"] in {"recurrent", "window"}
+
+
+def test_paddlegan_window_models_expose_fixed_runtime_frame_count():
+    """EDVR 固定使用 5 邻帧窗口,前端不应把它当可编辑帧块数。"""
+    edvr = next(entry for entry in SR_ALGORITHMS if entry["name"] == "edvr")
+    assert edvr["sequenceMode"] == "window"
+    assert edvr["defaultNumFrames"] == 5
+    assert edvr["modelDetails"][0]["metrics"]["runtimeFrameCount"] == 5
+
+    recurrent = [entry for entry in SR_ALGORITHMS if entry["tensorBackends"] == ["paddle"] and entry["name"] != "edvr"]
+    assert recurrent
+    for entry in recurrent:
+        assert entry["sequenceMode"] == "recurrent"
+        assert entry["modelDetails"][0]["metrics"]["runtimeFrameCount"] is None
