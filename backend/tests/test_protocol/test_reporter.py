@@ -34,17 +34,26 @@ def test_update_prefers_explicit_ffmpeg_fps(capsys: pytest.CaptureFixture[str]) 
     assert "48.0 fps" in line
 
 
-def test_update_at_zero_progress_keeps_unknown_fps_placeholder(capsys: pytest.CaptureFixture[str]) -> None:
+def test_update_at_zero_progress_emits_structured_progress_without_terminal_line(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     reporter = CliProgressReporter(100)
     reporter.started_at = time.time() - 10
 
     reporter.update(0)
 
-    line = _terminal_progress_line(capsys.readouterr().err)
-    assert "--.- fps" in line
+    captured = capsys.readouterr()
+    stderr_lines = [line for line in captured.err.splitlines() if line.startswith(TERMINAL_PROGRESS_PREFIX)]
+    stdout_lines = [json.loads(line) for line in captured.out.splitlines()]
+
+    assert stderr_lines == []
+    assert stdout_lines[-1]["current"] == 0
+    assert stdout_lines[-1]["percent"] == 0.0
 
 
-def test_stage_switch_allows_second_stage_to_restart_at_zero(capsys: pytest.CaptureFixture[str]) -> None:
+def test_stage_switch_allows_second_stage_to_restart_at_zero_without_terminal_line(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     reporter = CliProgressReporter(100)
 
     reporter.set_stage("01_frame_interpolation", 1, 2, total_frames=2)
@@ -56,10 +65,9 @@ def test_stage_switch_allows_second_stage_to_restart_at_zero(capsys: pytest.Capt
     stderr_lines = [line for line in captured.err.splitlines() if line.startswith(TERMINAL_PROGRESS_PREFIX)]
     stdout_lines = [json.loads(line) for line in captured.out.splitlines()]
 
-    assert stderr_lines[-2].startswith("[VP_PROGRESS] [1/2 01_frame_interpolation]")
-    assert "100.0% 2/2" in stderr_lines[-2]
-    assert stderr_lines[-1].startswith("[VP_PROGRESS] [2/2 02_super_resolution]")
-    assert "  0.0% 0/10" in stderr_lines[-1]
+    assert len(stderr_lines) == 1
+    assert stderr_lines[-1].startswith("[VP_PROGRESS] [1/2 01_frame_interpolation]")
+    assert "100.0% 2/2" in stderr_lines[-1]
     assert stdout_lines[-1] == {
         "type": "progress",
         "current": 0,
@@ -98,7 +106,6 @@ def test_heartbeat_forces_same_progress_with_runtime_status(capsys: pytest.Captu
     stderr_lines = [line for line in captured.err.splitlines() if line.startswith(TERMINAL_PROGRESS_PREFIX)]
     stdout_lines = [json.loads(line) for line in captured.out.splitlines()]
 
-    assert len(stderr_lines) == 2
-    assert "RUN 00:00:" in stderr_lines[-1]
+    assert stderr_lines == []
     assert stdout_lines[-1]["current"] == 0
     assert stdout_lines[-1]["stage"] == "02_super_resolution"
