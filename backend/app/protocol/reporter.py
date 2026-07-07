@@ -147,17 +147,18 @@ class CliProgressReporter:
         fps_text = f"{effective_fps:5.1f} fps" if effective_fps and effective_fps > 0 else "--.- fps"
         speed_text = f"{speed:.2f}x" if speed and speed > 0 else "--.--x"
         run_text = f" | RUN {format_eta(time.time() - self._stage_started_at)}" if heartbeat else ""
-        emit_terminal(
-            f"{TERMINAL_PROGRESS_PREFIX} "
-            f"[{self._stage_index}/{self._stage_total} {self._stage_name}] "
-            f"{format_progress_bar(display_current, display_total)} "
-            f"{percent:5.1f}% "
-            f"{display_current}/{display_total} "
-            f"| {fps_text} "
-            f"| {speed_text} "
-            f"| ETA {format_eta(eta_seconds)}"
-            f"{run_text}"
-        )
+        if display_current > 0 or is_end:
+            emit_terminal(
+                f"{TERMINAL_PROGRESS_PREFIX} "
+                f"[{self._stage_index}/{self._stage_total} {self._stage_name}] "
+                f"{format_progress_bar(display_current, display_total)} "
+                f"{percent:5.1f}% "
+                f"{display_current}/{display_total} "
+                f"| {fps_text} "
+                f"| {speed_text} "
+                f"| ETA {format_eta(eta_seconds)}"
+                f"{run_text}"
+            )
         ndjson.progress(
             current=display_current,
             total=display_total,
