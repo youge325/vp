@@ -107,10 +107,16 @@ def test_parse_stage_event_line_returns_json_event_only_for_prefixed_lines() -> 
 
 
 def test_read_worker_stderr_forwards_tensorrt_lifecycle_logs_to_parent_stderr(capsys) -> None:
+    trt_line = (
+        "22:03:13 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: "
+        "[VP_TRT] TensorRT BUILD PaddleGAN ppmsvsr shape=1x5x3x128x128"
+    )
     stderr = io.BytesIO(
-        b"[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x128x128\n"
-        b"ordinary worker stderr\n"
-        b'VP_STAGE_EVENT {"type":"progress","stageIndex":1,"current":1,"total":5}\n'
+        (
+            f"{trt_line}\n"
+            "ordinary worker stderr\n"
+            'VP_STAGE_EVENT {"type":"progress","stageIndex":1,"current":1,"total":5}\n'
+        ).encode("utf-8")
     )
     handle = SimpleNamespace(
         process=SimpleNamespace(stderr=stderr),
@@ -127,11 +133,11 @@ def test_read_worker_stderr_forwards_tensorrt_lifecycle_logs_to_parent_stderr(ca
     )
 
     captured = capsys.readouterr()
-    assert "[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x128x128" in captured.err
+    assert trt_line in captured.err
     assert "ordinary worker stderr" not in captured.err
     assert progress_calls == [(1, 5)]
     assert list(handle.stderr_tail) == [
-        "[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x128x128",
+        trt_line,
         "ordinary worker stderr",
     ]
 

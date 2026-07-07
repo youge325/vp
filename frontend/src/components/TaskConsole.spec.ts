@@ -13,7 +13,7 @@ describe('TaskConsole TensorRT logs', () => {
     setActivePinia(createPinia())
   })
 
-  it('renders TensorRT lifecycle log lines with a dedicated class and label', () => {
+  it('renders TensorRT lifecycle log lines in the standard backend log style', () => {
     const presetStore = usePresetStore()
     const mediaStore = useMediaStore()
     const runStateStore = useMediaRunState()
@@ -24,7 +24,8 @@ describe('TaskConsole TensorRT logs', () => {
       resumeStatus: null,
       logs: [
         'plain backend log',
-        '[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640',
+        '22:03:13 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +
+          '[VP_TRT] TensorRT BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640',
       ],
     })
 
@@ -33,7 +34,10 @@ describe('TaskConsole TensorRT logs', () => {
 
     expect(lines[0].classes()).not.toContain('log-line-trt')
     expect(lines[1].classes()).toContain('log-line-trt')
-    expect(lines[1].text()).toContain('TensorRT')
-    expect(lines[1].text()).toContain('BUILD PaddleGAN ppmsvsr')
+    expect(lines[1].find('.log-tag').exists()).toBe(false)
+    expect(lines[1].text()).toBe(
+      '22:03:13 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +
+        'TensorRT BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640',
+    )
   })
 })

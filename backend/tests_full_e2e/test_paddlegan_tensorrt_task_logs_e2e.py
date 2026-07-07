@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -213,9 +214,14 @@ def test_paddlegan_tensorrt_engine_logs_reach_parent_process_stderr(tmp_path: Pa
     assert metadata["frames"] == NUM_FRAMES
 
     assert "[VP_TRT]" in proc.stderr
-    assert (
-        "[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x128x128" in proc.stderr
-        or "[VP_TRT] LOAD static_model=" in proc.stderr
+    assert re.search(
+        r"\d\d:\d\d:\d\d \[INFO\] app\.algorithms\.paddle\.paddlegan_vsr\.runner: "
+        r"\[VP_TRT\] TensorRT BUILD PaddleGAN ppmsvsr shape=1x5x3x128x128",
+        proc.stderr,
+    ) or re.search(
+        r"\d\d:\d\d:\d\d \[INFO\] app\.algorithms\.paddle\.paddlegan_vsr\.runner: "
+        r"\[VP_TRT\] TensorRT LOAD static_model=",
+        proc.stderr,
     )
-    assert "[VP_TRT] CACHE dir=" in proc.stderr
-    assert "[VP_TRT] READY outputs=" in proc.stderr
+    assert "[VP_TRT] TensorRT CACHE dir=" in proc.stderr
+    assert "[VP_TRT] TensorRT READY outputs=" in proc.stderr
