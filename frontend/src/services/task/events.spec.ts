@@ -38,6 +38,17 @@ describe('appendTaskLog', () => {
     expect(logs).toEqual([tensorRtLog, plainLog, nextProgress])
   })
 
+  it('inserts later lifecycle logs before trailing progress lines', () => {
+    const progress = '[VP_PROGRESS] [1/2 01_super_resolution] [------------------------] 0.0% 0/6723'
+    const tensorRtLog =
+      '22:03:49 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +
+      '[VP_TRT] TensorRT LOAD static_model=model.json params=model.pdiparams'
+
+    const logs = appendLine(['regular log', progress], tensorRtLog)
+
+    expect(logs).toEqual(['regular log', tensorRtLog, progress])
+  })
+
   it('keeps legacy unkeyed progress replacement behavior', () => {
     const logs = appendLine(['regular log', '[VP_PROGRESS] 10%'], '[VP_PROGRESS] 20%')
 

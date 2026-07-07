@@ -89,6 +89,15 @@ export function appendTaskLog(state: MediaTaskState, payload: TaskLogPayload): M
     }
   }
 
+  const progressLogs = state.logs.filter((line) => line.startsWith(TERMINAL_PROGRESS_PREFIX))
+  if (progressLogs.length > 0) {
+    const nonProgressLogs = state.logs.filter((line) => !line.startsWith(TERMINAL_PROGRESS_PREFIX))
+    return {
+      ...state,
+      logs: [...nonProgressLogs, payload.message, ...progressLogs].slice(-300),
+    }
+  }
+
   return {
     ...state,
     logs: [...state.logs, payload.message].slice(-300),
