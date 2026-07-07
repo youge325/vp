@@ -762,7 +762,7 @@ def _read_worker_stderr(
         event = parse_stage_event_line(line)
         if event is None:
             handle.stderr_tail.append(line)
-            if line.startswith(TENSORRT_LOG_PREFIX):
+            if TENSORRT_LOG_PREFIX in line:
                 print(line, file=sys.stderr, flush=True)
             continue
         if event.get("type") == "progress":

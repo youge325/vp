@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import sys
 import tempfile
 import time
 from typing import Any, Callable, Sequence
@@ -22,9 +21,11 @@ from app.algorithms.paddle.paddlegan_vsr.weights import (
     ensure_paddlegan_vsr_weights,
     get_spec,
 )
+from app.utils.logger import get_logger
 
 TRACE_ENV_VAR = "VP_PADDLEGAN_VSR_TRACE_PATH"
 TENSORRT_LOG_PREFIX = "[VP_TRT]"
+logger = get_logger(__name__)
 
 
 class PaddleGanVsrRunner:
@@ -453,7 +454,7 @@ def _create_tensorrt_predictor(
 
 
 def _emit_tensorrt_log(message: str) -> None:
-    print(f"{TENSORRT_LOG_PREFIX} {message}", file=sys.stderr, flush=True)
+    logger.info("%s TensorRT %s", TENSORRT_LOG_PREFIX, message)
 
 
 def _format_shape(shape: Sequence[int]) -> str:

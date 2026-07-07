@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -217,9 +218,10 @@ def test_paddlegan_tensorrt_predictor_pads_and_crops_short_chunks(monkeypatch):
     assert output.shape == (1, 3, 3, 512, 512)
 
 
-def test_paddlegan_tensorrt_predictor_logs_build_save_cache_and_ready(tmp_path, monkeypatch, capsys):
+def test_paddlegan_tensorrt_predictor_logs_build_save_cache_and_ready(tmp_path, monkeypatch, caplog):
     from app.algorithms.paddle.paddlegan_vsr.runner import _PaddleGanTensorRtPredictor
 
+    caplog.set_level(logging.INFO, logger=runner_module.__name__)
     saved_prefixes = []
     prefix = tmp_path / "ppmsvsr" / "t5_h288_w640" / "model"
 
@@ -268,17 +270,18 @@ def test_paddlegan_tensorrt_predictor_logs_build_save_cache_and_ready(tmp_path, 
 
     predictor._ensure_predictor([1, 5, 3, 288, 640])
 
-    stderr = capsys.readouterr().err
+    messages = [record.getMessage() for record in caplog.records if record.name == runner_module.__name__]
     assert saved_prefixes == [str(prefix)]
-    assert "[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640" in stderr
-    assert "[VP_TRT] SAVE static_model=" in stderr
-    assert "[VP_TRT] CACHE dir=" in stderr
-    assert "[VP_TRT] READY outputs=output" in stderr
+    assert "[VP_TRT] TensorRT BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640" in messages
+    assert any(message.startswith("[VP_TRT] TensorRT SAVE static_model=") for message in messages)
+    assert any(message.startswith("[VP_TRT] TensorRT CACHE dir=") for message in messages)
+    assert "[VP_TRT] TensorRT READY outputs=output" in messages
 
 
-def test_paddlegan_tensorrt_predictor_logs_load_when_static_files_exist(tmp_path, monkeypatch, capsys):
+def test_paddlegan_tensorrt_predictor_logs_load_when_static_files_exist(tmp_path, monkeypatch, caplog):
     from app.algorithms.paddle.paddlegan_vsr.runner import _PaddleGanTensorRtPredictor
 
+    caplog.set_level(logging.INFO, logger=runner_module.__name__)
     prefix = tmp_path / "ppmsvsr" / "t5_h288_w640" / "model"
     prefix.parent.mkdir(parents=True, exist_ok=True)
     Path(f"{prefix}.json").write_text("model", encoding="utf-8")
@@ -311,16 +314,17 @@ def test_paddlegan_tensorrt_predictor_logs_load_when_static_files_exist(tmp_path
 
     predictor._ensure_predictor([1, 5, 3, 288, 640])
 
-    stderr = capsys.readouterr().err
-    assert "[VP_TRT] LOAD static_model=" in stderr
-    assert "[VP_TRT] CACHE dir=" in stderr
-    assert "[VP_TRT] READY outputs=output" in stderr
-    assert "[VP_TRT] BUILD" not in stderr
+    messages = [record.getMessage() for record in caplog.records if record.name == runner_module.__name__]
+    assert any(message.startswith("[VP_TRT] TensorRT LOAD static_model=") for message in messages)
+    assert any(message.startswith("[VP_TRT] TensorRT CACHE dir=") for message in messages)
+    assert "[VP_TRT] TensorRT READY outputs=output" in messages
+    assert not any("[VP_TRT] TensorRT BUILD" in message for message in messages)
 
 
-def test_paddlegan_tensorrt_predictor_logs_in_process_reuse(capsys):
+def test_paddlegan_tensorrt_predictor_logs_in_process_reuse(caplog):
     from app.algorithms.paddle.paddlegan_vsr.runner import _PaddleGanTensorRtPredictor
 
+    caplog.set_level(logging.INFO, logger=runner_module.__name__)
     predictor = _PaddleGanTensorRtPredictor(
         paddle=object(),
         model=object(),
@@ -333,5 +337,5 @@ def test_paddlegan_tensorrt_predictor_logs_in_process_reuse(capsys):
     assert predictor._ensure_predictor([1, 5, 3, 288, 640]) == ("predictor", "input", ["output"])
     assert predictor._ensure_predictor([1, 5, 3, 288, 640]) == ("predictor", "input", ["output"])
 
-    stderr = capsys.readouterr().err
-    assert stderr.count("[VP_TRT] REUSE PaddleGAN ppmsvsr shape=1x5x3x288x640") == 1
+    messages = [record.getMessage() for record in caplog.records if record.name == runner_module.__name__]
+    assert messages.count("[VP_TRT] TensorRT REUSE PaddleGAN ppmsvsr shape=1x5x3x288x640") == 1

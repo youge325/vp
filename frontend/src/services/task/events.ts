@@ -33,16 +33,21 @@ export function classifyTaskLogLine(line: string): TaskLogLineKind {
   if (line.startsWith(TERMINAL_PROGRESS_PREFIX)) {
     return 'progress'
   }
-  if (line.startsWith(TENSORRT_LOG_PREFIX)) {
+  if (line.includes(TENSORRT_LOG_PREFIX)) {
     return 'tensorrt'
   }
   return 'default'
 }
 
 export function displayTaskLogLine(line: string): string {
-  return classifyTaskLogLine(line) === 'tensorrt'
-    ? line.slice(TENSORRT_LOG_PREFIX.length).trimStart()
-    : line
+  if (classifyTaskLogLine(line) !== 'tensorrt') {
+    return line
+  }
+  const markerIndex = line.indexOf(TENSORRT_LOG_PREFIX)
+  if (markerIndex < 0) {
+    return line
+  }
+  return `${line.slice(0, markerIndex)}${line.slice(markerIndex + TENSORRT_LOG_PREFIX.length).trimStart()}`
 }
 
 function progressStageKey(line: string): string | null {

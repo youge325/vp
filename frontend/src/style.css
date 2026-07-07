@@ -829,19 +829,6 @@ a:focus-visible {
   color: #aee0ff;
 }
 
-.log-tag {
-  display: inline-block;
-  margin-right: 8px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid rgba(96, 178, 255, 0.45);
-  color: #d7f0ff;
-  background: rgba(96, 178, 255, 0.14);
-  font-family: inherit;
-  font-size: 11px;
-  line-height: 1.4;
-}
-
 .muted-line {
   color: var(--text-soft);
 }

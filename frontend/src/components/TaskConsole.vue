@@ -61,7 +61,6 @@ watch(
     </div>
     <div ref="terminalRef" class="log-panel log-panel-terminal">
       <p v-for="(line, index) in logs" :key="index" class="log-line" :class="logLineClass(line)">
-        <span v-if="classifyTaskLogLine(line) === 'tensorrt'" class="log-tag">TensorRT</span>
         <span>{{ displayTaskLogLine(line) }}</span>
       </p>
     </div>

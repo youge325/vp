@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appendTaskLog, classifyTaskLogLine, createIdleTaskState } from './events'
+import { appendTaskLog, classifyTaskLogLine, createIdleTaskState, displayTaskLogLine } from './events'
 
 function appendLine(logs: string[], message: string): string[] {
   return appendTaskLog({ ...createIdleTaskState(), logs }, { message }).logs
@@ -32,15 +32,20 @@ describe('appendTaskLog', () => {
   })
 
   it('keeps TensorRT lifecycle logs as ordinary append-only lines', () => {
+    const buildLine =
+      '22:03:13 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +
+      '[VP_TRT] TensorRT BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640'
+    const readyLine =
+      '22:03:14 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: [VP_TRT] TensorRT READY outputs=output'
     const logs = appendLine(
-      ['regular log', '[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640'],
-      '[VP_TRT] READY outputs=output',
+      ['regular log', buildLine],
+      readyLine,
     )
 
     expect(logs).toEqual([
       'regular log',
-      '[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640',
-      '[VP_TRT] READY outputs=output',
+      buildLine,
+      readyLine,
     ])
   })
 })
@@ -48,7 +53,25 @@ describe('appendTaskLog', () => {
 describe('classifyTaskLogLine', () => {
   it('classifies progress, TensorRT, and default log lines', () => {
     expect(classifyTaskLogLine('[VP_PROGRESS] [1/2 stage] 10%')).toBe('progress')
-    expect(classifyTaskLogLine('[VP_TRT] BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640')).toBe('tensorrt')
+    expect(
+      classifyTaskLogLine(
+        '22:03:13 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +
+          '[VP_TRT] TensorRT BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640',
+      ),
+    ).toBe('tensorrt')
     expect(classifyTaskLogLine('plain backend stderr')).toBe('default')
+  })
+})
+
+describe('displayTaskLogLine', () => {
+  it('removes the internal TensorRT marker while preserving the logging prefix', () => {
+    const line =
+      '22:03:13 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +
+      '[VP_TRT] TensorRT LOAD static_model=model.json params=model.pdiparams'
+
+    expect(displayTaskLogLine(line)).toBe(
+      '22:03:13 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +
+        'TensorRT LOAD static_model=model.json params=model.pdiparams',
+    )
   })
 })
