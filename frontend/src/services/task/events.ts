@@ -70,11 +70,10 @@ export function appendTaskLog(state: MediaTaskState, payload: TaskLogPayload): M
   if (incomingStageKey) {
     const existingIndex = state.logs.findIndex((line) => progressStageKey(line) === incomingStageKey)
     if (existingIndex >= 0) {
-      const logs = [...state.logs]
-      logs[existingIndex] = payload.message
+      const logs = state.logs.filter((_, index) => index !== existingIndex)
       return {
         ...state,
-        logs: logs.slice(-300),
+        logs: [...logs, payload.message].slice(-300),
       }
     }
     return {
