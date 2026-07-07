@@ -5,8 +5,8 @@
 // 自动消费。
 //
 // Phase 17 — 成功路径改走 ``useWorkbenchEditor.patchOutput`` 双轨路由:
-// 有 activeItem 写到 item.outputConfig.outputDir,无 activeItem 写到
-// preset.draftPreset.outputConfig.outputDir。原先直调 ``presetStore.patchOutput``
+// 有 activeItem 写到 active + selected 的素材级 outputConfig,无 activeItem
+// 写到 preset.draftPreset.outputConfig。原先直调 ``presetStore.patchOutput``
 // 在激活素材态下是真 bug —— 写到预设草稿后,view 的 ``editorConfig.outputConfig``
 // 优先读 activeItem.outputConfig.outputDir,用户点选完路径输入框还是
 // 旧值/空,体感"没生效"。

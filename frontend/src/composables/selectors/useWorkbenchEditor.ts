@@ -10,7 +10,7 @@
 //      每个素材可以覆盖预设中的部分配置。
 //
 // 编辑路径(``patchDecode`` 等):
-//   - 有激活素材 → 改素材级配置
+//   - 有激活素材 → 改 active + selected 的素材级配置
 //   - 无激活素材 → 改预设草稿
 //
 // 读取路径(``editorConfig``):
@@ -20,6 +20,8 @@
 // **不自动同步**:预设草稿变化时,**不会**自动套用到已选 items;素材级
 // 配置变化时,**不会**反向写入预设。这是有意的:用户希望"调整预设不
 // 影响已存在的素材"。
+// 少数明确需要作为全局偏好保存的 workflow 字段,使用
+// ``patchWorkflowAndPreset`` 显式双写当前可编辑素材和预设草稿。
 //
 // 如果用户希望把预设草稿手动套用到当前选中的所有素材,使用
 // ``useMediaImport.applyDraftToSelectedItems()``。Phase D 暂未在 UI 上
@@ -69,9 +71,15 @@ export function useWorkbenchEditor() {
   ): (mutator: (c: TConfig) => void) => void {
     return (mutator) => {
       if (activeItem.value) {
-        const next = clone(getItemConfig(activeItem.value))
-        mutator(next)
-        mediaStore.replaceItemConfig(activeItem.value.id, buildPartial(next))
+        const targetIds = mediaStore.getEditableTargetIds()
+        for (const item of mediaStore.mediaItems) {
+          if (!targetIds.has(item.id)) {
+            continue
+          }
+          const next = clone(getItemConfig(item))
+          mutator(next)
+          mediaStore.replaceItemConfig(item.id, buildPartial(next))
+        }
       } else {
         patchPreset(mutator)
       }
@@ -99,6 +107,21 @@ export function useWorkbenchEditor() {
     presetStore.patchWorkflow,
   )
 
+  const patchWorkflowAndPreset = (mutator: (c: WorkflowConfig) => void): void => {
+    if (activeItem.value) {
+      const targetIds = mediaStore.getEditableTargetIds()
+      for (const item of mediaStore.mediaItems) {
+        if (!targetIds.has(item.id)) {
+          continue
+        }
+        const next = cloneWorkflowConfig(item.workflowConfig)
+        mutator(next)
+        mediaStore.replaceItemConfig(item.id, { workflowConfig: next })
+      }
+    }
+    presetStore.patchWorkflow(mutator)
+  }
+
   const patchOutput = makePatcher(
     (item) => item.outputConfig,
     cloneOutputConfig,
@@ -114,6 +137,7 @@ export function useWorkbenchEditor() {
     patchDecode,
     patchEncode,
     patchWorkflow,
+    patchWorkflowAndPreset,
     patchOutput,
   }
 }
@@ -121,9 +145,10 @@ export function useWorkbenchEditor() {
 export function useEditingScope() {
   const mediaStore = useMediaStore()
   const isPresetMode = computed(() => !mediaStore.activeItem)
+  const editableCount = computed(() => mediaStore.getEditableTargetIds().size)
 
   const label = computed(() =>
-    getEditingScopeLabel(isPresetMode.value, mediaStore.selectedIds.length || 1),
+    getEditingScopeLabel(isPresetMode.value, editableCount.value || 1),
   )
 
   return {

@@ -299,11 +299,12 @@ function setProcessOrder(value: string): void {
         />
 
         <BaseNumber
-          v-if="form.isPaddleGanSuperResolution"
-          label="帧块数"
+          v-if="form.isSuperResolutionInputFramesEditable"
+          :label="form.superResolutionInputFramesLabel"
           :model-value="form.superResolutionNumFrames"
           :min="1"
           :max="100"
+          :hint="form.superResolutionInputFramesHint"
           @update:model-value="(v) => (form.superResolutionNumFrames = v)"
         />
 
@@ -316,8 +317,30 @@ function setProcessOrder(value: string): void {
         />
       </div>
 
+      <div
+        v-if="form.superResolutionFixedWindowRows.length"
+        class="model-metric-grid model-metric-grid-compact"
+        aria-label="超分固定窗口"
+      >
+        <div v-for="row in form.superResolutionFixedWindowRows" :key="row.label" class="model-metric-item">
+          <span>{{ row.label }}</span>
+          <strong>{{ row.value }}</strong>
+        </div>
+      </div>
+
       <div class="model-metric-grid" aria-label="超分模型指标">
         <div v-for="row in form.superResolutionMetricRows" :key="row.label" class="model-metric-item">
+          <span>{{ row.label }}</span>
+          <strong>{{ row.value }}</strong>
+        </div>
+      </div>
+
+      <div
+        v-if="form.combinedVramMetricRows.length"
+        class="model-metric-grid model-metric-grid-compact"
+        aria-label="增强流程组合显存峰值"
+      >
+        <div v-for="row in form.combinedVramMetricRows" :key="row.label" class="model-metric-item">
           <span>{{ row.label }}</span>
           <strong>{{ row.value }}</strong>
         </div>

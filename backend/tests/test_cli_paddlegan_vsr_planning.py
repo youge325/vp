@@ -4,6 +4,7 @@ from app.cli.defaults import _resolve_processing_steps
 from app.cli.commands._process_planning import _verify_model_availability, _verify_super_resolution_backend
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import ProcessingStep, build_stage_plan
+from app.processing.streaming.stage_worker import StageWorkerConfig
 from app.processing.streaming.worker_pipeline import build_stage_worker_plans
 
 
@@ -170,3 +171,29 @@ def test_pytorch_interpolation_plus_paddlegan_super_resolution_builds_isolated_s
     assert [plan.config.tensor_backend_name for plan in worker_plans] == ["pytorch", "paddle"]
     assert [plan.output_frame_count for plan in worker_plans] == [5, 5]
     assert (worker_plans[-1].config.output_width, worker_plans[-1].config.output_height) == (256, 256)
+    assert worker_plans[-1].config.stage.algorithm_kwargs["num_frames"] == 8
+
+
+def test_paddlegan_num_frames_survives_stage_worker_config_roundtrip():
+    step = ProcessingStep(
+        algorithm_type="super_resolution",
+        algorithm_kwargs={
+            "scale_factor": 4.0,
+            "sr_algorithm": "ppmsvsr",
+            "tensor_backend": "paddle",
+            "num_frames": 5,
+        },
+        stage_name="01_super_resolution",
+    )
+    stage_plan = build_stage_plan([step], 12, source_duration=1.0, output_fps=None)
+    worker_plan = build_stage_worker_plans(
+        stage_plan=stage_plan,
+        tensor_backend_name="paddle",
+        source_width=64,
+        source_height=64,
+        source_frame_count=12,
+    )[0]
+
+    parsed = StageWorkerConfig.from_mapping(worker_plan.config.to_jsonable())
+
+    assert parsed.stage.algorithm_kwargs["num_frames"] == 5

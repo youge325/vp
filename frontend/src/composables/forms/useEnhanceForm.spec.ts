@@ -6,6 +6,7 @@ import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
 import { createMediaItem } from '@/services/media/factory'
+import { buildTaskRequest } from '@/services/task/request-builder'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function makeEnv(): EnvironmentCheckResult {
@@ -33,10 +34,11 @@ function makeEnv(): EnvironmentCheckResult {
             name: '4.25',
             label: 'RIFE 4.25',
             metrics: {
-              parameterCount: 5664776,
-              parameterBytes: 22659104,
+              parameterCount: 5670892,
+              parameterBytes: 22683568,
               gflopsPerMegapixel: 18.5,
-              activationBytesPerMegapixel: 220000000,
+              activationBytesPerMegapixel: 694800000,
+              runtimeOverheadBytes: 38000000,
               inputModulo: 64,
               analysisStatus: 'ok',
               analysisNotes: [],
@@ -48,10 +50,11 @@ function makeEnv(): EnvironmentCheckResult {
             name: 'rife_v4.25.onnx',
             label: 'rife_v4.25.onnx',
             metrics: {
-              parameterCount: 5664776,
-              parameterBytes: 22659104,
+              parameterCount: 5670892,
+              parameterBytes: 22683568,
               gflopsPerMegapixel: 18.5,
-              activationBytesPerMegapixel: 220000000,
+              activationBytesPerMegapixel: 694800000,
+              runtimeOverheadBytes: 38000000,
               inputModulo: 64,
               analysisStatus: 'ok',
               analysisNotes: [],
@@ -68,15 +71,18 @@ function makeEnv(): EnvironmentCheckResult {
         models: ['x4'],
         scaleFactors: [4],
         defaultNumFrames: 10,
+        sequenceMode: 'recurrent',
         modelDetails: [
           {
             name: 'x4',
             label: 'PP-MSVSR',
             metrics: {
-              parameterCount: 15200000,
-              parameterBytes: 60800000,
+              parameterCount: 1453607,
+              parameterBytes: 5814428,
               gflopsPerMegapixel: 120,
-              activationBytesPerMegapixel: 360000000,
+              activationBytesPerMegapixel: 1981031424,
+              runtimeOverheadBytes: 2391117604,
+              runtimeFrameCount: null,
               inputModulo: 4,
               analysisStatus: 'ok',
               analysisNotes: [],
@@ -92,6 +98,24 @@ function makeEnv(): EnvironmentCheckResult {
         models: ['x4'],
         scaleFactors: [4],
         defaultNumFrames: 5,
+        sequenceMode: 'window',
+        modelDetails: [
+          {
+            name: 'x4',
+            label: 'EDVR',
+            metrics: {
+              parameterCount: 20633827,
+              parameterBytes: 82535308,
+              gflopsPerMegapixel: 240,
+              activationBytesPerMegapixel: 1000,
+              runtimeOverheadBytes: 100,
+              runtimeFrameCount: 5,
+              inputModulo: 4,
+              analysisStatus: 'ok',
+              analysisNotes: [],
+            },
+          },
+        ],
         weightPath: 'backend/models/super_resolution/paddlegan/edvr/EDVR_L_w_tsa_SRx4.pdparams',
         weightAvailable: true,
       },
@@ -101,6 +125,7 @@ function makeEnv(): EnvironmentCheckResult {
         models: ['x4'],
         scaleFactors: [4],
         defaultNumFrames: 10,
+        sequenceMode: 'recurrent',
       },
       {
         name: 'basicvsr',
@@ -108,6 +133,7 @@ function makeEnv(): EnvironmentCheckResult {
         models: ['x4'],
         scaleFactors: [4],
         defaultNumFrames: 10,
+        sequenceMode: 'recurrent',
       },
       {
         name: 'iconvsr',
@@ -115,6 +141,7 @@ function makeEnv(): EnvironmentCheckResult {
         models: ['x4'],
         scaleFactors: [4],
         defaultNumFrames: 10,
+        sequenceMode: 'recurrent',
       },
       {
         name: 'basicvsr-plus-plus',
@@ -122,6 +149,7 @@ function makeEnv(): EnvironmentCheckResult {
         models: ['x4'],
         scaleFactors: [4],
         defaultNumFrames: 10,
+        sequenceMode: 'recurrent',
       },
     ],
     animeProfiles: ['clean-lines'],
@@ -193,6 +221,169 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     expect(form.superResolutionNumFrames).toBe(10)
   })
 
+  it('labels recurrent input frame chunks and exposes EDVR fixed neighbor window', () => {
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.superResolution.enabled = true
+      workflow.superResolution.tensorBackend = 'paddle'
+      workflow.superResolution.algorithm = 'ppmsvsr'
+      workflow.superResolution.numFrames = 10
+    })
+
+    const form = useEnhanceForm()
+
+    expect(form.isSuperResolutionInputFramesEditable).toBe(true)
+    expect(form.superResolutionInputFramesLabel).toBe('每块输入帧数')
+    expect(form.superResolutionInputFramesHint).toContain('连续输入帧数')
+    expect(form.superResolutionInputFramesHint).toContain('不是邻帧窗口')
+    expect(form.superResolutionFixedWindowRows).toEqual([])
+
+    form.superResolutionAlgorithm = 'edvr'
+    form.superResolutionNumFrames = 10
+
+    expect(form.isSuperResolutionInputFramesEditable).toBe(false)
+    expect(form.superResolutionNumFrames).toBe(5)
+    expect(form.superResolutionFixedWindowRows).toEqual([
+      { label: '邻帧窗口', value: '5 帧（固定）' },
+    ])
+  })
+
+  it('uses EDVR fixed neighbor window for memory estimates regardless of stale numFrames', () => {
+    const mediaStore = useMediaStore()
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.superResolution.enabled = true
+      workflow.superResolution.tensorBackend = 'paddle'
+      workflow.superResolution.algorithm = 'edvr'
+      workflow.superResolution.scaleFactor = 4
+      workflow.superResolution.numFrames = 10
+    })
+    const item = createMediaItem('/video/tai-chi.mp4', presetStore.draftPreset)
+    mediaStore.appendItems([item])
+    mediaStore.setItemInfo(item.id, {
+      type: 'info',
+      fps: 27,
+      frames: 120,
+      duration: 4.4,
+      width: 640,
+      height: 288,
+      hasAudio: true,
+      videoCodec: 'h264',
+    })
+
+    const form = useEnhanceForm()
+    const before = form.superResolutionRuntimeEstimate?.vramBytes
+
+    form.superResolutionNumFrames = 2
+
+    expect(form.superResolutionRuntimeEstimate?.vramBytes).toBe(before)
+  })
+
+  it('applies recurrent input frame edits to every selected media item before task start', () => {
+    const mediaStore = useMediaStore()
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.superResolution.enabled = true
+      workflow.superResolution.tensorBackend = 'paddle'
+      workflow.superResolution.algorithm = 'ppmsvsr'
+      workflow.superResolution.scaleFactor = 4
+      workflow.superResolution.numFrames = 10
+    })
+    const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
+    const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
+    mediaStore.appendItems([first, second])
+
+    const form = useEnhanceForm()
+    form.superResolutionNumFrames = 5
+
+    expect(first.workflowConfig.superResolution.numFrames).toBe(5)
+    expect(second.workflowConfig.superResolution.numFrames).toBe(5)
+    expect(buildTaskRequest(second).workflowConfig.superResolution.numFrames).toBe(5)
+  })
+
+  it('persists process order while applying it to every selected media item', () => {
+    const mediaStore = useMediaStore()
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.processOrder = 'super_resolution_then_interpolation'
+    })
+    const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
+    const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
+    mediaStore.appendItems([first, second])
+
+    const form = useEnhanceForm()
+    form.processOrder = 'frame_interpolation_then_super_resolution'
+
+    expect(first.workflowConfig.processOrder).toBe('frame_interpolation_then_super_resolution')
+    expect(second.workflowConfig.processOrder).toBe('frame_interpolation_then_super_resolution')
+    expect(presetStore.draftPreset.workflowConfig.processOrder).toBe('frame_interpolation_then_super_resolution')
+  })
+
+  it('persists anime enabled while applying it to every selected media item', () => {
+    const mediaStore = useMediaStore()
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.anime.enabled = false
+    })
+    const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
+    const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
+    mediaStore.appendItems([first, second])
+
+    const form = useEnhanceForm()
+    form.animeEnabled = true
+
+    expect(first.workflowConfig.anime.enabled).toBe(true)
+    expect(second.workflowConfig.anime.enabled).toBe(true)
+    expect(presetStore.draftPreset.workflowConfig.anime.enabled).toBe(true)
+  })
+
+  it('keeps anime detail edits scoped to selected media items', () => {
+    const mediaStore = useMediaStore()
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.anime.profile = 'clean-lines'
+      workflow.anime.denoise = 10
+    })
+    const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
+    const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
+    mediaStore.appendItems([first, second])
+
+    const form = useEnhanceForm()
+    form.animeProfile = 'line-art'
+    form.animeDenoise = 24
+
+    expect(first.workflowConfig.anime.profile).toBe('line-art')
+    expect(second.workflowConfig.anime.profile).toBe('line-art')
+    expect(first.workflowConfig.anime.denoise).toBe(24)
+    expect(second.workflowConfig.anime.denoise).toBe(24)
+    expect(presetStore.draftPreset.workflowConfig.anime.profile).toBe('clean-lines')
+    expect(presetStore.draftPreset.workflowConfig.anime.denoise).toBe(10)
+  })
+
+  it('applies EDVR fixed window defaults to every selected media item', () => {
+    const mediaStore = useMediaStore()
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.superResolution.enabled = true
+      workflow.superResolution.tensorBackend = 'paddle'
+      workflow.superResolution.algorithm = 'ppmsvsr'
+      workflow.superResolution.scaleFactor = 4
+      workflow.superResolution.numFrames = 10
+    })
+    const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
+    const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
+    mediaStore.appendItems([first, second])
+
+    const form = useEnhanceForm()
+    form.superResolutionAlgorithm = 'edvr'
+
+    expect(first.workflowConfig.superResolution.algorithm).toBe('edvr')
+    expect(first.workflowConfig.superResolution.numFrames).toBe(5)
+    expect(second.workflowConfig.superResolution.algorithm).toBe('edvr')
+    expect(second.workflowConfig.superResolution.numFrames).toBe(5)
+    expect(buildTaskRequest(second).workflowConfig.superResolution.numFrames).toBe(5)
+  })
+
   it('exposes selected model details and current-video runtime estimates', () => {
     const mediaStore = useMediaStore()
     const presetStore = usePresetStore()
@@ -213,6 +404,43 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
 
     expect(form.currentInterpolationModelDetail?.name).toBe('4.25')
     expect(form.interpolationRuntimeEstimate?.effectiveHeight).toBe(1088)
-    expect(form.interpolationMetricRows[0].value).toBe('5.66M')
+    expect(form.interpolationMetricRows[0].value).toBe('5.67M')
+  })
+
+  it('estimates default SR to interpolation order and exposes combined peak VRAM', () => {
+    const mediaStore = useMediaStore()
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.processOrder = 'super_resolution_then_interpolation'
+      workflow.interpolation.enabled = true
+      workflow.interpolation.tensorBackend = 'pytorch'
+      workflow.interpolation.model = '4.25'
+      workflow.interpolation.fp16 = false
+      workflow.superResolution.enabled = true
+      workflow.superResolution.tensorBackend = 'paddle'
+      workflow.superResolution.algorithm = 'ppmsvsr'
+      workflow.superResolution.scaleFactor = 4
+      workflow.superResolution.numFrames = 10
+    })
+    const item = createMediaItem('/video/tai-chi.mp4', presetStore.draftPreset)
+    mediaStore.appendItems([item])
+    mediaStore.setItemInfo(item.id, {
+      type: 'info',
+      fps: 27,
+      frames: 120,
+      duration: 4.4,
+      width: 640,
+      height: 288,
+      hasAudio: true,
+      videoCodec: 'h264',
+    })
+
+    const form = useEnhanceForm()
+
+    expect(form.interpolationRuntimeEstimate?.effectiveWidth).toBe(2560)
+    expect(form.interpolationRuntimeEstimate?.effectiveHeight).toBe(1152)
+    expect(form.interpolationMetricRows[2].value).toBe('1.96 GiB')
+    expect(form.superResolutionMetricRows[2].value).toBe('5.63 GiB')
+    expect(form.combinedVramMetricRows[0].value).toBe('5.63 GiB')
   })
 })

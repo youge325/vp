@@ -81,8 +81,37 @@ def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
     assert all(detail["metrics"]["parameterCount"] for detail in rife_details)
     assert all(detail["metrics"]["inputModulo"] for detail in rife_details)
 
+    rife_425 = next(detail for detail in rife_details if detail["name"] == "4.25")
+    assert rife_425["metrics"]["parameterCount"] == 5_670_892
+    assert rife_425["metrics"]["runtimeOverheadBytes"] == pytest.approx(38_000_000, rel=0.02)
+    assert rife_425["metrics"]["activationBytesPerMegapixel"] == pytest.approx(694_800_000, rel=0.01)
+
     ppmsvsr = get_paddlegan_model_detail("ppmsvsr")
     assert ppmsvsr["name"] == "x4"
     assert ppmsvsr["label"] == "PP-MSVSR"
-    assert ppmsvsr["metrics"]["parameterCount"] is not None
+    assert ppmsvsr["metrics"]["parameterCount"] == 1_453_607
+    assert ppmsvsr["metrics"]["parameterBytes"] == 5_814_428
+    assert ppmsvsr["metrics"]["runtimeOverheadBytes"] is not None
+    assert ppmsvsr["metrics"]["runtimeFrameCount"] is None
+    assert ppmsvsr["metrics"]["runtimeOverheadBytes"] == pytest.approx(2_391_117_604, rel=0.001)
+    assert ppmsvsr["metrics"]["activationBytesPerMegapixel"] == pytest.approx(1_981_031_424, rel=0.001)
     assert ppmsvsr["metrics"]["gflopsPerMegapixel"] is not None
+
+    edvr = get_paddlegan_model_detail("edvr")
+    assert edvr["metrics"]["parameterCount"] == 20_633_827
+    assert edvr["metrics"]["runtimeOverheadBytes"] is not None
+    assert edvr["metrics"]["runtimeFrameCount"] == 5
+    assert edvr["metrics"]["runtimeOverheadBytes"] == pytest.approx(84_074_752, rel=0.001)
+    assert edvr["metrics"]["activationBytesPerMegapixel"] == pytest.approx(7_300_784_570, rel=0.001)
+
+    for model_id, parameter_count in {
+        "ppmsvsr-large": 7_417_197,
+        "basicvsr": 6_291_311,
+        "iconvsr": 8_694_991,
+        "basicvsr-plus-plus": 7_322_927,
+    }.items():
+        detail = get_paddlegan_model_detail(model_id)
+        assert detail["metrics"]["parameterCount"] == parameter_count
+        assert detail["metrics"]["runtimeOverheadBytes"]
+        assert detail["metrics"]["activationBytesPerMegapixel"]
+        assert detail["metrics"]["runtimeFrameCount"] is None

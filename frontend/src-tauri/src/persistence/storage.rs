@@ -13,6 +13,16 @@ use crate::error::ShellError;
 use crate::models::WorkbenchPreset;
 use crate::runtime::ResolvedRuntimePaths;
 
+// Phase 27 — bumped from 8 to 9 because ``AlgorithmInfo`` now carries
+// PaddleGAN sequence semantics and ``ModelMetricInfo`` carries
+// ``runtimeFrameCount``. Skipping v8 prevents EDVR from being shown as an
+// editable recurrent chunk model and refreshes PaddleGAN VRAM calibration.
+//
+// Phase 26 — bumped from 7 to 8 because ``ModelMetricInfo`` now carries
+// calibrated reserved-peak VRAM metadata (``runtimeOverheadBytes`` plus
+// refreshed activation bytes). Skipping v7 prevents stale underestimates
+// from lingering in the UI.
+//
 // Phase 25 — bumped from 6 to 7 because ``AlgorithmInfo`` now carries
 // model metric metadata (built-in modelDetails plus ONNX modelDetails).
 // Older caches deserialize but leave the UI without parameter/FLOPs/VRAM
@@ -42,7 +52,7 @@ use crate::runtime::ResolvedRuntimePaths;
 // Bumping the version forces ``load_environment_cache`` to skip
 // the stale file and re-run ``python -m app check``, whose fresh
 // output now carries ``tensorBackends`` end-to-end.
-const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 7;
+const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 9;
 const WORKBENCH_PRESET_SCHEMA_VERSION: u32 = 1;
 const ENVIRONMENT_CACHE_FILE: &str = "environment-cache.json";
 const WORKBENCH_PRESET_FILE: &str = "workbench-preset.json";
@@ -478,6 +488,38 @@ mod tests {
             checked_at: "2026-07-02T11:00:00Z".to_string(),
             fingerprint: "fingerprint-a".to_string(),
             result: json!({"type":"check", "interpolationAlgorithms":[{"name":"rife"}]}),
+        })
+        .expect("serialize env cache");
+        fs::write(environment_cache_path(&dir), payload).expect("write env cache");
+
+        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
+        assert!(entry.is_none());
+    }
+
+    #[tokio::test]
+    async fn invalidates_environment_cache_with_schema_version_seven() {
+        let dir = temp_dir("env-schema-v7");
+        let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
+            schema_version: 7,
+            checked_at: "2026-07-06T11:00:00Z".to_string(),
+            fingerprint: "fingerprint-a".to_string(),
+            result: json!({"type":"check", "interpolationAlgorithms":[{"name":"rife"}]}),
+        })
+        .expect("serialize env cache");
+        fs::write(environment_cache_path(&dir), payload).expect("write env cache");
+
+        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
+        assert!(entry.is_none());
+    }
+
+    #[tokio::test]
+    async fn invalidates_environment_cache_with_schema_version_eight() {
+        let dir = temp_dir("env-schema-v8");
+        let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
+            schema_version: 8,
+            checked_at: "2026-07-07T11:00:00Z".to_string(),
+            fingerprint: "fingerprint-a".to_string(),
+            result: json!({"type":"check", "superResolutionAlgorithms":[{"name":"edvr"}]}),
         })
         .expect("serialize env cache");
         fs::write(environment_cache_path(&dir), payload).expect("write env cache");
