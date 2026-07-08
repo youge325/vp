@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.planning import ProcessingStep, SegmentManifest
-from app.processing.streaming import stage_file_chunks, stage_file_rules
+from app.processing.streaming import stage_file_chunk_runtime, stage_file_chunks, stage_file_rules
 from app.processing.streaming.metrics import PipelineMetrics
 
 
@@ -23,7 +23,7 @@ def test_single_stage_file_chunks_finalize_manifest_segments(monkeypatch, tmp_pa
         Path(kwargs["output_path"]).write_bytes(b"chunk")
         return chunk.written_output_frame_count
 
-    monkeypatch.setattr(stage_file_chunks, "_run_stage_chunk_to_file", fake_run_stage_chunk_to_file)
+    monkeypatch.setattr(stage_file_chunk_runtime, "run_stage_chunk_to_file", fake_run_stage_chunk_to_file)
 
     completed = stage_file_chunks.run_single_stage_file_chunks(
         ffmpeg=object(),

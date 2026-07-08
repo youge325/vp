@@ -1265,6 +1265,9 @@ def test_stage_file_chunks_runtime_boundary_flags_compatibility_exports(tmp_path
         "    stage_chunk_output_start,\n"
         ")\n"
         "from app.processing.streaming.stage_file_chunk_runtime import run_stage_chunk_to_file\n\n"
+        "from app.processing.streaming.stage_file_chunk_runtime import run_stage_chunk_to_file as _run_stage_chunk_to_file\n\n"
+        "def run_single_stage_file_chunks():\n"
+        "    _run_stage_chunk_to_file()\n\n"
         "__all__ = [\n"
         '    "chunk_progress_adapter",\n'
         '    "run_single_stage_file_chunks",\n'
@@ -1279,6 +1282,8 @@ def test_stage_file_chunks_runtime_boundary_flags_compatibility_exports(tmp_path
     module._check_stage_file_chunks_runtime_boundary(issues)
 
     assert any("public chunk runtime import" in issue for issue in issues), issues
+    assert any("private chunk runtime alias import" in issue for issue in issues), issues
+    assert any("private chunk runtime alias call" in issue for issue in issues), issues
     assert any("progress helper import" in issue for issue in issues), issues
     assert any("helper __all__ export" in issue for issue in issues), issues
 
