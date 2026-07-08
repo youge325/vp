@@ -28,6 +28,7 @@ DOC_ROOT = ROOT / "docs"
 README = ROOT / "README.md"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
+STAGE_WORKER_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_runtime.py"
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
 WORKER_PROCESSES = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_processes.py"
 ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder.py"
@@ -43,6 +44,7 @@ CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
+ENHANCE_DEFAULT_SELECTION = FRONTEND_SRC / "services" / "preset" / "enhance-default-selection.ts"
 ENHANCE_WORKFLOW = FRONTEND_SRC / "services" / "preset" / "enhance-workflow.ts"
 ENHANCE_WORKFLOW_SELECTION = FRONTEND_SRC / "services" / "preset" / "enhance-workflow-selection.ts"
 ENHANCE_VIEW_MODEL = FRONTEND_SRC / "services" / "preset" / "enhance-view-model.ts"
@@ -464,6 +466,29 @@ def _check_stage_worker_runtime_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_stage_worker_runtime_split_boundary(issues: list[str]) -> None:
+    text = _read(STAGE_WORKER_RUNTIME)
+    forbidden_patterns = {
+        "dataclass import": r"^\s*from\s+dataclasses\s+import\s+dataclass\b",
+        "json import": r"^\s*import\s+json\b",
+        "sys import": r"^\s*import\s+sys\b",
+        "threading import": r"^\s*import\s+threading\b",
+        "algorithm factory import": r"^\s*from\s+app\.algorithms\.factory\s+import\s+AlgorithmFactory\b",
+        "stage kwargs import": r"\balgorithm_kwargs_for_create\b",
+        "progress state": r"^\s*class\s+StageProgressState\b",
+        "event emitter": r"^\s*def\s+emit_stage_event\b",
+        "backend factory": r"^\s*def\s+create_backend\b",
+        "algorithm factory": r"^\s*def\s+create_algorithm\b",
+        "algorithm registration": r"^\s*def\s+register_single_algorithm\b",
+        "backend name": r"^\s*def\s+backend_name\b",
+        "progress event": r"^\s*def\s+progress_event\b",
+        "sequence heartbeat": r"^\s*def\s+start_sequence_stage_heartbeat\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"stage worker runtime split `{label}` remains in {_rel(STAGE_WORKER_RUNTIME)}")
+
+
 def _check_frontend_form_profile_rule_boundary(issues: list[str]) -> None:
     forbidden_tokens = (
         "seedProfileOptions",
@@ -565,6 +590,23 @@ def _check_frontend_enhance_rules_split_boundary(issues: list[str]) -> None:
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
             issues.append(f"enhance rules split `{label}` remains in frontend/src/services/preset/enhance-rules.ts")
+
+
+def _check_frontend_enhance_default_selection_split_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_DEFAULT_SELECTION)
+    forbidden_patterns = {
+        "backend compatibility helper": r"^\s*function\s+backendCompatible\b",
+        "default engine picker": r"^\s*export\s+function\s+pickDefaultEngine\b",
+        "interpolation ONNX fallback": r"^\s*export\s+function\s+fallbackInterpolationOnnxModel\b",
+        "super-resolution ONNX fallback": r"^\s*export\s+function\s+fallbackSuperResolutionOnnxModel\b",
+        "default interpolation algorithm": r"^\s*export\s+function\s+pickDefaultInterpolationAlgorithm\b",
+        "default interpolation model": r"^\s*export\s+function\s+pickDefaultInterpolationModel\b",
+        "default super-resolution algorithm": r"^\s*export\s+function\s+pickDefaultSuperResolutionAlgorithm\b",
+        "default anime profile": r"^\s*export\s+function\s+pickDefaultAnimeProfile\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"enhance default-selection split `{label}` remains in {_rel(ENHANCE_DEFAULT_SELECTION)}")
 
 
 def _check_frontend_enhance_view_model_boundary(issues: list[str]) -> None:
@@ -1300,12 +1342,14 @@ def main() -> int:
         _check_paddlegan_vsr_contract(issues)
         _check_stage_worker_private_import_boundary(issues)
         _check_stage_worker_runtime_boundary(issues)
+        _check_stage_worker_runtime_split_boundary(issues)
         _check_frontend_form_profile_rule_boundary(issues)
         _check_cli_defaults_planning_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_workflow_selection_boundary(issues)
         _check_frontend_enhance_workflow_lookup_boundary(issues)
         _check_frontend_enhance_rules_split_boundary(issues)
+        _check_frontend_enhance_default_selection_split_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_view_model_split_boundary(issues)
         _check_frontend_enhance_runtime_view_split_boundary(issues)

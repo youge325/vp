@@ -13,7 +13,7 @@ from app.processing.streaming.stage_worker_io import (
     read_rgb_frame,
     write_rgb_frame,
 )
-from app.processing.streaming.stage_worker_runtime import (
+from app.processing.streaming.stage_worker_progress import (
     EventSink,
     SEQUENCE_STAGE_HEARTBEAT_SECONDS,
     StageProgressState,

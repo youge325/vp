@@ -9,7 +9,7 @@ import {
   pickDefaultInterpolationAlgorithm,
   pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
-} from './enhance-default-selection'
+} from './enhance-default-pickers'
 import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolution-defaults'
 
 export function createDefaultWorkflowConfig(): WorkflowConfig {

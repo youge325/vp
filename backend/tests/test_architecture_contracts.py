@@ -190,6 +190,28 @@ def test_frontend_enhance_rules_split_boundary_flags_local_rule_bodies(tmp_path,
     assert any("enhance rules split" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_default_selection_split_boundary_flags_local_rule_bodies(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_defaults = tmp_path / "enhance-default-selection.ts"
+    fake_defaults.write_text(
+        "function backendCompatible() {}\n"
+        "export function pickDefaultEngine() {}\n"
+        "export function fallbackInterpolationOnnxModel() {}\n"
+        "export function fallbackSuperResolutionOnnxModel() {}\n"
+        "export function pickDefaultInterpolationAlgorithm() {}\n"
+        "export function pickDefaultInterpolationModel() {}\n"
+        "export function pickDefaultSuperResolutionAlgorithm() {}\n"
+        "export function pickDefaultAnimeProfile() {}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_DEFAULT_SELECTION", fake_defaults, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_default_selection_split_boundary(issues)
+
+    assert any("enhance default-selection split" in issue for issue in issues), issues
+
+
 def test_worker_pipeline_plan_boundary_flags_local_plan_builders(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "worker_pipeline.py"
@@ -813,6 +835,42 @@ def test_stage_worker_runtime_boundary_flags_local_io_and_runtime_helpers(tmp_pa
     module._check_stage_worker_runtime_boundary(issues)
 
     assert any("stage worker runtime rule" in issue for issue in issues), issues
+
+
+def test_stage_worker_runtime_split_boundary_flags_local_factory_and_progress_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runtime = tmp_path / "stage_worker_runtime.py"
+    fake_runtime.write_text(
+        "from dataclasses import dataclass\n"
+        "import json\n"
+        "import sys\n"
+        "import threading\n"
+        "from app.algorithms.factory import AlgorithmFactory\n"
+        "from app.processing.streaming.stage_rules import algorithm_kwargs_for_create\n\n"
+        "class StageProgressState:\n"
+        "    pass\n\n"
+        "def emit_stage_event():\n"
+        "    pass\n\n"
+        "def create_backend():\n"
+        "    pass\n\n"
+        "def create_algorithm():\n"
+        "    pass\n\n"
+        "def register_single_algorithm():\n"
+        "    pass\n\n"
+        "def backend_name():\n"
+        "    pass\n\n"
+        "def progress_event():\n"
+        "    pass\n\n"
+        "def start_sequence_stage_heartbeat():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_WORKER_RUNTIME", fake_runtime, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_worker_runtime_split_boundary(issues)
+
+    assert any("stage worker runtime split" in issue for issue in issues), issues
 
 
 def test_stage_worker_execution_boundary_flags_local_stage_loops(tmp_path, monkeypatch) -> None:

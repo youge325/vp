@@ -23,15 +23,17 @@ from app.processing.streaming.stage_worker_execution import (
     run_sequence_stage,
     run_single_frame_stage,
 )
-from app.processing.streaming.stage_worker_runtime import (
-    STAGE_EVENT_PREFIX,
+from app.processing.streaming.stage_worker_factory import (
     AlgorithmFactory,
     AlgorithmFactoryFn,
     BackendFactoryFn,
-    EventSink,
-    SEQUENCE_STAGE_HEARTBEAT_SECONDS,
     create_algorithm,
     create_backend,
+)
+from app.processing.streaming.stage_worker_progress import (
+    EventSink,
+    SEQUENCE_STAGE_HEARTBEAT_SECONDS,
+    STAGE_EVENT_PREFIX,
     emit_stage_event,
 )
 from app.processing.streaming.stage_runtime import (
