@@ -60,6 +60,7 @@ ENHANCE_VIEW_MODEL = FRONTEND_SRC / "services" / "preset" / "enhance-view-model.
 ENHANCE_RUNTIME_VIEW = FRONTEND_SRC / "services" / "preset" / "enhance-runtime-view.ts"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-form-bindings.ts"
+ENHANCE_LENS = FRONTEND_SRC / "composables" / "forms" / "enhance-lens.ts"
 ENHANCE_FIELD_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-field-bindings.ts"
 ENHANCE_OPTION_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-option-bindings.ts"
 DECODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-form-bindings.ts"
@@ -828,6 +829,16 @@ def _check_frontend_enhance_projection_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_frontend_enhance_lens_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_LENS)
+    forbidden_patterns = {
+        "backend support inline check": r"\btensorBackends\.includes\s*\(",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(f"enhance lens `{label}` remains in {_rel(ENHANCE_LENS)}")
+
+
 def _check_frontend_enhance_option_boundary(issues: list[str]) -> None:
     text = _read(ENHANCE_VIEW)
     forbidden_patterns = {
@@ -1504,6 +1515,7 @@ def main() -> int:
         _check_frontend_enhance_field_binding_boundary(issues)
         _check_frontend_enhance_field_split_boundary(issues)
         _check_frontend_enhance_projection_boundary(issues)
+        _check_frontend_enhance_lens_boundary(issues)
         _check_frontend_enhance_option_boundary(issues)
         _check_frontend_enhance_option_binding_boundary(issues)
         _check_frontend_io_view_option_boundary(issues)

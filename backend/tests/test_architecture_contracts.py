@@ -716,6 +716,21 @@ def test_frontend_enhance_projection_boundary_flags_algorithm_and_view_leaks(tmp
     assert any("enhance projection rule" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_lens_boundary_flags_inline_backend_support_check(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_lens = tmp_path / "enhance-lens.ts"
+    fake_lens.write_text(
+        "const algorithms = allAlgorithms.value.filter((algorithm) => algorithm.tensorBackends.includes(backend.value))\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_LENS", fake_lens)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_lens_boundary(issues)
+
+    assert any("enhance lens" in issue for issue in issues), issues
+
+
 def test_frontend_enhance_view_model_split_boundary_flags_local_model_and_runtime_rules(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_view_model = tmp_path / "enhance-view-model.ts"

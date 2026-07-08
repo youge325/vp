@@ -5,7 +5,9 @@
 // 让 caller 只剩一行声明。
 
 import { computed, type ComputedRef } from 'vue'
+import { algorithmSupportsBackend } from '@/services/preset/enhance-workflow-lookup'
 import type { AlgorithmInfo } from '@/types/domain/env'
+import type { TensorBackend } from '@/types/domain/workflow'
 
 export type AlgorithmSpec = AlgorithmInfo
 
@@ -19,10 +21,10 @@ export interface AlgorithmLens {
 export function createAlgorithmLens(
   allAlgorithms: ComputedRef<AlgorithmSpec[]>,
   algorithmName: ComputedRef<string>,
-  backend: ComputedRef<string>,
+  backend: ComputedRef<TensorBackend>,
 ): AlgorithmLens {
   const algorithms = computed(() =>
-    allAlgorithms.value.filter((a) => a.tensorBackends.includes(backend.value)),
+    allAlgorithms.value.filter((a) => algorithmSupportsBackend(a, backend.value)),
   )
 
   const current = computed(() =>
