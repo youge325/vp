@@ -56,7 +56,7 @@ export function createDefaultWorkflowConfig(): WorkflowConfig {
   }
 }
 
-export function applyEnvironmentWorkflowDefaults(
+function applyEnvironmentWorkflowDefaults(
   workflowConfig: WorkflowConfig,
   env: EnvironmentCheckResult | null,
 ): void {
