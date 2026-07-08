@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { appendTaskLog, classifyTaskLogLine, createIdleTaskState, displayTaskLogLine } from './events'
+import * as taskEvents from './events'
+import { appendTaskLog, createIdleTaskState, displayTaskLogLine } from './events'
 
 function appendLine(logs: string[], message: string): string[] {
   return appendTaskLog({ ...createIdleTaskState(), logs }, { message }).logs
@@ -74,20 +75,18 @@ describe('appendTaskLog', () => {
   })
 })
 
-describe('classifyTaskLogLine', () => {
-  it('classifies progress, TensorRT, and default log lines', () => {
-    expect(classifyTaskLogLine('[VP_PROGRESS] [1/2 stage] 10%')).toBe('progress')
-    expect(
-      classifyTaskLogLine(
-        '22:03:13 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +
-          '[VP_TRT] TensorRT BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640',
-      ),
-    ).toBe('tensorrt')
-    expect(classifyTaskLogLine('plain backend stderr')).toBe('default')
+describe('task event public surface', () => {
+  it('keeps log classification private to the task event reducer', () => {
+    expect('classifyTaskLogLine' in taskEvents).toBe(false)
   })
 })
 
 describe('displayTaskLogLine', () => {
+  it('leaves regular and progress logs unchanged', () => {
+    expect(displayTaskLogLine('plain backend stderr')).toBe('plain backend stderr')
+    expect(displayTaskLogLine('[VP_PROGRESS] [1/2 stage] 10%')).toBe('[VP_PROGRESS] [1/2 stage] 10%')
+  })
+
   it('removes the internal TensorRT marker while preserving the logging prefix', () => {
     const line =
       '22:03:13 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +

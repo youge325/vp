@@ -29,7 +29,7 @@ const TENSORRT_LOG_PREFIX = '[VP_TRT]'
 
 export type TaskLogLineKind = 'progress' | 'tensorrt' | 'default'
 
-export function classifyTaskLogLine(line: string): TaskLogLineKind {
+function classifyTaskLogLine(line: string): TaskLogLineKind {
   if (line.startsWith(TERMINAL_PROGRESS_PREFIX)) {
     return 'progress'
   }
