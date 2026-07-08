@@ -198,6 +198,24 @@ def test_enhance_view_option_boundary_flags_view_local_option_rules(tmp_path, mo
     assert any("enhance option rule" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_option_binding_boundary_flags_aggregator_rule_leaks(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_bindings = tmp_path / "enhance-option-bindings.ts"
+    fake_bindings.write_text(
+        "import { useGpuCapabilities } from '@/composables/selectors/useGpuCapabilities'\n"
+        "import { buildBackendOptions, toTensorBackend } from '@/services/preset/enhance-options'\n"
+        "const backendOptions = buildBackendOptions(backends)\n"
+        "function setInterpolationBackend(value) { form.interpolationBackend = toTensorBackend(value) }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_OPTION_BINDINGS", fake_bindings)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_option_binding_boundary(issues)
+
+    assert any("enhance option binding rule" in issue for issue in issues), issues
+
+
 def test_worker_pipeline_file_boundary_flags_local_stage_file_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "worker_pipeline.py"
@@ -501,6 +519,31 @@ def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(t
     module._check_stage_file_pipeline_chunk_boundary(issues)
 
     assert any("stage file chunk rule" in issue for issue in issues), issues
+
+
+def test_stage_file_chunks_runtime_boundary_flags_local_runtime_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_chunks = tmp_path / "stage_file_chunks.py"
+    fake_chunks.write_text(
+        "import queue\n"
+        "import tempfile\n"
+        "import threading\n"
+        "from app.processing.streaming.stage_worker import StageWorkerConfig, read_rgb_frame\n"
+        "from app.processing.streaming.worker_processes import spawn_stage_workers, write_decoded_frames_to_worker\n\n"
+        "def run_stage_chunk_to_file():\n"
+        "    pass\n\n"
+        "def chunk_progress_adapter():\n"
+        "    pass\n\n"
+        "def stage_chunk_output_start():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_CHUNKS", fake_chunks)
+    issues: list[str] = []
+
+    module._check_stage_file_chunks_runtime_boundary(issues)
+
+    assert any("stage file chunk runtime" in issue for issue in issues), issues
 
 
 def test_stage_worker_runtime_boundary_flags_local_io_and_runtime_helpers(tmp_path, monkeypatch) -> None:
