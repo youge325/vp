@@ -93,6 +93,10 @@ describe('decode form bindings', () => {
     bindings.setDecodeProfile('h264_cuvid')
 
     expect(bindings.visibleDecoderProfiles.value.map((profile) => profile.name)).toEqual(['software', 'h264_cuvid'])
+    expect(bindings.decoderProfileOptions.value).toEqual([
+      { value: 'software', label: 'Software Decode' },
+      { value: 'h264_cuvid', label: 'NVDEC H.264' },
+    ])
     expect(bindings.currentDecoderProfile.value?.name).toBe('h264_cuvid')
     expect(bindings.decoderOptions.value.map((option) => option.name)).toEqual(['resize'])
     expect(bindings.decoderHardwareDeviceOptions.value).toEqual([

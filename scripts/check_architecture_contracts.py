@@ -32,16 +32,23 @@ WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worke
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
 STAGE_FILE_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_pipeline.py"
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
+PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-form-bindings.ts"
 ENHANCE_FIELD_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-field-bindings.ts"
+DECODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-form-bindings.ts"
+ENCODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-form-bindings.ts"
 ENHANCE_VIEW = FRONTEND_SRC / "views" / "EnhanceModuleView.vue"
 DECODE_VIEW = FRONTEND_SRC / "views" / "DecodeModuleView.vue"
 ENCODE_VIEW = FRONTEND_SRC / "views" / "EncodeModuleView.vue"
 FRONTEND_FORM_COMPOSABLES = [
     FRONTEND_SRC / "composables" / "forms" / "useDecodeForm.ts",
     FRONTEND_SRC / "composables" / "forms" / "useEncodeForm.ts",
+]
+FRONTEND_IO_FORM_BINDINGS = [
+    DECODE_FORM_BINDINGS,
+    ENCODE_FORM_BINDINGS,
 ]
 
 
@@ -586,6 +593,7 @@ def _check_frontend_enhance_option_boundary(issues: list[str]) -> None:
 
 def _check_frontend_io_view_option_boundary(issues: list[str]) -> None:
     forbidden_patterns = {
+        "io-options import": r"from\s+['\"]@/services/preset/io-options['\"]",
         "profile option map": r"\.map\(\s*\(?\s*profile\s*\)?\s*=>\s*\(\{\s*value:\s*profile\.name,\s*label:\s*profile\.label",
         "container constants import": r"from\s+['\"]@/config/constants['\"]",
         "container option map": r"\bCONTAINER_OPTIONS\.map\b",
@@ -630,6 +638,22 @@ def _check_frontend_io_form_binding_boundary(issues: list[str]) -> None:
         for label, pattern in forbidden_patterns.items():
             if re.search(pattern, text):
                 issues.append(f"io form binding rule `{label}` leaked into form composable: {_rel(path)}")
+
+
+def _check_frontend_io_form_aggregator_boundary(issues: list[str]) -> None:
+    forbidden_patterns = {
+        "profile-picker import": r"from\s+['\"]@/services/preset/profile-picker['\"]",
+        "profile-selection import": r"from\s+['\"]@/services/preset/profile-selection['\"]",
+        "io-form-rules import": r"from\s+['\"]@/services/preset/io-form-rules['\"]",
+        "preset options import": r"from\s+['\"]@/services/preset/options['\"]",
+        "preset normalize import": r"from\s+['\"]@/services/preset/normalize['\"]",
+        "io-options import": r"from\s+['\"]@/services/preset/io-options['\"]",
+    }
+    for path in FRONTEND_IO_FORM_BINDINGS:
+        text = _read(path)
+        for label, pattern in forbidden_patterns.items():
+            if re.search(pattern, text):
+                issues.append(f"io form rule `{label}` leaked into form binding aggregator: {_rel(path)}")
 
 
 def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
@@ -778,6 +802,23 @@ def _check_processor_stream_boundary(issues: list[str]) -> None:
             issues.append(f"processor stream rule `{label}` remains in backend/app/processing/streaming/processor.py")
 
 
+def _check_processor_stream_aggregator_boundary(issues: list[str]) -> None:
+    text = _read(PROCESSOR_STREAMS)
+    forbidden_patterns = {
+        "process_single_frame_stream": r"^\s*def\s+process_single_frame_stream\b",
+        "process_interpolated_stream": r"^\s*def\s+process_interpolated_stream\b",
+        "process_sequence_stream": r"^\s*def\s+process_sequence_stream\b",
+        "emit_encoded_payload": r"^\s*def\s+emit_encoded_payload\b",
+        "drain_decoded": r"^\s*def\s+drain_decoded\b",
+        "emit_stream_end": r"^\s*def\s+emit_stream_end\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"processor stream rule `{label}` remains in backend/app/processing/streaming/processor_streams.py"
+            )
+
+
 def main() -> int:
     issues: list[str] = []
     try:
@@ -800,6 +841,7 @@ def main() -> int:
         _check_frontend_io_view_option_boundary(issues)
         _check_frontend_io_form_rule_boundary(issues)
         _check_frontend_io_form_binding_boundary(issues)
+        _check_frontend_io_form_aggregator_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)
         _check_worker_pipeline_file_boundary(issues)
@@ -809,6 +851,7 @@ def main() -> int:
         _check_processor_algorithm_boundary(issues)
         _check_processor_stage_execution_boundary(issues)
         _check_processor_stream_boundary(issues)
+        _check_processor_stream_aggregator_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2
