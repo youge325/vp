@@ -676,7 +676,10 @@ def _check_frontend_enhance_default_pickers_boundary(issues: list[str]) -> None:
     forbidden_patterns = {
         "backend compatibility helper": r"^\s*function\s+backendCompatible\b",
         "backend support direct helper": r"\balgorithmSupportsBackend\b",
+        "backend-supported algorithm picker": r"\bpickBackendSupportedAlgorithmName\b",
+        "algorithm default body": r"^\s*export\s+function\s+pickDefault(?:Interpolation|SuperResolution)Algorithm\b",
         "direct interpolation lookup": r"\binterpolationAlgorithms\?\.\s*find\s*\(",
+        "super-resolution algorithm list": r"\bsuperResolutionAlgorithms\b",
         "default engine body": r"^\s*export\s+function\s+pickDefault(?:Interpolation)?Engine\b",
         "metadata default body": r"^\s*export\s+function\s+pickDefault(?:InterpolationModel|AnimeProfile)\b",
         "interpolation model lookup": r"\bmodels\?\.\[0\]",
