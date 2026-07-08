@@ -1169,6 +1169,8 @@ def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(t
     module = _load_module()
     fake_pipeline = tmp_path / "stage_file_pipeline.py"
     fake_pipeline.write_text(
+        "from app.planning import SegmentManifest\n"
+        "from app.processing.streaming.stage_file_rules import empty_resume_state, safe_stage_name, stage_signature\n\n"
         "def _run_single_stage_file_chunks():\n"
         "    pass\n\n"
         "def _run_stage_chunk_to_file():\n"
@@ -1180,7 +1182,12 @@ def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(t
         "def _stage_signature():\n"
         "    pass\n\n"
         "def _safe_stage_name():\n"
-        "    pass\n",
+        "    pass\n\n"
+        "def run_stage_file_pipeline(step):\n"
+        "    SegmentManifest('stage.mp4')\n"
+        "    stage_signature(1, step, 'input.mp4', 'stage.mp4')\n"
+        "    safe_stage_name(step)\n"
+        "    empty_resume_state()\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(module, "STAGE_FILE_PIPELINE", fake_pipeline)
@@ -1189,6 +1196,11 @@ def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(t
     module._check_stage_file_pipeline_chunk_boundary(issues)
 
     assert any("stage file chunk rule" in issue for issue in issues), issues
+    assert any("direct stage-file rule import" in issue for issue in issues), issues
+    assert any("intermediate manifest construction" in issue for issue in issues), issues
+    assert any("direct intermediate stage signature" in issue for issue in issues), issues
+    assert any("direct safe stage name" in issue for issue in issues), issues
+    assert any("direct empty resume state" in issue for issue in issues), issues
 
 
 def test_stage_file_chunks_runtime_boundary_flags_local_runtime_helpers(tmp_path, monkeypatch) -> None:

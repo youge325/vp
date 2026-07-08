@@ -1267,6 +1267,11 @@ def _check_stage_file_pipeline_chunk_boundary(issues: list[str]) -> None:
         "_empty_resume_state": r"^\s*def\s+_empty_resume_state\b",
         "_stage_signature": r"^\s*def\s+_stage_signature\b",
         "_safe_stage_name": r"^\s*def\s+_safe_stage_name\b",
+        "direct stage-file rule import": r"from\s+app\.processing\.streaming\.stage_file_rules\s+import\b",
+        "intermediate manifest construction": r"\bSegmentManifest\s*\(",
+        "direct intermediate stage signature": r"\bstage_signature\s*\(",
+        "direct safe stage name": r"\bsafe_stage_name\s*\(",
+        "direct empty resume state": r"\bempty_resume_state\s*\(",
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
