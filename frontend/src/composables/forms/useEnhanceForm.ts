@@ -7,18 +7,7 @@ import { useEnvStore } from '@/stores/env'
 import { createDraftEditor } from '@/composables/forms/lens'
 import { createAlgorithmLens } from '@/composables/forms/enhance-lens'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
-import {
-  combinedVramMetricRows,
-  estimateCombinedPeakVram,
-  estimateModelRuntimeMetrics,
-  metricRows,
-  resolveMetricsForEngine,
-} from '@/services/model-metrics'
-import {
-  fixedRuntimeFrameCount,
-  isPaddleGanVsrAlgorithm,
-  superResolutionInputFrameMode,
-} from '@/services/preset/enhance-rules'
+import { buildEnhanceViewModel } from '@/services/preset/enhance-view-model'
 import {
   applyInterpolationAlgorithmSelection,
   applyInterpolationBackendSelection,
@@ -70,104 +59,38 @@ export function useEnhanceForm() {
   const currentSuperResolutionAlgorithm = computed(() =>
     superResolutionAlgorithmSpecs.value.find((a) => a.name === workflow.value.superResolution.algorithm),
   )
-  const isPaddleGanSuperResolution = computed(() => isPaddleGanVsrAlgorithm(currentSuperResolutionAlgorithm.value))
-  const interpolationModelDetails = computed(() => currentInterpolationAlgorithm.value?.modelDetails ?? [])
-  const interpolationOnnxModelDetails = computed(() => currentInterpolationAlgorithm.value?.onnxModelDetails ?? [])
-  const superResolutionModelDetails = computed(() => currentSuperResolutionAlgorithm.value?.modelDetails ?? [])
-  const superResolutionOnnxModelDetails = computed(() => currentSuperResolutionAlgorithm.value?.onnxModelDetails ?? [])
-  const currentInterpolationModelDetail = computed(() => {
-    if (isInterpolationOnnxBackend.value) {
-      const selected = workflow.value.interpolation.onnxModel ?? ''
-      return interpolationOnnxModelDetails.value.find((detail) => detail.name === selected)
-    }
-    return interpolationModelDetails.value.find((detail) => detail.name === workflow.value.interpolation.model)
-  })
-  const currentSuperResolutionModelDetail = computed(() => {
-    if (isSuperResolutionOnnxBackend.value) {
-      const selected = workflow.value.superResolution.onnxModel ?? ''
-      return superResolutionOnnxModelDetails.value.find((detail) => detail.name === selected)
-    }
-    return superResolutionModelDetails.value[0]
-  })
-  const currentInterpolationRuntimeDetail = computed(() =>
-    resolveMetricsForEngine(currentInterpolationModelDetail.value, workflow.value.interpolation.engine),
-  )
-  const currentSuperResolutionRuntimeDetail = computed(() =>
-    resolveMetricsForEngine(currentSuperResolutionModelDetail.value, workflow.value.superResolution.engine),
-  )
-  const superResolutionRuntimeFrameCount = computed(() =>
-    currentSuperResolutionRuntimeDetail.value?.metrics.runtimeFrameCount ?? null,
-  )
-  const isSuperResolutionInputFramesEditable = computed(() =>
-    superResolutionInputFrameMode(currentSuperResolutionAlgorithm.value) === 'editable_chunk',
-  )
-  const superResolutionFixedWindowRows = computed(() => {
-    if (!isPaddleGanSuperResolution.value || isSuperResolutionInputFramesEditable.value) {
-      return []
-    }
-    const count = fixedRuntimeFrameCount(currentSuperResolutionAlgorithm.value)
-    return count ? [{ label: '邻帧窗口', value: `${count} 帧（固定）` }] : []
-  })
   const activeVideoDimensions = computed(() => {
     const info = activeItem.value?.info
     if (!info) return null
     return { width: info.width, height: info.height }
   })
-  const interpolationInputDimensions = computed(() => {
-    const video = activeVideoDimensions.value
-    if (!video) return null
-    if (
-      workflow.value.superResolution.enabled &&
-      workflow.value.processOrder === 'super_resolution_then_interpolation'
-    ) {
-      const scale = workflow.value.superResolution.scaleFactor || 1
-      return {
-        width: Math.max(1, Math.round(video.width * scale)),
-        height: Math.max(1, Math.round(video.height * scale)),
-      }
-    }
-    return video
-  })
-  const interpolationRuntimeEstimate = computed(() =>
-    estimateModelRuntimeMetrics(
-      currentInterpolationRuntimeDetail.value,
-      interpolationInputDimensions.value,
-      {
-        scale: workflow.value.interpolation.scale || 1,
-        precisionBytes: workflow.value.interpolation.fp16 ? 2 : 4,
-        temporalFrames: 1,
-      },
-    ),
+  const enhanceViewModel = computed(() =>
+    buildEnhanceViewModel({
+      workflow: workflow.value,
+      activeVideoDimensions: activeVideoDimensions.value,
+      currentInterpolationAlgorithm: currentInterpolationAlgorithm.value,
+      currentSuperResolutionAlgorithm: currentSuperResolutionAlgorithm.value,
+    }),
   )
-  const superResolutionRuntimeEstimate = computed(() =>
-    estimateModelRuntimeMetrics(
-      currentSuperResolutionRuntimeDetail.value,
-      activeVideoDimensions.value,
-      {
-        scale: 1,
-        precisionBytes: 4,
-        temporalFrames: isSuperResolutionInputFramesEditable.value ? workflow.value.superResolution.numFrames ?? 10 : 1,
-        runtimeFrameCount: superResolutionRuntimeFrameCount.value,
-      },
-    ),
+  const interpolationModelDetails = computed(() => enhanceViewModel.value.interpolationModelDetails)
+  const interpolationOnnxModelDetails = computed(() => enhanceViewModel.value.interpolationOnnxModelDetails)
+  const superResolutionModelDetails = computed(() => enhanceViewModel.value.superResolutionModelDetails)
+  const superResolutionOnnxModelDetails = computed(() => enhanceViewModel.value.superResolutionOnnxModelDetails)
+  const currentInterpolationModelDetail = computed(() => enhanceViewModel.value.currentInterpolationModelDetail)
+  const currentSuperResolutionModelDetail = computed(() => enhanceViewModel.value.currentSuperResolutionModelDetail)
+  const currentInterpolationRuntimeDetail = computed(() => enhanceViewModel.value.currentInterpolationRuntimeDetail)
+  const currentSuperResolutionRuntimeDetail = computed(() => enhanceViewModel.value.currentSuperResolutionRuntimeDetail)
+  const interpolationRuntimeEstimate = computed(() => enhanceViewModel.value.interpolationRuntimeEstimate)
+  const superResolutionRuntimeEstimate = computed(() => enhanceViewModel.value.superResolutionRuntimeEstimate)
+  const interpolationMetricRows = computed(() => enhanceViewModel.value.interpolationMetricRows)
+  const superResolutionMetricRows = computed(() => enhanceViewModel.value.superResolutionMetricRows)
+  const combinedPeakVramBytes = computed(() => enhanceViewModel.value.combinedPeakVramBytes)
+  const combinedVramRows = computed(() => enhanceViewModel.value.combinedVramMetricRows)
+  const isSuperResolutionInputFramesEditable = computed(() =>
+    enhanceViewModel.value.isSuperResolutionInputFramesEditable,
   )
-  const interpolationMetricRows = computed(() =>
-    metricRows(currentInterpolationRuntimeDetail.value, interpolationRuntimeEstimate.value),
-  )
-  const superResolutionMetricRows = computed(() =>
-    metricRows(currentSuperResolutionRuntimeDetail.value, superResolutionRuntimeEstimate.value),
-  )
-  const combinedPeakVramBytes = computed(() => {
-    if (!workflow.value.interpolation.enabled || !workflow.value.superResolution.enabled) {
-      return null
-    }
-    return estimateCombinedPeakVram(interpolationRuntimeEstimate.value, superResolutionRuntimeEstimate.value)
-  })
-  const combinedVramRows = computed(() =>
-    workflow.value.interpolation.enabled && workflow.value.superResolution.enabled
-      ? combinedVramMetricRows(combinedPeakVramBytes.value)
-      : [],
-  )
+  const superResolutionFixedWindowRows = computed(() => enhanceViewModel.value.superResolutionFixedWindowRows)
+  const isPaddleGanSuperResolution = computed(() => enhanceViewModel.value.isPaddleGanSuperResolution)
 
   // ── 纯字段 lens(读写同一处) ────────────────────────────────────────────
   const interpolationEnabled = effect<boolean>(
@@ -229,7 +152,7 @@ export function useEnhanceForm() {
     (c, v: string) => { c.superResolution.onnxModel = v },
   )
   const superResolutionNumFrames = effect<number>(
-    () => fixedRuntimeFrameCount(currentSuperResolutionAlgorithm.value) ?? workflow.value.superResolution.numFrames ?? 10,
+    () => enhanceViewModel.value.effectiveSuperResolutionNumFrames,
     (value) => patchEnhanceWorkflow((c) => {
       applySuperResolutionNumFrames(c, value, envStore.env.checkResult)
     }),
