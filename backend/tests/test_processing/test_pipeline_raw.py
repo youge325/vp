@@ -111,4 +111,4 @@ def test_raw_pipeline_runs_stage_worker_chain_into_segmented_encoder(tmp_path: P
     assert completed == 2
     assert ffmpeg.encoder_dimensions == [(1, 1), (1, 1)]
     assert progress_events == [(1, "end"), (2, "end")]
-    assert [segment.next_source_frame for segment in manifest.read_completed_segments()] == [1, 2]
+    assert [segment.next_source_frame for segment in manifest.scan_completed_chunks()] == [1, 2]

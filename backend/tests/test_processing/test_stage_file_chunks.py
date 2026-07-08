@@ -53,7 +53,7 @@ def test_single_stage_file_chunks_finalize_manifest_segments(monkeypatch, tmp_pa
         python_executable="python",
     )
 
-    segments = manifest.read_completed_segments()
+    segments = manifest.scan_completed_chunks()
     assert completed == 5
     assert calls == [(0, 2, 2), (2, 2, 2), (4, 1, 1)]
     assert [segment.frame_count for segment in segments] == [2, 2, 1]

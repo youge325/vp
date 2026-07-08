@@ -75,4 +75,4 @@ def test_stage_file_pipeline_runs_each_stage_as_bounded_segments(monkeypatch, tm
         ("frame_interpolation", 2, 3, 4),
     ]
     assert max(call[2] for call in calls if call[0] == "super_resolution") == 2
-    assert sum(segment.frame_count for segment in manifest.read_completed_segments()) == 9
+    assert sum(segment.frame_count for segment in manifest.scan_completed_chunks()) == 9

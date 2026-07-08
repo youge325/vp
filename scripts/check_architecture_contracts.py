@@ -50,6 +50,7 @@ STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "sta
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 PROCESSOR_TESTS = ROOT / "backend" / "tests" / "test_processing"
+SEGMENT_MANIFEST = ROOT / "backend" / "app" / "planning" / "manifest.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_validation.py"
 CLI_PROCESS_PLANNING = ROOT / "backend" / "app" / "cli" / "commands" / "_process_planning.py"
@@ -611,6 +612,16 @@ def _check_backend_test_private_cli_defaults_boundary(issues: list[str]) -> None
             imported_names = match.group("block") or match.group("line") or ""
             if re.search(r"\b_default_[A-Za-z0-9_]+_config\b", imported_names):
                 issues.append(f"private CLI defaults import remains in {_rel(path)}")
+
+
+def _check_segment_manifest_compat_boundary(issues: list[str]) -> None:
+    text = _read(SEGMENT_MANIFEST)
+    forbidden_patterns = {
+        "completed segments reader": r"^\s*def\s+read_completed_segments\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"SegmentManifest compatibility shim `{label}` remains in {_rel(SEGMENT_MANIFEST)}")
 
 
 def _check_cli_process_planning_validation_boundary(issues: list[str]) -> None:
@@ -1827,6 +1838,7 @@ def main() -> int:
         _check_cli_defaults_planning_boundary(issues)
         _check_cli_process_validation_compat_boundary(issues)
         _check_backend_test_private_cli_defaults_boundary(issues)
+        _check_segment_manifest_compat_boundary(issues)
         _check_cli_process_planning_validation_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_workflow_selection_boundary(issues)

@@ -70,7 +70,7 @@ def test_finalize_segmented_output_concats_segments_without_audio(tmp_path: Path
 
     assert result == output_path
     assert Path(output_path).read_bytes() == b"concat"
-    assert ffmpeg.concat_calls[0][0] == [str(manifest.sidecar_dir / manifest.read_completed_segments()[0].path)]
+    assert ffmpeg.concat_calls[0][0] == [str(manifest.sidecar_dir / manifest.scan_completed_chunks()[0].path)]
     assert ffmpeg.merged is None
 
 

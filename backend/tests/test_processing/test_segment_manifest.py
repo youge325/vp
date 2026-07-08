@@ -131,6 +131,12 @@ def test_scan_truncates_at_first_gap(tmp_path):
     assert remaining == ["chunk-0001-out00000000-00000999-src00000500.mp4"]
 
 
+def test_manifest_does_not_expose_legacy_completed_segment_shim(tmp_path):
+    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+
+    assert not hasattr(manifest, "read_completed_segments")
+
+
 def test_cleanup_partial_drops_in_flight_sentinel(tmp_path):
     manifest = SegmentManifest(str(tmp_path / "out.mp4"))
     manifest.prepare("sig-5", {}, mode="auto")

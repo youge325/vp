@@ -86,7 +86,7 @@ def test_encoder_segment_writer_seals_ready_segment_and_finalizes_manifest(tmp_p
     writer.write_frame(_frame(20))
     assert writer.seal_if_ready(next_source_frame=2) is True
 
-    segments = writer.manifest.read_completed_segments()
+    segments = writer.manifest.scan_completed_chunks()
     assert [segment.frame_count for segment in segments] == [2]
     assert [segment.next_source_frame for segment in segments] == [2]
     assert ffmpeg.writers[0].closed is True
@@ -104,4 +104,4 @@ def test_encoder_segment_writer_discards_open_segment_on_cleanup(tmp_path: Path)
 
     assert ffmpeg.writers[0].closed is True
     assert not tmp_path_written.exists()
-    assert writer.manifest.read_completed_segments() == []
+    assert writer.manifest.scan_completed_chunks() == []
