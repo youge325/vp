@@ -599,6 +599,7 @@ def _check_frontend_enhance_workflow_selection_boundary(issues: list[str]) -> No
 def _check_frontend_enhance_workflow_lookup_boundary(issues: list[str]) -> None:
     text = _read(ENHANCE_WORKFLOW_SELECTION)
     forbidden_patterns = {
+        "lookup helper re-export": r"\bexport\s+\{[\s\S]*?\b(?:findInterpolationAlgorithm|findSuperResolutionAlgorithm|pickSupportedBackend)\b[\s\S]*?\}\s+from\s+['\"]\.\/enhance-workflow-lookup['\"]",
         "tensor backend list": r"\bTENSOR_BACKENDS\b",
         "tensor backend guard": r"^\s*function\s+isTensorBackend\b",
         "interpolation algorithm finder": r"^\s*export\s+function\s+findInterpolationAlgorithm\b",

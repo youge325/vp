@@ -178,6 +178,25 @@ def test_frontend_enhance_workflow_lookup_boundary_flags_local_lookup_helpers(tm
     assert any("enhance workflow lookup" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_workflow_lookup_boundary_flags_lookup_reexport(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_selection = tmp_path / "enhance-workflow-selection.ts"
+    fake_selection.write_text(
+        "export {\n"
+        "  findInterpolationAlgorithm,\n"
+        "  findSuperResolutionAlgorithm,\n"
+        "  pickSupportedBackend,\n"
+        "} from './enhance-workflow-lookup'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_WORKFLOW_SELECTION", fake_selection, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_workflow_lookup_boundary(issues)
+
+    assert any("enhance workflow lookup" in issue for issue in issues), issues
+
+
 def test_frontend_enhance_rules_split_boundary_flags_local_rule_bodies(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_rules = tmp_path / "enhance-rules.ts"
