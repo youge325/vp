@@ -8,11 +8,11 @@ import {
   fixedRuntimeFrameCount,
   fixedSuperResolutionScaleFactor,
 } from './enhance-algorithm-capabilities'
-import { pickDefaultEngine } from './enhance-engine-defaults'
 import {
   pickDefaultInterpolationAlgorithm,
   pickDefaultSuperResolutionAlgorithm,
-} from './enhance-default-pickers'
+} from './enhance-algorithm-defaults'
+import { pickDefaultEngine } from './enhance-engine-defaults'
 import { pickDefaultInterpolationModel } from './enhance-metadata-defaults'
 import {
   fallbackInterpolationOnnxModel,

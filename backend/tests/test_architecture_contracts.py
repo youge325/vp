@@ -387,6 +387,29 @@ def test_frontend_enhance_default_pickers_boundary_flags_metadata_defaults(tmp_p
     assert any("anime profile lookup" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_default_pickers_boundary_flags_algorithm_defaults(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pickers = tmp_path / "enhance-default-pickers.ts"
+    fake_pickers.write_text(
+        "import { pickBackendSupportedAlgorithmName } from './enhance-workflow-lookup'\n"
+        "export function pickDefaultInterpolationAlgorithm(env, backend) {\n"
+        "  return pickBackendSupportedAlgorithmName(env?.interpolationAlgorithms, backend, 'rife')\n"
+        "}\n"
+        "export function pickDefaultSuperResolutionAlgorithm(env, backend) {\n"
+        "  return pickBackendSupportedAlgorithmName(env?.superResolutionAlgorithms, backend, 'placeholder')\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_default_pickers_boundary(issues)
+
+    assert any("backend-supported algorithm picker" in issue for issue in issues), issues
+    assert any("algorithm default body" in issue for issue in issues), issues
+    assert any("super-resolution algorithm list" in issue for issue in issues), issues
+
+
 def test_frontend_enhance_onnx_defaults_boundary_flags_direct_algorithm_lookup(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_defaults = tmp_path / "enhance-onnx-defaults.ts"
