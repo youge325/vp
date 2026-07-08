@@ -37,6 +37,7 @@ WORKER_PROCESS_EVENTS = ROOT / "backend" / "app" / "processing" / "streaming" / 
 WORKER_PROCESS_IO = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_process_io.py"
 ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder.py"
 PIPELINE_RAW = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw.py"
+PIPELINE_RAW_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_runtime.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
 PIPELINE_LIFECYCLE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_lifecycle.py"
 STAGE_FILE_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_pipeline.py"
@@ -1204,6 +1205,17 @@ def _check_pipeline_raw_runtime_boundary(issues: list[str]) -> None:
             issues.append(f"pipeline raw runtime `{label}` remains in {_rel(PIPELINE_RAW)}")
 
 
+def _check_pipeline_raw_runtime_encoder_boundary(issues: list[str]) -> None:
+    text = _read(PIPELINE_RAW_RUNTIME)
+    forbidden_patterns = {
+        "private encoder worker import": r"from\s+app\.processing\.streaming\.encoder\s+import\s+_encoder_worker\b",
+        "private encoder worker target": r"\btarget\s*=\s*_encoder_worker\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"pipeline raw encoder worker `{label}` remains in {_rel(PIPELINE_RAW_RUNTIME)}")
+
+
 def _check_streaming_pipeline_lifecycle_boundary(issues: list[str]) -> None:
     text = _read(STREAMING_PIPELINE)
     forbidden_patterns = {
@@ -1425,6 +1437,7 @@ def main() -> int:
         _check_streaming_pipeline_rule_boundary(issues)
         _check_streaming_pipeline_raw_boundary(issues)
         _check_pipeline_raw_runtime_boundary(issues)
+        _check_pipeline_raw_runtime_encoder_boundary(issues)
         _check_streaming_pipeline_lifecycle_boundary(issues)
         _check_streaming_pipeline_preflight_boundary(issues)
         _check_streaming_pipeline_dispatch_boundary(issues)
