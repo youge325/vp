@@ -25,12 +25,6 @@ import {
   pickSupportedBackend,
 } from './enhance-workflow-lookup'
 
-export {
-  findInterpolationAlgorithm,
-  findSuperResolutionAlgorithm,
-  pickSupportedBackend,
-} from './enhance-workflow-lookup'
-
 export function preferOnnxInterpolationForPaddleSuperResolution(
   config: WorkflowConfig,
   checkResult: EnvironmentCheckResult | null,
