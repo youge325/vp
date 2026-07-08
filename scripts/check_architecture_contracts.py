@@ -1461,6 +1461,11 @@ def _check_pipeline_raw_runtime_state_boundary(issues: list[str]) -> None:
 def _check_pipeline_raw_runtime_stage_boundary(issues: list[str]) -> None:
     text = _read(PIPELINE_RAW_RUNTIME)
     forbidden_patterns = {
+        "stage runner type import": (
+            r"from\s+app\.processing\.streaming\.pipeline_raw_stage\s+import\s+"
+            r"(?:[^\n]*,\s*)?StageWorkerRunner\b"
+        ),
+        "stage runner type export": r"__all__\s*=\s*\[[^\]]*\"StageWorkerRunner\"",
         "worker pipeline import": r"from\s+app\.processing\.streaming\.worker_pipeline\s+import\b",
         "worker pipeline symbol": r"\brun_stage_worker_pipeline\b",
         "runner fallback": r"\bstage_worker_runner\s+or\b",
