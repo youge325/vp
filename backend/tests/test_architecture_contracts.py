@@ -1157,6 +1157,26 @@ def test_processor_private_reexport_boundary_flags_compatibility_aliases(tmp_pat
     assert any("processor private re-export" in issue for issue in issues), issues
 
 
+def test_processor_test_private_alias_boundary_flags_legacy_test_aliases(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_tests = tmp_path / "test_processing"
+    fake_tests.mkdir()
+    (fake_tests / "test_processor_stream.py").write_text(
+        "from app.processing.streaming.processor_algorithms import PipelineAlgorithms as _PipelineAlgorithms\n"
+        "from app.processing.streaming.processor_stream_single import process_single_frame_stream as _process_single_frame_stream\n"
+        "from app.processing.streaming.stage_runtime import StepAlgorithm as _StepAlgorithm\n\n"
+        "def test_stream():\n"
+        "    _process_single_frame_stream()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PROCESSOR_TESTS", fake_tests, raising=False)
+    issues: list[str] = []
+
+    module._check_processor_test_private_alias_boundary(issues)
+
+    assert any("processor test private alias" in issue for issue in issues), issues
+
+
 def test_processor_stream_aggregator_boundary_flags_local_stream_loops(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_streams = tmp_path / "processor_streams.py"

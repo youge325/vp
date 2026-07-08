@@ -5,10 +5,10 @@ import numpy as np
 
 from app.planning import ProcessingStep, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.processor_algorithms import PipelineAlgorithms as _PipelineAlgorithms
-from app.processing.streaming.processor_stream_sequence import process_sequence_stream as _process_sequence_stream
+from app.processing.streaming.processor_algorithms import PipelineAlgorithms
+from app.processing.streaming.processor_stream_sequence import process_sequence_stream
 from app.processing.streaming.queues import DecodedFrame, EncodedFrame, StreamEnd, _DECODE_END, _ENCODE_END
-from app.processing.streaming.stage_runtime import StepAlgorithm as _StepAlgorithm
+from app.processing.streaming.stage_runtime import StepAlgorithm
 
 
 class _SequenceAlgorithm:
@@ -46,10 +46,10 @@ def test_process_sequence_stream_applies_sequence_stage_and_preserves_order():
         total_pairs=1,
     )
 
-    _process_sequence_stream(
+    process_sequence_stream(
         stage_plan=stage_plan,
-        algorithms=_PipelineAlgorithms(
-            pre=[_StepAlgorithm(step=step, backend=None, algorithm=_SequenceAlgorithm())],
+        algorithms=PipelineAlgorithms(
+            pre=[StepAlgorithm(step=step, backend=None, algorithm=_SequenceAlgorithm())],
             interpolation=None,
             post=[],
         ),
