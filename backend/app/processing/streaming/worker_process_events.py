@@ -1,0 +1,71 @@
+"""Stage-worker stderr event parsing and progress forwarding."""
+
+from __future__ import annotations
+
+import json
+import queue
+import sys
+from typing import Any
+
+from app.errors import ProcessError, TaskErrorCode, error_code_to_wire
+from app.processing.streaming.stage_worker import STAGE_EVENT_PREFIX
+
+TENSORRT_LOG_PREFIX = "[VP_TRT]"
+
+
+def parse_stage_event_line(line: str) -> dict[str, Any] | None:
+    """Parse a structured worker stderr line, ignoring ordinary stderr."""
+    if not line.startswith(STAGE_EVENT_PREFIX):
+        return None
+    payload = line[len(STAGE_EVENT_PREFIX) :].strip()
+    event = json.loads(payload)
+    if not isinstance(event, dict):
+        return None
+    return event
+
+
+def read_worker_stderr(
+    handle: Any,
+    progress_callbacks: list[Any],
+    error_queue: queue.Queue[BaseException],
+    stop_event: Any,
+) -> None:
+    stderr = handle.process.stderr
+    if stderr is None:
+        return
+    for raw_line in iter(stderr.readline, b""):
+        line = raw_line.decode("utf-8", errors="replace").strip()
+        if not line:
+            continue
+        event = parse_stage_event_line(line)
+        if event is None:
+            handle.stderr_tail.append(line)
+            if TENSORRT_LOG_PREFIX in line:
+                print(line, file=sys.stderr, flush=True)
+            continue
+        if event.get("type") == "progress":
+            callback_index = int(event.get("stageIndex") or handle.plan.config.stage_index) - 1
+            if 0 <= callback_index < len(progress_callbacks):
+                try:
+                    progress_callbacks[callback_index](
+                        int(event.get("current") or 0),
+                        int(event.get("total") or 1),
+                        force=bool(event.get("force") or False),
+                        heartbeat=bool(event.get("heartbeat") or False),
+                    )
+                except BaseException as exc:  # pragma: no cover - defensive thread boundary
+                    stop_event.set()
+                    error_queue.put(exc)
+            continue
+        if event.get("type") == "error":
+            stop_event.set()
+            error_queue.put(
+                ProcessError(
+                    error_code_to_wire(event.get("code") or TaskErrorCode.PROCESS_FAILED.value),
+                    str(event.get("message") or "Stage worker failed."),
+                    details=dict(event.get("details") or {}),
+                )
+            )
+
+
+__all__ = ["TENSORRT_LOG_PREFIX", "parse_stage_event_line", "read_worker_stderr"]
