@@ -1093,6 +1093,14 @@ def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
         "build_stage_worker_plans": r"^\s*def\s+build_stage_worker_plans\b",
         "build_stage_chunk_plans": r"^\s*def\s+build_stage_chunk_plans\b",
         "boundary_schedule_for_stage_plan": r"^\s*def\s+boundary_schedule_for_stage_plan\b",
+        "obsolete plan import": (
+            r"from\s+app\.processing\.streaming\.worker_plans\s+import\s*\([\s\S]*\b"
+            r"(?:StageChunkPlan|StageWorkerPlan|boundary_schedule_for_stage_plan|build_stage_chunk_plans)\b"
+        ),
+        "obsolete plan export": (
+            r"__all__\s*=\s*\[[\s\S]*\""
+            r"(?:StageChunkPlan|StageWorkerPlan|boundary_schedule_for_stage_plan|build_stage_chunk_plans)\""
+        ),
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
@@ -1104,6 +1112,10 @@ def _check_worker_pipeline_process_boundary(issues: list[str]) -> None:
     forbidden_patterns = {
         "_WorkerHandle": r"^\s*class\s+_WorkerHandle\b",
         "parse_stage_event_line": r"^\s*def\s+parse_stage_event_line\b",
+        "parse_stage_event_line import": (
+            r"from\s+app\.processing\.streaming\.worker_process_events\s+import\s+parse_stage_event_line\b"
+        ),
+        "parse_stage_event_line export": r"__all__\s*=\s*\[[\s\S]*\"parse_stage_event_line\"",
         "_spawn_stage_workers": r"^\s*def\s+_spawn_stage_workers\b",
         "_read_worker_stderr": r"^\s*def\s+_read_worker_stderr\b",
         "_write_decoded_frames_to_worker": r"^\s*def\s+_write_decoded_frames_to_worker\b",
@@ -1145,6 +1157,10 @@ def _check_worker_pipeline_file_boundary(issues: list[str]) -> None:
     text = _read(WORKER_PIPELINE)
     forbidden_patterns = {
         "run_stage_file_pipeline": r"^\s*def\s+run_stage_file_pipeline\b",
+        "stage file pipeline import": (
+            r"from\s+app\.processing\.streaming\.stage_file_pipeline\s+import\s+run_stage_file_pipeline\b"
+        ),
+        "stage file pipeline export": r"__all__\s*=\s*\[[\s\S]*\"run_stage_file_pipeline\"",
         "_run_single_stage_file_chunks": r"^\s*def\s+_run_single_stage_file_chunks\b",
         "_run_stage_chunk_to_file": r"^\s*def\s+_run_stage_chunk_to_file\b",
         "_chunk_progress_adapter": r"^\s*def\s+_chunk_progress_adapter\b",
