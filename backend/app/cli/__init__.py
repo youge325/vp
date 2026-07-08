@@ -23,7 +23,7 @@ from app.cli.commands.benchmark import cmd_benchmark
 from app.cli.commands.info import cmd_info
 from app.cli.commands.inspect_output import cmd_inspect_output
 from app.cli.commands.process import cmd_process
-from app.cli.defaults import PROCESS_LABEL_MAP, PROCESS_ORDER_MAP
+from app.planning import PROCESS_LABEL_MAP, PROCESS_ORDER_MAP
 from app.cli.main import main
 from app.cli.parser import build_parser
 

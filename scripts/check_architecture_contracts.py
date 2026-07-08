@@ -28,6 +28,11 @@ DOC_ROOT = ROOT / "docs"
 README = ROOT / "README.md"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
+CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
+FRONTEND_FORM_COMPOSABLES = [
+    FRONTEND_SRC / "composables" / "forms" / "useDecodeForm.ts",
+    FRONTEND_SRC / "composables" / "forms" / "useEncodeForm.ts",
+]
 
 
 def _read(path: Path) -> str:
@@ -395,6 +400,35 @@ def _check_stage_worker_private_import_boundary(issues: list[str]) -> None:
         issues.append("stage_worker.py imports processor private helpers instead of shared stage runtime helpers")
 
 
+def _check_frontend_form_profile_rule_boundary(issues: list[str]) -> None:
+    forbidden_tokens = (
+        "seedProfileOptions",
+        "resolveRateControlForProfile",
+        "profile.family ===",
+    )
+    for path in FRONTEND_FORM_COMPOSABLES:
+        text = _read(path)
+        for token in forbidden_tokens:
+            if token in text:
+                issues.append(f"profile rule `{token}` leaked into form composable: {_rel(path)}")
+
+
+def _check_cli_defaults_planning_boundary(issues: list[str]) -> None:
+    text = _read(CLI_DEFAULTS)
+    forbidden_patterns = {
+        "PROCESS_ORDER_MAP": r"\bPROCESS_ORDER_MAP\b",
+        "PROCESS_LABEL_MAP": r"\bPROCESS_LABEL_MAP\b",
+        "resolve_primary_algorithm": r"def\s+_?resolve_primary_algorithm\b",
+        "resolve_processing_steps": r"def\s+_?resolve_processing_steps\b",
+        "processing_needs_interpolation": r"def\s+_?processing_needs_interpolation\b",
+        "resolve_workflow_and_output_fps": r"def\s+_?resolve_workflow_and_output_fps\b",
+        "resolve_expected_output_frames": r"def\s+_?resolve_expected_output_frames\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(f"workflow planning rule `{label}` remains in backend/app/cli/defaults.py")
+
+
 def main() -> int:
     issues: list[str] = []
     try:
@@ -404,6 +438,8 @@ def main() -> int:
         _check_ui_and_store_ipc_boundary(issues)
         _check_paddlegan_vsr_contract(issues)
         _check_stage_worker_private_import_boundary(issues)
+        _check_frontend_form_profile_rule_boundary(issues)
+        _check_cli_defaults_planning_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2

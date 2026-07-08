@@ -20,15 +20,13 @@ from app.cli.commands._process_validation import (
     ensure_input_and_ffmpeg,
     load_runtime_configs,
 )
-from app.cli.defaults import (
-    _resolve_processing_steps,
-    _resolve_workflow_and_output_fps,
-)
 from app.planning import (
     SegmentManifest,
     build_signature,
     build_stage_plan,
+    resolve_processing_steps,
     resolve_video_info,
+    resolve_workflow_and_output_fps,
 )
 from app.protocol import ndjson
 from app.utils.file_utils import get_output_path
@@ -41,7 +39,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     configs = load_runtime_configs(args)
     workflow_config = configs.workflow_json
 
-    processing_steps = _resolve_processing_steps(workflow_config)
+    processing_steps = resolve_processing_steps(workflow_config)
 
     # Phase 18 — Pydantic ``OutputConfig`` validator 保证 outputDir 必填非空,
     # 这里不再 ``or settings.OUTPUT_DIR`` 兜底。
@@ -52,7 +50,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     else:
         output_path = get_output_path(input_path, output_dir, extension=f".{container}")
 
-    workflow_config, final_output_fps = _resolve_workflow_and_output_fps(
+    workflow_config, final_output_fps = resolve_workflow_and_output_fps(
         workflow_config,
         ffmpeg,
         input_path,

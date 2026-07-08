@@ -3,19 +3,16 @@
 import { computed } from 'vue'
 import { useEnvStore } from '@/stores/env'
 import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
-import {
-  normalizeOutputDir,
-  seedProfileOptions,
-} from '@/services/preset/normalize'
+import { normalizeOutputDir } from '@/services/preset/normalize'
+import { selectEncodeProfile } from '@/services/preset/profile-selection'
 import {
   getRateControlModeOptions,
   getRateControlUnit,
   hasRateControlModes,
   resolveRateControlForMode,
-  resolveRateControlForProfile,
 } from '@/services/preset/rate-control'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
-import { getOptionValue, coerceOptionValue } from '@/services/preset/options'
+import { getOptionValue, coerceOptionValue, updateProfileOption } from '@/services/preset/options'
 import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
 import type { EncodeConfig, OutputConfig } from '@/types/protocol'
 
@@ -52,14 +49,7 @@ export function useEncodeForm() {
       return
     }
     patchEncode((config: EncodeConfig) => {
-      config.codec = profile.name
-      config.family =
-        profile.family === 'nvidia' || profile.family === 'intel' ? profile.family : 'cpu'
-      const rateControl = resolveRateControlForProfile(profile)
-      if (rateControl) {
-        config.rateControl = rateControl
-      }
-      config.options = seedProfileOptions(profile, config.options)
+      Object.assign(config, selectEncodeProfile(profile, config))
     })
   }
 
@@ -81,7 +71,7 @@ export function useEncodeForm() {
 
   function setEncodeOption(name: string, value: CapabilityValue): void {
     patchEncode((config: EncodeConfig) => {
-      config.options = { ...config.options, [name]: value }
+      config.options = updateProfileOption(config.options, name, value)
     })
   }
 

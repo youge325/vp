@@ -1,6 +1,6 @@
 """Tests for _resolve_processing_steps with preprocess/postprocess filter chains."""
 
-from app.cli.defaults import _resolve_processing_steps
+from app.planning import resolve_processing_steps as _resolve_processing_steps
 
 
 def _make_workflow_config(**overrides):

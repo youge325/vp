@@ -11,9 +11,13 @@ import {
   pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
 } from './enhance-rules'
-import { resolveDecoderHwaccel, resolveDecoderHwaccelDevice } from './decode-hardware'
 import { pickPreferredDecoderProfile, pickPreferredEncoderProfile } from './profile-picker'
 import { resolveRateControlForProfile } from './rate-control'
+import {
+  defaultRateControlValue,
+  encoderFamilyFromProfile,
+  selectDecodeProfile,
+} from './profile-selection'
 
 export function createDefaultWorkflowConfig(): WorkflowConfig {
   return {
@@ -75,31 +79,13 @@ export function createDefaultDecodeConfig(
   videoCodec = '',
 ): DecodeConfig {
   const decoder = pickPreferredDecoderProfile(env, videoCodec)
-  if (!decoder || decoder.family === 'software') {
-    return {
-      mode: 'software',
-      hwaccel: '',
-      hwaccelDevice: '',
-      decoder: 'software',
-      options: {},
-    }
-  }
-
-  const hwaccel = resolveDecoderHwaccel(decoder)
-  return {
-    mode: 'hardware',
-    hwaccel,
-    hwaccelDevice: resolveDecoderHwaccelDevice(decoder, hwaccel),
-    decoder: decoder.name,
-    options: {},
-  }
+  return selectDecodeProfile(decoder)
 }
 
 export function createDefaultEncodeConfig(env: EnvironmentCheckResult | null): EncodeConfig {
   const profile = pickPreferredEncoderProfile(env)
   const codec = profile?.name ?? 'libx265'
-  const family: EncodeConfig['family'] =
-    profile?.family === 'nvidia' || profile?.family === 'intel' ? profile.family : 'cpu'
+  const family = profile ? encoderFamilyFromProfile(profile.family) : 'cpu'
   const options: Record<string, string | number | boolean> = {}
   const presetOption = profile?.options.find((option) => option.name === 'preset')
   if (presetOption?.defaultValue != null) {
@@ -116,8 +102,7 @@ export function createDefaultEncodeConfig(env: EnvironmentCheckResult | null): E
     container: 'mp4',
     keepAudio: true,
     rateControl: resolveRateControlForProfile(profile) ?? {
-      mode: family === 'cpu' ? 'crf' : family === 'nvidia' ? 'cq' : 'qp',
-      value: family === 'cpu' ? 18 : 23,
+      ...defaultRateControlValue(family),
     },
     options,
   }
