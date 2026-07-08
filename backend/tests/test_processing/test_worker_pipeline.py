@@ -24,14 +24,16 @@ from app.processing.streaming.stage_rules import (
 )
 from app.processing.streaming.stage_worker import StageWorkerConfig
 from app.processing.streaming.worker_pipeline import (
-    StageWorkerPlan,
     _drain_final_worker_output,
     _read_worker_stderr,
+    parse_stage_event_line,
+    run_stage_file_pipeline,
+)
+from app.processing.streaming.worker_plans import (
+    StageWorkerPlan,
     boundary_schedule_for_stage_plan,
     build_stage_chunk_plans,
     build_stage_worker_plans,
-    parse_stage_event_line,
-    run_stage_file_pipeline,
 )
 
 
