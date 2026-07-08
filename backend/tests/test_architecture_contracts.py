@@ -1676,6 +1676,27 @@ def test_pipeline_raw_runtime_stage_boundary_flags_local_worker_runner(tmp_path,
     assert any("runner local" in issue for issue in issues), issues
 
 
+def test_pipeline_raw_stage_boundary_flags_runner_alias_exports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_stage = tmp_path / "pipeline_raw_stage.py"
+    fake_stage.write_text(
+        "from typing import Callable\n\n"
+        "StageWorkerRunner = Callable[..., None]\n\n"
+        "def run_raw_stage_worker(stage_worker_runner: StageWorkerRunner | None = None):\n"
+        "    pass\n\n"
+        '__all__ = ["StageWorkerRunner", "run_raw_stage_worker"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PIPELINE_RAW_STAGE", fake_stage, raising=False)
+    issues: list[str] = []
+
+    module._check_pipeline_raw_stage_boundary(issues)
+
+    assert any("runner alias" in issue for issue in issues), issues
+    assert any("runner type reference" in issue for issue in issues), issues
+    assert any("runner export" in issue for issue in issues), issues
+
+
 def test_streaming_pipeline_lifecycle_boundary_flags_local_resume_and_finalize(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "pipeline.py"

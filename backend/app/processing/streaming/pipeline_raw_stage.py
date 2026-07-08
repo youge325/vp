@@ -10,8 +10,6 @@ from app.processing.streaming.pipeline_raw_state import RawPipelineState
 from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
 from app.utils.ffmpeg import FFmpegWrapper
 
-StageWorkerRunner = Callable[..., None]
-
 
 def run_raw_stage_worker(
     *,
@@ -25,7 +23,7 @@ def run_raw_stage_worker(
     resume_state: ResumeState,
     metrics: PipelineMetrics,
     state: RawPipelineState,
-    stage_worker_runner: StageWorkerRunner | None = None,
+    stage_worker_runner: Callable[..., None] | None = None,
 ) -> None:
     runner = stage_worker_runner or run_stage_worker_pipeline
     runner(
@@ -44,4 +42,4 @@ def run_raw_stage_worker(
     )
 
 
-__all__ = ["StageWorkerRunner", "run_raw_stage_worker"]
+__all__ = ["run_raw_stage_worker"]
