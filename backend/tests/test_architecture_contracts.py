@@ -948,6 +948,22 @@ def test_stage_worker_runtime_split_boundary_flags_local_factory_and_progress_he
     assert any("stage worker runtime split" in issue for issue in issues), issues
 
 
+def test_stage_worker_runtime_split_boundary_flags_obsolete_runtime_barrel(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runtime = tmp_path / "stage_worker_runtime.py"
+    fake_runtime.write_text(
+        '"""Compatibility barrel for isolated stage worker runtime helpers."""\n\n'
+        "from app.processing.streaming.stage_worker_factory import create_backend\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_WORKER_RUNTIME", fake_runtime, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_worker_runtime_split_boundary(issues)
+
+    assert any("obsolete stage worker runtime barrel" in issue for issue in issues), issues
+
+
 def test_stage_worker_execution_boundary_flags_local_stage_loops(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_stage_worker = tmp_path / "stage_worker.py"

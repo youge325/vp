@@ -489,7 +489,12 @@ def _check_stage_worker_helper_import_boundary(issues: list[str]) -> None:
 
 
 def _check_stage_worker_runtime_split_boundary(issues: list[str]) -> None:
+    if not STAGE_WORKER_RUNTIME.exists():
+        return
+
     text = _read(STAGE_WORKER_RUNTIME)
+    if "Compatibility barrel" in text:
+        issues.append(f"obsolete stage worker runtime barrel remains in {_rel(STAGE_WORKER_RUNTIME)}")
     forbidden_patterns = {
         "dataclass import": r"^\s*from\s+dataclasses\s+import\s+dataclass\b",
         "json import": r"^\s*import\s+json\b",

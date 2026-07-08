@@ -5,10 +5,10 @@ import json
 from types import SimpleNamespace
 
 from app.planning import ProcessingStep
-from app.processing.streaming.stage_worker_runtime import (
+from app.processing.streaming.stage_worker_factory import create_backend
+from app.processing.streaming.stage_worker_progress import (
     STAGE_EVENT_PREFIX,
     StageProgressState,
-    create_backend,
     emit_stage_event,
     progress_event,
     start_sequence_stage_heartbeat,
