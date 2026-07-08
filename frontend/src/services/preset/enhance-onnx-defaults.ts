@@ -3,14 +3,15 @@
 
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 
+import { findInterpolationAlgorithm, findSuperResolutionAlgorithm } from './enhance-workflow-lookup'
+
 export function fallbackInterpolationOnnxModel(
   checkResult: EnvironmentCheckResult | null,
   algorithm: string,
   current: string | undefined,
 ): string {
   if (current) return current
-  const alg = checkResult?.interpolationAlgorithms?.find((a) => a.name === algorithm)
-  return alg?.onnxModels?.[0] || ''
+  return findInterpolationAlgorithm(checkResult, algorithm)?.onnxModels?.[0] || ''
 }
 
 export function fallbackSuperResolutionOnnxModel(
@@ -19,6 +20,5 @@ export function fallbackSuperResolutionOnnxModel(
   current: string | undefined,
 ): string {
   if (current) return current
-  const alg = checkResult?.superResolutionAlgorithms?.find((a) => a.name === algorithm)
-  return alg?.onnxModels?.[0] || ''
+  return findSuperResolutionAlgorithm(checkResult, algorithm)?.onnxModels?.[0] || ''
 }

@@ -55,6 +55,7 @@ PRESET_NORMALIZE = FRONTEND_SRC / "services" / "preset" / "normalize.ts"
 ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
 ENHANCE_DEFAULT_SELECTION = FRONTEND_SRC / "services" / "preset" / "enhance-default-selection.ts"
 ENHANCE_DEFAULT_PICKERS = FRONTEND_SRC / "services" / "preset" / "enhance-default-pickers.ts"
+ENHANCE_ONNX_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "enhance-onnx-defaults.ts"
 ENHANCE_WORKFLOW = FRONTEND_SRC / "services" / "preset" / "enhance-workflow.ts"
 ENHANCE_WORKFLOW_SELECTION = FRONTEND_SRC / "services" / "preset" / "enhance-workflow-selection.ts"
 ENHANCE_VIEW_MODEL = FRONTEND_SRC / "services" / "preset" / "enhance-view-model.ts"
@@ -680,6 +681,17 @@ def _check_frontend_enhance_default_pickers_boundary(issues: list[str]) -> None:
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
             issues.append(f"enhance default pickers `{label}` remains in {_rel(ENHANCE_DEFAULT_PICKERS)}")
+
+
+def _check_frontend_enhance_onnx_defaults_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_ONNX_DEFAULTS)
+    forbidden_patterns = {
+        "direct interpolation lookup": r"\binterpolationAlgorithms\?\.\s*find\s*\(",
+        "direct super-resolution lookup": r"\bsuperResolutionAlgorithms\?\.\s*find\s*\(",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"enhance ONNX defaults `{label}` remains in {_rel(ENHANCE_ONNX_DEFAULTS)}")
 
 
 def _check_frontend_enhance_view_model_boundary(issues: list[str]) -> None:
@@ -1535,6 +1547,7 @@ def main() -> int:
         _check_frontend_enhance_rules_split_boundary(issues)
         _check_frontend_enhance_default_selection_split_boundary(issues)
         _check_frontend_enhance_default_pickers_boundary(issues)
+        _check_frontend_enhance_onnx_defaults_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_view_model_split_boundary(issues)
         _check_frontend_enhance_runtime_view_split_boundary(issues)

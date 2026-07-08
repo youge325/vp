@@ -343,6 +343,22 @@ def test_frontend_enhance_default_pickers_boundary_flags_direct_interpolation_lo
     assert any("direct interpolation lookup" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_onnx_defaults_boundary_flags_direct_algorithm_lookup(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_defaults = tmp_path / "enhance-onnx-defaults.ts"
+    fake_defaults.write_text(
+        "const interpolation = checkResult?.interpolationAlgorithms?.find((algorithm) => algorithm.name === selected)\n"
+        "const superResolution = checkResult?.superResolutionAlgorithms?.find((algorithm) => algorithm.name === selected)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_ONNX_DEFAULTS", fake_defaults, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_onnx_defaults_boundary(issues)
+
+    assert any("enhance ONNX defaults" in issue for issue in issues), issues
+
+
 def test_worker_pipeline_plan_boundary_flags_local_plan_builders(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "worker_pipeline.py"
