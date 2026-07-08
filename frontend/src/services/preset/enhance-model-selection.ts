@@ -3,7 +3,7 @@
 
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
-import { resolveMetricsForEngine } from '@/services/model-metrics'
+import { resolveMetricsForEngine } from '@/services/model-engine-metrics'
 
 export interface EnhanceModelSelectionInput {
   workflow: WorkflowConfig

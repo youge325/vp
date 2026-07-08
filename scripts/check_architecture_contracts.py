@@ -31,6 +31,7 @@ STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_wo
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
 WORKER_PROCESSES = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_processes.py"
 ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder.py"
+PIPELINE_RAW = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
 PIPELINE_LIFECYCLE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_lifecycle.py"
 STAGE_FILE_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_pipeline.py"
@@ -39,6 +40,7 @@ STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "sta
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
+MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
 ENHANCE_WORKFLOW = FRONTEND_SRC / "services" / "preset" / "enhance-workflow.ts"
@@ -609,6 +611,26 @@ def _check_frontend_enhance_runtime_view_split_boundary(issues: list[str]) -> No
             issues.append(f"enhance runtime-view split `{label}` remains in {_rel(ENHANCE_RUNTIME_VIEW)}")
 
 
+def _check_frontend_model_metrics_barrel_boundary(issues: list[str]) -> None:
+    text = _read(MODEL_METRICS)
+    forbidden_patterns = {
+        "format function": r"^\s*export\s+function\s+format(?:Bytes|Gflops|ParameterCount)\b",
+        "model option label": r"^\s*export\s+function\s+modelOptionLabel\b",
+        "engine resolver": r"^\s*export\s+function\s+resolveMetricsForEngine\b",
+        "runtime estimate": r"^\s*export\s+function\s+estimateModelRuntimeMetrics\b",
+        "combined vram estimate": r"^\s*export\s+function\s+estimateCombinedPeakVram\b",
+        "metric rows": r"^\s*export\s+function\s+(?:metricRows|combinedVramMetricRows)\b",
+        "local finite helper": r"^\s*function\s+finiteOrNull\b",
+        "local padding helper": r"^\s*function\s+padToModulo\b",
+        "local unknown sentinel": r"^\s*const\s+UNKNOWN\b",
+        "runtime interface": r"^\s*export\s+interface\s+(?:VideoDimensions|RuntimeMetricOptions|RuntimeMetricEstimate)\b",
+        "metric row interface": r"^\s*export\s+interface\s+MetricRow\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"model metrics barrel `{label}` remains in {_rel(MODEL_METRICS)}")
+
+
 def _check_frontend_enhance_binding_boundary(issues: list[str]) -> None:
     text = _read(ENHANCE_FORM)
     forbidden_patterns = {
@@ -1047,6 +1069,27 @@ def _check_streaming_pipeline_raw_boundary(issues: list[str]) -> None:
             issues.append(f"raw pipeline runtime `{label}` remains in backend/app/processing/streaming/pipeline.py")
 
 
+def _check_pipeline_raw_runtime_boundary(issues: list[str]) -> None:
+    text = _read(PIPELINE_RAW)
+    forbidden_patterns = {
+        "queue import": r"^\s*import\s+queue\b",
+        "threading import": r"^\s*import\s+threading\b",
+        "encoder worker import": r"\b_encoder_worker\b",
+        "queue allocation": r"\bqueue\.Queue\b",
+        "thread allocation": r"\bthreading\.Thread\b",
+        "stop event allocation": r"\bthreading\.Event\b",
+        "encoder thread": r"\bencoder_thread\b",
+        "encode queue": r"\bencode_queue\s*=",
+        "error queue": r"\berror_queue\s*=",
+        "stop event": r"\bstop_event\s*=",
+        "thread join": r"\.join\s*\(",
+        "completed segments aggregation": r"\bread_completed_segments\s*\(",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"pipeline raw runtime `{label}` remains in {_rel(PIPELINE_RAW)}")
+
+
 def _check_streaming_pipeline_lifecycle_boundary(issues: list[str]) -> None:
     text = _read(STREAMING_PIPELINE)
     forbidden_patterns = {
@@ -1235,6 +1278,7 @@ def main() -> int:
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_view_model_split_boundary(issues)
         _check_frontend_enhance_runtime_view_split_boundary(issues)
+        _check_frontend_model_metrics_barrel_boundary(issues)
         _check_frontend_enhance_binding_boundary(issues)
         _check_frontend_enhance_field_binding_boundary(issues)
         _check_frontend_enhance_field_split_boundary(issues)
@@ -1260,6 +1304,7 @@ def main() -> int:
         _check_stage_worker_execution_boundary(issues)
         _check_streaming_pipeline_rule_boundary(issues)
         _check_streaming_pipeline_raw_boundary(issues)
+        _check_pipeline_raw_runtime_boundary(issues)
         _check_streaming_pipeline_lifecycle_boundary(issues)
         _check_streaming_pipeline_preflight_boundary(issues)
         _check_streaming_pipeline_dispatch_boundary(issues)

@@ -7,8 +7,10 @@ import {
   combinedVramMetricRows,
   metricRows,
   type MetricRow,
+} from '@/services/model-metric-rows'
+import {
   type RuntimeMetricEstimate,
-} from '@/services/model-metrics'
+} from '@/services/model-runtime-estimates'
 import {
   fixedRuntimeFrameCount,
   isPaddleGanVsrAlgorithm,

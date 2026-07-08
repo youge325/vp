@@ -586,6 +586,26 @@ def test_frontend_enhance_runtime_view_split_boundary_flags_local_runtime_rules(
     assert any("enhance runtime-view split" in issue for issue in issues), issues
 
 
+def test_frontend_model_metrics_barrel_boundary_flags_local_rules(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_model_metrics = tmp_path / "model-metrics.ts"
+    fake_model_metrics.write_text(
+        "export function formatBytes() { return '--' }\n"
+        "export function resolveMetricsForEngine() { return null }\n"
+        "export function estimateModelRuntimeMetrics() { return null }\n"
+        "export function metricRows() { return [] }\n"
+        "const UNKNOWN = '--'\n"
+        "function finiteOrNull() { return null }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "MODEL_METRICS", fake_model_metrics, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_model_metrics_barrel_boundary(issues)
+
+    assert any("model metrics barrel" in issue for issue in issues), issues
+
+
 def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_processor = tmp_path / "processor.py"
@@ -836,6 +856,31 @@ def test_streaming_pipeline_raw_boundary_flags_local_runtime_helpers(tmp_path, m
     module._check_streaming_pipeline_raw_boundary(issues)
 
     assert any("raw pipeline runtime" in issue for issue in issues), issues
+
+
+def test_pipeline_raw_runtime_boundary_flags_local_queue_thread_runtime(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline_raw = tmp_path / "pipeline_raw.py"
+    fake_pipeline_raw.write_text(
+        "import queue\n"
+        "import threading\n"
+        "from app.processing.streaming.encoder import _encoder_worker\n\n"
+        "def run_raw_streaming_pipeline():\n"
+        "    encode_queue = queue.Queue(maxsize=8)\n"
+        "    error_queue = queue.Queue()\n"
+        "    stop_event = threading.Event()\n"
+        "    encoder_thread = threading.Thread(target=_encoder_worker)\n"
+        "    encoder_thread.start()\n"
+        "    stage_worker_runner(encode_queue=encode_queue, error_queue=error_queue, stop_event=stop_event)\n"
+        "    encoder_thread.join()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PIPELINE_RAW", fake_pipeline_raw, raising=False)
+    issues: list[str] = []
+
+    module._check_pipeline_raw_runtime_boundary(issues)
+
+    assert any("pipeline raw runtime" in issue for issue in issues), issues
 
 
 def test_streaming_pipeline_lifecycle_boundary_flags_local_resume_and_finalize(tmp_path, monkeypatch) -> None:
