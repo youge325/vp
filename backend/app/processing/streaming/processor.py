@@ -17,13 +17,18 @@ from __future__ import annotations
 
 import queue
 import threading
-from dataclasses import dataclass
-from typing import Any, Callable, Iterator
+from typing import Callable, Iterator
 
-from app.algorithms.factory import AlgorithmFactory
 from app.planning import StagePlan
 from app.processing.streaming.frame_payload import FramePayload
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.processor_algorithms import (
+    PipelineAlgorithms as _PipelineAlgorithms,
+    initialize_algorithms as _initialize_algorithms,
+    ordered_algorithm_entries as _ordered_algorithm_entries,
+    pipeline_needs_sequence as _pipeline_needs_sequence,
+    resolve_processor_mode as _resolve_processor_mode,
+)
 from app.processing.streaming.queues import (
     DecodedFrame,
     EncodedFrame,
@@ -35,25 +40,21 @@ from app.processing.streaming.queues import (
     _queue_put,
     _queue_put_nowait,
 )
-from app.processing.streaming.stage_rules import (
-    algorithm_kwargs_for_create as _algorithm_kwargs_for_create,
-    stage_tensor_backend_name as _step_tensor_backend_name,
-)
 from app.processing.streaming.stage_runtime import (
     StepAlgorithm as _StepAlgorithm,
     entry_needs_sequence as _entry_needs_sequence,
-    get_cached_backend as _get_cached_backend,
     is_cpu_frame_stage as _is_cpu_frame_stage,
     run_stage as _run_stage,
     should_prefer_tensor_stage as _should_prefer_tensor_stage,
 )
 
-
-@dataclass(slots=True)
-class _PipelineAlgorithms:
-    pre: list[_StepAlgorithm]
-    interpolation: _StepAlgorithm | None
-    post: list[_StepAlgorithm]
+__all__ = [
+    "_PipelineAlgorithms",
+    "_StepAlgorithm",
+    "_initialize_algorithms",
+    "_ordered_algorithm_entries",
+    "_pipeline_needs_sequence",
+]
 
 
 def _processor_worker(
@@ -71,8 +72,9 @@ def _processor_worker(
 ) -> None:
     try:
         algorithms = _initialize_algorithms(stage_plan, tensor_backend_name)
+        processor_mode = _resolve_processor_mode(stage_plan, algorithms)
 
-        if _pipeline_needs_sequence(algorithms):
+        if processor_mode == "sequence":
             _process_sequence_stream(
                 stage_plan=stage_plan,
                 algorithms=algorithms,
@@ -84,7 +86,7 @@ def _processor_worker(
                 stop_event=stop_event,
                 metrics=metrics,
             )
-        elif stage_plan.interpolation_step is None:
+        elif processor_mode == "single_frame":
             _process_single_frame_stream(
                 stage_plan=stage_plan,
                 algorithms=algorithms,
@@ -112,60 +114,6 @@ def _processor_worker(
         stop_event.set()
         error_queue.put(exc)
         _queue_put_nowait(encode_queue, _ENCODE_END)
-
-
-def _initialize_algorithms(stage_plan: StagePlan, tensor_backend_name: str) -> _PipelineAlgorithms:
-    algorithms = _PipelineAlgorithms(pre=[], interpolation=None, post=[])
-
-    backend_cache: dict[str, Any] = {}
-
-    for step in stage_plan.pre_steps:
-        step_backend_name = _step_tensor_backend_name(step, tensor_backend_name)
-        backend = _get_cached_backend(backend_cache, step_backend_name)
-        algorithm = AlgorithmFactory.create(
-            algorithm_type=step.algorithm_type,
-            tensor_backend=backend,
-            tensor_backend_name=step_backend_name,
-            **_algorithm_kwargs_for_create(step),
-        )
-        algorithms.pre.append(_StepAlgorithm(step=step, backend=backend, algorithm=algorithm))
-
-    if stage_plan.interpolation_step is not None:
-        step = stage_plan.interpolation_step
-        step_backend_name = _step_tensor_backend_name(step, tensor_backend_name)
-        backend = _get_cached_backend(backend_cache, step_backend_name)
-        algorithm = AlgorithmFactory.create(
-            algorithm_type=step.algorithm_type,
-            tensor_backend=backend,
-            tensor_backend_name=step_backend_name,
-            **_algorithm_kwargs_for_create(step),
-        )
-        algorithms.interpolation = _StepAlgorithm(step=step, backend=backend, algorithm=algorithm)
-
-    for step in stage_plan.post_steps:
-        step_backend_name = _step_tensor_backend_name(step, tensor_backend_name)
-        backend = _get_cached_backend(backend_cache, step_backend_name)
-        algorithm = AlgorithmFactory.create(
-            algorithm_type=step.algorithm_type,
-            tensor_backend=backend,
-            tensor_backend_name=step_backend_name,
-            **_algorithm_kwargs_for_create(step),
-        )
-        algorithms.post.append(_StepAlgorithm(step=step, backend=backend, algorithm=algorithm))
-
-    return algorithms
-
-
-def _pipeline_needs_sequence(algorithms: _PipelineAlgorithms) -> bool:
-    return any(_entry_needs_sequence(entry) for entry in _ordered_algorithm_entries(algorithms))
-
-
-def _ordered_algorithm_entries(algorithms: _PipelineAlgorithms) -> list[_StepAlgorithm]:
-    entries = list(algorithms.pre)
-    if algorithms.interpolation is not None:
-        entries.append(algorithms.interpolation)
-    entries.extend(algorithms.post)
-    return entries
 
 
 def _process_single_frame_stream(

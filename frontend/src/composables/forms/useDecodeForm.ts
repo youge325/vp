@@ -11,9 +11,11 @@ import {
   selectDecodeProfile,
 } from '@/services/preset/profile-selection'
 import {
-  getDecoderHwaccelDeviceOptions,
-  resolveDecoderHwaccelDevice,
-} from '@/services/preset/decode-hardware'
+  applyDecodeHwaccelDeviceSelection,
+  applyDecodeHwaccelSelection,
+  buildDecoderHardwareDeviceNumberOptions,
+  buildDecoderHardwareDeviceOptions,
+} from '@/services/preset/io-form-rules'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import { getOptionValue, coerceOptionValue, updateProfileOption } from '@/services/preset/options'
 import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
@@ -33,13 +35,10 @@ export function useDecodeForm() {
   )
   const decoderOptions = computed(() => currentDecoderProfile.value?.options ?? [])
   const decoderHardwareDeviceOptions = computed(() =>
-    (currentDecoderProfile.value?.hardwareDevices ?? []).map((device) => ({
-      value: device,
-      label: device.toUpperCase(),
-    })),
+    buildDecoderHardwareDeviceOptions(currentDecoderProfile.value),
   )
   const decoderHardwareDeviceNumberOptions = computed(() =>
-    getDecoderHwaccelDeviceOptions(
+    buildDecoderHardwareDeviceNumberOptions(
       currentDecoderProfile.value,
       editorConfig.value.decodeConfig.hwaccel ?? '',
     ),
@@ -74,17 +73,15 @@ export function useDecodeForm() {
 
   function setDecodeHwaccel(value: string): void {
     patchDecode((config: DecodeConfig) => {
-      config.hwaccel = value
-      config.hwaccelDevice = resolveDecoderHwaccelDevice(currentDecoderProfile.value, value)
+      Object.assign(config, applyDecodeHwaccelSelection(config, currentDecoderProfile.value, value))
     })
   }
 
   function setDecodeHwaccelDevice(value: string): void {
     patchDecode((config: DecodeConfig) => {
-      config.hwaccelDevice = resolveDecoderHwaccelDevice(
-        currentDecoderProfile.value,
-        config.hwaccel ?? '',
-        value,
+      Object.assign(
+        config,
+        applyDecodeHwaccelDeviceSelection(config, currentDecoderProfile.value, value),
       )
     })
   }

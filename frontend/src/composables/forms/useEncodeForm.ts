@@ -6,11 +6,10 @@ import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
 import { normalizeOutputDir } from '@/services/preset/normalize'
 import { selectEncodeProfile } from '@/services/preset/profile-selection'
 import {
-  getRateControlModeOptions,
-  getRateControlUnit,
-  hasRateControlModes,
-  resolveRateControlForMode,
-} from '@/services/preset/rate-control'
+  buildRateControlViewState,
+  normalizeSegmentFrames,
+  resolveRateControlModeSelection,
+} from '@/services/preset/io-form-rules'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import { getOptionValue, coerceOptionValue, updateProfileOption } from '@/services/preset/options'
 import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
@@ -27,21 +26,16 @@ export function useEncodeForm() {
     ) ?? null,
   )
   const encoderOptions = computed(() => currentEncoderProfile.value?.options ?? [])
-  const rateControlOptions = computed(() => getRateControlModeOptions(currentEncoderProfile.value))
-  const rateControlDisabled = computed(() => !hasRateControlModes(currentEncoderProfile.value))
-  const rateControlModeHint = computed(() =>
-    rateControlDisabled.value ? '未探测到可用码率控制模式' : undefined,
-  )
-  const rateControlValueHint = computed(() => {
-    if (rateControlDisabled.value) {
-      return '未探测到可用码率控制模式'
-    }
-    const unit = getRateControlUnit(
+  const rateControlViewState = computed(() =>
+    buildRateControlViewState(
       currentEncoderProfile.value,
       editorConfig.value.encodeConfig.rateControl.mode,
-    )
-    return unit ? `单位: ${unit}` : undefined
-  })
+    ),
+  )
+  const rateControlOptions = computed(() => rateControlViewState.value.options)
+  const rateControlDisabled = computed(() => rateControlViewState.value.disabled)
+  const rateControlModeHint = computed(() => rateControlViewState.value.modeHint)
+  const rateControlValueHint = computed(() => rateControlViewState.value.valueHint)
 
   function setEncodeProfile(profileName: string): void {
     const profile = visibleEncoderProfiles.value.find((entry) => entry.name === profileName) ?? null
@@ -54,7 +48,7 @@ export function useEncodeForm() {
   }
 
   function setRateControlMode(mode: EncodeConfig['rateControl']['mode']): void {
-    const rateControl = resolveRateControlForMode(currentEncoderProfile.value, mode)
+    const rateControl = resolveRateControlModeSelection(currentEncoderProfile.value, mode)
     if (!rateControl) {
       return
     }
@@ -108,7 +102,7 @@ export function useEncodeForm() {
 
   function setSegmentFrames(value: number): void {
     patchOutput((config: OutputConfig) => {
-      config.segmentFrames = Number.isFinite(value) && value > 0 ? Math.round(value) : 1000
+      config.segmentFrames = normalizeSegmentFrames(value)
     })
   }
 
