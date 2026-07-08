@@ -428,7 +428,7 @@ def test_streaming_pipeline_keeps_sidecar_when_finalization_fails(monkeypatch):
         del kwargs
         raise RuntimeError("concat failed")
 
-    monkeypatch.setattr("app.processing.streaming.pipeline._finalize_segmented_output", fail_finalize)
+    monkeypatch.setattr("app.processing.streaming.pipeline_lifecycle._finalize_segmented_output", fail_finalize)
 
     with pytest.raises(RuntimeError, match="concat failed"):
         process_video_streaming(
