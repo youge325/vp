@@ -30,9 +30,11 @@ PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddle
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
+STAGE_FILE_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_pipeline.py"
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
+ENHANCE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-form-bindings.ts"
 ENHANCE_VIEW = FRONTEND_SRC / "views" / "EnhanceModuleView.vue"
 DECODE_VIEW = FRONTEND_SRC / "views" / "DecodeModuleView.vue"
 ENCODE_VIEW = FRONTEND_SRC / "views" / "EncodeModuleView.vue"
@@ -490,6 +492,22 @@ def _check_frontend_enhance_binding_boundary(issues: list[str]) -> None:
             issues.append(f"enhance binding rule `{label}` leaked into form composable: {_rel(ENHANCE_FORM)}")
 
 
+def _check_frontend_enhance_field_binding_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_FORM_BINDINGS)
+    forbidden_patterns = {
+        "createDraftEditor": r"\bcreateDraftEditor\b",
+        "enhance workflow mutation import": r"from\s+['\"]@/services/preset/enhance-workflow['\"]",
+        "workflow mutation function": r"\bapply(?:Interpolation|SuperResolution)[A-Za-z]+\b",
+        "field writer": r"\bconst\s+[A-Za-z0-9]+\s*=\s*field\s*\(",
+        "effect writer": r"\bconst\s+[A-Za-z0-9]+\s*=\s*effect\s*<",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(
+                f"enhance field binding rule `{label}` leaked into form binding assembly: {_rel(ENHANCE_FORM_BINDINGS)}"
+            )
+
+
 def _check_frontend_enhance_option_boundary(issues: list[str]) -> None:
     text = _read(ENHANCE_VIEW)
     forbidden_patterns = {
@@ -594,6 +612,24 @@ def _check_worker_pipeline_file_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_stage_file_pipeline_chunk_boundary(issues: list[str]) -> None:
+    text = _read(STAGE_FILE_PIPELINE)
+    forbidden_patterns = {
+        "_run_single_stage_file_chunks": r"^\s*def\s+_run_single_stage_file_chunks\b",
+        "_run_stage_chunk_to_file": r"^\s*def\s+_run_stage_chunk_to_file\b",
+        "_chunk_progress_adapter": r"^\s*def\s+_chunk_progress_adapter\b",
+        "_stage_chunk_output_start": r"^\s*def\s+_stage_chunk_output_start\b",
+        "_empty_resume_state": r"^\s*def\s+_empty_resume_state\b",
+        "_stage_signature": r"^\s*def\s+_stage_signature\b",
+        "_safe_stage_name": r"^\s*def\s+_safe_stage_name\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"stage file chunk rule `{label}` remains in backend/app/processing/streaming/stage_file_pipeline.py"
+            )
+
+
 def _check_streaming_pipeline_rule_boundary(issues: list[str]) -> None:
     text = _read(STREAMING_PIPELINE)
     forbidden_patterns = {
@@ -656,12 +692,14 @@ def main() -> int:
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_binding_boundary(issues)
+        _check_frontend_enhance_field_binding_boundary(issues)
         _check_frontend_enhance_option_boundary(issues)
         _check_frontend_io_view_option_boundary(issues)
         _check_frontend_io_form_rule_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)
         _check_worker_pipeline_file_boundary(issues)
+        _check_stage_file_pipeline_chunk_boundary(issues)
         _check_streaming_pipeline_rule_boundary(issues)
         _check_processor_algorithm_boundary(issues)
         _check_processor_stage_execution_boundary(issues)

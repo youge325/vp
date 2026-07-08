@@ -283,6 +283,23 @@ def test_frontend_enhance_binding_boundary_flags_composable_binding_leaks(tmp_pa
     assert any("enhance binding rule" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_field_binding_boundary_flags_binding_rule_leaks(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_bindings = tmp_path / "enhance-form-bindings.ts"
+    fake_bindings.write_text(
+        "import { createDraftEditor } from '@/composables/forms/lens'\n"
+        "import { applyInterpolationEnabled } from '@/services/preset/enhance-workflow'\n"
+        "const interpolationEnabled = effect<boolean>(() => workflow.value.interpolation.enabled, () => {})\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_FORM_BINDINGS", fake_bindings)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_field_binding_boundary(issues)
+
+    assert any("enhance field binding rule" in issue for issue in issues), issues
+
+
 def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_processor = tmp_path / "processor.py"
@@ -326,6 +343,32 @@ def test_processor_stage_execution_boundary_flags_local_stage_helpers(tmp_path, 
     module._check_processor_stage_execution_boundary(issues)
 
     assert any("processor stage execution rule" in issue for issue in issues), issues
+
+
+def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "stage_file_pipeline.py"
+    fake_pipeline.write_text(
+        "def _run_single_stage_file_chunks():\n"
+        "    pass\n\n"
+        "def _run_stage_chunk_to_file():\n"
+        "    pass\n\n"
+        "def _chunk_progress_adapter():\n"
+        "    pass\n\n"
+        "def _empty_resume_state():\n"
+        "    pass\n\n"
+        "def _stage_signature():\n"
+        "    pass\n\n"
+        "def _safe_stage_name():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_stage_file_pipeline_chunk_boundary(issues)
+
+    assert any("stage file chunk rule" in issue for issue in issues), issues
 
 
 def test_streaming_pipeline_rule_boundary_flags_local_pipeline_rules(tmp_path, monkeypatch) -> None:
