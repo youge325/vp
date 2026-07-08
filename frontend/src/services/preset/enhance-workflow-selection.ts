@@ -8,8 +8,8 @@ import {
   fixedRuntimeFrameCount,
   fixedSuperResolutionScaleFactor,
 } from './enhance-algorithm-capabilities'
+import { pickDefaultEngine } from './enhance-engine-defaults'
 import {
-  pickDefaultEngine,
   pickDefaultInterpolationAlgorithm,
   pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,

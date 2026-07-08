@@ -3,11 +3,10 @@
 
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
+import { pickDefaultEngine, pickDefaultInterpolationEngine } from './enhance-engine-defaults'
 import {
   pickDefaultAnimeProfile,
-  pickDefaultEngine,
   pickDefaultInterpolationAlgorithm,
-  pickDefaultInterpolationEngine,
   pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
 } from './enhance-default-pickers'

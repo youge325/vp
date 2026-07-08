@@ -677,6 +677,10 @@ def _check_frontend_enhance_default_pickers_boundary(issues: list[str]) -> None:
         "backend compatibility helper": r"^\s*function\s+backendCompatible\b",
         "backend support direct helper": r"\balgorithmSupportsBackend\b",
         "direct interpolation lookup": r"\binterpolationAlgorithms\?\.\s*find\s*\(",
+        "default engine body": r"^\s*export\s+function\s+pickDefault(?:Interpolation)?Engine\b",
+        "tensor engine lookup": r"\btensorEngines\b",
+        "gpu vendor lookup": r"\bgpu\?\.adapters\b",
+        "vendor branch": r"\bvendor\s*===\s*['\"](?:hygon|nvidia)['\"]",
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
