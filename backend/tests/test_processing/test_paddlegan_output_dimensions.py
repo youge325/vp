@@ -1,5 +1,5 @@
 from app.planning import ProcessingStep, StagePlan
-from app.processing.streaming.pipeline import _resolved_output_dimensions
+from app.processing.streaming.pipeline_rules import resolved_output_dimensions
 
 
 def test_output_dimensions_scale_for_paddlegan_super_resolution_independent_of_global_backend():
@@ -22,7 +22,7 @@ def test_output_dimensions_scale_for_paddlegan_super_resolution_independent_of_g
         total_pairs=9,
     )
 
-    assert _resolved_output_dimensions(
+    assert resolved_output_dimensions(
         video_info={"width": 320, "height": 180},
         stage_plan=stage_plan,
         tensor_backend_name="onnx",

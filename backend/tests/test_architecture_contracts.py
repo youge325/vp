@@ -1249,6 +1249,22 @@ def test_planning_test_private_alias_boundary_flags_single_line_resolve_alias(tm
     assert any("planning test private alias" in issue for issue in issues), issues
 
 
+def test_pipeline_test_private_alias_boundary_flags_output_dimension_alias(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_tests = tmp_path / "test_processing"
+    fake_tests.mkdir()
+    (fake_tests / "test_paddlegan_output_dimensions.py").write_text(
+        "from app.processing.streaming.pipeline import _resolved_output_dimensions\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PROCESSOR_TESTS", fake_tests, raising=False)
+    issues: list[str] = []
+
+    module._check_pipeline_test_private_alias_boundary(issues)
+
+    assert any("pipeline test private alias" in issue for issue in issues), issues
+
+
 def test_cli_process_planning_validation_boundary_flags_local_validation_rules(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_planning = tmp_path / "_process_planning.py"
