@@ -544,6 +544,27 @@ def test_frontend_enhance_projection_boundary_flags_algorithm_and_view_leaks(tmp
     assert any("enhance projection rule" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_view_model_split_boundary_flags_local_model_and_runtime_rules(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_view_model = tmp_path / "enhance-view-model.ts"
+    fake_view_model.write_text(
+        "import { estimateModelRuntimeMetrics, metricRows, resolveMetricsForEngine } from '@/services/model-metrics'\n"
+        "import { fixedRuntimeFrameCount, isPaddleGanVsrAlgorithm } from './enhance-algorithm-capabilities'\n"
+        "function selectedModelDetail() {}\n"
+        "function scaledDimensions() {}\n"
+        "const interpolationRuntimeEstimate = estimateModelRuntimeMetrics()\n"
+        "const rows = metricRows()\n"
+        "const current = resolveMetricsForEngine()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_VIEW_MODEL", fake_view_model, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_view_model_split_boundary(issues)
+
+    assert any("enhance view-model split" in issue for issue in issues), issues
+
+
 def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_processor = tmp_path / "processor.py"
@@ -684,6 +705,30 @@ def test_stage_file_chunks_runtime_boundary_flags_local_runtime_helpers(tmp_path
     module._check_stage_file_chunks_runtime_boundary(issues)
 
     assert any("stage file chunk runtime" in issue for issue in issues), issues
+
+
+def test_stage_file_chunk_runtime_encoding_boundary_flags_local_encoding_loop(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runtime = tmp_path / "stage_file_chunk_runtime.py"
+    fake_runtime.write_text(
+        "from app.processing.streaming.encoder_segments import resolve_segment_output_frame_count\n"
+        "from app.processing.streaming.stage_worker import read_rgb_frame\n\n"
+        "def run_stage_chunk_to_file(ffmpeg, handle, chunk):\n"
+        "    writer = ffmpeg.open_rawvideo_encoder(output_path='chunk.mp4')\n"
+        "    written_frames = 0\n"
+        "    for raw_index in range(chunk.raw_output_frame_count):\n"
+        "        frame = read_rgb_frame(handle.process.stdout, width=1, height=1)\n"
+        "        writer.write_frame(frame)\n"
+        "        written_frames += 1\n"
+        "    resolve_segment_output_frame_count(ffmpeg, writer, 'chunk.mp4', fallback_frame_count=written_frames)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_CHUNK_RUNTIME", fake_runtime, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_file_chunk_runtime_encoding_boundary(issues)
+
+    assert any("stage file chunk encoding" in issue for issue in issues), issues
 
 
 def test_stage_worker_runtime_boundary_flags_local_io_and_runtime_helpers(tmp_path, monkeypatch) -> None:
