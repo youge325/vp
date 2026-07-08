@@ -713,7 +713,15 @@ def _check_frontend_enhance_runtime_view_split_boundary(issues: list[str]) -> No
 
 
 def _check_frontend_model_metrics_barrel_boundary(issues: list[str]) -> None:
+    if not MODEL_METRICS.exists():
+        return
     text = _read(MODEL_METRICS)
+    if re.search(
+        r"^\s*export\s+(?:type\s+)?(?:\{[\s\S]*?\}|\*)\s+from\s+['\"]\./model-(?:metric-format|engine-metrics|runtime-estimates|metric-rows)['\"]",
+        text,
+        re.MULTILINE,
+    ):
+        issues.append(f"obsolete model metrics barrel remains in {_rel(MODEL_METRICS)}")
     forbidden_patterns = {
         "format function": r"^\s*export\s+function\s+format(?:Bytes|Gflops|ParameterCount)\b",
         "model option label": r"^\s*export\s+function\s+modelOptionLabel\b",

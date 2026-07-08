@@ -729,6 +729,23 @@ def test_frontend_model_metrics_barrel_boundary_flags_local_rules(tmp_path, monk
     assert any("model metrics barrel" in issue for issue in issues), issues
 
 
+def test_frontend_model_metrics_barrel_boundary_flags_obsolete_reexports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_model_metrics = tmp_path / "model-metrics.ts"
+    fake_model_metrics.write_text(
+        "export { formatBytes, modelOptionLabel } from './model-metric-format'\n"
+        "export { resolveMetricsForEngine } from './model-engine-metrics'\n"
+        "export type { RuntimeMetricEstimate } from './model-runtime-estimates'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "MODEL_METRICS", fake_model_metrics, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_model_metrics_barrel_boundary(issues)
+
+    assert any("obsolete model metrics barrel" in issue for issue in issues), issues
+
+
 def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_processor = tmp_path / "processor.py"
