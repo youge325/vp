@@ -1500,6 +1500,22 @@ def test_frontend_defaults_workflow_boundary_flags_workflow_default_reexport(tmp
     assert any("workflow default rule" in issue for issue in issues), issues
 
 
+def test_frontend_workflow_defaults_lookup_boundary_flags_direct_algorithm_lookup(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_defaults = tmp_path / "workflow-defaults.ts"
+    fake_defaults.write_text(
+        "const interpolation = env?.interpolationAlgorithms?.find((algorithm) => algorithm.name === selected)\n"
+        "const superResolution = env?.superResolutionAlgorithms?.find((algorithm) => algorithm.name === selected)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKFLOW_DEFAULTS", fake_defaults)
+    issues: list[str] = []
+
+    module._check_frontend_workflow_defaults_lookup_boundary(issues)
+
+    assert any("workflow defaults lookup" in issue for issue in issues), issues
+
+
 def test_frontend_preset_normalize_boundary_flags_decoder_hardware_reexport(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_normalize = tmp_path / "normalize.ts"
