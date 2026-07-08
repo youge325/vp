@@ -30,6 +30,7 @@ PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddle
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
+PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_VIEW = FRONTEND_SRC / "views" / "EnhanceModuleView.vue"
@@ -509,6 +510,24 @@ def _check_frontend_io_view_option_boundary(issues: list[str]) -> None:
                 issues.append(f"io option rule `{label}` leaked into view: {_rel(path)}")
 
 
+def _check_frontend_io_form_rule_boundary(issues: list[str]) -> None:
+    forbidden_patterns = {
+        "hardware device map": r"\bhardwareDevices\b.{0,120}\.map\s*\(",
+        "decoder device options": r"\bgetDecoderHwaccelDeviceOptions\b",
+        "decoder device resolve": r"\bresolveDecoderHwaccelDevice\b",
+        "rate control mode options": r"\bgetRateControlModeOptions\b",
+        "rate control modes check": r"\bhasRateControlModes\b",
+        "rate control unit": r"\bgetRateControlUnit\b",
+        "rate control mode resolve": r"\bresolveRateControlForMode\b",
+        "segment frames normalize": r"\bNumber\.isFinite\b",
+    }
+    for path in FRONTEND_FORM_COMPOSABLES:
+        text = _read(path)
+        for label, pattern in forbidden_patterns.items():
+            if re.search(pattern, text, re.DOTALL):
+                issues.append(f"io form rule `{label}` leaked into form composable: {_rel(path)}")
+
+
 def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
     text = _read(WORKER_PIPELINE)
     forbidden_patterns = {
@@ -574,6 +593,22 @@ def _check_streaming_pipeline_rule_boundary(issues: list[str]) -> None:
             issues.append(f"streaming pipeline rule `{label}` remains in backend/app/processing/streaming/pipeline.py")
 
 
+def _check_processor_algorithm_boundary(issues: list[str]) -> None:
+    text = _read(PROCESSOR)
+    forbidden_patterns = {
+        "_PipelineAlgorithms": r"^\s*class\s+_PipelineAlgorithms\b",
+        "_initialize_algorithms": r"^\s*def\s+_initialize_algorithms\b",
+        "_pipeline_needs_sequence": r"^\s*def\s+_pipeline_needs_sequence\b",
+        "_ordered_algorithm_entries": r"^\s*def\s+_ordered_algorithm_entries\b",
+        "_resolve_processor_mode": r"^\s*def\s+_resolve_processor_mode\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"processor algorithm rule `{label}` remains in backend/app/processing/streaming/processor.py"
+            )
+
+
 def main() -> int:
     issues: list[str] = []
     try:
@@ -589,10 +624,12 @@ def main() -> int:
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_option_boundary(issues)
         _check_frontend_io_view_option_boundary(issues)
+        _check_frontend_io_form_rule_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)
         _check_worker_pipeline_file_boundary(issues)
         _check_streaming_pipeline_rule_boundary(issues)
+        _check_processor_algorithm_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2

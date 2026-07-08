@@ -238,6 +238,55 @@ def test_frontend_io_view_option_boundary_flags_view_local_option_rules(tmp_path
     assert any("io option rule" in issue for issue in issues), issues
 
 
+def test_frontend_io_form_rule_boundary_flags_composable_rule_leaks(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_decode_form = tmp_path / "useDecodeForm.ts"
+    fake_encode_form = tmp_path / "useEncodeForm.ts"
+    fake_decode_form.write_text(
+        "(currentDecoderProfile.value?.hardwareDevices ?? []).map((device) => device.toUpperCase())\n"
+        "getDecoderHwaccelDeviceOptions(profile, config.hwaccel)\n"
+        "resolveDecoderHwaccelDevice(profile, value)\n",
+        encoding="utf-8",
+    )
+    fake_encode_form.write_text(
+        "getRateControlModeOptions(profile)\n"
+        "hasRateControlModes(profile)\n"
+        "getRateControlUnit(profile, mode)\n"
+        "resolveRateControlForMode(profile, mode)\n"
+        "Number.isFinite(value) && value > 0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "FRONTEND_FORM_COMPOSABLES", [fake_decode_form, fake_encode_form])
+    issues: list[str] = []
+
+    module._check_frontend_io_form_rule_boundary(issues)
+
+    assert any("io form rule" in issue for issue in issues), issues
+
+
+def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_processor = tmp_path / "processor.py"
+    fake_processor.write_text(
+        "@dataclass(slots=True)\n"
+        "class _PipelineAlgorithms:\n"
+        "    pass\n\n"
+        "def _initialize_algorithms():\n"
+        "    pass\n\n"
+        "def _pipeline_needs_sequence():\n"
+        "    pass\n\n"
+        "def _ordered_algorithm_entries():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PROCESSOR", fake_processor)
+    issues: list[str] = []
+
+    module._check_processor_algorithm_boundary(issues)
+
+    assert any("processor algorithm rule" in issue for issue in issues), issues
+
+
 def test_streaming_pipeline_rule_boundary_flags_local_pipeline_rules(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "pipeline.py"
