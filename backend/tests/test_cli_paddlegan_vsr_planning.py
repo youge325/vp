@@ -1,6 +1,6 @@
 import pytest
 
-from app.planning import resolve_processing_steps as _resolve_processing_steps
+from app.planning import resolve_processing_steps
 from app.cli.commands._process_planning import _verify_model_availability, _verify_super_resolution_backend
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import ProcessingStep, build_stage_plan
@@ -113,7 +113,7 @@ def test_paddlegan_vsr_step_carries_super_resolution_runtime_fields():
         "postprocess": {"enabled": False, "filters": []},
     }
 
-    steps = _resolve_processing_steps(workflow)
+    steps = resolve_processing_steps(workflow)
 
     assert len(steps) == 1
     assert steps[0].algorithm_type == "super_resolution"
@@ -167,7 +167,7 @@ def test_pytorch_interpolation_plus_paddlegan_super_resolution_builds_isolated_s
         "postprocess": {"enabled": False, "filters": []},
     }
 
-    steps = _resolve_processing_steps(workflow)
+    steps = resolve_processing_steps(workflow)
     stage_plan = build_stage_plan(steps, 3, source_duration=1.0, output_fps=None)
     worker_plans = build_stage_worker_plans(
         stage_plan=stage_plan,

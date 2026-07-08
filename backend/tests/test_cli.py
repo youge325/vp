@@ -16,8 +16,8 @@ from app.planning import (
     build_signature,
     normalize_processing_steps,
     processing_steps_to_jsonable,
-    resolve_expected_output_frames as _resolve_expected_output_frames,
-    resolve_processing_steps as _resolve_processing_steps,
+    resolve_expected_output_frames,
+    resolve_processing_steps,
 )
 
 
@@ -107,7 +107,7 @@ def _make_workflow_config(**overrides):
 
 
 def test_resolve_processing_steps_interpolation_mode():
-    steps = _resolve_processing_steps(_make_workflow_config())
+    steps = resolve_processing_steps(_make_workflow_config())
 
     assert [step.algorithm_type for step in steps] == ["frame_interpolation"]
     assert steps[0].algorithm_kwargs["multi"] == 2
@@ -115,7 +115,7 @@ def test_resolve_processing_steps_interpolation_mode():
 
 
 def test_resolve_processing_steps_combined_order():
-    steps = _resolve_processing_steps(
+    steps = resolve_processing_steps(
         _make_workflow_config(
             processOrder="frame_interpolation_then_super_resolution",
             superResolution={
@@ -135,7 +135,7 @@ def test_resolve_processing_steps_combined_order():
 
 
 def test_resolve_processing_steps_format_conversion_skips_frame_filters():
-    steps = _resolve_processing_steps(
+    steps = resolve_processing_steps(
         _make_workflow_config(
             interpolation={
                 "enabled": False,
@@ -344,9 +344,9 @@ def test_resolve_expected_output_frames_uses_input_frames_for_format_conversion(
         },
         superResolution={"enabled": False, "scaleFactor": 2.0, "algorithm": "placeholder"},
     )
-    processing_steps = _resolve_processing_steps(workflow)
+    processing_steps = resolve_processing_steps(workflow)
 
-    total = _resolve_expected_output_frames(
+    total = resolve_expected_output_frames(
         ffmpeg=_FakeFFmpeg(frame_count=240, duration=10.0),
         input_path="demo.mp4",
         workflow_config=workflow,
@@ -359,9 +359,9 @@ def test_resolve_expected_output_frames_uses_input_frames_for_format_conversion(
 
 def test_resolve_expected_output_frames_uses_interpolated_output_frames_without_resample():
     workflow = _make_workflow_config()
-    processing_steps = _resolve_processing_steps(workflow)
+    processing_steps = resolve_processing_steps(workflow)
 
-    total = _resolve_expected_output_frames(
+    total = resolve_expected_output_frames(
         ffmpeg=_FakeFFmpeg(frame_count=240, duration=10.0),
         input_path="demo.mp4",
         workflow_config=workflow,
@@ -374,9 +374,9 @@ def test_resolve_expected_output_frames_uses_interpolated_output_frames_without_
 
 def test_resolve_expected_output_frames_uses_target_timeline_when_resampling():
     workflow = _make_workflow_config()
-    processing_steps = _resolve_processing_steps(workflow)
+    processing_steps = resolve_processing_steps(workflow)
 
-    total = _resolve_expected_output_frames(
+    total = resolve_expected_output_frames(
         ffmpeg=_FakeFFmpeg(frame_count=240, duration=10.0),
         input_path="demo.mp4",
         workflow_config=workflow,
