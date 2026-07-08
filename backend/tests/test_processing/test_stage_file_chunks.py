@@ -5,7 +5,6 @@ from pathlib import Path
 from app.planning import ProcessingStep, SegmentManifest
 from app.processing.streaming import stage_file_chunks, stage_file_rules
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.worker_plans import StageChunkPlan
 
 
 def test_single_stage_file_chunks_finalize_manifest_segments(monkeypatch, tmp_path) -> None:
@@ -24,7 +23,7 @@ def test_single_stage_file_chunks_finalize_manifest_segments(monkeypatch, tmp_pa
         Path(kwargs["output_path"]).write_bytes(b"chunk")
         return chunk.written_output_frame_count
 
-    monkeypatch.setattr(stage_file_chunks, "run_stage_chunk_to_file", fake_run_stage_chunk_to_file)
+    monkeypatch.setattr(stage_file_chunks, "_run_stage_chunk_to_file", fake_run_stage_chunk_to_file)
 
     completed = stage_file_chunks.run_single_stage_file_chunks(
         ffmpeg=object(),
@@ -58,61 +57,6 @@ def test_single_stage_file_chunks_finalize_manifest_segments(monkeypatch, tmp_pa
     assert completed == 5
     assert calls == [(0, 2, 2), (2, 2, 2), (4, 1, 1)]
     assert [segment.frame_count for segment in segments] == [2, 2, 1]
-
-
-def test_chunk_progress_adapter_offsets_interpolation_by_source_frame() -> None:
-    step = ProcessingStep(
-        algorithm_type="frame_interpolation",
-        algorithm_kwargs={"multi": 3},
-        stage_name="01_frame_interpolation",
-    )
-    chunk = StageChunkPlan(
-        input_start_frame=2,
-        input_frame_count=3,
-        logical_input_frame_count=2,
-        raw_output_frame_count=7,
-        written_output_frame_count=6,
-        skip_output_frames=1,
-    )
-    calls = []
-    adapter = stage_file_chunks.chunk_progress_adapter(
-        step,
-        chunk=chunk,
-        total=10,
-        callback=lambda current, total, **kwargs: calls.append((current, total, kwargs)),
-    )
-
-    adapter(3, 999, phase="stage")
-
-    assert stage_file_chunks.stage_chunk_output_start(step, chunk) == 6
-    assert calls == [(5, 10, {"phase": "stage"})]
-
-
-def test_chunk_progress_adapter_offsets_non_interpolation_by_output_frame() -> None:
-    step = ProcessingStep(
-        algorithm_type="super_resolution",
-        algorithm_kwargs={"scale_factor": 4.0, "sr_algorithm": "ppmsvsr"},
-        stage_name="01_super_resolution",
-    )
-    chunk = StageChunkPlan(
-        input_start_frame=4,
-        input_frame_count=2,
-        logical_input_frame_count=2,
-        raw_output_frame_count=2,
-        written_output_frame_count=2,
-    )
-    calls = []
-    adapter = stage_file_chunks.chunk_progress_adapter(
-        step,
-        chunk=chunk,
-        total=10,
-        callback=lambda current, total, **kwargs: calls.append((current, total, kwargs)),
-    )
-
-    adapter(3, 999, phase="stage")
-
-    assert stage_file_chunks.stage_chunk_output_start(step, chunk) == 4
-    assert calls == [(7, 10, {"phase": "stage"})]
 
 
 def test_stage_file_rules_build_safe_signature_and_empty_resume(tmp_path) -> None:

@@ -1216,6 +1216,33 @@ def test_stage_file_chunks_runtime_boundary_flags_local_runtime_helpers(tmp_path
     assert any("stage file chunk runtime" in issue for issue in issues), issues
 
 
+def test_stage_file_chunks_runtime_boundary_flags_compatibility_exports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_chunks = tmp_path / "stage_file_chunks.py"
+    fake_chunks.write_text(
+        "from app.processing.streaming.stage_file_chunk_progress import (\n"
+        "    chunk_progress_adapter,\n"
+        "    stage_chunk_output_start,\n"
+        ")\n"
+        "from app.processing.streaming.stage_file_chunk_runtime import run_stage_chunk_to_file\n\n"
+        "__all__ = [\n"
+        '    "chunk_progress_adapter",\n'
+        '    "run_single_stage_file_chunks",\n'
+        '    "run_stage_chunk_to_file",\n'
+        '    "stage_chunk_output_start",\n'
+        "]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_CHUNKS", fake_chunks)
+    issues: list[str] = []
+
+    module._check_stage_file_chunks_runtime_boundary(issues)
+
+    assert any("public chunk runtime import" in issue for issue in issues), issues
+    assert any("progress helper import" in issue for issue in issues), issues
+    assert any("helper __all__ export" in issue for issue in issues), issues
+
+
 def test_stage_file_chunk_runtime_encoding_boundary_flags_local_encoding_loop(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_runtime = tmp_path / "stage_file_chunk_runtime.py"
