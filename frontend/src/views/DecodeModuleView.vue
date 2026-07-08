@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useDecodeForm } from '@/composables/forms/useDecodeForm'
 import { useWorkbenchEditor, useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
-import { buildProfileOptions } from '@/services/preset/io-options'
 import BaseSelect from '@/components/forms/BaseSelect.vue'
 import CapabilityOptionField from '@/components/forms/CapabilityOptionField.vue'
 
 const {
-  visibleDecoderProfiles,
+  decoderProfileOptions,
   currentDecoderProfile,
   decoderOptions,
   decoderHardwareDeviceOptions,
@@ -21,10 +19,6 @@ const {
 
 const { editorConfig } = useWorkbenchEditor()
 const { targetLabel } = useEditingScope()
-
-const decoderProfileOptions = computed(() =>
-  buildProfileOptions(visibleDecoderProfiles.value),
-)
 </script>
 
 <template>

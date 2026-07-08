@@ -288,6 +288,28 @@ def test_frontend_io_form_binding_boundary_flags_composable_binding_leaks(tmp_pa
     assert any("io form binding rule" in issue for issue in issues), issues
 
 
+def test_frontend_io_form_aggregator_boundary_flags_rule_leaks(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_decode_bindings = tmp_path / "decode-form-bindings.ts"
+    fake_encode_bindings = tmp_path / "encode-form-bindings.ts"
+    fake_decode_bindings.write_text(
+        "import { getVisibleDecoderProfiles } from '@/services/preset/profile-picker'\n"
+        "import { selectDecodeProfile } from '@/services/preset/profile-selection'\n",
+        encoding="utf-8",
+    )
+    fake_encode_bindings.write_text(
+        "import { buildRateControlViewState } from '@/services/preset/io-form-rules'\n"
+        "import { buildProfileOptions } from '@/services/preset/io-options'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "FRONTEND_IO_FORM_BINDINGS", [fake_decode_bindings, fake_encode_bindings])
+    issues: list[str] = []
+
+    module._check_frontend_io_form_aggregator_boundary(issues)
+
+    assert any("io form rule" in issue and "aggregator" in issue for issue in issues), issues
+
+
 def test_frontend_enhance_binding_boundary_flags_composable_binding_leaks(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_form = tmp_path / "useEnhanceForm.ts"
@@ -429,6 +451,26 @@ def test_processor_stream_boundary_flags_local_stream_loops(tmp_path, monkeypatc
     module._check_processor_stream_boundary(issues)
 
     assert any("processor stream rule" in issue for issue in issues), issues
+
+
+def test_processor_stream_aggregator_boundary_flags_local_stream_loops(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_streams = tmp_path / "processor_streams.py"
+    fake_streams.write_text(
+        "def process_single_frame_stream():\n"
+        "    pass\n\n"
+        "def process_interpolated_stream():\n"
+        "    pass\n\n"
+        "def drain_decoded():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PROCESSOR_STREAMS", fake_streams)
+    issues: list[str] = []
+
+    module._check_processor_stream_aggregator_boundary(issues)
+
+    assert any("processor stream rule" in issue and "processor_streams.py" in issue for issue in issues), issues
 
 
 def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(tmp_path, monkeypatch) -> None:

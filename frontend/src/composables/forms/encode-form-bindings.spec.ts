@@ -84,18 +84,29 @@ describe('encode form bindings', () => {
     const { bindings } = makeBindings()
 
     expect(bindings.visibleEncoderProfiles.value.map((profile) => profile.name)).toEqual(['libx265', 'hevc_nvenc'])
+    expect(bindings.encoderProfileOptions.value).toEqual([
+      { value: 'libx265', label: 'x265' },
+      { value: 'hevc_nvenc', label: 'NVENC H.265' },
+    ])
     expect(bindings.currentEncoderProfile.value?.name).toBe('hevc_nvenc')
     expect(bindings.encoderOptions.value.map((option) => option.name)).toEqual(['preset', 'tune'])
     expect(bindings.rateControlOptions.value).toEqual([{ value: 'cq', label: 'CQ' }])
     expect(bindings.rateControlDisabled.value).toBe(false)
     expect(bindings.rateControlModeHint.value).toBeUndefined()
+    expect(bindings.rateControlValue.value).toBe(24)
+    expect(bindings.containerOptions.value).toEqual([
+      { value: 'mp4', label: 'MP4' },
+      { value: 'mkv', label: 'MKV' },
+      { value: 'mov', label: 'MOV' },
+    ])
+    expect(bindings.segmentFramesValue.value).toBe(1000)
   })
 
   it('applies encode profile, rate-control, option, and container setters through patch functions', () => {
     const { bindings, editorConfig } = makeBindings()
 
     bindings.setEncodeProfile('hevc_nvenc')
-    bindings.setRateControlMode('cq')
+    bindings.setRateControlModeValue('cq')
     bindings.setRateControlValue(26)
     bindings.setEncodeOption('tune', 'uhq')
     bindings.setContainer('mkv')
