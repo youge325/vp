@@ -5,12 +5,12 @@ import type { MediaItem } from '@/types/domain/media'
 import type { WorkbenchPreset } from '@/types/protocol'
 import { cloneWorkbenchPreset } from '@/services/preset/clone'
 
-export function createMediaId(path: string): string {
+function createMediaId(path: string): string {
   const suffix = Math.random().toString(36).slice(2, 8)
   return `${Date.now()}-${path.toLowerCase()}-${suffix}`
 }
 
-export function basename(path: string): string {
+function basename(path: string): string {
   return path.split(/[/\\]/).pop() ?? path
 }
 

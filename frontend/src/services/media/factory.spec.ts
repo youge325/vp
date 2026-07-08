@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createMediaItem, createMediaId, basename } from './factory'
+import * as mediaFactory from './factory'
+import { createMediaItem } from './factory'
 import { createIdleTaskState } from '@/services/task/events'
 import type { WorkbenchPreset } from '@/types/protocol'
 
@@ -27,24 +28,27 @@ const mockPreset: WorkbenchPreset = {
   outputConfig: { outputDir: '', openOnComplete: true, segmentFrames: 1000 },
 }
 
-describe('createMediaId', () => {
-  it('generates a non-empty string', () => {
-    const id = createMediaId('/path/to/video.mp4')
-    expect(typeof id).toBe('string')
-    expect(id.length).toBeGreaterThan(0)
+describe('createMediaItem public surface', () => {
+  it('keeps id and filename helpers private to the media item factory', () => {
+    expect('createMediaId' in mediaFactory).toBe(false)
+    expect('basename' in mediaFactory).toBe(false)
   })
 
-  it('generates unique ids', () => {
-    const id1 = createMediaId('/a.mp4')
-    const id2 = createMediaId('/b.mp4')
-    expect(id1).not.toBe(id2)
+  it('generates a non-empty id for each media item', () => {
+    const item = createMediaItem('/path/to/video.mp4', mockPreset)
+    expect(typeof item.id).toBe('string')
+    expect(item.id.length).toBeGreaterThan(0)
   })
-})
 
-describe('basename', () => {
-  it('extracts filename from path', () => {
-    expect(basename('/path/to/video.mp4')).toBe('video.mp4')
-    expect(basename('video.mp4')).toBe('video.mp4')
+  it('generates unique ids for separate media items', () => {
+    const first = createMediaItem('/a.mp4', mockPreset)
+    const second = createMediaItem('/b.mp4', mockPreset)
+    expect(first.id).not.toBe(second.id)
+  })
+
+  it('uses the filename portion of the input path as the display name', () => {
+    expect(createMediaItem('/path/to/video.mp4', mockPreset).displayName).toBe('video.mp4')
+    expect(createMediaItem('video.mp4', mockPreset).displayName).toBe('video.mp4')
   })
 })
 
