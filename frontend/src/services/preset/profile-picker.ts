@@ -7,11 +7,11 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 const FAMILY_PRIORITY = ['nvidia', 'intel', 'cpu'] as const
 const CODEC_PRIORITY = ['hevc', 'h264', 'av1'] as const
 
-export function getEncoderProfiles(env: EnvironmentCheckResult | null): EncoderProfileSpec[] {
+function getEncoderProfiles(env: EnvironmentCheckResult | null): EncoderProfileSpec[] {
   return env?.ffmpeg.encoderProfiles ?? []
 }
 
-export function getDecoderProfiles(env: EnvironmentCheckResult | null): DecoderProfileSpec[] {
+function getDecoderProfiles(env: EnvironmentCheckResult | null): DecoderProfileSpec[] {
   return env?.ffmpeg.decoderProfiles ?? []
 }
 
@@ -68,7 +68,7 @@ export function pickPreferredDecoderProfile(
   return profiles.find((profile) => profile.family === 'software') ?? null
 }
 
-export function normalizeCodec(codec: string): string {
+function normalizeCodec(codec: string): string {
   const lowered = codec.toLowerCase()
   if (lowered.includes('hevc') || lowered.includes('h265')) {
     return 'hevc'

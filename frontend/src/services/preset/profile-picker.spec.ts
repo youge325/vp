@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import * as profilePicker from './profile-picker'
 import {
   getVisibleEncoderProfiles,
   getVisibleDecoderProfiles,
@@ -24,6 +25,14 @@ function makeEnv(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCh
     ...overrides,
   } as EnvironmentCheckResult
 }
+
+describe('profile-picker public surface', () => {
+  it('does not expose internal raw profile and codec helpers', () => {
+    expect('getEncoderProfiles' in profilePicker).toBe(false)
+    expect('getDecoderProfiles' in profilePicker).toBe(false)
+    expect('normalizeCodec' in profilePicker).toBe(false)
+  })
+})
 
 describe('getVisibleEncoderProfiles', () => {
   it('filters out unavailable profiles', () => {
