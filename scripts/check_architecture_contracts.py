@@ -478,6 +478,32 @@ def _check_stage_worker_runtime_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_stage_worker_entrypoint_export_boundary(issues: list[str]) -> None:
+    text = _read(STAGE_WORKER)
+    forbidden_patterns = {
+        "rawvideo io import": (
+            r"^from\s+app\.processing\.streaming\.stage_worker_io\s+import\s*\([\s\S]*\b"
+            r"(?:RawVideoFrameError|read_rgb_frame|write_rgb_frame)\b"
+        ),
+        "progress helper import": (
+            r"^from\s+app\.processing\.streaming\.stage_worker_progress\s+import\s*\([\s\S]*\b"
+            r"(?:STAGE_EVENT_PREFIX|emit_stage_event)\b"
+        ),
+        "config re-export import": r"^from\s+app\.processing\.streaming\.stage_worker_config\s+import\s+StageWorkerConfig\b",
+        "algorithm factory re-export import": (
+            r"^from\s+app\.processing\.streaming\.stage_worker_factory\s+import\s*\([\s\S]*\bAlgorithmFactory\b"
+        ),
+        "helper __all__ export": (
+            r"__all__\s*=\s*\[[\s\S]*\""
+            r"(?:AlgorithmFactory|RawVideoFrameError|STAGE_EVENT_PREFIX|StageWorkerConfig|emit_stage_event|"
+            r"read_rgb_frame|write_rgb_frame)\""
+        ),
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"stage worker entrypoint compatibility `{label}` remains in {_rel(STAGE_WORKER)}")
+
+
 def _check_stage_worker_helper_import_boundary(issues: list[str]) -> None:
     helper_tokens = (
         "RawVideoFrameError",
@@ -1572,6 +1598,7 @@ def main() -> int:
         _check_paddlegan_vsr_contract(issues)
         _check_stage_worker_private_import_boundary(issues)
         _check_stage_worker_runtime_boundary(issues)
+        _check_stage_worker_entrypoint_export_boundary(issues)
         _check_stage_worker_helper_import_boundary(issues)
         _check_stage_worker_runtime_split_boundary(issues)
         _check_frontend_form_profile_rule_boundary(issues)

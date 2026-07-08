@@ -1232,6 +1232,48 @@ def test_stage_worker_runtime_boundary_flags_local_io_and_runtime_helpers(tmp_pa
     assert any("stage worker runtime rule" in issue for issue in issues), issues
 
 
+def test_stage_worker_entrypoint_export_boundary_flags_compatibility_exports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_stage_worker = tmp_path / "stage_worker.py"
+    fake_stage_worker.write_text(
+        "from app.processing.streaming.stage_worker_config import StageWorkerConfig\n"
+        "from app.processing.streaming.stage_worker_io import (\n"
+        "    RawVideoFrameError,\n"
+        "    read_rgb_frame,\n"
+        "    write_rgb_frame,\n"
+        ")\n"
+        "from app.processing.streaming.stage_worker_progress import (\n"
+        "    STAGE_EVENT_PREFIX,\n"
+        "    emit_stage_event,\n"
+        ")\n"
+        "from app.processing.streaming.stage_worker_factory import (\n"
+        "    AlgorithmFactory,\n"
+        "    create_algorithm,\n"
+        ")\n\n"
+        "__all__ = [\n"
+        '    "AlgorithmFactory",\n'
+        '    "RawVideoFrameError",\n'
+        '    "STAGE_EVENT_PREFIX",\n'
+        '    "StageWorkerConfig",\n'
+        '    "emit_stage_event",\n'
+        '    "read_rgb_frame",\n'
+        '    "run_stage_worker_stream",\n'
+        '    "write_rgb_frame",\n'
+        "]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_WORKER", fake_stage_worker)
+    issues: list[str] = []
+
+    module._check_stage_worker_entrypoint_export_boundary(issues)
+
+    assert any("rawvideo io import" in issue for issue in issues), issues
+    assert any("progress helper import" in issue for issue in issues), issues
+    assert any("config re-export import" in issue for issue in issues), issues
+    assert any("algorithm factory re-export import" in issue for issue in issues), issues
+    assert any("helper __all__ export" in issue for issue in issues), issues
+
+
 def test_stage_worker_helper_import_boundary_flags_helper_imports_from_entrypoint(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_encoding = tmp_path / "stage_file_chunk_encoding.py"

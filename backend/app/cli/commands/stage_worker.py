@@ -8,10 +8,8 @@ import traceback
 
 from app.errors import ProcessError, error_code_to_wire
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
-from app.processing.streaming.stage_worker import (
-    emit_stage_event,
-    run_stage_worker_stream,
-)
+from app.processing.streaming.stage_worker import run_stage_worker_stream
+from app.processing.streaming.stage_worker_progress import emit_stage_event
 
 
 def cmd_stage_worker(args: argparse.Namespace) -> None:

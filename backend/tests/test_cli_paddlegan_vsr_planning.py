@@ -4,7 +4,7 @@ from app.planning import resolve_processing_steps as _resolve_processing_steps
 from app.cli.commands._process_planning import _verify_model_availability, _verify_super_resolution_backend
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import ProcessingStep, build_stage_plan
-from app.processing.streaming.stage_worker import StageWorkerConfig
+from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import build_stage_worker_plans
 
 
