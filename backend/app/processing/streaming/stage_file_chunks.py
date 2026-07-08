@@ -8,11 +8,7 @@ from typing import Any
 
 from app.planning import ProcessingStep
 from app.planning.manifest import ResumeState, SegmentManifest
-from app.processing.streaming.stage_file_chunk_progress import (
-    chunk_progress_adapter,
-    stage_chunk_output_start,
-)
-from app.processing.streaming.stage_file_chunk_runtime import run_stage_chunk_to_file
+from app.processing.streaming.stage_file_chunk_runtime import run_stage_chunk_to_file as _run_stage_chunk_to_file
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_rules import stage_progress_total
 from app.processing.streaming.worker_plans import build_stage_chunk_plans
@@ -64,7 +60,7 @@ def run_single_stage_file_chunks(
         if chunk.written_output_frame_count <= 0:
             continue
         tmp_path = manifest.chunk_tmp_path(extension, index=chunk_index)
-        actual_written = run_stage_chunk_to_file(
+        actual_written = _run_stage_chunk_to_file(
             ffmpeg=ffmpeg,
             input_path=input_path,
             decode_config=decode_config,
@@ -102,9 +98,4 @@ def run_single_stage_file_chunks(
     return completed_output_frames
 
 
-__all__ = [
-    "chunk_progress_adapter",
-    "run_single_stage_file_chunks",
-    "run_stage_chunk_to_file",
-    "stage_chunk_output_start",
-]
+__all__ = ["run_single_stage_file_chunks"]

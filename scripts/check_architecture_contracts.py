@@ -1288,6 +1288,17 @@ def _check_stage_file_chunks_runtime_boundary(issues: list[str]) -> None:
         "read_rgb_frame": r"\bread_rgb_frame\b",
         "spawn_stage_workers": r"\bspawn_stage_workers\b",
         "write_decoded_frames_to_worker": r"\bwrite_decoded_frames_to_worker\b",
+        "public chunk runtime import": (
+            r"^from\s+app\.processing\.streaming\.stage_file_chunk_runtime\s+import\s+run_stage_chunk_to_file\s*$"
+        ),
+        "progress helper import": (
+            r"^from\s+app\.processing\.streaming\.stage_file_chunk_progress\s+import\s*\([\s\S]*\b"
+            r"(?:chunk_progress_adapter|stage_chunk_output_start)\b"
+        ),
+        "helper __all__ export": (
+            r"__all__\s*=\s*\[[\s\S]*\""
+            r"(?:chunk_progress_adapter|run_stage_chunk_to_file|stage_chunk_output_start)\""
+        ),
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):

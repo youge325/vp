@@ -47,7 +47,7 @@ def test_stage_file_pipeline_runs_each_stage_as_bounded_segments(monkeypatch, tm
         Path(kwargs["output_path"]).write_bytes(b"chunk")
         return chunk.written_output_frame_count
 
-    monkeypatch.setattr(stage_file_chunks, "run_stage_chunk_to_file", fake_run_stage_chunk_to_file)
+    monkeypatch.setattr(stage_file_chunks, "_run_stage_chunk_to_file", fake_run_stage_chunk_to_file)
 
     completed = run_stage_file_pipeline(
         ffmpeg=FakeFFmpeg(),
