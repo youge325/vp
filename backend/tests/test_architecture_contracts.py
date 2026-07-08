@@ -109,6 +109,37 @@ def test_stage_worker_private_import_boundary_flags_private_processor_dependency
     assert any("processor private helpers" in issue for issue in issues), issues
 
 
+def test_enhance_form_workflow_rule_boundary_flags_mutation_leaks(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_form = tmp_path / "useEnhanceForm.ts"
+    fake_form.write_text("pickDefaultInterpolationAlgorithm(env, 'onnx')\n", encoding="utf-8")
+    monkeypatch.setattr(module, "ENHANCE_FORM", fake_form)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_workflow_boundary(issues)
+
+    assert any("enhance workflow rule" in issue for issue in issues), issues
+
+
+def test_worker_pipeline_plan_boundary_flags_local_plan_builders(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "worker_pipeline.py"
+    fake_pipeline.write_text(
+        "@dataclass(frozen=True, slots=True)\n"
+        "class StageWorkerPlan:\n"
+        "    pass\n\n"
+        "def build_stage_worker_plans():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKER_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_worker_pipeline_plan_boundary(issues)
+
+    assert any("worker plan" in issue for issue in issues), issues
+
+
 def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(

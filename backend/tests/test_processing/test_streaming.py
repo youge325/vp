@@ -12,7 +12,7 @@ import pytest
 from app.planning import SegmentManifest, build_signature
 from app.processing.streaming.queues import EncodedFrame, StreamEnd
 from app.processing.streaming import process_video_streaming
-from app.processing.streaming.worker_pipeline import (
+from app.processing.streaming.worker_plans import (
     boundary_schedule_for_stage_plan,
     build_stage_worker_plans,
 )

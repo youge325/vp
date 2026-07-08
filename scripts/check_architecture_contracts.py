@@ -28,7 +28,9 @@ DOC_ROOT = ROOT / "docs"
 README = ROOT / "README.md"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
+WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
+ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 FRONTEND_FORM_COMPOSABLES = [
     FRONTEND_SRC / "composables" / "forms" / "useDecodeForm.ts",
     FRONTEND_SRC / "composables" / "forms" / "useEncodeForm.ts",
@@ -42,7 +44,10 @@ def _read(path: Path) -> str:
 
 
 def _rel(path: Path) -> str:
-    return path.relative_to(ROOT).as_posix()
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def _iter_source_files(*roots: Path) -> list[Path]:
@@ -429,6 +434,37 @@ def _check_cli_defaults_planning_boundary(issues: list[str]) -> None:
             issues.append(f"workflow planning rule `{label}` remains in backend/app/cli/defaults.py")
 
 
+def _check_frontend_enhance_workflow_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_FORM)
+    forbidden_tokens = (
+        "pickDefaultInterpolationAlgorithm",
+        "pickDefaultInterpolationModel",
+        "pickDefaultSuperResolutionAlgorithm",
+        "pickDefaultEngine",
+        "fallbackInterpolationOnnxModel",
+        "fallbackSuperResolutionOnnxModel",
+        "applySuperResolutionAlgorithmDefaults",
+        "fixedSuperResolutionScaleFactor",
+    )
+    for token in forbidden_tokens:
+        if token in text:
+            issues.append(f"enhance workflow rule `{token}` leaked into form composable: {_rel(ENHANCE_FORM)}")
+
+
+def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
+    text = _read(WORKER_PIPELINE)
+    forbidden_patterns = {
+        "StageWorkerPlan": r"^\s*class\s+StageWorkerPlan\b",
+        "StageChunkPlan": r"^\s*class\s+StageChunkPlan\b",
+        "build_stage_worker_plans": r"^\s*def\s+build_stage_worker_plans\b",
+        "build_stage_chunk_plans": r"^\s*def\s+build_stage_chunk_plans\b",
+        "boundary_schedule_for_stage_plan": r"^\s*def\s+boundary_schedule_for_stage_plan\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"worker plan rule `{label}` remains in backend/app/processing/streaming/worker_pipeline.py")
+
+
 def main() -> int:
     issues: list[str] = []
     try:
@@ -440,6 +476,8 @@ def main() -> int:
         _check_stage_worker_private_import_boundary(issues)
         _check_frontend_form_profile_rule_boundary(issues)
         _check_cli_defaults_planning_boundary(issues)
+        _check_frontend_enhance_workflow_boundary(issues)
+        _check_worker_pipeline_plan_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2

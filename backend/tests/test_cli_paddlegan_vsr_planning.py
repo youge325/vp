@@ -5,7 +5,7 @@ from app.cli.commands._process_planning import _verify_model_availability, _veri
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import ProcessingStep, build_stage_plan
 from app.processing.streaming.stage_worker import StageWorkerConfig
-from app.processing.streaming.worker_pipeline import build_stage_worker_plans
+from app.processing.streaming.worker_plans import build_stage_worker_plans
 
 
 def _workflow(*, sr_backend="paddle", interpolation_backend="onnx", scale_factor=4.0, algorithm="ppmsvsr"):
