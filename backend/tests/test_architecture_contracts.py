@@ -190,6 +190,23 @@ def test_frontend_enhance_rules_split_boundary_flags_local_rule_bodies(tmp_path,
     assert any("enhance rules split" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_rules_split_boundary_flags_nested_barrel(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_rules = tmp_path / "enhance-rules.ts"
+    fake_rules.write_text(
+        "export * from './enhance-algorithm-capabilities'\n"
+        "export * from './enhance-default-selection'\n"
+        "export * from './enhance-super-resolution-defaults'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_RULES", fake_rules, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_rules_split_boundary(issues)
+
+    assert any("nested default-selection barrel" in issue for issue in issues), issues
+
+
 def test_frontend_enhance_default_selection_split_boundary_flags_local_rule_bodies(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_defaults = tmp_path / "enhance-default-selection.ts"
@@ -835,6 +852,33 @@ def test_stage_worker_runtime_boundary_flags_local_io_and_runtime_helpers(tmp_pa
     module._check_stage_worker_runtime_boundary(issues)
 
     assert any("stage worker runtime rule" in issue for issue in issues), issues
+
+
+def test_stage_worker_helper_import_boundary_flags_helper_imports_from_entrypoint(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_encoding = tmp_path / "stage_file_chunk_encoding.py"
+    fake_events = tmp_path / "worker_process_events.py"
+    fake_io = tmp_path / "worker_process_io.py"
+    fake_encoding.write_text(
+        "from app.processing.streaming.stage_worker import read_rgb_frame\n",
+        encoding="utf-8",
+    )
+    fake_events.write_text(
+        "from app.processing.streaming.stage_worker import STAGE_EVENT_PREFIX, emit_stage_event\n",
+        encoding="utf-8",
+    )
+    fake_io.write_text(
+        "from app.processing.streaming.stage_worker import RawVideoFrameError, read_rgb_frame, write_rgb_frame\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_CHUNK_ENCODING", fake_encoding, raising=False)
+    monkeypatch.setattr(module, "WORKER_PROCESS_EVENTS", fake_events, raising=False)
+    monkeypatch.setattr(module, "WORKER_PROCESS_IO", fake_io, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_worker_helper_import_boundary(issues)
+
+    assert any("stage worker helper" in issue for issue in issues), issues
 
 
 def test_stage_worker_runtime_split_boundary_flags_local_factory_and_progress_helpers(tmp_path, monkeypatch) -> None:

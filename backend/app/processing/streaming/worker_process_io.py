@@ -9,7 +9,7 @@ from app.planning import StagePlan
 from app.planning.manifest import ResumeState
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, _queue_put
-from app.processing.streaming.stage_worker import read_rgb_frame, write_rgb_frame
+from app.processing.streaming.stage_worker_io import read_rgb_frame, write_rgb_frame
 from app.processing.streaming.worker_plans import StageWorkerPlan, boundary_schedule_for_stage_plan
 
 
