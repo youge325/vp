@@ -5,10 +5,10 @@ whether the planned final output and resume sidecar already exist, and
 how much progress the sidecar represents.  Called by the Tauri host
 before spawning ``process``.
 
-Phase 16 — 改走 ``load_configs(args)`` 替代原本的 8 行 try/except + 4 个
-``_load_json_arg`` 重复块。``load_configs`` 是 ``_process_validation`` 的
-SSOT,inspect_output 历史遗留没接进来,导致两份等价代码并存(添加字段
-时必须同时改两处,容易漂移)。
+Phase 16 — 改走 ``load_runtime_configs(args)`` 替代原本的 8 行
+try/except + 4 个重复 JSON 解析块。``load_runtime_configs`` 是
+``_process_validation`` 的 SSOT,inspect_output 历史遗留没接进来,导致两份
+等价代码并存(添加字段时必须同时改两处,容易漂移)。
 """
 
 from __future__ import annotations

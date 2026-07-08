@@ -21,7 +21,7 @@ graph TD
 
     subgraph PY["Python CLI 层"]
         P1["argparse process 子命令"]
-        P2["_load_json_arg()"]
+        P2["load_runtime_configs()"]
         P3["Pydantic 模型校验"]
         P4["_resolve_processing_steps()"]
         P5["StagePlan"]

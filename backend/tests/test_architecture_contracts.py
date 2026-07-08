@@ -109,6 +109,21 @@ def test_stage_worker_private_import_boundary_flags_private_processor_dependency
     assert any("processor private helpers" in issue for issue in issues), issues
 
 
+def test_cli_process_validation_compat_boundary_flags_legacy_wrappers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_validation = tmp_path / "_process_validation.py"
+    fake_validation.write_text(
+        "def _load_json_arg():\n    pass\n\ndef load_configs():\n    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "CLI_PROCESS_VALIDATION", fake_validation, raising=False)
+    issues: list[str] = []
+
+    module._check_cli_process_validation_compat_boundary(issues)
+
+    assert any("CLI process validation compatibility" in issue for issue in issues), issues
+
+
 def test_enhance_form_workflow_rule_boundary_flags_mutation_leaks(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_form = tmp_path / "useEnhanceForm.ts"

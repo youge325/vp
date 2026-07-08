@@ -54,7 +54,7 @@ def _validate_config_section(
 ) -> tuple[ConfigModel, dict[str, Any]]:
     """Parse + deep-merge + Pydantic-validate one config section.
 
-    ``legacy`` intentionally mirrors the old ``_load_json_arg`` shape:
+    ``legacy`` intentionally mirrors the old CLI section dict shape:
     defaults without an override keep their original dict shape, while an
     explicit JSON payload round-trips through Pydantic and gains model
     defaults. Output config is the exception: even the default path must
@@ -82,16 +82,6 @@ def _validate_config_section(
 
     legacy = validated.model_dump(by_alias=True) if has_override else merged
     return validated, legacy
-
-
-def _load_json_arg(
-    raw_value: str | None,
-    default: dict[str, Any],
-    model_cls: type[ConfigModel],
-) -> dict[str, Any]:
-    """Compatibility wrapper returning only the legacy camelCase dict."""
-    _model, legacy = _validate_config_section(raw_value, default, model_cls)
-    return legacy
 
 
 def ensure_input_and_ffmpeg(input_path: str) -> FFmpegWrapper:
@@ -125,8 +115,8 @@ def _read_stdin_config_sections() -> dict[str, str | None]:
 
     Returns a ``{decode, workflow, encode, output}`` dict where each value
     is a JSON string (or ``None`` if the section is missing). Reusing the
-    string form means ``_load_json_arg`` can validate stdin and CLI paths
-    through the same code, including the deep-merge + Pydantic round-trip.
+    string form lets ``load_runtime_configs`` validate stdin and CLI paths
+    through the same section loader, including the deep-merge + Pydantic round-trip.
     """
     raw = sys.stdin.read()
     if not raw.strip():
@@ -165,7 +155,7 @@ def collect_config_sections(args: argparse.Namespace) -> dict[str, str | None]:
     """Choose between the stdin and CLI-flag wire formats.
 
     Returns the same ``{decode, workflow, encode, output}`` shape so that
-    ``load_configs`` and ``cmd_inspect_output`` can stay format-agnostic.
+    ``load_runtime_configs`` and ``cmd_inspect_output`` can stay format-agnostic.
     ``--config-stdin`` takes precedence; the four ``--*-config-json``
     flags are ignored when it's set (the parser still accepts them so
     older tooling doesn't break, but the documentation calls this out).
@@ -221,10 +211,3 @@ def load_runtime_configs(args: argparse.Namespace) -> RuntimeConfigs:
         workflow_json=workflow_json,
         output_json=output_json,
     )
-
-
-def load_configs(
-    args: argparse.Namespace,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Compatibility wrapper returning legacy config dicts."""
-    return load_runtime_configs(args).legacy_tuple()

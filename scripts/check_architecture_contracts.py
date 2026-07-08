@@ -47,6 +47,7 @@ STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "sta
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
+CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_validation.py"
 MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
@@ -543,6 +544,17 @@ def _check_cli_defaults_planning_boundary(issues: list[str]) -> None:
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text):
             issues.append(f"workflow planning rule `{label}` remains in backend/app/cli/defaults.py")
+
+
+def _check_cli_process_validation_compat_boundary(issues: list[str]) -> None:
+    text = _read(CLI_PROCESS_VALIDATION)
+    forbidden_patterns = {
+        "legacy JSON arg wrapper": r"^\s*def\s+_load_json_arg\b",
+        "legacy config tuple wrapper": r"^\s*def\s+load_configs\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"CLI process validation compatibility `{label}` remains in {_rel(CLI_PROCESS_VALIDATION)}")
 
 
 def _check_frontend_enhance_workflow_boundary(issues: list[str]) -> None:
@@ -1452,6 +1464,7 @@ def main() -> int:
         _check_stage_worker_runtime_split_boundary(issues)
         _check_frontend_form_profile_rule_boundary(issues)
         _check_cli_defaults_planning_boundary(issues)
+        _check_cli_process_validation_compat_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_workflow_selection_boundary(issues)
         _check_frontend_enhance_workflow_lookup_boundary(issues)
