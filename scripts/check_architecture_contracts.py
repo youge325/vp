@@ -1318,6 +1318,7 @@ def _check_streaming_pipeline_dispatch_boundary(issues: list[str]) -> None:
         "stage file pipeline import": r"from\s+app\.processing\.streaming\.stage_file_pipeline\s+import\b",
         "worker pipeline import": r"from\s+app\.processing\.streaming\.worker_pipeline\s+import\b",
         "resume status dispatch": r"\bemit_resume_status_event\b",
+        "dispatch alias import": r"from\s+app\.processing\.streaming\.pipeline_dispatch\s+import\s+run_streaming_pipeline\s+as\s+_run_streaming_pipeline\b",
         "dispatch helper": r"^\s*def\s+_run_streaming_pipeline\b",
         "raw pipeline call": r"\brun_raw_streaming_pipeline\b",
         "stage file pipeline call": r"\brun_stage_file_pipeline\b",
