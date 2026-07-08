@@ -31,6 +31,7 @@ STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_wo
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
+ENHANCE_VIEW = FRONTEND_SRC / "views" / "EnhanceModuleView.vue"
 FRONTEND_FORM_COMPOSABLES = [
     FRONTEND_SRC / "composables" / "forms" / "useDecodeForm.ts",
     FRONTEND_SRC / "composables" / "forms" / "useEncodeForm.ts",
@@ -470,6 +471,26 @@ def _check_frontend_enhance_view_model_boundary(issues: list[str]) -> None:
             issues.append(f"enhance view-model rule `{label}` leaked into form composable: {_rel(ENHANCE_FORM)}")
 
 
+def _check_frontend_enhance_option_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_VIEW)
+    forbidden_patterns = {
+        "modelOptionLabel import": r"from\s+['\"]@/services/model-metrics['\"]",
+        "gpu-label import": r"from\s+['\"]@/config/gpu-labels['\"]",
+        "FPS_MODE_OPTIONS": r"\bconst\s+FPS_MODE_OPTIONS\b",
+        "MULTI_OPTIONS": r"\bconst\s+MULTI_OPTIONS\b",
+        "PROCESS_ORDER_OPTIONS": r"\bconst\s+PROCESS_ORDER_OPTIONS\b",
+        "findDetail": r"\bfunction\s+findDetail\b",
+        "TensorBackend cast": r"\bas\s+TensorBackend\b",
+        "InferenceEngine cast": r"\bas\s+InferenceEngine\b",
+        "FpsMode cast": r"\bas\s+FpsMode\b",
+        "ProcessOrder cast": r"\bas\s+ProcessOrder\b",
+        "Number select cast": r"\bNumber\s*\(",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(f"enhance option rule `{label}` leaked into view: {_rel(ENHANCE_VIEW)}")
+
+
 def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
     text = _read(WORKER_PIPELINE)
     forbidden_patterns = {
@@ -503,6 +524,24 @@ def _check_worker_pipeline_process_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_worker_pipeline_file_boundary(issues: list[str]) -> None:
+    text = _read(WORKER_PIPELINE)
+    forbidden_patterns = {
+        "run_stage_file_pipeline": r"^\s*def\s+run_stage_file_pipeline\b",
+        "_run_single_stage_file_chunks": r"^\s*def\s+_run_single_stage_file_chunks\b",
+        "_run_stage_chunk_to_file": r"^\s*def\s+_run_stage_chunk_to_file\b",
+        "_chunk_progress_adapter": r"^\s*def\s+_chunk_progress_adapter\b",
+        "_stage_chunk_output_start": r"^\s*def\s+_stage_chunk_output_start\b",
+        "_stage_signature": r"^\s*def\s+_stage_signature\b",
+        "_safe_stage_name": r"^\s*def\s+_safe_stage_name\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"stage file pipeline helper `{label}` remains in backend/app/processing/streaming/worker_pipeline.py"
+            )
+
+
 def main() -> int:
     issues: list[str] = []
     try:
@@ -516,8 +555,10 @@ def main() -> int:
         _check_cli_defaults_planning_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
+        _check_frontend_enhance_option_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)
+        _check_worker_pipeline_file_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2

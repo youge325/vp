@@ -176,6 +176,44 @@ def test_worker_pipeline_process_boundary_flags_local_runtime_helpers(tmp_path, 
     assert any("worker process helper" in issue for issue in issues), issues
 
 
+def test_enhance_view_option_boundary_flags_view_local_option_rules(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_view = tmp_path / "EnhanceModuleView.vue"
+    fake_view.write_text(
+        "import { modelOptionLabel } from '@/services/model-metrics'\n"
+        "const FPS_MODE_OPTIONS = []\n"
+        "function findDetail(details, name) { return details.find((detail) => detail.name === name) }\n"
+        "form.interpolationBackend = value as TensorBackend\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_VIEW", fake_view)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_option_boundary(issues)
+
+    assert any("enhance option rule" in issue for issue in issues), issues
+
+
+def test_worker_pipeline_file_boundary_flags_local_stage_file_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "worker_pipeline.py"
+    fake_pipeline.write_text(
+        "def run_stage_file_pipeline():\n"
+        "    pass\n\n"
+        "def _run_single_stage_file_chunks():\n"
+        "    pass\n\n"
+        "def _run_stage_chunk_to_file():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKER_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_worker_pipeline_file_boundary(issues)
+
+    assert any("stage file pipeline helper" in issue for issue in issues), issues
+
+
 def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(
