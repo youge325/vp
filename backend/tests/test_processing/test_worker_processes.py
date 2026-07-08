@@ -11,6 +11,7 @@ import numpy as np
 
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import ProcessingStep, build_stage_plan
+import app.processing.streaming.worker_processes as worker_processes
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import EncodedFrame
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
@@ -25,6 +26,10 @@ def test_parse_stage_event_line_returns_json_event_only_for_prefixed_lines() -> 
         "current": 2,
     }
     assert parse_stage_event_line("ordinary stderr") is None
+
+
+def test_worker_processes_keeps_backend_dir_private() -> None:
+    assert not hasattr(worker_processes, "backend_dir")
 
 
 def test_read_worker_stderr_forwards_tensorrt_lifecycle_logs_to_parent_stderr(capsys) -> None:
