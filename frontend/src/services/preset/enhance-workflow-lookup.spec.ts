@@ -4,6 +4,7 @@ import {
   algorithmSupportsBackend,
   findInterpolationAlgorithm,
   findSuperResolutionAlgorithm,
+  pickBackendSupportedAlgorithmName,
   pickSupportedBackend,
 } from './enhance-workflow-lookup'
 import type { AlgorithmInfo, EnvironmentCheckResult } from '@/types/domain/env'
@@ -59,5 +60,12 @@ describe('enhance workflow lookup rules', () => {
     expect(algorithmSupportsBackend(superResolution, 'onnx')).toBe(false)
     expect(algorithmSupportsBackend({ ...superResolution, tensorBackends: [] }, 'paddle')).toBe(false)
     expect(algorithmSupportsBackend(undefined, 'pytorch')).toBe(false)
+  })
+
+  it('picks a backend-supported algorithm name with first-item and hard-coded fallbacks', () => {
+    expect(pickBackendSupportedAlgorithmName([interpolation, superResolution], 'paddle', 'rife')).toBe('ppmsvsr')
+    expect(pickBackendSupportedAlgorithmName([superResolution], 'onnx', 'placeholder')).toBe('ppmsvsr')
+    expect(pickBackendSupportedAlgorithmName([], 'onnx', 'placeholder')).toBe('placeholder')
+    expect(pickBackendSupportedAlgorithmName(undefined, 'onnx', 'placeholder')).toBe('placeholder')
   })
 })

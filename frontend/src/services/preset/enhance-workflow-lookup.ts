@@ -17,6 +17,15 @@ export function algorithmSupportsBackend(
   return Boolean(algorithm?.tensorBackends?.includes(backend))
 }
 
+export function pickBackendSupportedAlgorithmName(
+  algorithms: ReadonlyArray<{ name: string; tensorBackends?: ReadonlyArray<string> }> | null | undefined,
+  backend: TensorBackend,
+  fallbackName: string,
+): string {
+  const all = algorithms ?? []
+  return all.find((algorithm) => algorithmSupportsBackend(algorithm, backend))?.name ?? all[0]?.name ?? fallbackName
+}
+
 export function findInterpolationAlgorithm(
   checkResult: EnvironmentCheckResult | null,
   name: string,
