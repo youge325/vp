@@ -2,9 +2,8 @@
 
 Re-exports the minimal public surface for ``python -m app``.
 
-Phase D.6.1 — 旧版本的 re-export 墙(70 行)被拆除。所有下划线前缀的
-内部 helper(``_default_*_config``、``_resolve_*``、``_load_json_arg``
-等)需要从它们各自的子模块直接 import:
+Phase D.6.1 — 旧版本的 re-export 墙(70 行)被拆除。内部 helper
+(``_default_*_config``、``_resolve_*`` 等)需要从它们各自的子模块直接 import:
 
     - ``app.cli.defaults``:配置默认值与 processing-step 解析
     - ``app.cli.parser``:argparse 构造

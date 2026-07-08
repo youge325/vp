@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.cli import build_parser, cmd_check
-from app.cli.commands._process_validation import _load_json_arg, load_configs, load_runtime_configs
+from app.cli.commands._process_validation import load_runtime_configs
 from app.cli.defaults import _default_output_config
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
@@ -251,10 +251,10 @@ def test_load_runtime_configs_returns_typed_models_and_legacy_shape():
     assert output_config["outputDir"] == "D:/typed-output"
 
 
-def test_load_configs_keeps_legacy_tuple_interface():
-    decode_config, encode_config, workflow_config, output_config = load_configs(
+def test_load_runtime_configs_keeps_legacy_tuple_interface():
+    decode_config, encode_config, workflow_config, output_config = load_runtime_configs(
         _make_runtime_args(output_dir="D:/legacy-output")
-    )
+    ).legacy_tuple()
 
     assert decode_config["decoder"] == "software"
     assert encode_config["rateControl"] == {"mode": "crf", "value": 18}
@@ -323,12 +323,12 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
 def test_default_output_config_includes_segment_frames_and_json_override():
     args = argparse.Namespace(output_dir="D:/output")
     config = _default_output_config(args)
-    from app.models import OutputConfig
-
-    merged = _load_json_arg('{"segmentFrames": 240}', config, OutputConfig)
+    configs = load_runtime_configs(
+        _make_runtime_args(output_dir="D:/output", output_config_json='{"segmentFrames": 240}')
+    )
 
     assert config["segmentFrames"] == 1000
-    assert merged["segmentFrames"] == 240
+    assert configs.output_json["segmentFrames"] == 240
 
 
 def test_resolve_expected_output_frames_uses_input_frames_for_format_conversion():

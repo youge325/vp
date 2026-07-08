@@ -102,8 +102,8 @@ def test_process_with_invalid_json_emits_typed_envelope() -> None:
     """``--workflow-config-json '{not valid json'`` 应当被 ProcessError 捕获。
 
     Rust 不会发这样的 payload(它走 ``serde_json::to_string`` 序列化结构体),
-    但人工 CLI 调用 / fuzz 仍可能触发。这条路径验证 ``_load_json_arg`` 的报错被
-    协议层归一化,而不是裸 ``Traceback`` 输出到 stderr。
+    但人工 CLI 调用 / fuzz 仍可能触发。这条路径验证配置加载错误被协议层
+    归一化,而不是裸 ``Traceback`` 输出到 stderr。
     """
     proc = _run_app(
         "process",
