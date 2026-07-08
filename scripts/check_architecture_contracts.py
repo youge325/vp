@@ -595,6 +595,24 @@ def _check_cli_process_validation_compat_boundary(issues: list[str]) -> None:
             issues.append(f"CLI process validation compatibility `{label}` remains in {_rel(CLI_PROCESS_VALIDATION)}")
 
 
+def _check_backend_test_private_cli_defaults_boundary(issues: list[str]) -> None:
+    if not BACKEND_TESTS.exists():
+        return
+
+    import_pattern = re.compile(
+        r"from\s+app\.cli\.defaults\s+import\s+(?:\((?P<block>.*?)\)|(?P<line>[^\n]+))",
+        re.DOTALL,
+    )
+    for path in BACKEND_TESTS.rglob("test_*.py"):
+        if path.name == "test_architecture_contracts.py":
+            continue
+        text = _read(path)
+        for match in import_pattern.finditer(text):
+            imported_names = match.group("block") or match.group("line") or ""
+            if re.search(r"\b_default_[A-Za-z0-9_]+_config\b", imported_names):
+                issues.append(f"private CLI defaults import remains in {_rel(path)}")
+
+
 def _check_cli_process_planning_validation_boundary(issues: list[str]) -> None:
     text = _read(CLI_PROCESS_PLANNING)
     forbidden_patterns = {
@@ -1792,6 +1810,7 @@ def main() -> int:
         _check_frontend_form_profile_rule_boundary(issues)
         _check_cli_defaults_planning_boundary(issues)
         _check_cli_process_validation_compat_boundary(issues)
+        _check_backend_test_private_cli_defaults_boundary(issues)
         _check_cli_process_planning_validation_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_workflow_selection_boundary(issues)
