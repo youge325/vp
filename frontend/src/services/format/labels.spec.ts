@@ -1,48 +1,49 @@
 import { describe, expect, it } from 'vitest'
-import { resolvePrimaryMode } from './labels'
+import * as labelModule from './labels'
+import { getWorkflowSummaryLabel } from './labels'
 
-describe('resolvePrimaryMode', () => {
-  it('returns frame_interpolation when interpolation is enabled', () => {
-    const item = {
-      workflowConfig: {
-        interpolation: { enabled: true },
-        superResolution: { enabled: false },
-        anime: { enabled: false },
-      },
-    } as any
-    expect(resolvePrimaryMode(item)).toBe('frame_interpolation')
+function itemWithWorkflow({
+  interpolation = false,
+  superResolution = false,
+  anime = false,
+}: {
+  interpolation?: boolean
+  superResolution?: boolean
+  anime?: boolean
+}) {
+  return {
+    workflowConfig: {
+      interpolation: { enabled: interpolation },
+      superResolution: { enabled: superResolution },
+      anime: { enabled: anime },
+    },
+  } as any
+}
+
+describe('getWorkflowSummaryLabel', () => {
+  it('keeps primary mode resolution private to label formatting', () => {
+    expect('resolvePrimaryMode' in labelModule).toBe(false)
   })
 
-  it('returns super_resolution when only sr is enabled', () => {
-    const item = {
-      workflowConfig: {
-        interpolation: { enabled: false },
-        superResolution: { enabled: true },
-        anime: { enabled: false },
-      },
-    } as any
-    expect(resolvePrimaryMode(item)).toBe('super_resolution')
+  it('returns the interpolation summary when interpolation is enabled', () => {
+    expect(getWorkflowSummaryLabel(itemWithWorkflow({ interpolation: true }))).toBe('补帧')
   })
 
-  it('returns anime_optimization when only anime is enabled', () => {
-    const item = {
-      workflowConfig: {
-        interpolation: { enabled: false },
-        superResolution: { enabled: false },
-        anime: { enabled: true },
-      },
-    } as any
-    expect(resolvePrimaryMode(item)).toBe('anime_optimization')
+  it('returns the super-resolution summary when only super-resolution is enabled', () => {
+    expect(getWorkflowSummaryLabel(itemWithWorkflow({ superResolution: true }))).toBe('超分')
   })
 
-  it('returns format_conversion when nothing is enabled', () => {
-    const item = {
-      workflowConfig: {
-        interpolation: { enabled: false },
-        superResolution: { enabled: false },
-        anime: { enabled: false },
-      },
-    } as any
-    expect(resolvePrimaryMode(item)).toBe('format_conversion')
+  it('returns the anime summary when only anime optimization is enabled', () => {
+    expect(getWorkflowSummaryLabel(itemWithWorkflow({ anime: true }))).toBe('动漫')
+  })
+
+  it('returns the conversion summary when no enhancement is enabled', () => {
+    expect(getWorkflowSummaryLabel(itemWithWorkflow({}))).toBe('转码')
+  })
+
+  it('joins enabled enhancement labels in workflow order', () => {
+    expect(
+      getWorkflowSummaryLabel(itemWithWorkflow({ interpolation: true, superResolution: true, anime: true })),
+    ).toBe('补帧 / 超分 / 动漫')
   })
 })
