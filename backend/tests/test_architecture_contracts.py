@@ -1216,6 +1216,44 @@ def test_planning_test_private_alias_boundary_flags_single_line_resolve_alias(tm
     assert any("planning test private alias" in issue for issue in issues), issues
 
 
+def test_cli_process_planning_validation_boundary_flags_local_validation_rules(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_planning = tmp_path / "_process_planning.py"
+    fake_planning.write_text(
+        "def _get_onnx_model_name(config):\n"
+        "    return config.get('onnxModel')\n\n"
+        "def _validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name):\n"
+        "    pass\n\n"
+        "def _verify_model_availability(workflow_config, processing_steps, tensor_backend_name):\n"
+        "    pass\n\n"
+        "def _verify_super_resolution_backend(workflow_config, tensor_backend_name):\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "CLI_PROCESS_PLANNING", fake_planning, raising=False)
+    issues: list[str] = []
+
+    module._check_cli_process_planning_validation_boundary(issues)
+
+    assert any("CLI process planning validation" in issue for issue in issues), issues
+
+
+def test_cli_process_planning_validation_boundary_flags_private_validation_reexports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_planning = tmp_path / "_process_planning.py"
+    fake_planning.write_text(
+        "from app.planning import verify_model_availability as _verify_model_availability\n"
+        "from app.planning import verify_super_resolution_backend as _verify_super_resolution_backend\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "CLI_PROCESS_PLANNING", fake_planning, raising=False)
+    issues: list[str] = []
+
+    module._check_cli_process_planning_validation_boundary(issues)
+
+    assert any("private validation re-export" in issue for issue in issues), issues
+
+
 def test_processor_stream_aggregator_boundary_flags_local_stream_loops(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_streams = tmp_path / "processor_streams.py"

@@ -52,6 +52,7 @@ PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "pro
 PROCESSOR_TESTS = ROOT / "backend" / "tests" / "test_processing"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_validation.py"
+CLI_PROCESS_PLANNING = ROOT / "backend" / "app" / "cli" / "commands" / "_process_planning.py"
 MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 WORKFLOW_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "workflow-defaults.ts"
@@ -591,6 +592,20 @@ def _check_cli_process_validation_compat_boundary(issues: list[str]) -> None:
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
             issues.append(f"CLI process validation compatibility `{label}` remains in {_rel(CLI_PROCESS_VALIDATION)}")
+
+
+def _check_cli_process_planning_validation_boundary(issues: list[str]) -> None:
+    text = _read(CLI_PROCESS_PLANNING)
+    forbidden_patterns = {
+        "ONNX model name helper": r"^\s*def\s+_get_onnx_model_name\b",
+        "ONNX workflow validation": r"^\s*def\s+_validate_onnx_models_for_workflow\b",
+        "model availability validation": r"^\s*def\s+_verify_model_availability\b",
+        "super-resolution backend validation": r"^\s*def\s+_verify_super_resolution_backend\b",
+        "private validation re-export": (r"\bas\s+_(?:verify_model_availability|verify_super_resolution_backend)\b"),
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"CLI process planning validation `{label}` remains in {_rel(CLI_PROCESS_PLANNING)}")
 
 
 def _check_frontend_enhance_workflow_boundary(issues: list[str]) -> None:
@@ -1776,6 +1791,7 @@ def main() -> int:
         _check_frontend_form_profile_rule_boundary(issues)
         _check_cli_defaults_planning_boundary(issues)
         _check_cli_process_validation_compat_boundary(issues)
+        _check_cli_process_planning_validation_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_workflow_selection_boundary(issues)
         _check_frontend_enhance_workflow_lookup_boundary(issues)

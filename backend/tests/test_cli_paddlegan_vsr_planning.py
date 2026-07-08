@@ -1,9 +1,13 @@
 import pytest
 
-from app.planning import resolve_processing_steps
-from app.cli.commands._process_planning import _verify_model_availability, _verify_super_resolution_backend
 from app.errors import ProcessError, TaskErrorCode
-from app.planning import ProcessingStep, build_stage_plan
+from app.planning import (
+    ProcessingStep,
+    build_stage_plan,
+    resolve_processing_steps,
+    verify_model_availability,
+    verify_super_resolution_backend,
+)
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import build_stage_worker_plans
 
@@ -26,19 +30,19 @@ def _workflow(*, sr_backend="paddle", interpolation_backend="onnx", scale_factor
 
 def test_paddlegan_vsr_requires_4x_scale_factor():
     with pytest.raises(ProcessError) as exc_info:
-        _verify_super_resolution_backend(_workflow(scale_factor=2.0), "onnx")
+        verify_super_resolution_backend(_workflow(scale_factor=2.0), "onnx")
 
     assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
     assert "4x" in exc_info.value.message
 
 
 def test_paddlegan_vsr_allows_pytorch_interpolation_plus_paddle_super_resolution():
-    _verify_super_resolution_backend(_workflow(interpolation_backend="pytorch"), "pytorch")
+    verify_super_resolution_backend(_workflow(interpolation_backend="pytorch"), "pytorch")
 
 
 def test_paddlegan_vsr_rejects_paddle_interpolation_backend_combination():
     with pytest.raises(ProcessError) as exc_info:
-        _verify_super_resolution_backend(_workflow(interpolation_backend="paddle"), "paddle")
+        verify_super_resolution_backend(_workflow(interpolation_backend="paddle"), "paddle")
 
     assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
     assert "RIFE" in exc_info.value.message
@@ -47,7 +51,7 @@ def test_paddlegan_vsr_rejects_paddle_interpolation_backend_combination():
 
 def test_restored_paddlegan_vsr_models_are_accepted_by_backend_planning():
     for algorithm in ["ppmsvsr-large", "basicvsr", "iconvsr", "basicvsr-plus-plus"]:
-        _verify_super_resolution_backend(_workflow(algorithm=algorithm), "onnx")
+        verify_super_resolution_backend(_workflow(algorithm=algorithm), "onnx")
 
 
 def test_paddlegan_vsr_missing_auxiliary_weight_is_rejected_before_stage_worker(tmp_path, monkeypatch):
@@ -75,7 +79,7 @@ def test_paddlegan_vsr_missing_auxiliary_weight_is_rejected_before_stage_worker(
     ]
 
     with pytest.raises(ProcessError) as exc_info:
-        _verify_model_availability(workflow, steps, "paddle")
+        verify_model_availability(workflow, steps, "paddle")
 
     expected_aux = tmp_path / "_auxiliary" / "modified_spynet_tiny.pdparams"
     assert exc_info.value.code == TaskErrorCode.MISSING_MODEL
@@ -83,7 +87,7 @@ def test_paddlegan_vsr_missing_auxiliary_weight_is_rejected_before_stage_worker(
 
 
 def test_paddlegan_vsr_allows_onnx_interpolation_plus_paddle_super_resolution():
-    _verify_super_resolution_backend(_workflow(), "onnx")
+    verify_super_resolution_backend(_workflow(), "onnx")
 
 
 def test_paddlegan_vsr_step_carries_super_resolution_runtime_fields():
