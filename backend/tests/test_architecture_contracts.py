@@ -214,6 +214,50 @@ def test_worker_pipeline_file_boundary_flags_local_stage_file_helpers(tmp_path, 
     assert any("stage file pipeline helper" in issue for issue in issues), issues
 
 
+def test_frontend_io_view_option_boundary_flags_view_local_option_rules(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_decode_view = tmp_path / "DecodeModuleView.vue"
+    fake_encode_view = tmp_path / "EncodeModuleView.vue"
+    fake_decode_view.write_text(
+        "visibleDecoderProfiles.value.map((profile) => ({ value: profile.name, label: profile.label }))\n",
+        encoding="utf-8",
+    )
+    fake_encode_view.write_text(
+        "import { CONTAINER_OPTIONS } from '@/config/constants'\n"
+        "CONTAINER_OPTIONS.map((value) => ({ value, label: value.toUpperCase() }))\n"
+        "setRateControlMode(value as RateControlMode)\n"
+        "Number(editorConfig.outputConfig.segmentFrames)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "DECODE_VIEW", fake_decode_view)
+    monkeypatch.setattr(module, "ENCODE_VIEW", fake_encode_view)
+    issues: list[str] = []
+
+    module._check_frontend_io_view_option_boundary(issues)
+
+    assert any("io option rule" in issue for issue in issues), issues
+
+
+def test_streaming_pipeline_rule_boundary_flags_local_pipeline_rules(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "pipeline.py"
+    fake_pipeline.write_text(
+        "def _build_config_snapshot():\n"
+        "    pass\n\n"
+        "def _should_use_stage_file_pipeline():\n"
+        "    pass\n\n"
+        "def _resolved_output_dimensions():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STREAMING_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_streaming_pipeline_rule_boundary(issues)
+
+    assert any("streaming pipeline rule" in issue for issue in issues), issues
+
+
 def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useDecodeForm } from '@/composables/forms/useDecodeForm'
 import { useWorkbenchEditor, useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
+import { buildProfileOptions } from '@/services/preset/io-options'
 import BaseSelect from '@/components/forms/BaseSelect.vue'
 import CapabilityOptionField from '@/components/forms/CapabilityOptionField.vue'
 
@@ -22,7 +23,7 @@ const { editorConfig } = useWorkbenchEditor()
 const { targetLabel } = useEditingScope()
 
 const decoderProfileOptions = computed(() =>
-  visibleDecoderProfiles.value.map((profile) => ({ value: profile.name, label: profile.label })),
+  buildProfileOptions(visibleDecoderProfiles.value),
 )
 </script>
 
