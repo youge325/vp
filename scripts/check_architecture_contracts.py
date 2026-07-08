@@ -44,6 +44,7 @@ DECODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-form-bin
 ENCODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-form-bindings.ts"
 DECODE_PROFILE_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-profile-bindings.ts"
 ENCODE_PROFILE_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-profile-bindings.ts"
+ENCODE_OUTPUT_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-output-bindings.ts"
 ENHANCE_VIEW = FRONTEND_SRC / "views" / "EnhanceModuleView.vue"
 DECODE_VIEW = FRONTEND_SRC / "views" / "DecodeModuleView.vue"
 ENCODE_VIEW = FRONTEND_SRC / "views" / "EncodeModuleView.vue"
@@ -716,6 +717,25 @@ def _check_frontend_decode_hardware_binding_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_frontend_encode_output_binding_boundary(issues: list[str]) -> None:
+    text = _read(ENCODE_OUTPUT_BINDINGS)
+    forbidden_patterns = {
+        "io-options import": r"from\s+['\"]@/services/preset/io-options['\"]",
+        "io-form-rules import": r"from\s+['\"]@/services/preset/io-form-rules['\"]",
+        "preset normalize import": r"from\s+['\"]@/services/preset/normalize['\"]",
+        "container options computed": r"\bcontainerOptions\s*=\s*computed\s*\(",
+        "segment frames computed": r"\bsegmentFramesValue\s*=\s*computed\s*\(",
+        "output setter": r"^\s*function\s+set(?:Container|KeepAudio|OutputDir|OpenOnComplete|SegmentFrames)\b",
+        "output normalizer": r"\bnormalize(?:OutputDir|SegmentFrames)\b",
+        "select value conversion": r"\b(?:CONTAINER_SELECT_OPTIONS|toNumberValue)\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"encode output binding rule `{label}` leaked into binding aggregator: {_rel(ENCODE_OUTPUT_BINDINGS)}"
+            )
+
+
 def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
     text = _read(WORKER_PIPELINE)
     forbidden_patterns = {
@@ -898,6 +918,25 @@ def _check_streaming_pipeline_raw_boundary(issues: list[str]) -> None:
             issues.append(f"raw pipeline runtime `{label}` remains in backend/app/processing/streaming/pipeline.py")
 
 
+def _check_streaming_pipeline_lifecycle_boundary(issues: list[str]) -> None:
+    text = _read(STREAMING_PIPELINE)
+    forbidden_patterns = {
+        "resume conflict": r"\bResumeConflictError\b",
+        "manifest prepare": r"\.prepare\s*\(",
+        "decision conflict branch": r"\bdecision\.kind\b",
+        "finalize helper": r"\b_finalize_segmented_output\b",
+        "manifest cleanup": r"\.cleanup\s*\(",
+        "final frame count": r"\bget_frame_count\s*\(",
+        "resume status emitter": r"^\s*def\s+_emit_resume_status_event\b",
+        "ndjson resume status": r"\bresume_status\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"streaming pipeline lifecycle `{label}` remains in backend/app/processing/streaming/pipeline.py"
+            )
+
+
 def _check_processor_algorithm_boundary(issues: list[str]) -> None:
     text = _read(PROCESSOR)
     forbidden_patterns = {
@@ -990,6 +1029,7 @@ def main() -> int:
         _check_frontend_io_form_aggregator_boundary(issues)
         _check_frontend_io_profile_state_boundary(issues)
         _check_frontend_decode_hardware_binding_boundary(issues)
+        _check_frontend_encode_output_binding_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)
         _check_worker_pipeline_chain_runtime_boundary(issues)
@@ -1000,6 +1040,7 @@ def main() -> int:
         _check_stage_worker_execution_boundary(issues)
         _check_streaming_pipeline_rule_boundary(issues)
         _check_streaming_pipeline_raw_boundary(issues)
+        _check_streaming_pipeline_lifecycle_boundary(issues)
         _check_processor_algorithm_boundary(issues)
         _check_processor_stage_execution_boundary(issues)
         _check_processor_stream_boundary(issues)

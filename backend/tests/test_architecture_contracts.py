@@ -722,6 +722,54 @@ def test_streaming_pipeline_raw_boundary_flags_local_runtime_helpers(tmp_path, m
     assert any("raw pipeline runtime" in issue for issue in issues), issues
 
 
+def test_streaming_pipeline_lifecycle_boundary_flags_local_resume_and_finalize(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "pipeline.py"
+    fake_pipeline.write_text(
+        "from app.errors import ResumeConflictError\n"
+        "from app.processing.streaming.encoder import _finalize_segmented_output\n"
+        "from app.protocol import ndjson\n\n"
+        "def process_video_streaming(manifest, ffmpeg):\n"
+        "    decision = manifest.prepare('sig', {})\n"
+        "    if decision.kind == 'conflict_final_exists':\n"
+        "        raise ResumeConflictError(output_path='out.mp4', completed_chunks=0, completed_output_frames=0, sidecar_signature_match=False)\n"
+        "    final_output = _finalize_segmented_output()\n"
+        "    manifest.cleanup()\n"
+        "    ffmpeg.get_frame_count(final_output)\n\n"
+        "def _emit_resume_status_event():\n"
+        "    ndjson.resume_status(resumed=False, completed_chunks=0, completed_output_frames=0, start_source_frame=0, total_output_frames=1)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STREAMING_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_streaming_pipeline_lifecycle_boundary(issues)
+
+    assert any("streaming pipeline lifecycle" in issue for issue in issues), issues
+
+
+def test_frontend_encode_output_binding_boundary_flags_local_state_and_setters(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_binding = tmp_path / "encode-output-bindings.ts"
+    fake_binding.write_text(
+        "import { computed } from 'vue'\n"
+        "import { CONTAINER_SELECT_OPTIONS, toNumberValue } from '@/services/preset/io-options'\n"
+        "import { normalizeOutputDir } from '@/services/preset/normalize'\n"
+        "import { normalizeSegmentFrames } from '@/services/preset/io-form-rules'\n\n"
+        "const containerOptions = computed(() => CONTAINER_SELECT_OPTIONS)\n"
+        "const segmentFramesValue = computed(() => toNumberValue(1000))\n"
+        "function setOutputDir(value: string): void { normalizeOutputDir(value) }\n"
+        "function setSegmentFrames(value: number): void { normalizeSegmentFrames(value) }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENCODE_OUTPUT_BINDINGS", fake_binding)
+    issues: list[str] = []
+
+    module._check_frontend_encode_output_binding_boundary(issues)
+
+    assert any("encode output binding rule" in issue for issue in issues), issues
+
+
 def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(

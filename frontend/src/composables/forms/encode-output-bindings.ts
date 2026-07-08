@@ -1,8 +1,7 @@
-import { computed, type ComputedRef } from 'vue'
+import type { ComputedRef } from 'vue'
 
-import { normalizeOutputDir } from '@/services/preset/normalize'
-import { normalizeSegmentFrames } from '@/services/preset/io-form-rules'
-import { CONTAINER_SELECT_OPTIONS, toNumberValue } from '@/services/preset/io-options'
+import { createEncodeOutputSetters } from '@/composables/forms/encode-output-setters'
+import { createEncodeOutputState } from '@/composables/forms/encode-output-state'
 import type { EncodeConfig, OutputConfig, WorkbenchPreset } from '@/types/protocol'
 
 export interface EncodeOutputBindingParams {
@@ -16,48 +15,11 @@ export function createEncodeOutputBindings({
   patchEncode,
   patchOutput,
 }: EncodeOutputBindingParams) {
-  const containerOptions = computed(() => CONTAINER_SELECT_OPTIONS)
-  const segmentFramesValue = computed(() =>
-    toNumberValue(editorConfig.value.outputConfig.segmentFrames),
-  )
-
-  function setContainer(value: string): void {
-    patchEncode((config: EncodeConfig) => {
-      config.container = value
-    })
-  }
-
-  function setKeepAudio(value: boolean): void {
-    patchEncode((config: EncodeConfig) => {
-      config.keepAudio = value
-    })
-  }
-
-  function setOutputDir(value: string): void {
-    patchOutput((config: OutputConfig) => {
-      config.outputDir = normalizeOutputDir(value)
-    })
-  }
-
-  function setOpenOnComplete(value: OutputConfig['openOnComplete']): void {
-    patchOutput((config: OutputConfig) => {
-      config.openOnComplete = value
-    })
-  }
-
-  function setSegmentFrames(value: number): void {
-    patchOutput((config: OutputConfig) => {
-      config.segmentFrames = normalizeSegmentFrames(value)
-    })
-  }
+  const state = createEncodeOutputState({ editorConfig })
+  const setters = createEncodeOutputSetters({ patchEncode, patchOutput })
 
   return {
-    containerOptions,
-    segmentFramesValue,
-    setContainer,
-    setKeepAudio,
-    setOutputDir,
-    setOpenOnComplete,
-    setSegmentFrames,
+    ...state,
+    ...setters,
   }
 }

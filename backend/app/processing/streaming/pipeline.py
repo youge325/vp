@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from app.errors import ResumeConflictError
 from app.planning import (
     ProcessingStepInput,
     ResumeMode,
@@ -21,7 +20,11 @@ from app.planning import (
     normalize_processing_steps,
     resolve_video_info,
 )
-from app.processing.streaming.encoder import _finalize_segmented_output
+from app.processing.streaming.pipeline_lifecycle import (
+    emit_resume_status_event,
+    finalize_streaming_output,
+    prepare_streaming_manifest,
+)
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_rules import (
     build_config_snapshot as _build_config_snapshot,
@@ -32,11 +35,7 @@ from app.processing.streaming.pipeline_rules import (
 from app.processing.streaming.pipeline_raw import run_raw_streaming_pipeline
 from app.processing.streaming.stage_file_pipeline import run_stage_file_pipeline
 from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
-from app.protocol import ndjson
 from app.utils.ffmpeg import FFmpegWrapper
-from app.utils.logger import get_logger
-
-logger = get_logger(__name__)
 
 
 def process_video_streaming(
@@ -90,17 +89,12 @@ def process_video_streaming(
         video_info=video_info,
     )
 
-    manifest = SegmentManifest(output_path)
-    decision = manifest.prepare(signature, config_snapshot, mode=resume_mode)
-    if decision.kind == "conflict_final_exists":
-        raise ResumeConflictError(
-            output_path=str(manifest.output_path),
-            completed_chunks=len(decision.state.completed_segments),
-            completed_output_frames=decision.state.completed_output_frames,
-            sidecar_signature_match=decision.sidecar_signature_match,
-        )
-
-    resume_state = decision.state
+    manifest, resume_state = prepare_streaming_manifest(
+        output_path=output_path,
+        signature=signature,
+        config_snapshot=config_snapshot,
+        resume_mode=resume_mode,
+    )
     use_stage_file_pipeline = _should_use_stage_file_pipeline(stage_plan)
     resume_source_frames = (
         _stage_file_resume_source_frames(stage_plan, int(video_info["source_frames"]))
@@ -137,7 +131,7 @@ def process_video_streaming(
             metrics=metrics,
         )
 
-    final_output = _finalize_segmented_output(
+    return finalize_streaming_output(
         ffmpeg=ffmpeg,
         input_path=input_path,
         output_path=output_path,
@@ -148,14 +142,6 @@ def process_video_streaming(
         total_output_frames=stage_plan.total_encoded_frames,
         strict_total_frames=output_fps is None,
     )
-
-    manifest.cleanup()
-    processed_frames = ffmpeg.get_frame_count(final_output)
-    return {
-        "output_path": final_output,
-        "processed_frames": processed_frames or completed_output_frames,
-        "audio_merged": bool(encode_config.get("keepAudio", True)),
-    }
 
 
 def _run_streaming_pipeline(
@@ -180,7 +166,7 @@ def _run_streaming_pipeline(
     metrics: PipelineMetrics,
 ) -> int:
     if _should_use_stage_file_pipeline(stage_plan):
-        _emit_resume_status_event(
+        emit_resume_status_event(
             resume_state=resume_state,
             total_output_frames=stage_plan.total_encoded_frames,
         )
@@ -201,7 +187,7 @@ def _run_streaming_pipeline(
             metrics=metrics,
         )
 
-    _emit_resume_status_event(
+    emit_resume_status_event(
         resume_state=resume_state,
         total_output_frames=stage_plan.total_encoded_frames,
     )
@@ -227,17 +213,3 @@ def _run_streaming_pipeline(
         metrics=metrics,
         stage_worker_runner=run_stage_worker_pipeline,
     )
-
-
-def _emit_resume_status_event(*, resume_state: ResumeState, total_output_frames: int) -> None:
-    """Emit a structured resume_status JSON line consumed by the Tauri host."""
-    try:
-        ndjson.resume_status(
-            resumed=resume_state.completed_output_frames > 0,
-            completed_chunks=len(resume_state.completed_segments),
-            completed_output_frames=resume_state.completed_output_frames,
-            start_source_frame=resume_state.start_source_frame,
-            total_output_frames=total_output_frames,
-        )
-    except Exception:  # pragma: no cover - never let telemetry break the pipeline
-        logger.exception("Failed to emit resume_status event")
