@@ -343,6 +343,28 @@ def test_frontend_enhance_default_pickers_boundary_flags_direct_interpolation_lo
     assert any("direct interpolation lookup" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_default_pickers_boundary_flags_engine_default_logic(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pickers = tmp_path / "enhance-default-pickers.ts"
+    fake_pickers.write_text(
+        "export function pickDefaultInterpolationEngine(env, backend) {\n"
+        "  const engines = env?.tensorEngines?.[backend] ?? []\n"
+        "  const vendor = env?.gpu?.adapters?.[0]?.vendor\n"
+        "  if (vendor === 'nvidia') return engines.includes('tensorrt') ? 'tensorrt' : engines[0]\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_default_pickers_boundary(issues)
+
+    assert any("default engine body" in issue for issue in issues), issues
+    assert any("tensor engine lookup" in issue for issue in issues), issues
+    assert any("gpu vendor lookup" in issue for issue in issues), issues
+    assert any("vendor branch" in issue for issue in issues), issues
+
+
 def test_frontend_enhance_onnx_defaults_boundary_flags_direct_algorithm_lookup(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_defaults = tmp_path / "enhance-onnx-defaults.ts"
