@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceRuntimeEstimates } from './enhance-runtime-estimates'
-import { createDefaultWorkflowConfig } from './defaults'
+import { createDefaultWorkflowConfig } from './workflow-defaults'
 import type { ModelVariantInfo } from '@/types/domain/env'
 
 const interpolationDetail: ModelVariantInfo = {

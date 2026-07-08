@@ -10,7 +10,7 @@ import {
   applySuperResolutionNumFrames,
   applySuperResolutionScale,
 } from './enhance-workflow'
-import { createDefaultWorkflowConfig } from './defaults'
+import { createDefaultWorkflowConfig } from './workflow-defaults'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function makeEnv(): EnvironmentCheckResult {

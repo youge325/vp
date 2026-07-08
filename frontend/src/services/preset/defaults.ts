@@ -11,11 +11,8 @@ import {
   selectDecodeProfile,
 } from './profile-selection'
 import {
-  createDefaultWorkflowConfig,
   createDefaultWorkflowConfigForEnvironment,
 } from './workflow-defaults'
-
-export { createDefaultWorkflowConfig }
 
 // Phase 18 — ``outputDir`` 从 ``string`` 改为 ``string | null``。``null``
 // 表示"未选 / 未填",backend Pydantic ``OutputConfig.output_dir`` validator

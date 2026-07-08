@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultWorkflowConfig } from './defaults'
+import { createDefaultWorkflowConfig } from './workflow-defaults'
 import {
   applyInterpolationBackendSelectionDefaults,
   applySuperResolutionAlgorithmSelectionDefaults,
