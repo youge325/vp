@@ -365,6 +365,28 @@ def test_frontend_enhance_default_pickers_boundary_flags_engine_default_logic(tm
     assert any("vendor branch" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_default_pickers_boundary_flags_metadata_defaults(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pickers = tmp_path / "enhance-default-pickers.ts"
+    fake_pickers.write_text(
+        "export function pickDefaultInterpolationModel(env, algorithm) {\n"
+        "  return findInterpolationAlgorithm(env, algorithm)?.models?.[0] ?? '4.25'\n"
+        "}\n"
+        "export function pickDefaultAnimeProfile(env) {\n"
+        "  return env?.animeProfiles?.[0] ?? 'clean-lines'\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_default_pickers_boundary(issues)
+
+    assert any("metadata default body" in issue for issue in issues), issues
+    assert any("interpolation model lookup" in issue for issue in issues), issues
+    assert any("anime profile lookup" in issue for issue in issues), issues
+
+
 def test_frontend_enhance_onnx_defaults_boundary_flags_direct_algorithm_lookup(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_defaults = tmp_path / "enhance-onnx-defaults.ts"

@@ -5,11 +5,10 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
 import { pickDefaultEngine, pickDefaultInterpolationEngine } from './enhance-engine-defaults'
 import {
-  pickDefaultAnimeProfile,
   pickDefaultInterpolationAlgorithm,
-  pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
 } from './enhance-default-pickers'
+import { pickDefaultAnimeProfile, pickDefaultInterpolationModel } from './enhance-metadata-defaults'
 import { fallbackInterpolationOnnxModel, fallbackSuperResolutionOnnxModel } from './enhance-onnx-defaults'
 import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolution-defaults'
 import { findSuperResolutionAlgorithm } from './enhance-workflow-lookup'
