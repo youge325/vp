@@ -3,6 +3,7 @@ from __future__ import annotations
 import queue
 import threading
 
+import app.processing.streaming.stage_rules as stage_rules
 import app.processing.streaming.worker_pipeline as worker_pipeline
 from app.planning import ProcessingStep, build_stage_plan
 from app.planning.manifest import ResumeState
@@ -58,6 +59,9 @@ def test_worker_plan_tracks_dimensions_for_super_resolution_then_interpolation()
 
 
 def test_stage_rules_centralize_stage_order_dimensions_and_backend_selection() -> None:
+    assert not hasattr(stage_rules, "super_resolution_changes_dimensions")
+    assert not hasattr(stage_rules, "is_paddlegan_vsr_step")
+
     steps = [
         ProcessingStep(
             algorithm_type="super_resolution",

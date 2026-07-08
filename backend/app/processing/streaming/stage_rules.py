@@ -54,7 +54,7 @@ def stage_output_dimensions(
 ) -> tuple[int, int]:
     if step.algorithm_type != "super_resolution":
         return input_width, input_height
-    if not super_resolution_changes_dimensions(step):
+    if not _super_resolution_changes_dimensions(step):
         return input_width, input_height
     scale_factor = float(step.algorithm_kwargs.get("scale_factor") or 1.0)
     return (
@@ -79,18 +79,18 @@ def resolve_stage_plan_output_dimensions(
 def stage_requires_file_pipeline(step: ProcessingStep) -> bool:
     if step.algorithm_type == "frame_interpolation":
         return True
-    return step.algorithm_type == "super_resolution" and is_paddlegan_vsr_step(step)
+    return step.algorithm_type == "super_resolution" and _is_paddlegan_vsr_step(step)
 
 
-def super_resolution_changes_dimensions(step: ProcessingStep) -> bool:
+def _super_resolution_changes_dimensions(step: ProcessingStep) -> bool:
     if step.algorithm_type != "super_resolution":
         return False
     if step.algorithm_kwargs.get("onnx_model"):
         return True
-    return is_paddlegan_vsr_step(step)
+    return _is_paddlegan_vsr_step(step)
 
 
-def is_paddlegan_vsr_step(step: ProcessingStep) -> bool:
+def _is_paddlegan_vsr_step(step: ProcessingStep) -> bool:
     sr_algorithm = str(step.algorithm_kwargs.get("sr_algorithm") or "")
     try:
         from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
@@ -109,6 +109,4 @@ __all__ = [
     "stage_progress_total",
     "stage_requires_file_pipeline",
     "stage_tensor_backend_name",
-    "super_resolution_changes_dimensions",
-    "is_paddlegan_vsr_step",
 ]
