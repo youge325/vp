@@ -1,7 +1,7 @@
 import { computed, reactive, ref } from 'vue'
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultEncodeConfig, createDefaultOutputConfig } from '@/services/preset/defaults'
+import { createDefaultEncodeConfig, createDefaultWorkbenchPreset } from '@/services/preset/defaults'
 import { createEncodeFormBindings } from './encode-form-bindings'
 import type { CapabilityOptionSpec } from '@/types/domain/capability'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
@@ -68,7 +68,7 @@ function makeBindings() {
   const checkResult = ref<EnvironmentCheckResult | null>(makeEnv())
   const editorConfig = reactive({
     encodeConfig: createDefaultEncodeConfig(checkResult.value),
-    outputConfig: createDefaultOutputConfig(),
+    outputConfig: createDefaultWorkbenchPreset(null).outputConfig,
   } as WorkbenchPreset)
   const bindings = createEncodeFormBindings({
     checkResult: computed(() => checkResult.value),
