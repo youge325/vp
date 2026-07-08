@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.planning import StagePlan
-from app.planning.manifest import ResumeState, SegmentManifest
 from app.processing.streaming.encoder_finalization import finalize_segmented_output
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_file_chunks import run_single_stage_file_chunks
-from app.processing.streaming.stage_file_rules import empty_resume_state, safe_stage_name, stage_signature
+from app.processing.streaming.stage_file_stage_context import build_stage_file_stage_context
 from app.processing.streaming.stage_rules import (
     ordered_steps,
     stage_output_dimensions,
@@ -18,6 +17,9 @@ from app.processing.streaming.stage_rules import (
     stage_output_frame_count,
     stage_tensor_backend_name,
 )
+
+if TYPE_CHECKING:
+    from app.planning.manifest import ResumeState, SegmentManifest
 
 
 def run_stage_file_pipeline(
@@ -63,39 +65,27 @@ def run_stage_file_pipeline(
         stage_output_frames = stage_output_frame_count(step, current_frame_count)
         stage_fps = stage_output_fps(step, current_fps)
 
-        if is_final_stage:
-            stage_manifest = manifest
-            stage_output_path = output_path
-            stage_resume_state = resume_state
-            stage_start_frame = min(int(resume_state.start_source_frame), current_frame_count)
-            stage_chunk_start_index = len(resume_state.completed_segments) + 1
-            stage_encode_output_fps = output_fps
-            stage_encode_config = encode_config
-        else:
-            stage_output_path = str(stage_root / f"stage-{stage_position:02d}-{safe_stage_name(step)}.mp4")
-            stage_manifest = SegmentManifest(stage_output_path)
-            stage_manifest.prepare(
-                stage_signature(stage_position, step, current_path, stage_output_path),
-                {
-                    "input_path": current_path,
-                    "output_path": stage_output_path,
-                    "stage": step.to_jsonable(),
-                    "segmentFrames": max(1, int(segment_frames)),
-                },
-                mode="force-fresh",
-            )
-            stage_resume_state = empty_resume_state()
-            stage_start_frame = 0
-            stage_chunk_start_index = 1
-            stage_encode_output_fps = None
-            stage_encode_config = {**encode_config, "keepAudio": False}
+        stage_context = build_stage_file_stage_context(
+            is_final_stage=is_final_stage,
+            stage_position=stage_position,
+            step=step,
+            stage_root=stage_root,
+            current_path=current_path,
+            current_frame_count=current_frame_count,
+            output_path=output_path,
+            manifest=manifest,
+            resume_state=resume_state,
+            encode_config=encode_config,
+            segment_frames=segment_frames,
+            output_fps=output_fps,
+        )
 
         completed_frames = run_single_stage_file_chunks(
             ffmpeg=ffmpeg,
             input_path=current_path,
             decode_config=decode_config,
-            encode_config=stage_encode_config,
-            manifest=stage_manifest,
+            encode_config=stage_context.encode_config,
+            manifest=stage_context.manifest,
             step=step,
             stage_index=stage_position,
             stage_total=len(steps),
@@ -111,10 +101,10 @@ def run_stage_file_pipeline(
             output_frame_count=stage_output_frames,
             input_fps=current_fps,
             output_fps=stage_fps,
-            encode_output_fps=stage_encode_output_fps,
-            resume_state=stage_resume_state,
-            start_frame=stage_start_frame,
-            start_chunk_index=stage_chunk_start_index,
+            encode_output_fps=stage_context.encode_output_fps,
+            resume_state=stage_context.resume_state,
+            start_frame=stage_context.start_frame,
+            start_chunk_index=stage_context.chunk_start_index,
             segment_frames=segment_frames,
             metrics=metrics,
             python_executable=python_executable or sys.executable,
@@ -126,15 +116,15 @@ def run_stage_file_pipeline(
         finalized = finalize_segmented_output(
             ffmpeg=ffmpeg,
             input_path=current_path,
-            output_path=stage_output_path,
-            encode_config=stage_encode_config,
-            manifest=stage_manifest,
+            output_path=stage_context.output_path,
+            encode_config=stage_context.encode_config,
+            manifest=stage_context.manifest,
             signature="",
             completed_output_frames=completed_frames,
             total_output_frames=stage_output_frames,
             strict_total_frames=True,
         )
-        stage_manifest.cleanup()
+        stage_context.manifest.cleanup()
         current_path = finalized
         current_width = output_width
         current_height = output_height
