@@ -1,7 +1,8 @@
 import { reactive, ref } from 'vue'
 import { describe, expect, it } from 'vitest'
 
-import { createDraftEditor, defineLens, fieldLens } from '../lens'
+import * as lensModule from '../lens'
+import { createDraftEditor } from '../lens'
 
 interface Draft {
   count: number
@@ -25,12 +26,16 @@ function createDraftStore() {
   return { state, patch }
 }
 
-describe('fieldLens', () => {
+describe('createDraftEditor public surface', () => {
+  it('keeps low-level field and effect helpers private to the draft editor module', () => {
+    expect('fieldLens' in lensModule).toBe(false)
+    expect('defineLens' in lensModule).toBe(false)
+  })
+
   it('reads through to the current draft value', () => {
     const { state, patch } = createDraftStore()
-    const count = fieldLens(
-      () => state.draft,
-      patch,
+    const { field } = createDraftEditor<Draft>(() => state.draft, patch)
+    const count = field(
       (d) => d.count,
       (d, v: number) => { d.count = v },
     )
@@ -39,9 +44,8 @@ describe('fieldLens', () => {
 
   it('writes through patcher so the draft is replaced reactively', () => {
     const { state, patch } = createDraftStore()
-    const count = fieldLens(
-      () => state.draft,
-      patch,
+    const { field } = createDraftEditor<Draft>(() => state.draft, patch)
+    const count = field(
       (d) => d.count,
       (d, v: number) => { d.count = v },
     )
@@ -52,15 +56,12 @@ describe('fieldLens', () => {
 
   it('handles nested fields without cross-talk between lenses', () => {
     const { state, patch } = createDraftStore()
-    const enabled = fieldLens(
-      () => state.draft,
-      patch,
+    const { field } = createDraftEditor<Draft>(() => state.draft, patch)
+    const enabled = field(
       (d) => d.nested.enabled,
       (d, v: boolean) => { d.nested.enabled = v },
     )
-    const label = fieldLens(
-      () => state.draft,
-      patch,
+    const label = field(
       (d) => d.nested.label,
       (d, v: string) => { d.nested.label = v },
     )
@@ -68,16 +69,16 @@ describe('fieldLens', () => {
     label.value = 'hello'
     expect(state.draft.nested).toEqual({ enabled: true, label: 'hello' })
   })
-})
 
-describe('defineLens', () => {
-  it('builds a writable computed from raw read/write closures', () => {
-    // ``defineLens`` only re-evaluates when its tracked reactive deps change,
+  it('effect() builds a writable computed from raw read/write closures', () => {
+    // ``effect`` only re-evaluates when its tracked reactive deps change,
     // so the read closure must close over a reactive source (typical real
     // usage). Using a plain ``let`` would leave the computed stuck on its
     // cached initial value.
+    const { state, patch } = createDraftStore()
+    const { effect } = createDraftEditor<Draft>(() => state.draft, patch)
     const storage = ref('initial')
-    const lens = defineLens(
+    const lens = effect(
       () => storage.value,
       (value: string) => { storage.value = value.toUpperCase() },
     )
@@ -87,9 +88,7 @@ describe('defineLens', () => {
     expect(storage.value).toBe('NEXT')
     expect(lens.value).toBe('NEXT')
   })
-})
 
-describe('createDraftEditor', () => {
   it('shares the prebound getRoot/patcher across multiple field calls', () => {
     const { state, patch } = createDraftStore()
     const { field } = createDraftEditor<Draft>(() => state.draft, patch)
