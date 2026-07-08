@@ -14,12 +14,11 @@ from app.processing.streaming.stage_file_chunk_encoding import encode_stage_work
 from app.processing.streaming.stage_file_chunk_progress import chunk_progress_adapter
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import StageChunkPlan, StageWorkerPlan
+from app.processing.streaming.worker_process_events import read_worker_stderr
+from app.processing.streaming.worker_process_io import close_pipe, write_decoded_frames_to_worker
 from app.processing.streaming.worker_processes import (
-    close_pipe,
-    read_worker_stderr,
     spawn_stage_workers,
     wait_for_workers,
-    write_decoded_frames_to_worker,
 )
 
 

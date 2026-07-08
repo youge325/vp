@@ -333,6 +333,37 @@ def test_worker_processes_event_io_boundary_flags_local_event_and_rawvideo_helpe
     assert any("worker process event/io helper" in issue for issue in issues), issues
 
 
+def test_worker_process_helper_import_boundary_flags_helper_imports_from_entrypoint(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_chunk_runtime = tmp_path / "stage_file_chunk_runtime.py"
+    fake_chain_runtime = tmp_path / "worker_chain_runtime.py"
+    fake_pipeline = tmp_path / "worker_pipeline.py"
+    fake_chunk_runtime.write_text(
+        "from app.processing.streaming.worker_processes import (\n"
+        "    close_pipe,\n"
+        "    read_worker_stderr,\n"
+        "    spawn_stage_workers,\n"
+        ")\n",
+        encoding="utf-8",
+    )
+    fake_chain_runtime.write_text(
+        "from app.processing.streaming.worker_processes import drain_final_worker_output, write_decoded_frames_to_worker\n",
+        encoding="utf-8",
+    )
+    fake_pipeline.write_text(
+        "from app.processing.streaming.worker_processes import parse_stage_event_line\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_CHUNK_RUNTIME", fake_chunk_runtime, raising=False)
+    monkeypatch.setattr(module, "WORKER_CHAIN_RUNTIME", fake_chain_runtime, raising=False)
+    monkeypatch.setattr(module, "WORKER_PIPELINE", fake_pipeline, raising=False)
+    issues: list[str] = []
+
+    module._check_worker_process_helper_import_boundary(issues)
+
+    assert any("worker process helper" in issue for issue in issues), issues
+
+
 def test_enhance_view_option_boundary_flags_view_local_option_rules(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_view = tmp_path / "EnhanceModuleView.vue"
