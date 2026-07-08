@@ -86,7 +86,7 @@ def test_finalize_streaming_output_cleans_sidecar_after_success_and_builds_resul
         return str(final_path)
 
     monkeypatch.setattr(
-        "app.processing.streaming.pipeline_lifecycle._finalize_segmented_output",
+        "app.processing.streaming.pipeline_lifecycle.finalize_segmented_output",
         fake_finalize,
     )
     ffmpeg = _FakeFFmpeg(frame_count=0)
@@ -124,7 +124,7 @@ def test_finalize_streaming_output_preserves_sidecar_when_finalize_fails(monkeyp
         raise RuntimeError("concat failed")
 
     monkeypatch.setattr(
-        "app.processing.streaming.pipeline_lifecycle._finalize_segmented_output",
+        "app.processing.streaming.pipeline_lifecycle.finalize_segmented_output",
         fail_finalize,
     )
 

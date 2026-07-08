@@ -1,4 +1,4 @@
-"""Encoder worker — writes segments to disk and finalizes the output."""
+"""Encoder worker — writes resumable video segments to disk."""
 
 from __future__ import annotations
 
@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.planning import ResumeState, SegmentManifest
+from app.processing.streaming.encoder_segments import (
+    make_segment_progress_callback as _make_segment_progress_callback,
+    resolve_segment_output_frame_count as _resolve_segment_output_frame_count,
+)
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import (
     EncodedFrame,
@@ -136,76 +140,3 @@ def _encoder_worker(
                 Path(tmp_path).unlink(missing_ok=True)
             except OSError:  # pragma: no cover - cleanup best effort
                 pass
-
-
-def _make_segment_progress_callback(
-    segment_start_frame: int,
-    encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
-) -> Callable[[dict[str, Any]], None] | None:
-    if encode_progress_callback is None:
-        return None
-
-    def callback(progress: dict[str, Any]) -> None:
-        encode_progress_callback(
-            segment_start_frame + int(progress.get("frame") or 0),
-            progress.get("fps"),
-            progress.get("speed"),
-            progress.get("out_time_seconds"),
-            str(progress.get("progress") or ""),
-        )
-
-    return callback
-
-
-def _resolve_segment_output_frame_count(
-    ffmpeg: FFmpegWrapper,
-    writer: Any,
-    segment_path: str,
-    *,
-    fallback_frame_count: int,
-) -> int:
-    output_frame_count = int(getattr(writer, "output_frame_count", 0) or 0)
-    if output_frame_count > 0:
-        return output_frame_count
-    return ffmpeg.get_frame_count(segment_path) or fallback_frame_count
-
-
-def _finalize_segmented_output(
-    *,
-    ffmpeg: FFmpegWrapper,
-    input_path: str,
-    output_path: str,
-    encode_config: dict[str, Any],
-    manifest: SegmentManifest,
-    signature: str,
-    completed_output_frames: int,
-    total_output_frames: int,
-    strict_total_frames: bool,
-) -> str:
-    del signature
-    completed_segments = manifest.read_completed_segments()
-    segment_paths = [str(manifest.sidecar_dir / record.path) for record in completed_segments]
-    if strict_total_frames and completed_output_frames != total_output_frames:
-        raise RuntimeError(
-            f"Temporary segments are incomplete: expected {total_output_frames} output frames, "
-            f"got {completed_output_frames}."
-        )
-    if not segment_paths:
-        raise RuntimeError("No completed temporary segments were found for finalization.")
-
-    extension = os.path.splitext(output_path)[1] or f".{encode_config.get('container') or 'mp4'}"
-    concat_path = manifest.concat_temp_path(extension)
-    ffmpeg.concat_videos(segment_paths, concat_path)
-
-    keep_audio = bool(encode_config.get("keepAudio", True))
-    if keep_audio and ffmpeg.has_audio(input_path):
-        audio_path = ffmpeg.extract_audio(input_path, str(manifest.sidecar_dir / "source_audio.aac"))
-        if audio_path:
-            final_output = ffmpeg.merge_audio(concat_path, audio_path, output_path)
-            Path(audio_path).unlink(missing_ok=True)
-            Path(concat_path).unlink(missing_ok=True)
-            return final_output
-
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    os.replace(concat_path, output_path)
-    return output_path

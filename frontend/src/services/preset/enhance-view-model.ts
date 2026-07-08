@@ -17,7 +17,7 @@ import {
   fixedRuntimeFrameCount,
   isPaddleGanVsrAlgorithm,
   superResolutionInputFrameMode,
-} from './enhance-rules'
+} from './enhance-algorithm-capabilities'
 
 export interface EnhanceViewModelInput {
   workflow: WorkflowConfig

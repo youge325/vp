@@ -144,6 +144,33 @@ def test_frontend_enhance_workflow_selection_boundary_flags_local_selection_help
     assert any("enhance workflow selection" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_rules_split_boundary_flags_local_rule_bodies(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_rules = tmp_path / "enhance-rules.ts"
+    fake_rules.write_text(
+        "function backendCompatible() {}\n"
+        "export function isPaddleGanVsrAlgorithm() {}\n"
+        "export function superResolutionInputFrameMode() {}\n"
+        "export function fixedRuntimeFrameCount() {}\n"
+        "export function fixedSuperResolutionScaleFactor() {}\n"
+        "export function applySuperResolutionAlgorithmDefaults() {}\n"
+        "export function pickDefaultEngine() {}\n"
+        "export function fallbackInterpolationOnnxModel() {}\n"
+        "export function fallbackSuperResolutionOnnxModel() {}\n"
+        "export function pickDefaultInterpolationAlgorithm() {}\n"
+        "export function pickDefaultInterpolationModel() {}\n"
+        "export function pickDefaultSuperResolutionAlgorithm() {}\n"
+        "export function pickDefaultAnimeProfile() {}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_RULES", fake_rules, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_rules_split_boundary(issues)
+
+    assert any("enhance rules split" in issue for issue in issues), issues
+
+
 def test_worker_pipeline_plan_boundary_flags_local_plan_builders(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "worker_pipeline.py"
@@ -816,6 +843,44 @@ def test_streaming_pipeline_dispatch_boundary_flags_local_dispatch_runtime(tmp_p
     module._check_streaming_pipeline_dispatch_boundary(issues)
 
     assert any("streaming pipeline dispatch" in issue for issue in issues), issues
+
+
+def test_encoder_helper_boundary_flags_local_segment_and_finalize_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_encoder = tmp_path / "encoder.py"
+    fake_lifecycle = tmp_path / "pipeline_lifecycle.py"
+    fake_stage_file = tmp_path / "stage_file_pipeline.py"
+    fake_chunk_runtime = tmp_path / "stage_file_chunk_runtime.py"
+    fake_encoder.write_text(
+        "def _make_segment_progress_callback():\n"
+        "    pass\n\n"
+        "def _resolve_segment_output_frame_count():\n"
+        "    pass\n\n"
+        "def _finalize_segmented_output():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    fake_lifecycle.write_text(
+        "from app.processing.streaming.encoder import _finalize_segmented_output\n",
+        encoding="utf-8",
+    )
+    fake_stage_file.write_text(
+        "from app.processing.streaming.encoder import _finalize_segmented_output\n",
+        encoding="utf-8",
+    )
+    fake_chunk_runtime.write_text(
+        "from app.processing.streaming.encoder import _resolve_segment_output_frame_count\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENCODER", fake_encoder, raising=False)
+    monkeypatch.setattr(module, "PIPELINE_LIFECYCLE", fake_lifecycle, raising=False)
+    monkeypatch.setattr(module, "STAGE_FILE_PIPELINE", fake_stage_file)
+    monkeypatch.setattr(module, "STAGE_FILE_CHUNK_RUNTIME", fake_chunk_runtime, raising=False)
+    issues: list[str] = []
+
+    module._check_encoder_helper_boundary(issues)
+
+    assert any("encoder helper" in issue for issue in issues), issues
 
 
 def test_frontend_encode_output_binding_boundary_flags_local_state_and_setters(tmp_path, monkeypatch) -> None:

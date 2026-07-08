@@ -203,9 +203,9 @@ def _frame(value: int) -> np.ndarray:
 
 def _install_video_frames_rename_hook(monkeypatch: pytest.MonkeyPatch, wrapper: "_FakeFFmpegWrapper") -> None:
     """Patch os.replace inside the encoder so renames propagate to the wrapper."""
-    import app.processing.streaming.encoder as encoder_module
+    import app.processing.streaming.encoder_finalization as finalization_module
 
-    original_replace = encoder_module.os.replace
+    original_replace = finalization_module.os.replace
 
     def tracking_replace(src, dst):
         result = original_replace(src, dst)
@@ -215,7 +215,7 @@ def _install_video_frames_rename_hook(monkeypatch: pytest.MonkeyPatch, wrapper: 
             wrapper.video_frames[dst_str] = wrapper.video_frames.pop(src_str)
         return result
 
-    monkeypatch.setattr(encoder_module.os, "replace", tracking_replace)
+    monkeypatch.setattr(finalization_module.os, "replace", tracking_replace)
 
 
 def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -431,7 +431,7 @@ def test_streaming_pipeline_keeps_sidecar_when_finalization_fails(monkeypatch):
         del kwargs
         raise RuntimeError("concat failed")
 
-    monkeypatch.setattr("app.processing.streaming.pipeline_lifecycle._finalize_segmented_output", fail_finalize)
+    monkeypatch.setattr("app.processing.streaming.pipeline_lifecycle.finalize_segmented_output", fail_finalize)
 
     with pytest.raises(RuntimeError, match="concat failed"):
         process_video_streaming(
