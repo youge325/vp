@@ -8,38 +8,29 @@ in-memory streams and fake algorithms.
 
 from __future__ import annotations
 
-from typing import BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
 
 from app.algorithms.tensor_backend import get_tensor_backend
+from app.processing.streaming import stage_worker_progress
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.stage_worker_config import StageWorkerConfig
-from app.processing.streaming.stage_worker_io import (
-    RawVideoFrameError,
-    read_rgb_frame,
-    write_rgb_frame,
-)
 from app.processing.streaming.stage_worker_execution import (
     run_interpolation_stage,
     run_sequence_stage,
     run_single_frame_stage,
 )
 from app.processing.streaming.stage_worker_factory import (
-    AlgorithmFactory,
-    AlgorithmFactoryFn,
-    BackendFactoryFn,
     create_algorithm,
     create_backend,
-)
-from app.processing.streaming.stage_worker_progress import (
-    EventSink,
-    SEQUENCE_STAGE_HEARTBEAT_SECONDS,
-    STAGE_EVENT_PREFIX,
-    emit_stage_event,
 )
 from app.processing.streaming.stage_runtime import (
     algorithm_needs_pairs,
     algorithm_needs_sequence,
 )
+
+if TYPE_CHECKING:
+    from app.processing.streaming.stage_worker_config import StageWorkerConfig
+    from app.processing.streaming.stage_worker_factory import AlgorithmFactoryFn, BackendFactoryFn
+    from app.processing.streaming.stage_worker_progress import EventSink
 
 _run_interpolation_stage = run_interpolation_stage
 _run_sequence_stage = run_sequence_stage
@@ -72,7 +63,7 @@ def run_stage_worker_stream(
             algorithm,
             sink,
             metrics,
-            heartbeat_seconds=SEQUENCE_STAGE_HEARTBEAT_SECONDS,
+            heartbeat_seconds=stage_worker_progress.SEQUENCE_STAGE_HEARTBEAT_SECONDS,
         )
     elif algorithm_needs_pairs(algorithm):
         written = _run_interpolation_stage(config, input_stream, output_stream, backend, algorithm, sink, metrics)
@@ -85,13 +76,4 @@ def run_stage_worker_stream(
     return written
 
 
-__all__ = [
-    "AlgorithmFactory",
-    "RawVideoFrameError",
-    "STAGE_EVENT_PREFIX",
-    "StageWorkerConfig",
-    "emit_stage_event",
-    "read_rgb_frame",
-    "run_stage_worker_stream",
-    "write_rgb_frame",
-]
+__all__ = ["run_stage_worker_stream"]

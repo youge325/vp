@@ -8,7 +8,7 @@ from typing import Any
 
 from app.planning import ProcessingStep, ResumeState, build_stage_plan
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.stage_worker import StageWorkerConfig
+from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_chain_runtime import run_worker_chain_runtime
 from app.processing.streaming.worker_plans import StageWorkerPlan
 

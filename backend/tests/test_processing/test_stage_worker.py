@@ -11,14 +11,13 @@ import pytest
 from app.cli.commands import stage_worker as stage_worker_command
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import ProcessingStep
-from app.processing.streaming import stage_worker
+from app.processing.streaming import stage_worker, stage_worker_factory, stage_worker_progress
 from app.processing.streaming.stage_worker import (
-    RawVideoFrameError,
-    STAGE_EVENT_PREFIX,
-    StageWorkerConfig,
-    read_rgb_frame,
     run_stage_worker_stream,
 )
+from app.processing.streaming.stage_worker_config import StageWorkerConfig
+from app.processing.streaming.stage_worker_io import RawVideoFrameError, read_rgb_frame
+from app.processing.streaming.stage_worker_progress import STAGE_EVENT_PREFIX
 
 
 class _IdentityBackend:
@@ -230,7 +229,7 @@ def test_sequence_stage_buffers_all_input_frames_before_writing_output() -> None
 def test_sequence_stage_emits_start_and_heartbeat_during_blocking_process(monkeypatch) -> None:
     output = io.BytesIO()
     events = []
-    monkeypatch.setattr(stage_worker, "SEQUENCE_STAGE_HEARTBEAT_SECONDS", 0.01)
+    monkeypatch.setattr(stage_worker_progress, "SEQUENCE_STAGE_HEARTBEAT_SECONDS", 0.01)
     config = _config(
         ProcessingStep(
             algorithm_type="super_resolution",
@@ -266,7 +265,7 @@ def test_sequence_stage_emits_start_and_heartbeat_during_blocking_process(monkey
 def test_sequence_stage_heartbeat_uses_latest_algorithm_progress(monkeypatch) -> None:
     output = io.BytesIO()
     events = []
-    monkeypatch.setattr(stage_worker, "SEQUENCE_STAGE_HEARTBEAT_SECONDS", 0.01)
+    monkeypatch.setattr(stage_worker_progress, "SEQUENCE_STAGE_HEARTBEAT_SECONDS", 0.01)
     config = _config(
         ProcessingStep(
             algorithm_type="super_resolution",
@@ -328,7 +327,7 @@ def test_stage_worker_uses_stage_tensor_backend_without_passing_it_to_algorithm(
         captured["kwargs"] = kwargs
         return _SequenceAlgorithm()
 
-    monkeypatch.setattr(stage_worker.AlgorithmFactory, "create", staticmethod(fake_create))
+    monkeypatch.setattr(stage_worker_factory.AlgorithmFactory, "create", staticmethod(fake_create))
     config = StageWorkerConfig(
         stage=ProcessingStep(
             algorithm_type="super_resolution",

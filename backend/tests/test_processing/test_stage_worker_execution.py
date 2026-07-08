@@ -6,7 +6,7 @@ import numpy as np
 
 from app.planning import ProcessingStep
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.stage_worker import StageWorkerConfig
+from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.stage_worker_execution import (
     run_interpolation_stage,
     run_sequence_stage,

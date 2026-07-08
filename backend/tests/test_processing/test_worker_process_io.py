@@ -10,7 +10,7 @@ import numpy as np
 from app.planning import ProcessingStep, build_stage_plan
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import EncodedFrame
-from app.processing.streaming.stage_worker import StageWorkerConfig
+from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import StageWorkerPlan
 from app.processing.streaming.worker_process_io import drain_final_worker_output, write_decoded_frames_to_worker
 
