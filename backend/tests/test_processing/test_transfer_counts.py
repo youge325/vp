@@ -11,13 +11,13 @@ import pytest
 
 from app.planning import ProcessingStep, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.processor import (
-    _PipelineAlgorithms,
-    _StepAlgorithm,
-    _process_interpolated_stream,
-    _process_single_frame_stream,
+from app.processing.streaming.processor_algorithms import PipelineAlgorithms as _PipelineAlgorithms
+from app.processing.streaming.processor_stream_interpolated import (
+    process_interpolated_stream as _process_interpolated_stream,
 )
+from app.processing.streaming.processor_stream_single import process_single_frame_stream as _process_single_frame_stream
 from app.processing.streaming.queues import DecodedFrame, EncodedFrame, _DECODE_END
+from app.processing.streaming.stage_runtime import StepAlgorithm as _StepAlgorithm
 
 
 class _CountingBackend:

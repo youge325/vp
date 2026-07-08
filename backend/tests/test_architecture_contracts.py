@@ -766,6 +766,29 @@ def test_processor_stream_boundary_flags_local_stream_loops(tmp_path, monkeypatc
     assert any("processor stream rule" in issue for issue in issues), issues
 
 
+def test_processor_private_reexport_boundary_flags_compatibility_aliases(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_processor = tmp_path / "processor.py"
+    fake_processor.write_text(
+        "from app.processing.streaming.processor_algorithms import PipelineAlgorithms as _PipelineAlgorithms\n"
+        "from app.processing.streaming.processor_stage_execution import run_sequence_stage as _run_sequence_stage\n"
+        "from app.processing.streaming.processor_stream_single import process_single_frame_stream as _process_single_frame_stream\n"
+        "from app.processing.streaming.stage_runtime import StepAlgorithm as _StepAlgorithm\n\n"
+        "__all__ = [\n"
+        '    "_PipelineAlgorithms",\n'
+        '    "_StepAlgorithm",\n'
+        '    "_process_single_frame_stream",\n'
+        "]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PROCESSOR", fake_processor)
+    issues: list[str] = []
+
+    module._check_processor_private_reexport_boundary(issues)
+
+    assert any("processor private re-export" in issue for issue in issues), issues
+
+
 def test_processor_stream_aggregator_boundary_flags_local_stream_loops(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_streams = tmp_path / "processor_streams.py"

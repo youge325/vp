@@ -5,12 +5,10 @@ import numpy as np
 
 from app.planning import ProcessingStep, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.processor import (
-    _PipelineAlgorithms,
-    _StepAlgorithm,
-    _process_sequence_stream,
-)
+from app.processing.streaming.processor_algorithms import PipelineAlgorithms as _PipelineAlgorithms
+from app.processing.streaming.processor_stream_sequence import process_sequence_stream as _process_sequence_stream
 from app.processing.streaming.queues import DecodedFrame, EncodedFrame, StreamEnd, _DECODE_END, _ENCODE_END
+from app.processing.streaming.stage_runtime import StepAlgorithm as _StepAlgorithm
 
 
 class _SequenceAlgorithm:

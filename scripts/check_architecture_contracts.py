@@ -1378,6 +1378,20 @@ def _check_processor_stream_boundary(issues: list[str]) -> None:
             issues.append(f"processor stream rule `{label}` remains in backend/app/processing/streaming/processor.py")
 
 
+def _check_processor_private_reexport_boundary(issues: list[str]) -> None:
+    text = _read(PROCESSOR)
+    forbidden_patterns = {
+        "algorithm helper re-export": r"\bas\s+_(?:PipelineAlgorithms|initialize_algorithms|ordered_algorithm_entries|pipeline_needs_sequence|resolve_processor_mode)\b",
+        "stage helper re-export": r"\bas\s+_(?:apply_post_steps|apply_pre_steps|apply_stage_chain|emit_stage_progress|run_interpolation_sequence_stage|run_per_frame_sequence_stage|run_sequence_stage)\b",
+        "stream helper re-export": r"\bas\s+_(?:drain_decoded|emit_encoded_payload|emit_stream_end|process_interpolated_stream|process_sequence_stream|process_single_frame_stream)\b",
+        "stage runtime helper re-export": r"\bas\s+_StepAlgorithm\b",
+        "private helper export list": r"__all__\s*=\s*\[[^\]]*\"_(?:PipelineAlgorithms|StepAlgorithm|process_|apply_|run_|emit_|drain_|initialize_|pipeline_|ordered_)",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.DOTALL):
+            issues.append(f"processor private re-export `{label}` remains in {_rel(PROCESSOR)}")
+
+
 def _check_processor_stream_aggregator_boundary(issues: list[str]) -> None:
     text = _read(PROCESSOR_STREAMS)
     forbidden_patterns = {
@@ -1455,6 +1469,7 @@ def main() -> int:
         _check_processor_algorithm_boundary(issues)
         _check_processor_stage_execution_boundary(issues)
         _check_processor_stream_boundary(issues)
+        _check_processor_private_reexport_boundary(issues)
         _check_processor_stream_aggregator_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
