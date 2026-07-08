@@ -617,6 +617,21 @@ def _check_frontend_io_form_rule_boundary(issues: list[str]) -> None:
                 issues.append(f"io form rule `{label}` leaked into form composable: {_rel(path)}")
 
 
+def _check_frontend_io_form_binding_boundary(issues: list[str]) -> None:
+    forbidden_patterns = {
+        "profile-picker import": r"from\s+['\"]@/services/preset/profile-picker['\"]",
+        "profile-selection import": r"from\s+['\"]@/services/preset/profile-selection['\"]",
+        "io-form-rules import": r"from\s+['\"]@/services/preset/io-form-rules['\"]",
+        "preset options import": r"from\s+['\"]@/services/preset/options['\"]",
+        "preset normalize import": r"from\s+['\"]@/services/preset/normalize['\"]",
+    }
+    for path in FRONTEND_FORM_COMPOSABLES:
+        text = _read(path)
+        for label, pattern in forbidden_patterns.items():
+            if re.search(pattern, text):
+                issues.append(f"io form binding rule `{label}` leaked into form composable: {_rel(path)}")
+
+
 def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
     text = _read(WORKER_PIPELINE)
     forbidden_patterns = {
@@ -748,6 +763,21 @@ def _check_processor_stage_execution_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_processor_stream_boundary(issues: list[str]) -> None:
+    text = _read(PROCESSOR)
+    forbidden_patterns = {
+        "_process_single_frame_stream": r"^\s*def\s+_process_single_frame_stream\b",
+        "_process_interpolated_stream": r"^\s*def\s+_process_interpolated_stream\b",
+        "_process_sequence_stream": r"^\s*def\s+_process_sequence_stream\b",
+        "_emit_encoded_payload": r"^\s*def\s+_emit_encoded_payload\b",
+        "_drain_decoded": r"^\s*def\s+_drain_decoded\b",
+        "_emit_stream_end": r"^\s*def\s+_emit_stream_end\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"processor stream rule `{label}` remains in backend/app/processing/streaming/processor.py")
+
+
 def main() -> int:
     issues: list[str] = []
     try:
@@ -769,6 +799,7 @@ def main() -> int:
         _check_frontend_enhance_option_boundary(issues)
         _check_frontend_io_view_option_boundary(issues)
         _check_frontend_io_form_rule_boundary(issues)
+        _check_frontend_io_form_binding_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)
         _check_worker_pipeline_file_boundary(issues)
@@ -777,6 +808,7 @@ def main() -> int:
         _check_streaming_pipeline_rule_boundary(issues)
         _check_processor_algorithm_boundary(issues)
         _check_processor_stage_execution_boundary(issues)
+        _check_processor_stream_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2
