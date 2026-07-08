@@ -1399,6 +1399,8 @@ def _check_pipeline_raw_runtime_boundary(issues: list[str]) -> None:
     text = _read(PIPELINE_RAW)
     forbidden_patterns = {
         "stage runner type import": r"from\s+app\.processing\.streaming\.pipeline_raw_stage\s+import\s+StageWorkerRunner\b",
+        "stage runner parameter": r"def\s+\w+\([^)]*\bstage_worker_runner\b",
+        "stage runner forwarding": r"\bstage_worker_runner\s*=",
         "worker pipeline import": r"from\s+app\.processing\.streaming\.worker_pipeline\s+import\b",
         "worker pipeline symbol": r"\brun_stage_worker_pipeline\b",
         "queue import": r"^\s*import\s+queue\b",
@@ -1469,6 +1471,8 @@ def _check_pipeline_raw_runtime_stage_boundary(issues: list[str]) -> None:
             r"(?:[^\n]*,\s*)?StageWorkerRunner\b"
         ),
         "stage runner type export": r"__all__\s*=\s*\[[^\]]*\"StageWorkerRunner\"",
+        "stage runner parameter": r"def\s+\w+\([^)]*\bstage_worker_runner\b",
+        "stage runner forwarding": r"\bstage_worker_runner\s*=",
         "worker pipeline import": r"from\s+app\.processing\.streaming\.worker_pipeline\s+import\b",
         "worker pipeline symbol": r"\brun_stage_worker_pipeline\b",
         "runner fallback": r"\bstage_worker_runner\s+or\b",
@@ -1484,6 +1488,8 @@ def _check_pipeline_raw_stage_boundary(issues: list[str]) -> None:
     forbidden_patterns = {
         "runner alias": r"^StageWorkerRunner\s*=",
         "runner type reference": r"\bstage_worker_runner\s*:\s*StageWorkerRunner\b",
+        "runner injection parameter": r"def\s+\w+\([^)]*\bstage_worker_runner\b",
+        "runner fallback": r"\bstage_worker_runner\s+or\b",
         "runner export": r"__all__\s*=\s*\[[^\]]*\"StageWorkerRunner\"",
     }
     for label, pattern in forbidden_patterns.items():

@@ -23,10 +23,8 @@ def run_raw_stage_worker(
     resume_state: ResumeState,
     metrics: PipelineMetrics,
     state: RawPipelineState,
-    stage_worker_runner: Callable[..., None] | None = None,
 ) -> None:
-    runner = stage_worker_runner or run_stage_worker_pipeline
-    runner(
+    run_stage_worker_pipeline(
         ffmpeg=ffmpeg,
         input_path=input_path,
         decode_config=decode_config,

@@ -31,7 +31,6 @@ def run_raw_streaming_pipeline(
     output_fps: float | None,
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
     metrics: PipelineMetrics,
-    stage_worker_runner: Callable[..., None] | None = None,
 ) -> int:
     return run_raw_pipeline_runtime(
         ffmpeg=ffmpeg,
@@ -53,7 +52,6 @@ def run_raw_streaming_pipeline(
         output_fps=output_fps,
         encode_progress_callback=encode_progress_callback,
         metrics=metrics,
-        stage_worker_runner=stage_worker_runner,
     )
 
 

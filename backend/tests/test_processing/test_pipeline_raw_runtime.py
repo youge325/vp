@@ -55,7 +55,7 @@ def _frame(value: int) -> np.ndarray:
     return np.full((1, 1, 3), value, dtype=np.uint8)
 
 
-def test_raw_pipeline_runtime_runs_encoder_thread_and_stage_worker(tmp_path: Path) -> None:
+def test_raw_pipeline_runtime_runs_encoder_thread_and_stage_worker(tmp_path: Path, monkeypatch) -> None:
     ffmpeg = _FakeFFmpeg()
     manifest = SegmentManifest(str(tmp_path / "out.mp4"))
     progress_events: list[tuple[int, str]] = []
@@ -69,6 +69,11 @@ def test_raw_pipeline_runtime_runs_encoder_thread_and_stage_worker(tmp_path: Pat
         encode_queue.put(SegmentBoundary(next_source_frame=1))
         encode_queue.put(EncodedFrame(output_index=1, frame=_frame(20)))
         encode_queue.put(StreamEnd(next_source_frame=2))
+
+    monkeypatch.setattr(
+        "app.processing.streaming.pipeline_raw_stage.run_stage_worker_pipeline",
+        fake_stage_worker_runner,
+    )
 
     completed = run_raw_pipeline_runtime(
         ffmpeg=ffmpeg,  # type: ignore[arg-type]
@@ -97,7 +102,6 @@ def test_raw_pipeline_runtime_runs_encoder_thread_and_stage_worker(tmp_path: Pat
         output_fps=None,
         encode_progress_callback=lambda frame, _fps, _speed, _time, progress: progress_events.append((frame, progress)),
         metrics=PipelineMetrics(),
-        stage_worker_runner=fake_stage_worker_runner,
     )
 
     assert completed == 2
