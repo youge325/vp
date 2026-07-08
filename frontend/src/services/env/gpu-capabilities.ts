@@ -2,7 +2,7 @@
 // GPU 能力推断 — 从环境探测结果推断可用 backend / engine。
 
 import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { GpuVendor, InferenceEngine, TensorBackend } from '@/types/domain/workflow'
+import type { InferenceEngine, TensorBackend } from '@/types/domain/workflow'
 
 const ALL_BACKENDS: TensorBackend[] = ['pytorch', 'paddle', 'onnx']
 
@@ -30,24 +30,6 @@ export function getVisibleBackends(
   }
 
   return [...ALL_BACKENDS]
-}
-
-export function inferGpuVendor(checkResult: EnvironmentCheckResult | null): GpuVendor {
-  const vendor = checkResult?.gpu?.adapters?.[0]?.vendor
-  if (vendor && vendor !== 'other') {
-    return vendor
-  }
-
-  const cudaAvailable = checkResult?.gpu?.cudaAvailable
-  const gpuAvailable = checkResult?.gpu?.available
-  const deviceNames = checkResult?.gpu?.devices ?? []
-  const hasNvidiaInName = deviceNames.some((name) => name.toLowerCase().includes('nvidia'))
-
-  if (cudaAvailable || hasNvidiaInName || (gpuAvailable === true && vendor === undefined)) {
-    return 'nvidia'
-  }
-
-  return 'other'
 }
 
 export function getAvailableEngines(
@@ -84,12 +66,4 @@ export function shouldShowEngineSelector(
 ): boolean {
   const gpuAvailable = checkResult?.gpu?.available
   return gpuAvailable === true && getAvailableEngines(checkResult, backend).length > 0
-}
-
-export function getBackendDeviceSupport(): Record<TensorBackend, string[]> {
-  return {
-    pytorch: ['nvidia', 'intel', 'amd'],
-    paddle: ['nvidia', 'intel', 'amd', 'hygon'],
-    onnx: ['nvidia', 'intel', 'amd'],
-  }
 }
