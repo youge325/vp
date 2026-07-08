@@ -7,7 +7,6 @@ from typing import Any, Callable
 from app.planning import ResumeState, SegmentManifest, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_raw_runtime import run_raw_pipeline_runtime
-from app.processing.streaming.pipeline_raw_stage import StageWorkerRunner
 from app.processing.streaming.pipeline_rules import resolved_stream_fps
 from app.utils.ffmpeg import FFmpegWrapper
 
@@ -32,7 +31,7 @@ def run_raw_streaming_pipeline(
     output_fps: float | None,
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
     metrics: PipelineMetrics,
-    stage_worker_runner: StageWorkerRunner | None = None,
+    stage_worker_runner: Callable[..., None] | None = None,
 ) -> int:
     return run_raw_pipeline_runtime(
         ffmpeg=ffmpeg,
