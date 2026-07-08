@@ -300,6 +300,24 @@ def test_frontend_enhance_field_binding_boundary_flags_binding_rule_leaks(tmp_pa
     assert any("enhance field binding rule" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_field_split_boundary_flags_aggregator_rule_leaks(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_bindings = tmp_path / "enhance-field-bindings.ts"
+    fake_bindings.write_text(
+        "import { createDraftEditor } from '@/composables/forms/lens'\n"
+        "import { applyInterpolationEnabled } from '@/services/preset/enhance-workflow'\n"
+        "const interpolationEngine = field((c) => c.interpolation.engine, () => {})\n"
+        "const interpolationEnabled = effect<boolean>(() => workflow.value.interpolation.enabled, () => {})\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_FIELD_BINDINGS", fake_bindings)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_field_split_boundary(issues)
+
+    assert any("enhance field split rule" in issue for issue in issues), issues
+
+
 def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_processor = tmp_path / "processor.py"
@@ -369,6 +387,30 @@ def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(t
     module._check_stage_file_pipeline_chunk_boundary(issues)
 
     assert any("stage file chunk rule" in issue for issue in issues), issues
+
+
+def test_stage_worker_runtime_boundary_flags_local_io_and_runtime_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_stage_worker = tmp_path / "stage_worker.py"
+    fake_stage_worker.write_text(
+        "class RawVideoFrameError(RuntimeError):\n"
+        "    pass\n\n"
+        "def read_rgb_frame():\n"
+        "    pass\n\n"
+        "def emit_stage_event():\n"
+        "    pass\n\n"
+        "def _create_algorithm():\n"
+        "    pass\n\n"
+        "class _StageProgressState:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_WORKER", fake_stage_worker)
+    issues: list[str] = []
+
+    module._check_stage_worker_runtime_boundary(issues)
+
+    assert any("stage worker runtime rule" in issue for issue in issues), issues
 
 
 def test_streaming_pipeline_rule_boundary_flags_local_pipeline_rules(tmp_path, monkeypatch) -> None:

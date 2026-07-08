@@ -35,6 +35,7 @@ PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.p
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-form-bindings.ts"
+ENHANCE_FIELD_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-field-bindings.ts"
 ENHANCE_VIEW = FRONTEND_SRC / "views" / "EnhanceModuleView.vue"
 DECODE_VIEW = FRONTEND_SRC / "views" / "DecodeModuleView.vue"
 ENCODE_VIEW = FRONTEND_SRC / "views" / "EncodeModuleView.vue"
@@ -412,6 +413,29 @@ def _check_stage_worker_private_import_boundary(issues: list[str]) -> None:
         issues.append("stage_worker.py imports processor private helpers instead of shared stage runtime helpers")
 
 
+def _check_stage_worker_runtime_boundary(issues: list[str]) -> None:
+    text = _read(STAGE_WORKER)
+    forbidden_patterns = {
+        "RawVideoFrameError": r"^\s*class\s+RawVideoFrameError\b",
+        "read_rgb_frame": r"^\s*def\s+read_rgb_frame\b",
+        "write_rgb_frame": r"^\s*def\s+write_rgb_frame\b",
+        "emit_stage_event": r"^\s*def\s+emit_stage_event\b",
+        "_create_backend": r"^\s*def\s+_create_backend\b",
+        "_create_algorithm": r"^\s*def\s+_create_algorithm\b",
+        "_register_single_algorithm": r"^\s*def\s+_register_single_algorithm\b",
+        "_backend_name": r"^\s*def\s+_backend_name\b",
+        "_read_declared_frames": r"^\s*def\s+_read_declared_frames\b",
+        "_progress_event": r"^\s*def\s+_progress_event\b",
+        "_StageProgressState": r"^\s*class\s+_StageProgressState\b",
+        "_start_sequence_stage_heartbeat": r"^\s*def\s+_start_sequence_stage_heartbeat\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"stage worker runtime rule `{label}` remains in backend/app/processing/streaming/stage_worker.py"
+            )
+
+
 def _check_frontend_form_profile_rule_boundary(issues: list[str]) -> None:
     forbidden_tokens = (
         "seedProfileOptions",
@@ -505,6 +529,23 @@ def _check_frontend_enhance_field_binding_boundary(issues: list[str]) -> None:
         if re.search(pattern, text):
             issues.append(
                 f"enhance field binding rule `{label}` leaked into form binding assembly: {_rel(ENHANCE_FORM_BINDINGS)}"
+            )
+
+
+def _check_frontend_enhance_field_split_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_FIELD_BINDINGS)
+    forbidden_patterns = {
+        "createDraftEditor": r"\bcreateDraftEditor\b",
+        "enhance workflow mutation import": r"from\s+['\"]@/services/preset/enhance-workflow['\"]",
+        "workflow mutation function": r"\bapply(?:Interpolation|SuperResolution)[A-Za-z]+\b",
+        "field writer": r"\bconst\s+[A-Za-z0-9]+\s*=\s*field\s*\(",
+        "effect writer": r"\bconst\s+[A-Za-z0-9]+\s*=\s*effect\s*<",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(
+                f"enhance field split rule `{label}` leaked into field binding aggregator: "
+                f"{_rel(ENHANCE_FIELD_BINDINGS)}"
             )
 
 
@@ -687,12 +728,14 @@ def main() -> int:
         _check_ui_and_store_ipc_boundary(issues)
         _check_paddlegan_vsr_contract(issues)
         _check_stage_worker_private_import_boundary(issues)
+        _check_stage_worker_runtime_boundary(issues)
         _check_frontend_form_profile_rule_boundary(issues)
         _check_cli_defaults_planning_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_binding_boundary(issues)
         _check_frontend_enhance_field_binding_boundary(issues)
+        _check_frontend_enhance_field_split_boundary(issues)
         _check_frontend_enhance_option_boundary(issues)
         _check_frontend_io_view_option_boundary(issues)
         _check_frontend_io_form_rule_boundary(issues)
