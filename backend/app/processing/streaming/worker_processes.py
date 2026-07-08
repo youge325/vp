@@ -29,7 +29,7 @@ def spawn_stage_workers(
 ) -> list[WorkerHandle]:
     handles: list[WorkerHandle] = []
     previous_stdout = None
-    root = backend_dir()
+    root = _backend_dir()
 
     for index, plan in enumerate(plans):
         config_path = config_dir / f"stage-{index + 1:02d}.json"
@@ -60,7 +60,7 @@ def spawn_stage_workers(
     return handles
 
 
-def backend_dir() -> Path:
+def _backend_dir() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
