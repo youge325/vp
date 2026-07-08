@@ -37,6 +37,7 @@ PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.p
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
+ENHANCE_WORKFLOW = FRONTEND_SRC / "services" / "preset" / "enhance-workflow.ts"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-form-bindings.ts"
 ENHANCE_FIELD_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-field-bindings.ts"
@@ -498,6 +499,27 @@ def _check_frontend_enhance_workflow_boundary(issues: list[str]) -> None:
     for token in forbidden_tokens:
         if token in text:
             issues.append(f"enhance workflow rule `{token}` leaked into form composable: {_rel(ENHANCE_FORM)}")
+
+
+def _check_frontend_enhance_workflow_selection_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_WORKFLOW)
+    forbidden_patterns = {
+        "tensor backend list": r"\bTENSOR_BACKENDS\b",
+        "interpolation algorithm finder": r"^\s*function\s+findInterpolationAlgorithm\b",
+        "super-resolution algorithm finder": r"^\s*function\s+findSuperResolutionAlgorithm\b",
+        "supported backend picker": r"^\s*function\s+pickSupportedBackend\b",
+        "paddle sr onnx preference": r"^\s*function\s+preferOnnxInterpolationForPaddleSuperResolution\b",
+        "interpolation onnx fallback": r"\bfallbackInterpolationOnnxModel\b",
+        "super-resolution onnx fallback": r"\bfallbackSuperResolutionOnnxModel\b",
+        "fixed runtime frames": r"\bfixedRuntimeFrameCount\b",
+        "fixed scale factor": r"\bfixedSuperResolutionScaleFactor\b",
+        "default engine picker": r"\bpickDefaultEngine\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"enhance workflow selection `{label}` remains in frontend/src/services/preset/enhance-workflow.ts"
+            )
 
 
 def _check_frontend_enhance_view_model_boundary(issues: list[str]) -> None:
@@ -979,6 +1001,25 @@ def _check_streaming_pipeline_preflight_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_streaming_pipeline_dispatch_boundary(issues: list[str]) -> None:
+    text = _read(STREAMING_PIPELINE)
+    forbidden_patterns = {
+        "raw pipeline import": r"from\s+app\.processing\.streaming\.pipeline_raw\s+import\b",
+        "stage file pipeline import": r"from\s+app\.processing\.streaming\.stage_file_pipeline\s+import\b",
+        "worker pipeline import": r"from\s+app\.processing\.streaming\.worker_pipeline\s+import\b",
+        "resume status dispatch": r"\bemit_resume_status_event\b",
+        "dispatch helper": r"^\s*def\s+_run_streaming_pipeline\b",
+        "raw pipeline call": r"\brun_raw_streaming_pipeline\b",
+        "stage file pipeline call": r"\brun_stage_file_pipeline\b",
+        "stage worker runner": r"\brun_stage_worker_pipeline\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"streaming pipeline dispatch `{label}` remains in backend/app/processing/streaming/pipeline.py"
+            )
+
+
 def _check_processor_algorithm_boundary(issues: list[str]) -> None:
     text = _read(PROCESSOR)
     forbidden_patterns = {
@@ -1058,6 +1099,7 @@ def main() -> int:
         _check_frontend_form_profile_rule_boundary(issues)
         _check_cli_defaults_planning_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
+        _check_frontend_enhance_workflow_selection_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_binding_boundary(issues)
         _check_frontend_enhance_field_binding_boundary(issues)
@@ -1085,6 +1127,7 @@ def main() -> int:
         _check_streaming_pipeline_raw_boundary(issues)
         _check_streaming_pipeline_lifecycle_boundary(issues)
         _check_streaming_pipeline_preflight_boundary(issues)
+        _check_streaming_pipeline_dispatch_boundary(issues)
         _check_processor_algorithm_boundary(issues)
         _check_processor_stage_execution_boundary(issues)
         _check_processor_stream_boundary(issues)

@@ -121,6 +121,29 @@ def test_enhance_form_workflow_rule_boundary_flags_mutation_leaks(tmp_path, monk
     assert any("enhance workflow rule" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_workflow_selection_boundary_flags_local_selection_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_workflow = tmp_path / "enhance-workflow.ts"
+    fake_workflow.write_text(
+        "const TENSOR_BACKENDS = ['pytorch', 'paddle', 'onnx']\n"
+        "function findInterpolationAlgorithm() {}\n"
+        "function findSuperResolutionAlgorithm() {}\n"
+        "function pickSupportedBackend() {}\n"
+        "function preferOnnxInterpolationForPaddleSuperResolution() {}\n"
+        "fallbackInterpolationOnnxModel(env, algorithm)\n"
+        "fallbackSuperResolutionOnnxModel(env, algorithm)\n"
+        "fixedRuntimeFrameCount(algorithm)\n"
+        "fixedSuperResolutionScaleFactor(algorithm)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_WORKFLOW", fake_workflow)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_workflow_selection_boundary(issues)
+
+    assert any("enhance workflow selection" in issue for issue in issues), issues
+
+
 def test_worker_pipeline_plan_boundary_flags_local_plan_builders(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "worker_pipeline.py"
@@ -770,6 +793,29 @@ def test_streaming_pipeline_preflight_boundary_flags_local_context_building(tmp_
     module._check_streaming_pipeline_preflight_boundary(issues)
 
     assert any("streaming pipeline preflight" in issue for issue in issues), issues
+
+
+def test_streaming_pipeline_dispatch_boundary_flags_local_dispatch_runtime(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "pipeline.py"
+    fake_pipeline.write_text(
+        "from app.processing.streaming.pipeline_lifecycle import emit_resume_status_event\n"
+        "from app.processing.streaming.pipeline_raw import run_raw_streaming_pipeline\n"
+        "from app.processing.streaming.stage_file_pipeline import run_stage_file_pipeline\n"
+        "from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline\n\n"
+        "def _run_streaming_pipeline(use_stage_file_pipeline):\n"
+        "    emit_resume_status_event()\n"
+        "    if use_stage_file_pipeline:\n"
+        "        return run_stage_file_pipeline()\n"
+        "    return run_raw_streaming_pipeline(stage_worker_runner=run_stage_worker_pipeline)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STREAMING_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_streaming_pipeline_dispatch_boundary(issues)
+
+    assert any("streaming pipeline dispatch" in issue for issue in issues), issues
 
 
 def test_frontend_encode_output_binding_boundary_flags_local_state_and_setters(tmp_path, monkeypatch) -> None:
