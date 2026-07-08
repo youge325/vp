@@ -1,114 +1,14 @@
 <script setup lang="ts">
-import { computed, toRef } from 'vue'
+import { createEnhanceOptionBindings } from '@/composables/forms/enhance-option-bindings'
 import { useEnhanceForm } from '@/composables/forms/useEnhanceForm'
 import { useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
-import { useGpuCapabilities } from '@/composables/selectors/useGpuCapabilities'
 import BaseNumber from '@/components/forms/BaseNumber.vue'
 import BaseSelect from '@/components/forms/BaseSelect.vue'
 import BaseToggle from '@/components/forms/BaseToggle.vue'
-import {
-  FPS_MODE_OPTIONS,
-  MULTI_OPTIONS,
-  PROCESS_ORDER_OPTIONS,
-  buildAlgorithmOptions,
-  buildBackendOptions,
-  buildEngineOptions,
-  buildModelOptions,
-  buildOnnxModelOptions,
-  buildProfileOptions,
-  toFpsMode,
-  toInferenceEngine,
-  toNumberOption,
-  toProcessOrder,
-  toTensorBackend,
-} from '@/services/preset/enhance-options'
 
 const form = useEnhanceForm()
-const interpolationCapabilities = useGpuCapabilities(
-  toRef(form, 'interpolationBackend')
-)
-const superResolutionCapabilities = useGpuCapabilities(
-  toRef(form, 'superResolutionBackend')
-)
+const options = createEnhanceOptionBindings(form)
 const { targetLabel } = useEditingScope()
-
-// Phase 14.2 — 把所有 select 选项一次性 computed 化,模板里只剩 BaseSelect
-// + props,跟 Decode/Encode 视觉对齐。原 EnhanceModuleView 里 8+ 个原生
-// <select>+<option v-for> 的样板被收敛掉。
-//
-// BaseSelect 只接 string value;增强页的数字与 domain enum 转换集中在
-// ``enhance-options`` 中,这里仅把转换结果赋给 form。
-
-const backendOptions = computed(() =>
-  buildBackendOptions(interpolationCapabilities.visibleBackends.value),
-)
-
-const interpolationEngineOptions = computed(() =>
-  buildEngineOptions(interpolationCapabilities.availableEngines.value),
-)
-
-const superResolutionEngineOptions = computed(() =>
-  buildEngineOptions(superResolutionCapabilities.availableEngines.value),
-)
-
-const interpolationAlgorithmOptions = computed(() =>
-  buildAlgorithmOptions(form.interpolationAlgorithms, 'name'),
-)
-
-const interpolationModelOptions = computed(() =>
-  buildModelOptions(form.interpolationModels, form.interpolationModelDetails),
-)
-
-// ONNX 模型空列表的情况:仍然渲染 select(disabled),options 里只有占位
-// "未选择",hint 提示用户去放 .onnx 文件 —— BaseField 自带的 hint slot
-// 替换掉原视图末尾的 ``<span class="field-hint">``。
-const interpolationOnnxOptions = computed(() => [
-  ...buildOnnxModelOptions(form.interpolationOnnxModels, form.interpolationOnnxModelDetails),
-])
-
-const superResolutionAlgorithmOptions = computed(() =>
-  buildAlgorithmOptions(form.superResolutionAlgorithms, 'modelMetrics'),
-)
-
-const superResolutionOnnxOptions = computed(() => [
-  ...buildOnnxModelOptions(form.superResolutionOnnxModels, form.superResolutionOnnxModelDetails),
-])
-
-const animeProfileOptions = computed(() =>
-  buildProfileOptions(form.animeProfiles),
-)
-
-function setInterpolationBackend(value: string): void {
-  form.interpolationBackend = toTensorBackend(value)
-}
-
-function setInterpolationEngine(value: string): void {
-  form.interpolationEngine = toInferenceEngine(value)
-}
-
-function setSuperResolutionBackend(value: string): void {
-  form.superResolutionBackend = toTensorBackend(value)
-}
-
-function setSuperResolutionEngine(value: string): void {
-  form.superResolutionEngine = toInferenceEngine(value)
-}
-
-function setFpsMode(value: string): void {
-  form.fpsMode = toFpsMode(value)
-}
-
-function setInterpolationMulti(value: string): void {
-  form.interpolationMulti = toNumberOption(value)
-}
-
-function setSuperResolutionScale(value: string): void {
-  form.superResolutionScale = toNumberOption(value)
-}
-
-function setProcessOrder(value: string): void {
-  form.processOrder = toProcessOrder(value)
-}
 </script>
 
 <template>
@@ -135,50 +35,48 @@ function setProcessOrder(value: string): void {
         <BaseSelect
           label="后端"
           :model-value="form.interpolationBackend"
-          :options="backendOptions"
-          @update:model-value="setInterpolationBackend"
+          :options="options.backendOptions"
+          @update:model-value="options.setInterpolationBackend"
         />
 
         <BaseSelect
-          v-if="interpolationCapabilities.showEngineSelector.value"
+          v-if="options.interpolationShowEngineSelector"
           label="推理引擎"
           :model-value="form.interpolationEngine"
-          :options="interpolationEngineOptions"
-          @update:model-value="setInterpolationEngine"
+          :options="options.interpolationEngineOptions"
+          @update:model-value="options.setInterpolationEngine"
         />
 
         <BaseSelect
           label="算法"
           :model-value="form.interpolationAlgorithm"
-          :options="interpolationAlgorithmOptions"
-          @update:model-value="(v) => (form.interpolationAlgorithm = v)"
+          :options="options.interpolationAlgorithmOptions"
+          @update:model-value="options.setInterpolationAlgorithm"
         />
 
         <BaseSelect
           v-if="!form.isInterpolationOnnxBackend"
           label="模型"
           :model-value="form.interpolationModel"
-          :options="interpolationModelOptions"
-          @update:model-value="(v) => (form.interpolationModel = v)"
+          :options="options.interpolationModelOptions"
+          @update:model-value="options.setInterpolationModel"
         />
 
         <BaseSelect
           v-if="form.isInterpolationOnnxBackend"
           label="ONNX 补帧模型"
           :model-value="form.interpolationOnnxModel"
-          :options="interpolationOnnxOptions"
-          :disabled="form.interpolationOnnxModels.length === 0"
-          :hint="form.interpolationOnnxModels.length === 0
-            ? '未找到 ONNX 模型，请将 .onnx 文件放入 models/interpolation 目录'
-            : undefined"
-          @update:model-value="(v) => (form.interpolationOnnxModel = v)"
+          :options="options.interpolationOnnxOptions"
+          :disabled="options.interpolationOnnxDisabled"
+          :hint="options.interpolationOnnxHint"
+          @update:model-value="options.setInterpolationOnnxModel"
         />
 
         <BaseSelect
           label="帧率模式"
           :model-value="form.fpsMode"
-          :options="FPS_MODE_OPTIONS"
-          @update:model-value="setFpsMode"
+          :options="options.fpsModeOptions"
+          @update:model-value="options.setFpsMode"
         />
 
         <BaseNumber
@@ -194,8 +92,8 @@ function setProcessOrder(value: string): void {
           v-else
           label="倍率"
           :model-value="String(form.interpolationMulti)"
-          :options="MULTI_OPTIONS"
-          @update:model-value="setInterpolationMulti"
+          :options="options.multiOptions"
+          @update:model-value="options.setInterpolationMulti"
         />
 
         <BaseNumber
@@ -236,43 +134,41 @@ function setProcessOrder(value: string): void {
         <BaseSelect
           label="后端"
           :model-value="form.superResolutionBackend"
-          :options="backendOptions"
-          @update:model-value="setSuperResolutionBackend"
+          :options="options.backendOptions"
+          @update:model-value="options.setSuperResolutionBackend"
         />
 
         <BaseSelect
-          v-if="superResolutionCapabilities.showEngineSelector.value"
+          v-if="options.superResolutionShowEngineSelector"
           label="推理引擎"
           :model-value="form.superResolutionEngine"
-          :options="superResolutionEngineOptions"
-          @update:model-value="setSuperResolutionEngine"
+          :options="options.superResolutionEngineOptions"
+          @update:model-value="options.setSuperResolutionEngine"
         />
 
         <BaseSelect
           label="算法"
           :model-value="form.superResolutionAlgorithm"
-          :options="superResolutionAlgorithmOptions"
-          @update:model-value="(v) => (form.superResolutionAlgorithm = v)"
+          :options="options.superResolutionAlgorithmOptions"
+          @update:model-value="options.setSuperResolutionAlgorithm"
         />
 
         <BaseSelect
           label="倍率"
           :model-value="String(form.superResolutionScale)"
-          :options="MULTI_OPTIONS"
+          :options="options.multiOptions"
           :disabled="form.isPaddleGanSuperResolution"
-          @update:model-value="setSuperResolutionScale"
+          @update:model-value="options.setSuperResolutionScale"
         />
 
         <BaseSelect
           v-if="form.isSuperResolutionOnnxBackend"
           label="ONNX 超分模型"
           :model-value="form.superResolutionOnnxModel"
-          :options="superResolutionOnnxOptions"
-          :disabled="form.superResolutionOnnxModels.length === 0"
-          :hint="form.superResolutionOnnxModels.length === 0
-            ? '未找到 ONNX 模型，请将 .onnx 文件放入 models/super_resolution 目录'
-            : undefined"
-          @update:model-value="(v) => (form.superResolutionOnnxModel = v)"
+          :options="options.superResolutionOnnxOptions"
+          :disabled="options.superResolutionOnnxDisabled"
+          :hint="options.superResolutionOnnxHint"
+          @update:model-value="options.setSuperResolutionOnnxModel"
         />
 
         <BaseNumber
@@ -289,8 +185,8 @@ function setProcessOrder(value: string): void {
           label="处理顺序"
           span-two
           :model-value="form.processOrder"
-          :options="PROCESS_ORDER_OPTIONS"
-          @update:model-value="setProcessOrder"
+          :options="options.processOrderOptions"
+          @update:model-value="options.setProcessOrder"
         />
       </div>
 
@@ -337,8 +233,8 @@ function setProcessOrder(value: string): void {
         <BaseSelect
           label="预设"
           :model-value="form.animeProfile"
-          :options="animeProfileOptions"
-          @update:model-value="(v) => (form.animeProfile = v)"
+          :options="options.animeProfileOptions"
+          @update:model-value="options.setAnimeProfile"
         />
 
         <BaseNumber
