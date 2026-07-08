@@ -2,11 +2,12 @@
 // Default workflow config and environment hydration rules.
 
 import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { InferenceEngine } from '@/types/domain/workflow'
 import type { WorkflowConfig } from '@/types/protocol'
 import {
   pickDefaultAnimeProfile,
+  pickDefaultEngine,
   pickDefaultInterpolationAlgorithm,
+  pickDefaultInterpolationEngine,
   pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
 } from './enhance-default-pickers'
@@ -82,18 +83,8 @@ export function applyEnvironmentWorkflowDefaults(
   workflowConfig.superResolution.onnxModel =
     findSuperResolutionAlgorithm(env, workflowConfig.superResolution.algorithm)?.onnxModels?.[0] ?? ''
 
-  const vendor = env?.gpu?.adapters?.[0]?.vendor
-  const engines = (env?.tensorEngines as Record<string, string[]> | undefined)?.[interpolationBackend] ?? []
-  const superResolutionEngines =
-    (env?.tensorEngines as Record<string, string[]> | undefined)?.[superResolutionBackend] ?? []
-  if (vendor === 'hygon') {
-    workflowConfig.interpolation.engine = engines.includes('dcu') ? 'dcu' : (engines[0] as InferenceEngine) ?? 'cuda'
-  } else if (vendor === 'nvidia') {
-    workflowConfig.interpolation.engine = engines.includes('tensorrt') ? 'tensorrt' : (engines[0] as InferenceEngine) ?? 'cuda'
-  } else {
-    workflowConfig.interpolation.engine = (engines[0] as InferenceEngine) ?? 'cuda'
-  }
-  workflowConfig.superResolution.engine = (superResolutionEngines[0] as InferenceEngine) ?? 'cuda'
+  workflowConfig.interpolation.engine = pickDefaultInterpolationEngine(env, interpolationBackend) ?? 'cuda'
+  workflowConfig.superResolution.engine = pickDefaultEngine(env, superResolutionBackend) ?? 'cuda'
 }
 
 export function createDefaultWorkflowConfigForEnvironment(

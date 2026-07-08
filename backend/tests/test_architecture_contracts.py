@@ -1516,6 +1516,24 @@ def test_frontend_workflow_defaults_lookup_boundary_flags_direct_algorithm_looku
     assert any("workflow defaults lookup" in issue for issue in issues), issues
 
 
+def test_frontend_workflow_defaults_engine_boundary_flags_local_engine_preference(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_defaults = tmp_path / "workflow-defaults.ts"
+    fake_defaults.write_text(
+        "import type { InferenceEngine } from '@/types/domain/workflow'\n"
+        "const vendor = env?.gpu?.adapters?.[0]?.vendor\n"
+        "const engines = env?.tensorEngines?.[backend] ?? []\n"
+        "if (vendor === 'nvidia') workflow.interpolation.engine = engines.includes('tensorrt') ? 'tensorrt' : (engines[0] as InferenceEngine)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKFLOW_DEFAULTS", fake_defaults)
+    issues: list[str] = []
+
+    module._check_frontend_workflow_defaults_engine_boundary(issues)
+
+    assert any("workflow defaults engine" in issue for issue in issues), issues
+
+
 def test_frontend_preset_normalize_boundary_flags_decoder_hardware_reexport(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_normalize = tmp_path / "normalize.ts"

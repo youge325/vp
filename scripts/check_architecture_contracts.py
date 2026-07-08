@@ -1010,6 +1010,20 @@ def _check_frontend_workflow_defaults_lookup_boundary(issues: list[str]) -> None
             issues.append(f"workflow defaults lookup `{label}` remains in {_rel(WORKFLOW_DEFAULTS)}")
 
 
+def _check_frontend_workflow_defaults_engine_boundary(issues: list[str]) -> None:
+    text = _read(WORKFLOW_DEFAULTS)
+    forbidden_patterns = {
+        "workflow engine type import": r"\bInferenceEngine\b",
+        "tensor engine lookup": r"\btensorEngines\b",
+        "gpu vendor lookup": r"\bgpu\?\.adapters\b",
+        "vendor branch": r"\bvendor\s*===\s*['\"](?:hygon|nvidia)['\"]",
+        "engine preference check": r"\bengines\.includes\s*\(",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(f"workflow defaults engine `{label}` remains in {_rel(WORKFLOW_DEFAULTS)}")
+
+
 def _check_frontend_preset_normalize_boundary(issues: list[str]) -> None:
     text = _read(PRESET_NORMALIZE)
     forbidden_patterns = {
@@ -1540,6 +1554,7 @@ def main() -> int:
         _check_frontend_decode_hardware_binding_boundary(issues)
         _check_frontend_defaults_workflow_boundary(issues)
         _check_frontend_workflow_defaults_lookup_boundary(issues)
+        _check_frontend_workflow_defaults_engine_boundary(issues)
         _check_frontend_preset_normalize_boundary(issues)
         _check_frontend_encode_output_binding_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
