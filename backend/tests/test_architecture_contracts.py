@@ -748,6 +748,30 @@ def test_streaming_pipeline_lifecycle_boundary_flags_local_resume_and_finalize(t
     assert any("streaming pipeline lifecycle" in issue for issue in issues), issues
 
 
+def test_streaming_pipeline_preflight_boundary_flags_local_context_building(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "pipeline.py"
+    fake_pipeline.write_text(
+        "from app.planning import build_signature, build_stage_plan, normalize_processing_steps, resolve_video_info\n"
+        "from app.processing.streaming.pipeline_rules import build_config_snapshot, resolved_output_dimensions\n\n"
+        "def process_video_streaming(ffmpeg, input_path, output_path):\n"
+        "    resolved_steps = normalize_processing_steps([])\n"
+        "    video_info = resolve_video_info(ffmpeg, input_path)\n"
+        "    stage_plan = build_stage_plan(resolved_steps, video_info['source_frames'], source_duration=video_info['duration'], output_fps=None)\n"
+        "    signature = build_signature(input_path=input_path, output_path=output_path, decode_config={}, encode_config={}, workflow_config={}, output_config={}, processing_steps=resolved_steps, video_info=video_info)\n"
+        "    config_snapshot = build_config_snapshot(input_path=input_path, output_path=output_path, decode_config={}, encode_config={}, workflow_config={}, output_config={}, processing_steps=resolved_steps, video_info=video_info)\n"
+        "    output_width, output_height = resolved_output_dimensions(video_info=video_info, stage_plan=stage_plan, tensor_backend_name='onnx')\n"
+        "    segment_frames = max(1, int(0 or 1000))\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STREAMING_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_streaming_pipeline_preflight_boundary(issues)
+
+    assert any("streaming pipeline preflight" in issue for issue in issues), issues
+
+
 def test_frontend_encode_output_binding_boundary_flags_local_state_and_setters(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_binding = tmp_path / "encode-output-bindings.ts"
@@ -768,6 +792,31 @@ def test_frontend_encode_output_binding_boundary_flags_local_state_and_setters(t
     module._check_frontend_encode_output_binding_boundary(issues)
 
     assert any("encode output binding rule" in issue for issue in issues), issues
+
+
+def test_frontend_defaults_workflow_boundary_flags_local_hydration_rules(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_defaults = tmp_path / "defaults.ts"
+    fake_defaults.write_text(
+        "import { pickDefaultInterpolationAlgorithm } from './enhance-rules'\n"
+        "import type { InferenceEngine } from '@/types/domain/workflow'\n\n"
+        "export function createDefaultWorkbenchPreset(env) {\n"
+        "  const workflowConfig = createDefaultWorkflowConfig()\n"
+        "  const algorithm = pickDefaultInterpolationAlgorithm(env, workflowConfig.interpolation.tensorBackend)\n"
+        "  workflowConfig.interpolation.algorithm = algorithm\n"
+        "  const vendor = env?.gpu?.adapters?.[0]?.vendor\n"
+        "  const engines = env?.tensorEngines?.[workflowConfig.interpolation.tensorBackend] ?? []\n"
+        "  if (vendor === 'nvidia') workflowConfig.interpolation.engine = engines.includes('tensorrt') ? 'tensorrt' : (engines[0] as InferenceEngine)\n"
+        "  return { workflowConfig }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PRESET_DEFAULTS", fake_defaults)
+    issues: list[str] = []
+
+    module._check_frontend_defaults_workflow_boundary(issues)
+
+    assert any("workflow default rule" in issue for issue in issues), issues
 
 
 def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:
