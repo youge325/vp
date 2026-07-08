@@ -1288,6 +1288,21 @@ def test_streaming_pipeline_dispatch_boundary_flags_local_dispatch_runtime(tmp_p
     assert any("streaming pipeline dispatch" in issue for issue in issues), issues
 
 
+def test_streaming_pipeline_dispatch_boundary_flags_dispatch_alias_import(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "pipeline.py"
+    fake_pipeline.write_text(
+        "from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline as _run_streaming_pipeline\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STREAMING_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_streaming_pipeline_dispatch_boundary(issues)
+
+    assert any("dispatch alias import" in issue for issue in issues), issues
+
+
 def test_encoder_helper_boundary_flags_local_segment_and_finalize_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_encoder = tmp_path / "encoder.py"

@@ -1,7 +1,7 @@
 """Streaming pipeline orchestrator.
 
 Builds the stage plan + resume signature, runs the decode/process/encode
-threads through :func:`_run_streaming_pipeline`, and finalizes the
+threads through :func:`run_streaming_pipeline`, and finalizes the
 segmented output. Public entry point: :func:`process_video_streaming`.
 """
 
@@ -18,7 +18,7 @@ from app.processing.streaming.pipeline_lifecycle import (
     prepare_streaming_manifest,
 )
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline as _run_streaming_pipeline
+from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline
 from app.processing.streaming.pipeline_preflight import build_streaming_pipeline_preflight
 from app.utils.ffmpeg import FFmpegWrapper
 
@@ -68,7 +68,7 @@ def process_video_streaming(
     if resume_state.start_source_frame >= preflight.resume_source_frames:
         completed_output_frames = resume_state.completed_output_frames
     else:
-        completed_output_frames = _run_streaming_pipeline(
+        completed_output_frames = run_streaming_pipeline(
             ffmpeg=ffmpeg,
             input_path=input_path,
             decode_config=decode_config,
