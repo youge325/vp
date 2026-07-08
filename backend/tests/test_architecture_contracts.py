@@ -144,6 +144,25 @@ def test_frontend_enhance_workflow_selection_boundary_flags_local_selection_help
     assert any("enhance workflow selection" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_workflow_lookup_boundary_flags_local_lookup_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_selection = tmp_path / "enhance-workflow-selection.ts"
+    fake_selection.write_text(
+        "const TENSOR_BACKENDS = ['pytorch', 'paddle', 'onnx']\n"
+        "function isTensorBackend(value) { return true }\n"
+        "export function findInterpolationAlgorithm() {}\n"
+        "export function findSuperResolutionAlgorithm() {}\n"
+        "export function pickSupportedBackend() {}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_WORKFLOW_SELECTION", fake_selection, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_workflow_lookup_boundary(issues)
+
+    assert any("enhance workflow lookup" in issue for issue in issues), issues
+
+
 def test_frontend_enhance_rules_split_boundary_flags_local_rule_bodies(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_rules = tmp_path / "enhance-rules.ts"
@@ -814,6 +833,29 @@ def test_stage_worker_execution_boundary_flags_local_stage_loops(tmp_path, monke
     module._check_stage_worker_execution_boundary(issues)
 
     assert any("stage worker execution rule" in issue for issue in issues), issues
+
+
+def test_stage_worker_config_boundary_flags_local_config_model(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_stage_worker = tmp_path / "stage_worker.py"
+    fake_stage_worker.write_text(
+        "import json\n"
+        "from app.planning import normalize_processing_step\n\n"
+        "class StageWorkerConfig:\n"
+        "    def from_mapping(self):\n"
+        "        normalize_processing_step({})\n"
+        "    def from_json_file(self):\n"
+        "        json.load(open('config.json'))\n"
+        "    def to_jsonable(self):\n"
+        "        return {}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_WORKER", fake_stage_worker)
+    issues: list[str] = []
+
+    module._check_stage_worker_config_boundary(issues)
+
+    assert any("stage worker config" in issue for issue in issues), issues
 
 
 def test_streaming_pipeline_rule_boundary_flags_local_pipeline_rules(tmp_path, monkeypatch) -> None:
