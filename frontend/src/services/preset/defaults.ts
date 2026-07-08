@@ -18,7 +18,7 @@ import {
 // 表示"未选 / 未填",backend Pydantic ``OutputConfig.output_dir`` validator
 // (min_length=1 + 非空白)在 wire 入口拒。默认创建预设 / 新 item 时 outputDir
 // 是 ``null``,用户必须主动选择目录后才能启动批处理。
-export function createDefaultOutputConfig(outputDir: string | null = null): OutputConfig {
+function createDefaultOutputConfig(outputDir: string | null = null): OutputConfig {
   return {
     outputDir,
     openOnComplete: true,

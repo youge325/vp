@@ -1,14 +1,14 @@
 import { computed, reactive } from 'vue'
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultEncodeConfig, createDefaultOutputConfig } from '@/services/preset/defaults'
+import { createDefaultEncodeConfig, createDefaultWorkbenchPreset } from '@/services/preset/defaults'
 import { createEncodeOutputState } from './encode-output-state'
 import type { WorkbenchPreset } from '@/types/protocol'
 
 function makeEditorConfig() {
   return reactive({
     encodeConfig: createDefaultEncodeConfig(null),
-    outputConfig: createDefaultOutputConfig('D:/Output'),
+    outputConfig: { ...createDefaultWorkbenchPreset(null).outputConfig, outputDir: 'D:/Output' },
   } as Pick<WorkbenchPreset, 'encodeConfig' | 'outputConfig'>)
 }
 

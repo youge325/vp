@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultEncodeConfig, createDefaultOutputConfig } from '@/services/preset/defaults'
+import { createDefaultEncodeConfig, createDefaultWorkbenchPreset } from '@/services/preset/defaults'
 import { createEncodeOutputSetters } from './encode-output-setters'
 import type { EncodeConfig, OutputConfig } from '@/types/protocol'
 
 describe('encode output setters', () => {
   it('patches encode and output fields with existing normalization rules', () => {
     const encodeConfig = createDefaultEncodeConfig(null)
-    const outputConfig = createDefaultOutputConfig()
+    const outputConfig = createDefaultWorkbenchPreset(null).outputConfig
     const setters = createEncodeOutputSetters({
       patchEncode: (mutator: (config: EncodeConfig) => void) => { mutator(encodeConfig) },
       patchOutput: (mutator: (config: OutputConfig) => void) => { mutator(outputConfig) },
@@ -32,7 +32,7 @@ describe('encode output setters', () => {
 
   it('normalizes blank output directories to null and rounds positive segment frames', () => {
     const encodeConfig = createDefaultEncodeConfig(null)
-    const outputConfig = createDefaultOutputConfig('D:/Output')
+    const outputConfig = { ...createDefaultWorkbenchPreset(null).outputConfig, outputDir: 'D:/Output' }
     const setters = createEncodeOutputSetters({
       patchEncode: (mutator: (config: EncodeConfig) => void) => { mutator(encodeConfig) },
       patchOutput: (mutator: (config: OutputConfig) => void) => { mutator(outputConfig) },

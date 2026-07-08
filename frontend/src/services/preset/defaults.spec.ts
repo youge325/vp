@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultDecodeConfig } from './defaults'
+import * as presetDefaults from './defaults'
+import { createDefaultDecodeConfig, createDefaultWorkbenchPreset } from './defaults'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { HardwareDeviceOptionSpec } from '@/types/domain/capability'
 
@@ -39,6 +40,20 @@ const decoderProfile = (
   hardwareDevices,
   hardwareDeviceOptions,
   options: [],
+})
+
+describe('preset defaults public surface', () => {
+  it('keeps output config defaults private to the workbench preset factory', () => {
+    expect('createDefaultOutputConfig' in presetDefaults).toBe(false)
+  })
+
+  it('creates default output config through the workbench preset factory', () => {
+    expect(createDefaultWorkbenchPreset(null).outputConfig).toEqual({
+      outputDir: null,
+      openOnComplete: true,
+      segmentFrames: 1000,
+    })
+  })
 })
 
 describe('createDefaultDecodeConfig decoder hardware devices', () => {
