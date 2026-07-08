@@ -13,13 +13,15 @@ from app.planning import StagePlan
 from app.planning.manifest import ResumeState
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.worker_plans import StageWorkerPlan
-from app.processing.streaming.worker_processes import (
+from app.processing.streaming.worker_process_events import read_worker_stderr
+from app.processing.streaming.worker_process_io import (
     close_pipe,
     drain_final_worker_output,
-    read_worker_stderr,
+    write_decoded_frames_to_worker,
+)
+from app.processing.streaming.worker_processes import (
     spawn_stage_workers,
     wait_for_workers,
-    write_decoded_frames_to_worker,
 )
 
 

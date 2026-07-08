@@ -31,6 +31,7 @@ STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_wo
 STAGE_WORKER_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_runtime.py"
 STAGE_FILE_CHUNK_ENCODING = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_encoding.py"
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
+WORKER_CHAIN_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_chain_runtime.py"
 WORKER_PROCESSES = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_processes.py"
 WORKER_PROCESS_EVENTS = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_process_events.py"
 WORKER_PROCESS_IO = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_process_io.py"
@@ -1042,6 +1043,27 @@ def _check_worker_processes_event_io_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_worker_process_helper_import_boundary(issues: list[str]) -> None:
+    helper_tokens = (
+        "close_pipe",
+        "drain_final_worker_output",
+        "parse_stage_event_line",
+        "read_worker_stderr",
+        "write_decoded_frames_to_worker",
+    )
+    import_pattern = re.compile(
+        r"from\s+app\.processing\.streaming\.worker_processes\s+import\s+(?:\((?P<block>.*?)\)|(?P<line>[^\n]+))",
+        re.DOTALL,
+    )
+    for path in (STAGE_FILE_CHUNK_RUNTIME, WORKER_CHAIN_RUNTIME, WORKER_PIPELINE):
+        text = _read(path)
+        for match in import_pattern.finditer(text):
+            imported_names = match.group("block") or match.group("line") or ""
+            leaked = [token for token in helper_tokens if token in imported_names]
+            for token in leaked:
+                issues.append(f"worker process helper `{token}` import remains in {_rel(path)}")
+
+
 def _check_stage_file_pipeline_chunk_boundary(issues: list[str]) -> None:
     text = _read(STAGE_FILE_PIPELINE)
     forbidden_patterns = {
@@ -1394,6 +1416,7 @@ def main() -> int:
         _check_worker_pipeline_chain_runtime_boundary(issues)
         _check_worker_pipeline_file_boundary(issues)
         _check_worker_processes_event_io_boundary(issues)
+        _check_worker_process_helper_import_boundary(issues)
         _check_stage_file_pipeline_chunk_boundary(issues)
         _check_stage_file_chunks_runtime_boundary(issues)
         _check_stage_file_chunk_runtime_encoding_boundary(issues)

@@ -23,9 +23,7 @@ from app.processing.streaming.worker_plans import (
     build_stage_chunk_plans,
     build_stage_worker_plans,
 )
-from app.processing.streaming.worker_processes import (
-    parse_stage_event_line,
-)
+from app.processing.streaming.worker_process_events import parse_stage_event_line
 
 
 def run_stage_worker_pipeline(
