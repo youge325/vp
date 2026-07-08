@@ -34,7 +34,6 @@ def run_raw_pipeline_runtime(
     output_fps: float | None,
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
     metrics: PipelineMetrics,
-    stage_worker_runner: Callable[..., None] | None = None,
 ) -> int:
     state = create_raw_pipeline_state()
 
@@ -67,7 +66,6 @@ def run_raw_pipeline_runtime(
         resume_state=resume_state,
         metrics=metrics,
         state=state,
-        stage_worker_runner=stage_worker_runner,
     )
     return finish_raw_pipeline_runtime(
         encoder_thread=encoder_thread,

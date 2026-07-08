@@ -8,12 +8,14 @@ from app.processing.streaming.pipeline_raw_stage import run_raw_stage_worker
 from app.processing.streaming.pipeline_raw_state import create_raw_pipeline_state
 
 
-def test_run_raw_stage_worker_uses_injected_runner_with_runtime_state() -> None:
+def test_run_raw_stage_worker_forwards_runtime_state(monkeypatch) -> None:
     state = create_raw_pipeline_state()
     calls: list[dict[str, Any]] = []
 
     def fake_runner(**kwargs: Any) -> None:
         calls.append(kwargs)
+
+    monkeypatch.setattr("app.processing.streaming.pipeline_raw_stage.run_stage_worker_pipeline", fake_runner)
 
     run_raw_stage_worker(
         ffmpeg=object(),  # type: ignore[arg-type]
@@ -33,7 +35,6 @@ def test_run_raw_stage_worker_uses_injected_runner_with_runtime_state() -> None:
         resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
         metrics=PipelineMetrics(),
         state=state,
-        stage_worker_runner=fake_runner,
     )
 
     assert len(calls) == 1

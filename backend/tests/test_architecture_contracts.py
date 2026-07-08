@@ -1564,6 +1564,8 @@ def test_pipeline_raw_runtime_boundary_flags_worker_chain_coupling(tmp_path, mon
     assert any("worker pipeline import" in issue for issue in issues), issues
     assert any("worker pipeline symbol" in issue for issue in issues), issues
     assert any("stage runner type import" in issue for issue in issues), issues
+    assert any("stage runner parameter" in issue for issue in issues), issues
+    assert any("stage runner forwarding" in issue for issue in issues), issues
 
 
 def test_pipeline_raw_runtime_encoder_boundary_flags_private_encoder_worker_dependency(tmp_path, monkeypatch) -> None:
@@ -1659,6 +1661,7 @@ def test_pipeline_raw_runtime_stage_boundary_flags_local_worker_runner(tmp_path,
         "from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline\n\n"
         "def run_raw_pipeline_runtime(stage_worker_runner=None):\n"
         "    runner = stage_worker_runner or run_stage_worker_pipeline\n"
+        "    run_raw_stage_worker(stage_worker_runner=stage_worker_runner)\n"
         "    runner(input_path='input.mp4')\n"
         '__all__ = ["StageWorkerRunner", "run_raw_pipeline_runtime"]\n',
         encoding="utf-8",
@@ -1672,6 +1675,8 @@ def test_pipeline_raw_runtime_stage_boundary_flags_local_worker_runner(tmp_path,
     assert any("stage runner type export" in issue for issue in issues), issues
     assert any("worker pipeline import" in issue for issue in issues), issues
     assert any("worker pipeline symbol" in issue for issue in issues), issues
+    assert any("stage runner parameter" in issue for issue in issues), issues
+    assert any("stage runner forwarding" in issue for issue in issues), issues
     assert any("runner fallback" in issue for issue in issues), issues
     assert any("runner local" in issue for issue in issues), issues
 
@@ -1683,7 +1688,8 @@ def test_pipeline_raw_stage_boundary_flags_runner_alias_exports(tmp_path, monkey
         "from typing import Callable\n\n"
         "StageWorkerRunner = Callable[..., None]\n\n"
         "def run_raw_stage_worker(stage_worker_runner: StageWorkerRunner | None = None):\n"
-        "    pass\n\n"
+        "    runner = stage_worker_runner or run_stage_worker_pipeline\n"
+        "    runner()\n\n"
         '__all__ = ["StageWorkerRunner", "run_raw_stage_worker"]\n',
         encoding="utf-8",
     )
@@ -1694,6 +1700,8 @@ def test_pipeline_raw_stage_boundary_flags_runner_alias_exports(tmp_path, monkey
 
     assert any("runner alias" in issue for issue in issues), issues
     assert any("runner type reference" in issue for issue in issues), issues
+    assert any("runner injection parameter" in issue for issue in issues), issues
+    assert any("runner fallback" in issue for issue in issues), issues
     assert any("runner export" in issue for issue in issues), issues
 
 
