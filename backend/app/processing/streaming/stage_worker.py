@@ -32,10 +32,6 @@ if TYPE_CHECKING:
     from app.processing.streaming.stage_worker_factory import AlgorithmFactoryFn, BackendFactoryFn
     from app.processing.streaming.stage_worker_progress import EventSink
 
-_run_interpolation_stage = run_interpolation_stage
-_run_sequence_stage = run_sequence_stage
-_run_single_frame_stage = run_single_frame_stage
-
 
 def run_stage_worker_stream(
     config: StageWorkerConfig,
@@ -56,7 +52,7 @@ def run_stage_worker_stream(
     metrics = PipelineMetrics()
 
     if algorithm_needs_sequence(algorithm):
-        written = _run_sequence_stage(
+        written = run_sequence_stage(
             config,
             input_stream,
             output_stream,
@@ -66,9 +62,9 @@ def run_stage_worker_stream(
             heartbeat_seconds=stage_worker_progress.SEQUENCE_STAGE_HEARTBEAT_SECONDS,
         )
     elif algorithm_needs_pairs(algorithm):
-        written = _run_interpolation_stage(config, input_stream, output_stream, backend, algorithm, sink, metrics)
+        written = run_interpolation_stage(config, input_stream, output_stream, backend, algorithm, sink, metrics)
     else:
-        written = _run_single_frame_stage(config, input_stream, output_stream, backend, algorithm, sink, metrics)
+        written = run_single_frame_stage(config, input_stream, output_stream, backend, algorithm, sink, metrics)
 
     flush = getattr(output_stream, "flush", None)
     if callable(flush):

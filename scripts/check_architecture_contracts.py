@@ -1356,6 +1356,11 @@ def _check_stage_worker_execution_boundary(issues: list[str]) -> None:
         "_run_sequence_stage": r"^\s*def\s+_run_sequence_stage\b",
         "_run_interpolation_stage": r"^\s*def\s+_run_interpolation_stage\b",
         "_run_single_frame_stage": r"^\s*def\s+_run_single_frame_stage\b",
+        "stage execution alias assignment": (
+            r"^_run_(?:sequence|interpolation|single_frame)_stage\s*=\s*"
+            r"run_(?:sequence|interpolation|single_frame)_stage\b"
+        ),
+        "stage execution alias call": (r"(?<!def )\b_run_(?:sequence|interpolation|single_frame)_stage\s*\("),
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
