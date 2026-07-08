@@ -41,6 +41,8 @@ ENHANCE_FIELD_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-field
 ENHANCE_OPTION_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-option-bindings.ts"
 DECODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-form-bindings.ts"
 ENCODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-form-bindings.ts"
+DECODE_PROFILE_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-profile-bindings.ts"
+ENCODE_PROFILE_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-profile-bindings.ts"
 ENHANCE_VIEW = FRONTEND_SRC / "views" / "EnhanceModuleView.vue"
 DECODE_VIEW = FRONTEND_SRC / "views" / "DecodeModuleView.vue"
 ENCODE_VIEW = FRONTEND_SRC / "views" / "EncodeModuleView.vue"
@@ -51,6 +53,10 @@ FRONTEND_FORM_COMPOSABLES = [
 FRONTEND_IO_FORM_BINDINGS = [
     DECODE_FORM_BINDINGS,
     ENCODE_FORM_BINDINGS,
+]
+FRONTEND_IO_PROFILE_BINDINGS = [
+    DECODE_PROFILE_BINDINGS,
+    ENCODE_PROFILE_BINDINGS,
 ]
 
 
@@ -680,6 +686,19 @@ def _check_frontend_io_form_aggregator_boundary(issues: list[str]) -> None:
                 issues.append(f"io form rule `{label}` leaked into form binding aggregator: {_rel(path)}")
 
 
+def _check_frontend_io_profile_state_boundary(issues: list[str]) -> None:
+    forbidden_patterns = {
+        "buildProfileOptions import": r"\bbuildProfileOptions\b",
+        "current profile computed": r"\bcurrent(?:Decoder|Encoder)Profile\s*=\s*computed\s*\(",
+        "capability options computed": r"\b(?:decoder|encoder)Options\s*=\s*computed\s*\(",
+    }
+    for path in FRONTEND_IO_PROFILE_BINDINGS:
+        text = _read(path)
+        for label, pattern in forbidden_patterns.items():
+            if re.search(pattern, text):
+                issues.append(f"io profile state rule `{label}` leaked into profile binding: {_rel(path)}")
+
+
 def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
     text = _read(WORKER_PIPELINE)
     forbidden_patterns = {
@@ -710,6 +729,29 @@ def _check_worker_pipeline_process_boundary(issues: list[str]) -> None:
         if re.search(pattern, text, re.MULTILINE):
             issues.append(
                 f"worker process helper `{label}` remains in backend/app/processing/streaming/worker_pipeline.py"
+            )
+
+
+def _check_worker_pipeline_chain_runtime_boundary(issues: list[str]) -> None:
+    text = _read(WORKER_PIPELINE)
+    forbidden_patterns = {
+        "Path import": r"^\s*from\s+pathlib\s+import\s+Path\b",
+        "sys import": r"^\s*import\s+sys\b",
+        "tempfile import": r"^\s*import\s+tempfile\b",
+        "threading import": r"^\s*import\s+threading\b",
+        "temporary directory": r"\bTemporaryDirectory\s*\(",
+        "thread allocation": r"\bthreading\.Thread\s*\(",
+        "close_pipe": r"\bclose_pipe\b",
+        "drain_final_worker_output": r"\bdrain_final_worker_output\b",
+        "read_worker_stderr": r"\bread_worker_stderr\b",
+        "spawn_stage_workers": r"\bspawn_stage_workers\b",
+        "wait_for_workers": r"\bwait_for_workers\b",
+        "write_decoded_frames_to_worker": r"\bwrite_decoded_frames_to_worker\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"worker chain runtime `{label}` remains in backend/app/processing/streaming/worker_pipeline.py"
             )
 
 
@@ -907,8 +949,10 @@ def main() -> int:
         _check_frontend_io_form_rule_boundary(issues)
         _check_frontend_io_form_binding_boundary(issues)
         _check_frontend_io_form_aggregator_boundary(issues)
+        _check_frontend_io_profile_state_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)
+        _check_worker_pipeline_chain_runtime_boundary(issues)
         _check_worker_pipeline_file_boundary(issues)
         _check_stage_file_pipeline_chunk_boundary(issues)
         _check_stage_file_chunks_runtime_boundary(issues)

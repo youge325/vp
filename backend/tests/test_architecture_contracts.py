@@ -176,6 +176,28 @@ def test_worker_pipeline_process_boundary_flags_local_runtime_helpers(tmp_path, 
     assert any("worker process helper" in issue for issue in issues), issues
 
 
+def test_worker_pipeline_chain_runtime_boundary_flags_local_thread_and_io_runtime(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "worker_pipeline.py"
+    fake_pipeline.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "import tempfile\n"
+        "import threading\n"
+        "from app.processing.streaming.worker_processes import spawn_stage_workers, read_worker_stderr\n\n"
+        "with tempfile.TemporaryDirectory(prefix='vp-stage-workers-') as config_dir:\n"
+        "    handles = spawn_stage_workers([], config_dir=Path(config_dir), python_executable=sys.executable)\n"
+        "    threading.Thread(target=read_worker_stderr)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKER_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_worker_pipeline_chain_runtime_boundary(issues)
+
+    assert any("worker chain runtime" in issue for issue in issues), issues
+
+
 def test_enhance_view_option_boundary_flags_view_local_option_rules(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_view = tmp_path / "EnhanceModuleView.vue"
@@ -330,6 +352,30 @@ def test_frontend_io_form_aggregator_boundary_flags_rule_leaks(tmp_path, monkeyp
     module._check_frontend_io_form_aggregator_boundary(issues)
 
     assert any("io form rule" in issue and "aggregator" in issue for issue in issues), issues
+
+
+def test_frontend_io_profile_state_boundary_flags_local_profile_derivation(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_decode_profile = tmp_path / "decode-profile-bindings.ts"
+    fake_encode_profile = tmp_path / "encode-profile-bindings.ts"
+    fake_decode_profile.write_text(
+        "import { buildProfileOptions } from '@/services/preset/io-options'\n"
+        "const decoderProfileOptions = computed(() => buildProfileOptions(visibleDecoderProfiles.value))\n"
+        "const currentDecoderProfile = computed(() => visibleDecoderProfiles.value.find((profile) => profile.name === selected))\n"
+        "const decoderOptions = computed(() => currentDecoderProfile.value?.options ?? [])\n",
+        encoding="utf-8",
+    )
+    fake_encode_profile.write_text(
+        "const currentEncoderProfile = computed(() => visibleEncoderProfiles.value.find((profile) => profile.name === selected))\n"
+        "const encoderOptions = computed(() => currentEncoderProfile.value?.options ?? [])\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "FRONTEND_IO_PROFILE_BINDINGS", [fake_decode_profile, fake_encode_profile])
+    issues: list[str] = []
+
+    module._check_frontend_io_profile_state_boundary(issues)
+
+    assert any("io profile state rule" in issue for issue in issues), issues
 
 
 def test_frontend_enhance_binding_boundary_flags_composable_binding_leaks(tmp_path, monkeypatch) -> None:
