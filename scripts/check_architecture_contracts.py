@@ -39,6 +39,7 @@ ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder.py"
 ENCODER_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_worker.py"
 PIPELINE_RAW = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw.py"
 PIPELINE_RAW_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_runtime.py"
+PIPELINE_RAW_STAGE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_stage.py"
 PIPELINE_DISPATCH = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_dispatch.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
 PIPELINE_LIFECYCLE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_lifecycle.py"
@@ -1478,6 +1479,18 @@ def _check_pipeline_raw_runtime_stage_boundary(issues: list[str]) -> None:
             issues.append(f"pipeline raw stage runner `{label}` remains in {_rel(PIPELINE_RAW_RUNTIME)}")
 
 
+def _check_pipeline_raw_stage_boundary(issues: list[str]) -> None:
+    text = _read(PIPELINE_RAW_STAGE)
+    forbidden_patterns = {
+        "runner alias": r"^StageWorkerRunner\s*=",
+        "runner type reference": r"\bstage_worker_runner\s*:\s*StageWorkerRunner\b",
+        "runner export": r"__all__\s*=\s*\[[^\]]*\"StageWorkerRunner\"",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"pipeline raw stage `{label}` remains in {_rel(PIPELINE_RAW_STAGE)}")
+
+
 def _check_streaming_pipeline_lifecycle_boundary(issues: list[str]) -> None:
     text = _read(STREAMING_PIPELINE)
     forbidden_patterns = {
@@ -1748,6 +1761,7 @@ def main() -> int:
         _check_pipeline_raw_runtime_completion_boundary(issues)
         _check_pipeline_raw_runtime_state_boundary(issues)
         _check_pipeline_raw_runtime_stage_boundary(issues)
+        _check_pipeline_raw_stage_boundary(issues)
         _check_streaming_pipeline_lifecycle_boundary(issues)
         _check_streaming_pipeline_preflight_boundary(issues)
         _check_streaming_pipeline_dispatch_boundary(issues)
