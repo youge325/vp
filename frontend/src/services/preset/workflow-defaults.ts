@@ -11,6 +11,7 @@ import {
   pickDefaultSuperResolutionAlgorithm,
 } from './enhance-default-pickers'
 import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolution-defaults'
+import { findInterpolationAlgorithm, findSuperResolutionAlgorithm } from './enhance-workflow-lookup'
 
 export function createDefaultWorkflowConfig(): WorkflowConfig {
   return {
@@ -71,17 +72,15 @@ export function applyEnvironmentWorkflowDefaults(
   )
   applySuperResolutionAlgorithmDefaults(
     workflowConfig,
-    env?.superResolutionAlgorithms?.find((a) => a.name === workflowConfig.superResolution.algorithm),
+    findSuperResolutionAlgorithm(env, workflowConfig.superResolution.algorithm),
     env,
   )
   workflowConfig.anime.profile = pickDefaultAnimeProfile(env)
 
   workflowConfig.interpolation.onnxModel =
-    env?.interpolationAlgorithms?.find((a) => a.name === workflowConfig.interpolation.algorithm)
-      ?.onnxModels?.[0] ?? ''
+    findInterpolationAlgorithm(env, workflowConfig.interpolation.algorithm)?.onnxModels?.[0] ?? ''
   workflowConfig.superResolution.onnxModel =
-    env?.superResolutionAlgorithms?.find((a) => a.name === workflowConfig.superResolution.algorithm)
-      ?.onnxModels?.[0] ?? ''
+    findSuperResolutionAlgorithm(env, workflowConfig.superResolution.algorithm)?.onnxModels?.[0] ?? ''
 
   const vendor = env?.gpu?.adapters?.[0]?.vendor
   const engines = (env?.tensorEngines as Record<string, string[]> | undefined)?.[interpolationBackend] ?? []

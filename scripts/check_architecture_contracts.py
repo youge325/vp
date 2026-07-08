@@ -50,6 +50,7 @@ CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_validation.py"
 MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
+WORKFLOW_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "workflow-defaults.ts"
 PRESET_NORMALIZE = FRONTEND_SRC / "services" / "preset" / "normalize.ts"
 ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
 ENHANCE_DEFAULT_SELECTION = FRONTEND_SRC / "services" / "preset" / "enhance-default-selection.ts"
@@ -998,6 +999,17 @@ def _check_frontend_defaults_workflow_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_frontend_workflow_defaults_lookup_boundary(issues: list[str]) -> None:
+    text = _read(WORKFLOW_DEFAULTS)
+    forbidden_patterns = {
+        "direct interpolation lookup": r"\binterpolationAlgorithms\?\.\s*find\s*\(",
+        "direct super-resolution lookup": r"\bsuperResolutionAlgorithms\?\.\s*find\s*\(",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(f"workflow defaults lookup `{label}` remains in {_rel(WORKFLOW_DEFAULTS)}")
+
+
 def _check_frontend_preset_normalize_boundary(issues: list[str]) -> None:
     text = _read(PRESET_NORMALIZE)
     forbidden_patterns = {
@@ -1527,6 +1539,7 @@ def main() -> int:
         _check_frontend_io_profile_state_boundary(issues)
         _check_frontend_decode_hardware_binding_boundary(issues)
         _check_frontend_defaults_workflow_boundary(issues)
+        _check_frontend_workflow_defaults_lookup_boundary(issues)
         _check_frontend_preset_normalize_boundary(issues)
         _check_frontend_encode_output_binding_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
