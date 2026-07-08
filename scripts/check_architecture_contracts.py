@@ -72,6 +72,7 @@ ENCODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-form-bin
 DECODE_PROFILE_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-profile-bindings.ts"
 ENCODE_PROFILE_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-profile-bindings.ts"
 ENCODE_OUTPUT_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-output-bindings.ts"
+USE_TASK_ORCHESTRATOR = FRONTEND_SRC / "composables" / "app" / "useTaskOrchestrator.ts"
 ENHANCE_VIEW = FRONTEND_SRC / "views" / "EnhanceModuleView.vue"
 DECODE_VIEW = FRONTEND_SRC / "views" / "DecodeModuleView.vue"
 ENCODE_VIEW = FRONTEND_SRC / "views" / "EncodeModuleView.vue"
@@ -826,6 +827,17 @@ def _check_frontend_model_metrics_barrel_boundary(issues: list[str]) -> None:
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
             issues.append(f"model metrics barrel `{label}` remains in {_rel(MODEL_METRICS)}")
+
+
+def _check_frontend_task_orchestrator_runtime_boundary(issues: list[str]) -> None:
+    text = _read(USE_TASK_ORCHESTRATOR)
+    forbidden_patterns = {
+        "runtime dispose re-export": r"\bexport\s+\{\s*disposeRunner\s*\}\s+from\s+['\"]\.\/taskOrchestratorRuntime['\"]",
+        "runtime wildcard re-export": r"\bexport\s+\*\s+from\s+['\"]\.\/taskOrchestratorRuntime['\"]",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(f"task orchestrator runtime `{label}` remains in {_rel(USE_TASK_ORCHESTRATOR)}")
 
 
 def _check_frontend_enhance_binding_boundary(issues: list[str]) -> None:
@@ -1731,6 +1743,7 @@ def main() -> int:
         _check_frontend_enhance_view_model_split_boundary(issues)
         _check_frontend_enhance_runtime_view_split_boundary(issues)
         _check_frontend_model_metrics_barrel_boundary(issues)
+        _check_frontend_task_orchestrator_runtime_boundary(issues)
         _check_frontend_enhance_binding_boundary(issues)
         _check_frontend_enhance_field_binding_boundary(issues)
         _check_frontend_enhance_field_split_boundary(issues)

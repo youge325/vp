@@ -14,8 +14,6 @@ import {
   getTaskRunner,
 } from './taskOrchestratorRuntime'
 
-export { disposeRunner } from './taskOrchestratorRuntime'
-
 export function useTaskOrchestrator() {
   const mediaStore = useMediaStore()
   const taskStore = useTaskStore()

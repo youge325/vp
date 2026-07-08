@@ -1047,6 +1047,22 @@ def test_frontend_model_metrics_barrel_boundary_flags_recreated_entrypoint(tmp_p
     assert any("obsolete model metrics entrypoint" in issue for issue in issues), issues
 
 
+def test_frontend_task_orchestrator_runtime_boundary_flags_runtime_reexports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_orchestrator = tmp_path / "useTaskOrchestrator.ts"
+    fake_orchestrator.write_text(
+        "export { disposeRunner } from './taskOrchestratorRuntime'\nexport * from './taskOrchestratorRuntime'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "USE_TASK_ORCHESTRATOR", fake_orchestrator, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_task_orchestrator_runtime_boundary(issues)
+
+    assert any("runtime dispose re-export" in issue for issue in issues), issues
+    assert any("runtime wildcard re-export" in issue for issue in issues), issues
+
+
 def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_processor = tmp_path / "processor.py"
