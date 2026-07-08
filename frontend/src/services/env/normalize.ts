@@ -10,7 +10,7 @@ import type {
   ModelVariantInfo,
 } from '@/types/domain/env'
 
-export function normalizeGpuAdapter(adapter: Record<string, unknown>): GpuAdapter {
+function normalizeGpuAdapter(adapter: Record<string, unknown>): GpuAdapter {
   return {
     name: String(adapter.name || ''),
     vendor: (adapter.vendor as GpuAdapter['vendor']) ?? 'other',
@@ -121,7 +121,7 @@ function normalizeAlgorithmInfo(raw: AlgorithmInfo): AlgorithmInfo {
   }
 }
 
-export function normalizeCheckResult(raw: EnvironmentCheckResult): EnvironmentCheckResult {
+function normalizeCheckResult(raw: EnvironmentCheckResult): EnvironmentCheckResult {
   const adapters = Array.isArray(raw.gpu?.adapters)
     ? raw.gpu.adapters.map((adapter) => normalizeGpuAdapter(adapter as unknown as Record<string, unknown>))
     : []
