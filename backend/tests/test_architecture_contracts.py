@@ -140,6 +140,42 @@ def test_worker_pipeline_plan_boundary_flags_local_plan_builders(tmp_path, monke
     assert any("worker plan" in issue for issue in issues), issues
 
 
+def test_enhance_form_view_model_boundary_flags_derived_rule_leaks(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_form = tmp_path / "useEnhanceForm.ts"
+    fake_form.write_text(
+        "estimateModelRuntimeMetrics(detail, video)\nfixedRuntimeFrameCount(algorithm)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_FORM", fake_form)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_view_model_boundary(issues)
+
+    assert any("enhance view-model rule" in issue for issue in issues), issues
+
+
+def test_worker_pipeline_process_boundary_flags_local_runtime_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "worker_pipeline.py"
+    fake_pipeline.write_text(
+        "@dataclass(slots=True)\n"
+        "class _WorkerHandle:\n"
+        "    pass\n\n"
+        "def _spawn_stage_workers():\n"
+        "    pass\n\n"
+        "def _read_worker_stderr():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKER_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_worker_pipeline_process_boundary(issues)
+
+    assert any("worker process helper" in issue for issue in issues), issues
+
+
 def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(

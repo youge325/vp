@@ -451,6 +451,25 @@ def _check_frontend_enhance_workflow_boundary(issues: list[str]) -> None:
             issues.append(f"enhance workflow rule `{token}` leaked into form composable: {_rel(ENHANCE_FORM)}")
 
 
+def _check_frontend_enhance_view_model_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_FORM)
+    forbidden_patterns = {
+        "model-metrics import": r"from\s+['\"]@/services/model-metrics['\"]",
+        "enhance-rules import": r"from\s+['\"]@/services/preset/enhance-rules['\"]",
+        "estimateModelRuntimeMetrics": r"\bestimateModelRuntimeMetrics\s*\(",
+        "estimateCombinedPeakVram": r"\bestimateCombinedPeakVram\s*\(",
+        "combinedVramMetricRows": r"\bcombinedVramMetricRows\s*\(",
+        "metricRows": r"\bmetricRows\s*\(",
+        "resolveMetricsForEngine": r"\bresolveMetricsForEngine\s*\(",
+        "fixedRuntimeFrameCount": r"\bfixedRuntimeFrameCount\s*\(",
+        "isPaddleGanVsrAlgorithm": r"\bisPaddleGanVsrAlgorithm\s*\(",
+        "superResolutionInputFrameMode": r"\bsuperResolutionInputFrameMode\s*\(",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(f"enhance view-model rule `{label}` leaked into form composable: {_rel(ENHANCE_FORM)}")
+
+
 def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
     text = _read(WORKER_PIPELINE)
     forbidden_patterns = {
@@ -465,6 +484,25 @@ def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
             issues.append(f"worker plan rule `{label}` remains in backend/app/processing/streaming/worker_pipeline.py")
 
 
+def _check_worker_pipeline_process_boundary(issues: list[str]) -> None:
+    text = _read(WORKER_PIPELINE)
+    forbidden_patterns = {
+        "_WorkerHandle": r"^\s*class\s+_WorkerHandle\b",
+        "parse_stage_event_line": r"^\s*def\s+parse_stage_event_line\b",
+        "_spawn_stage_workers": r"^\s*def\s+_spawn_stage_workers\b",
+        "_read_worker_stderr": r"^\s*def\s+_read_worker_stderr\b",
+        "_write_decoded_frames_to_worker": r"^\s*def\s+_write_decoded_frames_to_worker\b",
+        "_drain_final_worker_output": r"^\s*def\s+_drain_final_worker_output\b",
+        "_wait_for_workers": r"^\s*def\s+_wait_for_workers\b",
+        "_close_pipe": r"^\s*def\s+_close_pipe\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"worker process helper `{label}` remains in backend/app/processing/streaming/worker_pipeline.py"
+            )
+
+
 def main() -> int:
     issues: list[str] = []
     try:
@@ -477,7 +515,9 @@ def main() -> int:
         _check_frontend_form_profile_rule_boundary(issues)
         _check_cli_defaults_planning_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
+        _check_frontend_enhance_view_model_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
+        _check_worker_pipeline_process_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2
