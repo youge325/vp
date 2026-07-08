@@ -12,7 +12,7 @@ from app.planning import ProcessingStep
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_file_chunk_encoding import encode_stage_worker_output
 from app.processing.streaming.stage_file_chunk_progress import chunk_progress_adapter
-from app.processing.streaming.stage_worker import StageWorkerConfig
+from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import StageChunkPlan, StageWorkerPlan
 from app.processing.streaming.worker_processes import (
     close_pipe,

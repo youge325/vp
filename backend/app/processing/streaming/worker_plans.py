@@ -11,7 +11,7 @@ from app.processing.streaming.stage_rules import (
     stage_output_frame_count,
     stage_tensor_backend_name,
 )
-from app.processing.streaming.stage_worker import StageWorkerConfig
+from app.processing.streaming.stage_worker_config import StageWorkerConfig
 
 
 @dataclass(frozen=True, slots=True)

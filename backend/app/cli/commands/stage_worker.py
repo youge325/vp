@@ -7,8 +7,8 @@ import sys
 import traceback
 
 from app.errors import ProcessError, error_code_to_wire
+from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.stage_worker import (
-    StageWorkerConfig,
     emit_stage_event,
     run_stage_worker_stream,
 )

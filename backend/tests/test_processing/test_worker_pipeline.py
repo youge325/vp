@@ -4,10 +4,10 @@ import queue
 import threading
 
 import app.processing.streaming.worker_pipeline as worker_pipeline
-import app.processing.streaming.pipeline as streaming_pipeline
 from app.planning import ProcessingStep, build_stage_plan
 from app.planning.manifest import ResumeState
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.pipeline_rules import stage_file_resume_source_frames
 from app.processing.streaming.queues import StreamEnd, _ENCODE_END
 from app.processing.streaming.stage_rules import (
     ordered_steps,
@@ -185,7 +185,7 @@ def test_stage_file_resume_source_frames_use_final_stage_input_domain() -> None:
         output_fps=None,
     )
 
-    assert streaming_pipeline._stage_file_resume_source_frames(stage_plan, 5) == 9
+    assert stage_file_resume_source_frames(stage_plan, 5) == 9
 
 
 def test_boundary_schedule_matches_interpolation_output_groups() -> None:

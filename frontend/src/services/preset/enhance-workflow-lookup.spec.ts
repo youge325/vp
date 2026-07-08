@@ -1,0 +1,55 @@
+import { describe, expect, it } from 'vitest'
+
+import {
+  findInterpolationAlgorithm,
+  findSuperResolutionAlgorithm,
+  pickSupportedBackend,
+} from './enhance-workflow-lookup'
+import type { AlgorithmInfo, EnvironmentCheckResult } from '@/types/domain/env'
+
+const interpolation: AlgorithmInfo = {
+  name: 'rife',
+  tensorBackends: ['pytorch', 'onnx'],
+  models: ['4.25'],
+  onnxModels: ['rife.onnx'],
+}
+
+const superResolution: AlgorithmInfo = {
+  name: 'ppmsvsr',
+  tensorBackends: ['paddle'],
+  models: ['x4'],
+  scaleFactors: [4],
+}
+
+function env(): EnvironmentCheckResult {
+  return {
+    type: 'check',
+    ffmpeg: {
+      available: true,
+      hwaccels: [],
+      encoderProfiles: [],
+      decoderProfiles: [],
+    },
+    gpu: { available: true, devices: [], adapters: [] },
+    tensorBackends: { pytorch: true, paddle: true, onnx: true },
+    tensorEngines: { pytorch: ['cuda'], paddle: ['cuda'], onnx: ['cuda'] },
+    onnxRuntime: { available: true, providers: ['CUDAExecutionProvider'] },
+    rifeModel: { available: true, version: '4.25' },
+    interpolationAlgorithms: [interpolation],
+    superResolutionAlgorithms: [superResolution],
+    animeProfiles: [],
+  }
+}
+
+describe('enhance workflow lookup rules', () => {
+  it('finds algorithms and selects a supported tensor backend without Vue state', () => {
+    expect(findInterpolationAlgorithm(env(), 'rife')).toBe(interpolation)
+    expect(findSuperResolutionAlgorithm(env(), 'ppmsvsr')).toBe(superResolution)
+    expect(findInterpolationAlgorithm(null, 'rife')).toBeUndefined()
+
+    expect(pickSupportedBackend(interpolation, 'onnx')).toBe('onnx')
+    expect(pickSupportedBackend(superResolution, 'onnx')).toBe('paddle')
+    expect(pickSupportedBackend({ ...superResolution, tensorBackends: ['custom'] }, 'onnx')).toBe('onnx')
+    expect(pickSupportedBackend(undefined, 'pytorch')).toBe('pytorch')
+  })
+})

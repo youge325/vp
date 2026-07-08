@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // Selection helpers backing enhance workflow mutation rules.
 
-import type { AlgorithmInfo, EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { TensorBackend } from '@/types/domain/workflow'
 import type { WorkflowConfig } from '@/types/protocol'
 import {
@@ -17,35 +17,17 @@ import {
   pickDefaultSuperResolutionAlgorithm,
 } from './enhance-default-selection'
 import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolution-defaults'
+import {
+  findInterpolationAlgorithm,
+  findSuperResolutionAlgorithm,
+  pickSupportedBackend,
+} from './enhance-workflow-lookup'
 
-const TENSOR_BACKENDS: TensorBackend[] = ['pytorch', 'paddle', 'onnx']
-
-function isTensorBackend(value: string): value is TensorBackend {
-  return TENSOR_BACKENDS.includes(value as TensorBackend)
-}
-
-export function findInterpolationAlgorithm(
-  checkResult: EnvironmentCheckResult | null,
-  name: string,
-): AlgorithmInfo | undefined {
-  return checkResult?.interpolationAlgorithms?.find((algorithm) => algorithm.name === name)
-}
-
-export function findSuperResolutionAlgorithm(
-  checkResult: EnvironmentCheckResult | null,
-  name: string,
-): AlgorithmInfo | undefined {
-  return checkResult?.superResolutionAlgorithms?.find((algorithm) => algorithm.name === name)
-}
-
-export function pickSupportedBackend(
-  algorithm: AlgorithmInfo | undefined,
-  fallback: TensorBackend,
-): TensorBackend {
-  if (!algorithm) return fallback
-  if (algorithm.tensorBackends.includes(fallback)) return fallback
-  return algorithm.tensorBackends.find(isTensorBackend) ?? fallback
-}
+export {
+  findInterpolationAlgorithm,
+  findSuperResolutionAlgorithm,
+  pickSupportedBackend,
+} from './enhance-workflow-lookup'
 
 export function preferOnnxInterpolationForPaddleSuperResolution(
   config: WorkflowConfig,

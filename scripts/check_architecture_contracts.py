@@ -44,6 +44,7 @@ MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
 ENHANCE_WORKFLOW = FRONTEND_SRC / "services" / "preset" / "enhance-workflow.ts"
+ENHANCE_WORKFLOW_SELECTION = FRONTEND_SRC / "services" / "preset" / "enhance-workflow-selection.ts"
 ENHANCE_VIEW_MODEL = FRONTEND_SRC / "services" / "preset" / "enhance-view-model.ts"
 ENHANCE_RUNTIME_VIEW = FRONTEND_SRC / "services" / "preset" / "enhance-runtime-view.ts"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
@@ -528,6 +529,20 @@ def _check_frontend_enhance_workflow_selection_boundary(issues: list[str]) -> No
             issues.append(
                 f"enhance workflow selection `{label}` remains in frontend/src/services/preset/enhance-workflow.ts"
             )
+
+
+def _check_frontend_enhance_workflow_lookup_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_WORKFLOW_SELECTION)
+    forbidden_patterns = {
+        "tensor backend list": r"\bTENSOR_BACKENDS\b",
+        "tensor backend guard": r"^\s*function\s+isTensorBackend\b",
+        "interpolation algorithm finder": r"^\s*export\s+function\s+findInterpolationAlgorithm\b",
+        "super-resolution algorithm finder": r"^\s*export\s+function\s+findSuperResolutionAlgorithm\b",
+        "supported backend picker": r"^\s*export\s+function\s+pickSupportedBackend\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"enhance workflow lookup `{label}` remains in {_rel(ENHANCE_WORKFLOW_SELECTION)}")
 
 
 def _check_frontend_enhance_rules_split_boundary(issues: list[str]) -> None:
@@ -1036,6 +1051,21 @@ def _check_stage_worker_execution_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_stage_worker_config_boundary(issues: list[str]) -> None:
+    text = _read(STAGE_WORKER)
+    forbidden_patterns = {
+        "config dataclass": r"^\s*class\s+StageWorkerConfig\b",
+        "config mapping parser": r"^\s+def\s+from_mapping\b",
+        "config json parser": r"^\s+def\s+from_json_file\b",
+        "config serializer": r"^\s+def\s+to_jsonable\b",
+        "processing step normalizer": r"\bnormalize_processing_step\b",
+        "json config parsing": r"\bjson\.load\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"stage worker config `{label}` remains in {_rel(STAGE_WORKER)}")
+
+
 def _check_streaming_pipeline_rule_boundary(issues: list[str]) -> None:
     text = _read(STREAMING_PIPELINE)
     forbidden_patterns = {
@@ -1274,6 +1304,7 @@ def main() -> int:
         _check_cli_defaults_planning_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_workflow_selection_boundary(issues)
+        _check_frontend_enhance_workflow_lookup_boundary(issues)
         _check_frontend_enhance_rules_split_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_view_model_split_boundary(issues)
@@ -1302,6 +1333,7 @@ def main() -> int:
         _check_stage_file_chunks_runtime_boundary(issues)
         _check_stage_file_chunk_runtime_encoding_boundary(issues)
         _check_stage_worker_execution_boundary(issues)
+        _check_stage_worker_config_boundary(issues)
         _check_streaming_pipeline_rule_boundary(issues)
         _check_streaming_pipeline_raw_boundary(issues)
         _check_pipeline_raw_runtime_boundary(issues)
