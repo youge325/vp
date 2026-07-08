@@ -53,6 +53,7 @@ PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 PRESET_NORMALIZE = FRONTEND_SRC / "services" / "preset" / "normalize.ts"
 ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
 ENHANCE_DEFAULT_SELECTION = FRONTEND_SRC / "services" / "preset" / "enhance-default-selection.ts"
+ENHANCE_DEFAULT_PICKERS = FRONTEND_SRC / "services" / "preset" / "enhance-default-pickers.ts"
 ENHANCE_WORKFLOW = FRONTEND_SRC / "services" / "preset" / "enhance-workflow.ts"
 ENHANCE_WORKFLOW_SELECTION = FRONTEND_SRC / "services" / "preset" / "enhance-workflow-selection.ts"
 ENHANCE_VIEW_MODEL = FRONTEND_SRC / "services" / "preset" / "enhance-view-model.ts"
@@ -665,6 +666,16 @@ def _check_frontend_enhance_default_selection_split_boundary(issues: list[str]) 
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
             issues.append(f"enhance default-selection split `{label}` remains in {_rel(ENHANCE_DEFAULT_SELECTION)}")
+
+
+def _check_frontend_enhance_default_pickers_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_DEFAULT_PICKERS)
+    forbidden_patterns = {
+        "backend compatibility helper": r"^\s*function\s+backendCompatible\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"enhance default pickers `{label}` remains in {_rel(ENHANCE_DEFAULT_PICKERS)}")
 
 
 def _check_frontend_enhance_view_model_boundary(issues: list[str]) -> None:
@@ -1484,6 +1495,7 @@ def main() -> int:
         _check_frontend_enhance_workflow_lookup_boundary(issues)
         _check_frontend_enhance_rules_split_boundary(issues)
         _check_frontend_enhance_default_selection_split_boundary(issues)
+        _check_frontend_enhance_default_pickers_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_view_model_split_boundary(issues)
         _check_frontend_enhance_runtime_view_split_boundary(issues)

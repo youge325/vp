@@ -10,6 +10,13 @@ function isTensorBackend(value: string): value is TensorBackend {
   return TENSOR_BACKENDS.includes(value as TensorBackend)
 }
 
+export function algorithmSupportsBackend(
+  algorithm: { tensorBackends?: ReadonlyArray<string> } | null | undefined,
+  backend: TensorBackend,
+): boolean {
+  return Boolean(algorithm?.tensorBackends?.includes(backend))
+}
+
 export function findInterpolationAlgorithm(
   checkResult: EnvironmentCheckResult | null,
   name: string,
@@ -29,6 +36,6 @@ export function pickSupportedBackend(
   fallback: TensorBackend,
 ): TensorBackend {
   if (!algorithm) return fallback
-  if (algorithm.tensorBackends.includes(fallback)) return fallback
+  if (algorithmSupportsBackend(algorithm, fallback)) return fallback
   return algorithm.tensorBackends.find(isTensorBackend) ?? fallback
 }
