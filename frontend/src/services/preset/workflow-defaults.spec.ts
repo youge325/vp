@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import * as workflowDefaults from './workflow-defaults'
 import {
   createDefaultWorkflowConfig,
   createDefaultWorkflowConfigForEnvironment,
@@ -28,6 +29,10 @@ function makeEnv(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCh
 }
 
 describe('workflow defaults', () => {
+  it('keeps environment hydration private to the environment-aware factory', () => {
+    expect('applyEnvironmentWorkflowDefaults' in workflowDefaults).toBe(false)
+  })
+
   it('creates the base workflow defaults without environment hydration', () => {
     const workflow = createDefaultWorkflowConfig()
 
