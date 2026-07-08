@@ -104,3 +104,49 @@ def test_raw_pipeline_runtime_runs_encoder_thread_and_stage_worker(tmp_path: Pat
     assert runner_saw_runtime is True
     assert ffmpeg.encoder_fps == [48.0, 48.0]
     assert progress_events == [(1, "end"), (2, "end")]
+
+
+def test_raw_pipeline_runtime_resolves_default_stage_worker_runner(tmp_path: Path, monkeypatch) -> None:
+    ffmpeg = _FakeFFmpeg()
+    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+
+    def fake_stage_worker_runner(**kwargs: Any) -> None:
+        encode_queue = kwargs["encode_queue"]
+        encode_queue.put(EncodedFrame(output_index=0, frame=_frame(10)))
+        encode_queue.put(StreamEnd(next_source_frame=1))
+
+    monkeypatch.setattr(
+        "app.processing.streaming.pipeline_raw_runtime.run_stage_worker_pipeline",
+        fake_stage_worker_runner,
+    )
+
+    completed = run_raw_pipeline_runtime(
+        ffmpeg=ffmpeg,  # type: ignore[arg-type]
+        input_path=str(tmp_path / "in.mp4"),
+        decode_config={"mode": "software"},
+        encode_config={"container": "mp4"},
+        manifest=manifest,
+        signature="sig",
+        stage_plan=StagePlan(
+            pre_steps=[],
+            interpolation_step=None,
+            post_steps=[],
+            total_output_frames=1,
+            total_encoded_frames=1,
+            total_pairs=0,
+        ),
+        tensor_backend_name="onnx",
+        progress_callbacks=[],
+        video_info={"source_fps": 24.0, "source_frames": 1, "width": 1, "height": 1},
+        output_width=1,
+        output_height=1,
+        stream_fps=24.0,
+        resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
+        segment_frames=1,
+        output_path=str(tmp_path / "out.mp4"),
+        output_fps=None,
+        encode_progress_callback=None,
+        metrics=PipelineMetrics(),
+    )
+
+    assert completed == 1

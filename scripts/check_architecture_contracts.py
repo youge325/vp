@@ -1396,6 +1396,8 @@ def _check_streaming_pipeline_raw_boundary(issues: list[str]) -> None:
 def _check_pipeline_raw_runtime_boundary(issues: list[str]) -> None:
     text = _read(PIPELINE_RAW)
     forbidden_patterns = {
+        "worker pipeline import": r"from\s+app\.processing\.streaming\.worker_pipeline\s+import\b",
+        "worker pipeline symbol": r"\brun_stage_worker_pipeline\b",
         "queue import": r"^\s*import\s+queue\b",
         "threading import": r"^\s*import\s+threading\b",
         "encoder worker import": r"\b_encoder_worker\b",
