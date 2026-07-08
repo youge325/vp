@@ -1,5 +1,6 @@
 import { computed, watch, type ComputedRef } from 'vue'
 
+import { createIoProfileState } from '@/composables/forms/io-profile-state'
 import {
   getVisibleDecoderProfiles,
 } from '@/services/preset/profile-picker'
@@ -13,7 +14,7 @@ import {
   buildDecoderHardwareDeviceNumberOptions,
   buildDecoderHardwareDeviceOptions,
 } from '@/services/preset/io-form-rules'
-import { buildProfileOptions } from '@/services/preset/io-options'
+import type { DecoderProfileSpec } from '@/types/domain/capability'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
 
@@ -30,18 +31,14 @@ export function createDecodeProfileBindings({
   editorVideoCodec,
   patchDecode,
 }: DecodeProfileBindingParams) {
-  const visibleDecoderProfiles = computed(() =>
-    getVisibleDecoderProfiles(checkResult.value, editorVideoCodec.value),
-  )
-  const decoderProfileOptions = computed(() =>
-    buildProfileOptions(visibleDecoderProfiles.value),
-  )
-  const currentDecoderProfile = computed(() =>
-    visibleDecoderProfiles.value.find(
-      (profile) => profile.name === editorConfig.value.decodeConfig.decoder,
-    ) ?? null,
-  )
-  const decoderOptions = computed(() => currentDecoderProfile.value?.options ?? [])
+  const profileState = createIoProfileState<DecoderProfileSpec>({
+    resolveVisibleProfiles: () => getVisibleDecoderProfiles(checkResult.value, editorVideoCodec.value),
+    selectedProfileName: () => editorConfig.value.decodeConfig.decoder ?? '',
+  })
+  const visibleDecoderProfiles = profileState.visibleProfiles
+  const decoderProfileOptions = profileState.profileOptions
+  const currentDecoderProfile = profileState.currentProfile
+  const decoderOptions = profileState.capabilityOptions
   const decoderHardwareDeviceOptions = computed(() =>
     buildDecoderHardwareDeviceOptions(currentDecoderProfile.value),
   )

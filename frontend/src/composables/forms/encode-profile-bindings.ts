@@ -1,8 +1,9 @@
-import { computed, type ComputedRef } from 'vue'
+import type { ComputedRef } from 'vue'
 
+import { createIoProfileState } from '@/composables/forms/io-profile-state'
 import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
 import { selectEncodeProfile } from '@/services/preset/profile-selection'
-import { buildProfileOptions } from '@/services/preset/io-options'
+import type { EncoderProfileSpec } from '@/types/domain/capability'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { EncodeConfig, WorkbenchPreset } from '@/types/protocol'
 
@@ -17,16 +18,14 @@ export function createEncodeProfileBindings({
   editorConfig,
   patchEncode,
 }: EncodeProfileBindingParams) {
-  const visibleEncoderProfiles = computed(() => getVisibleEncoderProfiles(checkResult.value))
-  const encoderProfileOptions = computed(() =>
-    buildProfileOptions(visibleEncoderProfiles.value),
-  )
-  const currentEncoderProfile = computed(() =>
-    visibleEncoderProfiles.value.find(
-      (profile) => profile.name === editorConfig.value.encodeConfig.codec,
-    ) ?? null,
-  )
-  const encoderOptions = computed(() => currentEncoderProfile.value?.options ?? [])
+  const profileState = createIoProfileState<EncoderProfileSpec>({
+    resolveVisibleProfiles: () => getVisibleEncoderProfiles(checkResult.value),
+    selectedProfileName: () => editorConfig.value.encodeConfig.codec,
+  })
+  const visibleEncoderProfiles = profileState.visibleProfiles
+  const encoderProfileOptions = profileState.profileOptions
+  const currentEncoderProfile = profileState.currentProfile
+  const encoderOptions = profileState.capabilityOptions
 
   function setEncodeProfile(profileName: string): void {
     const profile = visibleEncoderProfiles.value.find((entry) => entry.name === profileName) ?? null
