@@ -9,10 +9,10 @@ import threading
 from typing import Any
 
 from app.planning import ProcessingStep
-from app.processing.streaming.encoder_segments import resolve_segment_output_frame_count
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.stage_file_chunk_encoding import encode_stage_worker_output
 from app.processing.streaming.stage_file_chunk_progress import chunk_progress_adapter
-from app.processing.streaming.stage_worker import StageWorkerConfig, read_rgb_frame
+from app.processing.streaming.stage_worker import StageWorkerConfig
 from app.processing.streaming.worker_plans import StageChunkPlan, StageWorkerPlan
 from app.processing.streaming.worker_processes import (
     close_pipe,
@@ -62,7 +62,6 @@ def run_stage_chunk_to_file(
     plan = StageWorkerPlan(config=config, output_frame_count=chunk.raw_output_frame_count)
     error_queue: queue.Queue[BaseException] = queue.Queue()
     stop_event = threading.Event()
-    writer = None
 
     with tempfile.TemporaryDirectory(prefix="vp-stage-chunk-") as config_dir:
         handle = spawn_stage_workers([plan], config_dir=Path(config_dir), python_executable=python_executable)[0]
@@ -106,40 +105,20 @@ def run_stage_chunk_to_file(
         try:
             if handle.process.stdout is None:
                 raise RuntimeError("Stage worker stdout is unavailable.")
-            writer = ffmpeg.open_rawvideo_encoder(
-                output_path=output_path,
-                width=output_width,
-                height=output_height,
-                fps=output_fps,
-                output_fps=encode_output_fps,
+            encoded_frames = encode_stage_worker_output(
+                ffmpeg=ffmpeg,
                 encode_config=encode_config,
-            )
-            active_writer = writer
-            written_frames = 0
-            for raw_index in range(chunk.raw_output_frame_count):
-                frame = read_rgb_frame(handle.process.stdout, width=output_width, height=output_height)
-                if frame is None:
-                    break
-                if raw_index < chunk.skip_output_frames:
-                    continue
-                writer.write_frame(frame)
-                written_frames += 1
-                metrics.record_processed_frames(1)
-            active_writer.close()
-            writer = None
-            encoded_frames = resolve_segment_output_frame_count(
-                ffmpeg,
-                active_writer,
-                output_path,
-                fallback_frame_count=written_frames,
+                output_path=output_path,
+                worker_stdout=handle.process.stdout,
+                chunk=chunk,
+                output_width=output_width,
+                output_height=output_height,
+                output_fps=output_fps,
+                encode_output_fps=encode_output_fps,
+                metrics=metrics,
             )
             if not error_queue.empty():
                 raise error_queue.get()
-            if written_frames != chunk.written_output_frame_count:
-                raise RuntimeError(
-                    "Stage chunk output frame count mismatch: "
-                    f"expected {chunk.written_output_frame_count}, got {written_frames}."
-                )
             return encoded_frames
         except BaseException as exc:
             stop_event.set()
@@ -147,11 +126,6 @@ def run_stage_chunk_to_file(
             raise
         finally:
             decode_thread.join()
-            if writer is not None:
-                try:
-                    writer.close()
-                except Exception:
-                    pass
             close_pipe(handle.process.stdin)
             close_pipe(handle.process.stdout)
             wait_for_workers([handle], error_queue)

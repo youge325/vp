@@ -42,6 +42,7 @@ CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
 ENHANCE_WORKFLOW = FRONTEND_SRC / "services" / "preset" / "enhance-workflow.ts"
+ENHANCE_VIEW_MODEL = FRONTEND_SRC / "services" / "preset" / "enhance-view-model.ts"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-form-bindings.ts"
 ENHANCE_FIELD_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-field-bindings.ts"
@@ -567,6 +568,27 @@ def _check_frontend_enhance_view_model_boundary(issues: list[str]) -> None:
             issues.append(f"enhance view-model rule `{label}` leaked into form composable: {_rel(ENHANCE_FORM)}")
 
 
+def _check_frontend_enhance_view_model_split_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_VIEW_MODEL)
+    forbidden_patterns = {
+        "model-metrics import": r"from\s+['\"]@/services/model-metrics['\"]",
+        "algorithm capability import": r"from\s+['\"]\.\/enhance-algorithm-capabilities['\"]",
+        "selected model detail": r"\bselectedModelDetail\b",
+        "scaled dimensions": r"\bscaledDimensions\b",
+        "metrics resolver": r"\bresolveMetricsForEngine\b",
+        "runtime estimate": r"\bestimateModelRuntimeMetrics\b",
+        "metric rows": r"\bmetricRows\b",
+        "combined vram rows": r"\bcombinedVramMetricRows\s*\(",
+        "combined peak vram": r"\bestimateCombinedPeakVram\b",
+        "fixed frame helper": r"\bfixedRuntimeFrameCount\b",
+        "PaddleGAN helper": r"\bisPaddleGanVsrAlgorithm\b",
+        "input frame mode helper": r"\bsuperResolutionInputFrameMode\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"enhance view-model split `{label}` remains in {_rel(ENHANCE_VIEW_MODEL)}")
+
+
 def _check_frontend_enhance_binding_boundary(issues: list[str]) -> None:
     text = _read(ENHANCE_FORM)
     forbidden_patterns = {
@@ -940,6 +962,24 @@ def _check_stage_file_chunks_runtime_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_stage_file_chunk_runtime_encoding_boundary(issues: list[str]) -> None:
+    text = _read(STAGE_FILE_CHUNK_RUNTIME)
+    forbidden_patterns = {
+        "rgb frame reader": r"\bread_rgb_frame\b",
+        "segment frame count resolver": r"\bresolve_segment_output_frame_count\b",
+        "rawvideo encoder open": r"\bopen_rawvideo_encoder\b",
+        "writer frame write": r"\bwrite_frame\s*\(",
+        "written frame counter": r"\bwritten_frames\b",
+        "frame count mismatch": r"Stage chunk output frame count mismatch",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"stage file chunk encoding `{label}` remains in "
+                "backend/app/processing/streaming/stage_file_chunk_runtime.py"
+            )
+
+
 def _check_stage_worker_execution_boundary(issues: list[str]) -> None:
     text = _read(STAGE_WORKER)
     forbidden_patterns = {
@@ -1153,6 +1193,7 @@ def main() -> int:
         _check_frontend_enhance_workflow_selection_boundary(issues)
         _check_frontend_enhance_rules_split_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
+        _check_frontend_enhance_view_model_split_boundary(issues)
         _check_frontend_enhance_binding_boundary(issues)
         _check_frontend_enhance_field_binding_boundary(issues)
         _check_frontend_enhance_field_split_boundary(issues)
@@ -1174,6 +1215,7 @@ def main() -> int:
         _check_worker_processes_event_io_boundary(issues)
         _check_stage_file_pipeline_chunk_boundary(issues)
         _check_stage_file_chunks_runtime_boundary(issues)
+        _check_stage_file_chunk_runtime_encoding_boundary(issues)
         _check_stage_worker_execution_boundary(issues)
         _check_streaming_pipeline_rule_boundary(issues)
         _check_streaming_pipeline_raw_boundary(issues)
