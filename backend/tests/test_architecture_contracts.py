@@ -1466,7 +1466,14 @@ def test_stage_worker_execution_boundary_flags_local_stage_loops(tmp_path, monke
         "def _run_interpolation_stage():\n"
         "    pass\n\n"
         "def _run_single_frame_stage():\n"
-        "    pass\n",
+        "    pass\n\n"
+        "_run_sequence_stage = run_sequence_stage\n"
+        "_run_interpolation_stage = run_interpolation_stage\n"
+        "_run_single_frame_stage = run_single_frame_stage\n\n"
+        "def run_stage_worker_stream():\n"
+        "    _run_sequence_stage()\n"
+        "    _run_interpolation_stage()\n"
+        "    _run_single_frame_stage()\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(module, "STAGE_WORKER", fake_stage_worker)
@@ -1475,6 +1482,8 @@ def test_stage_worker_execution_boundary_flags_local_stage_loops(tmp_path, monke
     module._check_stage_worker_execution_boundary(issues)
 
     assert any("stage worker execution rule" in issue for issue in issues), issues
+    assert any("stage execution alias assignment" in issue for issue in issues), issues
+    assert any("stage execution alias call" in issue for issue in issues), issues
 
 
 def test_stage_worker_config_boundary_flags_local_config_model(tmp_path, monkeypatch) -> None:
