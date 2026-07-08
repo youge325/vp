@@ -577,6 +577,7 @@ def _check_cli_defaults_planning_boundary(issues: list[str]) -> None:
         "processing_needs_interpolation": r"def\s+_?processing_needs_interpolation\b",
         "resolve_workflow_and_output_fps": r"def\s+_?resolve_workflow_and_output_fps\b",
         "resolve_expected_output_frames": r"def\s+_?resolve_expected_output_frames\b",
+        "model path helper": r"def\s+_model_path\b",
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text):

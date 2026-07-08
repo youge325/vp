@@ -124,6 +124,23 @@ def test_cli_process_validation_compat_boundary_flags_legacy_wrappers(tmp_path, 
     assert any("CLI process validation compatibility" in issue for issue in issues), issues
 
 
+def test_cli_defaults_planning_boundary_flags_model_path_helper(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_defaults = tmp_path / "defaults.py"
+    fake_defaults.write_text(
+        "from pathlib import Path\n\n"
+        "def _model_path(model_version=None):\n"
+        "    return Path('models') / f'flownet_v{model_version}.pkl'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "CLI_DEFAULTS", fake_defaults, raising=False)
+    issues: list[str] = []
+
+    module._check_cli_defaults_planning_boundary(issues)
+
+    assert any("model path helper" in issue for issue in issues), issues
+
+
 def test_enhance_form_workflow_rule_boundary_flags_mutation_leaks(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_form = tmp_path / "useEnhanceForm.ts"

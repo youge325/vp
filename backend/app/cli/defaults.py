@@ -7,15 +7,9 @@ subcommands when no explicit nested config JSON is provided.
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 from typing import Any
 
 from app.config import settings
-
-
-def _model_path(model_version: str | None = None) -> Path:
-    version = model_version or settings.RIFE_MODEL_VERSION
-    return Path(settings.RIFE_MODEL_DIR) / f"flownet_v{version}.pkl"
 
 
 def _default_decode_config() -> dict[str, Any]:
