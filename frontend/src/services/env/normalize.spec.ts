@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeCheckResult } from './normalize'
+import * as envNormalize from './normalize'
+import { normalizeCheckPayload } from './normalize'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function baseResult(): EnvironmentCheckResult {
@@ -17,9 +18,18 @@ function baseResult(): EnvironmentCheckResult {
   }
 }
 
-describe('normalizeCheckResult', () => {
+function normalizeResult(result: EnvironmentCheckResult): EnvironmentCheckResult {
+  return normalizeCheckPayload({ result, source: 'probe', checkedAt: null }).result
+}
+
+describe('normalizeCheckPayload', () => {
+  it('keeps result and adapter normalization private to the payload normalizer', () => {
+    expect('normalizeCheckResult' in envNormalize).toBe(false)
+    expect('normalizeGpuAdapter' in envNormalize).toBe(false)
+  })
+
   it('normalizes engine metric overrides from snake_case payloads', () => {
-    const result = normalizeCheckResult({
+    const result = normalizeResult({
       ...baseResult(),
       interpolationAlgorithms: [
         {
@@ -68,7 +78,7 @@ describe('normalizeCheckResult', () => {
   })
 
   it('normalizes and derives algorithm capability metadata from legacy payloads', () => {
-    const result = normalizeCheckResult({
+    const result = normalizeResult({
       ...baseResult(),
       superResolutionAlgorithms: [
         {
