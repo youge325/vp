@@ -66,4 +66,54 @@ describe('normalizeCheckResult', () => {
       analysisNotes: ['calibrated'],
     })
   })
+
+  it('normalizes and derives algorithm capability metadata from legacy payloads', () => {
+    const result = normalizeCheckResult({
+      ...baseResult(),
+      superResolutionAlgorithms: [
+        {
+          name: 'legacy-paddlegan',
+          tensorBackends: ['paddle'],
+          models: ['x4'],
+          scaleFactors: [4],
+          defaultNumFrames: 10,
+          sequenceMode: 'recurrent',
+        },
+        {
+          name: 'legacy-edvr',
+          tensorBackends: ['paddle'],
+          models: ['x4'],
+          scaleFactors: [4],
+          defaultNumFrames: 5,
+          sequence_mode: 'window',
+        } as EnvironmentCheckResult['superResolutionAlgorithms'][number],
+        {
+          name: 'snake-case-metadata',
+          tensorBackends: ['paddle'],
+          models: ['x4'],
+          scaleFactors: [4],
+          family: 'paddlegan_vsr',
+          fixed_scale_factor: 4,
+          input_frame_mode: 'fixed_window',
+        } as EnvironmentCheckResult['superResolutionAlgorithms'][number],
+      ],
+    })
+
+    expect(result.superResolutionAlgorithms?.[0]).toMatchObject({
+      family: 'paddlegan_vsr',
+      fixedScaleFactor: 4,
+      inputFrameMode: 'editable_chunk',
+    })
+    expect(result.superResolutionAlgorithms?.[1]).toMatchObject({
+      family: 'paddlegan_vsr',
+      fixedScaleFactor: 4,
+      inputFrameMode: 'fixed_window',
+      sequenceMode: 'window',
+    })
+    expect(result.superResolutionAlgorithms?.[2]).toMatchObject({
+      family: 'paddlegan_vsr',
+      fixedScaleFactor: 4,
+      inputFrameMode: 'fixed_window',
+    })
+  })
 })

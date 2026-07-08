@@ -10,6 +10,8 @@ boundaries, and direct IPC access from UI/store layers.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import re
 import sys
 from pathlib import Path
@@ -25,7 +27,7 @@ FRONTEND_SRC = ROOT / "frontend" / "src"
 DOC_ROOT = ROOT / "docs"
 README = ROOT / "README.md"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
-ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
+STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 
 
 def _read(path: Path) -> str:
@@ -307,35 +309,73 @@ def _collect_backend_paddlegan_disabled_models() -> set[str]:
     return _collect_python_dict_keys(_read(PADDLEGAN_WEIGHTS), "DISABLED_PADDLEGAN_VSR_MODELS")
 
 
-def _collect_frontend_paddlegan_models() -> set[str]:
-    text = _read(ENHANCE_FORM)
-    match = re.search(r"PADDLEGAN_VSR_ALGORITHMS\s*=\s*new\s+Set\s*\((?P<body>\[[\s\S]*?\])\)", text)
-    if not match:
-        raise RuntimeError("could not parse PADDLEGAN_VSR_ALGORITHMS in useEnhanceForm.ts")
-    return set(re.findall(r"['\"]([a-z0-9-]+)['\"]", match.group("body")))
+def _collect_backend_algorithm_metadata() -> dict[str, dict[str, object]]:
+    backend_dir = ROOT / "backend"
+    inserted = False
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+        inserted = True
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            from app.processing.super_resolution import SUPPORTED_ALGORITHMS
+
+        return {
+            str(entry["name"]): {
+                "family": entry.get("family"),
+                "fixedScaleFactor": entry.get("fixedScaleFactor"),
+                "inputFrameMode": entry.get("inputFrameMode"),
+            }
+            for entry in SUPPORTED_ALGORITHMS
+        }
+    finally:
+        if inserted:
+            try:
+                sys.path.remove(str(backend_dir))
+            except ValueError:
+                pass
 
 
 def _diff_paddlegan_vsr_contract(
-    backend_enabled: set[str],
+    backend_specs: set[str],
     backend_disabled: set[str],
-    frontend_models: set[str],
+    algorithm_metadata: dict[str, dict[str, object]],
 ) -> list[str]:
     issues: list[str] = []
-    only_backend = backend_enabled - frontend_models
-    only_frontend = frontend_models - backend_enabled
-    if only_backend or only_frontend:
+
+    metadata_models = {
+        name for name, metadata in algorithm_metadata.items() if metadata.get("family") == "paddlegan_vsr"
+    }
+    missing_metadata = backend_specs - metadata_models
+    extra_metadata = metadata_models - backend_specs
+    if missing_metadata or extra_metadata:
         issues.append(
-            "PaddleGAN VSR backend/frontend model exposure drift: "
-            f"only-in-backend={sorted(only_backend)}, only-in-frontend={sorted(only_frontend)}"
+            "PaddleGAN VSR backend specs and algorithm metadata drift: "
+            f"missing-metadata={sorted(missing_metadata)}, extra-metadata={sorted(extra_metadata)}"
         )
 
-    enabled_disabled_overlap = backend_enabled & backend_disabled
+    enabled_disabled_overlap = backend_specs & backend_disabled
     if enabled_disabled_overlap:
         issues.append(f"PaddleGAN VSR models cannot be both enabled and disabled: {sorted(enabled_disabled_overlap)}")
 
-    frontend_disabled_overlap = frontend_models & backend_disabled
-    if frontend_disabled_overlap:
-        issues.append(f"Frontend re-exposes disabled PaddleGAN VSR models: {sorted(frontend_disabled_overlap)}")
+    metadata_disabled_overlap = metadata_models & backend_disabled
+    if metadata_disabled_overlap:
+        issues.append(
+            f"Algorithm metadata re-exposes disabled PaddleGAN VSR models: {sorted(metadata_disabled_overlap)}"
+        )
+
+    for model_id in sorted(backend_specs & metadata_models):
+        metadata = algorithm_metadata[model_id]
+        if metadata.get("fixedScaleFactor") != 4:
+            issues.append(
+                f"PaddleGAN VSR metadata for `{model_id}` must expose fixedScaleFactor=4; "
+                f"got {metadata.get('fixedScaleFactor')!r}"
+            )
+        expected_frame_mode = "fixed_window" if model_id == "edvr" else "editable_chunk"
+        if metadata.get("inputFrameMode") != expected_frame_mode:
+            issues.append(
+                f"PaddleGAN VSR metadata for `{model_id}` must expose inputFrameMode={expected_frame_mode!r}; "
+                f"got {metadata.get('inputFrameMode')!r}"
+            )
     return issues
 
 
@@ -344,9 +384,15 @@ def _check_paddlegan_vsr_contract(issues: list[str]) -> None:
         _diff_paddlegan_vsr_contract(
             _collect_backend_paddlegan_enabled_models(),
             _collect_backend_paddlegan_disabled_models(),
-            _collect_frontend_paddlegan_models(),
+            _collect_backend_algorithm_metadata(),
         )
     )
+
+
+def _check_stage_worker_private_import_boundary(issues: list[str]) -> None:
+    text = _read(STAGE_WORKER)
+    if re.search(r"from\s+app\.processing\.streaming\.processor\s+import\s+[^\n]*_", text):
+        issues.append("stage_worker.py imports processor private helpers instead of shared stage runtime helpers")
 
 
 def main() -> int:
@@ -357,6 +403,7 @@ def main() -> int:
         _check_generated_type_import_boundary(issues)
         _check_ui_and_store_ipc_boundary(issues)
         _check_paddlegan_vsr_contract(issues)
+        _check_stage_worker_private_import_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2

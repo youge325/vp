@@ -27,9 +27,11 @@ SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
         # 与 ONNX 推理路径,因此两者都列出;paddle 暂无实现,前端切到
         # paddle 后该算法不会出现在下拉列表里。
         "name": "rife",
+        "family": "rife",
         "tensorBackends": ["pytorch", "onnx"],
         "models": list(_RIFE_MODELS),
         "modelDetails": get_rife_model_details(),
+        "inputFrameMode": "none",
     },
 ]
 

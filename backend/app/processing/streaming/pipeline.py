@@ -32,6 +32,12 @@ from app.processing.streaming.queues import (
     SegmentBoundary,
     StreamEnd,
 )
+from app.processing.streaming.stage_rules import (
+    ordered_steps,
+    resolve_stage_plan_output_dimensions,
+    stage_output_frame_count,
+    stage_requires_file_pipeline,
+)
 from app.processing.streaming.worker_pipeline import run_stage_file_pipeline, run_stage_worker_pipeline
 from app.protocol import ndjson
 from app.utils.ffmpeg import FFmpegWrapper
@@ -302,38 +308,20 @@ def _run_streaming_pipeline(
 
 
 def _should_use_stage_file_pipeline(stage_plan: StagePlan) -> bool:
-    for step in _stage_steps(stage_plan):
-        if step.algorithm_type == "frame_interpolation":
-            return True
-        if step.algorithm_type != "super_resolution":
-            continue
-        try:
-            from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
-        except Exception:
-            continue
-        if str(step.algorithm_kwargs.get("sr_algorithm") or "") in PADDLEGAN_VSR_SPECS:
-            return True
-    return False
+    return any(stage_requires_file_pipeline(step) for step in ordered_steps(stage_plan))
 
 
 def _stage_file_resume_source_frames(stage_plan: StagePlan, source_frames: int) -> int:
     """Return the source-frame domain used by the final staged manifest."""
     current_frames = max(int(source_frames), 0)
-    steps = _stage_steps(stage_plan)
+    steps = ordered_steps(stage_plan)
     for step in steps[:-1]:
-        if step.algorithm_type != "frame_interpolation" or current_frames < 2:
-            continue
-        multi = int(step.algorithm_kwargs.get("multi") or 2)
-        current_frames = current_frames + (current_frames - 1) * (multi - 1)
+        current_frames = stage_output_frame_count(step, current_frames)
     return current_frames
 
 
 def _stage_steps(stage_plan: StagePlan) -> list[Any]:
-    return [
-        *stage_plan.pre_steps,
-        *([stage_plan.interpolation_step] if stage_plan.interpolation_step else []),
-        *stage_plan.post_steps,
-    ]
+    return ordered_steps(stage_plan)
 
 
 def _resolved_stream_fps(source_fps: float, stage_plan: StagePlan) -> float:
@@ -366,19 +354,11 @@ def _resolved_output_dimensions(
 ) -> tuple[int, int]:
     width = int(video_info["width"])
     height = int(video_info["height"])
-    from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
-
-    for step in [*stage_plan.pre_steps, *stage_plan.post_steps]:
-        if step.algorithm_type != "super_resolution":
-            continue
-        kwargs = step.algorithm_kwargs
-        sr_algorithm = str(kwargs.get("sr_algorithm") or "")
-        is_paddlegan_vsr = sr_algorithm in PADDLEGAN_VSR_SPECS
-        if not is_paddlegan_vsr and not kwargs.get("onnx_model"):
-            continue
-        scale_factor = float(kwargs.get("scale_factor") or 1.0)
-        width = max(1, int(round(width * scale_factor)))
-        height = max(1, int(round(height * scale_factor)))
+    width, height = resolve_stage_plan_output_dimensions(
+        stage_plan,
+        source_width=width,
+        source_height=height,
+    )
 
     del tensor_backend_name
     return width, height
