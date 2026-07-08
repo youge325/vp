@@ -36,6 +36,7 @@ STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "sta
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
+PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-form-bindings.ts"
 ENHANCE_FIELD_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-field-bindings.ts"
@@ -717,6 +718,26 @@ def _check_frontend_decode_hardware_binding_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_frontend_defaults_workflow_boundary(issues: list[str]) -> None:
+    text = _read(PRESET_DEFAULTS)
+    forbidden_patterns = {
+        "enhance-rules import": r"from\s+['\"]\.\/enhance-rules['\"]",
+        "workflow engine type import": r"\bInferenceEngine\b",
+        "default interpolation picker": r"\bpickDefaultInterpolationAlgorithm\b",
+        "default super-resolution picker": r"\bpickDefaultSuperResolutionAlgorithm\b",
+        "super-resolution defaults": r"\bapplySuperResolutionAlgorithmDefaults\b",
+        "anime default picker": r"\bpickDefaultAnimeProfile\b",
+        "tensor engine lookup": r"\btensorEngines\b",
+        "gpu vendor lookup": r"\bgpu\?\.adapters\b",
+        "vendor branch": r"\bvendor\s*===\s*['\"](?:hygon|nvidia)['\"]",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(
+                f"workflow default rule `{label}` leaked into preset defaults factory: {_rel(PRESET_DEFAULTS)}"
+            )
+
+
 def _check_frontend_encode_output_binding_boundary(issues: list[str]) -> None:
     text = _read(ENCODE_OUTPUT_BINDINGS)
     forbidden_patterns = {
@@ -937,6 +958,27 @@ def _check_streaming_pipeline_lifecycle_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_streaming_pipeline_preflight_boundary(issues: list[str]) -> None:
+    text = _read(STREAMING_PIPELINE)
+    forbidden_patterns = {
+        "normalize processing steps": r"\bnormalize_processing_steps\b",
+        "resolve video info": r"\bresolve_video_info\b",
+        "build stage plan": r"\bbuild_stage_plan\b",
+        "build signature": r"\bbuild_signature\b",
+        "config snapshot": r"\bbuild_config_snapshot\b",
+        "stage-file strategy": r"\bshould_use_stage_file_pipeline\b",
+        "stage-file resume domain": r"\bstage_file_resume_source_frames\b",
+        "output dimensions": r"\bresolved_output_dimensions\b",
+        "direct pipeline rules import": r"from\s+app\.processing\.streaming\.pipeline_rules\s+import\b",
+        "segment frame normalization": r"\bsegment_frames\s*=\s*max\s*\(",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(
+                f"streaming pipeline preflight `{label}` remains in backend/app/processing/streaming/pipeline.py"
+            )
+
+
 def _check_processor_algorithm_boundary(issues: list[str]) -> None:
     text = _read(PROCESSOR)
     forbidden_patterns = {
@@ -1029,6 +1071,7 @@ def main() -> int:
         _check_frontend_io_form_aggregator_boundary(issues)
         _check_frontend_io_profile_state_boundary(issues)
         _check_frontend_decode_hardware_binding_boundary(issues)
+        _check_frontend_defaults_workflow_boundary(issues)
         _check_frontend_encode_output_binding_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)
@@ -1041,6 +1084,7 @@ def main() -> int:
         _check_streaming_pipeline_rule_boundary(issues)
         _check_streaming_pipeline_raw_boundary(issues)
         _check_streaming_pipeline_lifecycle_boundary(issues)
+        _check_streaming_pipeline_preflight_boundary(issues)
         _check_processor_algorithm_boundary(issues)
         _check_processor_stage_execution_boundary(issues)
         _check_processor_stream_boundary(issues)

@@ -1,16 +1,8 @@
 // pure: no Vue / no Pinia / no Tauri
 // 默认值工厂 — 根据环境探测结果生成默认的解码/编码/工作流/输出/预设配置。
 
-import type { DecodeConfig, EncodeConfig, OutputConfig, WorkbenchPreset, WorkflowConfig } from '@/types/protocol'
+import type { DecodeConfig, EncodeConfig, OutputConfig, WorkbenchPreset } from '@/types/protocol'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { InferenceEngine } from '@/types/domain/workflow'
-import {
-  applySuperResolutionAlgorithmDefaults,
-  pickDefaultAnimeProfile,
-  pickDefaultInterpolationAlgorithm,
-  pickDefaultInterpolationModel,
-  pickDefaultSuperResolutionAlgorithm,
-} from './enhance-rules'
 import { pickPreferredDecoderProfile, pickPreferredEncoderProfile } from './profile-picker'
 import { resolveRateControlForProfile } from './rate-control'
 import {
@@ -18,49 +10,12 @@ import {
   encoderFamilyFromProfile,
   selectDecodeProfile,
 } from './profile-selection'
+import {
+  createDefaultWorkflowConfig,
+  createDefaultWorkflowConfigForEnvironment,
+} from './workflow-defaults'
 
-export function createDefaultWorkflowConfig(): WorkflowConfig {
-  return {
-    fpsMode: 'target',
-    processOrder: 'super_resolution_then_interpolation',
-    interpolation: {
-      enabled: true,
-      targetFps: 60,
-      multi: 2,
-      algorithm: 'rife',
-      model: '4.25',
-      onnxModel: '',
-      scale: 1,
-      fp16: false,
-      tensorBackend: 'pytorch',
-      engine: 'cuda',
-    },
-    superResolution: {
-      enabled: false,
-      scaleFactor: 2,
-      algorithm: 'placeholder',
-      onnxModel: '',
-      tensorBackend: 'onnx',
-      engine: 'cuda',
-      numFrames: 10,
-      autoDownloadWeights: false,
-    },
-    anime: {
-      enabled: false,
-      profile: 'clean-lines',
-      denoise: 10,
-      edgeBoost: 15,
-    },
-    preprocess: {
-      enabled: false,
-      filters: [],
-    },
-    postprocess: {
-      enabled: false,
-      filters: [],
-    },
-  }
-}
+export { createDefaultWorkflowConfig }
 
 // Phase 18 — ``outputDir`` 从 ``string`` 改为 ``string | null``。``null``
 // 表示"未选 / 未填",backend Pydantic ``OutputConfig.output_dir`` validator
@@ -109,53 +64,9 @@ export function createDefaultEncodeConfig(env: EnvironmentCheckResult | null): E
 }
 
 export function createDefaultWorkbenchPreset(env: EnvironmentCheckResult | null): WorkbenchPreset {
-  const workflowConfig = createDefaultWorkflowConfig()
-
-  // Phase 8 — pick the default algorithm against the initial backend
-  // (``createDefaultWorkflowConfig`` seeds it as ``'pytorch'``). With
-  // the backend filter in place, a preset created on a Paddle-only
-  // environment would otherwise still try to default to RIFE and then
-  // see it filtered out the moment the user opens the dropdown.
-  const interpolationBackend = workflowConfig.interpolation.tensorBackend
-  const algorithm = pickDefaultInterpolationAlgorithm(env, interpolationBackend)
-  workflowConfig.interpolation.algorithm = algorithm
-  workflowConfig.interpolation.model = pickDefaultInterpolationModel(env, algorithm)
-  const superResolutionBackend = workflowConfig.superResolution.tensorBackend
-  workflowConfig.superResolution.algorithm = pickDefaultSuperResolutionAlgorithm(
-    env,
-    superResolutionBackend,
-  )
-  applySuperResolutionAlgorithmDefaults(
-    workflowConfig,
-    env?.superResolutionAlgorithms?.find((a) => a.name === workflowConfig.superResolution.algorithm),
-    env,
-  )
-  workflowConfig.anime.profile = pickDefaultAnimeProfile(env)
-
-  workflowConfig.interpolation.onnxModel =
-    env?.interpolationAlgorithms?.find((a) => a.name === workflowConfig.interpolation.algorithm)
-      ?.onnxModels?.[0] ?? ''
-  workflowConfig.superResolution.onnxModel =
-    env?.superResolutionAlgorithms?.find((a) => a.name === workflowConfig.superResolution.algorithm)
-      ?.onnxModels?.[0] ?? ''
-
-  const vendor = env?.gpu?.adapters?.[0]?.vendor
-  const backend = workflowConfig.interpolation.tensorBackend
-  const engines = (env?.tensorEngines as Record<string, string[]> | undefined)?.[backend] ?? []
-  const superResolutionEngines =
-    (env?.tensorEngines as Record<string, string[]> | undefined)?.[superResolutionBackend] ?? []
-  if (vendor === 'hygon') {
-    workflowConfig.interpolation.engine = engines.includes('dcu') ? 'dcu' : (engines[0] as InferenceEngine) ?? 'cuda'
-  } else if (vendor === 'nvidia') {
-    workflowConfig.interpolation.engine = engines.includes('tensorrt') ? 'tensorrt' : (engines[0] as InferenceEngine) ?? 'cuda'
-  } else {
-    workflowConfig.interpolation.engine = (engines[0] as InferenceEngine) ?? 'cuda'
-  }
-  workflowConfig.superResolution.engine = (superResolutionEngines[0] as InferenceEngine) ?? 'cuda'
-
   return {
     decodeConfig: createDefaultDecodeConfig(env),
-    workflowConfig,
+    workflowConfig: createDefaultWorkflowConfigForEnvironment(env),
     encodeConfig: createDefaultEncodeConfig(env),
     outputConfig: createDefaultOutputConfig(),
   }
