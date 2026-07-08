@@ -565,6 +565,27 @@ def test_frontend_enhance_view_model_split_boundary_flags_local_model_and_runtim
     assert any("enhance view-model split" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_runtime_view_split_boundary_flags_local_runtime_rules(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runtime_view = tmp_path / "enhance-runtime-view.ts"
+    fake_runtime_view.write_text(
+        "import { estimateModelRuntimeMetrics, metricRows } from '@/services/model-metrics'\n"
+        "import { fixedRuntimeFrameCount, isPaddleGanVsrAlgorithm } from './enhance-algorithm-capabilities'\n"
+        "function scaledDimensions() {}\n"
+        "const estimate = estimateModelRuntimeMetrics()\n"
+        "const rows = metricRows()\n"
+        "const frames = fixedRuntimeFrameCount()\n"
+        "const isPaddle = isPaddleGanVsrAlgorithm()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_RUNTIME_VIEW", fake_runtime_view, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_runtime_view_split_boundary(issues)
+
+    assert any("enhance runtime-view split" in issue for issue in issues), issues
+
+
 def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_processor = tmp_path / "processor.py"
@@ -926,6 +947,27 @@ def test_encoder_helper_boundary_flags_local_segment_and_finalize_helpers(tmp_pa
     module._check_encoder_helper_boundary(issues)
 
     assert any("encoder helper" in issue for issue in issues), issues
+
+
+def test_encoder_segment_writer_boundary_flags_local_writer_lifecycle(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_encoder = tmp_path / "encoder.py"
+    fake_encoder.write_text(
+        "from pathlib import Path\n\n"
+        "def _encoder_worker():\n"
+        "    writer = ffmpeg.open_rawvideo_encoder(output_path='chunk.mp4')\n"
+        "    writer.write_frame(frame)\n"
+        "    writer.close()\n"
+        "    manifest.finalize_chunk('chunk.mp4')\n"
+        "    Path('chunk.mp4').unlink(missing_ok=True)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENCODER", fake_encoder, raising=False)
+    issues: list[str] = []
+
+    module._check_encoder_segment_writer_boundary(issues)
+
+    assert any("encoder segment writer" in issue for issue in issues), issues
 
 
 def test_frontend_encode_output_binding_boundary_flags_local_state_and_setters(tmp_path, monkeypatch) -> None:

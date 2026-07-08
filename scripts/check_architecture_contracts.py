@@ -43,6 +43,7 @@ PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
 ENHANCE_WORKFLOW = FRONTEND_SRC / "services" / "preset" / "enhance-workflow.ts"
 ENHANCE_VIEW_MODEL = FRONTEND_SRC / "services" / "preset" / "enhance-view-model.ts"
+ENHANCE_RUNTIME_VIEW = FRONTEND_SRC / "services" / "preset" / "enhance-runtime-view.ts"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-form-bindings.ts"
 ENHANCE_FIELD_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-field-bindings.ts"
@@ -589,6 +590,25 @@ def _check_frontend_enhance_view_model_split_boundary(issues: list[str]) -> None
             issues.append(f"enhance view-model split `{label}` remains in {_rel(ENHANCE_VIEW_MODEL)}")
 
 
+def _check_frontend_enhance_runtime_view_split_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_RUNTIME_VIEW)
+    forbidden_patterns = {
+        "model-metrics import": r"from\s+['\"]@/services/model-metrics['\"]",
+        "algorithm capability import": r"from\s+['\"]\.\/enhance-algorithm-capabilities['\"]",
+        "scaled dimensions": r"\bscaledDimensions\b",
+        "runtime estimate": r"\bestimateModelRuntimeMetrics\b",
+        "metric rows": r"\bmetricRows\s*\(",
+        "combined vram rows": r"\bcombinedVramMetricRows\s*\(",
+        "combined peak vram": r"\bestimateCombinedPeakVram\b",
+        "fixed frame helper": r"\bfixedRuntimeFrameCount\b",
+        "PaddleGAN helper": r"\bisPaddleGanVsrAlgorithm\b",
+        "input frame mode helper": r"\bsuperResolutionInputFrameMode\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"enhance runtime-view split `{label}` remains in {_rel(ENHANCE_RUNTIME_VIEW)}")
+
+
 def _check_frontend_enhance_binding_boundary(issues: list[str]) -> None:
     text = _read(ENHANCE_FORM)
     forbidden_patterns = {
@@ -1111,6 +1131,26 @@ def _check_encoder_helper_boundary(issues: list[str]) -> None:
             issues.append(f"encoder helper `{helper}` dependency remains in {_rel(path)}")
 
 
+def _check_encoder_segment_writer_boundary(issues: list[str]) -> None:
+    text = _read(ENCODER)
+    forbidden_patterns = {
+        "Path import": r"^\s*from\s+pathlib\s+import\s+Path\b",
+        "os import": r"^\s*import\s+os\b",
+        "rawvideo encoder open": r"\bopen_rawvideo_encoder\b",
+        "writer frame write": r"\bwriter\.write_frame\s*\(",
+        "writer close": r"\bwriter\.close\s*\(",
+        "manifest finalize": r"\bfinalize_chunk\s*\(",
+        "chunk tmp path": r"\bchunk_tmp_path\s*\(",
+        "progress callback helper": r"\b_make_segment_progress_callback\b|\bmake_segment_progress_callback\b",
+        "segment frame count resolver": r"\b_resolve_segment_output_frame_count\b|\bresolve_segment_output_frame_count\b",
+        "segment temp cleanup": r"\bunlink\s*\(",
+        "segment writer state": r"\bcurrent_segment_input_frames\b|\bsegment_index\b|\btmp_path\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"encoder segment writer `{label}` remains in backend/app/processing/streaming/encoder.py")
+
+
 def _check_processor_algorithm_boundary(issues: list[str]) -> None:
     text = _read(PROCESSOR)
     forbidden_patterns = {
@@ -1194,6 +1234,7 @@ def main() -> int:
         _check_frontend_enhance_rules_split_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_view_model_split_boundary(issues)
+        _check_frontend_enhance_runtime_view_split_boundary(issues)
         _check_frontend_enhance_binding_boundary(issues)
         _check_frontend_enhance_field_binding_boundary(issues)
         _check_frontend_enhance_field_split_boundary(issues)
@@ -1223,6 +1264,7 @@ def main() -> int:
         _check_streaming_pipeline_preflight_boundary(issues)
         _check_streaming_pipeline_dispatch_boundary(issues)
         _check_encoder_helper_boundary(issues)
+        _check_encoder_segment_writer_boundary(issues)
         _check_processor_algorithm_boundary(issues)
         _check_processor_stage_execution_boundary(issues)
         _check_processor_stream_boundary(issues)
