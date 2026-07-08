@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import * as profileSelection from './profile-selection'
 import {
   defaultRateControlValue,
   fallbackUnavailableDecodeProfile,
@@ -68,6 +69,10 @@ const encodeConfig = (): EncodeConfig => ({
 })
 
 describe('profile-selection rules', () => {
+  it('does not expose internal software decode config helper', () => {
+    expect('softwareDecodeConfig' in profileSelection).toBe(false)
+  })
+
   it('selects a hardware decoder with preferred device values and seeded options', () => {
     expect(selectDecodeProfile(decoderProfile(), { resize: '1280x720' }, 'd3d11va')).toEqual({
       mode: 'hardware',

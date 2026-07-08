@@ -8,7 +8,7 @@ import { resolveDecoderHwaccel, resolveDecoderHwaccelDevice } from './decode-har
 import { seedProfileOptions } from './options'
 import { resolveRateControlForProfile } from './rate-control'
 
-export function softwareDecodeConfig(): DecodeConfig {
+function softwareDecodeConfig(): DecodeConfig {
   return {
     mode: 'software',
     hwaccel: '',
