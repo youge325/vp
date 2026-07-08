@@ -598,7 +598,15 @@ def _check_frontend_enhance_workflow_lookup_boundary(issues: list[str]) -> None:
 
 
 def _check_frontend_enhance_rules_split_boundary(issues: list[str]) -> None:
+    if not ENHANCE_RULES.exists():
+        return
     text = _read(ENHANCE_RULES)
+    if "Compatibility barrel" in text or re.search(
+        r"^\s*export\s+\*\s+from\s+['\"]\./enhance-(?:algorithm-capabilities|default-pickers|onnx-defaults|super-resolution-defaults)['\"]",
+        text,
+        re.MULTILINE,
+    ):
+        issues.append(f"obsolete enhance rules barrel remains in {_rel(ENHANCE_RULES)}")
     forbidden_patterns = {
         "nested default-selection barrel": r"export\s+\*\s+from\s+['\"]\.\/enhance-default-selection['\"]",
         "backend compatibility helper": r"^\s*function\s+backendCompatible\b",

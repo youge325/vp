@@ -207,6 +207,25 @@ def test_frontend_enhance_rules_split_boundary_flags_nested_barrel(tmp_path, mon
     assert any("nested default-selection barrel" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_rules_split_boundary_flags_obsolete_barrel(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_rules = tmp_path / "enhance-rules.ts"
+    fake_rules.write_text(
+        "// Compatibility barrel for enhance rule helpers.\n"
+        "export * from './enhance-algorithm-capabilities'\n"
+        "export * from './enhance-default-pickers'\n"
+        "export * from './enhance-onnx-defaults'\n"
+        "export * from './enhance-super-resolution-defaults'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_RULES", fake_rules, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_rules_split_boundary(issues)
+
+    assert any("obsolete enhance rules barrel" in issue for issue in issues), issues
+
+
 def test_frontend_enhance_default_selection_split_boundary_flags_local_rule_bodies(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_defaults = tmp_path / "enhance-default-selection.ts"
