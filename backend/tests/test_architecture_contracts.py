@@ -312,6 +312,22 @@ def test_frontend_enhance_default_pickers_boundary_flags_local_backend_helper(tm
     assert any("enhance default pickers" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_default_pickers_boundary_flags_direct_backend_support_helper(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pickers = tmp_path / "enhance-default-pickers.ts"
+    fake_pickers.write_text(
+        "import { algorithmSupportsBackend } from './enhance-workflow-lookup'\n"
+        "const selected = algorithms.find((algorithm) => algorithmSupportsBackend(algorithm, backend))\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_default_pickers_boundary(issues)
+
+    assert any("backend support direct helper" in issue for issue in issues), issues
+
+
 def test_worker_pipeline_plan_boundary_flags_local_plan_builders(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "worker_pipeline.py"

@@ -3,7 +3,7 @@
 
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { InferenceEngine, TensorBackend } from '@/types/domain/workflow'
-import { algorithmSupportsBackend } from './enhance-workflow-lookup'
+import { pickBackendSupportedAlgorithmName } from './enhance-workflow-lookup'
 
 export function pickDefaultEngine(
   checkResult: EnvironmentCheckResult | null,
@@ -17,8 +17,7 @@ export function pickDefaultInterpolationAlgorithm(
   checkResult: EnvironmentCheckResult | null,
   backend: TensorBackend,
 ): string {
-  const all = checkResult?.interpolationAlgorithms ?? []
-  return all.find((a) => algorithmSupportsBackend(a, backend))?.name ?? all[0]?.name ?? 'rife'
+  return pickBackendSupportedAlgorithmName(checkResult?.interpolationAlgorithms, backend, 'rife')
 }
 
 export function pickDefaultInterpolationModel(
@@ -32,8 +31,7 @@ export function pickDefaultSuperResolutionAlgorithm(
   checkResult: EnvironmentCheckResult | null,
   backend: TensorBackend,
 ): string {
-  const all = checkResult?.superResolutionAlgorithms ?? []
-  return all.find((a) => algorithmSupportsBackend(a, backend))?.name ?? all[0]?.name ?? 'placeholder'
+  return pickBackendSupportedAlgorithmName(checkResult?.superResolutionAlgorithms, backend, 'placeholder')
 }
 
 export function pickDefaultAnimeProfile(
