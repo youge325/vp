@@ -1569,6 +1569,24 @@ def test_pipeline_raw_runtime_encoder_boundary_flags_private_encoder_worker_depe
     assert any("pipeline raw encoder worker" in issue for issue in issues), issues
 
 
+def test_pipeline_raw_runtime_encoder_boundary_flags_public_encoder_worker_dependency(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runtime = tmp_path / "pipeline_raw_runtime.py"
+    fake_runtime.write_text(
+        "from app.processing.streaming.encoder_worker import run_encoder_worker\n\n"
+        "def run_raw_pipeline_runtime():\n"
+        "    encoder_thread = threading.Thread(target=run_encoder_worker)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PIPELINE_RAW_RUNTIME", fake_runtime, raising=False)
+    issues: list[str] = []
+
+    module._check_pipeline_raw_runtime_encoder_boundary(issues)
+
+    assert any("encoder worker import" in issue for issue in issues), issues
+    assert any("encoder worker target" in issue for issue in issues), issues
+
+
 def test_streaming_pipeline_lifecycle_boundary_flags_local_resume_and_finalize(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "pipeline.py"

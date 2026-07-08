@@ -1419,6 +1419,8 @@ def _check_pipeline_raw_runtime_boundary(issues: list[str]) -> None:
 def _check_pipeline_raw_runtime_encoder_boundary(issues: list[str]) -> None:
     text = _read(PIPELINE_RAW_RUNTIME)
     forbidden_patterns = {
+        "encoder worker import": r"from\s+app\.processing\.streaming\.encoder_worker\s+import\s+run_encoder_worker\b",
+        "encoder worker target": r"\btarget\s*=\s*run_encoder_worker\b",
         "private encoder worker import": r"from\s+app\.processing\.streaming\.encoder\s+import\s+_encoder_worker\b",
         "private encoder worker target": r"\btarget\s*=\s*_encoder_worker\b",
     }

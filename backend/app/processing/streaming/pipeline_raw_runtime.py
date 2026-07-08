@@ -7,8 +7,8 @@ import threading
 from typing import Any, Callable
 
 from app.planning import ResumeState, SegmentManifest, StagePlan
-from app.processing.streaming.encoder_worker import run_encoder_worker
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.pipeline_raw_encoder import start_raw_encoder_thread
 from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, StreamEnd
 from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
 from app.utils.ffmpeg import FFmpegWrapper
@@ -43,41 +43,24 @@ def run_raw_pipeline_runtime(
     error_queue: queue.Queue[BaseException] = queue.Queue()
     stop_event = threading.Event()
 
-    encoder_thread = threading.Thread(
-        target=run_encoder_worker,
-        name="vp-encoder",
-        kwargs={
-            "decode_queue": queue.Queue(maxsize=1),
-            "encode_queue": encode_queue,
-            "error_queue": error_queue,
-            "stop_event": stop_event,
-            "metrics": metrics,
-            "ffmpeg": ffmpeg,
-            "encode_config": encode_config,
-            "manifest": manifest,
-            "signature": signature,
-            "width": output_width,
-            "height": output_height,
-            "fps": stream_fps,
-            "output_fps": output_fps,
-            "segment_frames": segment_frames,
-            "resume_state": resume_state,
-            "output_path": output_path,
-            "encode_progress_callback": encode_progress_callback,
-        },
-        daemon=True,
+    encoder_thread = start_raw_encoder_thread(
+        ffmpeg=ffmpeg,
+        encode_config=encode_config,
+        manifest=manifest,
+        signature=signature,
+        output_width=output_width,
+        output_height=output_height,
+        stream_fps=stream_fps,
+        output_fps=output_fps,
+        segment_frames=segment_frames,
+        resume_state=resume_state,
+        output_path=output_path,
+        encode_progress_callback=encode_progress_callback,
+        metrics=metrics,
+        encode_queue=encode_queue,
+        error_queue=error_queue,
+        stop_event=stop_event,
     )
-
-    if encode_progress_callback is not None and resume_state.completed_output_frames > 0:
-        encode_progress_callback(
-            resume_state.completed_output_frames,
-            None,
-            None,
-            None,
-            "continue",
-        )
-
-    encoder_thread.start()
     runner = stage_worker_runner or run_stage_worker_pipeline
     runner(
         ffmpeg=ffmpeg,
