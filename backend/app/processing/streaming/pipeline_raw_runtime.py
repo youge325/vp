@@ -7,7 +7,7 @@ import threading
 from typing import Any, Callable
 
 from app.planning import ResumeState, SegmentManifest, StagePlan
-from app.processing.streaming.encoder import _encoder_worker
+from app.processing.streaming.encoder_worker import run_encoder_worker
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, StreamEnd
 from app.utils.ffmpeg import FFmpegWrapper
@@ -43,7 +43,7 @@ def run_raw_pipeline_runtime(
     stop_event = threading.Event()
 
     encoder_thread = threading.Thread(
-        target=_encoder_worker,
+        target=run_encoder_worker,
         name="vp-encoder",
         kwargs={
             "decode_queue": queue.Queue(maxsize=1),
