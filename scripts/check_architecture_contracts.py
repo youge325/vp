@@ -1393,7 +1393,12 @@ def _check_processor_private_reexport_boundary(issues: list[str]) -> None:
 
 
 def _check_processor_stream_aggregator_boundary(issues: list[str]) -> None:
+    if not PROCESSOR_STREAMS.exists():
+        return
+
     text = _read(PROCESSOR_STREAMS)
+    if "Compatibility exports" in text:
+        issues.append(f"obsolete processor stream aggregator remains in {_rel(PROCESSOR_STREAMS)}")
     forbidden_patterns = {
         "process_single_frame_stream": r"^\s*def\s+process_single_frame_stream\b",
         "process_interpolated_stream": r"^\s*def\s+process_interpolated_stream\b",

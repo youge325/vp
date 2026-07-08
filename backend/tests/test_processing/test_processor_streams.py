@@ -9,12 +9,10 @@ import numpy as np
 from app.planning import ProcessingStep, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.processor_algorithms import PipelineAlgorithms
-from app.processing.streaming.processor_streams import (
-    drain_decoded,
-    process_interpolated_stream,
-    process_sequence_stream,
-    process_single_frame_stream,
-)
+from app.processing.streaming.processor_stream_interpolated import process_interpolated_stream
+from app.processing.streaming.processor_stream_io import drain_decoded
+from app.processing.streaming.processor_stream_sequence import process_sequence_stream
+from app.processing.streaming.processor_stream_single import process_single_frame_stream
 from app.processing.streaming.queues import (
     DecodedFrame,
     EncodedFrame,
