@@ -463,6 +463,33 @@ def test_worker_pipeline_plan_boundary_flags_local_plan_builders(tmp_path, monke
     assert any("worker plan" in issue for issue in issues), issues
 
 
+def test_worker_pipeline_plan_boundary_flags_obsolete_plan_reexports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "worker_pipeline.py"
+    fake_pipeline.write_text(
+        "from app.processing.streaming.worker_plans import (\n"
+        "    StageChunkPlan,\n"
+        "    StageWorkerPlan,\n"
+        "    boundary_schedule_for_stage_plan,\n"
+        "    build_stage_chunk_plans,\n"
+        "    build_stage_worker_plans,\n"
+        ")\n"
+        "__all__ = [\n"
+        '    "StageWorkerPlan",\n'
+        '    "build_stage_chunk_plans",\n'
+        '    "run_stage_worker_pipeline",\n'
+        "]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKER_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_worker_pipeline_plan_boundary(issues)
+
+    assert any("obsolete plan import" in issue for issue in issues), issues
+    assert any("obsolete plan export" in issue for issue in issues), issues
+
+
 def test_enhance_form_view_model_boundary_flags_derived_rule_leaks(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_form = tmp_path / "useEnhanceForm.ts"
@@ -497,6 +524,23 @@ def test_worker_pipeline_process_boundary_flags_local_runtime_helpers(tmp_path, 
     module._check_worker_pipeline_process_boundary(issues)
 
     assert any("worker process helper" in issue for issue in issues), issues
+
+
+def test_worker_pipeline_process_boundary_flags_obsolete_event_reexport(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "worker_pipeline.py"
+    fake_pipeline.write_text(
+        "from app.processing.streaming.worker_process_events import parse_stage_event_line\n"
+        '__all__ = ["parse_stage_event_line", "run_stage_worker_pipeline"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKER_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_worker_pipeline_process_boundary(issues)
+
+    assert any("parse_stage_event_line import" in issue for issue in issues), issues
+    assert any("parse_stage_event_line export" in issue for issue in issues), issues
 
 
 def test_worker_pipeline_chain_runtime_boundary_flags_local_thread_and_io_runtime(tmp_path, monkeypatch) -> None:
@@ -637,6 +681,23 @@ def test_worker_pipeline_file_boundary_flags_local_stage_file_helpers(tmp_path, 
     module._check_worker_pipeline_file_boundary(issues)
 
     assert any("stage file pipeline helper" in issue for issue in issues), issues
+
+
+def test_worker_pipeline_file_boundary_flags_obsolete_stage_file_reexport(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "worker_pipeline.py"
+    fake_pipeline.write_text(
+        "from app.processing.streaming.stage_file_pipeline import run_stage_file_pipeline\n"
+        '__all__ = ["run_stage_file_pipeline", "run_stage_worker_pipeline"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKER_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_worker_pipeline_file_boundary(issues)
+
+    assert any("stage file pipeline import" in issue for issue in issues), issues
+    assert any("stage file pipeline export" in issue for issue in issues), issues
 
 
 def test_frontend_io_view_option_boundary_flags_view_local_option_rules(tmp_path, monkeypatch) -> None:
