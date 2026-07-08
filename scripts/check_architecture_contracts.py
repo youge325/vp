@@ -801,6 +801,7 @@ def _check_frontend_enhance_runtime_view_split_boundary(issues: list[str]) -> No
 def _check_frontend_model_metrics_barrel_boundary(issues: list[str]) -> None:
     if not MODEL_METRICS.exists():
         return
+    issues.append(f"obsolete model metrics entrypoint remains in {_rel(MODEL_METRICS)}")
     text = _read(MODEL_METRICS)
     if re.search(
         r"^\s*export\s+(?:type\s+)?(?:\{[\s\S]*?\}|\*)\s+from\s+['\"]\./model-(?:metric-format|engine-metrics|runtime-estimates|metric-rows)['\"]",
@@ -1396,6 +1397,7 @@ def _check_streaming_pipeline_raw_boundary(issues: list[str]) -> None:
 def _check_pipeline_raw_runtime_boundary(issues: list[str]) -> None:
     text = _read(PIPELINE_RAW)
     forbidden_patterns = {
+        "stage runner type import": r"from\s+app\.processing\.streaming\.pipeline_raw_stage\s+import\s+StageWorkerRunner\b",
         "worker pipeline import": r"from\s+app\.processing\.streaming\.worker_pipeline\s+import\b",
         "worker pipeline symbol": r"\brun_stage_worker_pipeline\b",
         "queue import": r"^\s*import\s+queue\b",

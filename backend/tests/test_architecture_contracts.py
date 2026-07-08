@@ -1035,6 +1035,18 @@ def test_frontend_model_metrics_barrel_boundary_flags_obsolete_reexports(tmp_pat
     assert any("obsolete model metrics barrel" in issue for issue in issues), issues
 
 
+def test_frontend_model_metrics_barrel_boundary_flags_recreated_entrypoint(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_model_metrics = tmp_path / "model-metrics.ts"
+    fake_model_metrics.write_text("", encoding="utf-8")
+    monkeypatch.setattr(module, "MODEL_METRICS", fake_model_metrics, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_model_metrics_barrel_boundary(issues)
+
+    assert any("obsolete model metrics entrypoint" in issue for issue in issues), issues
+
+
 def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_processor = tmp_path / "processor.py"
@@ -1538,6 +1550,7 @@ def test_pipeline_raw_runtime_boundary_flags_worker_chain_coupling(tmp_path, mon
     module = _load_module()
     fake_pipeline_raw = tmp_path / "pipeline_raw.py"
     fake_pipeline_raw.write_text(
+        "from app.processing.streaming.pipeline_raw_stage import StageWorkerRunner\n"
         "from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline\n\n"
         "def run_raw_streaming_pipeline(stage_worker_runner=None):\n"
         "    return run_raw_pipeline_runtime(stage_worker_runner=stage_worker_runner or run_stage_worker_pipeline)\n",
@@ -1550,6 +1563,7 @@ def test_pipeline_raw_runtime_boundary_flags_worker_chain_coupling(tmp_path, mon
 
     assert any("worker pipeline import" in issue for issue in issues), issues
     assert any("worker pipeline symbol" in issue for issue in issues), issues
+    assert any("stage runner type import" in issue for issue in issues), issues
 
 
 def test_pipeline_raw_runtime_encoder_boundary_flags_private_encoder_worker_dependency(tmp_path, monkeypatch) -> None:
