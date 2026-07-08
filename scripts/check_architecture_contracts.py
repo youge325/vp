@@ -36,6 +36,7 @@ WORKER_PROCESSES = ROOT / "backend" / "app" / "processing" / "streaming" / "work
 WORKER_PROCESS_EVENTS = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_process_events.py"
 WORKER_PROCESS_IO = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_process_io.py"
 ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder.py"
+ENCODER_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_worker.py"
 PIPELINE_RAW = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw.py"
 PIPELINE_RAW_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_runtime.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
@@ -1276,15 +1277,18 @@ def _check_streaming_pipeline_dispatch_boundary(issues: list[str]) -> None:
 
 
 def _check_encoder_helper_boundary(issues: list[str]) -> None:
-    encoder_text = _read(ENCODER)
-    forbidden_encoder_defs = {
-        "segment progress callback": r"^\s*def\s+_make_segment_progress_callback\b",
-        "segment frame count": r"^\s*def\s+_resolve_segment_output_frame_count\b",
-        "segmented finalization": r"^\s*def\s+_finalize_segmented_output\b",
-    }
-    for label, pattern in forbidden_encoder_defs.items():
-        if re.search(pattern, encoder_text, re.MULTILINE):
-            issues.append(f"encoder helper `{label}` remains in backend/app/processing/streaming/encoder.py")
+    if ENCODER.exists():
+        encoder_text = _read(ENCODER)
+        if "run_encoder_worker as _encoder_worker" in encoder_text:
+            issues.append(f"obsolete encoder compatibility entrypoint remains in {_rel(ENCODER)}")
+        forbidden_encoder_defs = {
+            "segment progress callback": r"^\s*def\s+_make_segment_progress_callback\b",
+            "segment frame count": r"^\s*def\s+_resolve_segment_output_frame_count\b",
+            "segmented finalization": r"^\s*def\s+_finalize_segmented_output\b",
+        }
+        for label, pattern in forbidden_encoder_defs.items():
+            if re.search(pattern, encoder_text, re.MULTILINE):
+                issues.append(f"encoder helper `{label}` remains in backend/app/processing/streaming/encoder.py")
 
     private_helpers = (
         "_make_segment_progress_callback",
@@ -1301,7 +1305,7 @@ def _check_encoder_helper_boundary(issues: list[str]) -> None:
 
 
 def _check_encoder_segment_writer_boundary(issues: list[str]) -> None:
-    text = _read(ENCODER)
+    text = _read(ENCODER_WORKER)
     forbidden_patterns = {
         "Path import": r"^\s*from\s+pathlib\s+import\s+Path\b",
         "os import": r"^\s*import\s+os\b",
