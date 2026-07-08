@@ -2,7 +2,7 @@
 // Select option and value conversion rules for the enhance view.
 
 import { BACKEND_LABELS, ENGINE_LABELS } from '@/config/gpu-labels'
-import { modelOptionLabel } from '@/services/model-metrics'
+import { modelOptionLabel } from '@/services/model-metric-format'
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
 import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/domain/workflow'
 

@@ -8,7 +8,7 @@ import {
   estimateModelRuntimeMetrics,
   type RuntimeMetricEstimate,
   type VideoDimensions,
-} from '@/services/model-metrics'
+} from '@/services/model-runtime-estimates'
 
 export type { RuntimeMetricEstimate, VideoDimensions }
 
