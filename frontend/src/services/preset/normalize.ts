@@ -18,8 +18,6 @@ import {
   resolveRateControlForProfile,
 } from './rate-control'
 
-export { resolveDecoderHwaccel } from './decode-hardware'
-
 export function normalizeDecodeConfig(
   config: DecodeConfig,
   checkResult: EnvironmentCheckResult | null,

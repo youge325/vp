@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeDecodeConfig, resolveDecoderHwaccel } from './normalize'
+import { resolveDecoderHwaccel } from './decode-hardware'
+import { normalizeDecodeConfig } from './normalize'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { DecodeConfig } from '@/types/protocol'
 import type { HardwareDeviceOptionSpec } from '@/types/domain/capability'
