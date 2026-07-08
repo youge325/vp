@@ -16,6 +16,7 @@ import json
 import pytest
 
 import app.__main__ as app_main
+import app.errors as errors
 from app.errors import ProcessError
 from app.errors._bootstrap import infer_error_code
 from app.errors._codes import ALL_CODES, TaskErrorCode, error_code_to_wire
@@ -75,6 +76,11 @@ def test_infer_error_code_defaults_to_process_failed() -> None:
 def test_all_codes_match_enum() -> None:
     """The ``ALL_CODES`` frozenset must exactly enumerate the enum values."""
     assert ALL_CODES == {code.value for code in TaskErrorCode}
+
+
+def test_errors_public_surface_drops_deprecated_emit_error_alias() -> None:
+    assert not hasattr(errors, "emit_error")
+    assert "emit_error" not in errors.__all__
 
 
 @pytest.mark.parametrize(

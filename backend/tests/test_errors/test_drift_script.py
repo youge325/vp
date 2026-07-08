@@ -191,6 +191,12 @@ def emit(process_error, exc, pe):
     assert module._scan_python_error_code_wire_misuse("sample.py", text) == []
 
 
+def test_error_code_wire_scan_wrappers_drop_deprecated_emit_error() -> None:
+    module = _load_module()
+
+    assert module._ERROR_CODE_WRAPPER_CALL_NAMES == {"ProcessError", "raise_error"}
+
+
 def test_error_code_wire_scan_flags_enum_repr_leaks() -> None:
     """Regression guard for ``TaskErrorCode.MISSING_MODEL`` leaking over NDJSON."""
     module = _load_module()
