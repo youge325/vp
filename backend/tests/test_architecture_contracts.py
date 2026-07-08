@@ -1532,6 +1532,23 @@ def test_frontend_workflow_defaults_lookup_boundary_flags_direct_algorithm_looku
     assert any("workflow defaults lookup" in issue for issue in issues), issues
 
 
+def test_frontend_workflow_defaults_lookup_boundary_flags_direct_onnx_defaults(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_defaults = tmp_path / "workflow-defaults.ts"
+    fake_defaults.write_text(
+        "workflow.interpolation.onnxModel = findInterpolationAlgorithm(env, workflow.interpolation.algorithm)?.onnxModels?.[0] ?? ''\n"
+        "workflow.superResolution.onnxModel = findSuperResolutionAlgorithm(env, workflow.superResolution.algorithm)?.onnxModels?.[0] ?? ''\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKFLOW_DEFAULTS", fake_defaults)
+    issues: list[str] = []
+
+    module._check_frontend_workflow_defaults_lookup_boundary(issues)
+
+    assert any("direct interpolation ONNX default" in issue for issue in issues), issues
+    assert any("direct super-resolution ONNX default" in issue for issue in issues), issues
+
+
 def test_frontend_workflow_defaults_engine_boundary_flags_local_engine_preference(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_defaults = tmp_path / "workflow-defaults.ts"

@@ -1016,6 +1016,8 @@ def _check_frontend_workflow_defaults_lookup_boundary(issues: list[str]) -> None
     forbidden_patterns = {
         "direct interpolation lookup": r"\binterpolationAlgorithms\?\.\s*find\s*\(",
         "direct super-resolution lookup": r"\bsuperResolutionAlgorithms\?\.\s*find\s*\(",
+        "direct interpolation ONNX default": r"\bfindInterpolationAlgorithm\b[\s\S]*?\?\.onnxModels\?\.\[0\]",
+        "direct super-resolution ONNX default": r"\bfindSuperResolutionAlgorithm\b[\s\S]*?\?\.onnxModels\?\.\[0\]",
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text):

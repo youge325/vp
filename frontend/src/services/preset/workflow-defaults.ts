@@ -11,8 +11,9 @@ import {
   pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
 } from './enhance-default-pickers'
+import { fallbackInterpolationOnnxModel, fallbackSuperResolutionOnnxModel } from './enhance-onnx-defaults'
 import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolution-defaults'
-import { findInterpolationAlgorithm, findSuperResolutionAlgorithm } from './enhance-workflow-lookup'
+import { findSuperResolutionAlgorithm } from './enhance-workflow-lookup'
 
 export function createDefaultWorkflowConfig(): WorkflowConfig {
   return {
@@ -78,10 +79,16 @@ export function applyEnvironmentWorkflowDefaults(
   )
   workflowConfig.anime.profile = pickDefaultAnimeProfile(env)
 
-  workflowConfig.interpolation.onnxModel =
-    findInterpolationAlgorithm(env, workflowConfig.interpolation.algorithm)?.onnxModels?.[0] ?? ''
-  workflowConfig.superResolution.onnxModel =
-    findSuperResolutionAlgorithm(env, workflowConfig.superResolution.algorithm)?.onnxModels?.[0] ?? ''
+  workflowConfig.interpolation.onnxModel = fallbackInterpolationOnnxModel(
+    env,
+    workflowConfig.interpolation.algorithm,
+    undefined,
+  )
+  workflowConfig.superResolution.onnxModel = fallbackSuperResolutionOnnxModel(
+    env,
+    workflowConfig.superResolution.algorithm,
+    undefined,
+  )
 
   workflowConfig.interpolation.engine = pickDefaultInterpolationEngine(env, interpolationBackend) ?? 'cuda'
   workflowConfig.superResolution.engine = pickDefaultEngine(env, superResolutionBackend) ?? 'cuda'
