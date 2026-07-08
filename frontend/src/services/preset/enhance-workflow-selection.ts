@@ -11,9 +11,9 @@ import {
 import { pickDefaultEngine } from './enhance-engine-defaults'
 import {
   pickDefaultInterpolationAlgorithm,
-  pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
 } from './enhance-default-pickers'
+import { pickDefaultInterpolationModel } from './enhance-metadata-defaults'
 import {
   fallbackInterpolationOnnxModel,
   fallbackSuperResolutionOnnxModel,
