@@ -198,6 +198,33 @@ def test_worker_pipeline_chain_runtime_boundary_flags_local_thread_and_io_runtim
     assert any("worker chain runtime" in issue for issue in issues), issues
 
 
+def test_worker_processes_event_io_boundary_flags_local_event_and_rawvideo_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_processes = tmp_path / "worker_processes.py"
+    fake_processes.write_text(
+        "from app.processing.streaming.stage_worker import STAGE_EVENT_PREFIX, read_rgb_frame, write_rgb_frame\n"
+        "from app.processing.streaming.worker_plans import boundary_schedule_for_stage_plan\n"
+        "TENSORRT_LOG_PREFIX = '[VP_TRT]'\n\n"
+        "def parse_stage_event_line():\n"
+        "    pass\n\n"
+        "def read_worker_stderr():\n"
+        "    pass\n\n"
+        "def write_decoded_frames_to_worker():\n"
+        "    pass\n\n"
+        "def drain_final_worker_output():\n"
+        "    pass\n\n"
+        "def close_pipe():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKER_PROCESSES", fake_processes)
+    issues: list[str] = []
+
+    module._check_worker_processes_event_io_boundary(issues)
+
+    assert any("worker process event/io helper" in issue for issue in issues), issues
+
+
 def test_enhance_view_option_boundary_flags_view_local_option_rules(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_view = tmp_path / "EnhanceModuleView.vue"
@@ -376,6 +403,23 @@ def test_frontend_io_profile_state_boundary_flags_local_profile_derivation(tmp_p
     module._check_frontend_io_profile_state_boundary(issues)
 
     assert any("io profile state rule" in issue for issue in issues), issues
+
+
+def test_frontend_decode_hardware_binding_boundary_flags_profile_hardware_leaks(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_decode_profile = tmp_path / "decode-profile-bindings.ts"
+    fake_decode_profile.write_text(
+        "import { buildDecoderHardwareDeviceOptions, applyDecodeHwaccelSelection } from '@/services/preset/io-form-rules'\n"
+        "const decoderHardwareDeviceOptions = computed(() => buildDecoderHardwareDeviceOptions(profile.value))\n"
+        "function setDecodeHwaccel(value) { applyDecodeHwaccelSelection(config, profile.value, value) }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "DECODE_PROFILE_BINDINGS", fake_decode_profile)
+    issues: list[str] = []
+
+    module._check_frontend_decode_hardware_binding_boundary(issues)
+
+    assert any("decode hardware binding rule" in issue for issue in issues), issues
 
 
 def test_frontend_enhance_binding_boundary_flags_composable_binding_leaks(tmp_path, monkeypatch) -> None:

@@ -29,6 +29,7 @@ README = ROOT / "README.md"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
+WORKER_PROCESSES = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_processes.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
 STAGE_FILE_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_pipeline.py"
 STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunks.py"
@@ -699,6 +700,22 @@ def _check_frontend_io_profile_state_boundary(issues: list[str]) -> None:
                 issues.append(f"io profile state rule `{label}` leaked into profile binding: {_rel(path)}")
 
 
+def _check_frontend_decode_hardware_binding_boundary(issues: list[str]) -> None:
+    text = _read(DECODE_PROFILE_BINDINGS)
+    forbidden_patterns = {
+        "io-form-rules import": r"from\s+['\"]@/services/preset/io-form-rules['\"]",
+        "hardware option builder": r"\bbuildDecoderHardwareDevice(?:Number)?Options\b",
+        "hardware selection rule": r"\bapplyDecodeHwaccel(?:Device)?Selection\b",
+        "hardware option computed": r"\bdecoderHardwareDevice(?:Number)?Options\s*=\s*computed\s*\(",
+        "hardware setter": r"^\s*function\s+setDecodeHwaccel(?:Device)?\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"decode hardware binding rule `{label}` leaked into profile binding: {_rel(DECODE_PROFILE_BINDINGS)}"
+            )
+
+
 def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
     text = _read(WORKER_PIPELINE)
     forbidden_patterns = {
@@ -770,6 +787,28 @@ def _check_worker_pipeline_file_boundary(issues: list[str]) -> None:
         if re.search(pattern, text, re.MULTILINE):
             issues.append(
                 f"stage file pipeline helper `{label}` remains in backend/app/processing/streaming/worker_pipeline.py"
+            )
+
+
+def _check_worker_processes_event_io_boundary(issues: list[str]) -> None:
+    text = _read(WORKER_PROCESSES)
+    forbidden_patterns = {
+        "parse_stage_event_line": r"^\s*def\s+parse_stage_event_line\b",
+        "read_worker_stderr": r"^\s*def\s+read_worker_stderr\b",
+        "write_decoded_frames_to_worker": r"^\s*def\s+write_decoded_frames_to_worker\b",
+        "drain_final_worker_output": r"^\s*def\s+drain_final_worker_output\b",
+        "close_pipe": r"^\s*def\s+close_pipe\b",
+        "TENSORRT_LOG_PREFIX": r"\bTENSORRT_LOG_PREFIX\b",
+        "STAGE_EVENT_PREFIX": r"\bSTAGE_EVENT_PREFIX\b",
+        "read_rgb_frame": r"\bread_rgb_frame\b",
+        "write_rgb_frame": r"\bwrite_rgb_frame\b",
+        "boundary_schedule_for_stage_plan": r"\bboundary_schedule_for_stage_plan\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"worker process event/io helper `{label}` remains in "
+                "backend/app/processing/streaming/worker_processes.py"
             )
 
 
@@ -950,10 +989,12 @@ def main() -> int:
         _check_frontend_io_form_binding_boundary(issues)
         _check_frontend_io_form_aggregator_boundary(issues)
         _check_frontend_io_profile_state_boundary(issues)
+        _check_frontend_decode_hardware_binding_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)
         _check_worker_pipeline_chain_runtime_boundary(issues)
         _check_worker_pipeline_file_boundary(issues)
+        _check_worker_processes_event_io_boundary(issues)
         _check_stage_file_pipeline_chunk_boundary(issues)
         _check_stage_file_chunks_runtime_boundary(issues)
         _check_stage_worker_execution_boundary(issues)
