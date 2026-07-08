@@ -1658,6 +1658,27 @@ def test_pipeline_dispatch_runtime_boundary_flags_worker_chain_coupling(tmp_path
     assert any("stage worker runner symbol" in issue for issue in issues), issues
 
 
+def test_pipeline_dispatch_runtime_boundary_flags_duplicate_resume_status_event(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_dispatch = tmp_path / "pipeline_dispatch.py"
+    fake_dispatch.write_text(
+        "from app.processing.streaming.pipeline_lifecycle import emit_resume_status_event\n\n"
+        "def run_streaming_pipeline(use_stage_file_pipeline):\n"
+        "    if use_stage_file_pipeline:\n"
+        "        emit_resume_status_event(resume_state=None, total_output_frames=0)\n"
+        "        return run_stage_file_pipeline()\n"
+        "    emit_resume_status_event(resume_state=None, total_output_frames=0)\n"
+        "    return run_raw_streaming_pipeline()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PIPELINE_DISPATCH", fake_dispatch, raising=False)
+    issues: list[str] = []
+
+    module._check_pipeline_dispatch_runtime_boundary(issues)
+
+    assert any("duplicate resume status event" in issue for issue in issues), issues
+
+
 def test_encoder_helper_boundary_flags_local_segment_and_finalize_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_encoder = tmp_path / "encoder.py"

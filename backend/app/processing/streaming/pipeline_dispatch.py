@@ -34,11 +34,12 @@ def run_streaming_pipeline(
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
     metrics: PipelineMetrics,
 ) -> int:
+    emit_resume_status_event(
+        resume_state=resume_state,
+        total_output_frames=stage_plan.total_encoded_frames,
+    )
+
     if use_stage_file_pipeline:
-        emit_resume_status_event(
-            resume_state=resume_state,
-            total_output_frames=stage_plan.total_encoded_frames,
-        )
         return run_stage_file_pipeline(
             ffmpeg=ffmpeg,
             input_path=input_path,
@@ -55,11 +56,6 @@ def run_streaming_pipeline(
             output_fps=output_fps,
             metrics=metrics,
         )
-
-    emit_resume_status_event(
-        resume_state=resume_state,
-        total_output_frames=stage_plan.total_encoded_frames,
-    )
 
     return run_raw_streaming_pipeline(
         ffmpeg=ffmpeg,
