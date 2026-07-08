@@ -1639,6 +1639,25 @@ def test_streaming_pipeline_dispatch_boundary_flags_dispatch_alias_import(tmp_pa
     assert any("dispatch alias import" in issue for issue in issues), issues
 
 
+def test_pipeline_dispatch_runtime_boundary_flags_worker_chain_coupling(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_dispatch = tmp_path / "pipeline_dispatch.py"
+    fake_dispatch.write_text(
+        "from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline\n\n"
+        "def run_streaming_pipeline():\n"
+        "    return run_raw_streaming_pipeline(stage_worker_runner=run_stage_worker_pipeline)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PIPELINE_DISPATCH", fake_dispatch, raising=False)
+    issues: list[str] = []
+
+    module._check_pipeline_dispatch_runtime_boundary(issues)
+
+    assert any("worker pipeline import" in issue for issue in issues), issues
+    assert any("stage worker runner injection" in issue for issue in issues), issues
+    assert any("stage worker runner symbol" in issue for issue in issues), issues
+
+
 def test_encoder_helper_boundary_flags_local_segment_and_finalize_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_encoder = tmp_path / "encoder.py"
