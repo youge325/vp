@@ -116,7 +116,7 @@ def test_raw_pipeline_runtime_resolves_default_stage_worker_runner(tmp_path: Pat
         encode_queue.put(StreamEnd(next_source_frame=1))
 
     monkeypatch.setattr(
-        "app.processing.streaming.pipeline_raw_runtime.run_stage_worker_pipeline",
+        "app.processing.streaming.pipeline_raw_stage.run_stage_worker_pipeline",
         fake_stage_worker_runner,
     )
 

@@ -1458,6 +1458,19 @@ def _check_pipeline_raw_runtime_state_boundary(issues: list[str]) -> None:
             issues.append(f"pipeline raw state `{label}` remains in {_rel(PIPELINE_RAW_RUNTIME)}")
 
 
+def _check_pipeline_raw_runtime_stage_boundary(issues: list[str]) -> None:
+    text = _read(PIPELINE_RAW_RUNTIME)
+    forbidden_patterns = {
+        "worker pipeline import": r"from\s+app\.processing\.streaming\.worker_pipeline\s+import\b",
+        "worker pipeline symbol": r"\brun_stage_worker_pipeline\b",
+        "runner fallback": r"\bstage_worker_runner\s+or\b",
+        "runner local": r"^ {4}runner\s*=",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"pipeline raw stage runner `{label}` remains in {_rel(PIPELINE_RAW_RUNTIME)}")
+
+
 def _check_streaming_pipeline_lifecycle_boundary(issues: list[str]) -> None:
     text = _read(STREAMING_PIPELINE)
     forbidden_patterns = {
@@ -1727,6 +1740,7 @@ def main() -> int:
         _check_pipeline_raw_runtime_encoder_boundary(issues)
         _check_pipeline_raw_runtime_completion_boundary(issues)
         _check_pipeline_raw_runtime_state_boundary(issues)
+        _check_pipeline_raw_runtime_stage_boundary(issues)
         _check_streaming_pipeline_lifecycle_boundary(issues)
         _check_streaming_pipeline_preflight_boundary(issues)
         _check_streaming_pipeline_dispatch_boundary(issues)

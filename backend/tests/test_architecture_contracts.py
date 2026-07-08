@@ -1637,6 +1637,27 @@ def test_pipeline_raw_runtime_state_boundary_flags_local_queue_state(tmp_path, m
     assert any("stop event local" in issue for issue in issues), issues
 
 
+def test_pipeline_raw_runtime_stage_boundary_flags_local_worker_runner(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runtime = tmp_path / "pipeline_raw_runtime.py"
+    fake_runtime.write_text(
+        "from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline\n\n"
+        "def run_raw_pipeline_runtime(stage_worker_runner=None):\n"
+        "    runner = stage_worker_runner or run_stage_worker_pipeline\n"
+        "    runner(input_path='input.mp4')\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PIPELINE_RAW_RUNTIME", fake_runtime, raising=False)
+    issues: list[str] = []
+
+    module._check_pipeline_raw_runtime_stage_boundary(issues)
+
+    assert any("worker pipeline import" in issue for issue in issues), issues
+    assert any("worker pipeline symbol" in issue for issue in issues), issues
+    assert any("runner fallback" in issue for issue in issues), issues
+    assert any("runner local" in issue for issue in issues), issues
+
+
 def test_streaming_pipeline_lifecycle_boundary_flags_local_resume_and_finalize(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "pipeline.py"

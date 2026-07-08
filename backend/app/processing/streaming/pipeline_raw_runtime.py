@@ -8,11 +8,9 @@ from app.planning import ResumeState, SegmentManifest, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_raw_completion import finish_raw_pipeline_runtime
 from app.processing.streaming.pipeline_raw_encoder import start_raw_encoder_thread
+from app.processing.streaming.pipeline_raw_stage import StageWorkerRunner, run_raw_stage_worker
 from app.processing.streaming.pipeline_raw_state import create_raw_pipeline_state
-from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
 from app.utils.ffmpeg import FFmpegWrapper
-
-StageWorkerRunner = Callable[..., None]
 
 
 def run_raw_pipeline_runtime(
@@ -58,8 +56,7 @@ def run_raw_pipeline_runtime(
         error_queue=state.error_queue,
         stop_event=state.stop_event,
     )
-    runner = stage_worker_runner or run_stage_worker_pipeline
-    runner(
+    run_raw_stage_worker(
         ffmpeg=ffmpeg,
         input_path=input_path,
         decode_config=decode_config,
@@ -68,10 +65,9 @@ def run_raw_pipeline_runtime(
         progress_callbacks=progress_callbacks,
         video_info=video_info,
         resume_state=resume_state,
-        encode_queue=state.encode_queue,
-        error_queue=state.error_queue,
-        stop_event=state.stop_event,
         metrics=metrics,
+        state=state,
+        stage_worker_runner=stage_worker_runner,
     )
     return finish_raw_pipeline_runtime(
         encoder_thread=encoder_thread,

@@ -6,7 +6,8 @@ from typing import Any, Callable
 
 from app.planning import ResumeState, SegmentManifest, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.pipeline_raw_runtime import StageWorkerRunner, run_raw_pipeline_runtime
+from app.processing.streaming.pipeline_raw_runtime import run_raw_pipeline_runtime
+from app.processing.streaming.pipeline_raw_stage import StageWorkerRunner
 from app.processing.streaming.pipeline_rules import resolved_stream_fps
 from app.utils.ffmpeg import FFmpegWrapper
 
