@@ -38,7 +38,8 @@ from app.processing.streaming.stage_rules import (
     stage_output_frame_count,
     stage_requires_file_pipeline,
 )
-from app.processing.streaming.worker_pipeline import run_stage_file_pipeline, run_stage_worker_pipeline
+from app.processing.streaming.stage_file_pipeline import run_stage_file_pipeline
+from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
 from app.protocol import ndjson
 from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.logger import get_logger

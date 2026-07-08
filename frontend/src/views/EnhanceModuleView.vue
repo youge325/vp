@@ -3,13 +3,25 @@ import { computed, toRef } from 'vue'
 import { useEnhanceForm } from '@/composables/forms/useEnhanceForm'
 import { useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
 import { useGpuCapabilities } from '@/composables/selectors/useGpuCapabilities'
-import { BACKEND_LABELS, ENGINE_LABELS } from '@/config/gpu-labels'
 import BaseNumber from '@/components/forms/BaseNumber.vue'
 import BaseSelect from '@/components/forms/BaseSelect.vue'
 import BaseToggle from '@/components/forms/BaseToggle.vue'
-import { modelOptionLabel } from '@/services/model-metrics'
-import type { ModelVariantInfo } from '@/types/domain/env'
-import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/domain/workflow'
+import {
+  FPS_MODE_OPTIONS,
+  MULTI_OPTIONS,
+  PROCESS_ORDER_OPTIONS,
+  buildAlgorithmOptions,
+  buildBackendOptions,
+  buildEngineOptions,
+  buildModelOptions,
+  buildOnnxModelOptions,
+  buildProfileOptions,
+  toFpsMode,
+  toInferenceEngine,
+  toNumberOption,
+  toProcessOrder,
+  toTensorBackend,
+} from '@/services/preset/enhance-options'
 
 const form = useEnhanceForm()
 const interpolationCapabilities = useGpuCapabilities(
@@ -24,113 +36,78 @@ const { targetLabel } = useEditingScope()
 // + props,跟 Decode/Encode 视觉对齐。原 EnhanceModuleView 里 8+ 个原生
 // <select>+<option v-for> 的样板被收敛掉。
 //
-// 三处 "number-typed" 的 select(``interpolationMulti``/``superResolutionScale``/
-// ``interpolationOnnxModel`` 之外的几个倍率)BaseSelect 只接 string value,
-// 需要在 ``@update:model-value`` 处做一次 ``Number()`` cast —— 与
-// CapabilityOptionField 内部对 choice value 的 ``String(...)`` cast 是镜像关系。
+// BaseSelect 只接 string value;增强页的数字与 domain enum 转换集中在
+// ``enhance-options`` 中,这里仅把转换结果赋给 form。
 
 const backendOptions = computed(() =>
-  interpolationCapabilities.visibleBackends.value.map((value) => ({ value, label: BACKEND_LABELS[value] })),
+  buildBackendOptions(interpolationCapabilities.visibleBackends.value),
 )
 
 const interpolationEngineOptions = computed(() =>
-  interpolationCapabilities.availableEngines.value.map((value) => ({ value, label: ENGINE_LABELS[value] || value })),
+  buildEngineOptions(interpolationCapabilities.availableEngines.value),
 )
 
 const superResolutionEngineOptions = computed(() =>
-  superResolutionCapabilities.availableEngines.value.map((value) => ({ value, label: ENGINE_LABELS[value] || value })),
+  buildEngineOptions(superResolutionCapabilities.availableEngines.value),
 )
 
 const interpolationAlgorithmOptions = computed(() =>
-  form.interpolationAlgorithms.map((alg) => ({ value: alg.name, label: alg.name })),
+  buildAlgorithmOptions(form.interpolationAlgorithms, 'name'),
 )
 
 const interpolationModelOptions = computed(() =>
-  form.interpolationModels.map((model) => ({
-    value: model,
-    label: modelOptionLabel(model, findDetail(form.interpolationModelDetails, model)),
-  })),
+  buildModelOptions(form.interpolationModels, form.interpolationModelDetails),
 )
 
 // ONNX 模型空列表的情况:仍然渲染 select(disabled),options 里只有占位
 // "未选择",hint 提示用户去放 .onnx 文件 —— BaseField 自带的 hint slot
 // 替换掉原视图末尾的 ``<span class="field-hint">``。
 const interpolationOnnxOptions = computed(() => [
-  { value: '', label: '未选择' },
-  ...form.interpolationOnnxModels.map((model) => ({
-    value: model,
-    label: modelOptionLabel(model, findDetail(form.interpolationOnnxModelDetails, model)),
-  })),
+  ...buildOnnxModelOptions(form.interpolationOnnxModels, form.interpolationOnnxModelDetails),
 ])
 
-const FPS_MODE_OPTIONS = [
-  { value: 'target', label: '目标 FPS' },
-  { value: 'multi', label: '倍率' },
-] as const
-
-const MULTI_OPTIONS = [
-  { value: '2', label: '2x' },
-  { value: '4', label: '4x' },
-] as const
-
 const superResolutionAlgorithmOptions = computed(() =>
-  form.superResolutionAlgorithms.map((alg) => ({
-    value: alg.name,
-    label: modelOptionLabel(alg.name, alg.modelDetails?.[0]),
-  })),
+  buildAlgorithmOptions(form.superResolutionAlgorithms, 'modelMetrics'),
 )
 
 const superResolutionOnnxOptions = computed(() => [
-  { value: '', label: '未选择' },
-  ...form.superResolutionOnnxModels.map((model) => ({
-    value: model,
-    label: modelOptionLabel(model, findDetail(form.superResolutionOnnxModelDetails, model)),
-  })),
+  ...buildOnnxModelOptions(form.superResolutionOnnxModels, form.superResolutionOnnxModelDetails),
 ])
 
-const PROCESS_ORDER_OPTIONS = [
-  { value: 'super_resolution_then_interpolation', label: '先超分后补帧' },
-  { value: 'frame_interpolation_then_super_resolution', label: '先补帧后超分' },
-] as const
-
 const animeProfileOptions = computed(() =>
-  form.animeProfiles.map((profile) => ({ value: profile, label: profile })),
+  buildProfileOptions(form.animeProfiles),
 )
 
-function findDetail(details: ModelVariantInfo[], name: string): ModelVariantInfo | undefined {
-  return details.find((detail) => detail.name === name)
-}
-
 function setInterpolationBackend(value: string): void {
-  form.interpolationBackend = value as TensorBackend
+  form.interpolationBackend = toTensorBackend(value)
 }
 
 function setInterpolationEngine(value: string): void {
-  form.interpolationEngine = value as InferenceEngine
+  form.interpolationEngine = toInferenceEngine(value)
 }
 
 function setSuperResolutionBackend(value: string): void {
-  form.superResolutionBackend = value as TensorBackend
+  form.superResolutionBackend = toTensorBackend(value)
 }
 
 function setSuperResolutionEngine(value: string): void {
-  form.superResolutionEngine = value as InferenceEngine
+  form.superResolutionEngine = toInferenceEngine(value)
 }
 
 function setFpsMode(value: string): void {
-  form.fpsMode = value as FpsMode
+  form.fpsMode = toFpsMode(value)
 }
 
 function setInterpolationMulti(value: string): void {
-  form.interpolationMulti = Number(value)
+  form.interpolationMulti = toNumberOption(value)
 }
 
 function setSuperResolutionScale(value: string): void {
-  form.superResolutionScale = Number(value)
+  form.superResolutionScale = toNumberOption(value)
 }
 
 function setProcessOrder(value: string): void {
-  form.processOrder = value as ProcessOrder
+  form.processOrder = toProcessOrder(value)
 }
 </script>
 
