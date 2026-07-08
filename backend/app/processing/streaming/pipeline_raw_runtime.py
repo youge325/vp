@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import queue
-import threading
 from typing import Any, Callable
 
 from app.planning import ResumeState, SegmentManifest, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_raw_completion import finish_raw_pipeline_runtime
 from app.processing.streaming.pipeline_raw_encoder import start_raw_encoder_thread
-from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, StreamEnd
+from app.processing.streaming.pipeline_raw_state import create_raw_pipeline_state
 from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
 from app.utils.ffmpeg import FFmpegWrapper
 
@@ -40,9 +38,7 @@ def run_raw_pipeline_runtime(
     metrics: PipelineMetrics,
     stage_worker_runner: StageWorkerRunner | None = None,
 ) -> int:
-    encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object] = queue.Queue(maxsize=8)
-    error_queue: queue.Queue[BaseException] = queue.Queue()
-    stop_event = threading.Event()
+    state = create_raw_pipeline_state()
 
     encoder_thread = start_raw_encoder_thread(
         ffmpeg=ffmpeg,
@@ -58,9 +54,9 @@ def run_raw_pipeline_runtime(
         output_path=output_path,
         encode_progress_callback=encode_progress_callback,
         metrics=metrics,
-        encode_queue=encode_queue,
-        error_queue=error_queue,
-        stop_event=stop_event,
+        encode_queue=state.encode_queue,
+        error_queue=state.error_queue,
+        stop_event=state.stop_event,
     )
     runner = stage_worker_runner or run_stage_worker_pipeline
     runner(
@@ -72,14 +68,14 @@ def run_raw_pipeline_runtime(
         progress_callbacks=progress_callbacks,
         video_info=video_info,
         resume_state=resume_state,
-        encode_queue=encode_queue,
-        error_queue=error_queue,
-        stop_event=stop_event,
+        encode_queue=state.encode_queue,
+        error_queue=state.error_queue,
+        stop_event=state.stop_event,
         metrics=metrics,
     )
     return finish_raw_pipeline_runtime(
         encoder_thread=encoder_thread,
-        error_queue=error_queue,
+        error_queue=state.error_queue,
         manifest=manifest,
     )
 

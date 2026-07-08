@@ -1442,6 +1442,22 @@ def _check_pipeline_raw_runtime_completion_boundary(issues: list[str]) -> None:
             issues.append(f"pipeline raw completion `{label}` remains in {_rel(PIPELINE_RAW_RUNTIME)}")
 
 
+def _check_pipeline_raw_runtime_state_boundary(issues: list[str]) -> None:
+    text = _read(PIPELINE_RAW_RUNTIME)
+    forbidden_patterns = {
+        "queue import": r"^\s*import\s+queue\b",
+        "threading import": r"^\s*import\s+threading\b",
+        "queue allocation": r"\bqueue\.Queue\b",
+        "stop event allocation": r"\bthreading\.Event\b",
+        "encode queue local": r"^ {4}encode_queue\s*=",
+        "error queue local": r"^ {4}error_queue\s*=",
+        "stop event local": r"^ {4}stop_event\s*=",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"pipeline raw state `{label}` remains in {_rel(PIPELINE_RAW_RUNTIME)}")
+
+
 def _check_streaming_pipeline_lifecycle_boundary(issues: list[str]) -> None:
     text = _read(STREAMING_PIPELINE)
     forbidden_patterns = {
@@ -1710,6 +1726,7 @@ def main() -> int:
         _check_pipeline_raw_runtime_boundary(issues)
         _check_pipeline_raw_runtime_encoder_boundary(issues)
         _check_pipeline_raw_runtime_completion_boundary(issues)
+        _check_pipeline_raw_runtime_state_boundary(issues)
         _check_streaming_pipeline_lifecycle_boundary(issues)
         _check_streaming_pipeline_preflight_boundary(issues)
         _check_streaming_pipeline_dispatch_boundary(issues)

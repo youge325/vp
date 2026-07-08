@@ -1610,6 +1610,33 @@ def test_pipeline_raw_runtime_completion_boundary_flags_local_completion_helpers
     assert any("completed segments aggregation" in issue for issue in issues), issues
 
 
+def test_pipeline_raw_runtime_state_boundary_flags_local_queue_state(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runtime = tmp_path / "pipeline_raw_runtime.py"
+    fake_runtime.write_text(
+        "import queue\n"
+        "import threading\n\n"
+        "def run_raw_pipeline_runtime():\n"
+        "    encode_queue = queue.Queue(maxsize=8)\n"
+        "    error_queue = queue.Queue()\n"
+        "    stop_event = threading.Event()\n"
+        "    return encode_queue, error_queue, stop_event\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PIPELINE_RAW_RUNTIME", fake_runtime, raising=False)
+    issues: list[str] = []
+
+    module._check_pipeline_raw_runtime_state_boundary(issues)
+
+    assert any("queue import" in issue for issue in issues), issues
+    assert any("threading import" in issue for issue in issues), issues
+    assert any("queue allocation" in issue for issue in issues), issues
+    assert any("stop event allocation" in issue for issue in issues), issues
+    assert any("encode queue local" in issue for issue in issues), issues
+    assert any("error queue local" in issue for issue in issues), issues
+    assert any("stop event local" in issue for issue in issues), issues
+
+
 def test_streaming_pipeline_lifecycle_boundary_flags_local_resume_and_finalize(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "pipeline.py"
