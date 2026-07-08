@@ -24,7 +24,7 @@ def create_algorithm(stage: ProcessingStep, backend: Any) -> Any:
 
         return FrameFilterChainAlgorithm(tensor_backend=None, **stage.algorithm_kwargs)
 
-    register_single_algorithm(stage.algorithm_type)
+    _register_single_algorithm(stage.algorithm_type)
     return AlgorithmFactory.create(
         algorithm_type=stage.algorithm_type,
         tensor_backend=backend,
@@ -33,7 +33,7 @@ def create_algorithm(stage: ProcessingStep, backend: Any) -> Any:
     )
 
 
-def register_single_algorithm(algorithm_type: str) -> None:
+def _register_single_algorithm(algorithm_type: str) -> None:
     if algorithm_type == "frame_interpolation":
         from app.processing.interpolation import FrameInterpolationAlgorithm
 
@@ -66,5 +66,4 @@ __all__ = [
     "backend_name",
     "create_algorithm",
     "create_backend",
-    "register_single_algorithm",
 ]
