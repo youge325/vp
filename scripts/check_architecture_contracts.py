@@ -1772,6 +1772,22 @@ def _check_planning_test_private_alias_boundary(issues: list[str]) -> None:
             issues.append(f"planning test private alias remains in {_rel(path)}")
 
 
+def _check_pipeline_test_private_alias_boundary(issues: list[str]) -> None:
+    if not PROCESSOR_TESTS.exists():
+        return
+
+    import_pattern = re.compile(
+        r"from\s+app\.processing\.streaming\.pipeline\s+import\s+(?:\((?P<block>.*?)\)|(?P<line>[^\n]+))",
+        re.DOTALL,
+    )
+    for path in PROCESSOR_TESTS.rglob("test_*.py"):
+        text = _read(path)
+        for match in import_pattern.finditer(text):
+            imported_names = match.group("block") or match.group("line") or ""
+            if re.search(r"(?:^|[\s,])_[A-Za-z0-9_]+\b", imported_names):
+                issues.append(f"pipeline test private alias remains in {_rel(path)}")
+
+
 def _check_processor_stream_aggregator_boundary(issues: list[str]) -> None:
     if not PROCESSOR_STREAMS.exists():
         return
@@ -1873,6 +1889,7 @@ def main() -> int:
         _check_processor_private_reexport_boundary(issues)
         _check_processor_test_private_alias_boundary(issues)
         _check_planning_test_private_alias_boundary(issues)
+        _check_pipeline_test_private_alias_boundary(issues)
         _check_processor_stream_aggregator_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
