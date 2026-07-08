@@ -6,7 +6,7 @@ from typing import Any, BinaryIO
 
 from app.processing.streaming.encoder_segments import resolve_segment_output_frame_count
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.stage_worker import read_rgb_frame
+from app.processing.streaming.stage_worker_io import read_rgb_frame
 from app.processing.streaming.worker_plans import StageChunkPlan
 
 

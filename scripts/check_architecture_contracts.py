@@ -29,8 +29,11 @@ README = ROOT / "README.md"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_runtime.py"
+STAGE_FILE_CHUNK_ENCODING = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_encoding.py"
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
 WORKER_PROCESSES = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_processes.py"
+WORKER_PROCESS_EVENTS = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_process_events.py"
+WORKER_PROCESS_IO = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_process_io.py"
 ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder.py"
 PIPELINE_RAW = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
@@ -466,6 +469,22 @@ def _check_stage_worker_runtime_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_stage_worker_helper_import_boundary(issues: list[str]) -> None:
+    helper_tokens = (
+        "RawVideoFrameError",
+        "STAGE_EVENT_PREFIX",
+        "emit_stage_event",
+        "read_rgb_frame",
+        "write_rgb_frame",
+    )
+    for path in (STAGE_FILE_CHUNK_ENCODING, WORKER_PROCESS_EVENTS, WORKER_PROCESS_IO):
+        text = _read(path)
+        for match in re.finditer(r"from\s+app\.processing\.streaming\.stage_worker\s+import\s+([^\n]+)", text):
+            leaked = [token for token in helper_tokens if token in match.group(1)]
+            for token in leaked:
+                issues.append(f"stage worker helper `{token}` import remains in {_rel(path)}")
+
+
 def _check_stage_worker_runtime_split_boundary(issues: list[str]) -> None:
     text = _read(STAGE_WORKER_RUNTIME)
     forbidden_patterns = {
@@ -573,6 +592,7 @@ def _check_frontend_enhance_workflow_lookup_boundary(issues: list[str]) -> None:
 def _check_frontend_enhance_rules_split_boundary(issues: list[str]) -> None:
     text = _read(ENHANCE_RULES)
     forbidden_patterns = {
+        "nested default-selection barrel": r"export\s+\*\s+from\s+['\"]\.\/enhance-default-selection['\"]",
         "backend compatibility helper": r"^\s*function\s+backendCompatible\b",
         "PaddleGAN classifier": r"^\s*export\s+function\s+isPaddleGanVsrAlgorithm\b",
         "input frame mode": r"^\s*export\s+function\s+superResolutionInputFrameMode\b",
@@ -1342,6 +1362,7 @@ def main() -> int:
         _check_paddlegan_vsr_contract(issues)
         _check_stage_worker_private_import_boundary(issues)
         _check_stage_worker_runtime_boundary(issues)
+        _check_stage_worker_helper_import_boundary(issues)
         _check_stage_worker_runtime_split_boundary(issues)
         _check_frontend_form_profile_rule_boundary(issues)
         _check_cli_defaults_planning_boundary(issues)

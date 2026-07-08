@@ -8,7 +8,7 @@ import sys
 from typing import Any
 
 from app.errors import ProcessError, TaskErrorCode, error_code_to_wire
-from app.processing.streaming.stage_worker import STAGE_EVENT_PREFIX
+from app.processing.streaming.stage_worker_progress import STAGE_EVENT_PREFIX
 
 TENSORRT_LOG_PREFIX = "[VP_TRT]"
 
