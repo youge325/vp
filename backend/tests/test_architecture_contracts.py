@@ -229,6 +229,21 @@ def test_frontend_enhance_default_selection_split_boundary_flags_local_rule_bodi
     assert any("enhance default-selection split" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_default_selection_split_boundary_flags_obsolete_barrel(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_defaults = tmp_path / "enhance-default-selection.ts"
+    fake_defaults.write_text(
+        "export * from './enhance-default-pickers'\nexport * from './enhance-onnx-defaults'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_DEFAULT_SELECTION", fake_defaults, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_default_selection_split_boundary(issues)
+
+    assert any("obsolete enhance default-selection barrel" in issue for issue in issues), issues
+
+
 def test_worker_pipeline_plan_boundary_flags_local_plan_builders(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "worker_pipeline.py"
