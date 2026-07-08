@@ -75,7 +75,7 @@ def test_run_streaming_pipeline_dispatches_stage_file_pipeline_and_emits_resume_
     assert "output_width" not in calls
 
 
-def test_run_streaming_pipeline_dispatches_raw_pipeline_with_stage_worker_runner(monkeypatch, tmp_path) -> None:
+def test_run_streaming_pipeline_dispatches_raw_pipeline_without_worker_chain_coupling(monkeypatch, tmp_path) -> None:
     events: list[tuple[int, int]] = []
     calls: dict[str, object] = {}
 
@@ -120,4 +120,4 @@ def test_run_streaming_pipeline_dispatches_raw_pipeline_with_stage_worker_runner
     assert calls["signature"] == "sig"
     assert calls["output_width"] == 640
     assert calls["output_height"] == 360
-    assert callable(calls["stage_worker_runner"])
+    assert "stage_worker_runner" not in calls

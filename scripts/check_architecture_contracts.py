@@ -39,6 +39,7 @@ ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder.py"
 ENCODER_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_worker.py"
 PIPELINE_RAW = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw.py"
 PIPELINE_RAW_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_runtime.py"
+PIPELINE_DISPATCH = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_dispatch.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
 PIPELINE_LIFECYCLE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_lifecycle.py"
 STAGE_FILE_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_pipeline.py"
@@ -1484,6 +1485,18 @@ def _check_streaming_pipeline_dispatch_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_pipeline_dispatch_runtime_boundary(issues: list[str]) -> None:
+    text = _read(PIPELINE_DISPATCH)
+    forbidden_patterns = {
+        "worker pipeline import": r"from\s+app\.processing\.streaming\.worker_pipeline\s+import\b",
+        "stage worker runner injection": r"\bstage_worker_runner\s*=",
+        "stage worker runner symbol": r"\brun_stage_worker_pipeline\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"pipeline dispatch runtime `{label}` remains in {_rel(PIPELINE_DISPATCH)}")
+
+
 def _check_encoder_helper_boundary(issues: list[str]) -> None:
     if ENCODER.exists():
         encoder_text = _read(ENCODER)
@@ -1680,6 +1693,7 @@ def main() -> int:
         _check_streaming_pipeline_lifecycle_boundary(issues)
         _check_streaming_pipeline_preflight_boundary(issues)
         _check_streaming_pipeline_dispatch_boundary(issues)
+        _check_pipeline_dispatch_runtime_boundary(issues)
         _check_encoder_helper_boundary(issues)
         _check_encoder_segment_writer_boundary(issues)
         _check_processor_algorithm_boundary(issues)

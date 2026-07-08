@@ -9,7 +9,6 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_lifecycle import emit_resume_status_event
 from app.processing.streaming.pipeline_raw import run_raw_streaming_pipeline
 from app.processing.streaming.stage_file_pipeline import run_stage_file_pipeline
-from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
 from app.utils.ffmpeg import FFmpegWrapper
 
 
@@ -81,7 +80,6 @@ def run_streaming_pipeline(
         output_fps=output_fps,
         encode_progress_callback=encode_progress_callback,
         metrics=metrics,
-        stage_worker_runner=run_stage_worker_pipeline,
     )
 
 
