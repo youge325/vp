@@ -31,12 +31,14 @@ STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_wo
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
 STAGE_FILE_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_pipeline.py"
+STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunks.py"
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-form-bindings.ts"
 ENHANCE_FIELD_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-field-bindings.ts"
+ENHANCE_OPTION_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-option-bindings.ts"
 DECODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-form-bindings.ts"
 ENCODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-form-bindings.ts"
 ENHANCE_VIEW = FRONTEND_SRC / "views" / "EnhanceModuleView.vue"
@@ -596,6 +598,23 @@ def _check_frontend_enhance_option_boundary(issues: list[str]) -> None:
             issues.append(f"enhance option rule `{label}` leaked into view: {_rel(ENHANCE_VIEW)}")
 
 
+def _check_frontend_enhance_option_binding_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_OPTION_BINDINGS)
+    forbidden_patterns = {
+        "useGpuCapabilities": r"\buseGpuCapabilities\b",
+        "enhance-options import": r"from\s+['\"]@/services/preset/enhance-options['\"]",
+        "option builder": r"\bbuild(?:Backend|Engine|Algorithm|Model|OnnxModel|Profile)Options\s*\(",
+        "value converter": r"\bto(?:TensorBackend|InferenceEngine|FpsMode|ProcessOrder|NumberOption)\s*\(",
+        "option setter": r"^\s*function\s+set(?:Interpolation|SuperResolution|Fps|ProcessOrder|Anime)\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"enhance option binding rule `{label}` leaked into option binding aggregator: "
+                f"{_rel(ENHANCE_OPTION_BINDINGS)}"
+            )
+
+
 def _check_frontend_io_view_option_boundary(issues: list[str]) -> None:
     forbidden_patterns = {
         "io-options import": r"from\s+['\"]@/services/preset/io-options['\"]",
@@ -727,6 +746,27 @@ def _check_stage_file_pipeline_chunk_boundary(issues: list[str]) -> None:
         if re.search(pattern, text, re.MULTILINE):
             issues.append(
                 f"stage file chunk rule `{label}` remains in backend/app/processing/streaming/stage_file_pipeline.py"
+            )
+
+
+def _check_stage_file_chunks_runtime_boundary(issues: list[str]) -> None:
+    text = _read(STAGE_FILE_CHUNKS)
+    forbidden_patterns = {
+        "run_stage_chunk_to_file": r"^\s*def\s+run_stage_chunk_to_file\b",
+        "chunk_progress_adapter": r"^\s*def\s+chunk_progress_adapter\b",
+        "stage_chunk_output_start": r"^\s*def\s+stage_chunk_output_start\b",
+        "queue import": r"^\s*import\s+queue\b",
+        "tempfile import": r"^\s*import\s+tempfile\b",
+        "threading import": r"^\s*import\s+threading\b",
+        "StageWorkerConfig": r"\bStageWorkerConfig\b",
+        "read_rgb_frame": r"\bread_rgb_frame\b",
+        "spawn_stage_workers": r"\bspawn_stage_workers\b",
+        "write_decoded_frames_to_worker": r"\bwrite_decoded_frames_to_worker\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"stage file chunk runtime `{label}` remains in backend/app/processing/streaming/stage_file_chunks.py"
             )
 
 
@@ -862,6 +902,7 @@ def main() -> int:
         _check_frontend_enhance_field_split_boundary(issues)
         _check_frontend_enhance_projection_boundary(issues)
         _check_frontend_enhance_option_boundary(issues)
+        _check_frontend_enhance_option_binding_boundary(issues)
         _check_frontend_io_view_option_boundary(issues)
         _check_frontend_io_form_rule_boundary(issues)
         _check_frontend_io_form_binding_boundary(issues)
@@ -870,6 +911,7 @@ def main() -> int:
         _check_worker_pipeline_process_boundary(issues)
         _check_worker_pipeline_file_boundary(issues)
         _check_stage_file_pipeline_chunk_boundary(issues)
+        _check_stage_file_chunks_runtime_boundary(issues)
         _check_stage_worker_execution_boundary(issues)
         _check_streaming_pipeline_rule_boundary(issues)
         _check_streaming_pipeline_raw_boundary(issues)
