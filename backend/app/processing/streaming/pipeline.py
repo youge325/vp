@@ -7,7 +7,6 @@ segmented output. Public entry point: :func:`process_video_streaming`.
 
 from __future__ import annotations
 
-import os
 import queue
 import threading
 from typing import Any, Callable
@@ -22,21 +21,21 @@ from app.planning import (
     build_signature,
     build_stage_plan,
     normalize_processing_steps,
-    processing_steps_to_jsonable,
     resolve_video_info,
 )
 from app.processing.streaming.encoder import _encoder_worker, _finalize_segmented_output
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.pipeline_rules import (
+    build_config_snapshot as _build_config_snapshot,
+    resolved_output_dimensions as _resolved_output_dimensions,
+    resolved_stream_fps as _resolved_stream_fps,
+    should_use_stage_file_pipeline as _should_use_stage_file_pipeline,
+    stage_file_resume_source_frames as _stage_file_resume_source_frames,
+)
 from app.processing.streaming.queues import (
     EncodedFrame,
     SegmentBoundary,
     StreamEnd,
-)
-from app.processing.streaming.stage_rules import (
-    ordered_steps,
-    resolve_stage_plan_output_dimensions,
-    stage_output_frame_count,
-    stage_requires_file_pipeline,
 )
 from app.processing.streaming.stage_file_pipeline import run_stage_file_pipeline
 from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
@@ -166,37 +165,6 @@ def process_video_streaming(
     }
 
 
-def _build_config_snapshot(
-    *,
-    input_path: str,
-    output_path: str,
-    decode_config: dict[str, Any],
-    encode_config: dict[str, Any],
-    workflow_config: dict[str, Any],
-    output_config: dict[str, Any],
-    processing_steps: list[ProcessingStepInput],
-    video_info: dict[str, Any],
-) -> dict[str, Any]:
-    """Capture the parameters that determine signature + behaviour for a run."""
-    return {
-        "input_path": os.path.abspath(input_path),
-        "output_path": os.path.abspath(output_path),
-        "decode_config": decode_config,
-        "encode_config": encode_config,
-        "workflow_config": workflow_config,
-        "output_config": {
-            "segmentFrames": max(1, int(output_config.get("segmentFrames") or 1000)),
-        },
-        "processing_steps": processing_steps_to_jsonable(processing_steps),
-        "video_info": {
-            "width": video_info["width"],
-            "height": video_info["height"],
-            "source_fps": video_info["source_fps"],
-            "source_frames": video_info["source_frames"],
-        },
-    }
-
-
 def _run_streaming_pipeline(
     *,
     ffmpeg: FFmpegWrapper,
@@ -308,31 +276,6 @@ def _run_streaming_pipeline(
     return sum(segment.frame_count for segment in completed_segments)
 
 
-def _should_use_stage_file_pipeline(stage_plan: StagePlan) -> bool:
-    return any(stage_requires_file_pipeline(step) for step in ordered_steps(stage_plan))
-
-
-def _stage_file_resume_source_frames(stage_plan: StagePlan, source_frames: int) -> int:
-    """Return the source-frame domain used by the final staged manifest."""
-    current_frames = max(int(source_frames), 0)
-    steps = ordered_steps(stage_plan)
-    for step in steps[:-1]:
-        current_frames = stage_output_frame_count(step, current_frames)
-    return current_frames
-
-
-def _stage_steps(stage_plan: StagePlan) -> list[Any]:
-    return ordered_steps(stage_plan)
-
-
-def _resolved_stream_fps(source_fps: float, stage_plan: StagePlan) -> float:
-    interpolation_step = stage_plan.interpolation_step
-    if interpolation_step is None:
-        return source_fps
-    multi = int(interpolation_step.algorithm_kwargs.get("multi") or 2)
-    return source_fps * multi
-
-
 def _emit_resume_status_event(*, resume_state: ResumeState, total_output_frames: int) -> None:
     """Emit a structured resume_status JSON line consumed by the Tauri host."""
     try:
@@ -345,21 +288,3 @@ def _emit_resume_status_event(*, resume_state: ResumeState, total_output_frames:
         )
     except Exception:  # pragma: no cover - never let telemetry break the pipeline
         logger.exception("Failed to emit resume_status event")
-
-
-def _resolved_output_dimensions(
-    *,
-    video_info: dict[str, Any],
-    stage_plan: StagePlan,
-    tensor_backend_name: str,
-) -> tuple[int, int]:
-    width = int(video_info["width"])
-    height = int(video_info["height"])
-    width, height = resolve_stage_plan_output_dimensions(
-        stage_plan,
-        source_width=width,
-        source_height=height,
-    )
-
-    del tensor_backend_name
-    return width, height

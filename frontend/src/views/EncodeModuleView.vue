@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { CONTAINER_OPTIONS } from '@/config/constants'
 import { useEncodeForm } from '@/composables/forms/useEncodeForm'
 import { useOutputPicker } from '@/composables/app/useOutputPicker'
 import { useWorkbenchEditor, useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
 import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
+import {
+  buildProfileOptions,
+  CONTAINER_SELECT_OPTIONS,
+  toNumberValue,
+  toRateControlMode,
+} from '@/services/preset/io-options'
 import IssueBanner from '@/components/IssueBanner.vue'
 import BaseField from '@/components/forms/BaseField.vue'
 import BaseNumber from '@/components/forms/BaseNumber.vue'
 import BaseSelect from '@/components/forms/BaseSelect.vue'
 import BaseToggle from '@/components/forms/BaseToggle.vue'
 import CapabilityOptionField from '@/components/forms/CapabilityOptionField.vue'
-import type { RateControlMode } from '@/types/domain/workflow'
 
 const {
   visibleEncoderProfiles,
@@ -37,16 +41,12 @@ const { editorConfig } = useWorkbenchEditor()
 const { targetLabel } = useEditingScope()
 const encodeIssue = useOperationIssue('encode')
 
-const containerOptions = computed(() =>
-  CONTAINER_OPTIONS.map((value) => ({ value, label: value.toUpperCase() })),
-)
-
 const codecOptions = computed(() =>
-  visibleEncoderProfiles.value.map((profile) => ({ value: profile.name, label: profile.label })),
+  buildProfileOptions(visibleEncoderProfiles.value),
 )
 
 function handleRateControlModeChange(value: string): void {
-  setRateControlMode(value as RateControlMode)
+  setRateControlMode(toRateControlMode(value))
 }
 
 async function handlePickOutputDirectory(): Promise<void> {
@@ -104,13 +104,13 @@ async function handlePickOutputDirectory(): Promise<void> {
         <BaseSelect
           label="容器"
           :model-value="editorConfig.encodeConfig.container"
-          :options="containerOptions"
+          :options="CONTAINER_SELECT_OPTIONS"
           @update:model-value="setContainer"
         />
 
         <BaseNumber
           label="分段帧数"
-          :model-value="Number(editorConfig.outputConfig.segmentFrames)"
+          :model-value="toNumberValue(editorConfig.outputConfig.segmentFrames)"
           :min="1"
           :step="1"
           @update:model-value="setSegmentFrames"
@@ -134,7 +134,7 @@ async function handlePickOutputDirectory(): Promise<void> {
 
         <BaseNumber
           label="码率控制值"
-          :model-value="Number(editorConfig.encodeConfig.rateControl.value)"
+          :model-value="toNumberValue(editorConfig.encodeConfig.rateControl.value)"
           :min="0"
           :hint="rateControlValueHint"
           :disabled="rateControlDisabled"

@@ -29,9 +29,12 @@ README = ROOT / "README.md"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
+STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_VIEW = FRONTEND_SRC / "views" / "EnhanceModuleView.vue"
+DECODE_VIEW = FRONTEND_SRC / "views" / "DecodeModuleView.vue"
+ENCODE_VIEW = FRONTEND_SRC / "views" / "EncodeModuleView.vue"
 FRONTEND_FORM_COMPOSABLES = [
     FRONTEND_SRC / "composables" / "forms" / "useDecodeForm.ts",
     FRONTEND_SRC / "composables" / "forms" / "useEncodeForm.ts",
@@ -491,6 +494,21 @@ def _check_frontend_enhance_option_boundary(issues: list[str]) -> None:
             issues.append(f"enhance option rule `{label}` leaked into view: {_rel(ENHANCE_VIEW)}")
 
 
+def _check_frontend_io_view_option_boundary(issues: list[str]) -> None:
+    forbidden_patterns = {
+        "profile option map": r"\.map\(\s*\(?\s*profile\s*\)?\s*=>\s*\(\{\s*value:\s*profile\.name,\s*label:\s*profile\.label",
+        "container constants import": r"from\s+['\"]@/config/constants['\"]",
+        "container option map": r"\bCONTAINER_OPTIONS\.map\b",
+        "RateControlMode cast": r"\bas\s+RateControlMode\b",
+        "Number select cast": r"\bNumber\s*\(",
+    }
+    for path in (DECODE_VIEW, ENCODE_VIEW):
+        text = _read(path)
+        for label, pattern in forbidden_patterns.items():
+            if re.search(pattern, text, re.DOTALL):
+                issues.append(f"io option rule `{label}` leaked into view: {_rel(path)}")
+
+
 def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
     text = _read(WORKER_PIPELINE)
     forbidden_patterns = {
@@ -542,6 +560,20 @@ def _check_worker_pipeline_file_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_streaming_pipeline_rule_boundary(issues: list[str]) -> None:
+    text = _read(STREAMING_PIPELINE)
+    forbidden_patterns = {
+        "_build_config_snapshot": r"^\s*def\s+_build_config_snapshot\b",
+        "_should_use_stage_file_pipeline": r"^\s*def\s+_should_use_stage_file_pipeline\b",
+        "_stage_file_resume_source_frames": r"^\s*def\s+_stage_file_resume_source_frames\b",
+        "_resolved_stream_fps": r"^\s*def\s+_resolved_stream_fps\b",
+        "_resolved_output_dimensions": r"^\s*def\s+_resolved_output_dimensions\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"streaming pipeline rule `{label}` remains in backend/app/processing/streaming/pipeline.py")
+
+
 def main() -> int:
     issues: list[str] = []
     try:
@@ -556,9 +588,11 @@ def main() -> int:
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_option_boundary(issues)
+        _check_frontend_io_view_option_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)
         _check_worker_pipeline_file_boundary(issues)
+        _check_streaming_pipeline_rule_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2
