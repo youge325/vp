@@ -9,13 +9,15 @@ import {
   fixedSuperResolutionScaleFactor,
 } from './enhance-algorithm-capabilities'
 import {
-  fallbackInterpolationOnnxModel,
-  fallbackSuperResolutionOnnxModel,
   pickDefaultEngine,
   pickDefaultInterpolationAlgorithm,
   pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
-} from './enhance-default-selection'
+} from './enhance-default-pickers'
+import {
+  fallbackInterpolationOnnxModel,
+  fallbackSuperResolutionOnnxModel,
+} from './enhance-onnx-defaults'
 import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolution-defaults'
 import {
   findInterpolationAlgorithm,

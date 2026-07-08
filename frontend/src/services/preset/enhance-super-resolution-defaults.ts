@@ -8,7 +8,7 @@ import {
   fixedSuperResolutionScaleFactor,
   isPaddleGanVsrAlgorithm,
 } from './enhance-algorithm-capabilities'
-import { fallbackSuperResolutionOnnxModel } from './enhance-default-selection'
+import { fallbackSuperResolutionOnnxModel } from './enhance-onnx-defaults'
 
 export function applySuperResolutionAlgorithmDefaults(
   config: WorkflowConfig,
