@@ -4,22 +4,8 @@
 import type { MediaItem } from '@/types/domain/media'
 import type { BatchState } from '@/types/domain/batch'
 import type { EncoderProfileSpec } from '@/types/domain/capability'
-import type { WorkflowMode } from '@/types/domain/workflow'
 
-const WORKFLOW_LABELS: Record<WorkflowMode, string> = {
-  frame_interpolation: '补帧',
-  super_resolution: '超分',
-  anime_optimization: '动漫优化',
-  format_conversion: '转码',
-}
-
-export function resolvePrimaryMode(item: Pick<MediaItem, 'workflowConfig'>): WorkflowMode {
-  const wf = item.workflowConfig
-  if (wf.interpolation.enabled) return 'frame_interpolation'
-  if (wf.superResolution.enabled) return 'super_resolution'
-  if (wf.anime.enabled) return 'anime_optimization'
-  return 'format_conversion'
-}
+const FORMAT_CONVERSION_LABEL = '转码'
 
 export function getWorkflowSummaryLabel(item: MediaItem): string {
   const labels = [
@@ -30,7 +16,7 @@ export function getWorkflowSummaryLabel(item: MediaItem): string {
 
   return labels.length > 0
     ? labels.join(' / ')
-    : WORKFLOW_LABELS[resolvePrimaryMode(item)]
+    : FORMAT_CONVERSION_LABEL
 }
 
 export function groupEncoderProfilesByFamily(
