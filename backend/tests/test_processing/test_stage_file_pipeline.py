@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import app.processing.streaming.stage_file_chunks as stage_file_chunks
+import app.processing.streaming.stage_file_chunk_runtime as stage_file_chunk_runtime
 from app.planning import ProcessingStep, SegmentManifest, build_stage_plan
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_file_pipeline import run_stage_file_pipeline
@@ -47,7 +47,7 @@ def test_stage_file_pipeline_runs_each_stage_as_bounded_segments(monkeypatch, tm
         Path(kwargs["output_path"]).write_bytes(b"chunk")
         return chunk.written_output_frame_count
 
-    monkeypatch.setattr(stage_file_chunks, "_run_stage_chunk_to_file", fake_run_stage_chunk_to_file)
+    monkeypatch.setattr(stage_file_chunk_runtime, "run_stage_chunk_to_file", fake_run_stage_chunk_to_file)
 
     completed = run_stage_file_pipeline(
         ffmpeg=FakeFFmpeg(),

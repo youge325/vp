@@ -1311,6 +1311,11 @@ def _check_stage_file_chunks_runtime_boundary(issues: list[str]) -> None:
         "public chunk runtime import": (
             r"^from\s+app\.processing\.streaming\.stage_file_chunk_runtime\s+import\s+run_stage_chunk_to_file\s*$"
         ),
+        "private chunk runtime alias import": (
+            r"^from\s+app\.processing\.streaming\.stage_file_chunk_runtime\s+import\s+"
+            r"run_stage_chunk_to_file\s+as\s+_run_stage_chunk_to_file\b"
+        ),
+        "private chunk runtime alias call": r"\b_run_stage_chunk_to_file\s*\(",
         "progress helper import": (
             r"^from\s+app\.processing\.streaming\.stage_file_chunk_progress\s+import\s*\([\s\S]*\b"
             r"(?:chunk_progress_adapter|stage_chunk_output_start)\b"
