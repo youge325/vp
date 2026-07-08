@@ -30,13 +30,17 @@ PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddle
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
 WORKER_PROCESSES = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_processes.py"
+ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
+PIPELINE_LIFECYCLE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_lifecycle.py"
 STAGE_FILE_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_pipeline.py"
+STAGE_FILE_CHUNK_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_runtime.py"
 STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunks.py"
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
+ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
 ENHANCE_WORKFLOW = FRONTEND_SRC / "services" / "preset" / "enhance-workflow.ts"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-form-bindings.ts"
@@ -520,6 +524,28 @@ def _check_frontend_enhance_workflow_selection_boundary(issues: list[str]) -> No
             issues.append(
                 f"enhance workflow selection `{label}` remains in frontend/src/services/preset/enhance-workflow.ts"
             )
+
+
+def _check_frontend_enhance_rules_split_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_RULES)
+    forbidden_patterns = {
+        "backend compatibility helper": r"^\s*function\s+backendCompatible\b",
+        "PaddleGAN classifier": r"^\s*export\s+function\s+isPaddleGanVsrAlgorithm\b",
+        "input frame mode": r"^\s*export\s+function\s+superResolutionInputFrameMode\b",
+        "fixed runtime frames": r"^\s*export\s+function\s+fixedRuntimeFrameCount\b",
+        "fixed scale factor": r"^\s*export\s+function\s+fixedSuperResolutionScaleFactor\b",
+        "super-resolution defaults": r"^\s*export\s+function\s+applySuperResolutionAlgorithmDefaults\b",
+        "default engine picker": r"^\s*export\s+function\s+pickDefaultEngine\b",
+        "interpolation ONNX fallback": r"^\s*export\s+function\s+fallbackInterpolationOnnxModel\b",
+        "super-resolution ONNX fallback": r"^\s*export\s+function\s+fallbackSuperResolutionOnnxModel\b",
+        "default interpolation algorithm": r"^\s*export\s+function\s+pickDefaultInterpolationAlgorithm\b",
+        "default interpolation model": r"^\s*export\s+function\s+pickDefaultInterpolationModel\b",
+        "default super-resolution algorithm": r"^\s*export\s+function\s+pickDefaultSuperResolutionAlgorithm\b",
+        "default anime profile": r"^\s*export\s+function\s+pickDefaultAnimeProfile\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"enhance rules split `{label}` remains in frontend/src/services/preset/enhance-rules.ts")
 
 
 def _check_frontend_enhance_view_model_boundary(issues: list[str]) -> None:
@@ -1020,6 +1046,31 @@ def _check_streaming_pipeline_dispatch_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_encoder_helper_boundary(issues: list[str]) -> None:
+    encoder_text = _read(ENCODER)
+    forbidden_encoder_defs = {
+        "segment progress callback": r"^\s*def\s+_make_segment_progress_callback\b",
+        "segment frame count": r"^\s*def\s+_resolve_segment_output_frame_count\b",
+        "segmented finalization": r"^\s*def\s+_finalize_segmented_output\b",
+    }
+    for label, pattern in forbidden_encoder_defs.items():
+        if re.search(pattern, encoder_text, re.MULTILINE):
+            issues.append(f"encoder helper `{label}` remains in backend/app/processing/streaming/encoder.py")
+
+    private_helpers = (
+        "_make_segment_progress_callback",
+        "_resolve_segment_output_frame_count",
+        "_finalize_segmented_output",
+    )
+    for path in (PIPELINE_LIFECYCLE, STAGE_FILE_PIPELINE, STAGE_FILE_CHUNK_RUNTIME):
+        text = _read(path)
+        if "from app.processing.streaming.encoder import" not in text:
+            continue
+        leaked = [helper for helper in private_helpers if helper in text]
+        for helper in leaked:
+            issues.append(f"encoder helper `{helper}` dependency remains in {_rel(path)}")
+
+
 def _check_processor_algorithm_boundary(issues: list[str]) -> None:
     text = _read(PROCESSOR)
     forbidden_patterns = {
@@ -1100,6 +1151,7 @@ def main() -> int:
         _check_cli_defaults_planning_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_workflow_selection_boundary(issues)
+        _check_frontend_enhance_rules_split_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_binding_boundary(issues)
         _check_frontend_enhance_field_binding_boundary(issues)
@@ -1128,6 +1180,7 @@ def main() -> int:
         _check_streaming_pipeline_lifecycle_boundary(issues)
         _check_streaming_pipeline_preflight_boundary(issues)
         _check_streaming_pipeline_dispatch_boundary(issues)
+        _check_encoder_helper_boundary(issues)
         _check_processor_algorithm_boundary(issues)
         _check_processor_stage_execution_boundary(issues)
         _check_processor_stream_boundary(issues)

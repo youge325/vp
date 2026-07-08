@@ -6,7 +6,7 @@ from typing import Any
 
 from app.errors import ResumeConflictError
 from app.planning import ResumeMode, ResumeState, SegmentManifest
-from app.processing.streaming.encoder import _finalize_segmented_output
+from app.processing.streaming.encoder_finalization import finalize_segmented_output
 from app.protocol import ndjson
 from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.logger import get_logger
@@ -59,7 +59,7 @@ def finalize_streaming_output(
     total_output_frames: int,
     strict_total_frames: bool,
 ) -> dict[str, Any]:
-    final_output = _finalize_segmented_output(
+    final_output = finalize_segmented_output(
         ffmpeg=ffmpeg,
         input_path=input_path,
         output_path=output_path,

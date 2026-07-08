@@ -5,12 +5,12 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { InferenceEngine } from '@/types/domain/workflow'
 import type { WorkflowConfig } from '@/types/protocol'
 import {
-  applySuperResolutionAlgorithmDefaults,
   pickDefaultAnimeProfile,
   pickDefaultInterpolationAlgorithm,
   pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
-} from './enhance-rules'
+} from './enhance-default-selection'
+import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolution-defaults'
 
 export function createDefaultWorkflowConfig(): WorkflowConfig {
   return {

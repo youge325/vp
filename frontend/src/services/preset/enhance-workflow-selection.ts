@@ -5,16 +5,18 @@ import type { AlgorithmInfo, EnvironmentCheckResult } from '@/types/domain/env'
 import type { TensorBackend } from '@/types/domain/workflow'
 import type { WorkflowConfig } from '@/types/protocol'
 import {
-  applySuperResolutionAlgorithmDefaults,
-  fallbackInterpolationOnnxModel,
-  fallbackSuperResolutionOnnxModel,
   fixedRuntimeFrameCount,
   fixedSuperResolutionScaleFactor,
+} from './enhance-algorithm-capabilities'
+import {
+  fallbackInterpolationOnnxModel,
+  fallbackSuperResolutionOnnxModel,
   pickDefaultEngine,
   pickDefaultInterpolationAlgorithm,
   pickDefaultInterpolationModel,
   pickDefaultSuperResolutionAlgorithm,
-} from './enhance-rules'
+} from './enhance-default-selection'
+import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolution-defaults'
 
 const TENSOR_BACKENDS: TensorBackend[] = ['pytorch', 'paddle', 'onnx']
 

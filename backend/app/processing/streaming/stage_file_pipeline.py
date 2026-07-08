@@ -7,7 +7,7 @@ from typing import Any
 
 from app.planning import StagePlan
 from app.planning.manifest import ResumeState, SegmentManifest
-from app.processing.streaming.encoder import _finalize_segmented_output
+from app.processing.streaming.encoder_finalization import finalize_segmented_output
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_file_chunks import run_single_stage_file_chunks
 from app.processing.streaming.stage_file_rules import empty_resume_state, safe_stage_name, stage_signature
@@ -123,7 +123,7 @@ def run_stage_file_pipeline(
         if is_final_stage:
             return completed_frames
 
-        finalized = _finalize_segmented_output(
+        finalized = finalize_segmented_output(
             ffmpeg=ffmpeg,
             input_path=current_path,
             output_path=stage_output_path,

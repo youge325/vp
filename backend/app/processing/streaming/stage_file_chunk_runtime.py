@@ -9,7 +9,7 @@ import threading
 from typing import Any
 
 from app.planning import ProcessingStep
-from app.processing.streaming.encoder import _resolve_segment_output_frame_count
+from app.processing.streaming.encoder_segments import resolve_segment_output_frame_count
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_file_chunk_progress import chunk_progress_adapter
 from app.processing.streaming.stage_worker import StageWorkerConfig, read_rgb_frame
@@ -127,7 +127,7 @@ def run_stage_chunk_to_file(
                 metrics.record_processed_frames(1)
             active_writer.close()
             writer = None
-            encoded_frames = _resolve_segment_output_frame_count(
+            encoded_frames = resolve_segment_output_frame_count(
                 ffmpeg,
                 active_writer,
                 output_path,
