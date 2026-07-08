@@ -33,6 +33,14 @@ from app.processing.streaming.stage_worker import (
     read_rgb_frame,
     write_rgb_frame,
 )
+from app.processing.streaming.stage_rules import (
+    ordered_steps,
+    stage_output_dimensions,
+    stage_output_fps,
+    stage_output_frame_count,
+    stage_progress_total,
+    stage_tensor_backend_name,
+)
 from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
 TENSORRT_LOG_PREFIX = "[VP_TRT]"
@@ -74,19 +82,19 @@ def build_stage_worker_plans(
     source_frame_count: int,
 ) -> list[StageWorkerPlan]:
     """Build sequential stage-worker configs from a resolved ``StagePlan``."""
-    steps = _ordered_steps(stage_plan)
+    steps = ordered_steps(stage_plan)
     plans: list[StageWorkerPlan] = []
     input_width = source_width
     input_height = source_height
     input_frame_count = source_frame_count
 
     for index, step in enumerate(steps, start=1):
-        output_width, output_height = _stage_output_dimensions(
+        output_width, output_height = stage_output_dimensions(
             step,
             input_width=input_width,
             input_height=input_height,
         )
-        output_frame_count = _stage_output_frame_count(step, input_frame_count)
+        output_frame_count = stage_output_frame_count(step, input_frame_count)
         plans.append(
             StageWorkerPlan(
                 config=StageWorkerConfig(
@@ -99,7 +107,7 @@ def build_stage_worker_plans(
                     output_width=output_width,
                     output_height=output_height,
                     input_frame_count=input_frame_count,
-                    tensor_backend_name=_stage_tensor_backend_name(step, tensor_backend_name),
+                    tensor_backend_name=stage_tensor_backend_name(step, tensor_backend_name),
                     output_frame_count=output_frame_count,
                 ),
                 output_frame_count=output_frame_count,
@@ -148,7 +156,7 @@ def build_stage_chunk_plans(
         logical_count = min(chunk_size, total_frames - start)
         has_lookahead = start + logical_count < total_frames
         read_count = logical_count + (1 if has_lookahead else 0)
-        raw_output_count = _stage_output_frame_count(step, read_count)
+        raw_output_count = stage_output_frame_count(step, read_count)
         skip_output_frames = 1 if start > 0 and raw_output_count > 0 else 0
         chunks.append(
             StageChunkPlan(
@@ -292,7 +300,7 @@ def run_stage_file_pipeline(
     python_executable: str | None = None,
 ) -> int:
     """Run each algorithm stage as segmented files instead of one rawvideo chain."""
-    steps = _ordered_steps(stage_plan)
+    steps = ordered_steps(stage_plan)
     if not steps:
         raise RuntimeError("Stage file pipeline requires at least one processing stage.")
 
@@ -308,13 +316,13 @@ def run_stage_file_pipeline(
 
     for stage_position, step in enumerate(steps, start=1):
         is_final_stage = stage_position == len(steps)
-        output_width, output_height = _stage_output_dimensions(
+        output_width, output_height = stage_output_dimensions(
             step,
             input_width=current_width,
             input_height=current_height,
         )
-        stage_output_frames = _stage_output_frame_count(step, current_frame_count)
-        stage_fps = _stage_output_fps(step, current_fps)
+        stage_output_frames = stage_output_frame_count(step, current_frame_count)
+        stage_fps = stage_output_fps(step, current_fps)
 
         if is_final_stage:
             stage_manifest = manifest
@@ -352,7 +360,7 @@ def run_stage_file_pipeline(
             step=step,
             stage_index=stage_position,
             stage_total=len(steps),
-            tensor_backend_name=_stage_tensor_backend_name(step, tensor_backend_name),
+            tensor_backend_name=stage_tensor_backend_name(step, tensor_backend_name),
             progress_callback=progress_callbacks[stage_position - 1]
             if stage_position - 1 < len(progress_callbacks)
             else None,
@@ -459,7 +467,7 @@ def _run_single_stage_file_chunks(
             input_height=input_height,
             output_width=output_width,
             output_height=output_height,
-            stage_total_frames=_stage_progress_total(step, input_frame_count, output_frame_count),
+            stage_total_frames=stage_progress_total(step, input_frame_count, output_frame_count),
             output_fps=output_fps,
             encode_output_fps=encode_output_fps,
             metrics=metrics,
@@ -643,19 +651,6 @@ def _stage_chunk_output_start(step: ProcessingStep, chunk: StageChunkPlan) -> in
     if chunk.input_start_frame <= 0:
         return 0
     return chunk.input_start_frame + chunk.input_start_frame * (multi - 1)
-
-
-def _stage_progress_total(step: ProcessingStep, input_frame_count: int, output_frame_count: int) -> int:
-    if step.algorithm_type == "frame_interpolation":
-        return max(input_frame_count - 1, 1)
-    return max(output_frame_count, 1)
-
-
-def _stage_output_fps(step: ProcessingStep, input_fps: float) -> float:
-    if step.algorithm_type != "frame_interpolation":
-        return input_fps
-    multi = int(step.algorithm_kwargs.get("multi") or 2)
-    return input_fps * multi
 
 
 def _empty_resume_state() -> ResumeState:
@@ -910,55 +905,6 @@ def _close_pipe(pipe: Any) -> None:
         pipe.close()
     except Exception:
         pass
-
-
-def _ordered_steps(stage_plan: StagePlan) -> list[ProcessingStep]:
-    steps = list(stage_plan.pre_steps)
-    if stage_plan.interpolation_step is not None:
-        steps.append(stage_plan.interpolation_step)
-    steps.extend(stage_plan.post_steps)
-    return steps
-
-
-def _stage_tensor_backend_name(step: ProcessingStep, default_backend_name: str) -> str:
-    return str(step.algorithm_kwargs.get("tensor_backend") or default_backend_name)
-
-
-def _stage_output_frame_count(step: ProcessingStep, input_frame_count: int) -> int:
-    if step.algorithm_type != "frame_interpolation":
-        return input_frame_count
-    if input_frame_count < 2:
-        return input_frame_count
-    multi = int(step.algorithm_kwargs.get("multi") or 2)
-    return input_frame_count + (input_frame_count - 1) * (multi - 1)
-
-
-def _stage_output_dimensions(
-    step: ProcessingStep,
-    *,
-    input_width: int,
-    input_height: int,
-) -> tuple[int, int]:
-    if step.algorithm_type != "super_resolution":
-        return input_width, input_height
-    if not _super_resolution_changes_dimensions(step):
-        return input_width, input_height
-    scale_factor = float(step.algorithm_kwargs.get("scale_factor") or 1.0)
-    return (
-        max(1, int(round(input_width * scale_factor))),
-        max(1, int(round(input_height * scale_factor))),
-    )
-
-
-def _super_resolution_changes_dimensions(step: ProcessingStep) -> bool:
-    sr_algorithm = str(step.algorithm_kwargs.get("sr_algorithm") or "")
-    if step.algorithm_kwargs.get("onnx_model"):
-        return True
-    try:
-        from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
-    except Exception:
-        return False
-    return sr_algorithm in PADDLEGAN_VSR_SPECS
 
 
 __all__ = [

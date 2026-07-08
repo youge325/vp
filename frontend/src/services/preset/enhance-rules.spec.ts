@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  applySuperResolutionAlgorithmDefaults,
+  fixedRuntimeFrameCount,
+  isPaddleGanVsrAlgorithm,
   pickDefaultInterpolationAlgorithm,
   pickDefaultSuperResolutionAlgorithm,
+  superResolutionInputFrameMode,
 } from './enhance-rules'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
+import { createDefaultWorkflowConfig } from './defaults'
 
 // Phase 8 — 算法默认值挑选必须按当前 tensorBackend 过滤。
 // 如果不过滤,Paddle backend 下会默认到 RIFE(PyTorch only),
@@ -100,5 +105,72 @@ describe('pickDefaultSuperResolutionAlgorithm (Phase 8 backend-aware)', () => {
 
   it('returns hard-coded placeholder when checkResult is null', () => {
     expect(pickDefaultSuperResolutionAlgorithm(null, 'onnx')).toBe('placeholder')
+  })
+})
+
+describe('algorithm capability metadata helpers', () => {
+  it('classifies PaddleGAN VSR from metadata rather than a hard-coded name list', () => {
+    const algorithm = {
+      name: 'custom-vsr',
+      family: 'paddlegan_vsr',
+      tensorBackends: ['paddle'],
+      models: ['x4'],
+      fixedScaleFactor: 4,
+      inputFrameMode: 'editable_chunk',
+    }
+
+    expect(isPaddleGanVsrAlgorithm(algorithm)).toBe(true)
+    expect(superResolutionInputFrameMode(algorithm)).toBe('editable_chunk')
+  })
+
+  it('resolves fixed-window runtime frame counts from model metrics first', () => {
+    const algorithm = {
+      name: 'custom-window-vsr',
+      family: 'paddlegan_vsr',
+      tensorBackends: ['paddle'],
+      models: ['x4'],
+      defaultNumFrames: 7,
+      inputFrameMode: 'fixed_window',
+      modelDetails: [
+        {
+          name: 'x4',
+          label: 'Custom',
+          metrics: {
+            runtimeFrameCount: 5,
+            analysisStatus: 'ok',
+            analysisNotes: [],
+          },
+        },
+      ],
+    }
+
+    expect(fixedRuntimeFrameCount(algorithm)).toBe(5)
+    expect(superResolutionInputFrameMode(algorithm)).toBe('fixed_window')
+  })
+
+  it('applies PaddleGAN defaults through the shared workflow strategy', () => {
+    const workflow = createDefaultWorkflowConfig()
+    workflow.superResolution.scaleFactor = 2
+    workflow.superResolution.numFrames = 3
+    workflow.superResolution.onnxModel = 'stale.onnx'
+
+    applySuperResolutionAlgorithmDefaults(
+      workflow,
+      {
+        name: 'custom-vsr',
+        family: 'paddlegan_vsr',
+        tensorBackends: ['paddle'],
+        models: ['x4'],
+        fixedScaleFactor: 4,
+        defaultNumFrames: 8,
+        inputFrameMode: 'editable_chunk',
+      },
+      null,
+    )
+
+    expect(workflow.superResolution.tensorBackend).toBe('paddle')
+    expect(workflow.superResolution.scaleFactor).toBe(4)
+    expect(workflow.superResolution.onnxModel).toBe('')
+    expect(workflow.superResolution.numFrames).toBe(8)
   })
 })

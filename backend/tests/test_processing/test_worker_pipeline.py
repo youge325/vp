@@ -16,6 +16,12 @@ from app.errors import ProcessError, TaskErrorCode
 from app.planning import ProcessingStep, SegmentManifest, build_stage_plan
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import EncodedFrame
+from app.processing.streaming.stage_rules import (
+    ordered_steps,
+    stage_output_dimensions,
+    stage_output_frame_count,
+    stage_tensor_backend_name,
+)
 from app.processing.streaming.stage_worker import StageWorkerConfig
 from app.processing.streaming.worker_pipeline import (
     StageWorkerPlan,
@@ -62,6 +68,34 @@ def test_worker_plan_tracks_dimensions_for_super_resolution_then_interpolation()
     assert plans[1].config.output_width == 4
     assert plans[1].config.output_height == 6
     assert plans[1].config.input_frame_count == 3
+
+
+def test_stage_rules_centralize_stage_order_dimensions_and_backend_selection() -> None:
+    steps = [
+        ProcessingStep(
+            algorithm_type="super_resolution",
+            algorithm_kwargs={
+                "scale_factor": 4.0,
+                "sr_algorithm": "ppmsvsr",
+                "tensor_backend": "paddle",
+            },
+            stage_name="01_super_resolution",
+        ),
+        ProcessingStep(
+            algorithm_type="frame_interpolation",
+            algorithm_kwargs={"multi": 3},
+            stage_name="02_frame_interpolation",
+        ),
+    ]
+    stage_plan = build_stage_plan(steps, 3, source_duration=1.0, output_fps=None)
+
+    assert [step.stage_name for step in ordered_steps(stage_plan)] == [
+        "01_super_resolution",
+        "02_frame_interpolation",
+    ]
+    assert stage_tensor_backend_name(steps[0], "onnx") == "paddle"
+    assert stage_output_dimensions(steps[0], input_width=2, input_height=3) == (8, 12)
+    assert stage_output_frame_count(steps[1], 3) == 7
 
 
 def test_worker_plan_tracks_frame_counts_for_interpolation_then_super_resolution() -> None:

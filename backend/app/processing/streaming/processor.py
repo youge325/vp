@@ -21,8 +21,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Iterator
 
 from app.algorithms.factory import AlgorithmFactory
-from app.algorithms.tensor_backend import get_tensor_backend
-from app.planning import ProcessingStep, StagePlan
+from app.planning import StagePlan
 from app.processing.streaming.frame_payload import FramePayload
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import (
@@ -36,13 +35,18 @@ from app.processing.streaming.queues import (
     _queue_put,
     _queue_put_nowait,
 )
-
-
-@dataclass(slots=True)
-class _StepAlgorithm:
-    step: ProcessingStep
-    backend: Any
-    algorithm: Any
+from app.processing.streaming.stage_rules import (
+    algorithm_kwargs_for_create as _algorithm_kwargs_for_create,
+    stage_tensor_backend_name as _step_tensor_backend_name,
+)
+from app.processing.streaming.stage_runtime import (
+    StepAlgorithm as _StepAlgorithm,
+    entry_needs_sequence as _entry_needs_sequence,
+    get_cached_backend as _get_cached_backend,
+    is_cpu_frame_stage as _is_cpu_frame_stage,
+    run_stage as _run_stage,
+    should_prefer_tensor_stage as _should_prefer_tensor_stage,
+)
 
 
 @dataclass(slots=True)
@@ -152,27 +156,8 @@ def _initialize_algorithms(stage_plan: StagePlan, tensor_backend_name: str) -> _
     return algorithms
 
 
-def _step_tensor_backend_name(step: ProcessingStep, default_backend_name: str) -> str:
-    return str(step.algorithm_kwargs.get("tensor_backend") or default_backend_name)
-
-
-def _algorithm_kwargs_for_create(step: ProcessingStep) -> dict[str, Any]:
-    return {key: value for key, value in step.algorithm_kwargs.items() if key != "tensor_backend"}
-
-
-def _get_cached_backend(cache: dict[str, Any], backend_name: str) -> Any:
-    if backend_name not in cache:
-        cache[backend_name] = get_tensor_backend(backend_name)
-    return cache[backend_name]
-
-
 def _pipeline_needs_sequence(algorithms: _PipelineAlgorithms) -> bool:
     return any(_entry_needs_sequence(entry) for entry in _ordered_algorithm_entries(algorithms))
-
-
-def _entry_needs_sequence(entry: _StepAlgorithm) -> bool:
-    needs_sequence = getattr(entry.algorithm, "needs_frame_sequence", None)
-    return callable(needs_sequence) and bool(needs_sequence())
 
 
 def _ordered_algorithm_entries(algorithms: _PipelineAlgorithms) -> list[_StepAlgorithm]:
@@ -539,72 +524,6 @@ def _apply_stage_chain(
             if step_index < len(progress_callbacks):
                 progress_callbacks[step_index](progress_current, progress_total)
     return payload
-
-
-def _run_stage(
-    entry: _StepAlgorithm,
-    payload: FramePayload,
-    metrics: PipelineMetrics,
-    *,
-    prefer_tensor: bool,
-) -> FramePayload:
-    if _is_cpu_frame_stage(entry):
-        return _run_frame_filter_stage(entry, payload, metrics, prefer_tensor=prefer_tensor)
-    return _run_tensor_frame_stage(entry, payload, metrics)
-
-
-def _is_cpu_frame_stage(entry: _StepAlgorithm) -> bool:
-    return entry.step.algorithm_type == "frame_filter_chain"
-
-
-def _should_prefer_tensor_stage(
-    *,
-    entry: _StepAlgorithm,
-    payload: FramePayload,
-    remaining: list[_StepAlgorithm],
-    has_tensor_stage_after_chain: bool,
-) -> bool:
-    if not _is_cpu_frame_stage(entry):
-        return True
-    if payload.has_tensor_for(entry.backend):
-        return True
-    return any(not _is_cpu_frame_stage(next_entry) for next_entry in remaining) or has_tensor_stage_after_chain
-
-
-def _run_frame_filter_stage(
-    entry: _StepAlgorithm,
-    payload: FramePayload,
-    metrics: PipelineMetrics,
-    *,
-    prefer_tensor: bool,
-) -> FramePayload:
-    if prefer_tensor:
-        can_process_tensor = getattr(entry.algorithm, "can_process_tensor", None)
-        if not callable(can_process_tensor) or not can_process_tensor(entry.backend):
-            raise RuntimeError(
-                f"Frame filter stage '{entry.step.algorithm_type}' does not support tensor processing "
-                "in this tensor chain."
-            )
-        process_tensor = getattr(entry.algorithm, "process_tensor", None)
-        if not callable(process_tensor):
-            raise RuntimeError(f"Tensor frame stage '{entry.step.algorithm_type}' does not implement process_tensor().")
-        tensor = payload.ensure_tensor(entry.backend, metrics)
-        return FramePayload.from_tensor(process_tensor(tensor, entry.backend), entry.backend)
-    return _run_cpu_frame_stage(entry, payload, metrics)
-
-
-def _run_cpu_frame_stage(entry: _StepAlgorithm, payload: FramePayload, metrics: PipelineMetrics) -> FramePayload:
-    process_numpy = getattr(entry.algorithm, "process_numpy", None)
-    if not callable(process_numpy):
-        raise RuntimeError(f"CPU frame stage '{entry.step.algorithm_type}' does not implement process_numpy().")
-    frame = payload.ensure_numpy(metrics)
-    return FramePayload.from_numpy(process_numpy(frame))
-
-
-def _run_tensor_frame_stage(entry: _StepAlgorithm, payload: FramePayload, metrics: PipelineMetrics) -> FramePayload:
-    tensor = payload.ensure_tensor(entry.backend, metrics)
-    processed = entry.algorithm.process_frame(tensor)
-    return FramePayload.from_tensor(processed, entry.backend)
 
 
 def _emit_encoded_payload(

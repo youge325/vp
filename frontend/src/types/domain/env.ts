@@ -56,14 +56,17 @@ export interface ModelVariantInfo {
 
 export interface AlgorithmInfo {
   name: string
+  family?: 'rife' | 'onnx_super_resolution' | 'paddlegan_vsr' | string | null
   tensorBackends: string[]
   models: string[]
   onnxModels?: string[]
   modelDetails?: ModelVariantInfo[]
   onnxModelDetails?: ModelVariantInfo[]
   scaleFactors?: number[]
+  fixedScaleFactor?: number | null
   defaultNumFrames?: number | null
   sequenceMode?: 'recurrent' | 'window' | string | null
+  inputFrameMode?: 'none' | 'editable_chunk' | 'fixed_window' | string | null
   weightPath?: string | null
   weightAvailable?: boolean | null
 }

@@ -16,16 +16,31 @@ SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
     # Phase 8 — ``tensorBackends`` 显式声明该算法支持的 tensor 后端。
     # 当前两个算法都只在 ONNX 路径下有完整实现(见下方 class doc),
     # PyTorch / Paddle 路径返回 NotImplementedError。
-    {"name": "placeholder", "tensorBackends": ["onnx"], "models": []},
-    {"name": "realesrgan-plan", "tensorBackends": ["onnx"], "models": []},
+    {
+        "name": "placeholder",
+        "family": "onnx_super_resolution",
+        "tensorBackends": ["onnx"],
+        "models": [],
+        "inputFrameMode": "none",
+    },
+    {
+        "name": "realesrgan-plan",
+        "family": "onnx_super_resolution",
+        "tensorBackends": ["onnx"],
+        "models": [],
+        "inputFrameMode": "none",
+    },
     *[
         {
             "name": spec.model_id,
+            "family": "paddlegan_vsr",
             "tensorBackends": ["paddle"],
             "models": ["x4"],
             "scaleFactors": [4],
+            "fixedScaleFactor": 4,
             "defaultNumFrames": spec.default_num_frames,
             "sequenceMode": spec.sequence_mode,
+            "inputFrameMode": "fixed_window" if spec.sequence_mode == "window" else "editable_chunk",
             "modelDetails": [get_paddlegan_model_detail(spec.model_id)],
         }
         for spec in PADDLEGAN_VSR_SPECS.values()

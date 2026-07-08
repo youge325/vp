@@ -29,36 +29,94 @@ def _load_module():
 
 def test_paddlegan_vsr_contract_matches_current_repo() -> None:
     module = _load_module()
-    backend_enabled = module._collect_backend_paddlegan_enabled_models()
+    backend_specs = module._collect_backend_paddlegan_enabled_models()
     backend_disabled = module._collect_backend_paddlegan_disabled_models()
-    frontend_models = module._collect_frontend_paddlegan_models()
+    algorithm_metadata = module._collect_backend_algorithm_metadata()
 
-    issues = module._diff_paddlegan_vsr_contract(backend_enabled, backend_disabled, frontend_models)
+    issues = module._diff_paddlegan_vsr_contract(backend_specs, backend_disabled, algorithm_metadata)
 
-    assert backend_enabled == ALL_PADDLEGAN_VSR_MODELS
+    assert backend_specs == ALL_PADDLEGAN_VSR_MODELS
     assert backend_disabled == set()
-    assert frontend_models == backend_enabled
+    assert {
+        name for name, metadata in algorithm_metadata.items() if metadata["family"] == "paddlegan_vsr"
+    } == backend_specs
     assert issues == []
 
 
 def test_paddlegan_vsr_contract_flags_frontend_reexposing_disabled_model() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(
-        backend_enabled={"ppmsvsr", "edvr"},
+        backend_specs={"ppmsvsr", "edvr"},
         backend_disabled={"basicvsr"},
-        frontend_models={"ppmsvsr", "edvr", "basicvsr"},
+        algorithm_metadata={
+            "ppmsvsr": {"family": "paddlegan_vsr", "fixedScaleFactor": 4, "inputFrameMode": "editable_chunk"},
+            "edvr": {"family": "paddlegan_vsr", "fixedScaleFactor": 4, "inputFrameMode": "fixed_window"},
+            "basicvsr": {"family": "paddlegan_vsr", "fixedScaleFactor": 4, "inputFrameMode": "editable_chunk"},
+        },
     )
 
-    assert any("frontend" in issue.lower() and "basicvsr" in issue for issue in issues), issues
     assert any("disabled" in issue.lower() and "basicvsr" in issue for issue in issues), issues
+
+
+def test_paddlegan_vsr_contract_flags_missing_metadata() -> None:
+    module = _load_module()
+    issues = module._diff_paddlegan_vsr_contract(
+        backend_specs={"ppmsvsr", "edvr"},
+        backend_disabled=set(),
+        algorithm_metadata={
+            "ppmsvsr": {"family": "paddlegan_vsr", "fixedScaleFactor": 4, "inputFrameMode": "editable_chunk"},
+        },
+    )
+
+    assert any("edvr" in issue and "metadata" in issue.lower() for issue in issues), issues
+
+
+def test_paddlegan_vsr_contract_flags_wrong_metadata_shape() -> None:
+    module = _load_module()
+    issues = module._diff_paddlegan_vsr_contract(
+        backend_specs={"edvr"},
+        backend_disabled=set(),
+        algorithm_metadata={
+            "edvr": {"family": "paddlegan_vsr", "fixedScaleFactor": 2, "inputFrameMode": "editable_chunk"},
+        },
+    )
+
+    assert any("fixedScaleFactor" in issue and "edvr" in issue for issue in issues), issues
+    assert any("inputFrameMode" in issue and "edvr" in issue for issue in issues), issues
+
+
+def test_stage_worker_does_not_import_processor_private_helpers() -> None:
+    module = _load_module()
+    issues: list[str] = []
+
+    module._check_stage_worker_private_import_boundary(issues)
+
+    assert issues == []
+
+
+def test_stage_worker_private_import_boundary_flags_private_processor_dependency(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_stage_worker = tmp_path / "stage_worker.py"
+    fake_stage_worker.write_text(
+        "from app.processing.streaming.processor import _StepAlgorithm, _run_stage\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_WORKER", fake_stage_worker)
+    issues: list[str] = []
+
+    module._check_stage_worker_private_import_boundary(issues)
+
+    assert any("processor private helpers" in issue for issue in issues), issues
 
 
 def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(
-        backend_enabled={"ppmsvsr", "edvr"},
+        backend_specs={"ppmsvsr", "edvr"},
         backend_disabled=set(),
-        frontend_models={"ppmsvsr"},
+        algorithm_metadata={
+            "ppmsvsr": {"family": "paddlegan_vsr", "fixedScaleFactor": 4, "inputFrameMode": "editable_chunk"},
+        },
     )
 
-    assert any("backend" in issue.lower() and "edvr" in issue for issue in issues), issues
+    assert any("metadata" in issue.lower() and "edvr" in issue for issue in issues), issues

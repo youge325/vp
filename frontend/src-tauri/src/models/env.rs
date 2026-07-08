@@ -175,6 +175,8 @@ pub struct RuntimeInfo {
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct AlgorithmInfo {
     pub name: String,
+    #[serde(default)]
+    pub family: Option<String>,
     /// Phase 8 — tensor backends this algorithm has a working
     /// implementation for. The frontend uses this list to hide the
     /// algorithm from the dropdown when the currently selected
@@ -204,9 +206,13 @@ pub struct AlgorithmInfo {
     #[serde(default)]
     pub scale_factors: Vec<u32>,
     #[serde(default)]
+    pub fixed_scale_factor: Option<u32>,
+    #[serde(default)]
     pub default_num_frames: Option<u32>,
     #[serde(default)]
     pub sequence_mode: Option<String>,
+    #[serde(default)]
+    pub input_frame_mode: Option<String>,
     #[serde(default)]
     pub weight_path: Option<String>,
     #[serde(default)]

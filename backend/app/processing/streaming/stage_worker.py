@@ -22,7 +22,14 @@ from app.algorithms.tensor_backend import get_tensor_backend
 from app.planning import ProcessingStep, normalize_processing_step
 from app.processing.streaming.frame_payload import FramePayload
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.processor import _StepAlgorithm, _is_cpu_frame_stage, _run_stage
+from app.processing.streaming.stage_rules import algorithm_kwargs_for_create
+from app.processing.streaming.stage_runtime import (
+    StepAlgorithm,
+    algorithm_needs_pairs,
+    algorithm_needs_sequence,
+    is_cpu_frame_stage,
+    run_stage,
+)
 
 STAGE_EVENT_PREFIX = "VP_STAGE_EVENT "
 SEQUENCE_STAGE_HEARTBEAT_SECONDS = 30.0
@@ -152,9 +159,9 @@ def run_stage_worker_stream(
     algorithm = (algorithm_factory or _create_algorithm)(config.stage, backend)
     metrics = PipelineMetrics()
 
-    if _algorithm_needs_sequence(algorithm):
+    if algorithm_needs_sequence(algorithm):
         written = _run_sequence_stage(config, input_stream, output_stream, algorithm, sink, metrics)
-    elif _algorithm_needs_pairs(algorithm):
+    elif algorithm_needs_pairs(algorithm):
         written = _run_interpolation_stage(config, input_stream, output_stream, backend, algorithm, sink, metrics)
     else:
         written = _run_single_frame_stage(config, input_stream, output_stream, backend, algorithm, sink, metrics)
@@ -182,7 +189,7 @@ def _create_algorithm(stage: ProcessingStep, backend: Any) -> Any:
         algorithm_type=stage.algorithm_type,
         tensor_backend=backend,
         tensor_backend_name=_backend_name(backend),
-        **_algorithm_kwargs_for_create(stage),
+        **algorithm_kwargs_for_create(stage),
     )
 
 
@@ -210,20 +217,6 @@ def _backend_name(backend: Any) -> str:
     if callable(get_name):
         return str(get_name())
     return "numpy"
-
-
-def _algorithm_kwargs_for_create(stage: ProcessingStep) -> dict[str, Any]:
-    return {key: value for key, value in stage.algorithm_kwargs.items() if key != "tensor_backend"}
-
-
-def _algorithm_needs_sequence(algorithm: Any) -> bool:
-    needs_sequence = getattr(algorithm, "needs_frame_sequence", None)
-    return callable(needs_sequence) and bool(needs_sequence())
-
-
-def _algorithm_needs_pairs(algorithm: Any) -> bool:
-    needs_pairs = getattr(algorithm, "needs_frame_pairs", None)
-    return callable(needs_pairs) and bool(needs_pairs())
 
 
 def _read_declared_frames(config: StageWorkerConfig, input_stream: BinaryIO) -> list[np.ndarray]:
@@ -399,7 +392,7 @@ def _run_single_frame_stage(
     event_sink: EventSink,
     metrics: PipelineMetrics,
 ) -> int:
-    entry = _StepAlgorithm(step=config.stage, backend=backend, algorithm=algorithm)
+    entry = StepAlgorithm(step=config.stage, backend=backend, algorithm=algorithm)
     total = max(config.input_frame_count, 1)
     written = 0
     for index in range(config.input_frame_count):
@@ -408,11 +401,11 @@ def _run_single_frame_stage(
             raise RawVideoFrameError(
                 f"rawvideo stream ended before {config.input_frame_count} declared input frames were read."
             )
-        payload = _run_stage(
+        payload = run_stage(
             entry,
             FramePayload.from_numpy(frame),
             metrics,
-            prefer_tensor=not _is_cpu_frame_stage(entry),
+            prefer_tensor=not is_cpu_frame_stage(entry),
         )
         write_rgb_frame(
             output_stream, payload.ensure_numpy(metrics), width=config.output_width, height=config.output_height

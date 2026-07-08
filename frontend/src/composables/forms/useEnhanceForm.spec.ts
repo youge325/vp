@@ -136,6 +136,17 @@ function makeEnv(): EnvironmentCheckResult {
         weightAvailable: true,
       },
       {
+        name: 'custom-vsr',
+        family: 'paddlegan_vsr',
+        tensorBackends: ['paddle'],
+        models: ['x4'],
+        scaleFactors: [4],
+        fixedScaleFactor: 4,
+        inputFrameMode: 'editable_chunk',
+        defaultNumFrames: 8,
+        sequenceMode: 'recurrent',
+      },
+      {
         name: 'ppmsvsr-large',
         tensorBackends: ['paddle'],
         models: ['x4'],
@@ -197,6 +208,7 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     expect(form.superResolutionAlgorithms.map((algorithm) => algorithm.name)).toEqual([
       'ppmsvsr',
       'edvr',
+      'custom-vsr',
       'ppmsvsr-large',
       'basicvsr',
       'iconvsr',
@@ -235,6 +247,23 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     form.superResolutionAlgorithm = 'basicvsr'
     expect(form.superResolutionScale).toBe(4)
     expect(form.superResolutionNumFrames).toBe(10)
+  })
+
+  it('uses PaddleGAN capability metadata for algorithms outside the old hard-coded name list', () => {
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.superResolution.enabled = true
+      workflow.superResolution.tensorBackend = 'paddle'
+      workflow.superResolution.scaleFactor = 2
+      workflow.superResolution.numFrames = 3
+    })
+
+    const form = useEnhanceForm()
+    form.superResolutionAlgorithm = 'custom-vsr'
+
+    expect(form.isPaddleGanSuperResolution).toBe(true)
+    expect(form.superResolutionScale).toBe(4)
+    expect(form.superResolutionNumFrames).toBe(8)
   })
 
   it('labels recurrent input frame chunks and exposes EDVR fixed neighbor window', () => {

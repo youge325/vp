@@ -14,6 +14,7 @@ from app.processing.interpolation import SUPPORTED_ALGORITHMS as INTERPOLATION_A
 from app.processing.super_resolution import SUPPORTED_ALGORITHMS as SR_ALGORITHMS
 
 _VALID_BACKENDS = {"pytorch", "paddle", "onnx"}
+_VALID_INPUT_FRAME_MODES = {"none", "editable_chunk", "fixed_window"}
 
 
 @pytest.mark.parametrize(
@@ -78,6 +79,32 @@ def test_builtin_models_expose_metric_details():
         assert entry["modelDetails"][0]["metrics"]["parameterCount"]
         assert entry["modelDetails"][0]["metrics"]["engineMetrics"]["tensorrt"]
         assert entry["sequenceMode"] in {"recurrent", "window"}
+
+
+def test_algorithms_expose_ui_capability_metadata():
+    """能力 payload 需要携带足够元数据,前端不应再硬编码算法族规则。"""
+    rife = next(entry for entry in INTERPOLATION_ALGORITHMS if entry["name"] == "rife")
+    assert rife["family"] == "rife"
+    assert rife["inputFrameMode"] == "none"
+    assert "fixedScaleFactor" not in rife
+
+    onnx_entries = [entry for entry in SR_ALGORITHMS if entry["tensorBackends"] == ["onnx"]]
+    assert onnx_entries
+    for entry in onnx_entries:
+        assert entry["family"] == "onnx_super_resolution"
+        assert entry["inputFrameMode"] == "none"
+        assert "fixedScaleFactor" not in entry
+
+    paddlegan_entries = [entry for entry in SR_ALGORITHMS if entry["tensorBackends"] == ["paddle"]]
+    assert paddlegan_entries
+    for entry in paddlegan_entries:
+        assert entry["family"] == "paddlegan_vsr"
+        assert entry["fixedScaleFactor"] == 4
+        assert entry["inputFrameMode"] in _VALID_INPUT_FRAME_MODES
+        if entry["sequenceMode"] == "window":
+            assert entry["inputFrameMode"] == "fixed_window"
+        else:
+            assert entry["inputFrameMode"] == "editable_chunk"
 
 
 def test_paddlegan_window_models_expose_fixed_runtime_frame_count():

@@ -5,6 +5,7 @@ import type { DecodeConfig, EncodeConfig, OutputConfig, WorkbenchPreset, Workflo
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { InferenceEngine } from '@/types/domain/workflow'
 import {
+  applySuperResolutionAlgorithmDefaults,
   pickDefaultAnimeProfile,
   pickDefaultInterpolationAlgorithm,
   pickDefaultInterpolationModel,
@@ -138,6 +139,11 @@ export function createDefaultWorkbenchPreset(env: EnvironmentCheckResult | null)
   workflowConfig.superResolution.algorithm = pickDefaultSuperResolutionAlgorithm(
     env,
     superResolutionBackend,
+  )
+  applySuperResolutionAlgorithmDefaults(
+    workflowConfig,
+    env?.superResolutionAlgorithms?.find((a) => a.name === workflowConfig.superResolution.algorithm),
+    env,
   )
   workflowConfig.anime.profile = pickDefaultAnimeProfile(env)
 
