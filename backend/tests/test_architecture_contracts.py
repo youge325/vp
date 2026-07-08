@@ -1587,6 +1587,29 @@ def test_pipeline_raw_runtime_encoder_boundary_flags_public_encoder_worker_depen
     assert any("encoder worker target" in issue for issue in issues), issues
 
 
+def test_pipeline_raw_runtime_completion_boundary_flags_local_completion_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runtime = tmp_path / "pipeline_raw_runtime.py"
+    fake_runtime.write_text(
+        "def run_raw_pipeline_runtime(encoder_thread, error_queue, manifest):\n"
+        "    encoder_thread.join()\n"
+        "    if not error_queue.empty():\n"
+        "        raise error_queue.get()\n"
+        "    completed_segments = manifest.read_completed_segments()\n"
+        "    return sum(segment.frame_count for segment in completed_segments)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PIPELINE_RAW_RUNTIME", fake_runtime, raising=False)
+    issues: list[str] = []
+
+    module._check_pipeline_raw_runtime_completion_boundary(issues)
+
+    assert any("encoder thread join" in issue for issue in issues), issues
+    assert any("error queue empty check" in issue for issue in issues), issues
+    assert any("error queue get" in issue for issue in issues), issues
+    assert any("completed segments aggregation" in issue for issue in issues), issues
+
+
 def test_streaming_pipeline_lifecycle_boundary_flags_local_resume_and_finalize(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "pipeline.py"

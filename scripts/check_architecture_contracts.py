@@ -1429,6 +1429,19 @@ def _check_pipeline_raw_runtime_encoder_boundary(issues: list[str]) -> None:
             issues.append(f"pipeline raw encoder worker `{label}` remains in {_rel(PIPELINE_RAW_RUNTIME)}")
 
 
+def _check_pipeline_raw_runtime_completion_boundary(issues: list[str]) -> None:
+    text = _read(PIPELINE_RAW_RUNTIME)
+    forbidden_patterns = {
+        "encoder thread join": r"\bencoder_thread\.join\s*\(",
+        "error queue empty check": r"\berror_queue\.empty\s*\(",
+        "error queue get": r"\berror_queue\.get\s*\(",
+        "completed segments aggregation": r"\bread_completed_segments\s*\(",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"pipeline raw completion `{label}` remains in {_rel(PIPELINE_RAW_RUNTIME)}")
+
+
 def _check_streaming_pipeline_lifecycle_boundary(issues: list[str]) -> None:
     text = _read(STREAMING_PIPELINE)
     forbidden_patterns = {
@@ -1696,6 +1709,7 @@ def main() -> int:
         _check_streaming_pipeline_raw_boundary(issues)
         _check_pipeline_raw_runtime_boundary(issues)
         _check_pipeline_raw_runtime_encoder_boundary(issues)
+        _check_pipeline_raw_runtime_completion_boundary(issues)
         _check_streaming_pipeline_lifecycle_boundary(issues)
         _check_streaming_pipeline_preflight_boundary(issues)
         _check_streaming_pipeline_dispatch_boundary(issues)

@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from app.planning import ResumeState, SegmentManifest, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.pipeline_raw_completion import finish_raw_pipeline_runtime
 from app.processing.streaming.pipeline_raw_encoder import start_raw_encoder_thread
 from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, StreamEnd
 from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
@@ -76,13 +77,11 @@ def run_raw_pipeline_runtime(
         stop_event=stop_event,
         metrics=metrics,
     )
-    encoder_thread.join()
-
-    if not error_queue.empty():
-        raise error_queue.get()
-
-    completed_segments = manifest.read_completed_segments()
-    return sum(segment.frame_count for segment in completed_segments)
+    return finish_raw_pipeline_runtime(
+        encoder_thread=encoder_thread,
+        error_queue=error_queue,
+        manifest=manifest,
+    )
 
 
 __all__ = ["StageWorkerRunner", "run_raw_pipeline_runtime"]
