@@ -157,6 +157,21 @@ def test_backend_tests_private_cli_defaults_boundary_flags_private_default_impor
     assert any("private CLI defaults import" in issue for issue in issues), issues
 
 
+def test_segment_manifest_compat_boundary_flags_completed_segments_shim(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_manifest = tmp_path / "manifest.py"
+    fake_manifest.write_text(
+        "class SegmentManifest:\n    def read_completed_segments(self):\n        return self.scan_completed_chunks()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "SEGMENT_MANIFEST", fake_manifest, raising=False)
+    issues: list[str] = []
+
+    module._check_segment_manifest_compat_boundary(issues)
+
+    assert any("SegmentManifest compatibility shim" in issue for issue in issues), issues
+
+
 def test_enhance_form_workflow_rule_boundary_flags_mutation_leaks(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_form = tmp_path / "useEnhanceForm.ts"

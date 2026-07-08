@@ -19,7 +19,7 @@ def finish_raw_pipeline_runtime(
     if not error_queue.empty():
         raise error_queue.get()
 
-    completed_segments = manifest.read_completed_segments()
+    completed_segments = manifest.scan_completed_chunks()
     return sum(segment.frame_count for segment in completed_segments)
 
 

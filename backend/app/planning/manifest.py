@@ -327,10 +327,6 @@ class SegmentManifest:
         if self.sidecar_dir.is_dir():
             shutil.rmtree(self.sidecar_dir, ignore_errors=True)
 
-    def read_completed_segments(self) -> list[SegmentRecord]:
-        """Compatibility shim: read contiguous completed chunks from disk."""
-        return self.scan_completed_chunks()
-
     # ------------------------------------------------------------- internals
     def _scan_resume_state(self) -> ResumeState:
         chunks = self.scan_completed_chunks()

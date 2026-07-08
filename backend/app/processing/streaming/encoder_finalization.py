@@ -23,7 +23,7 @@ def finalize_segmented_output(
     strict_total_frames: bool,
 ) -> str:
     del signature
-    completed_segments = manifest.read_completed_segments()
+    completed_segments = manifest.scan_completed_chunks()
     segment_paths = [str(manifest.sidecar_dir / record.path) for record in completed_segments]
     if strict_total_frames and completed_output_frames != total_output_frames:
         raise RuntimeError(
