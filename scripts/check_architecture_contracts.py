@@ -475,6 +475,21 @@ def _check_frontend_enhance_view_model_boundary(issues: list[str]) -> None:
             issues.append(f"enhance view-model rule `{label}` leaked into form composable: {_rel(ENHANCE_FORM)}")
 
 
+def _check_frontend_enhance_binding_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_FORM)
+    forbidden_patterns = {
+        "createDraftEditor": r"\bcreateDraftEditor\b",
+        "createAlgorithmLens": r"\bcreateAlgorithmLens\b",
+        "buildEnhanceViewModel": r"\bbuildEnhanceViewModel\b",
+        "enhance workflow mutation import": r"\bapply(?:Interpolation|SuperResolution)[A-Za-z]+\b",
+        "input frame label": r"\bsuperResolutionInputFramesLabel\b",
+        "input frame hint": r"\bsuperResolutionInputFramesHint\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(f"enhance binding rule `{label}` leaked into form composable: {_rel(ENHANCE_FORM)}")
+
+
 def _check_frontend_enhance_option_boundary(issues: list[str]) -> None:
     text = _read(ENHANCE_VIEW)
     forbidden_patterns = {
@@ -609,6 +624,24 @@ def _check_processor_algorithm_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_processor_stage_execution_boundary(issues: list[str]) -> None:
+    text = _read(PROCESSOR)
+    forbidden_patterns = {
+        "_apply_pre_steps": r"^\s*def\s+_apply_pre_steps\b",
+        "_apply_post_steps": r"^\s*def\s+_apply_post_steps\b",
+        "_apply_stage_chain": r"^\s*def\s+_apply_stage_chain\b",
+        "_run_sequence_stage": r"^\s*def\s+_run_sequence_stage\b",
+        "_run_interpolation_sequence_stage": r"^\s*def\s+_run_interpolation_sequence_stage\b",
+        "_run_per_frame_sequence_stage": r"^\s*def\s+_run_per_frame_sequence_stage\b",
+        "_emit_stage_progress": r"^\s*def\s+_emit_stage_progress\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"processor stage execution rule `{label}` remains in backend/app/processing/streaming/processor.py"
+            )
+
+
 def main() -> int:
     issues: list[str] = []
     try:
@@ -622,6 +655,7 @@ def main() -> int:
         _check_cli_defaults_planning_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_view_model_boundary(issues)
+        _check_frontend_enhance_binding_boundary(issues)
         _check_frontend_enhance_option_boundary(issues)
         _check_frontend_io_view_option_boundary(issues)
         _check_frontend_io_form_rule_boundary(issues)
@@ -630,6 +664,7 @@ def main() -> int:
         _check_worker_pipeline_file_boundary(issues)
         _check_streaming_pipeline_rule_boundary(issues)
         _check_processor_algorithm_boundary(issues)
+        _check_processor_stage_execution_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2

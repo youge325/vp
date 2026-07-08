@@ -264,6 +264,25 @@ def test_frontend_io_form_rule_boundary_flags_composable_rule_leaks(tmp_path, mo
     assert any("io form rule" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_binding_boundary_flags_composable_binding_leaks(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_form = tmp_path / "useEnhanceForm.ts"
+    fake_form.write_text(
+        "import { createDraftEditor } from '@/composables/forms/lens'\n"
+        "import { createAlgorithmLens } from '@/composables/forms/enhance-lens'\n"
+        "import { buildEnhanceViewModel } from '@/services/preset/enhance-view-model'\n"
+        "applyInterpolationEnabled(c, value, envStore.env.checkResult)\n"
+        "superResolutionInputFramesLabel: '每块输入帧数'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_FORM", fake_form)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_binding_boundary(issues)
+
+    assert any("enhance binding rule" in issue for issue in issues), issues
+
+
 def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_processor = tmp_path / "processor.py"
@@ -285,6 +304,28 @@ def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, mo
     module._check_processor_algorithm_boundary(issues)
 
     assert any("processor algorithm rule" in issue for issue in issues), issues
+
+
+def test_processor_stage_execution_boundary_flags_local_stage_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_processor = tmp_path / "processor.py"
+    fake_processor.write_text(
+        "def _apply_stage_chain():\n"
+        "    pass\n\n"
+        "def _apply_pre_steps():\n"
+        "    pass\n\n"
+        "def _run_sequence_stage():\n"
+        "    pass\n\n"
+        "def _run_interpolation_sequence_stage():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PROCESSOR", fake_processor)
+    issues: list[str] = []
+
+    module._check_processor_stage_execution_boundary(issues)
+
+    assert any("processor stage execution rule" in issue for issue in issues), issues
 
 
 def test_streaming_pipeline_rule_boundary_flags_local_pipeline_rules(tmp_path, monkeypatch) -> None:

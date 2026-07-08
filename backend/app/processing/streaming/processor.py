@@ -29,6 +29,16 @@ from app.processing.streaming.processor_algorithms import (
     pipeline_needs_sequence as _pipeline_needs_sequence,
     resolve_processor_mode as _resolve_processor_mode,
 )
+from app.processing.streaming.processor_stage_execution import (
+    apply_post_steps as _apply_post_steps,
+    apply_pre_steps as _apply_pre_steps,
+    apply_stage_chain as _apply_stage_chain,
+    emit_stage_progress as _emit_stage_progress,
+    run_interpolation_sequence_stage as _run_interpolation_sequence_stage,
+    run_per_frame_sequence_stage as _run_per_frame_sequence_stage,
+    run_sequence_pipeline as _run_sequence_pipeline,
+    run_sequence_stage as _run_sequence_stage,
+)
 from app.processing.streaming.queues import (
     DecodedFrame,
     EncodedFrame,
@@ -42,14 +52,17 @@ from app.processing.streaming.queues import (
 )
 from app.processing.streaming.stage_runtime import (
     StepAlgorithm as _StepAlgorithm,
-    entry_needs_sequence as _entry_needs_sequence,
-    is_cpu_frame_stage as _is_cpu_frame_stage,
-    run_stage as _run_stage,
-    should_prefer_tensor_stage as _should_prefer_tensor_stage,
 )
 
 __all__ = [
+    "_apply_post_steps",
+    "_apply_pre_steps",
+    "_apply_stage_chain",
+    "_emit_stage_progress",
     "_PipelineAlgorithms",
+    "_run_interpolation_sequence_stage",
+    "_run_per_frame_sequence_stage",
+    "_run_sequence_stage",
     "_StepAlgorithm",
     "_initialize_algorithms",
     "_ordered_algorithm_entries",
@@ -301,32 +314,12 @@ def _process_sequence_stream(
     without sequence stages continue to use the streaming per-frame paths.
     """
     payloads = [FramePayload.from_numpy(item.frame) for item in _drain_decoded(decode_queue, stop_event)]
-    entries = _ordered_algorithm_entries(algorithms)
-
-    for stage_index, entry in enumerate(entries):
-        callback = progress_callbacks[stage_index] if stage_index < len(progress_callbacks) else None
-        if _entry_needs_sequence(entry):
-            payloads = _run_sequence_stage(
-                entry=entry,
-                payloads=payloads,
-                callback=callback,
-                metrics=metrics,
-            )
-            continue
-        if entry.algorithm.needs_frame_pairs():
-            payloads = _run_interpolation_sequence_stage(
-                entry=entry,
-                payloads=payloads,
-                callback=callback,
-                metrics=metrics,
-            )
-            continue
-        payloads = _run_per_frame_sequence_stage(
-            entry=entry,
-            payloads=payloads,
-            callback=callback,
-            metrics=metrics,
-        )
+    payloads = _run_sequence_pipeline(
+        entries=_ordered_algorithm_entries(algorithms),
+        payloads=payloads,
+        progress_callbacks=progress_callbacks,
+        metrics=metrics,
+    )
 
     output_index = resume_output_frames
     for payload in payloads:
@@ -341,137 +334,6 @@ def _process_sequence_stream(
 
     _emit_stream_end(encode_queue, source_frames, stop_event)
     del stage_plan
-
-
-def _run_sequence_stage(
-    *,
-    entry: _StepAlgorithm,
-    payloads: list[FramePayload],
-    callback: Callable[[int, int], None] | None,
-    metrics: PipelineMetrics,
-) -> list[FramePayload]:
-    frames = [payload.ensure_numpy(metrics) for payload in payloads]
-    with metrics.timed("process"):
-        output_frames = entry.algorithm.process_frame_sequence(frames)
-    output_payloads = [FramePayload.from_numpy(frame) for frame in output_frames]
-    _emit_stage_progress(callback, len(output_payloads))
-    return output_payloads
-
-
-def _run_interpolation_sequence_stage(
-    *,
-    entry: _StepAlgorithm,
-    payloads: list[FramePayload],
-    callback: Callable[[int, int], None] | None,
-    metrics: PipelineMetrics,
-) -> list[FramePayload]:
-    if len(payloads) < 2:
-        _emit_stage_progress(callback, len(payloads))
-        return payloads
-
-    multi = int(entry.algorithm.get_interpolation_multi())
-    output_payloads: list[FramePayload] = []
-    total_pairs = max(len(payloads) - 1, 1)
-    with metrics.timed("interpolate"):
-        for pair_index in range(len(payloads) - 1):
-            prev_payload = payloads[pair_index]
-            current_payload = payloads[pair_index + 1]
-            prev_tensor = prev_payload.ensure_tensor(entry.backend, metrics)
-            current_tensor = current_payload.ensure_tensor(entry.backend, metrics)
-            output_payloads.append(prev_payload)
-            for mid_index in range(1, multi):
-                timestep = mid_index / multi
-                mid_tensor = entry.algorithm.process_frame_pair(prev_tensor, current_tensor, timestep=timestep)
-                output_payloads.append(FramePayload.from_tensor(mid_tensor, entry.backend))
-            if callback is not None:
-                callback(pair_index + 1, total_pairs)
-    output_payloads.append(payloads[-1])
-    return output_payloads
-
-
-def _run_per_frame_sequence_stage(
-    *,
-    entry: _StepAlgorithm,
-    payloads: list[FramePayload],
-    callback: Callable[[int, int], None] | None,
-    metrics: PipelineMetrics,
-) -> list[FramePayload]:
-    output_payloads: list[FramePayload] = []
-    total = len(payloads)
-    with metrics.timed("process"):
-        for index, payload in enumerate(payloads):
-            output_payloads.append(
-                _run_stage(
-                    entry,
-                    payload,
-                    metrics,
-                    prefer_tensor=not _is_cpu_frame_stage(entry),
-                )
-            )
-            if callback is not None:
-                callback(index + 1, total)
-    return output_payloads
-
-
-def _emit_stage_progress(callback: Callable[[int, int], None] | None, total: int) -> None:
-    if callback is None:
-        return
-    denominator = max(total, 1)
-    for current in range(1, total + 1):
-        callback(current, denominator)
-
-
-def _apply_post_steps(
-    *,
-    post_algorithms: list[_StepAlgorithm],
-    post_callbacks: list[Callable[[int, int], None]],
-    payload: FramePayload,
-    output_index: int,
-    total_output_frames_denominator: int,
-    metrics: PipelineMetrics,
-) -> FramePayload:
-    """Apply post steps while preserving tensor payloads across tensor stages."""
-    return _apply_stage_chain(
-        algorithms=post_algorithms,
-        progress_callbacks=post_callbacks,
-        payload=payload,
-        progress_current=output_index + 1,
-        progress_total=total_output_frames_denominator,
-        has_tensor_stage_after_chain=False,
-        metrics=metrics,
-    )
-
-
-def _apply_stage_chain(
-    *,
-    algorithms: list[_StepAlgorithm],
-    progress_callbacks: list[Callable[[int, int], None]],
-    payload: FramePayload,
-    progress_current: int,
-    progress_total: int,
-    has_tensor_stage_after_chain: bool,
-    metrics: PipelineMetrics,
-) -> FramePayload:
-    """Run CPU and tensor stages in order, converting only at explicit boundaries."""
-    if not algorithms:
-        return payload
-
-    with metrics.timed("process"):
-        for step_index, entry in enumerate(algorithms):
-            payload = _run_stage(
-                entry,
-                payload,
-                metrics,
-                prefer_tensor=_should_prefer_tensor_stage(
-                    entry=entry,
-                    payload=payload,
-                    remaining=algorithms[step_index + 1 :],
-                    has_tensor_stage_after_chain=has_tensor_stage_after_chain,
-                ),
-            )
-            if step_index < len(progress_callbacks):
-                progress_callbacks[step_index](progress_current, progress_total)
-    return payload
 
 
 def _emit_encoded_payload(
@@ -508,31 +370,6 @@ def _drain_decoded(
             return
         if isinstance(item, DecodedFrame):
             yield item
-
-
-def _apply_pre_steps(
-    *,
-    pre_algorithms: list[_StepAlgorithm],
-    progress_callbacks: list[Callable[[int, int], None]],
-    item: DecodedFrame,
-    source_frames: int,
-    has_tensor_stage_after_chain: bool,
-    metrics: PipelineMetrics,
-) -> FramePayload:
-    """Run every pre-step algorithm on a decoded frame, reporting per-step progress.
-
-    Progress denominator is fixed at ``max(source_frames, 1)`` so the NDJSON
-    percent always reflects source-frame coverage regardless of pipeline shape.
-    """
-    return _apply_stage_chain(
-        algorithms=pre_algorithms,
-        progress_callbacks=progress_callbacks,
-        payload=FramePayload.from_numpy(item.frame),
-        progress_current=item.source_index + 1,
-        progress_total=max(source_frames, 1),
-        has_tensor_stage_after_chain=has_tensor_stage_after_chain,
-        metrics=metrics,
-    )
 
 
 def _emit_stream_end(
