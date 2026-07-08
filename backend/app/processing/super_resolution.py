@@ -55,7 +55,7 @@ class SuperResolutionAlgorithm(IAlgorithm):
     - ONNX backend:运行 NCHW RGB float32 image-to-image 推理,按 scale_factor 验证输出尺寸。
     - 其它 backend(pytorch / paddle / numpy):**未实现**。``validate()`` 返回 False,
       ``process_frame`` 抛 ``NotImplementedError``;planning 层会通过
-      ``_verify_super_resolution_backend`` 提前拦截无效组合。
+      ``verify_super_resolution_backend`` 提前拦截无效组合。
 
     未来计划:Real-ESRGAN 等其它算法、多倍率(2x/4x)、Tensor 后端实现。
     """
@@ -173,7 +173,7 @@ class SuperResolutionAlgorithm(IAlgorithm):
         """验证超分算法配置。
 
         Phase D.1.1 — 非 ONNX backend 不支持 SR,直接 fail validation。
-        正常路径应该在 ``_process_planning._verify_super_resolution_backend``
+        正常路径应该在 ``planning.verify_super_resolution_backend``
         提前拦截;此处是第二道防线,防止单独调用算法时静默 no-op。
         """
         if self._is_paddlegan_vsr():

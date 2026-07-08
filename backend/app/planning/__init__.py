@@ -39,6 +39,12 @@ from app.planning.workflow_steps import (
     resolve_processing_steps,
     resolve_workflow_and_output_fps,
 )
+from app.planning.workflow_validation import (
+    get_onnx_model_name,
+    validate_onnx_models_for_workflow,
+    verify_model_availability,
+    verify_super_resolution_backend,
+)
 
 __all__ = [
     "ResumeDecision",
@@ -65,4 +71,8 @@ __all__ = [
     "resolve_primary_algorithm",
     "resolve_processing_steps",
     "resolve_workflow_and_output_fps",
+    "get_onnx_model_name",
+    "validate_onnx_models_for_workflow",
+    "verify_model_availability",
+    "verify_super_resolution_backend",
 ]
