@@ -5,7 +5,8 @@ import { useEnvStore } from '@/stores/env'
 import { usePresetStore } from '@/stores/preset'
 import { useEnvironmentChecker } from './useEnvironmentChecker'
 import { usePresetSync } from './usePresetSync'
-import { disposeRunner, useTaskOrchestrator } from './useTaskOrchestrator'
+import { disposeRunner } from './taskOrchestratorRuntime'
+import { useTaskOrchestrator } from './useTaskOrchestrator'
 
 export function useBootstrap() {
   const envStore = useEnvStore()

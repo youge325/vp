@@ -30,7 +30,8 @@ vi.mock('@/lib/ipc/endpoints/task', () => ({
   },
 }))
 
-import { disposeRunner, useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
+import { disposeRunner } from '@/composables/app/taskOrchestratorRuntime'
+import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { useMediaStore } from '@/stores/media'
 import { createMediaItem } from '@/services/media/factory'
 import { normalizeOutputDir } from '@/services/preset/normalize'
