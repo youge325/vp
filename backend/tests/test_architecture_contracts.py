@@ -1186,12 +1186,27 @@ def test_encoder_helper_boundary_flags_local_segment_and_finalize_helpers(tmp_pa
     assert any("encoder helper" in issue for issue in issues), issues
 
 
-def test_encoder_segment_writer_boundary_flags_local_writer_lifecycle(tmp_path, monkeypatch) -> None:
+def test_encoder_helper_boundary_flags_obsolete_compatibility_entrypoint(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_encoder = tmp_path / "encoder.py"
     fake_encoder.write_text(
+        "from app.processing.streaming.encoder_worker import run_encoder_worker as _encoder_worker\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENCODER", fake_encoder, raising=False)
+    issues: list[str] = []
+
+    module._check_encoder_helper_boundary(issues)
+
+    assert any("obsolete encoder compatibility entrypoint" in issue for issue in issues), issues
+
+
+def test_encoder_segment_writer_boundary_flags_local_writer_lifecycle(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_worker = tmp_path / "encoder_worker.py"
+    fake_worker.write_text(
         "from pathlib import Path\n\n"
-        "def _encoder_worker():\n"
+        "def run_encoder_worker():\n"
         "    writer = ffmpeg.open_rawvideo_encoder(output_path='chunk.mp4')\n"
         "    writer.write_frame(frame)\n"
         "    writer.close()\n"
@@ -1199,7 +1214,7 @@ def test_encoder_segment_writer_boundary_flags_local_writer_lifecycle(tmp_path, 
         "    Path('chunk.mp4').unlink(missing_ok=True)\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(module, "ENCODER", fake_encoder, raising=False)
+    monkeypatch.setattr(module, "ENCODER_WORKER", fake_worker, raising=False)
     issues: list[str] = []
 
     module._check_encoder_segment_writer_boundary(issues)
