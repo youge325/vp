@@ -8,11 +8,7 @@ import pytest
 
 from app.cli import build_parser, cmd_check
 from app.cli.commands._process_validation import _load_json_arg, load_configs, load_runtime_configs
-from app.cli.defaults import (
-    _default_output_config,
-    _resolve_expected_output_frames,
-    _resolve_processing_steps,
-)
+from app.cli.defaults import _default_output_config
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import (
@@ -20,6 +16,8 @@ from app.planning import (
     build_signature,
     normalize_processing_steps,
     processing_steps_to_jsonable,
+    resolve_expected_output_frames as _resolve_expected_output_frames,
+    resolve_processing_steps as _resolve_processing_steps,
 )
 
 

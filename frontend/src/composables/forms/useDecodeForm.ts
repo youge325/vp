@@ -7,15 +7,15 @@ import {
   getVisibleDecoderProfiles,
 } from '@/services/preset/profile-picker'
 import {
-  resolveDecoderHwaccel,
-  seedProfileOptions,
-} from '@/services/preset/normalize'
+  fallbackUnavailableDecodeProfile,
+  selectDecodeProfile,
+} from '@/services/preset/profile-selection'
 import {
   getDecoderHwaccelDeviceOptions,
   resolveDecoderHwaccelDevice,
 } from '@/services/preset/decode-hardware'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
-import { getOptionValue, coerceOptionValue } from '@/services/preset/options'
+import { getOptionValue, coerceOptionValue, updateProfileOption } from '@/services/preset/options'
 import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
 import type { DecodeConfig } from '@/types/protocol'
 
@@ -53,15 +53,12 @@ export function useDecodeForm() {
       () => editorConfig.value.decodeConfig.decoder,
     ],
     ([checkResult, profile, mode]) => {
-      if (!checkResult || mode !== 'hardware' || (profile && profile.family !== 'software')) {
+      const fallback = checkResult ? fallbackUnavailableDecodeProfile(profile, mode) : null
+      if (!fallback) {
         return
       }
       patchDecode((config: DecodeConfig) => {
-        config.mode = 'software'
-        config.hwaccel = ''
-        config.hwaccelDevice = ''
-        config.decoder = 'software'
-        config.options = {}
+        Object.assign(config, fallback)
       })
     },
     { immediate: true },
@@ -71,20 +68,7 @@ export function useDecodeForm() {
     const allProfiles = getVisibleDecoderProfiles(envStore.env.checkResult, '')
     const profile = allProfiles.find((entry) => entry.name === profileName) ?? null
     patchDecode((config: DecodeConfig) => {
-      if (!profile || profile.family === 'software') {
-        config.mode = 'software'
-        config.hwaccel = ''
-        config.hwaccelDevice = ''
-        config.decoder = 'software'
-        config.options = {}
-        return
-      }
-      config.mode = 'hardware'
-      const hwaccel = resolveDecoderHwaccel(profile)
-      config.hwaccel = hwaccel
-      config.hwaccelDevice = resolveDecoderHwaccelDevice(profile, hwaccel)
-      config.decoder = profile.name
-      config.options = seedProfileOptions(profile, config.options)
+      Object.assign(config, selectDecodeProfile(profile, config.options))
     })
   }
 
@@ -107,7 +91,7 @@ export function useDecodeForm() {
 
   function setDecodeOption(name: string, value: CapabilityValue): void {
     patchDecode((config: DecodeConfig) => {
-      config.options = { ...config.options, [name]: value }
+      config.options = updateProfileOption(config.options, name, value)
     })
   }
 

@@ -1,7 +1,51 @@
 // pure: no Vue / no Pinia / no Tauri
-// 表单选项纯函数 — getOptionValue / coerceOptionValue。
+// 表单选项纯函数 — seed/get/update/coerce option values。
 
 import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
+
+type ProfileWithOptions = {
+  options: Array<{
+    name: string
+    defaultValue?: CapabilityValue | null
+    choices: Array<{ value: CapabilityValue }>
+    type: string
+  }>
+} | null
+
+export function seedProfileOptions(
+  profile: ProfileWithOptions,
+  currentOptions: Record<string, CapabilityValue> = {},
+): Record<string, CapabilityValue> {
+  if (!profile) {
+    return {}
+  }
+
+  const next: Record<string, CapabilityValue> = {}
+  for (const option of profile.options) {
+    if (option.name in currentOptions) {
+      next[option.name] = currentOptions[option.name] as CapabilityValue
+      continue
+    }
+    if (option.defaultValue != null) {
+      next[option.name] = option.defaultValue
+      continue
+    }
+    if (option.choices.length > 0) {
+      next[option.name] = option.choices[0]?.value ?? ''
+      continue
+    }
+    next[option.name] = option.type === 'boolean' ? false : ''
+  }
+  return next
+}
+
+export function updateProfileOption(
+  values: Record<string, CapabilityValue>,
+  name: string,
+  value: CapabilityValue,
+): Record<string, CapabilityValue> {
+  return { ...values, [name]: value }
+}
 
 export function getOptionValue(
   option: { name: string; defaultValue?: CapabilityValue | null; choices: Array<{ value: CapabilityValue }>; type: string },

@@ -1,6 +1,6 @@
 import pytest
 
-from app.cli.defaults import _resolve_processing_steps
+from app.planning import resolve_processing_steps as _resolve_processing_steps
 from app.cli.commands._process_planning import _verify_model_availability, _verify_super_resolution_backend
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import ProcessingStep, build_stage_plan

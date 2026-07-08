@@ -3,10 +3,15 @@
 
 import type { DecodeConfig, EncodeConfig } from '@/types/protocol'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { CapabilityValue } from '@/types/domain/capability'
 import { createDefaultDecodeConfig, createDefaultEncodeConfig } from './defaults'
-import { resolveDecoderHwaccel, resolveDecoderHwaccelDevice } from './decode-hardware'
 import { getVisibleDecoderProfiles, getVisibleEncoderProfiles } from './profile-picker'
+import { seedProfileOptions } from './options'
+import {
+  defaultRateControlValue,
+  encoderFamilyFromProfile,
+  selectDecodeProfile,
+  selectEncodeProfile,
+} from './profile-selection'
 import {
   hasRateControlModes,
   resolveRateControlForMode,
@@ -14,43 +19,6 @@ import {
 } from './rate-control'
 
 export { resolveDecoderHwaccel } from './decode-hardware'
-
-export function seedProfileOptions(
-  profile: { options: Array<{ name: string; defaultValue?: CapabilityValue | null; choices: Array<{ value: CapabilityValue }>; type: string }> } | null,
-  currentOptions: Record<string, CapabilityValue> = {},
-): Record<string, CapabilityValue> {
-  if (!profile) {
-    return {}
-  }
-
-  const next: Record<string, CapabilityValue> = {}
-  for (const option of profile.options) {
-    if (option.name in currentOptions) {
-      next[option.name] = currentOptions[option.name] as CapabilityValue
-      continue
-    }
-    if (option.defaultValue != null) {
-      next[option.name] = option.defaultValue
-      continue
-    }
-    if (option.choices.length > 0) {
-      next[option.name] = option.choices[0]?.value ?? ''
-      continue
-    }
-    next[option.name] = option.type === 'boolean' ? false : ''
-  }
-  return next
-}
-
-export function defaultRateControlValue(family: EncodeConfig['family']): EncodeConfig['rateControl'] {
-  if (family === 'nvidia') {
-    return { mode: 'cq', value: 23 }
-  }
-  if (family === 'intel') {
-    return { mode: 'qp', value: 23 }
-  }
-  return { mode: 'crf', value: 18 }
-}
 
 export function normalizeDecodeConfig(
   config: DecodeConfig,
@@ -68,24 +36,14 @@ export function normalizeDecodeConfig(
   const selectedName = config.mode === 'software' ? 'software' : config.decoder
   const matchedVisible = visibleProfiles.find((profile) => profile.name === selectedName) ?? null
   if (matchedVisible) {
-    if (matchedVisible.family === 'software') {
-      return {
-        mode: 'software',
-        hwaccel: '',
-        hwaccelDevice: '',
-        decoder: 'software',
-        options: {},
-      }
-    }
-
-    const hwaccel = resolveDecoderHwaccel(matchedVisible, config.hwaccel)
     return {
       ...config,
-      mode: 'hardware',
-      hwaccel,
-      hwaccelDevice: resolveDecoderHwaccelDevice(matchedVisible, hwaccel, config.hwaccelDevice),
-      decoder: matchedVisible.name,
-      options: seedProfileOptions(matchedVisible, config.options),
+      ...selectDecodeProfile(
+        matchedVisible,
+        config.options,
+        config.hwaccel,
+        config.hwaccelDevice,
+      ),
     }
   }
 
@@ -94,14 +52,9 @@ export function normalizeDecodeConfig(
     ? visibleProfiles.find((profile) => profile.family === currentProfile.family) ?? null
     : null
   if (remappedProfile && remappedProfile.family !== 'software') {
-    const hwaccel = resolveDecoderHwaccel(remappedProfile)
     return {
       ...config,
-      mode: 'hardware',
-      hwaccel,
-      hwaccelDevice: resolveDecoderHwaccelDevice(remappedProfile, hwaccel),
-      decoder: remappedProfile.name,
-      options: seedProfileOptions(remappedProfile, config.options),
+      ...selectDecodeProfile(remappedProfile, config.options),
     }
   }
 
@@ -128,15 +81,8 @@ export function normalizeEncodeConfig(
       }
     }
 
-    const family =
-      candidate.family === 'nvidia' || candidate.family === 'intel' ? candidate.family : 'cpu'
-    return {
-      ...config,
-      codec: candidate.name,
-      family,
-      rateControl: resolveRateControlForProfile(candidate) ?? defaultRateControlValue(family),
-      options: seedProfileOptions(candidate, config.options),
-    }
+    const family = encoderFamilyFromProfile(candidate.family)
+    return selectEncodeProfile(candidate, config, defaultRateControlValue(family)) ?? config
   }
 
   const normalizedRateControl =
@@ -148,10 +94,7 @@ export function normalizeEncodeConfig(
 
   return {
     ...config,
-    family:
-      matchedProfile.family === 'nvidia' || matchedProfile.family === 'intel'
-        ? matchedProfile.family
-        : 'cpu',
+    family: encoderFamilyFromProfile(matchedProfile.family),
     rateControl: normalizedRateControl,
     options: seedProfileOptions(matchedProfile, config.options),
   }

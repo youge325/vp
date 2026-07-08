@@ -16,8 +16,8 @@ import argparse
 from app.cli.commands._process_execution import execute_plan, finalize_and_emit
 from app.cli.commands._process_planning import build_plan
 from app.cli.commands._process_validation import ensure_input_and_ffmpeg, load_runtime_configs
-from app.cli.defaults import _resolve_primary_algorithm
 from app.errors import ProcessError, ResumeConflictError, TaskErrorCode
+from app.planning import resolve_primary_algorithm
 
 
 def cmd_process(args: argparse.Namespace) -> None:
@@ -62,7 +62,7 @@ def cmd_process(args: argparse.Namespace) -> None:
             {
                 "input_path": input_path,
                 "output_path": plan.output_path,
-                "algorithm": _resolve_primary_algorithm(configs.workflow_json),
+                "algorithm": resolve_primary_algorithm(configs.workflow_json),
                 "processing_steps": [step.algorithm_type for step in plan.processing_steps],
             }
         )

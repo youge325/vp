@@ -14,16 +14,16 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.cli.runtime_configs import RuntimeConfigs
-from app.cli.defaults import (
-    _model_path,
-    _processing_needs_interpolation,
-    _resolve_expected_output_frames,
-    _resolve_processing_steps,
-    _resolve_workflow_and_output_fps,
-)
+from app.cli.defaults import _model_path
 from app.config import settings
 from app.errors import TaskErrorCode, raise_error
-from app.planning import ProcessingStep
+from app.planning import (
+    ProcessingStep,
+    processing_needs_interpolation,
+    resolve_expected_output_frames,
+    resolve_processing_steps,
+    resolve_workflow_and_output_fps,
+)
 from app.processing.streaming.metrics import PipelineMetrics
 from app.protocol.reporter import CliProgressReporter
 from app.utils.ffmpeg import FFmpegWrapper
@@ -127,7 +127,7 @@ def _verify_model_availability(
                 ),
             )
 
-    if _processing_needs_interpolation(processing_steps):
+    if processing_needs_interpolation(processing_steps):
         if tensor_backend_name == "onnx":
             try:
                 _validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
@@ -280,7 +280,7 @@ def build_plan(
 ) -> ProcessingPlan:
     """Compose the full ``ProcessingPlan`` for execution."""
     workflow_config = configs.workflow_json
-    processing_steps = _resolve_processing_steps(workflow_config)
+    processing_steps = resolve_processing_steps(workflow_config)
     tensor_backend_name = configs.workflow.interpolation.tensor_backend or args.backend
 
     _verify_super_resolution_backend(workflow_config, tensor_backend_name)
@@ -290,14 +290,14 @@ def build_plan(
 
     # Phase D.6.3 — multi 写回 + final_output_fps 推导收敛到 defaults helper,
     # 与 cmd_inspect_output 共享一份"不 mutate 原 dict"的语义。
-    workflow_config, final_output_fps = _resolve_workflow_and_output_fps(
+    workflow_config, final_output_fps = resolve_workflow_and_output_fps(
         workflow_config,
         ffmpeg,
         input_path,
     )
     configs = configs.with_workflow_json(workflow_config)
 
-    expected_output_frames = _resolve_expected_output_frames(
+    expected_output_frames = resolve_expected_output_frames(
         ffmpeg=ffmpeg,
         input_path=input_path,
         workflow_config=workflow_config,

@@ -13,7 +13,7 @@ from app.cli.commands.info import cmd_info
 from app.cli.commands.inspect_output import cmd_inspect_output
 from app.cli.commands.process import cmd_process
 from app.cli.commands.stage_worker import cmd_stage_worker
-from app.cli.defaults import PROCESS_ORDER_MAP
+from app.planning import PROCESS_ORDER_MAP
 
 
 def _add_shared_planning_args(parser: argparse.ArgumentParser) -> None:

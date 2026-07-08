@@ -30,6 +30,15 @@ from app.planning.stage_plan import (
     estimate_encoded_output_frames,
     resolve_video_info,
 )
+from app.planning.workflow_steps import (
+    PROCESS_LABEL_MAP,
+    PROCESS_ORDER_MAP,
+    processing_needs_interpolation,
+    resolve_expected_output_frames,
+    resolve_primary_algorithm,
+    resolve_processing_steps,
+    resolve_workflow_and_output_fps,
+)
 
 __all__ = [
     "ResumeDecision",
@@ -49,4 +58,11 @@ __all__ = [
     "build_stage_plan",
     "estimate_encoded_output_frames",
     "resolve_video_info",
+    "PROCESS_LABEL_MAP",
+    "PROCESS_ORDER_MAP",
+    "processing_needs_interpolation",
+    "resolve_expected_output_frames",
+    "resolve_primary_algorithm",
+    "resolve_processing_steps",
+    "resolve_workflow_and_output_fps",
 ]
