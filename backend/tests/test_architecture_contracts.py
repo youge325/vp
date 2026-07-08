@@ -318,6 +318,24 @@ def test_frontend_enhance_field_split_boundary_flags_aggregator_rule_leaks(tmp_p
     assert any("enhance field split rule" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_projection_boundary_flags_algorithm_and_view_leaks(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_bindings = tmp_path / "enhance-form-bindings.ts"
+    fake_bindings.write_text(
+        "import { createAlgorithmLens } from '@/composables/forms/enhance-lens'\n"
+        "import { buildEnhanceViewModel } from '@/services/preset/enhance-view-model'\n"
+        "const current = createAlgorithmLens(all, selected, backend)\n"
+        "const viewModel = buildEnhanceViewModel(input)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_FORM_BINDINGS", fake_bindings)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_projection_boundary(issues)
+
+    assert any("enhance projection rule" in issue for issue in issues), issues
+
+
 def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_processor = tmp_path / "processor.py"
@@ -411,6 +429,26 @@ def test_stage_worker_runtime_boundary_flags_local_io_and_runtime_helpers(tmp_pa
     module._check_stage_worker_runtime_boundary(issues)
 
     assert any("stage worker runtime rule" in issue for issue in issues), issues
+
+
+def test_stage_worker_execution_boundary_flags_local_stage_loops(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_stage_worker = tmp_path / "stage_worker.py"
+    fake_stage_worker.write_text(
+        "def _run_sequence_stage():\n"
+        "    pass\n\n"
+        "def _run_interpolation_stage():\n"
+        "    pass\n\n"
+        "def _run_single_frame_stage():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_WORKER", fake_stage_worker)
+    issues: list[str] = []
+
+    module._check_stage_worker_execution_boundary(issues)
+
+    assert any("stage worker execution rule" in issue for issue in issues), issues
 
 
 def test_streaming_pipeline_rule_boundary_flags_local_pipeline_rules(tmp_path, monkeypatch) -> None:
