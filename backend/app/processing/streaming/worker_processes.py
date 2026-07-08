@@ -11,12 +11,6 @@ import subprocess
 
 from app.errors import ProcessError, TaskErrorCode
 from app.processing.streaming.worker_plans import StageWorkerPlan
-from app.processing.streaming.worker_process_events import parse_stage_event_line, read_worker_stderr
-from app.processing.streaming.worker_process_io import (
-    close_pipe,
-    drain_final_worker_output,
-    write_decoded_frames_to_worker,
-)
 from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
 
@@ -90,11 +84,6 @@ def wait_for_workers(handles: list[WorkerHandle], error_queue: queue.Queue[BaseE
 
 __all__ = [
     "WorkerHandle",
-    "close_pipe",
-    "drain_final_worker_output",
-    "parse_stage_event_line",
-    "read_worker_stderr",
     "spawn_stage_workers",
     "wait_for_workers",
-    "write_decoded_frames_to_worker",
 ]

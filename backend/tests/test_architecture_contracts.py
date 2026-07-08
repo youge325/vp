@@ -592,6 +592,38 @@ def test_worker_processes_event_io_boundary_flags_local_event_and_rawvideo_helpe
     assert any("worker process event/io helper" in issue for issue in issues), issues
 
 
+def test_worker_processes_event_io_boundary_flags_compatibility_exports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_processes = tmp_path / "worker_processes.py"
+    fake_processes.write_text(
+        "from app.processing.streaming.worker_process_events import parse_stage_event_line, read_worker_stderr\n"
+        "from app.processing.streaming.worker_process_io import (\n"
+        "    close_pipe,\n"
+        "    drain_final_worker_output,\n"
+        "    write_decoded_frames_to_worker,\n"
+        ")\n\n"
+        "__all__ = [\n"
+        '    "WorkerHandle",\n'
+        '    "close_pipe",\n'
+        '    "drain_final_worker_output",\n'
+        '    "parse_stage_event_line",\n'
+        '    "read_worker_stderr",\n'
+        '    "spawn_stage_workers",\n'
+        '    "wait_for_workers",\n'
+        '    "write_decoded_frames_to_worker",\n'
+        "]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKER_PROCESSES", fake_processes)
+    issues: list[str] = []
+
+    module._check_worker_processes_event_io_boundary(issues)
+
+    assert any("event helper import" in issue for issue in issues), issues
+    assert any("io helper import" in issue for issue in issues), issues
+    assert any("helper __all__ export" in issue for issue in issues), issues
+
+
 def test_worker_process_helper_import_boundary_flags_helper_imports_from_entrypoint(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_chunk_runtime = tmp_path / "stage_file_chunk_runtime.py"

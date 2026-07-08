@@ -15,11 +15,8 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import EncodedFrame
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import StageWorkerPlan
-from app.processing.streaming.worker_processes import (
-    drain_final_worker_output,
-    parse_stage_event_line,
-    read_worker_stderr,
-)
+from app.processing.streaming.worker_process_events import parse_stage_event_line, read_worker_stderr
+from app.processing.streaming.worker_process_io import drain_final_worker_output
 
 
 def test_parse_stage_event_line_returns_json_event_only_for_prefixed_lines() -> None:

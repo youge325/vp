@@ -1214,6 +1214,19 @@ def _check_worker_processes_event_io_boundary(issues: list[str]) -> None:
         "read_rgb_frame": r"\bread_rgb_frame\b",
         "write_rgb_frame": r"\bwrite_rgb_frame\b",
         "boundary_schedule_for_stage_plan": r"\bboundary_schedule_for_stage_plan\b",
+        "event helper import": (
+            r"^from\s+app\.processing\.streaming\.worker_process_events\s+import\s+"
+            r"[^\n]*(?:parse_stage_event_line|read_worker_stderr)\b"
+        ),
+        "io helper import": (
+            r"^from\s+app\.processing\.streaming\.worker_process_io\s+import\s*\([\s\S]*\b"
+            r"(?:close_pipe|drain_final_worker_output|write_decoded_frames_to_worker)\b"
+        ),
+        "helper __all__ export": (
+            r"__all__\s*=\s*\[[\s\S]*\""
+            r"(?:close_pipe|drain_final_worker_output|parse_stage_event_line|read_worker_stderr|"
+            r"write_decoded_frames_to_worker)\""
+        ),
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
