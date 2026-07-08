@@ -3,7 +3,7 @@
 
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { InferenceEngine, TensorBackend } from '@/types/domain/workflow'
-import { pickBackendSupportedAlgorithmName } from './enhance-workflow-lookup'
+import { findInterpolationAlgorithm, pickBackendSupportedAlgorithmName } from './enhance-workflow-lookup'
 
 export function pickDefaultEngine(
   checkResult: EnvironmentCheckResult | null,
@@ -24,7 +24,7 @@ export function pickDefaultInterpolationModel(
   checkResult: EnvironmentCheckResult | null,
   algorithm: string,
 ): string {
-  return checkResult?.interpolationAlgorithms?.find((a) => a.name === algorithm)?.models?.[0] ?? '4.25'
+  return findInterpolationAlgorithm(checkResult, algorithm)?.models?.[0] ?? '4.25'
 }
 
 export function pickDefaultSuperResolutionAlgorithm(

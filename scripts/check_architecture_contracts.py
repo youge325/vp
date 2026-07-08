@@ -674,6 +674,7 @@ def _check_frontend_enhance_default_pickers_boundary(issues: list[str]) -> None:
     forbidden_patterns = {
         "backend compatibility helper": r"^\s*function\s+backendCompatible\b",
         "backend support direct helper": r"\balgorithmSupportsBackend\b",
+        "direct interpolation lookup": r"\binterpolationAlgorithms\?\.\s*find\s*\(",
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
