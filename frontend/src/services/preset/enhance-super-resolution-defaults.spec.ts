@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultWorkflowConfig } from './defaults'
+import { createDefaultWorkflowConfig } from './workflow-defaults'
 import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolution-defaults'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceModelSelection } from './enhance-model-selection'
-import { createDefaultWorkflowConfig } from './defaults'
+import { createDefaultWorkflowConfig } from './workflow-defaults'
 import type { AlgorithmInfo } from '@/types/domain/env'
 
 const interpolationAlgorithm: AlgorithmInfo = {

@@ -1,7 +1,7 @@
 import { computed, reactive } from 'vue'
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultWorkflowConfig } from '@/services/preset/defaults'
+import { createDefaultWorkflowConfig } from '@/services/preset/workflow-defaults'
 import { createEnhanceViewBindings } from './enhance-view-bindings'
 import type { AlgorithmInfo } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'

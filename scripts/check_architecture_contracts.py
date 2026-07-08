@@ -955,6 +955,7 @@ def _check_frontend_defaults_workflow_boundary(issues: list[str]) -> None:
     text = _read(PRESET_DEFAULTS)
     forbidden_patterns = {
         "enhance-rules import": r"from\s+['\"]\.\/enhance-rules['\"]",
+        "workflow default re-export": r"\bexport\s+\{\s*createDefaultWorkflowConfig\s*\}",
         "workflow engine type import": r"\bInferenceEngine\b",
         "default interpolation picker": r"\bpickDefaultInterpolationAlgorithm\b",
         "default super-resolution picker": r"\bpickDefaultSuperResolutionAlgorithm\b",

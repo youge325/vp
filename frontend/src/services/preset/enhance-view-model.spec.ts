@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceViewModel } from './enhance-view-model'
-import { createDefaultWorkflowConfig } from './defaults'
+import { createDefaultWorkflowConfig } from './workflow-defaults'
 import type { AlgorithmInfo } from '@/types/domain/env'
 
 const rife: AlgorithmInfo = {

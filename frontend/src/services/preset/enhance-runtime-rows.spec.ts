@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceRuntimeRows } from './enhance-runtime-rows'
-import { createDefaultWorkflowConfig } from './defaults'
+import { createDefaultWorkflowConfig } from './workflow-defaults'
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
 import type { RuntimeMetricEstimate } from '@/services/model-runtime-estimates'
 

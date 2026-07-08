@@ -1,7 +1,7 @@
 import { computed, reactive } from 'vue'
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultWorkflowConfig } from '@/services/preset/defaults'
+import { createDefaultWorkflowConfig } from '@/services/preset/workflow-defaults'
 import { createEnhanceScalarFieldBindings } from './enhance-scalar-field-bindings'
 import type { WorkflowConfig } from '@/types/protocol'
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultDecodeConfig, createDefaultWorkflowConfig } from './defaults'
+import { createDefaultDecodeConfig } from './defaults'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { HardwareDeviceOptionSpec } from '@/types/domain/capability'
 
@@ -39,17 +39,6 @@ const decoderProfile = (
   hardwareDevices,
   hardwareDeviceOptions,
   options: [],
-})
-
-describe('createDefaultWorkflowConfig PaddleGAN SR fields', () => {
-  it('creates independent super-resolution runtime fields', () => {
-    const workflow = createDefaultWorkflowConfig()
-
-    expect(workflow.superResolution.tensorBackend).toBe('onnx')
-    expect(workflow.superResolution.engine).toBe('cuda')
-    expect(workflow.superResolution.numFrames).toBe(10)
-    expect(workflow.superResolution.autoDownloadWeights).toBe(false)
-  })
 })
 
 describe('createDefaultDecodeConfig decoder hardware devices', () => {

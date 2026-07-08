@@ -1390,6 +1390,21 @@ def test_frontend_defaults_workflow_boundary_flags_local_hydration_rules(tmp_pat
     assert any("workflow default rule" in issue for issue in issues), issues
 
 
+def test_frontend_defaults_workflow_boundary_flags_workflow_default_reexport(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_defaults = tmp_path / "defaults.ts"
+    fake_defaults.write_text(
+        "import { createDefaultWorkflowConfig } from './workflow-defaults'\nexport { createDefaultWorkflowConfig }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PRESET_DEFAULTS", fake_defaults)
+    issues: list[str] = []
+
+    module._check_frontend_defaults_workflow_boundary(issues)
+
+    assert any("workflow default rule" in issue for issue in issues), issues
+
+
 def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(
