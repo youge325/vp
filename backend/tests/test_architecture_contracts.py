@@ -141,6 +141,22 @@ def test_cli_defaults_planning_boundary_flags_model_path_helper(tmp_path, monkey
     assert any("model path helper" in issue for issue in issues), issues
 
 
+def test_backend_tests_private_cli_defaults_boundary_flags_private_default_import(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_tests = tmp_path / "tests"
+    fake_tests.mkdir()
+    (fake_tests / "test_cli.py").write_text(
+        "from app.cli.defaults import _default_output_config\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "BACKEND_TESTS", fake_tests, raising=False)
+    issues: list[str] = []
+
+    module._check_backend_test_private_cli_defaults_boundary(issues)
+
+    assert any("private CLI defaults import" in issue for issue in issues), issues
+
+
 def test_enhance_form_workflow_rule_boundary_flags_mutation_leaks(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_form = tmp_path / "useEnhanceForm.ts"

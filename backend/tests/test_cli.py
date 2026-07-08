@@ -8,7 +8,6 @@ import pytest
 
 from app.cli import build_parser, cmd_check
 from app.cli.commands._process_validation import load_runtime_configs
-from app.cli.defaults import _default_output_config
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import (
@@ -320,15 +319,14 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
     assert typed_signature == legacy_signature
 
 
-def test_default_output_config_includes_segment_frames_and_json_override():
-    args = argparse.Namespace(output_dir="D:/output")
-    config = _default_output_config(args)
-    configs = load_runtime_configs(
+def test_runtime_output_config_includes_segment_frames_and_json_override():
+    default_configs = load_runtime_configs(_make_runtime_args(output_dir="D:/output"))
+    override_configs = load_runtime_configs(
         _make_runtime_args(output_dir="D:/output", output_config_json='{"segmentFrames": 240}')
     )
 
-    assert config["segmentFrames"] == 1000
-    assert configs.output_json["segmentFrames"] == 240
+    assert default_configs.output_json["segmentFrames"] == 1000
+    assert override_configs.output_json["segmentFrames"] == 240
 
 
 def test_resolve_expected_output_frames_uses_input_frames_for_format_conversion():
