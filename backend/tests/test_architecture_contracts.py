@@ -809,6 +809,22 @@ def test_processor_stream_aggregator_boundary_flags_local_stream_loops(tmp_path,
     assert any("processor stream rule" in issue and "processor_streams.py" in issue for issue in issues), issues
 
 
+def test_processor_stream_aggregator_boundary_flags_obsolete_compatibility_barrel(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_streams = tmp_path / "processor_streams.py"
+    fake_streams.write_text(
+        '"""Compatibility exports for queue-driven processor stream loops."""\n\n'
+        "from app.processing.streaming.processor_stream_single import process_single_frame_stream\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PROCESSOR_STREAMS", fake_streams)
+    issues: list[str] = []
+
+    module._check_processor_stream_aggregator_boundary(issues)
+
+    assert any("obsolete processor stream aggregator" in issue for issue in issues), issues
+
+
 def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "stage_file_pipeline.py"
