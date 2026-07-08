@@ -14,7 +14,7 @@ export function buildProfileOptions(profiles: readonly Pick<CodecProfileSpec, 'n
   return profiles.map((profile) => ({ value: profile.name, label: profile.label }))
 }
 
-export function buildContainerOptions(containers: readonly string[]): SelectOption[] {
+function buildContainerOptions(containers: readonly string[]): SelectOption[] {
   return containers.map((value) => ({ value, label: value.toUpperCase() }))
 }
 
