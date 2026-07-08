@@ -1495,6 +1495,8 @@ def _check_pipeline_dispatch_runtime_boundary(issues: list[str]) -> None:
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
             issues.append(f"pipeline dispatch runtime `{label}` remains in {_rel(PIPELINE_DISPATCH)}")
+    if len(re.findall(r"\bemit_resume_status_event\s*\(", text)) > 1:
+        issues.append(f"pipeline dispatch runtime duplicate resume status event remains in {_rel(PIPELINE_DISPATCH)}")
 
 
 def _check_encoder_helper_boundary(issues: list[str]) -> None:
