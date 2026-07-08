@@ -672,7 +672,15 @@ def _check_frontend_enhance_default_selection_split_boundary(issues: list[str]) 
 
 
 def _check_frontend_enhance_default_pickers_boundary(issues: list[str]) -> None:
+    if not ENHANCE_DEFAULT_PICKERS.exists():
+        return
     text = _read(ENHANCE_DEFAULT_PICKERS)
+    if "Compatibility barrel" in text or re.search(
+        r"^\s*export\s+\{[\s\S]*?\}\s+from\s+['\"]\./enhance-(?:algorithm|engine|metadata)-defaults['\"]",
+        text,
+        re.MULTILINE,
+    ):
+        issues.append(f"obsolete enhance default pickers barrel remains in {_rel(ENHANCE_DEFAULT_PICKERS)}")
     forbidden_patterns = {
         "backend compatibility helper": r"^\s*function\s+backendCompatible\b",
         "backend support direct helper": r"\balgorithmSupportsBackend\b",
