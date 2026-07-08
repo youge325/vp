@@ -549,6 +549,21 @@ def _check_frontend_enhance_field_split_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_frontend_enhance_projection_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_FORM_BINDINGS)
+    forbidden_patterns = {
+        "enhance lens import": r"from\s+['\"]@/composables/forms/enhance-lens['\"]",
+        "enhance view-model import": r"from\s+['\"]@/services/preset/enhance-view-model['\"]",
+        "createAlgorithmLens": r"\bcreateAlgorithmLens\b",
+        "buildEnhanceViewModel": r"\bbuildEnhanceViewModel\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(
+                f"enhance projection rule `{label}` leaked into form binding assembly: {_rel(ENHANCE_FORM_BINDINGS)}"
+            )
+
+
 def _check_frontend_enhance_option_boundary(issues: list[str]) -> None:
     text = _read(ENHANCE_VIEW)
     forbidden_patterns = {
@@ -671,6 +686,20 @@ def _check_stage_file_pipeline_chunk_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_stage_worker_execution_boundary(issues: list[str]) -> None:
+    text = _read(STAGE_WORKER)
+    forbidden_patterns = {
+        "_run_sequence_stage": r"^\s*def\s+_run_sequence_stage\b",
+        "_run_interpolation_stage": r"^\s*def\s+_run_interpolation_stage\b",
+        "_run_single_frame_stage": r"^\s*def\s+_run_single_frame_stage\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(
+                f"stage worker execution rule `{label}` remains in backend/app/processing/streaming/stage_worker.py"
+            )
+
+
 def _check_streaming_pipeline_rule_boundary(issues: list[str]) -> None:
     text = _read(STREAMING_PIPELINE)
     forbidden_patterns = {
@@ -736,6 +765,7 @@ def main() -> int:
         _check_frontend_enhance_binding_boundary(issues)
         _check_frontend_enhance_field_binding_boundary(issues)
         _check_frontend_enhance_field_split_boundary(issues)
+        _check_frontend_enhance_projection_boundary(issues)
         _check_frontend_enhance_option_boundary(issues)
         _check_frontend_io_view_option_boundary(issues)
         _check_frontend_io_form_rule_boundary(issues)
@@ -743,6 +773,7 @@ def main() -> int:
         _check_worker_pipeline_process_boundary(issues)
         _check_worker_pipeline_file_boundary(issues)
         _check_stage_file_pipeline_chunk_boundary(issues)
+        _check_stage_worker_execution_boundary(issues)
         _check_streaming_pipeline_rule_boundary(issues)
         _check_processor_algorithm_boundary(issues)
         _check_processor_stage_execution_boundary(issues)
