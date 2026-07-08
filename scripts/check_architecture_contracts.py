@@ -574,11 +574,16 @@ def _check_frontend_enhance_projection_boundary(issues: list[str]) -> None:
 def _check_frontend_enhance_option_boundary(issues: list[str]) -> None:
     text = _read(ENHANCE_VIEW)
     forbidden_patterns = {
+        "enhance-options import": r"from\s+['\"]@/services/preset/enhance-options['\"]",
+        "gpu capabilities import": r"from\s+['\"]@/composables/selectors/useGpuCapabilities['\"]",
         "modelOptionLabel import": r"from\s+['\"]@/services/model-metrics['\"]",
         "gpu-label import": r"from\s+['\"]@/config/gpu-labels['\"]",
         "FPS_MODE_OPTIONS": r"\bconst\s+FPS_MODE_OPTIONS\b",
         "MULTI_OPTIONS": r"\bconst\s+MULTI_OPTIONS\b",
         "PROCESS_ORDER_OPTIONS": r"\bconst\s+PROCESS_ORDER_OPTIONS\b",
+        "enhance option builder": r"\bbuild(?:Backend|Engine|Algorithm|Model|OnnxModel|Profile)Options\s*\(",
+        "enhance value converter": r"\bto(?:TensorBackend|InferenceEngine|FpsMode|ProcessOrder|NumberOption)\s*\(",
+        "enhance option setter": r"^\s*function\s+set(?:Interpolation|SuperResolution|Fps|ProcessOrder)\b",
         "findDetail": r"\bfunction\s+findDetail\b",
         "TensorBackend cast": r"\bas\s+TensorBackend\b",
         "InferenceEngine cast": r"\bas\s+InferenceEngine\b",
@@ -753,6 +758,25 @@ def _check_streaming_pipeline_rule_boundary(issues: list[str]) -> None:
             issues.append(f"streaming pipeline rule `{label}` remains in backend/app/processing/streaming/pipeline.py")
 
 
+def _check_streaming_pipeline_raw_boundary(issues: list[str]) -> None:
+    text = _read(STREAMING_PIPELINE)
+    forbidden_patterns = {
+        "queue import": r"^\s*import\s+queue\b",
+        "threading import": r"^\s*import\s+threading\b",
+        "queue allocation": r"\bqueue\.Queue\b",
+        "thread allocation": r"\bthreading\.Thread\b",
+        "stop event allocation": r"\bthreading\.Event\b",
+        "_encoder_worker": r"\b_encoder_worker\b",
+        "encoder_thread": r"\bencoder_thread\b",
+        "encode_queue": r"\bencode_queue\s*=",
+        "error_queue": r"\berror_queue\s*=",
+        "stop_event": r"\bstop_event\s*=",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"raw pipeline runtime `{label}` remains in backend/app/processing/streaming/pipeline.py")
+
+
 def _check_processor_algorithm_boundary(issues: list[str]) -> None:
     text = _read(PROCESSOR)
     forbidden_patterns = {
@@ -848,6 +872,7 @@ def main() -> int:
         _check_stage_file_pipeline_chunk_boundary(issues)
         _check_stage_worker_execution_boundary(issues)
         _check_streaming_pipeline_rule_boundary(issues)
+        _check_streaming_pipeline_raw_boundary(issues)
         _check_processor_algorithm_boundary(issues)
         _check_processor_stage_execution_boundary(issues)
         _check_processor_stream_boundary(issues)

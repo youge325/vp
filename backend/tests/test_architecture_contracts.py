@@ -180,8 +180,12 @@ def test_enhance_view_option_boundary_flags_view_local_option_rules(tmp_path, mo
     module = _load_module()
     fake_view = tmp_path / "EnhanceModuleView.vue"
     fake_view.write_text(
+        "import { buildBackendOptions, toTensorBackend } from '@/services/preset/enhance-options'\n"
+        "import { useGpuCapabilities } from '@/composables/selectors/useGpuCapabilities'\n"
         "import { modelOptionLabel } from '@/services/model-metrics'\n"
         "const FPS_MODE_OPTIONS = []\n"
+        "const options = buildBackendOptions(backends)\n"
+        "function setInterpolationBackend(value) { form.interpolationBackend = toTensorBackend(value) }\n"
         "function findDetail(details, name) { return details.find((detail) => detail.name === name) }\n"
         "form.interpolationBackend = value as TensorBackend\n",
         encoding="utf-8",
@@ -561,6 +565,28 @@ def test_streaming_pipeline_rule_boundary_flags_local_pipeline_rules(tmp_path, m
     module._check_streaming_pipeline_rule_boundary(issues)
 
     assert any("streaming pipeline rule" in issue for issue in issues), issues
+
+
+def test_streaming_pipeline_raw_boundary_flags_local_runtime_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "pipeline.py"
+    fake_pipeline.write_text(
+        "import queue\n"
+        "import threading\n"
+        "from app.processing.streaming.encoder import _encoder_worker\n\n"
+        "def _run_streaming_pipeline():\n"
+        "    encode_queue = queue.Queue(maxsize=8)\n"
+        "    error_queue = queue.Queue()\n"
+        "    stop_event = threading.Event()\n"
+        "    encoder_thread = threading.Thread(target=_encoder_worker)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STREAMING_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_streaming_pipeline_raw_boundary(issues)
+
+    assert any("raw pipeline runtime" in issue for issue in issues), issues
 
 
 def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:

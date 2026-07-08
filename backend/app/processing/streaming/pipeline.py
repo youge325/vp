@@ -7,8 +7,6 @@ segmented output. Public entry point: :func:`process_video_streaming`.
 
 from __future__ import annotations
 
-import queue
-import threading
 from typing import Any, Callable
 
 from app.errors import ResumeConflictError
@@ -23,20 +21,15 @@ from app.planning import (
     normalize_processing_steps,
     resolve_video_info,
 )
-from app.processing.streaming.encoder import _encoder_worker, _finalize_segmented_output
+from app.processing.streaming.encoder import _finalize_segmented_output
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_rules import (
     build_config_snapshot as _build_config_snapshot,
     resolved_output_dimensions as _resolved_output_dimensions,
-    resolved_stream_fps as _resolved_stream_fps,
     should_use_stage_file_pipeline as _should_use_stage_file_pipeline,
     stage_file_resume_source_frames as _stage_file_resume_source_frames,
 )
-from app.processing.streaming.queues import (
-    EncodedFrame,
-    SegmentBoundary,
-    StreamEnd,
-)
+from app.processing.streaming.pipeline_raw import run_raw_streaming_pipeline
 from app.processing.streaming.stage_file_pipeline import run_stage_file_pipeline
 from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
 from app.protocol import ndjson
@@ -208,72 +201,32 @@ def _run_streaming_pipeline(
             metrics=metrics,
         )
 
-    encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object] = queue.Queue(maxsize=8)
-    error_queue: queue.Queue[BaseException] = queue.Queue()
-    stop_event = threading.Event()
-
-    encoder_thread = threading.Thread(
-        target=_encoder_worker,
-        name="vp-encoder",
-        kwargs={
-            "decode_queue": queue.Queue(maxsize=1),
-            "encode_queue": encode_queue,
-            "error_queue": error_queue,
-            "stop_event": stop_event,
-            "metrics": metrics,
-            "ffmpeg": ffmpeg,
-            "encode_config": encode_config,
-            "manifest": manifest,
-            "signature": signature,
-            "width": output_width,
-            "height": output_height,
-            "fps": _resolved_stream_fps(video_info["source_fps"], stage_plan),
-            "output_fps": output_fps,
-            "segment_frames": segment_frames,
-            "resume_state": resume_state,
-            "output_path": output_path,
-            "encode_progress_callback": encode_progress_callback,
-        },
-        daemon=True,
-    )
-
     _emit_resume_status_event(
         resume_state=resume_state,
         total_output_frames=stage_plan.total_encoded_frames,
     )
 
-    if encode_progress_callback is not None and resume_state.completed_output_frames > 0:
-        encode_progress_callback(
-            resume_state.completed_output_frames,
-            None,
-            None,
-            None,
-            "continue",
-        )
-
-    encoder_thread.start()
-    run_stage_worker_pipeline(
+    return run_raw_streaming_pipeline(
         ffmpeg=ffmpeg,
         input_path=input_path,
         decode_config=decode_config,
+        encode_config=encode_config,
+        manifest=manifest,
+        signature=signature,
         stage_plan=stage_plan,
         tensor_backend_name=tensor_backend_name,
         progress_callbacks=progress_callbacks,
         video_info=video_info,
+        output_width=output_width,
+        output_height=output_height,
         resume_state=resume_state,
-        encode_queue=encode_queue,
-        error_queue=error_queue,
-        stop_event=stop_event,
+        segment_frames=segment_frames,
+        output_path=output_path,
+        output_fps=output_fps,
+        encode_progress_callback=encode_progress_callback,
         metrics=metrics,
+        stage_worker_runner=run_stage_worker_pipeline,
     )
-    encoder_thread.join()
-
-    if not error_queue.empty():
-        raise error_queue.get()
-
-    del signature
-    completed_segments = manifest.read_completed_segments()
-    return sum(segment.frame_count for segment in completed_segments)
 
 
 def _emit_resume_status_event(*, resume_state: ResumeState, total_output_frames: int) -> None:
