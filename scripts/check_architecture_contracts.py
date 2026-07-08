@@ -50,6 +50,7 @@ CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_validation.py"
 MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
+PRESET_NORMALIZE = FRONTEND_SRC / "services" / "preset" / "normalize.ts"
 ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
 ENHANCE_DEFAULT_SELECTION = FRONTEND_SRC / "services" / "preset" / "enhance-default-selection.ts"
 ENHANCE_WORKFLOW = FRONTEND_SRC / "services" / "preset" / "enhance-workflow.ts"
@@ -972,6 +973,16 @@ def _check_frontend_defaults_workflow_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_frontend_preset_normalize_boundary(issues: list[str]) -> None:
+    text = _read(PRESET_NORMALIZE)
+    forbidden_patterns = {
+        "decoder hardware helper re-export": r"\bexport\s+\{\s*resolveDecoderHwaccel\s*\}\s+from\s+['\"]\.\/decode-hardware['\"]",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(f"preset normalize boundary `{label}` remains in {_rel(PRESET_NORMALIZE)}")
+
+
 def _check_frontend_encode_output_binding_boundary(issues: list[str]) -> None:
     text = _read(ENCODE_OUTPUT_BINDINGS)
     forbidden_patterns = {
@@ -1488,6 +1499,7 @@ def main() -> int:
         _check_frontend_io_profile_state_boundary(issues)
         _check_frontend_decode_hardware_binding_boundary(issues)
         _check_frontend_defaults_workflow_boundary(issues)
+        _check_frontend_preset_normalize_boundary(issues)
         _check_frontend_encode_output_binding_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)

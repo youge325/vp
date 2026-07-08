@@ -1405,6 +1405,21 @@ def test_frontend_defaults_workflow_boundary_flags_workflow_default_reexport(tmp
     assert any("workflow default rule" in issue for issue in issues), issues
 
 
+def test_frontend_preset_normalize_boundary_flags_decoder_hardware_reexport(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_normalize = tmp_path / "normalize.ts"
+    fake_normalize.write_text(
+        "export { resolveDecoderHwaccel } from './decode-hardware'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PRESET_NORMALIZE", fake_normalize)
+    issues: list[str] = []
+
+    module._check_frontend_preset_normalize_boundary(issues)
+
+    assert any("preset normalize boundary" in issue for issue in issues), issues
+
+
 def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(
