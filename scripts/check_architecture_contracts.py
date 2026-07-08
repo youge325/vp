@@ -48,6 +48,7 @@ STAGE_FILE_CHUNK_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming"
 STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunks.py"
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
+PROCESSOR_TESTS = ROOT / "backend" / "tests" / "test_processing"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_validation.py"
 MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
@@ -1704,6 +1705,20 @@ def _check_processor_private_reexport_boundary(issues: list[str]) -> None:
             issues.append(f"processor private re-export `{label}` remains in {_rel(PROCESSOR)}")
 
 
+def _check_processor_test_private_alias_boundary(issues: list[str]) -> None:
+    if not PROCESSOR_TESTS.exists():
+        return
+
+    forbidden_pattern = (
+        r"\b_(?:PipelineAlgorithms|StepAlgorithm|process_interpolated_stream|process_sequence_stream|"
+        r"process_single_frame_stream)\b"
+    )
+    for path in PROCESSOR_TESTS.rglob("test_*.py"):
+        text = _read(path)
+        if re.search(forbidden_pattern, text):
+            issues.append(f"processor test private alias remains in {_rel(path)}")
+
+
 def _check_processor_stream_aggregator_boundary(issues: list[str]) -> None:
     if not PROCESSOR_STREAMS.exists():
         return
@@ -1801,6 +1816,7 @@ def main() -> int:
         _check_processor_stage_execution_boundary(issues)
         _check_processor_stream_boundary(issues)
         _check_processor_private_reexport_boundary(issues)
+        _check_processor_test_private_alias_boundary(issues)
         _check_processor_stream_aggregator_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")

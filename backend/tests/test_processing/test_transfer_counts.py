@@ -11,13 +11,13 @@ import pytest
 
 from app.planning import ProcessingStep, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.processor_algorithms import PipelineAlgorithms as _PipelineAlgorithms
+from app.processing.streaming.processor_algorithms import PipelineAlgorithms
 from app.processing.streaming.processor_stream_interpolated import (
-    process_interpolated_stream as _process_interpolated_stream,
+    process_interpolated_stream,
 )
-from app.processing.streaming.processor_stream_single import process_single_frame_stream as _process_single_frame_stream
+from app.processing.streaming.processor_stream_single import process_single_frame_stream
 from app.processing.streaming.queues import DecodedFrame, EncodedFrame, _DECODE_END
-from app.processing.streaming.stage_runtime import StepAlgorithm as _StepAlgorithm
+from app.processing.streaming.stage_runtime import StepAlgorithm
 
 
 class _CountingBackend:
@@ -117,8 +117,8 @@ def _step(algorithm_type: str, *, multi: int | None = None) -> ProcessingStep:
     )
 
 
-def _step_algorithm(backend: _CountingBackend, algorithm_type: str, algorithm: Any) -> _StepAlgorithm:
-    return _StepAlgorithm(step=_step(algorithm_type), backend=backend, algorithm=algorithm)
+def _step_algorithm(backend: _CountingBackend, algorithm_type: str, algorithm: Any) -> StepAlgorithm:
+    return StepAlgorithm(step=_step(algorithm_type), backend=backend, algorithm=algorithm)
 
 
 def _decoded_queue(values: list[int]) -> queue.Queue[Any]:
@@ -140,7 +140,7 @@ def _encoded_values(encode_queue: queue.Queue[Any]) -> list[int]:
 
 def _run_single(
     *,
-    pre: list[_StepAlgorithm],
+    pre: list[StepAlgorithm],
     source_values: list[int],
     progress_callbacks: list[Any] | None = None,
 ) -> tuple[_CountingBackend, PipelineMetrics, list[int]]:
@@ -155,9 +155,9 @@ def _run_single(
     )
     encode_queue: queue.Queue[Any] = queue.Queue()
     metrics = PipelineMetrics()
-    _process_single_frame_stream(
+    process_single_frame_stream(
         stage_plan=stage_plan,
-        algorithms=_PipelineAlgorithms(pre=pre, interpolation=None, post=[]),
+        algorithms=PipelineAlgorithms(pre=pre, interpolation=None, post=[]),
         progress_callbacks=progress_callbacks or [lambda *_: None for _ in pre],
         source_frames=len(source_values),
         resume_output_frames=0,
@@ -172,8 +172,8 @@ def _run_single(
 def _run_interpolated(
     *,
     backend: _CountingBackend,
-    pre: list[_StepAlgorithm],
-    post: list[_StepAlgorithm],
+    pre: list[StepAlgorithm],
+    post: list[StepAlgorithm],
     source_values: list[int],
     multi: int = 2,
 ) -> tuple[PipelineMetrics, list[int]]:
@@ -189,11 +189,11 @@ def _run_interpolated(
     encode_queue: queue.Queue[Any] = queue.Queue()
     metrics = PipelineMetrics()
     callbacks = [lambda *_: None for _ in [*pre, interpolation_step, *post]]
-    _process_interpolated_stream(
+    process_interpolated_stream(
         stage_plan=stage_plan,
-        algorithms=_PipelineAlgorithms(
+        algorithms=PipelineAlgorithms(
             pre=pre,
-            interpolation=_StepAlgorithm(
+            interpolation=StepAlgorithm(
                 step=interpolation_step,
                 backend=backend,
                 algorithm=_MidpointInterpolation(),
@@ -256,9 +256,9 @@ def test_legacy_cpu_filter_between_tensor_stages_fails_without_roundtrip() -> No
     )
 
     with pytest.raises(RuntimeError, match="does not support tensor processing"):
-        _process_single_frame_stream(
+        process_single_frame_stream(
             stage_plan=stage_plan,
-            algorithms=_PipelineAlgorithms(pre=pre, interpolation=None, post=[]),
+            algorithms=PipelineAlgorithms(pre=pre, interpolation=None, post=[]),
             progress_callbacks=[lambda *_: None for _ in pre],
             source_frames=1,
             resume_output_frames=0,
@@ -322,9 +322,9 @@ def test_unsupported_filter_in_tensor_chain_fails_without_roundtrip() -> None:
     )
 
     with pytest.raises(RuntimeError, match="does not support tensor processing"):
-        _process_single_frame_stream(
+        process_single_frame_stream(
             stage_plan=stage_plan,
-            algorithms=_PipelineAlgorithms(pre=pre, interpolation=None, post=[]),
+            algorithms=PipelineAlgorithms(pre=pre, interpolation=None, post=[]),
             progress_callbacks=[lambda *_: None for _ in pre],
             source_frames=1,
             resume_output_frames=0,

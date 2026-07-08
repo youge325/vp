@@ -1,11 +1,11 @@
 """Phase 11 — interpolation 路径的 prev_tensor 复用回归护栏。
 
-原来 ``_process_interpolated_stream`` 对每对相邻源帧都做两次
+原来 ``process_interpolated_stream`` 对每对相邻源帧都做两次
 ``numpy_to_tensor``(prev + current),但 prev 实际就是上一轮的 current,
 H2D 拷贝被重复了。本测试用计数 backend 把这条约束钉住:N 个源帧总共
 只能调用 ``numpy_to_tensor`` N 次(每帧一次,不多不少)。
 
-测试直接驱动模块级 ``_process_interpolated_stream``,绕过 ffmpeg /
+测试直接驱动模块级 ``process_interpolated_stream``,绕过 ffmpeg /
 encoder 包装,可独立 / 快速校验内部 tensor 流转。
 """
 
@@ -19,9 +19,9 @@ import numpy as np
 
 from app.planning import ProcessingStep, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.processor_algorithms import PipelineAlgorithms as _PipelineAlgorithms
+from app.processing.streaming.processor_algorithms import PipelineAlgorithms
 from app.processing.streaming.processor_stream_interpolated import (
-    process_interpolated_stream as _process_interpolated_stream,
+    process_interpolated_stream,
 )
 from app.processing.streaming.queues import (
     DecodedFrame,
@@ -30,7 +30,7 @@ from app.processing.streaming.queues import (
     StreamEnd,
     _DECODE_END,
 )
-from app.processing.streaming.stage_runtime import StepAlgorithm as _StepAlgorithm
+from app.processing.streaming.stage_runtime import StepAlgorithm
 
 
 class _CountingBackend:
@@ -95,15 +95,15 @@ def _build_stage_plan(*, multi: int, total_output_frames: int) -> StagePlan:
     )
 
 
-def _build_algorithms(backend: _CountingBackend) -> _PipelineAlgorithms:
+def _build_algorithms(backend: _CountingBackend) -> PipelineAlgorithms:
     step = ProcessingStep(
         algorithm_type="frame_interpolation",
         algorithm_kwargs={"multi": 2},
         stage_name="interp",
     )
-    return _PipelineAlgorithms(
+    return PipelineAlgorithms(
         pre=[],
-        interpolation=_StepAlgorithm(step=step, backend=backend, algorithm=_MidpointInterpolation()),
+        interpolation=StepAlgorithm(step=step, backend=backend, algorithm=_MidpointInterpolation()),
         post=[],
     )
 
@@ -132,7 +132,7 @@ def test_prev_tensor_is_reused_across_consecutive_pairs() -> None:
     metrics = PipelineMetrics()
     progress_calls: list[tuple[int, int]] = []
 
-    _process_interpolated_stream(
+    process_interpolated_stream(
         stage_plan=stage_plan,
         algorithms=algorithms,
         progress_callbacks=[lambda current, total: progress_calls.append((current, total))],
@@ -179,7 +179,7 @@ def test_single_source_frame_does_not_trigger_h2d() -> None:
     stop_event = threading.Event()
     metrics = PipelineMetrics()
 
-    _process_interpolated_stream(
+    process_interpolated_stream(
         stage_plan=stage_plan,
         algorithms=algorithms,
         progress_callbacks=[lambda *_: None],
@@ -214,7 +214,7 @@ def test_higher_multi_does_not_inflate_h2d_count() -> None:
     stop_event = threading.Event()
     metrics = PipelineMetrics()
 
-    _process_interpolated_stream(
+    process_interpolated_stream(
         stage_plan=stage_plan,
         algorithms=algorithms,
         progress_callbacks=[lambda *_: None],
