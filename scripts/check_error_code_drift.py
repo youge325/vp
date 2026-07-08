@@ -112,6 +112,7 @@ _RUST_NDJSON_ENVELOPE_BLOCK = re.compile(
 _RUST_NDJSON_VARIANT_RENAME_PATTERN = re.compile(
     r"#\[serde\(rename\s*=\s*\"(?P<wire>[a-z_]+)\"\)\]",
 )
+_ERROR_CODE_WRAPPER_CALL_NAMES = {"ProcessError", "raise_error"}
 
 
 def _pascal_to_snake(name: str) -> str:
@@ -411,7 +412,7 @@ def _scan_python_error_code_wire_misuse(filename: str, text: str) -> list[str]:
 
         if isinstance(node, ast.Call):
             name = _call_name(node.func)
-            if name not in {"ProcessError", "raise_error", "emit_error"} or not node.args:
+            if name not in _ERROR_CODE_WRAPPER_CALL_NAMES or not node.args:
                 continue
             problem = _describe_forbidden_wire_code_expr(node.args[0])
             if problem:
