@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+BACKEND_TESTS = ROOT / "backend" / "tests"
 COMMANDS_MANIFEST = ROOT / "frontend" / "src-tauri" / "src" / "commands_manifest.rs"
 DEFAULT_PERMISSIONS = ROOT / "frontend" / "src-tauri" / "permissions" / "default.toml"
 IPC_ENDPOINT_DIR = ROOT / "frontend" / "src" / "lib" / "ipc" / "endpoints"
@@ -1719,6 +1720,24 @@ def _check_processor_test_private_alias_boundary(issues: list[str]) -> None:
             issues.append(f"processor test private alias remains in {_rel(path)}")
 
 
+def _check_planning_test_private_alias_boundary(issues: list[str]) -> None:
+    if not BACKEND_TESTS.exists():
+        return
+
+    forbidden_pattern = (
+        r"from\s+app\.planning\s+import\s+(?:"
+        r"\([\s\S]*?\bas\s+_resolve_(?:expected_output_frames|processing_steps)\b[\s\S]*?\)"
+        r"|[^\n]*\bas\s+_resolve_(?:expected_output_frames|processing_steps)\b"
+        r")"
+    )
+    for path in BACKEND_TESTS.rglob("test_*.py"):
+        if path.name == "test_architecture_contracts.py":
+            continue
+        text = _read(path)
+        if re.search(forbidden_pattern, text):
+            issues.append(f"planning test private alias remains in {_rel(path)}")
+
+
 def _check_processor_stream_aggregator_boundary(issues: list[str]) -> None:
     if not PROCESSOR_STREAMS.exists():
         return
@@ -1817,6 +1836,7 @@ def main() -> int:
         _check_processor_stream_boundary(issues)
         _check_processor_private_reexport_boundary(issues)
         _check_processor_test_private_alias_boundary(issues)
+        _check_planning_test_private_alias_boundary(issues)
         _check_processor_stream_aggregator_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")

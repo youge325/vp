@@ -1177,6 +1177,45 @@ def test_processor_test_private_alias_boundary_flags_legacy_test_aliases(tmp_pat
     assert any("processor test private alias" in issue for issue in issues), issues
 
 
+def test_planning_test_private_alias_boundary_flags_legacy_resolve_aliases(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_tests = tmp_path / "tests"
+    fake_tests.mkdir()
+    (fake_tests / "test_cli.py").write_text(
+        "from app.planning import (\n"
+        "    resolve_expected_output_frames as _resolve_expected_output_frames,\n"
+        "    resolve_processing_steps as _resolve_processing_steps,\n"
+        ")\n\n"
+        "def test_steps():\n"
+        "    _resolve_processing_steps({})\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "BACKEND_TESTS", fake_tests, raising=False)
+    issues: list[str] = []
+
+    module._check_planning_test_private_alias_boundary(issues)
+
+    assert any("planning test private alias" in issue for issue in issues), issues
+
+
+def test_planning_test_private_alias_boundary_flags_single_line_resolve_alias(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_tests = tmp_path / "tests"
+    fake_tests.mkdir()
+    (fake_tests / "test_cli_resolve_steps.py").write_text(
+        "from app.planning import resolve_processing_steps as _resolve_processing_steps\n\n"
+        "def test_steps():\n"
+        "    _resolve_processing_steps({})\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "BACKEND_TESTS", fake_tests, raising=False)
+    issues: list[str] = []
+
+    module._check_planning_test_private_alias_boundary(issues)
+
+    assert any("planning test private alias" in issue for issue in issues), issues
+
+
 def test_processor_stream_aggregator_boundary_flags_local_stream_loops(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_streams = tmp_path / "processor_streams.py"

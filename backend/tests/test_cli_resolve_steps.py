@@ -1,6 +1,6 @@
-"""Tests for _resolve_processing_steps with preprocess/postprocess filter chains."""
+"""Tests for resolve_processing_steps with preprocess/postprocess filter chains."""
 
-from app.planning import resolve_processing_steps as _resolve_processing_steps
+from app.planning import resolve_processing_steps
 
 
 def _make_workflow_config(**overrides):
@@ -41,7 +41,7 @@ def test_preprocess_prepended_before_interpolation():
             "filters": [{"kind": "scale", "enabled": True, "params": {"mode": "factor", "factor": 0.5}}],
         }
     )
-    steps = _resolve_processing_steps(config)
+    steps = resolve_processing_steps(config)
     assert [s.algorithm_type for s in steps] == ["frame_filter_chain", "frame_interpolation"]
     assert steps[0].algorithm_kwargs["filters"][0]["kind"] == "scale"
     assert steps[0].stage_name == "01_preprocess"
@@ -55,7 +55,7 @@ def test_postprocess_appended_after_interpolation():
             "filters": [{"kind": "sharpen", "enabled": True, "params": {"amount": 0.5}}],
         }
     )
-    steps = _resolve_processing_steps(config)
+    steps = resolve_processing_steps(config)
     assert [s.algorithm_type for s in steps] == ["frame_interpolation", "frame_filter_chain"]
     assert steps[1].algorithm_kwargs["filters"][0]["kind"] == "sharpen"
     assert steps[0].stage_name == "01_frame_interpolation"
@@ -73,7 +73,7 @@ def test_both_pre_and_postprocess():
             "filters": [{"kind": "color", "enabled": True, "params": {}}],
         },
     )
-    steps = _resolve_processing_steps(config)
+    steps = resolve_processing_steps(config)
     assert [s.algorithm_type for s in steps] == [
         "frame_filter_chain",
         "frame_interpolation",
@@ -86,7 +86,7 @@ def test_both_pre_and_postprocess():
 
 def test_disabled_pre_post_not_included():
     config = _make_workflow_config()
-    steps = _resolve_processing_steps(config)
+    steps = resolve_processing_steps(config)
     assert all(s.algorithm_type != "frame_filter_chain" for s in steps)
 
 
@@ -99,7 +99,7 @@ def test_preprocess_with_super_resolution_combined():
             "filters": [{"kind": "scale", "enabled": True, "params": {}}],
         },
     )
-    steps = _resolve_processing_steps(config)
+    steps = resolve_processing_steps(config)
     assert [s.algorithm_type for s in steps] == [
         "frame_filter_chain",
         "super_resolution",
@@ -124,7 +124,7 @@ def test_postprocess_with_format_conversion():
             "filters": [{"kind": "scale", "enabled": True, "params": {}}],
         },
     )
-    steps = _resolve_processing_steps(config)
+    steps = resolve_processing_steps(config)
     # format_conversion with no interpolation/sr gives empty algorithm_types,
     # postprocess should still be appended
     assert [s.algorithm_type for s in steps] == ["frame_filter_chain"]
