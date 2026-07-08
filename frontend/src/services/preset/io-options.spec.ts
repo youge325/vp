@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import * as ioOptions from './io-options'
 import {
-  buildContainerOptions,
   buildProfileOptions,
   CONTAINER_SELECT_OPTIONS,
   toNumberValue,
@@ -32,6 +32,10 @@ const encoderProfile = (name: string, label: string): EncoderProfileSpec => ({
 })
 
 describe('io-options', () => {
+  it('does not expose internal container option builder', () => {
+    expect('buildContainerOptions' in ioOptions).toBe(false)
+  })
+
   it('builds profile select options for decoder and encoder profiles', () => {
     expect(buildProfileOptions([
       decoderProfile('software', 'Software Decode'),
@@ -42,12 +46,7 @@ describe('io-options', () => {
     ])
   })
 
-  it('builds uppercase container select options', () => {
-    expect(buildContainerOptions(['mp4', 'mkv', 'mov'])).toEqual([
-      { value: 'mp4', label: 'MP4' },
-      { value: 'mkv', label: 'MKV' },
-      { value: 'mov', label: 'MOV' },
-    ])
+  it('exposes uppercase container select options', () => {
     expect(CONTAINER_SELECT_OPTIONS).toEqual([
       { value: 'mp4', label: 'MP4' },
       { value: 'mkv', label: 'MKV' },
