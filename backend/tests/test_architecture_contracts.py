@@ -297,6 +297,21 @@ def test_frontend_enhance_default_selection_split_boundary_flags_obsolete_barrel
     assert any("obsolete enhance default-selection barrel" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_default_pickers_boundary_flags_local_backend_helper(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pickers = tmp_path / "enhance-default-pickers.ts"
+    fake_pickers.write_text(
+        "function backendCompatible(algorithm, backend) {\n  return algorithm.tensorBackends.includes(backend)\n}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_default_pickers_boundary(issues)
+
+    assert any("enhance default pickers" in issue for issue in issues), issues
+
+
 def test_worker_pipeline_plan_boundary_flags_local_plan_builders(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "worker_pipeline.py"

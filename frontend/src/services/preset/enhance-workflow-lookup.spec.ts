@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  algorithmSupportsBackend,
   findInterpolationAlgorithm,
   findSuperResolutionAlgorithm,
   pickSupportedBackend,
@@ -51,5 +52,12 @@ describe('enhance workflow lookup rules', () => {
     expect(pickSupportedBackend(superResolution, 'onnx')).toBe('paddle')
     expect(pickSupportedBackend({ ...superResolution, tensorBackends: ['custom'] }, 'onnx')).toBe('onnx')
     expect(pickSupportedBackend(undefined, 'pytorch')).toBe('pytorch')
+  })
+
+  it('checks explicit backend support without falling back to another backend', () => {
+    expect(algorithmSupportsBackend(interpolation, 'onnx')).toBe(true)
+    expect(algorithmSupportsBackend(superResolution, 'onnx')).toBe(false)
+    expect(algorithmSupportsBackend({ ...superResolution, tensorBackends: [] }, 'paddle')).toBe(false)
+    expect(algorithmSupportsBackend(undefined, 'pytorch')).toBe(false)
   })
 })
