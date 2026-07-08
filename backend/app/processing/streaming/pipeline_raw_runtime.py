@@ -10,6 +10,7 @@ from app.planning import ResumeState, SegmentManifest, StagePlan
 from app.processing.streaming.encoder_worker import run_encoder_worker
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, StreamEnd
+from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
 from app.utils.ffmpeg import FFmpegWrapper
 
 StageWorkerRunner = Callable[..., None]
@@ -36,7 +37,7 @@ def run_raw_pipeline_runtime(
     output_fps: float | None,
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
     metrics: PipelineMetrics,
-    stage_worker_runner: StageWorkerRunner,
+    stage_worker_runner: StageWorkerRunner | None = None,
 ) -> int:
     encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object] = queue.Queue(maxsize=8)
     error_queue: queue.Queue[BaseException] = queue.Queue()
@@ -77,7 +78,8 @@ def run_raw_pipeline_runtime(
         )
 
     encoder_thread.start()
-    stage_worker_runner(
+    runner = stage_worker_runner or run_stage_worker_pipeline
+    runner(
         ffmpeg=ffmpeg,
         input_path=input_path,
         decode_config=decode_config,

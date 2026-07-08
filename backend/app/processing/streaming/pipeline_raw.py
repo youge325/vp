@@ -8,7 +8,6 @@ from app.planning import ResumeState, SegmentManifest, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_raw_runtime import StageWorkerRunner, run_raw_pipeline_runtime
 from app.processing.streaming.pipeline_rules import resolved_stream_fps
-from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
 from app.utils.ffmpeg import FFmpegWrapper
 
 
@@ -54,7 +53,7 @@ def run_raw_streaming_pipeline(
         output_fps=output_fps,
         encode_progress_callback=encode_progress_callback,
         metrics=metrics,
-        stage_worker_runner=stage_worker_runner or run_stage_worker_pipeline,
+        stage_worker_runner=stage_worker_runner,
     )
 
 
