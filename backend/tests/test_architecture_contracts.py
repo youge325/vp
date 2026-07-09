@@ -2076,6 +2076,42 @@ def test_encoder_segment_writer_boundary_flags_local_writer_lifecycle(tmp_path, 
     assert any("encoder segment writer" in issue for issue in issues), issues
 
 
+def test_encoder_finalization_signature_boundary_flags_dead_signature_forwarding(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "pipeline.py"
+    fake_lifecycle = tmp_path / "pipeline_lifecycle.py"
+    fake_finalization = tmp_path / "encoder_finalization.py"
+    fake_stage_file = tmp_path / "stage_file_pipeline.py"
+    fake_pipeline.write_text(
+        "def process_video_streaming():\n    return finalize_streaming_output(signature=preflight.signature)\n",
+        encoding="utf-8",
+    )
+    fake_lifecycle.write_text(
+        "def prepare_streaming_manifest(*, signature: str):\n"
+        "    manifest.prepare(signature, {})\n\n"
+        "def finalize_streaming_output(*, signature: str):\n"
+        "    return finalize_segmented_output(signature=signature)\n",
+        encoding="utf-8",
+    )
+    fake_finalization.write_text(
+        "def finalize_segmented_output(*, signature: str):\n    del signature\n",
+        encoding="utf-8",
+    )
+    fake_stage_file.write_text(
+        "def run_stage_file_pipeline():\n    return finalize_segmented_output(signature='')\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STREAMING_PIPELINE", fake_pipeline, raising=False)
+    monkeypatch.setattr(module, "PIPELINE_LIFECYCLE", fake_lifecycle, raising=False)
+    monkeypatch.setattr(module, "ENCODER_FINALIZATION", fake_finalization, raising=False)
+    monkeypatch.setattr(module, "STAGE_FILE_PIPELINE", fake_stage_file, raising=False)
+    issues: list[str] = []
+
+    module._check_encoder_finalization_signature_boundary(issues)
+
+    assert any("encoder finalization signature" in issue for issue in issues), issues
+
+
 def test_frontend_encode_output_binding_boundary_flags_local_state_and_setters(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_binding = tmp_path / "encode-output-bindings.ts"

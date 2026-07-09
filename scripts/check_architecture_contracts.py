@@ -42,6 +42,7 @@ WORKER_PROCESS_EVENTS = ROOT / "backend" / "app" / "processing" / "streaming" / 
 WORKER_PROCESS_IO = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_process_io.py"
 ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder.py"
 ENCODER_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_worker.py"
+ENCODER_FINALIZATION = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_finalization.py"
 STREAMING_QUEUES = ROOT / "backend" / "app" / "processing" / "streaming" / "queues.py"
 PIPELINE_RAW = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw.py"
 PIPELINE_RAW_ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_encoder.py"
@@ -1856,6 +1857,33 @@ def _check_encoder_segment_writer_boundary(issues: list[str]) -> None:
             issues.append(f"encoder segment writer `{label}` remains in backend/app/processing/streaming/encoder.py")
 
 
+def _check_encoder_finalization_signature_boundary(issues: list[str]) -> None:
+    finalization_text = _read(ENCODER_FINALIZATION)
+    if re.search(r"\bsignature\b", finalization_text):
+        issues.append(f"encoder finalization signature forwarding remains in {_rel(ENCODER_FINALIZATION)}")
+
+    lifecycle_text = _read(PIPELINE_LIFECYCLE)
+    lifecycle_patterns = {
+        "finalize_streaming_output signature parameter": (
+            r"def\s+finalize_streaming_output\s*\([\s\S]*?\bsignature\s*:"
+        ),
+        "finalize_segmented_output signature forwarding": (
+            r"finalize_segmented_output\s*\([\s\S]*?\bsignature\s*=\s*signature"
+        ),
+    }
+    for label, pattern in lifecycle_patterns.items():
+        if re.search(pattern, lifecycle_text):
+            issues.append(f"encoder finalization signature `{label}` remains in {_rel(PIPELINE_LIFECYCLE)}")
+
+    pipeline_text = _read(STREAMING_PIPELINE)
+    if re.search(r"finalize_streaming_output\s*\([\s\S]*?\bsignature\s*=\s*preflight\.signature", pipeline_text):
+        issues.append(f"encoder finalization signature forwarding remains in {_rel(STREAMING_PIPELINE)}")
+
+    stage_file_text = _read(STAGE_FILE_PIPELINE)
+    if re.search(r"finalize_segmented_output\s*\([\s\S]*?\bsignature\s*=", stage_file_text):
+        issues.append(f"encoder finalization signature forwarding remains in {_rel(STAGE_FILE_PIPELINE)}")
+
+
 def _check_planning_test_private_alias_boundary(issues: list[str]) -> None:
     if not BACKEND_TESTS.exists():
         return
@@ -2061,6 +2089,7 @@ def main() -> int:
         _check_pipeline_dispatch_runtime_boundary(issues)
         _check_encoder_helper_boundary(issues)
         _check_encoder_segment_writer_boundary(issues)
+        _check_encoder_finalization_signature_boundary(issues)
         _check_planning_test_private_alias_boundary(issues)
         _check_pipeline_test_private_alias_boundary(issues)
         _check_obsolete_tensor_chain_boundary(issues)

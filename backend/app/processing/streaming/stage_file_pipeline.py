@@ -119,7 +119,6 @@ def run_stage_file_pipeline(
             output_path=stage_context.output_path,
             encode_config=stage_context.encode_config,
             manifest=stage_context.manifest,
-            signature="",
             completed_output_frames=completed_frames,
             total_output_frames=stage_output_frames,
             strict_total_frames=True,
