@@ -12,7 +12,9 @@ import {
   buildOnnxModelOptions,
   buildProfileOptions,
 } from '@/services/preset/enhance-options'
-import type { EnhanceOptionForm } from '@/composables/forms/enhance-option-bindings'
+import type { createEnhanceOptionBindings } from '@/composables/forms/enhance-option-bindings'
+
+type EnhanceOptionForm = Parameters<typeof createEnhanceOptionBindings>[0]
 
 const INTERPOLATION_ONNX_EMPTY_HINT = '未找到 ONNX 模型，请将 .onnx 文件放入 models/interpolation 目录'
 const SUPER_RESOLUTION_ONNX_EMPTY_HINT = '未找到 ONNX 模型，请将 .onnx 文件放入 models/super_resolution 目录'

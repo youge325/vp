@@ -215,8 +215,10 @@ FRONTEND_UTILITY_INTERNAL_TYPE_FILES = {
     ENHANCE_LENS: ("AlgorithmSpec", "AlgorithmLens"),
     FRONTEND_SRC / "composables" / "forms" / "useFilterChainForm.ts": ("FilterStage",),
     FRONTEND_SRC / "composables" / "selectors" / "useGpuCapabilities.ts": ("GpuCapabilitiesView",),
+    ENHANCE_OPTION_BINDINGS: ("EnhanceOptionForm",),
     FRONTEND_SRC / "lib" / "ipc" / "events.ts": ("TaskEventHandlers",),
     FRONTEND_SRC / "services" / "model-runtime-estimates.ts": ("RuntimeMetricOptions",),
+    FRONTEND_SRC / "services" / "preset" / "io-form-rules.ts": ("RateControlViewState",),
     FRONTEND_SRC / "services" / "task" / "events.ts": ("TaskLogLineKind",),
     FRONTEND_SRC / "services" / "task" / "preflight.ts": (
         "BatchPreflightItem",

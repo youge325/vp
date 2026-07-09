@@ -2,12 +2,11 @@ import { reactive } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import {
-  createEnhanceOptionBindings,
-  type EnhanceOptionForm,
-} from '@/composables/forms/enhance-option-bindings'
+import { createEnhanceOptionBindings } from '@/composables/forms/enhance-option-bindings'
 import { useEnvStore } from '@/stores/env'
 import type { EnvironmentCheckResult, ModelVariantInfo } from '@/types/domain/env'
+
+type EnhanceOptionForm = Parameters<typeof createEnhanceOptionBindings>[0]
 
 const detail = (name: string, label: string): ModelVariantInfo => ({
   name,

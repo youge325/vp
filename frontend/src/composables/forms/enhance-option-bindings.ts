@@ -5,7 +5,7 @@ import { createEnhanceOptionState } from '@/composables/forms/enhance-option-sta
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
 import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/domain/workflow'
 
-export interface EnhanceOptionForm {
+interface EnhanceOptionForm {
   interpolationBackend: TensorBackend
   interpolationEngine: InferenceEngine
   interpolationAlgorithm: string
