@@ -1411,6 +1411,25 @@ def test_processor_stream_aggregator_boundary_flags_obsolete_compatibility_barre
     assert any("obsolete processor stream aggregator" in issue for issue in issues), issues
 
 
+def test_obsolete_tensor_chain_boundary_flags_helper_and_tests(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_helper = tmp_path / "_tensor_chain.py"
+    fake_test = tmp_path / "test_tensor_chain.py"
+    fake_helper.write_text("def run_tensor_chain():\n    pass\n", encoding="utf-8")
+    fake_test.write_text(
+        "from app.processing.streaming._tensor_chain import run_tensor_chain\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "TENSOR_CHAIN", fake_helper, raising=False)
+    monkeypatch.setattr(module, "TENSOR_CHAIN_TEST", fake_test, raising=False)
+    issues: list[str] = []
+
+    module._check_obsolete_tensor_chain_boundary(issues)
+
+    assert any("obsolete tensor chain helper" in issue for issue in issues), issues
+    assert any("obsolete tensor chain test" in issue for issue in issues), issues
+
+
 def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "stage_file_pipeline.py"
