@@ -72,6 +72,7 @@ ENHANCE_VIEW_MODEL = FRONTEND_SRC / "services" / "preset" / "enhance-view-model.
 ENHANCE_RUNTIME_VIEW = FRONTEND_SRC / "services" / "preset" / "enhance-runtime-view.ts"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-form-bindings.ts"
+ENHANCE_VIEW_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-view-bindings.ts"
 ENHANCE_LENS = FRONTEND_SRC / "composables" / "forms" / "enhance-lens.ts"
 ENHANCE_FIELD_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-field-bindings.ts"
 ENHANCE_OPTION_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-option-bindings.ts"
@@ -1000,6 +1001,13 @@ def _check_frontend_enhance_projection_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_frontend_enhance_binding_type_boundary(issues: list[str]) -> None:
+    for path in (ENHANCE_FORM_BINDINGS, ENHANCE_VIEW_BINDINGS):
+        text = _read(path)
+        if re.search(r"^\s*interface\s+VideoDimensions\b", text, re.MULTILINE):
+            issues.append(f"enhance binding type local VideoDimensions remains in {_rel(path)}")
+
+
 def _check_frontend_enhance_lens_boundary(issues: list[str]) -> None:
     text = _read(ENHANCE_LENS)
     forbidden_patterns = {
@@ -1910,6 +1918,7 @@ def main() -> int:
         _check_frontend_enhance_field_binding_boundary(issues)
         _check_frontend_enhance_field_split_boundary(issues)
         _check_frontend_enhance_projection_boundary(issues)
+        _check_frontend_enhance_binding_type_boundary(issues)
         _check_frontend_enhance_lens_boundary(issues)
         _check_frontend_enhance_option_boundary(issues)
         _check_frontend_enhance_option_binding_boundary(issues)

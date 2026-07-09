@@ -2,13 +2,9 @@ import { reactive, type ComputedRef } from 'vue'
 import { createEnhanceAlgorithmBindings } from '@/composables/forms/enhance-algorithm-bindings'
 import { createEnhanceFieldBindings } from '@/composables/forms/enhance-field-bindings'
 import { createEnhanceViewBindings } from '@/composables/forms/enhance-view-bindings'
+import type { VideoDimensions } from '@/services/model-runtime-estimates'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
-
-interface VideoDimensions {
-  width: number
-  height: number
-}
 
 export interface EnhanceFormBindingParams {
   workflow: ComputedRef<WorkflowConfig>

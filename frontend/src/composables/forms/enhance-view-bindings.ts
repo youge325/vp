@@ -1,13 +1,9 @@
 import { computed, type ComputedRef } from 'vue'
 
 import { buildEnhanceViewModel } from '@/services/preset/enhance-view-model'
+import type { VideoDimensions } from '@/services/model-runtime-estimates'
 import type { AlgorithmInfo } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
-
-interface VideoDimensions {
-  width: number
-  height: number
-}
 
 export interface EnhanceViewBindingParams {
   workflow: ComputedRef<WorkflowConfig>
