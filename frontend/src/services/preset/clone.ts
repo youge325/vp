@@ -12,7 +12,7 @@
 
 import type { DecodeConfig, EncodeConfig, OutputConfig, WorkbenchPreset, WorkflowConfig } from '@/types/protocol'
 
-export function clone<T>(value: T): T {
+function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 

@@ -51,6 +51,7 @@ STREAMING_QUEUES = ROOT / "backend" / "app" / "processing" / "streaming" / "queu
 PIPELINE_RAW = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw.py"
 PIPELINE_RAW_ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_encoder.py"
 PIPELINE_RAW_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_runtime.py"
+PIPELINE_RAW_STATE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_state.py"
 PIPELINE_RAW_STAGE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_stage.py"
 PIPELINE_DISPATCH = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_dispatch.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
@@ -125,6 +126,7 @@ DOMAIN_PRESET_TYPES = FRONTEND_SRC / "types" / "domain" / "preset.ts"
 DOMAIN_WORKFLOW_TYPES = FRONTEND_SRC / "types" / "domain" / "workflow.ts"
 DOMAIN_MEDIA_TYPES = FRONTEND_SRC / "types" / "domain" / "media.ts"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
+PRESET_CLONE = FRONTEND_SRC / "services" / "preset" / "clone.ts"
 WORKFLOW_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "workflow-defaults.ts"
 PRESET_NORMALIZE = FRONTEND_SRC / "services" / "preset" / "normalize.ts"
 PRESET_ENHANCE_OPTIONS = FRONTEND_SRC / "services" / "preset" / "enhance-options.ts"
@@ -1103,6 +1105,12 @@ def _check_frontend_model_metric_view_type_boundary(issues: list[str]) -> None:
                 issues.append(f"model metric view type `{name}` exported from {_rel(path)}")
 
 
+def _check_frontend_preset_clone_boundary(issues: list[str]) -> None:
+    text = _read(PRESET_CLONE)
+    if re.search(r"^\s*export\s+function\s+clone\s*<", text, re.MULTILINE):
+        issues.append(f"preset clone surface generic `clone` exported from {_rel(PRESET_CLONE)}")
+
+
 def _check_frontend_domain_preset_barrel_boundary(issues: list[str]) -> None:
     if DOMAIN_PRESET_TYPES.exists():
         issues.append(f"obsolete domain preset type barrel remains in {_rel(DOMAIN_PRESET_TYPES)}")
@@ -1953,6 +1961,17 @@ def _check_pipeline_raw_runtime_state_boundary(issues: list[str]) -> None:
             issues.append(f"pipeline raw state `{label}` remains in {_rel(PIPELINE_RAW_RUNTIME)}")
 
 
+def _check_pipeline_raw_state_boundary(issues: list[str]) -> None:
+    text = _read(PIPELINE_RAW_STATE)
+    forbidden_patterns = {
+        "public encode queue item alias": r"^RawEncodeQueueItem\s*=",
+        "encode queue item export": r"__all__\s*=\s*\[[\s\S]*\"RawEncodeQueueItem\"",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"pipeline raw state public type `{label}` remains in {_rel(PIPELINE_RAW_STATE)}")
+
+
 def _check_pipeline_raw_runtime_stage_boundary(issues: list[str]) -> None:
     text = _read(PIPELINE_RAW_RUNTIME)
     forbidden_patterns = {
@@ -2320,6 +2339,7 @@ def main() -> int:
         _check_frontend_enhance_read_model_type_boundary(issues)
         _check_frontend_model_metrics_barrel_boundary(issues)
         _check_frontend_model_metric_view_type_boundary(issues)
+        _check_frontend_preset_clone_boundary(issues)
         _check_frontend_domain_preset_barrel_boundary(issues)
         _check_frontend_ipc_barrel_boundary(issues)
         _check_frontend_task_orchestrator_runtime_boundary(issues)
@@ -2371,6 +2391,7 @@ def main() -> int:
         _check_pipeline_raw_runtime_encoder_boundary(issues)
         _check_pipeline_raw_runtime_completion_boundary(issues)
         _check_pipeline_raw_runtime_state_boundary(issues)
+        _check_pipeline_raw_state_boundary(issues)
         _check_pipeline_raw_runtime_stage_boundary(issues)
         _check_pipeline_raw_signature_boundary(issues)
         _check_pipeline_raw_stage_boundary(issues)

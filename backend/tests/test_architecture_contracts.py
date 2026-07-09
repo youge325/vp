@@ -1329,6 +1329,22 @@ def test_frontend_model_metric_view_type_boundary_flags_service_type_exports(tmp
     assert any("model metric view type" in issue for issue in issues), issues
 
 
+def test_frontend_preset_clone_boundary_flags_generic_clone_export(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_clone = tmp_path / "clone.ts"
+    fake_clone.write_text(
+        "export function clone<T>(value: T): T { return value }\n"
+        "export const cloneWorkflowConfig = (config) => clone(config)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PRESET_CLONE", fake_clone, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_preset_clone_boundary(issues)
+
+    assert any("preset clone surface" in issue for issue in issues), issues
+
+
 def test_frontend_domain_preset_barrel_boundary_flags_obsolete_barrel(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_domain_preset = tmp_path / "preset.ts"
@@ -2279,6 +2295,22 @@ def test_pipeline_raw_runtime_state_boundary_flags_local_queue_state(tmp_path, m
     assert any("encode queue local" in issue for issue in issues), issues
     assert any("error queue local" in issue for issue in issues), issues
     assert any("stop event local" in issue for issue in issues), issues
+
+
+def test_pipeline_raw_state_boundary_flags_public_encode_queue_item_alias(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_state = tmp_path / "pipeline_raw_state.py"
+    fake_state.write_text(
+        "RawEncodeQueueItem = EncodedFrame | SegmentBoundary | StreamEnd | object\n"
+        '__all__ = ["RawEncodeQueueItem", "RawPipelineState", "create_raw_pipeline_state"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PIPELINE_RAW_STATE", fake_state, raising=False)
+    issues: list[str] = []
+
+    module._check_pipeline_raw_state_boundary(issues)
+
+    assert any("pipeline raw state public type" in issue for issue in issues), issues
 
 
 def test_pipeline_raw_runtime_stage_boundary_flags_local_worker_runner(tmp_path, monkeypatch) -> None:

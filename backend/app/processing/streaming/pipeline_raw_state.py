@@ -8,12 +8,12 @@ from dataclasses import dataclass
 
 from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, StreamEnd
 
-RawEncodeQueueItem = EncodedFrame | SegmentBoundary | StreamEnd | object
+_RawEncodeQueueItem = EncodedFrame | SegmentBoundary | StreamEnd | object
 
 
 @dataclass(frozen=True)
 class RawPipelineState:
-    encode_queue: queue.Queue[RawEncodeQueueItem]
+    encode_queue: queue.Queue[_RawEncodeQueueItem]
     error_queue: queue.Queue[BaseException]
     stop_event: threading.Event
 
@@ -26,4 +26,4 @@ def create_raw_pipeline_state(*, encode_queue_size: int = 8) -> RawPipelineState
     )
 
 
-__all__ = ["RawEncodeQueueItem", "RawPipelineState", "create_raw_pipeline_state"]
+__all__ = ["RawPipelineState", "create_raw_pipeline_state"]
