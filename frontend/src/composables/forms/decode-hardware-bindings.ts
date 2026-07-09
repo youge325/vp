@@ -9,7 +9,7 @@ import {
 import type { DecoderProfileSpec } from '@/types/domain/capability'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
 
-export interface DecodeHardwareBindingParams {
+interface DecodeHardwareBindingParams {
   currentDecoderProfile: ComputedRef<DecoderProfileSpec | null>
   editorConfig: ComputedRef<Pick<WorkbenchPreset, 'decodeConfig'>>
   patchDecode: (mutator: (config: DecodeConfig) => void) => void

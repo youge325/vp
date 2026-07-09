@@ -2,7 +2,7 @@ import { createEnhanceEffectBindings } from '@/composables/forms/enhance-effect-
 import { createEnhanceScalarFieldBindings } from '@/composables/forms/enhance-scalar-field-bindings'
 import type { EnhanceEffectBindingParams } from '@/composables/forms/enhance-effect-bindings'
 
-export type EnhanceFieldBindingParams = EnhanceEffectBindingParams
+type EnhanceFieldBindingParams = EnhanceEffectBindingParams
 
 export function createEnhanceFieldBindings(params: EnhanceFieldBindingParams) {
   return {

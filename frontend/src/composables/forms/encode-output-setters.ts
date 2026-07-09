@@ -2,7 +2,7 @@ import { normalizeSegmentFrames } from '@/services/preset/io-form-rules'
 import { normalizeOutputDir } from '@/services/preset/normalize'
 import type { EncodeConfig, OutputConfig } from '@/types/protocol'
 
-export interface EncodeOutputSetterParams {
+interface EncodeOutputSetterParams {
   patchEncode: (mutator: (config: EncodeConfig) => void) => void
   patchOutput: (mutator: (config: OutputConfig) => void) => void
 }

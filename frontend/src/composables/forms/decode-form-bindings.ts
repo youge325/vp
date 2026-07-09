@@ -7,7 +7,7 @@ import type { CapabilityValue } from '@/types/domain/capability'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
 
-export interface DecodeFormBindingParams {
+interface DecodeFormBindingParams {
   checkResult: ComputedRef<EnvironmentCheckResult | null>
   editorConfig: ComputedRef<Pick<WorkbenchPreset, 'decodeConfig'>>
   editorVideoCodec: ComputedRef<string>

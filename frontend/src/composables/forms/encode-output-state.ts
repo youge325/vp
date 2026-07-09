@@ -3,7 +3,7 @@ import { computed, type ComputedRef } from 'vue'
 import { CONTAINER_SELECT_OPTIONS, toNumberValue } from '@/services/preset/io-options'
 import type { WorkbenchPreset } from '@/types/protocol'
 
-export interface EncodeOutputStateParams {
+interface EncodeOutputStateParams {
   editorConfig: ComputedRef<Pick<WorkbenchPreset, 'outputConfig'>>
 }
 

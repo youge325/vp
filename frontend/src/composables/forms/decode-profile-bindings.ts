@@ -12,7 +12,7 @@ import type { DecoderProfileSpec } from '@/types/domain/capability'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
 
-export interface DecodeProfileBindingParams {
+interface DecodeProfileBindingParams {
   checkResult: ComputedRef<EnvironmentCheckResult | null>
   editorConfig: ComputedRef<Pick<WorkbenchPreset, 'decodeConfig'>>
   editorVideoCodec: ComputedRef<string>

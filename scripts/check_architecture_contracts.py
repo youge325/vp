@@ -164,6 +164,24 @@ FRONTEND_IO_PROFILE_BINDINGS = [
     DECODE_PROFILE_BINDINGS,
     ENCODE_PROFILE_BINDINGS,
 ]
+FRONTEND_FORM_BINDING_PARAM_FILES = {
+    FRONTEND_SRC / "composables" / "forms" / "capability-option-bindings.ts": ("CapabilityOptionBindingParams",),
+    DECODE_FORM_BINDINGS: ("DecodeFormBindingParams",),
+    FRONTEND_SRC / "composables" / "forms" / "decode-hardware-bindings.ts": ("DecodeHardwareBindingParams",),
+    DECODE_PROFILE_BINDINGS: ("DecodeProfileBindingParams",),
+    ENCODE_FORM_BINDINGS: ("EncodeFormBindingParams",),
+    ENCODE_OUTPUT_BINDINGS: ("EncodeOutputBindingParams",),
+    FRONTEND_SRC / "composables" / "forms" / "encode-output-setters.ts": ("EncodeOutputSetterParams",),
+    FRONTEND_SRC / "composables" / "forms" / "encode-output-state.ts": ("EncodeOutputStateParams",),
+    ENCODE_PROFILE_BINDINGS: ("EncodeProfileBindingParams",),
+    FRONTEND_SRC / "composables" / "forms" / "encode-rate-control-bindings.ts": ("EncodeRateControlBindingParams",),
+    FRONTEND_SRC / "composables" / "forms" / "enhance-algorithm-bindings.ts": ("EnhanceAlgorithmBindingParams",),
+    ENHANCE_FIELD_BINDINGS: ("EnhanceFieldBindingParams",),
+    ENHANCE_FORM_BINDINGS: ("EnhanceFormBindingParams",),
+    FRONTEND_SRC / "composables" / "forms" / "enhance-scalar-field-bindings.ts": ("EnhanceScalarFieldBindingParams",),
+    ENHANCE_VIEW_BINDINGS: ("EnhanceViewBindingParams",),
+    FRONTEND_SRC / "composables" / "forms" / "io-profile-state.ts": ("IoProfileStateParams",),
+}
 
 
 def _read(path: Path) -> str:
@@ -1202,6 +1220,14 @@ def _check_frontend_io_form_aggregator_boundary(issues: list[str]) -> None:
                 issues.append(f"io form rule `{label}` leaked into form binding aggregator: {_rel(path)}")
 
 
+def _check_frontend_form_binding_param_export_boundary(issues: list[str]) -> None:
+    for path, names in FRONTEND_FORM_BINDING_PARAM_FILES.items():
+        text = _read(path)
+        for name in names:
+            if re.search(rf"\bexport\s+(?:interface|type)\s+{re.escape(name)}\b", text):
+                issues.append(f"form binding params `{name}` exported from {_rel(path)}")
+
+
 def _check_frontend_io_profile_state_boundary(issues: list[str]) -> None:
     forbidden_patterns = {
         "buildProfileOptions import": r"\bbuildProfileOptions\b",
@@ -2182,6 +2208,7 @@ def main() -> int:
         _check_frontend_io_form_rule_boundary(issues)
         _check_frontend_io_form_binding_boundary(issues)
         _check_frontend_io_form_aggregator_boundary(issues)
+        _check_frontend_form_binding_param_export_boundary(issues)
         _check_frontend_io_profile_state_boundary(issues)
         _check_frontend_decode_hardware_binding_boundary(issues)
         _check_frontend_defaults_workflow_boundary(issues)

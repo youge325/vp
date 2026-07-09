@@ -5,7 +5,7 @@ import type { VideoDimensions } from '@/services/model-runtime-estimates'
 import type { AlgorithmInfo } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
 
-export interface EnhanceViewBindingParams {
+interface EnhanceViewBindingParams {
   workflow: ComputedRef<WorkflowConfig>
   activeVideoDimensions: ComputedRef<VideoDimensions | null>
   currentInterpolationAlgorithm: ComputedRef<AlgorithmInfo | undefined>

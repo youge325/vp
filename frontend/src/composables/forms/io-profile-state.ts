@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { buildProfileOptions } from '@/services/preset/io-options'
 import type { CodecProfileSpec } from '@/types/domain/capability'
 
-export interface IoProfileStateParams<Profile extends CodecProfileSpec> {
+interface IoProfileStateParams<Profile extends CodecProfileSpec> {
   resolveVisibleProfiles: () => readonly Profile[]
   selectedProfileName: () => string
 }
