@@ -151,7 +151,7 @@ def finalize_and_emit(
         str(result.get("output_path", plan.output_path)),
         int(result.get("processed_frames", plan.expected_output_frames) or plan.expected_output_frames),
     )
-    plan.progress_reporter.finish(processed_frames)
+    plan.progress_reporter.finish()
     ndjson.completed(
         output_path=result.get("output_path", plan.output_path),
         processed_frames=processed_frames,

@@ -95,6 +95,28 @@ def test_update_at_stage_total_forces_final_progress(capsys: pytest.CaptureFixtu
     assert stdout_lines[-1]["percent"] == 100.0
 
 
+def test_finish_uses_stage_total_without_processed_frame_argument(capsys: pytest.CaptureFixture[str]) -> None:
+    reporter = CliProgressReporter(100)
+    reporter.set_stage("02_super_resolution", 2, 2, total_frames=25)
+
+    reporter.finish()
+
+    captured = capsys.readouterr()
+    stderr_line = _terminal_progress_line(captured.err)
+    stdout_lines = [json.loads(line) for line in captured.out.splitlines()]
+
+    assert "100.0% 25/25" in stderr_line
+    assert stdout_lines[-1] == {
+        "type": "progress",
+        "current": 25,
+        "total": 25,
+        "percent": 100.0,
+        "stage": "02_super_resolution",
+        "stageIndex": 2,
+        "stageTotal": 2,
+    }
+
+
 def test_heartbeat_forces_same_progress_with_runtime_status(capsys: pytest.CaptureFixture[str]) -> None:
     reporter = CliProgressReporter(100)
     reporter.set_stage("02_super_resolution", 2, 2, total_frames=10)
