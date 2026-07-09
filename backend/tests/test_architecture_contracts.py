@@ -958,6 +958,26 @@ def test_frontend_domain_preset_barrel_boundary_flags_obsolete_barrel(tmp_path, 
     assert any("obsolete domain preset type barrel" in issue for issue in issues), issues
 
 
+def test_frontend_ipc_barrel_boundary_flags_obsolete_barrel_and_root_import(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_ipc_barrel = tmp_path / "index.ts"
+    fake_source_root = tmp_path / "src"
+    fake_source_root.mkdir()
+    fake_ipc_barrel.write_text("export { safeInvoke } from './client'\n", encoding="utf-8")
+    (fake_source_root / "consumer.ts").write_text(
+        "import type { UnlistenFn } from '@/lib/ipc'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "FRONTEND_IPC_INDEX", fake_ipc_barrel, raising=False)
+    monkeypatch.setattr(module, "FRONTEND_SRC", fake_source_root, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_ipc_barrel_boundary(issues)
+
+    assert any("obsolete IPC barrel" in issue for issue in issues), issues
+    assert any("obsolete IPC barrel import" in issue for issue in issues), issues
+
+
 def test_frontend_task_orchestrator_runtime_boundary_flags_runtime_reexports(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_orchestrator = tmp_path / "useTaskOrchestrator.ts"

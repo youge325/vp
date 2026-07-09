@@ -23,6 +23,7 @@ COMMANDS_MANIFEST = ROOT / "frontend" / "src-tauri" / "src" / "commands_manifest
 DEFAULT_PERMISSIONS = ROOT / "frontend" / "src-tauri" / "permissions" / "default.toml"
 IPC_ENDPOINT_DIR = ROOT / "frontend" / "src" / "lib" / "ipc" / "endpoints"
 IPC_CONTRACT = ROOT / "frontend" / "src" / "lib" / "ipc" / "contract.ts"
+FRONTEND_IPC_INDEX = ROOT / "frontend" / "src" / "lib" / "ipc" / "index.ts"
 TAURI_SRC = ROOT / "frontend" / "src-tauri" / "src"
 FRONTEND_SRC = ROOT / "frontend" / "src"
 DOC_ROOT = ROOT / "docs"
@@ -919,6 +920,18 @@ def _check_frontend_domain_preset_barrel_boundary(issues: list[str]) -> None:
             continue
         if "@/types/domain/preset" in _read(path):
             issues.append(f"obsolete domain preset type barrel import remains in {_rel(path)}")
+
+
+def _check_frontend_ipc_barrel_boundary(issues: list[str]) -> None:
+    if FRONTEND_IPC_INDEX.exists():
+        issues.append(f"obsolete IPC barrel remains in {_rel(FRONTEND_IPC_INDEX)}")
+
+    import_pattern = re.compile(r"from\s+['\"]@/lib/ipc['\"]")
+    for path in _iter_source_files(FRONTEND_SRC):
+        if path == FRONTEND_IPC_INDEX:
+            continue
+        if import_pattern.search(_read(path)):
+            issues.append(f"obsolete IPC barrel import remains in {_rel(path)}")
 
 
 def _check_frontend_task_orchestrator_runtime_boundary(issues: list[str]) -> None:
@@ -1944,6 +1957,7 @@ def main() -> int:
         _check_frontend_enhance_runtime_view_split_boundary(issues)
         _check_frontend_model_metrics_barrel_boundary(issues)
         _check_frontend_domain_preset_barrel_boundary(issues)
+        _check_frontend_ipc_barrel_boundary(issues)
         _check_frontend_task_orchestrator_runtime_boundary(issues)
         _check_frontend_enhance_binding_boundary(issues)
         _check_frontend_enhance_field_binding_boundary(issues)
