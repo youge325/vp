@@ -142,6 +142,7 @@ ENHANCE_VIEW_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-view-b
 ENHANCE_LENS = FRONTEND_SRC / "composables" / "forms" / "enhance-lens.ts"
 ENHANCE_FIELD_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-field-bindings.ts"
 ENHANCE_OPTION_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-option-bindings.ts"
+FRONTEND_BATCH_LIFECYCLE_INDEX = FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "index.ts"
 DECODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-form-bindings.ts"
 ENCODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-form-bindings.ts"
 DECODE_PROFILE_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-profile-bindings.ts"
@@ -1061,6 +1062,12 @@ def _check_frontend_utility_internal_type_boundary(issues: list[str]) -> None:
         for name in names:
             if re.search(rf"\bexport\s+(?:interface|type)\s+{re.escape(name)}\b", text):
                 issues.append(f"frontend utility internal type `{name}` exported from {_rel(path)}")
+
+
+def _check_frontend_batch_lifecycle_facade_boundary(issues: list[str]) -> None:
+    text = _read(FRONTEND_BATCH_LIFECYCLE_INDEX)
+    if re.search(r"\bexport\s+type\s*\{[^}]*\bBatchLifecycle(?:Deps)?\b", text, re.DOTALL):
+        issues.append(f"batch lifecycle facade type re-export remains in {_rel(FRONTEND_BATCH_LIFECYCLE_INDEX)}")
 
 
 def _check_frontend_model_metrics_barrel_boundary(issues: list[str]) -> None:
@@ -2292,6 +2299,7 @@ def main() -> int:
         _check_frontend_io_form_aggregator_boundary(issues)
         _check_frontend_form_binding_param_export_boundary(issues)
         _check_frontend_utility_internal_type_boundary(issues)
+        _check_frontend_batch_lifecycle_facade_boundary(issues)
         _check_frontend_io_profile_state_boundary(issues)
         _check_frontend_decode_hardware_binding_boundary(issues)
         _check_frontend_defaults_workflow_boundary(issues)

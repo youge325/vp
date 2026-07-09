@@ -20,8 +20,6 @@ import { createFinalizeOps } from './finalize'
 import { createQueueOps } from './queue'
 import type { BatchLifecycle, BatchLifecycleDeps } from './types'
 
-export type { BatchLifecycle, BatchLifecycleDeps } from './types'
-
 export function createBatchLifecycle(deps: BatchLifecycleDeps): BatchLifecycle {
   const helpers = createCommonHelpers(deps)
 
