@@ -42,7 +42,6 @@ def test_single_stage_file_chunks_finalize_manifest_segments(monkeypatch, tmp_pa
         output_height=64,
         input_frame_count=5,
         output_frame_count=5,
-        input_fps=24.0,
         output_fps=24.0,
         encode_output_fps=None,
         resume_state=type("ResumeState", (), {"completed_output_frames": 0, "completed_segments": []})(),
