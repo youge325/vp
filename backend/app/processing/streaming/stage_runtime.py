@@ -9,7 +9,6 @@ from app.algorithms.tensor_backend import get_tensor_backend
 from app.planning import ProcessingStep
 from app.processing.streaming.frame_payload import FramePayload
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.stage_rules import algorithm_kwargs_for_create
 
 
 @dataclass(slots=True)
@@ -107,7 +106,6 @@ def _run_tensor_frame_stage(entry: StepAlgorithm, payload: FramePayload, metrics
 
 __all__ = [
     "StepAlgorithm",
-    "algorithm_kwargs_for_create",
     "algorithm_needs_pairs",
     "algorithm_needs_sequence",
     "entry_needs_sequence",
