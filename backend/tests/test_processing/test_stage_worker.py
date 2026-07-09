@@ -17,7 +17,6 @@ from app.processing.streaming.stage_worker import (
     run_stage_worker_stream,
 )
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
-from app.processing.streaming.stage_worker_io import RawVideoFrameError, read_rgb_frame
 from app.processing.streaming.stage_worker_progress import STAGE_EVENT_PREFIX
 
 
@@ -117,37 +116,6 @@ def _config(step: ProcessingStep, *, input_frame_count: int = 2) -> StageWorkerC
         input_frame_count=input_frame_count,
         tensor_backend_name="identity",
     )
-
-
-def test_stage_worker_config_accepts_jsonable_stage_shape() -> None:
-    config = StageWorkerConfig.from_mapping(
-        {
-            "stage": {
-                "algorithm_type": "super_resolution",
-                "algorithm_kwargs": {"scale_factor": 2.0},
-                "stage_name": "01_super_resolution",
-            },
-            "stageIndex": 1,
-            "stageTotal": 2,
-            "stageName": "01_super_resolution",
-            "inputWidth": 320,
-            "inputHeight": 180,
-            "outputWidth": 640,
-            "outputHeight": 360,
-            "inputFrameCount": 12,
-            "tensorBackendName": "onnx",
-        }
-    )
-
-    assert config.stage.algorithm_type == "super_resolution"
-    assert config.stage.algorithm_kwargs == {"scale_factor": 2.0}
-    assert config.output_width == 640
-    assert config.tensor_backend_name == "onnx"
-
-
-def test_read_rgb_frame_rejects_partial_frame() -> None:
-    with pytest.raises(RawVideoFrameError, match="partial rawvideo frame"):
-        read_rgb_frame(io.BytesIO(b"\x00\x01"), width=1, height=1)
 
 
 def test_single_frame_stage_reads_and_writes_rawvideo_frames() -> None:

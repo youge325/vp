@@ -54,6 +54,7 @@ PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.p
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 PROCESSOR_TESTS = ROOT / "backend" / "tests" / "test_processing"
 WORKER_PROCESSES_TEST = PROCESSOR_TESTS / "test_worker_processes.py"
+STAGE_WORKER_TEST = PROCESSOR_TESTS / "test_stage_worker.py"
 STAGE_WORKER_RUNTIME_TEST = PROCESSOR_TESTS / "test_stage_worker_runtime.py"
 SEGMENT_MANIFEST = ROOT / "backend" / "app" / "planning" / "manifest.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
@@ -608,6 +609,26 @@ def _check_stage_worker_runtime_split_boundary(issues: list[str]) -> None:
 def _check_stage_worker_runtime_test_boundary(issues: list[str]) -> None:
     if STAGE_WORKER_RUNTIME_TEST.exists():
         issues.append(f"obsolete stage worker runtime test remains in {_rel(STAGE_WORKER_RUNTIME_TEST)}")
+
+
+def _check_stage_worker_entrypoint_test_boundary(issues: list[str]) -> None:
+    if not STAGE_WORKER_TEST.exists():
+        return
+
+    text = _read(STAGE_WORKER_TEST)
+    forbidden_patterns = {
+        "raw io helper import": r"from\s+app\.processing\.streaming\.stage_worker_io\s+import\b",
+        "raw io helper test": r"^\s*def\s+test_(?:read|write)_rgb_frame\b",
+        "raw io error reference": r"\bRawVideoFrameError\b",
+        "raw io read helper": r"\bread_rgb_frame\b",
+        "raw io write helper": r"\bwrite_rgb_frame\b",
+        "config parsing test": r"^\s*def\s+test_stage_worker_config_\w+\b",
+        "config from mapping": r"\bStageWorkerConfig\.from_mapping\b",
+        "config from json": r"\bStageWorkerConfig\.from_json_file\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"stage worker entrypoint test boundary `{label}` remains in {_rel(STAGE_WORKER_TEST)}")
 
 
 def _check_frontend_form_profile_rule_boundary(issues: list[str]) -> None:
@@ -1931,6 +1952,7 @@ def main() -> int:
         _check_stage_worker_helper_import_boundary(issues)
         _check_stage_worker_runtime_split_boundary(issues)
         _check_stage_worker_runtime_test_boundary(issues)
+        _check_stage_worker_entrypoint_test_boundary(issues)
         _check_frontend_form_profile_rule_boundary(issues)
         _check_cli_defaults_planning_boundary(issues)
         _check_cli_process_validation_compat_boundary(issues)
