@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from app.planning import ProcessingStep, SegmentManifest
 from app.planning.manifest import ResumeState, SegmentRecord
+from app.processing.streaming import stage_file_stage_context
 from app.processing.streaming.stage_file_stage_context import build_stage_file_stage_context
+
+
+def test_stage_file_stage_context_only_exports_builder() -> None:
+    assert stage_file_stage_context.__all__ == ["build_stage_file_stage_context"]
 
 
 def test_stage_file_stage_context_uses_resume_state_for_final_stage(tmp_path) -> None:

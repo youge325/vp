@@ -59,6 +59,7 @@ PIPELINE_PREFLIGHT = ROOT / "backend" / "app" / "processing" / "streaming" / "pi
 PIPELINE_RULES = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_rules.py"
 PIPELINE_LIFECYCLE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_lifecycle.py"
 STAGE_FILE_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_pipeline.py"
+STAGE_FILE_STAGE_CONTEXT = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_stage_context.py"
 STAGE_FILE_CHUNK_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_runtime.py"
 STAGE_FILE_CHUNK_PROGRESS = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_progress.py"
 STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunks.py"
@@ -709,6 +710,13 @@ def _check_stage_runtime_rule_helper_boundary(issues: list[str]) -> None:
     forbidden_patterns = {
         "stage rules helper import": r"from\s+app\.processing\.streaming\.stage_rules\s+import\s+algorithm_kwargs_for_create\b",
         "stage rules helper export": r"__all__\s*=\s*\[[\s\S]*\"algorithm_kwargs_for_create\"",
+        "get_cached_backend": r"^def\s+get_cached_backend\b",
+        "entry_needs_sequence": r"^def\s+entry_needs_sequence\b",
+        "should_prefer_tensor_stage": r"^def\s+should_prefer_tensor_stage\b",
+        "dead tensor helper export": (
+            r"__all__\s*=\s*\[[\s\S]*\""
+            r"(?:get_cached_backend|entry_needs_sequence|should_prefer_tensor_stage)\""
+        ),
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
@@ -1715,6 +1723,14 @@ def _check_stage_file_pipeline_chunk_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_stage_file_stage_context_surface_boundary(issues: list[str]) -> None:
+    text = _read(STAGE_FILE_STAGE_CONTEXT)
+    if re.search(r"__all__\s*=\s*\[[\s\S]*\"StageFileStageContext\"", text, re.MULTILINE):
+        issues.append(
+            f"stage file stage context `StageFileStageContext` exported from {_rel(STAGE_FILE_STAGE_CONTEXT)}"
+        )
+
+
 def _check_stage_file_chunks_runtime_boundary(issues: list[str]) -> None:
     text = _read(STAGE_FILE_CHUNKS)
     forbidden_patterns = {
@@ -2405,6 +2421,7 @@ def main() -> int:
         _check_worker_process_helper_import_boundary(issues)
         _check_worker_processes_test_boundary(issues)
         _check_stage_file_pipeline_chunk_boundary(issues)
+        _check_stage_file_stage_context_surface_boundary(issues)
         _check_stage_file_chunks_runtime_boundary(issues)
         _check_stage_file_chunks_test_boundary(issues)
         _check_stage_file_chunk_input_fps_boundary(issues)
