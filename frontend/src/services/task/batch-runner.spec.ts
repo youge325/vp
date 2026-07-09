@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createBatchRunner, type BatchRunnerDeps } from './batch-runner'
+import { createBatchRunner } from './batch-runner'
 import type { BatchState, ResumeConflictDescriptor } from '@/types/domain/batch'
 import type { MediaItem, MediaRunState, MediaTaskState } from '@/types/domain/media'
 import { createIdleTaskState } from './events'
 import type { TaskRequest } from '@/types/protocol'
+
+type BatchRunnerDeps = Parameters<typeof createBatchRunner>[0]
 
 function makeDeps(overrides: Partial<BatchRunnerDeps> = {}): BatchRunnerDeps {
   const batchState: BatchState = {

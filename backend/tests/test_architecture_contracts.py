@@ -896,7 +896,11 @@ def test_frontend_utility_internal_types_are_not_exported() -> None:
             "BatchPreflightInput",
             "BatchPreflightVerdict",
         ),
-        frontend_src / "services" / "task" / "batch" / "conflict.ts": ("ConflictResolverDeps",),
+        frontend_src / "services" / "task" / "batch-runner.ts": ("BatchRunnerDeps",),
+        frontend_src / "services" / "task" / "batch" / "conflict.ts": (
+            "ConflictResolverDeps",
+            "ConflictResolver",
+        ),
         frontend_src / "services" / "task" / "batch" / "events.ts": (
             "EventHandlersDeps",
             "EventHandlers",

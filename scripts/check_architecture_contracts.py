@@ -225,7 +225,11 @@ FRONTEND_UTILITY_INTERNAL_TYPE_FILES = {
         "BatchPreflightInput",
         "BatchPreflightVerdict",
     ),
-    FRONTEND_SRC / "services" / "task" / "batch" / "conflict.ts": ("ConflictResolverDeps",),
+    FRONTEND_SRC / "services" / "task" / "batch-runner.ts": ("BatchRunnerDeps",),
+    FRONTEND_SRC / "services" / "task" / "batch" / "conflict.ts": (
+        "ConflictResolverDeps",
+        "ConflictResolver",
+    ),
     FRONTEND_SRC / "services" / "task" / "batch" / "events.ts": ("EventHandlersDeps", "EventHandlers"),
     FRONTEND_SRC / "composables" / "forms" / "enhance-effect-bindings.ts": ("EnhanceEffectBindingParams",),
     FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "common.ts": ("CommonHelpers",),
