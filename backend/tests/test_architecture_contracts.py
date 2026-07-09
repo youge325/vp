@@ -245,235 +245,26 @@ def test_frontend_enhance_workflow_lookup_boundary_flags_lookup_reexport(tmp_pat
     assert any("enhance workflow lookup" in issue for issue in issues), issues
 
 
-def test_frontend_enhance_rules_split_boundary_flags_local_rule_bodies(tmp_path, monkeypatch) -> None:
+def test_frontend_enhance_removed_rule_files_boundary_flags_empty_files(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_rules = tmp_path / "enhance-rules.ts"
-    fake_rules.write_text(
-        "function backendCompatible() {}\n"
-        "export function isPaddleGanVsrAlgorithm() {}\n"
-        "export function superResolutionInputFrameMode() {}\n"
-        "export function fixedRuntimeFrameCount() {}\n"
-        "export function fixedSuperResolutionScaleFactor() {}\n"
-        "export function applySuperResolutionAlgorithmDefaults() {}\n"
-        "export function pickDefaultEngine() {}\n"
-        "export function fallbackInterpolationOnnxModel() {}\n"
-        "export function fallbackSuperResolutionOnnxModel() {}\n"
-        "export function pickDefaultInterpolationAlgorithm() {}\n"
-        "export function pickDefaultInterpolationModel() {}\n"
-        "export function pickDefaultSuperResolutionAlgorithm() {}\n"
-        "export function pickDefaultAnimeProfile() {}\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "ENHANCE_RULES", fake_rules, raising=False)
-    issues: list[str] = []
-
-    module._check_frontend_enhance_rules_split_boundary(issues)
-
-    assert any("enhance rules split" in issue for issue in issues), issues
-
-
-def test_frontend_enhance_rules_split_boundary_flags_nested_barrel(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_rules = tmp_path / "enhance-rules.ts"
-    fake_rules.write_text(
-        "export * from './enhance-algorithm-capabilities'\n"
-        "export * from './enhance-default-selection'\n"
-        "export * from './enhance-super-resolution-defaults'\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "ENHANCE_RULES", fake_rules, raising=False)
-    issues: list[str] = []
-
-    module._check_frontend_enhance_rules_split_boundary(issues)
-
-    assert any("nested default-selection barrel" in issue for issue in issues), issues
-
-
-def test_frontend_enhance_rules_split_boundary_flags_obsolete_barrel(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_rules = tmp_path / "enhance-rules.ts"
-    fake_rules.write_text(
-        "// Compatibility barrel for enhance rule helpers.\n"
-        "export * from './enhance-algorithm-capabilities'\n"
-        "export * from './enhance-default-pickers'\n"
-        "export * from './enhance-onnx-defaults'\n"
-        "export * from './enhance-super-resolution-defaults'\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "ENHANCE_RULES", fake_rules, raising=False)
-    issues: list[str] = []
-
-    module._check_frontend_enhance_rules_split_boundary(issues)
-
-    assert any("obsolete enhance rules barrel" in issue for issue in issues), issues
-
-
-def test_frontend_enhance_default_selection_split_boundary_flags_local_rule_bodies(tmp_path, monkeypatch) -> None:
-    module = _load_module()
     fake_defaults = tmp_path / "enhance-default-selection.ts"
-    fake_defaults.write_text(
-        "function backendCompatible() {}\n"
-        "export function pickDefaultEngine() {}\n"
-        "export function fallbackInterpolationOnnxModel() {}\n"
-        "export function fallbackSuperResolutionOnnxModel() {}\n"
-        "export function pickDefaultInterpolationAlgorithm() {}\n"
-        "export function pickDefaultInterpolationModel() {}\n"
-        "export function pickDefaultSuperResolutionAlgorithm() {}\n"
-        "export function pickDefaultAnimeProfile() {}\n",
-        encoding="utf-8",
-    )
+    fake_pickers = tmp_path / "enhance-default-pickers.ts"
+    fake_rules.write_text("", encoding="utf-8")
+    fake_defaults.write_text("", encoding="utf-8")
+    fake_pickers.write_text("", encoding="utf-8")
+    monkeypatch.setattr(module, "ENHANCE_RULES", fake_rules, raising=False)
     monkeypatch.setattr(module, "ENHANCE_DEFAULT_SELECTION", fake_defaults, raising=False)
+    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
     issues: list[str] = []
 
+    module._check_frontend_enhance_rules_split_boundary(issues)
     module._check_frontend_enhance_default_selection_split_boundary(issues)
-
-    assert any("enhance default-selection split" in issue for issue in issues), issues
-
-
-def test_frontend_enhance_default_selection_split_boundary_flags_obsolete_barrel(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_defaults = tmp_path / "enhance-default-selection.ts"
-    fake_defaults.write_text(
-        "export * from './enhance-default-pickers'\nexport * from './enhance-onnx-defaults'\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "ENHANCE_DEFAULT_SELECTION", fake_defaults, raising=False)
-    issues: list[str] = []
-
-    module._check_frontend_enhance_default_selection_split_boundary(issues)
-
-    assert any("obsolete enhance default-selection barrel" in issue for issue in issues), issues
-
-
-def test_frontend_enhance_default_pickers_boundary_flags_local_backend_helper(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_pickers = tmp_path / "enhance-default-pickers.ts"
-    fake_pickers.write_text(
-        "function backendCompatible(algorithm, backend) {\n  return algorithm.tensorBackends.includes(backend)\n}\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
-    issues: list[str] = []
-
     module._check_frontend_enhance_default_pickers_boundary(issues)
 
-    assert any("enhance default pickers" in issue for issue in issues), issues
-
-
-def test_frontend_enhance_default_pickers_boundary_flags_obsolete_barrel(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_pickers = tmp_path / "enhance-default-pickers.ts"
-    fake_pickers.write_text(
-        "// Compatibility barrel for enhance default picker helpers.\n"
-        "export { pickDefaultInterpolationAlgorithm } from './enhance-algorithm-defaults'\n"
-        "export { pickDefaultEngine } from './enhance-engine-defaults'\n"
-        "export { pickDefaultAnimeProfile } from './enhance-metadata-defaults'\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
-    issues: list[str] = []
-
-    module._check_frontend_enhance_default_pickers_boundary(issues)
-
-    assert any("obsolete enhance default pickers barrel" in issue for issue in issues), issues
-
-
-def test_frontend_enhance_default_pickers_boundary_flags_direct_backend_support_helper(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_pickers = tmp_path / "enhance-default-pickers.ts"
-    fake_pickers.write_text(
-        "import { algorithmSupportsBackend } from './enhance-workflow-lookup'\n"
-        "const selected = algorithms.find((algorithm) => algorithmSupportsBackend(algorithm, backend))\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
-    issues: list[str] = []
-
-    module._check_frontend_enhance_default_pickers_boundary(issues)
-
-    assert any("backend support direct helper" in issue for issue in issues), issues
-
-
-def test_frontend_enhance_default_pickers_boundary_flags_direct_interpolation_lookup(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_pickers = tmp_path / "enhance-default-pickers.ts"
-    fake_pickers.write_text(
-        "return checkResult?.interpolationAlgorithms?.find((algorithm) => algorithm.name === selected)?.models?.[0]\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
-    issues: list[str] = []
-
-    module._check_frontend_enhance_default_pickers_boundary(issues)
-
-    assert any("direct interpolation lookup" in issue for issue in issues), issues
-
-
-def test_frontend_enhance_default_pickers_boundary_flags_engine_default_logic(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_pickers = tmp_path / "enhance-default-pickers.ts"
-    fake_pickers.write_text(
-        "export function pickDefaultInterpolationEngine(env, backend) {\n"
-        "  const engines = env?.tensorEngines?.[backend] ?? []\n"
-        "  const vendor = env?.gpu?.adapters?.[0]?.vendor\n"
-        "  if (vendor === 'nvidia') return engines.includes('tensorrt') ? 'tensorrt' : engines[0]\n"
-        "}\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
-    issues: list[str] = []
-
-    module._check_frontend_enhance_default_pickers_boundary(issues)
-
-    assert any("default engine body" in issue for issue in issues), issues
-    assert any("tensor engine lookup" in issue for issue in issues), issues
-    assert any("gpu vendor lookup" in issue for issue in issues), issues
-    assert any("vendor branch" in issue for issue in issues), issues
-
-
-def test_frontend_enhance_default_pickers_boundary_flags_metadata_defaults(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_pickers = tmp_path / "enhance-default-pickers.ts"
-    fake_pickers.write_text(
-        "export function pickDefaultInterpolationModel(env, algorithm) {\n"
-        "  return findInterpolationAlgorithm(env, algorithm)?.models?.[0] ?? '4.25'\n"
-        "}\n"
-        "export function pickDefaultAnimeProfile(env) {\n"
-        "  return env?.animeProfiles?.[0] ?? 'clean-lines'\n"
-        "}\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
-    issues: list[str] = []
-
-    module._check_frontend_enhance_default_pickers_boundary(issues)
-
-    assert any("metadata default body" in issue for issue in issues), issues
-    assert any("interpolation model lookup" in issue for issue in issues), issues
-    assert any("anime profile lookup" in issue for issue in issues), issues
-
-
-def test_frontend_enhance_default_pickers_boundary_flags_algorithm_defaults(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_pickers = tmp_path / "enhance-default-pickers.ts"
-    fake_pickers.write_text(
-        "import { pickBackendSupportedAlgorithmName } from './enhance-workflow-lookup'\n"
-        "export function pickDefaultInterpolationAlgorithm(env, backend) {\n"
-        "  return pickBackendSupportedAlgorithmName(env?.interpolationAlgorithms, backend, 'rife')\n"
-        "}\n"
-        "export function pickDefaultSuperResolutionAlgorithm(env, backend) {\n"
-        "  return pickBackendSupportedAlgorithmName(env?.superResolutionAlgorithms, backend, 'placeholder')\n"
-        "}\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "ENHANCE_DEFAULT_PICKERS", fake_pickers, raising=False)
-    issues: list[str] = []
-
-    module._check_frontend_enhance_default_pickers_boundary(issues)
-
-    assert any("backend-supported algorithm picker" in issue for issue in issues), issues
-    assert any("algorithm default body" in issue for issue in issues), issues
-    assert any("super-resolution algorithm list" in issue for issue in issues), issues
+    assert any("obsolete enhance rules file" in issue for issue in issues), issues
+    assert any("obsolete enhance default-selection file" in issue for issue in issues), issues
+    assert any("obsolete enhance default pickers file" in issue for issue in issues), issues
 
 
 def test_frontend_enhance_onnx_defaults_boundary_flags_direct_algorithm_lookup(tmp_path, monkeypatch) -> None:
