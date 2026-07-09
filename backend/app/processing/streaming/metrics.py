@@ -1,14 +1,15 @@
 """Lightweight metrics container for the streaming pipeline.
 
-Phase C.1.3 引入。三个进程内目标:
+Phase C.1.3 引入。目标:
 1. 给将来想接入的"队列水位 / 实测 fps / 每阶段耗时"提供线程安全的存储,
    避免每个 caller 自己 hack 一个 dict + Lock。
 2. 让 NDJSON ``progress`` 帧能可选地携带这些字段(向后兼容,前端忽略未知字段)。
 3. 不依赖外部库(无 prometheus_client / no psutil),避免给 backend
    再引入新 dependency。
 
-本次只提供数据结构与同步原语,具体接入到 ``_run_streaming_pipeline``
-留给后续 PR 演进 — Pipeline 接入是大改且需要回归测试覆盖。
+当前 rawvideo 路径由 stage-worker 子进程、主进程 encoder queue 和
+``encoder_worker`` 共同更新 metrics；stage-file 路径复用同一个容器来
+记录 chunk encoding 与 tensor transfer 统计。
 
 Usage::
 
@@ -52,11 +53,10 @@ class _MetricsState:
 class PipelineMetrics:
     """Thread-safe metrics container for the streaming pipeline.
 
-    Designed for the three-worker producer/consumer model in
-    ``processing/streaming/pipeline.py``. All public methods acquire a
-    single ``threading.Lock``; granularity isn't fine but contention is
-    low (decode / process / encode threads emit at most a few hundred
-    metrics updates per second on the hot path).
+    Designed for the current stage-worker and encoder-thread runtimes.
+    All public methods acquire a single ``threading.Lock``; granularity
+    isn't fine but contention is low because updates happen at stage,
+    queue, and frame boundaries.
     """
 
     def __init__(self) -> None:

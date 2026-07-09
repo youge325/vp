@@ -1132,6 +1132,23 @@ def test_obsolete_in_process_streaming_workers_boundary_flags_files_tests_and_re
     assert any("obsolete in-process streaming worker reference" in issue for issue in issues), issues
 
 
+def test_obsolete_in_process_streaming_workers_boundary_flags_stale_metrics_runtime_text(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_doc = tmp_path / "metrics.py"
+    fake_doc.write_text(
+        "specific接入到 ``_run_streaming_pipeline``\nDesigned for the three-worker producer/consumer model\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "OBSOLETE_IN_PROCESS_STREAMING_FILES", (), raising=False)
+    monkeypatch.setattr(module, "OBSOLETE_IN_PROCESS_STREAMING_TESTS", (), raising=False)
+    monkeypatch.setattr(module, "OBSOLETE_IN_PROCESS_STREAMING_REFERENCE_ROOTS", (fake_doc,), raising=False)
+    issues: list[str] = []
+
+    module._check_obsolete_in_process_streaming_workers_boundary(issues)
+
+    assert any("obsolete in-process streaming worker reference" in issue for issue in issues), issues
+
+
 def test_obsolete_decode_queue_boundary_flags_queue_worker_and_doc_references(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_queues = tmp_path / "queues.py"
