@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.planning import ProcessingStep, SegmentManifest
-from app.processing.streaming import stage_file_chunk_runtime, stage_file_chunks, stage_file_rules
+from app.processing.streaming import stage_file_chunk_runtime, stage_file_chunks
 from app.processing.streaming.metrics import PipelineMetrics
 
 
@@ -57,21 +57,3 @@ def test_single_stage_file_chunks_finalize_manifest_segments(monkeypatch, tmp_pa
     assert completed == 5
     assert calls == [(0, 2, 2), (2, 2, 2), (4, 1, 1)]
     assert [segment.frame_count for segment in segments] == [2, 2, 1]
-
-
-def test_stage_file_rules_build_safe_signature_and_empty_resume(tmp_path) -> None:
-    step = ProcessingStep(
-        algorithm_type="super_resolution",
-        algorithm_kwargs={"scale_factor": 4.0, "sr_algorithm": "ppmsvsr"},
-        stage_name="01 super/resolution",
-    )
-
-    signature = stage_file_rules.stage_signature(2, step, "input.mp4", str(tmp_path / "stage.mp4"))
-    resume_state = stage_file_rules.empty_resume_state()
-
-    assert stage_file_rules.safe_stage_name(step) == "01_super_resolution"
-    assert '"stage": 2' in signature
-    assert '"input":' in signature
-    assert resume_state.start_source_frame == 0
-    assert resume_state.completed_output_frames == 0
-    assert resume_state.completed_segments == []

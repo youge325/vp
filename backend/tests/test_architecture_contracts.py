@@ -1506,6 +1506,25 @@ def test_stage_file_chunks_runtime_boundary_flags_compatibility_exports(tmp_path
     assert any("helper __all__ export" in issue for issue in issues), issues
 
 
+def test_stage_file_chunks_test_boundary_flags_stage_file_rule_tests(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_test = tmp_path / "test_stage_file_chunks.py"
+    fake_test.write_text(
+        "from app.processing.streaming import stage_file_rules\n\n"
+        "def test_stage_file_rules_build_safe_signature_and_empty_resume():\n"
+        "    stage_file_rules.stage_signature(1, step, 'input.mp4', 'stage.mp4')\n"
+        "    stage_file_rules.safe_stage_name(step)\n"
+        "    stage_file_rules.empty_resume_state()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_CHUNKS_TEST", fake_test, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_file_chunks_test_boundary(issues)
+
+    assert any("stage file chunks test boundary" in issue for issue in issues), issues
+
+
 def test_stage_file_chunk_runtime_encoding_boundary_flags_local_encoding_loop(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_runtime = tmp_path / "stage_file_chunk_runtime.py"

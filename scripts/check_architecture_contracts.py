@@ -53,6 +53,7 @@ STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "sta
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 PROCESSOR_TESTS = ROOT / "backend" / "tests" / "test_processing"
+STAGE_FILE_CHUNKS_TEST = PROCESSOR_TESTS / "test_stage_file_chunks.py"
 WORKER_PIPELINE_TEST = PROCESSOR_TESTS / "test_worker_pipeline.py"
 WORKER_PROCESSES_TEST = PROCESSOR_TESTS / "test_worker_processes.py"
 STAGE_WORKER_TEST = PROCESSOR_TESTS / "test_stage_worker.py"
@@ -1519,6 +1520,23 @@ def _check_stage_file_chunks_runtime_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_stage_file_chunks_test_boundary(issues: list[str]) -> None:
+    if not STAGE_FILE_CHUNKS_TEST.exists():
+        return
+
+    text = _read(STAGE_FILE_CHUNKS_TEST)
+    forbidden_patterns = {
+        "stage-file rules import": r"from\s+app\.processing\.streaming\s+import\s+stage_file_rules\b|from\s+app\.processing\.streaming\.stage_file_rules\s+import\b",
+        "stage-file rules test": r"^\s*def\s+test_stage_file_rules_\w+\b",
+        "stage signature": r"\bstage_signature\b",
+        "safe stage name": r"\bsafe_stage_name\b",
+        "empty resume state": r"\bempty_resume_state\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"stage file chunks test boundary `{label}` remains in {_rel(STAGE_FILE_CHUNKS_TEST)}")
+
+
 def _check_stage_file_chunk_runtime_encoding_boundary(issues: list[str]) -> None:
     text = _read(STAGE_FILE_CHUNK_RUNTIME)
     forbidden_patterns = {
@@ -2027,6 +2045,7 @@ def main() -> int:
         _check_worker_processes_test_boundary(issues)
         _check_stage_file_pipeline_chunk_boundary(issues)
         _check_stage_file_chunks_runtime_boundary(issues)
+        _check_stage_file_chunks_test_boundary(issues)
         _check_stage_file_chunk_runtime_encoding_boundary(issues)
         _check_stage_worker_execution_boundary(issues)
         _check_stage_worker_config_boundary(issues)
