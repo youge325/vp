@@ -61,6 +61,41 @@ WORKER_PIPELINE_TEST = PROCESSOR_TESTS / "test_worker_pipeline.py"
 WORKER_PROCESSES_TEST = PROCESSOR_TESTS / "test_worker_processes.py"
 STAGE_WORKER_TEST = PROCESSOR_TESTS / "test_stage_worker.py"
 STAGE_WORKER_RUNTIME_TEST = PROCESSOR_TESTS / "test_stage_worker_runtime.py"
+STREAMING_DECODER = ROOT / "backend" / "app" / "processing" / "streaming" / "decoder.py"
+PROCESSOR_ALGORITHMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_algorithms.py"
+PROCESSOR_STAGE_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_stage_execution.py"
+PROCESSOR_STREAM_IO = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_stream_io.py"
+PROCESSOR_STREAM_INTERPOLATED = (
+    ROOT / "backend" / "app" / "processing" / "streaming" / "processor_stream_interpolated.py"
+)
+PROCESSOR_STREAM_SEQUENCE = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_stream_sequence.py"
+PROCESSOR_STREAM_SINGLE = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_stream_single.py"
+OBSOLETE_IN_PROCESS_STREAMING_FILES = (
+    STREAMING_DECODER,
+    PROCESSOR,
+    PROCESSOR_ALGORITHMS,
+    PROCESSOR_STAGE_EXECUTION,
+    PROCESSOR_STREAMS,
+    PROCESSOR_STREAM_IO,
+    PROCESSOR_STREAM_INTERPOLATED,
+    PROCESSOR_STREAM_SEQUENCE,
+    PROCESSOR_STREAM_SINGLE,
+)
+OBSOLETE_IN_PROCESS_STREAMING_TESTS = (
+    PROCESSOR_TESTS / "test_decoder.py",
+    PROCESSOR_TESTS / "test_interpolation_tensor_reuse.py",
+    PROCESSOR_TESTS / "test_processor_algorithms.py",
+    PROCESSOR_TESTS / "test_processor_stage_execution.py",
+    PROCESSOR_TESTS / "test_processor_streams.py",
+    PROCESSOR_TESTS / "test_sequence_processor.py",
+    PROCESSOR_TESTS / "test_transfer_counts.py",
+)
+OBSOLETE_IN_PROCESS_STREAMING_REFERENCE_ROOTS = (
+    ROOT / "backend" / "app",
+    BACKEND_TESTS,
+    DOC_ROOT,
+    README,
+)
 SEGMENT_MANIFEST = ROOT / "backend" / "app" / "planning" / "manifest.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_validation.py"
@@ -1794,83 +1829,6 @@ def _check_encoder_segment_writer_boundary(issues: list[str]) -> None:
             issues.append(f"encoder segment writer `{label}` remains in backend/app/processing/streaming/encoder.py")
 
 
-def _check_processor_algorithm_boundary(issues: list[str]) -> None:
-    text = _read(PROCESSOR)
-    forbidden_patterns = {
-        "_PipelineAlgorithms": r"^\s*class\s+_PipelineAlgorithms\b",
-        "_initialize_algorithms": r"^\s*def\s+_initialize_algorithms\b",
-        "_pipeline_needs_sequence": r"^\s*def\s+_pipeline_needs_sequence\b",
-        "_ordered_algorithm_entries": r"^\s*def\s+_ordered_algorithm_entries\b",
-        "_resolve_processor_mode": r"^\s*def\s+_resolve_processor_mode\b",
-    }
-    for label, pattern in forbidden_patterns.items():
-        if re.search(pattern, text, re.MULTILINE):
-            issues.append(
-                f"processor algorithm rule `{label}` remains in backend/app/processing/streaming/processor.py"
-            )
-
-
-def _check_processor_stage_execution_boundary(issues: list[str]) -> None:
-    text = _read(PROCESSOR)
-    forbidden_patterns = {
-        "_apply_pre_steps": r"^\s*def\s+_apply_pre_steps\b",
-        "_apply_post_steps": r"^\s*def\s+_apply_post_steps\b",
-        "_apply_stage_chain": r"^\s*def\s+_apply_stage_chain\b",
-        "_run_sequence_stage": r"^\s*def\s+_run_sequence_stage\b",
-        "_run_interpolation_sequence_stage": r"^\s*def\s+_run_interpolation_sequence_stage\b",
-        "_run_per_frame_sequence_stage": r"^\s*def\s+_run_per_frame_sequence_stage\b",
-        "_emit_stage_progress": r"^\s*def\s+_emit_stage_progress\b",
-    }
-    for label, pattern in forbidden_patterns.items():
-        if re.search(pattern, text, re.MULTILINE):
-            issues.append(
-                f"processor stage execution rule `{label}` remains in backend/app/processing/streaming/processor.py"
-            )
-
-
-def _check_processor_stream_boundary(issues: list[str]) -> None:
-    text = _read(PROCESSOR)
-    forbidden_patterns = {
-        "_process_single_frame_stream": r"^\s*def\s+_process_single_frame_stream\b",
-        "_process_interpolated_stream": r"^\s*def\s+_process_interpolated_stream\b",
-        "_process_sequence_stream": r"^\s*def\s+_process_sequence_stream\b",
-        "_emit_encoded_payload": r"^\s*def\s+_emit_encoded_payload\b",
-        "_drain_decoded": r"^\s*def\s+_drain_decoded\b",
-        "_emit_stream_end": r"^\s*def\s+_emit_stream_end\b",
-    }
-    for label, pattern in forbidden_patterns.items():
-        if re.search(pattern, text, re.MULTILINE):
-            issues.append(f"processor stream rule `{label}` remains in backend/app/processing/streaming/processor.py")
-
-
-def _check_processor_private_reexport_boundary(issues: list[str]) -> None:
-    text = _read(PROCESSOR)
-    forbidden_patterns = {
-        "algorithm helper re-export": r"\bas\s+_(?:PipelineAlgorithms|initialize_algorithms|ordered_algorithm_entries|pipeline_needs_sequence|resolve_processor_mode)\b",
-        "stage helper re-export": r"\bas\s+_(?:apply_post_steps|apply_pre_steps|apply_stage_chain|emit_stage_progress|run_interpolation_sequence_stage|run_per_frame_sequence_stage|run_sequence_stage)\b",
-        "stream helper re-export": r"\bas\s+_(?:drain_decoded|emit_encoded_payload|emit_stream_end|process_interpolated_stream|process_sequence_stream|process_single_frame_stream)\b",
-        "stage runtime helper re-export": r"\bas\s+_StepAlgorithm\b",
-        "private helper export list": r"__all__\s*=\s*\[[^\]]*\"_(?:PipelineAlgorithms|StepAlgorithm|process_|apply_|run_|emit_|drain_|initialize_|pipeline_|ordered_)",
-    }
-    for label, pattern in forbidden_patterns.items():
-        if re.search(pattern, text, re.DOTALL):
-            issues.append(f"processor private re-export `{label}` remains in {_rel(PROCESSOR)}")
-
-
-def _check_processor_test_private_alias_boundary(issues: list[str]) -> None:
-    if not PROCESSOR_TESTS.exists():
-        return
-
-    forbidden_pattern = (
-        r"\b_(?:PipelineAlgorithms|StepAlgorithm|process_interpolated_stream|process_sequence_stream|"
-        r"process_single_frame_stream)\b"
-    )
-    for path in PROCESSOR_TESTS.rglob("test_*.py"):
-        text = _read(path)
-        if re.search(forbidden_pattern, text):
-            issues.append(f"processor test private alias remains in {_rel(path)}")
-
-
 def _check_planning_test_private_alias_boundary(issues: list[str]) -> None:
     if not BACKEND_TESTS.exists():
         return
@@ -1905,28 +1863,6 @@ def _check_pipeline_test_private_alias_boundary(issues: list[str]) -> None:
                 issues.append(f"pipeline test private alias remains in {_rel(path)}")
 
 
-def _check_processor_stream_aggregator_boundary(issues: list[str]) -> None:
-    if not PROCESSOR_STREAMS.exists():
-        return
-
-    text = _read(PROCESSOR_STREAMS)
-    if "Compatibility exports" in text:
-        issues.append(f"obsolete processor stream aggregator remains in {_rel(PROCESSOR_STREAMS)}")
-    forbidden_patterns = {
-        "process_single_frame_stream": r"^\s*def\s+process_single_frame_stream\b",
-        "process_interpolated_stream": r"^\s*def\s+process_interpolated_stream\b",
-        "process_sequence_stream": r"^\s*def\s+process_sequence_stream\b",
-        "emit_encoded_payload": r"^\s*def\s+emit_encoded_payload\b",
-        "drain_decoded": r"^\s*def\s+drain_decoded\b",
-        "emit_stream_end": r"^\s*def\s+emit_stream_end\b",
-    }
-    for label, pattern in forbidden_patterns.items():
-        if re.search(pattern, text, re.MULTILINE):
-            issues.append(
-                f"processor stream rule `{label}` remains in backend/app/processing/streaming/processor_streams.py"
-            )
-
-
 def _check_obsolete_tensor_chain_boundary(issues: list[str]) -> None:
     if TENSOR_CHAIN.exists():
         issues.append(f"obsolete tensor chain helper remains in {_rel(TENSOR_CHAIN)}")
@@ -1942,6 +1878,34 @@ def _check_obsolete_tensor_chain_boundary(issues: list[str]) -> None:
             continue
         if re.search(forbidden_import, _read(path)):
             issues.append(f"obsolete tensor chain import remains in {_rel(path)}")
+
+
+def _check_obsolete_in_process_streaming_workers_boundary(issues: list[str]) -> None:
+    obsolete_paths = set(OBSOLETE_IN_PROCESS_STREAMING_FILES) | set(OBSOLETE_IN_PROCESS_STREAMING_TESTS)
+    for path in OBSOLETE_IN_PROCESS_STREAMING_FILES:
+        if path.exists():
+            issues.append(f"obsolete in-process streaming worker remains in {_rel(path)}")
+
+    for path in OBSOLETE_IN_PROCESS_STREAMING_TESTS:
+        if path.exists():
+            issues.append(f"obsolete in-process streaming worker test remains in {_rel(path)}")
+
+    forbidden_patterns = (
+        r"app\.processing\.streaming\.decoder\b",
+        r"app\.processing\.streaming\.processor(?:\b|_)",
+        r"backend/app/processing/streaming/(?:decoder|processor|encoder)\.py",
+        r"backend\\app\\processing\\streaming\\(?:decoder|processor|encoder)\.py",
+    )
+    for root in OBSOLETE_IN_PROCESS_STREAMING_REFERENCE_ROOTS:
+        paths = [root] if root.is_file() else sorted(root.rglob("*"))
+        for path in paths:
+            if not path.is_file() or path in obsolete_paths or path.name == "test_architecture_contracts.py":
+                continue
+            if path.suffix not in {".py", ".md", ".rst", ".txt"}:
+                continue
+            text = _read(path)
+            if any(re.search(pattern, text) for pattern in forbidden_patterns):
+                issues.append(f"obsolete in-process streaming worker reference remains in {_rel(path)}")
 
 
 def main() -> int:
@@ -2030,15 +1994,10 @@ def main() -> int:
         _check_pipeline_dispatch_runtime_boundary(issues)
         _check_encoder_helper_boundary(issues)
         _check_encoder_segment_writer_boundary(issues)
-        _check_processor_algorithm_boundary(issues)
-        _check_processor_stage_execution_boundary(issues)
-        _check_processor_stream_boundary(issues)
-        _check_processor_private_reexport_boundary(issues)
-        _check_processor_test_private_alias_boundary(issues)
         _check_planning_test_private_alias_boundary(issues)
         _check_pipeline_test_private_alias_boundary(issues)
-        _check_processor_stream_aggregator_boundary(issues)
         _check_obsolete_tensor_chain_boundary(issues)
+        _check_obsolete_in_process_streaming_workers_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2

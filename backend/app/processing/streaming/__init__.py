@@ -1,9 +1,8 @@
 """Streaming pipeline entry point.
 
-Splits the original monolithic ``processing/streaming.py`` into focused
-sub-modules: ``queues``, ``decoder``, ``processor``, ``encoder``, and
-``pipeline``.  Public surface is the single :func:`process_video_streaming`
-orchestrator.
+The public surface is the :func:`process_video_streaming` orchestrator.
+Runtime work is split across preflight, dispatch, stage-worker pipeline,
+stage-file pipeline, and encoder-worker modules.
 """
 
 from app.processing.streaming.pipeline import process_video_streaming
