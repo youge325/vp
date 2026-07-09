@@ -15,8 +15,7 @@ def chunk_progress_adapter(
     total: int,
     callback: Any,
 ) -> Any:
-    def adapter(current: int, progress_total: int, **kwargs: Any) -> None:
-        del progress_total
+    def adapter(current: int, _progress_total: int, **kwargs: Any) -> None:
         if step.algorithm_type == "frame_interpolation":
             current_value = min(chunk.input_start_frame + max(int(current), 0), total)
         else:
