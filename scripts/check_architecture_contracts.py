@@ -52,9 +52,11 @@ STAGE_FILE_CHUNK_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming"
 STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunks.py"
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
+TENSOR_CHAIN = ROOT / "backend" / "app" / "processing" / "streaming" / "_tensor_chain.py"
 PROCESSOR_TESTS = ROOT / "backend" / "tests" / "test_processing"
 STAGE_FILE_PIPELINE_TEST = PROCESSOR_TESTS / "test_stage_file_pipeline.py"
 STAGE_FILE_CHUNKS_TEST = PROCESSOR_TESTS / "test_stage_file_chunks.py"
+TENSOR_CHAIN_TEST = PROCESSOR_TESTS / "test_tensor_chain.py"
 WORKER_PIPELINE_TEST = PROCESSOR_TESTS / "test_worker_pipeline.py"
 WORKER_PROCESSES_TEST = PROCESSOR_TESTS / "test_worker_processes.py"
 STAGE_WORKER_TEST = PROCESSOR_TESTS / "test_stage_worker.py"
@@ -1984,6 +1986,23 @@ def _check_processor_stream_aggregator_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_obsolete_tensor_chain_boundary(issues: list[str]) -> None:
+    if TENSOR_CHAIN.exists():
+        issues.append(f"obsolete tensor chain helper remains in {_rel(TENSOR_CHAIN)}")
+
+    if TENSOR_CHAIN_TEST.exists():
+        issues.append(f"obsolete tensor chain test remains in {_rel(TENSOR_CHAIN_TEST)}")
+
+    forbidden_import = (
+        r"app\.processing\.streaming\._tensor_chain|from\s+app\.processing\.streaming\s+import\s+_tensor_chain"
+    )
+    for path in [*sorted((ROOT / "backend" / "app").rglob("*.py")), *sorted(BACKEND_TESTS.rglob("*.py"))]:
+        if path in {TENSOR_CHAIN, TENSOR_CHAIN_TEST} or path.name == "test_architecture_contracts.py":
+            continue
+        if re.search(forbidden_import, _read(path)):
+            issues.append(f"obsolete tensor chain import remains in {_rel(path)}")
+
+
 def main() -> int:
     issues: list[str] = []
     try:
@@ -2077,6 +2096,7 @@ def main() -> int:
         _check_planning_test_private_alias_boundary(issues)
         _check_pipeline_test_private_alias_boundary(issues)
         _check_processor_stream_aggregator_boundary(issues)
+        _check_obsolete_tensor_chain_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2
