@@ -2008,6 +2008,8 @@ def _check_obsolete_in_process_streaming_workers_boundary(issues: list[str]) -> 
         r"app\.processing\.streaming\.processor(?:\b|_)",
         r"backend/app/processing/streaming/(?:decoder|processor|encoder)\.py",
         r"backend\\app\\processing\\streaming\\(?:decoder|processor|encoder)\.py",
+        r"\b_run_streaming_pipeline\b",
+        r"\bthree-worker producer/consumer\b",
     )
     for root in OBSOLETE_IN_PROCESS_STREAMING_REFERENCE_ROOTS:
         paths = [root] if root.is_file() else sorted(root.rglob("*"))
