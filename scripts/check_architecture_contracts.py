@@ -66,6 +66,7 @@ CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_validation.py"
 CLI_PROCESS_PLANNING = ROOT / "backend" / "app" / "cli" / "commands" / "_process_planning.py"
 MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
+DOMAIN_PRESET_TYPES = FRONTEND_SRC / "types" / "domain" / "preset.ts"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 WORKFLOW_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "workflow-defaults.ts"
 PRESET_NORMALIZE = FRONTEND_SRC / "services" / "preset" / "normalize.ts"
@@ -872,6 +873,17 @@ def _check_frontend_model_metrics_barrel_boundary(issues: list[str]) -> None:
         text = _read(path)
         if any(re.search(pattern, text) for pattern in import_patterns):
             issues.append(f"obsolete model metrics barrel import remains in {_rel(path)}")
+
+
+def _check_frontend_domain_preset_barrel_boundary(issues: list[str]) -> None:
+    if DOMAIN_PRESET_TYPES.exists():
+        issues.append(f"obsolete domain preset type barrel remains in {_rel(DOMAIN_PRESET_TYPES)}")
+
+    for path in _iter_source_files(FRONTEND_SRC):
+        if path == DOMAIN_PRESET_TYPES:
+            continue
+        if "@/types/domain/preset" in _read(path):
+            issues.append(f"obsolete domain preset type barrel import remains in {_rel(path)}")
 
 
 def _check_frontend_task_orchestrator_runtime_boundary(issues: list[str]) -> None:
@@ -1967,6 +1979,7 @@ def main() -> int:
         _check_frontend_enhance_view_model_split_boundary(issues)
         _check_frontend_enhance_runtime_view_split_boundary(issues)
         _check_frontend_model_metrics_barrel_boundary(issues)
+        _check_frontend_domain_preset_barrel_boundary(issues)
         _check_frontend_task_orchestrator_runtime_boundary(issues)
         _check_frontend_enhance_binding_boundary(issues)
         _check_frontend_enhance_field_binding_boundary(issues)
