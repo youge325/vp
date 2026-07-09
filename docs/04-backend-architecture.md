@@ -108,27 +108,30 @@ class StagePlan:
 
 ```mermaid
 graph LR
-    A[FFmpeg 解码] --> B[decode_queue<br/>maxsize=100]
-    B --> C[decoder_worker]
-    C --> D[DecodedFrame]
-    D --> E[encode_queue<br/>maxsize=8]
-    E --> F[processor_worker]
-    F --> G[EncodedFrame / SegmentBoundary]
-    G --> H[encoder_worker]
-    H --> I[FFmpeg 编码]
-    I --> J[片段文件]
+    A[Pipeline preflight] --> B[Stage plan]
+    B --> C{Stage-file strategy?}
+    C -->|yes| D[stage_file_pipeline]
+    C -->|no| E[pipeline_raw]
+    E --> F[worker_pipeline]
+    F --> G[stage-worker subprocess chain]
+    G --> H[encode_queue]
+    H --> I[encoder_worker]
+    I --> J[FFmpeg 编码]
+    J --> K[片段文件]
 
-    K[error_queue] --> L[异常汇聚]
-    M[stop_event] --> N[协作式终止]
+    L[error_queue] --> M[异常汇聚]
+    N[stop_event] --> O[协作式终止]
 ```
 
-三个 daemon 线程通过 `queue.Queue` 协作：
+rawvideo 路径由 stage-worker 子进程链执行算法，主进程只保留编码队列和生命周期编排：
 
-| 线程 | 文件 | 职责 |
-|------|------|------|
-| `vp-decoder` | [`decoder.py`](../backend/app/processing/streaming/decoder.py) | FFmpeg rawvideo 解码，写入 `decode_queue` |
-| `vp-processor` | [`processor.py`](../backend/app/processing/streaming/processor.py) | 从 `decode_queue` 读取，执行算法，写入 `encode_queue` |
-| `vp-encoder` | [`encoder.py`](../backend/app/processing/streaming/encoder.py) | 从 `encode_queue` 读取，FFmpeg 编码，生成分段文件 |
+| 模块 | 职责 |
+|------|------|
+| [`pipeline_preflight.py`](../backend/app/processing/streaming/pipeline_preflight.py) | 解析视频信息、stage plan、signature、resume domain 和输出尺寸 |
+| [`pipeline_dispatch.py`](../backend/app/processing/streaming/pipeline_dispatch.py) | 根据 plan 分派 stage-file 或 rawvideo runtime |
+| [`worker_pipeline.py`](../backend/app/processing/streaming/worker_pipeline.py) | 构建 stage-worker chain 并把处理后帧写入 `encode_queue` |
+| [`stage_worker.py`](../backend/app/processing/streaming/stage_worker.py) | isolated worker 入口，执行单个 stage 的 rawvideo I/O 与算法循环 |
+| [`encoder_worker.py`](../backend/app/processing/streaming/encoder_worker.py) | 从 `encode_queue` 读取，FFmpeg 编码，生成分段文件 |
 
 ### 队列消息类型
 
@@ -141,7 +144,7 @@ graph LR
 
 ### 最终拼接
 
-所有片段完成后，`_finalize_segmented_output()`：
+所有片段完成后，`finalize_segmented_output()`：
 1. 使用 FFmpeg concat demuxer 拼接视频片段
 2. 合并原始音频（若 `keepAudio=true`）
 3. 清理 `.vp_segments/` 和 sidecar 文件

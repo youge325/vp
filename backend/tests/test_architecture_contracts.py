@@ -974,120 +974,6 @@ def test_frontend_task_orchestrator_runtime_boundary_flags_runtime_reexports(tmp
     assert any("runtime wildcard re-export" in issue for issue in issues), issues
 
 
-def test_processor_algorithm_boundary_flags_local_algorithm_helpers(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_processor = tmp_path / "processor.py"
-    fake_processor.write_text(
-        "@dataclass(slots=True)\n"
-        "class _PipelineAlgorithms:\n"
-        "    pass\n\n"
-        "def _initialize_algorithms():\n"
-        "    pass\n\n"
-        "def _pipeline_needs_sequence():\n"
-        "    pass\n\n"
-        "def _ordered_algorithm_entries():\n"
-        "    pass\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "PROCESSOR", fake_processor)
-    issues: list[str] = []
-
-    module._check_processor_algorithm_boundary(issues)
-
-    assert any("processor algorithm rule" in issue for issue in issues), issues
-
-
-def test_processor_stage_execution_boundary_flags_local_stage_helpers(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_processor = tmp_path / "processor.py"
-    fake_processor.write_text(
-        "def _apply_stage_chain():\n"
-        "    pass\n\n"
-        "def _apply_pre_steps():\n"
-        "    pass\n\n"
-        "def _run_sequence_stage():\n"
-        "    pass\n\n"
-        "def _run_interpolation_sequence_stage():\n"
-        "    pass\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "PROCESSOR", fake_processor)
-    issues: list[str] = []
-
-    module._check_processor_stage_execution_boundary(issues)
-
-    assert any("processor stage execution rule" in issue for issue in issues), issues
-
-
-def test_processor_stream_boundary_flags_local_stream_loops(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_processor = tmp_path / "processor.py"
-    fake_processor.write_text(
-        "def _process_single_frame_stream():\n"
-        "    pass\n\n"
-        "def _process_interpolated_stream():\n"
-        "    pass\n\n"
-        "def _process_sequence_stream():\n"
-        "    pass\n\n"
-        "def _emit_encoded_payload():\n"
-        "    pass\n\n"
-        "def _drain_decoded():\n"
-        "    pass\n\n"
-        "def _emit_stream_end():\n"
-        "    pass\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "PROCESSOR", fake_processor)
-    issues: list[str] = []
-
-    module._check_processor_stream_boundary(issues)
-
-    assert any("processor stream rule" in issue for issue in issues), issues
-
-
-def test_processor_private_reexport_boundary_flags_compatibility_aliases(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_processor = tmp_path / "processor.py"
-    fake_processor.write_text(
-        "from app.processing.streaming.processor_algorithms import PipelineAlgorithms as _PipelineAlgorithms\n"
-        "from app.processing.streaming.processor_stage_execution import run_sequence_stage as _run_sequence_stage\n"
-        "from app.processing.streaming.processor_stream_single import process_single_frame_stream as _process_single_frame_stream\n"
-        "from app.processing.streaming.stage_runtime import StepAlgorithm as _StepAlgorithm\n\n"
-        "__all__ = [\n"
-        '    "_PipelineAlgorithms",\n'
-        '    "_StepAlgorithm",\n'
-        '    "_process_single_frame_stream",\n'
-        "]\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "PROCESSOR", fake_processor)
-    issues: list[str] = []
-
-    module._check_processor_private_reexport_boundary(issues)
-
-    assert any("processor private re-export" in issue for issue in issues), issues
-
-
-def test_processor_test_private_alias_boundary_flags_legacy_test_aliases(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_tests = tmp_path / "test_processing"
-    fake_tests.mkdir()
-    (fake_tests / "test_processor_stream.py").write_text(
-        "from app.processing.streaming.processor_algorithms import PipelineAlgorithms as _PipelineAlgorithms\n"
-        "from app.processing.streaming.processor_stream_single import process_single_frame_stream as _process_single_frame_stream\n"
-        "from app.processing.streaming.stage_runtime import StepAlgorithm as _StepAlgorithm\n\n"
-        "def test_stream():\n"
-        "    _process_single_frame_stream()\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "PROCESSOR_TESTS", fake_tests, raising=False)
-    issues: list[str] = []
-
-    module._check_processor_test_private_alias_boundary(issues)
-
-    assert any("processor test private alias" in issue for issue in issues), issues
-
-
 def test_planning_test_private_alias_boundary_flags_legacy_resolve_aliases(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_tests = tmp_path / "tests"
@@ -1181,42 +1067,6 @@ def test_cli_process_planning_validation_boundary_flags_private_validation_reexp
     assert any("private validation re-export" in issue for issue in issues), issues
 
 
-def test_processor_stream_aggregator_boundary_flags_local_stream_loops(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_streams = tmp_path / "processor_streams.py"
-    fake_streams.write_text(
-        "def process_single_frame_stream():\n"
-        "    pass\n\n"
-        "def process_interpolated_stream():\n"
-        "    pass\n\n"
-        "def drain_decoded():\n"
-        "    pass\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "PROCESSOR_STREAMS", fake_streams)
-    issues: list[str] = []
-
-    module._check_processor_stream_aggregator_boundary(issues)
-
-    assert any("processor stream rule" in issue and "processor_streams.py" in issue for issue in issues), issues
-
-
-def test_processor_stream_aggregator_boundary_flags_obsolete_compatibility_barrel(tmp_path, monkeypatch) -> None:
-    module = _load_module()
-    fake_streams = tmp_path / "processor_streams.py"
-    fake_streams.write_text(
-        '"""Compatibility exports for queue-driven processor stream loops."""\n\n'
-        "from app.processing.streaming.processor_stream_single import process_single_frame_stream\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(module, "PROCESSOR_STREAMS", fake_streams)
-    issues: list[str] = []
-
-    module._check_processor_stream_aggregator_boundary(issues)
-
-    assert any("obsolete processor stream aggregator" in issue for issue in issues), issues
-
-
 def test_obsolete_tensor_chain_boundary_flags_helper_and_tests(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_helper = tmp_path / "_tensor_chain.py"
@@ -1234,6 +1084,32 @@ def test_obsolete_tensor_chain_boundary_flags_helper_and_tests(tmp_path, monkeyp
 
     assert any("obsolete tensor chain helper" in issue for issue in issues), issues
     assert any("obsolete tensor chain test" in issue for issue in issues), issues
+
+
+def test_obsolete_in_process_streaming_workers_boundary_flags_files_tests_and_references(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_worker = tmp_path / "processor.py"
+    fake_test = tmp_path / "test_processor_streams.py"
+    fake_doc = tmp_path / "backend-architecture.md"
+    fake_worker.write_text("def _processor_worker():\n    pass\n", encoding="utf-8")
+    fake_test.write_text(
+        "from app.processing.streaming.processor_algorithms import PipelineAlgorithms\n",
+        encoding="utf-8",
+    )
+    fake_doc.write_text(
+        "[processor.py](../backend/app/processing/streaming/processor.py)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "OBSOLETE_IN_PROCESS_STREAMING_FILES", (fake_worker,), raising=False)
+    monkeypatch.setattr(module, "OBSOLETE_IN_PROCESS_STREAMING_TESTS", (fake_test,), raising=False)
+    monkeypatch.setattr(module, "OBSOLETE_IN_PROCESS_STREAMING_REFERENCE_ROOTS", (fake_doc,), raising=False)
+    issues: list[str] = []
+
+    module._check_obsolete_in_process_streaming_workers_boundary(issues)
+
+    assert any("obsolete in-process streaming worker" in issue for issue in issues), issues
+    assert any("obsolete in-process streaming worker test" in issue for issue in issues), issues
+    assert any("obsolete in-process streaming worker reference" in issue for issue in issues), issues
 
 
 def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(tmp_path, monkeypatch) -> None:
