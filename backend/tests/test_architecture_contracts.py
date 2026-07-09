@@ -1812,6 +1812,44 @@ def test_pipeline_raw_runtime_stage_boundary_flags_local_worker_runner(tmp_path,
     assert any("runner local" in issue for issue in issues), issues
 
 
+def test_pipeline_raw_signature_boundary_flags_dead_signature_forwarding(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_dispatch = tmp_path / "pipeline_dispatch.py"
+    fake_raw = tmp_path / "pipeline_raw.py"
+    fake_runtime = tmp_path / "pipeline_raw_runtime.py"
+    fake_raw_encoder = tmp_path / "pipeline_raw_encoder.py"
+    fake_encoder_worker = tmp_path / "encoder_worker.py"
+    fake_dispatch.write_text(
+        "def run_streaming_pipeline(*, signature: str):\n    return run_raw_streaming_pipeline(signature=signature)\n",
+        encoding="utf-8",
+    )
+    fake_raw.write_text(
+        "def run_raw_streaming_pipeline(*, signature: str):\n"
+        "    return run_raw_pipeline_runtime(signature=signature)\n",
+        encoding="utf-8",
+    )
+    fake_runtime.write_text(
+        "def run_raw_pipeline_runtime(*, signature: str):\n    return start_raw_encoder_thread(signature=signature)\n",
+        encoding="utf-8",
+    )
+    fake_raw_encoder.write_text(
+        "def start_raw_encoder_thread(*, signature: str):\n"
+        "    return threading.Thread(kwargs={'signature': signature})\n",
+        encoding="utf-8",
+    )
+    fake_encoder_worker.write_text("def run_encoder_worker(*, signature: str):\n    del signature\n", encoding="utf-8")
+    monkeypatch.setattr(module, "PIPELINE_DISPATCH", fake_dispatch, raising=False)
+    monkeypatch.setattr(module, "PIPELINE_RAW", fake_raw, raising=False)
+    monkeypatch.setattr(module, "PIPELINE_RAW_RUNTIME", fake_runtime, raising=False)
+    monkeypatch.setattr(module, "PIPELINE_RAW_ENCODER", fake_raw_encoder, raising=False)
+    monkeypatch.setattr(module, "ENCODER_WORKER", fake_encoder_worker, raising=False)
+    issues: list[str] = []
+
+    module._check_pipeline_raw_signature_boundary(issues)
+
+    assert any("raw encoder signature" in issue for issue in issues), issues
+
+
 def test_pipeline_raw_stage_boundary_flags_runner_alias_exports(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_stage = tmp_path / "pipeline_raw_stage.py"

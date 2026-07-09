@@ -31,7 +31,6 @@ def test_start_raw_encoder_thread_wires_worker_and_resume_progress(tmp_path: Pat
         ffmpeg=object(),  # type: ignore[arg-type]
         encode_config={"container": "mp4"},
         manifest=manifest,
-        signature="sig",
         output_width=2,
         output_height=3,
         stream_fps=24.0,

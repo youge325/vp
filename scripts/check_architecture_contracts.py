@@ -1714,6 +1714,12 @@ def _check_pipeline_raw_runtime_stage_boundary(issues: list[str]) -> None:
             issues.append(f"pipeline raw stage runner `{label}` remains in {_rel(PIPELINE_RAW_RUNTIME)}")
 
 
+def _check_pipeline_raw_signature_boundary(issues: list[str]) -> None:
+    for path in (PIPELINE_DISPATCH, PIPELINE_RAW, PIPELINE_RAW_RUNTIME, PIPELINE_RAW_ENCODER, ENCODER_WORKER):
+        if re.search(r"\bsignature\b", _read(path)):
+            issues.append(f"raw encoder signature forwarding remains in {_rel(path)}")
+
+
 def _check_pipeline_raw_stage_boundary(issues: list[str]) -> None:
     text = _read(PIPELINE_RAW_STAGE)
     forbidden_patterns = {
@@ -2047,6 +2053,7 @@ def main() -> int:
         _check_pipeline_raw_runtime_completion_boundary(issues)
         _check_pipeline_raw_runtime_state_boundary(issues)
         _check_pipeline_raw_runtime_stage_boundary(issues)
+        _check_pipeline_raw_signature_boundary(issues)
         _check_pipeline_raw_stage_boundary(issues)
         _check_streaming_pipeline_lifecycle_boundary(issues)
         _check_streaming_pipeline_preflight_boundary(issues)

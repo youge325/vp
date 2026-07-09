@@ -81,7 +81,6 @@ def test_raw_pipeline_runtime_runs_encoder_thread_and_stage_worker(tmp_path: Pat
         decode_config={"mode": "software"},
         encode_config={"container": "mp4"},
         manifest=manifest,
-        signature="sig",
         stage_plan=StagePlan(
             pre_steps=[],
             interpolation_step=None,
@@ -130,7 +129,6 @@ def test_raw_pipeline_runtime_resolves_default_stage_worker_runner(tmp_path: Pat
         decode_config={"mode": "software"},
         encode_config={"container": "mp4"},
         manifest=manifest,
-        signature="sig",
         stage_plan=StagePlan(
             pre_steps=[],
             interpolation_step=None,

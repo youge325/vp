@@ -18,7 +18,6 @@ def run_encoder_worker(
     ffmpeg: FFmpegWrapper,
     encode_config: dict[str, Any],
     manifest: SegmentManifest,
-    signature: str,
     width: int,
     height: int,
     fps: float,
@@ -32,7 +31,6 @@ def run_encoder_worker(
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
     metrics: PipelineMetrics,
 ) -> None:
-    del signature
     segment_writer = EncoderSegmentWriter(
         ffmpeg=ffmpeg,
         encode_config=encode_config,
