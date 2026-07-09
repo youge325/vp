@@ -31,6 +31,7 @@ PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddle
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_FACTORY = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_factory.py"
 STAGE_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_runtime.py"
+STAGE_WORKER_IO = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_io.py"
 STAGE_WORKER_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_runtime.py"
 STAGE_FILE_CHUNK_ENCODING = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_encoding.py"
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
@@ -541,6 +542,17 @@ def _check_stage_runtime_rule_helper_boundary(issues: list[str]) -> None:
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
             issues.append(f"stage runtime rule helper `{label}` remains in {_rel(STAGE_RUNTIME)}")
+
+
+def _check_stage_worker_io_surface_boundary(issues: list[str]) -> None:
+    text = _read(STAGE_WORKER_IO)
+    forbidden_patterns = {
+        "declared frame helper": r"^def\s+read_declared_frames\b",
+        "declared frame export": r"__all__\s*=\s*\[[\s\S]*\"read_declared_frames\"",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"stage worker io surface `{label}` remains in {_rel(STAGE_WORKER_IO)}")
 
 
 def _check_stage_worker_helper_import_boundary(issues: list[str]) -> None:
@@ -1866,6 +1878,7 @@ def main() -> int:
         _check_stage_worker_entrypoint_export_boundary(issues)
         _check_stage_worker_factory_public_boundary(issues)
         _check_stage_runtime_rule_helper_boundary(issues)
+        _check_stage_worker_io_surface_boundary(issues)
         _check_stage_worker_helper_import_boundary(issues)
         _check_stage_worker_runtime_split_boundary(issues)
         _check_frontend_form_profile_rule_boundary(issues)

@@ -1585,6 +1585,28 @@ def test_stage_runtime_rule_helper_boundary_flags_rule_reexports(tmp_path, monke
     assert any("stage runtime rule helper" in issue for issue in issues), issues
 
 
+def test_stage_worker_io_surface_boundary_flags_declared_frame_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_stage_worker_io = tmp_path / "stage_worker_io.py"
+    fake_stage_worker_io.write_text(
+        "def read_declared_frames():\n"
+        "    pass\n\n"
+        "__all__ = [\n"
+        '    "RawVideoFrameError",\n'
+        '    "read_declared_frames",\n'
+        '    "read_rgb_frame",\n'
+        '    "write_rgb_frame",\n'
+        "]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_WORKER_IO", fake_stage_worker_io, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_worker_io_surface_boundary(issues)
+
+    assert any("stage worker io surface" in issue for issue in issues), issues
+
+
 def test_stage_worker_helper_import_boundary_flags_helper_imports_from_entrypoint(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_encoding = tmp_path / "stage_file_chunk_encoding.py"

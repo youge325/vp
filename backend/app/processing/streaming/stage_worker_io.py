@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, BinaryIO
+from typing import BinaryIO
 
 import numpy as np
 
@@ -43,21 +43,8 @@ def write_rgb_frame(stream: BinaryIO, frame: np.ndarray, *, width: int, height: 
     stream.write(np.ascontiguousarray(frame).tobytes())
 
 
-def read_declared_frames(config: Any, input_stream: BinaryIO) -> list[np.ndarray]:
-    frames: list[np.ndarray] = []
-    for _index in range(max(config.input_frame_count, 0)):
-        frame = read_rgb_frame(input_stream, width=config.input_width, height=config.input_height)
-        if frame is None:
-            raise RawVideoFrameError(
-                f"rawvideo stream ended before {config.input_frame_count} declared input frames were read."
-            )
-        frames.append(frame)
-    return frames
-
-
 __all__ = [
     "RawVideoFrameError",
-    "read_declared_frames",
     "read_rgb_frame",
     "write_rgb_frame",
 ]
