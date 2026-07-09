@@ -211,6 +211,23 @@ FRONTEND_ENHANCE_READ_MODEL_TYPE_REEXPORT_FILES = (
     FRONTEND_SRC / "services" / "preset" / "enhance-runtime-rows.ts",
     ENHANCE_RUNTIME_VIEW,
 )
+FRONTEND_UTILITY_INTERNAL_TYPE_FILES = {
+    ENHANCE_LENS: ("AlgorithmSpec", "AlgorithmLens"),
+    FRONTEND_SRC / "composables" / "forms" / "useFilterChainForm.ts": ("FilterStage",),
+    FRONTEND_SRC / "composables" / "selectors" / "useGpuCapabilities.ts": ("GpuCapabilitiesView",),
+    FRONTEND_SRC / "lib" / "ipc" / "events.ts": ("TaskEventHandlers",),
+    FRONTEND_SRC / "services" / "model-runtime-estimates.ts": ("RuntimeMetricOptions",),
+    FRONTEND_SRC / "services" / "task" / "events.ts": ("TaskLogLineKind",),
+    FRONTEND_SRC / "services" / "task" / "preflight.ts": (
+        "BatchPreflightItem",
+        "BatchPreflightInput",
+        "BatchPreflightVerdict",
+    ),
+    FRONTEND_SRC / "services" / "task" / "batch" / "conflict.ts": ("ConflictResolverDeps",),
+    FRONTEND_SRC / "services" / "task" / "batch" / "events.ts": ("EventHandlersDeps", "EventHandlers"),
+    FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "finalize.ts": ("FinalizeInternalRefs",),
+    FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "queue.ts": ("QueueInternalRefs",),
+}
 
 
 def _read(path: Path) -> str:
@@ -1021,6 +1038,14 @@ def _check_frontend_enhance_read_model_type_boundary(issues: list[str]) -> None:
     for path in FRONTEND_ENHANCE_READ_MODEL_TYPE_REEXPORT_FILES:
         if re.search(r"\bexport\s+type\s+\{", _read(path)):
             issues.append(f"enhance read-model type re-export remains in {_rel(path)}")
+
+
+def _check_frontend_utility_internal_type_boundary(issues: list[str]) -> None:
+    for path, names in FRONTEND_UTILITY_INTERNAL_TYPE_FILES.items():
+        text = _read(path)
+        for name in names:
+            if re.search(rf"\bexport\s+(?:interface|type)\s+{re.escape(name)}\b", text):
+                issues.append(f"frontend utility internal type `{name}` exported from {_rel(path)}")
 
 
 def _check_frontend_model_metrics_barrel_boundary(issues: list[str]) -> None:
@@ -2251,6 +2276,7 @@ def main() -> int:
         _check_frontend_io_form_binding_boundary(issues)
         _check_frontend_io_form_aggregator_boundary(issues)
         _check_frontend_form_binding_param_export_boundary(issues)
+        _check_frontend_utility_internal_type_boundary(issues)
         _check_frontend_io_profile_state_boundary(issues)
         _check_frontend_decode_hardware_binding_boundary(issues)
         _check_frontend_defaults_workflow_boundary(issues)

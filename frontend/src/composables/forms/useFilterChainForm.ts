@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import type { FilterStep, WorkflowConfig } from '@/types/protocol'
 
-export type FilterStage = 'preprocess' | 'postprocess'
+type FilterStage = 'preprocess' | 'postprocess'
 
 export function useFilterChainForm(stage: FilterStage) {
   const { editorConfig, patchWorkflow } = useWorkbenchEditor()

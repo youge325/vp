@@ -10,7 +10,7 @@ import {
 } from '@/services/env/gpu-capabilities'
 import type { InferenceEngine, TensorBackend } from '@/types/domain/workflow'
 
-export interface GpuCapabilitiesView {
+interface GpuCapabilitiesView {
   visibleBackends: Ref<TensorBackend[]>
   availableEngines: Ref<InferenceEngine[]>
   showEngineSelector: Ref<boolean>

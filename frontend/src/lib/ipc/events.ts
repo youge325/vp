@@ -12,7 +12,7 @@ import type { ResumeStatus } from '@/types/domain/batch'
 import type { TaskError } from '@/types/domain/media'
 import { isTauriRuntime } from './client'
 
-export interface TaskEventHandlers {
+interface TaskEventHandlers {
   onProgress: (payload: TaskProgressPayload) => void
   onLog: (payload: TaskLogPayload) => void
   onCompleted: (payload: TaskCompletedPayload) => void

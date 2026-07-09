@@ -876,6 +876,65 @@ def test_frontend_form_binding_param_export_boundary_flags_internal_exports(tmp_
     assert any("form binding params" in issue for issue in issues), issues
 
 
+def test_frontend_utility_internal_types_are_not_exported() -> None:
+    module = _load_module()
+    frontend_src = module.FRONTEND_SRC
+    internal_types = {
+        frontend_src / "composables" / "forms" / "enhance-lens.ts": (
+            "AlgorithmSpec",
+            "AlgorithmLens",
+        ),
+        frontend_src / "composables" / "forms" / "useFilterChainForm.ts": ("FilterStage",),
+        frontend_src / "composables" / "selectors" / "useGpuCapabilities.ts": ("GpuCapabilitiesView",),
+        frontend_src / "lib" / "ipc" / "events.ts": ("TaskEventHandlers",),
+        frontend_src / "services" / "model-runtime-estimates.ts": ("RuntimeMetricOptions",),
+        frontend_src / "services" / "task" / "events.ts": ("TaskLogLineKind",),
+        frontend_src / "services" / "task" / "preflight.ts": (
+            "BatchPreflightItem",
+            "BatchPreflightInput",
+            "BatchPreflightVerdict",
+        ),
+        frontend_src / "services" / "task" / "batch" / "conflict.ts": ("ConflictResolverDeps",),
+        frontend_src / "services" / "task" / "batch" / "events.ts": (
+            "EventHandlersDeps",
+            "EventHandlers",
+        ),
+        frontend_src / "services" / "task" / "batch" / "lifecycle" / "finalize.ts": ("FinalizeInternalRefs",),
+        frontend_src / "services" / "task" / "batch" / "lifecycle" / "queue.ts": ("QueueInternalRefs",),
+    }
+
+    exported = []
+    for path, names in internal_types.items():
+        text = path.read_text(encoding="utf-8")
+        exported.extend(
+            f"{path.name}:{name}"
+            for name in names
+            if f"export interface {name}" in text or f"export type {name}" in text
+        )
+
+    assert exported == []
+
+
+def test_frontend_utility_internal_type_boundary_flags_internal_exports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_utility = tmp_path / "preflight.ts"
+    fake_utility.write_text(
+        "export interface BatchPreflightInput { selectedItems: unknown[] }\nexport type TaskLogLineKind = 'default'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        module,
+        "FRONTEND_UTILITY_INTERNAL_TYPE_FILES",
+        {fake_utility: ("BatchPreflightInput", "TaskLogLineKind")},
+        raising=False,
+    )
+    issues: list[str] = []
+
+    module._check_frontend_utility_internal_type_boundary(issues)
+
+    assert any("frontend utility internal type" in issue for issue in issues), issues
+
+
 def test_frontend_io_profile_state_boundary_flags_local_profile_derivation(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_decode_profile = tmp_path / "decode-profile-bindings.ts"

@@ -7,7 +7,7 @@ import type { BatchLifecycle, BatchLifecycleDeps } from './lifecycle'
 import { buildInspectionFromError } from '../resume-classifier'
 import { TASK_ERROR_CODES } from '@/types/protocol'
 
-export type ConflictResolverDeps = Pick<
+type ConflictResolverDeps = Pick<
   BatchLifecycleDeps,
   'getBatch' | 'setBatch' | 'getMediaItem' | 'setPendingConflict'
 >
