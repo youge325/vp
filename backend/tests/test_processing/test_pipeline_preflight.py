@@ -55,7 +55,6 @@ def test_build_streaming_pipeline_preflight_resolves_planning_context(tmp_path) 
         workflow_config={"fpsMode": "target"},
         output_config={"segmentFrames": 0},
         processing_steps=steps,
-        tensor_backend_name="onnx",
         output_fps=None,
     )
 

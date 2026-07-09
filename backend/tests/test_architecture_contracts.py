@@ -1924,6 +1924,30 @@ def test_streaming_pipeline_preflight_boundary_flags_local_context_building(tmp_
     assert any("streaming pipeline preflight" in issue for issue in issues), issues
 
 
+def test_pipeline_output_dimensions_backend_boundary_flags_dead_backend_forwarding(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_rules = tmp_path / "pipeline_rules.py"
+    fake_preflight = tmp_path / "pipeline_preflight.py"
+    fake_rules.write_text(
+        "def resolved_output_dimensions(*, video_info, stage_plan, tensor_backend_name: str):\n"
+        "    del tensor_backend_name\n"
+        "    return video_info['width'], video_info['height']\n",
+        encoding="utf-8",
+    )
+    fake_preflight.write_text(
+        "def build_streaming_pipeline_preflight(*, tensor_backend_name: str):\n"
+        "    return resolved_output_dimensions(video_info={}, stage_plan=None, tensor_backend_name=tensor_backend_name)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "PIPELINE_RULES", fake_rules, raising=False)
+    monkeypatch.setattr(module, "PIPELINE_PREFLIGHT", fake_preflight, raising=False)
+    issues: list[str] = []
+
+    module._check_pipeline_output_dimensions_backend_boundary(issues)
+
+    assert any("pipeline output dimensions backend" in issue for issue in issues), issues
+
+
 def test_streaming_pipeline_dispatch_boundary_flags_local_dispatch_runtime(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "pipeline.py"

@@ -70,11 +70,9 @@ def resolved_output_dimensions(
     *,
     video_info: dict[str, Any],
     stage_plan: StagePlan,
-    tensor_backend_name: str,
 ) -> tuple[int, int]:
     width = int(video_info["width"])
     height = int(video_info["height"])
-    del tensor_backend_name
     return resolve_stage_plan_output_dimensions(
         stage_plan,
         source_width=width,

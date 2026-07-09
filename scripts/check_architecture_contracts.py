@@ -50,6 +50,8 @@ PIPELINE_RAW_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "
 PIPELINE_RAW_STAGE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_stage.py"
 PIPELINE_DISPATCH = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_dispatch.py"
 STREAMING_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline.py"
+PIPELINE_PREFLIGHT = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_preflight.py"
+PIPELINE_RULES = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_rules.py"
 PIPELINE_LIFECYCLE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_lifecycle.py"
 STAGE_FILE_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_pipeline.py"
 STAGE_FILE_CHUNK_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_runtime.py"
@@ -1775,6 +1777,23 @@ def _check_streaming_pipeline_preflight_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_pipeline_output_dimensions_backend_boundary(issues: list[str]) -> None:
+    rules_text = _read(PIPELINE_RULES)
+    if re.search(r"def\s+resolved_output_dimensions\s*\([\s\S]*?\btensor_backend_name\b", rules_text):
+        issues.append(f"pipeline output dimensions backend parameter remains in {_rel(PIPELINE_RULES)}")
+    if re.search(r"\bdel\s+tensor_backend_name\b", rules_text):
+        issues.append(f"pipeline output dimensions backend discard remains in {_rel(PIPELINE_RULES)}")
+
+    preflight_text = _read(PIPELINE_PREFLIGHT)
+    forbidden_patterns = {
+        "preflight backend parameter": r"def\s+build_streaming_pipeline_preflight\s*\([\s\S]*?\btensor_backend_name\b",
+        "preflight backend forwarding": r"resolved_output_dimensions\s*\([\s\S]*?\btensor_backend_name\s*=",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, preflight_text):
+            issues.append(f"pipeline output dimensions backend `{label}` remains in {_rel(PIPELINE_PREFLIGHT)}")
+
+
 def _check_streaming_pipeline_dispatch_boundary(issues: list[str]) -> None:
     text = _read(STREAMING_PIPELINE)
     forbidden_patterns = {
@@ -2085,6 +2104,7 @@ def main() -> int:
         _check_pipeline_raw_stage_boundary(issues)
         _check_streaming_pipeline_lifecycle_boundary(issues)
         _check_streaming_pipeline_preflight_boundary(issues)
+        _check_pipeline_output_dimensions_backend_boundary(issues)
         _check_streaming_pipeline_dispatch_boundary(issues)
         _check_pipeline_dispatch_runtime_boundary(issues)
         _check_encoder_helper_boundary(issues)

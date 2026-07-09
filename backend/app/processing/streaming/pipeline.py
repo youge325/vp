@@ -54,7 +54,6 @@ def process_video_streaming(
         workflow_config=workflow_config,
         output_config=output_config,
         processing_steps=processing_steps,
-        tensor_backend_name=tensor_backend_name,
         output_fps=output_fps,
     )
 
