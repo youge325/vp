@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.algorithms.factory import AlgorithmFactory
 from app.planning import ProcessingStep
 from app.processing.streaming import stage_worker_factory
 
@@ -15,6 +16,14 @@ class _Backend:
 
 def test_stage_worker_factory_keeps_algorithm_registration_private() -> None:
     assert not hasattr(stage_worker_factory, "register_single_algorithm")
+
+
+def test_stage_worker_factory_keeps_implementation_details_private() -> None:
+    assert not hasattr(stage_worker_factory, "AlgorithmFactory")
+    assert not hasattr(stage_worker_factory, "AlgorithmFactoryFn")
+    assert not hasattr(stage_worker_factory, "BackendFactoryFn")
+    assert not hasattr(stage_worker_factory, "backend_name")
+    assert stage_worker_factory.__all__ == ["create_algorithm", "create_backend"]
 
 
 def test_stage_worker_factory_skips_backend_for_frame_filter_chain() -> None:
@@ -46,7 +55,7 @@ def test_stage_worker_factory_passes_filtered_kwargs_to_algorithm_factory(monkey
         )
         return "algorithm"
 
-    monkeypatch.setattr(stage_worker_factory.AlgorithmFactory, "create", staticmethod(fake_create))
+    monkeypatch.setattr(AlgorithmFactory, "create", staticmethod(fake_create))
     stage = ProcessingStep(
         algorithm_type="anime_optimization",
         algorithm_kwargs={"profile": "clean-lines", "tensor_backend": "pytorch", "duplicate_threshold": 0.99},

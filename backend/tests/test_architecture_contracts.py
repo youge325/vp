@@ -1539,6 +1539,33 @@ def test_stage_worker_entrypoint_export_boundary_flags_compatibility_exports(tmp
     assert any("helper __all__ export" in issue for issue in issues), issues
 
 
+def test_stage_worker_factory_public_boundary_flags_implementation_details(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_factory = tmp_path / "stage_worker_factory.py"
+    fake_factory.write_text(
+        "from app.algorithms.factory import AlgorithmFactory\n\n"
+        "AlgorithmFactoryFn = object\n"
+        "BackendFactoryFn = object\n\n"
+        "def backend_name():\n"
+        "    pass\n\n"
+        "__all__ = [\n"
+        '    "AlgorithmFactory",\n'
+        '    "AlgorithmFactoryFn",\n'
+        '    "BackendFactoryFn",\n'
+        '    "backend_name",\n'
+        '    "create_algorithm",\n'
+        '    "create_backend",\n'
+        "]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_WORKER_FACTORY", fake_factory, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_worker_factory_public_boundary(issues)
+
+    assert any("stage worker factory public surface" in issue for issue in issues), issues
+
+
 def test_stage_worker_helper_import_boundary_flags_helper_imports_from_entrypoint(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_encoding = tmp_path / "stage_file_chunk_encoding.py"
