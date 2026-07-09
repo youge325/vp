@@ -21,17 +21,4 @@ def import_cv2() -> Any:
     return cv2
 
 
-def get_cuda_device_count() -> int:
-    """Return OpenCV CUDA device count, or 0 when CUDA support is unavailable."""
-    cv2 = import_cv2()
-    cuda = getattr(cv2, "cuda", None)
-    get_count = getattr(cuda, "getCudaEnabledDeviceCount", None)
-    if not callable(get_count):
-        return 0
-    try:
-        return max(int(get_count()), 0)
-    except Exception:
-        return 0
-
-
-__all__ = ["get_cuda_device_count", "import_cv2"]
+__all__ = ["import_cv2"]

@@ -151,7 +151,7 @@ def _read_stdin_config_sections() -> dict[str, str | None]:
     }
 
 
-def collect_config_sections(args: argparse.Namespace) -> dict[str, str | None]:
+def _collect_config_sections(args: argparse.Namespace) -> dict[str, str | None]:
     """Choose between the stdin and CLI-flag wire formats.
 
     Returns the same ``{decode, workflow, encode, output}`` shape so that
@@ -179,7 +179,7 @@ def load_runtime_configs(args: argparse.Namespace) -> RuntimeConfigs:
     as ``INVALID_CONFIG`` so the frontend sees a typed error rather than a
     stack trace.
     """
-    sections = collect_config_sections(args)
+    sections = _collect_config_sections(args)
     try:
         decode, decode_json = _validate_config_section(sections["decode"], _default_decode_config(), DecodeConfig)
         encode, encode_json = _validate_config_section(

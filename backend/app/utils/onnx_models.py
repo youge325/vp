@@ -22,7 +22,7 @@ _ENGINE_PROVIDER_PRIORITY: dict[str, list[str]] = {
 }
 
 
-def get_onnx_model_dir(kind: OnnxModelKind, model_root: str | Path | None = None) -> Path:
+def _get_onnx_model_dir(kind: OnnxModelKind, model_root: str | Path | None = None) -> Path:
     """Return the configured ONNX model directory for a model kind."""
     if model_root is None:
         raise ValueError("model_root is required")
@@ -36,12 +36,12 @@ def scan_onnx_models(model_root: str | Path | None = None) -> dict[str, dict[str
     Layout: ``<model_root>/<kind>/<algorithm>/<basename>.onnx``
     Returns ``{"interpolation": {"rife": ["rife_v4.25.onnx", ...]}, "super_resolution": {...}}``.
     """
-    return {kind: _scan_kind_dir(get_onnx_model_dir(kind, model_root)) for kind in ONNX_MODEL_SUBDIRS}
+    return {kind: _scan_kind_dir(_get_onnx_model_dir(kind, model_root)) for kind in ONNX_MODEL_SUBDIRS}
 
 
 def scan_onnx_model_details(model_root: str | Path | None = None) -> dict[str, dict[str, list[dict[str, Any]]]]:
     """Analyze ONNX model files grouped by kind and algorithm subdir."""
-    return {kind: _scan_kind_details(get_onnx_model_dir(kind, model_root)) for kind in ONNX_MODEL_SUBDIRS}
+    return {kind: _scan_kind_details(_get_onnx_model_dir(kind, model_root)) for kind in ONNX_MODEL_SUBDIRS}
 
 
 def resolve_onnx_model_path(
@@ -56,7 +56,7 @@ def resolve_onnx_model_path(
     if not is_safe_algorithm_name(algorithm):
         raise FileNotFoundError(f"Invalid ONNX algorithm name: {algorithm!r}")
 
-    kind_dir = get_onnx_model_dir(kind, model_root)
+    kind_dir = _get_onnx_model_dir(kind, model_root)
     candidate = (kind_dir / algorithm / filename).resolve()
     kind_dir_resolved = kind_dir.resolve()
 

@@ -113,7 +113,12 @@ def test_cli_process_validation_compat_boundary_flags_legacy_wrappers(tmp_path, 
     module = _load_module()
     fake_validation = tmp_path / "_process_validation.py"
     fake_validation.write_text(
-        "def _load_json_arg():\n    pass\n\ndef load_configs():\n    pass\n",
+        "def _load_json_arg():\n"
+        "    pass\n\n"
+        "def load_configs():\n"
+        "    pass\n\n"
+        "def collect_config_sections(args):\n"
+        "    return {}\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(module, "CLI_PROCESS_VALIDATION", fake_validation, raising=False)
@@ -122,6 +127,7 @@ def test_cli_process_validation_compat_boundary_flags_legacy_wrappers(tmp_path, 
     module._check_cli_process_validation_compat_boundary(issues)
 
     assert any("CLI process validation compatibility" in issue for issue in issues), issues
+    assert any("collect_config_sections" in issue for issue in issues), issues
 
 
 def test_dll_paths_test_helper_boundary_flags_production_reset_helper(tmp_path, monkeypatch) -> None:
@@ -154,6 +160,21 @@ def test_backend_model_metrics_dead_helper_boundary_flags_obsolete_attribute_hel
     assert any("model metrics dead helper" in issue for issue in issues), issues
 
 
+def test_backend_opencv_runtime_dead_helper_boundary_flags_cuda_count_helper(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_opencv_runtime = tmp_path / "opencv_runtime.py"
+    fake_opencv_runtime.write_text(
+        "def get_cuda_device_count():\n    return 0\n\n__all__ = ['get_cuda_device_count', 'import_cv2']\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "BACKEND_OPENCV_RUNTIME", fake_opencv_runtime, raising=False)
+    issues: list[str] = []
+
+    module._check_backend_opencv_runtime_dead_helper_boundary(issues)
+
+    assert any("get_cuda_device_count" in issue for issue in issues), issues
+
+
 def test_dead_type_aliases_do_not_remain_in_current_repo() -> None:
     backend_onnx_models = REPO_ROOT / "backend" / "app" / "utils" / "onnx_models.py"
     workflow_types = REPO_ROOT / "frontend" / "src" / "types" / "domain" / "workflow.ts"
@@ -182,7 +203,12 @@ def test_dead_type_alias_boundary_flags_obsolete_aliases(tmp_path, monkeypatch) 
     fake_media_types = tmp_path / "media.ts"
     fake_env_types = tmp_path / "env.ts"
     fake_capability_types = tmp_path / "capability.ts"
-    fake_onnx_models.write_text("OnnxEngine = Literal['cuda']\n", encoding="utf-8")
+    fake_onnx_models.write_text(
+        "OnnxEngine = Literal['cuda']\n\n"
+        "def get_onnx_model_dir(kind, model_root=None):\n"
+        "    return model_root / kind\n",
+        encoding="utf-8",
+    )
     fake_workflow_types.write_text(
         "export type WorkflowMode = 'frame_interpolation'\nexport type EditingScope = 'preset'\n",
         encoding="utf-8",
@@ -210,6 +236,7 @@ def test_dead_type_alias_boundary_flags_obsolete_aliases(tmp_path, monkeypatch) 
     module._check_dead_type_alias_boundary(issues)
 
     assert any("OnnxEngine" in issue for issue in issues), issues
+    assert any("get_onnx_model_dir" in issue for issue in issues), issues
     assert any("WorkflowMode" in issue for issue in issues), issues
     assert any("EditingScope" in issue for issue in issues), issues
     assert any("ItemConfigSnapshot" in issue for issue in issues), issues

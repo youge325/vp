@@ -31,6 +31,7 @@ README = ROOT / "README.md"
 DLL_PATHS = ROOT / "backend" / "app" / "utils" / "dll_paths.py"
 BACKEND_MODEL_METRICS = ROOT / "backend" / "app" / "utils" / "model_metrics.py"
 BACKEND_ONNX_MODELS = ROOT / "backend" / "app" / "utils" / "onnx_models.py"
+BACKEND_OPENCV_RUNTIME = ROOT / "backend" / "app" / "utils" / "opencv_runtime.py"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
@@ -838,6 +839,7 @@ def _check_cli_process_validation_compat_boundary(issues: list[str]) -> None:
     forbidden_patterns = {
         "legacy JSON arg wrapper": r"^\s*def\s+_load_json_arg\b",
         "legacy config tuple wrapper": r"^\s*def\s+load_configs\b",
+        "collect_config_sections": r"^\s*def\s+collect_config_sections\b",
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
@@ -856,9 +858,21 @@ def _check_backend_model_metrics_dead_helper_boundary(issues: list[str]) -> None
         issues.append(f"model metrics dead helper `_attribute_int` remains in {_rel(BACKEND_MODEL_METRICS)}")
 
 
+def _check_backend_opencv_runtime_dead_helper_boundary(issues: list[str]) -> None:
+    text = _read(BACKEND_OPENCV_RUNTIME)
+    forbidden_patterns = {
+        "get_cuda_device_count": r"^\s*def\s+get_cuda_device_count\b",
+        "get_cuda_device_count export": r"__all__\s*=\s*\[[\s\S]*['\"]get_cuda_device_count['\"]",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"OpenCV runtime dead helper `{label}` remains in {_rel(BACKEND_OPENCV_RUNTIME)}")
+
+
 def _check_dead_type_alias_boundary(issues: list[str]) -> None:
     checks = (
         (BACKEND_ONNX_MODELS, "OnnxEngine", r"^\s*OnnxEngine\s*="),
+        (BACKEND_ONNX_MODELS, "get_onnx_model_dir", r"^\s*def\s+get_onnx_model_dir\b"),
         (DOMAIN_WORKFLOW_TYPES, "WorkflowMode", r"^\s*export\s+type\s+WorkflowMode\b"),
         (DOMAIN_WORKFLOW_TYPES, "EditingScope", r"^\s*export\s+type\s+EditingScope\b"),
         (DOMAIN_MEDIA_TYPES, "ItemConfigSnapshot", r"^\s*export\s+type\s+ItemConfigSnapshot\b"),
@@ -2364,6 +2378,7 @@ def main() -> int:
         _check_cli_process_validation_compat_boundary(issues)
         _check_dll_paths_test_helper_boundary(issues)
         _check_backend_model_metrics_dead_helper_boundary(issues)
+        _check_backend_opencv_runtime_dead_helper_boundary(issues)
         _check_dead_type_alias_boundary(issues)
         _check_frontend_task_event_reducer_payload_boundary(issues)
         _check_cli_process_execution_dead_config_unpack_boundary(issues)
