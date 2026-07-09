@@ -8,7 +8,7 @@ in-memory streams and fake algorithms.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO, Callable
 
 from app.algorithms.tensor_backend import get_tensor_backend
 from app.processing.streaming import stage_worker_progress
@@ -28,8 +28,8 @@ from app.processing.streaming.stage_runtime import (
 )
 
 if TYPE_CHECKING:
+    from app.planning import ProcessingStep
     from app.processing.streaming.stage_worker_config import StageWorkerConfig
-    from app.processing.streaming.stage_worker_factory import AlgorithmFactoryFn, BackendFactoryFn
     from app.processing.streaming.stage_worker_progress import EventSink
 
 
@@ -38,8 +38,8 @@ def run_stage_worker_stream(
     input_stream: BinaryIO,
     output_stream: BinaryIO,
     *,
-    algorithm_factory: AlgorithmFactoryFn | None = None,
-    backend_factory: BackendFactoryFn | None = None,
+    algorithm_factory: Callable[[ProcessingStep, Any], Any] | None = None,
+    backend_factory: Callable[[str], Any] | None = None,
     event_sink: EventSink | None = None,
 ) -> int:
     """Run exactly one configured stage over rawvideo streams.

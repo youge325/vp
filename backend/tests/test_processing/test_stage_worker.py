@@ -8,10 +8,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from app.algorithms.factory import AlgorithmFactory
 from app.cli.commands import stage_worker as stage_worker_command
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import ProcessingStep
-from app.processing.streaming import stage_worker, stage_worker_factory, stage_worker_progress
+from app.processing.streaming import stage_worker_progress
 from app.processing.streaming.stage_worker import (
     run_stage_worker_stream,
 )
@@ -327,7 +328,7 @@ def test_stage_worker_uses_stage_tensor_backend_without_passing_it_to_algorithm(
         captured["kwargs"] = kwargs
         return _SequenceAlgorithm()
 
-    monkeypatch.setattr(stage_worker_factory.AlgorithmFactory, "create", staticmethod(fake_create))
+    monkeypatch.setattr(AlgorithmFactory, "create", staticmethod(fake_create))
     config = StageWorkerConfig(
         stage=ProcessingStep(
             algorithm_type="super_resolution",
