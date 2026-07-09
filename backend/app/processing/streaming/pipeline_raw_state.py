@@ -26,4 +26,4 @@ def create_raw_pipeline_state(*, encode_queue_size: int = 8) -> RawPipelineState
     )
 
 
-__all__ = ["RawPipelineState", "create_raw_pipeline_state"]
+__all__ = ["create_raw_pipeline_state"]
