@@ -3,7 +3,7 @@
 
 import type { MediaItem, TaskError } from '@/types/domain/media'
 import type { ResumeConflictAction, ResumeMode } from '@/types/domain/batch'
-import type { BatchLifecycle, BatchLifecycleDeps } from './lifecycle'
+import type { BatchLifecycle, BatchLifecycleDeps } from './lifecycle/types'
 import { buildInspectionFromError } from '../resume-classifier'
 import { TASK_ERROR_CODES } from '@/types/protocol'
 

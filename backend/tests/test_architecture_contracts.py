@@ -950,6 +950,29 @@ def test_frontend_utility_internal_type_boundary_flags_internal_exports(tmp_path
     assert any("frontend utility internal type" in issue for issue in issues), issues
 
 
+def test_frontend_batch_lifecycle_facade_does_not_reexport_internal_types() -> None:
+    module = _load_module()
+    lifecycle_index = module.FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "index.ts"
+    text = lifecycle_index.read_text(encoding="utf-8")
+
+    assert "export type { BatchLifecycle" not in text
+
+
+def test_frontend_batch_lifecycle_facade_boundary_flags_type_reexports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_index = tmp_path / "index.ts"
+    fake_index.write_text(
+        "export type { BatchLifecycle, BatchLifecycleDeps } from './types'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "FRONTEND_BATCH_LIFECYCLE_INDEX", fake_index, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_batch_lifecycle_facade_boundary(issues)
+
+    assert any("batch lifecycle facade" in issue for issue in issues), issues
+
+
 def test_frontend_io_profile_state_boundary_flags_local_profile_derivation(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_decode_profile = tmp_path / "decode-profile-bindings.ts"
