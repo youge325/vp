@@ -4,8 +4,7 @@
 // process-level wiring between stores, IPC endpoints, task event listeners and
 // the pure ``BatchRunner`` facade.
 
-import type { UnlistenFn } from '@/lib/ipc'
-import { listenTaskEvents } from '@/lib/ipc/events'
+import { listenTaskEvents, type UnlistenFn } from '@/lib/ipc/events'
 import { taskIpc } from '@/lib/ipc/endpoints/task'
 import { useIssueStore } from '@/stores/issue'
 import { useMediaStore } from '@/stores/media'
