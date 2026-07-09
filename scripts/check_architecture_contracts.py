@@ -127,7 +127,9 @@ WORKFLOW_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "workflow-defaults.ts
 PRESET_NORMALIZE = FRONTEND_SRC / "services" / "preset" / "normalize.ts"
 PRESET_ENHANCE_OPTIONS = FRONTEND_SRC / "services" / "preset" / "enhance-options.ts"
 PRESET_IO_OPTIONS = FRONTEND_SRC / "services" / "preset" / "io-options.ts"
+PRESET_SELECT_OPTIONS = FRONTEND_SRC / "services" / "preset" / "select-options.ts"
 PRESET_RATE_CONTROL = FRONTEND_SRC / "services" / "preset" / "rate-control.ts"
+BASE_SELECT = FRONTEND_SRC / "components" / "forms" / "BaseSelect.vue"
 ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
 ENHANCE_DEFAULT_SELECTION = FRONTEND_SRC / "services" / "preset" / "enhance-default-selection.ts"
 ENHANCE_DEFAULT_PICKERS = FRONTEND_SRC / "services" / "preset" / "enhance-default-pickers.ts"
@@ -1404,6 +1406,13 @@ def _check_frontend_preset_normalize_boundary(issues: list[str]) -> None:
 
 
 def _check_frontend_preset_select_option_type_boundary(issues: list[str]) -> None:
+    if PRESET_SELECT_OPTIONS.exists():
+        issues.append(f"obsolete preset select option type file remains in {_rel(PRESET_SELECT_OPTIONS)}")
+
+    base_select_text = _read(BASE_SELECT)
+    if re.search(r"^\s*(?:export\s+)?interface\s+SelectOption\b", base_select_text, re.MULTILINE):
+        issues.append(f"BaseSelect local SelectOption remains in {_rel(BASE_SELECT)}")
+
     for path in (PRESET_ENHANCE_OPTIONS, PRESET_IO_OPTIONS, PRESET_RATE_CONTROL):
         text = _read(path)
         if re.search(r"^\s*(?:export\s+)?interface\s+SelectOption\b", text, re.MULTILINE):

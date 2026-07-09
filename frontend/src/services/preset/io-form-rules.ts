@@ -18,7 +18,7 @@ import {
   hasRateControlModes,
   resolveRateControlForMode,
 } from './rate-control'
-import type { SelectOption } from './select-options'
+import type { SelectOption } from '@/types/view/select-option'
 
 const RATE_CONTROL_UNAVAILABLE_HINT = '未探测到可用码率控制模式'
 

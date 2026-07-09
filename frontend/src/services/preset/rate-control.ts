@@ -4,7 +4,7 @@
 import type { EncoderProfileSpec, RateControlModeSpec } from '@/types/domain/capability'
 import type { RateControlMode } from '@/types/domain/workflow'
 import type { EncodeConfig } from '@/types/protocol'
-import type { SelectOption } from './select-options'
+import type { SelectOption } from '@/types/view/select-option'
 
 function getProfileModes(profile: EncoderProfileSpec | null): RateControlModeSpec[] {
   return Array.isArray(profile?.rateControlModes) ? profile.rateControlModes : []
