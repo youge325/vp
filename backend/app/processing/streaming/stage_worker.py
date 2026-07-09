@@ -58,7 +58,6 @@ def run_stage_worker_stream(
             output_stream,
             algorithm,
             sink,
-            metrics,
             heartbeat_seconds=stage_worker_progress.SEQUENCE_STAGE_HEARTBEAT_SECONDS,
         )
     elif algorithm_needs_pairs(algorithm):

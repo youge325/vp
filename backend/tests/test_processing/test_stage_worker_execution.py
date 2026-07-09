@@ -151,7 +151,6 @@ def test_sequence_execution_uses_algorithm_progress_instead_of_write_progress() 
         output,
         _ProgressSequenceAlgorithm(),
         events.append,
-        PipelineMetrics(),
     )
 
     frames = _frames_from_bytes(output.getvalue(), count=3)
@@ -178,5 +177,4 @@ def test_sequence_execution_rejects_streams_shorter_than_configured_count() -> N
             io.BytesIO(),
             _ProgressSequenceAlgorithm(),
             lambda _event: None,
-            PipelineMetrics(),
         )

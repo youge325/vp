@@ -27,11 +27,9 @@ def run_sequence_stage(
     output_stream: BinaryIO,
     algorithm: Any,
     event_sink: EventSink,
-    metrics: PipelineMetrics,
     *,
     heartbeat_seconds: float = SEQUENCE_STAGE_HEARTBEAT_SECONDS,
 ) -> int:
-    del metrics
     frames = _read_declared_frames(config, input_stream)
     total = max(int(config.output_frame_count or config.input_frame_count or len(frames)), 1)
     progress_state = StageProgressState()
