@@ -1566,6 +1566,25 @@ def test_stage_worker_factory_public_boundary_flags_implementation_details(tmp_p
     assert any("stage worker factory public surface" in issue for issue in issues), issues
 
 
+def test_stage_runtime_rule_helper_boundary_flags_rule_reexports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_stage_runtime = tmp_path / "stage_runtime.py"
+    fake_stage_runtime.write_text(
+        "from app.processing.streaming.stage_rules import algorithm_kwargs_for_create\n\n"
+        "__all__ = [\n"
+        '    "StepAlgorithm",\n'
+        '    "algorithm_kwargs_for_create",\n'
+        "]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_RUNTIME", fake_stage_runtime, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_runtime_rule_helper_boundary(issues)
+
+    assert any("stage runtime rule helper" in issue for issue in issues), issues
+
+
 def test_stage_worker_helper_import_boundary_flags_helper_imports_from_entrypoint(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_encoding = tmp_path / "stage_file_chunk_encoding.py"
