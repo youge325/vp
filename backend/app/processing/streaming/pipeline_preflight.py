@@ -47,7 +47,6 @@ def build_streaming_pipeline_preflight(
     workflow_config: dict[str, Any],
     output_config: dict[str, Any],
     processing_steps: list[ProcessingStepInput],
-    tensor_backend_name: str,
     output_fps: float | None,
 ) -> StreamingPipelinePreflight:
     resolved_steps = normalize_processing_steps(processing_steps)
@@ -87,7 +86,6 @@ def build_streaming_pipeline_preflight(
     output_width, output_height = resolved_output_dimensions(
         video_info=video_info,
         stage_plan=stage_plan,
-        tensor_backend_name=tensor_backend_name,
     )
 
     return StreamingPipelinePreflight(

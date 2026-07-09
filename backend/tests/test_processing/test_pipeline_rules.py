@@ -131,7 +131,6 @@ def test_resolved_output_dimensions_and_stream_fps_follow_stage_plan() -> None:
     assert resolved_output_dimensions(
         video_info={"width": 320, "height": 180},
         stage_plan=stage_plan,
-        tensor_backend_name="onnx",
     ) == (1280, 720)
     assert resolved_stream_fps(24.0, stage_plan) == 72.0
 
