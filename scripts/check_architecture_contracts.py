@@ -773,89 +773,18 @@ def _check_frontend_enhance_workflow_lookup_boundary(issues: list[str]) -> None:
 
 
 def _check_frontend_enhance_rules_split_boundary(issues: list[str]) -> None:
-    if not ENHANCE_RULES.exists():
-        return
-    text = _read(ENHANCE_RULES)
-    if "Compatibility barrel" in text or re.search(
-        r"^\s*export\s+\*\s+from\s+['\"]\./enhance-(?:algorithm-capabilities|default-pickers|onnx-defaults|super-resolution-defaults)['\"]",
-        text,
-        re.MULTILINE,
-    ):
-        issues.append(f"obsolete enhance rules barrel remains in {_rel(ENHANCE_RULES)}")
-    forbidden_patterns = {
-        "nested default-selection barrel": r"export\s+\*\s+from\s+['\"]\.\/enhance-default-selection['\"]",
-        "backend compatibility helper": r"^\s*function\s+backendCompatible\b",
-        "PaddleGAN classifier": r"^\s*export\s+function\s+isPaddleGanVsrAlgorithm\b",
-        "input frame mode": r"^\s*export\s+function\s+superResolutionInputFrameMode\b",
-        "fixed runtime frames": r"^\s*export\s+function\s+fixedRuntimeFrameCount\b",
-        "fixed scale factor": r"^\s*export\s+function\s+fixedSuperResolutionScaleFactor\b",
-        "super-resolution defaults": r"^\s*export\s+function\s+applySuperResolutionAlgorithmDefaults\b",
-        "default engine picker": r"^\s*export\s+function\s+pickDefaultEngine\b",
-        "interpolation ONNX fallback": r"^\s*export\s+function\s+fallbackInterpolationOnnxModel\b",
-        "super-resolution ONNX fallback": r"^\s*export\s+function\s+fallbackSuperResolutionOnnxModel\b",
-        "default interpolation algorithm": r"^\s*export\s+function\s+pickDefaultInterpolationAlgorithm\b",
-        "default interpolation model": r"^\s*export\s+function\s+pickDefaultInterpolationModel\b",
-        "default super-resolution algorithm": r"^\s*export\s+function\s+pickDefaultSuperResolutionAlgorithm\b",
-        "default anime profile": r"^\s*export\s+function\s+pickDefaultAnimeProfile\b",
-    }
-    for label, pattern in forbidden_patterns.items():
-        if re.search(pattern, text, re.MULTILINE):
-            issues.append(f"enhance rules split `{label}` remains in frontend/src/services/preset/enhance-rules.ts")
+    if ENHANCE_RULES.exists():
+        issues.append(f"obsolete enhance rules file remains in {_rel(ENHANCE_RULES)}")
 
 
 def _check_frontend_enhance_default_selection_split_boundary(issues: list[str]) -> None:
-    if not ENHANCE_DEFAULT_SELECTION.exists():
-        return
-    text = _read(ENHANCE_DEFAULT_SELECTION)
-    if re.search(r"^\s*export\s+\*\s+from\s+['\"]\./enhance-default-pickers['\"]", text, re.MULTILINE) or re.search(
-        r"^\s*export\s+\*\s+from\s+['\"]\./enhance-onnx-defaults['\"]",
-        text,
-        re.MULTILINE,
-    ):
-        issues.append(f"obsolete enhance default-selection barrel remains in {_rel(ENHANCE_DEFAULT_SELECTION)}")
-    forbidden_patterns = {
-        "backend compatibility helper": r"^\s*function\s+backendCompatible\b",
-        "default engine picker": r"^\s*export\s+function\s+pickDefaultEngine\b",
-        "interpolation ONNX fallback": r"^\s*export\s+function\s+fallbackInterpolationOnnxModel\b",
-        "super-resolution ONNX fallback": r"^\s*export\s+function\s+fallbackSuperResolutionOnnxModel\b",
-        "default interpolation algorithm": r"^\s*export\s+function\s+pickDefaultInterpolationAlgorithm\b",
-        "default interpolation model": r"^\s*export\s+function\s+pickDefaultInterpolationModel\b",
-        "default super-resolution algorithm": r"^\s*export\s+function\s+pickDefaultSuperResolutionAlgorithm\b",
-        "default anime profile": r"^\s*export\s+function\s+pickDefaultAnimeProfile\b",
-    }
-    for label, pattern in forbidden_patterns.items():
-        if re.search(pattern, text, re.MULTILINE):
-            issues.append(f"enhance default-selection split `{label}` remains in {_rel(ENHANCE_DEFAULT_SELECTION)}")
+    if ENHANCE_DEFAULT_SELECTION.exists():
+        issues.append(f"obsolete enhance default-selection file remains in {_rel(ENHANCE_DEFAULT_SELECTION)}")
 
 
 def _check_frontend_enhance_default_pickers_boundary(issues: list[str]) -> None:
-    if not ENHANCE_DEFAULT_PICKERS.exists():
-        return
-    text = _read(ENHANCE_DEFAULT_PICKERS)
-    if "Compatibility barrel" in text or re.search(
-        r"^\s*export\s+\{[\s\S]*?\}\s+from\s+['\"]\./enhance-(?:algorithm|engine|metadata)-defaults['\"]",
-        text,
-        re.MULTILINE,
-    ):
-        issues.append(f"obsolete enhance default pickers barrel remains in {_rel(ENHANCE_DEFAULT_PICKERS)}")
-    forbidden_patterns = {
-        "backend compatibility helper": r"^\s*function\s+backendCompatible\b",
-        "backend support direct helper": r"\balgorithmSupportsBackend\b",
-        "backend-supported algorithm picker": r"\bpickBackendSupportedAlgorithmName\b",
-        "algorithm default body": r"^\s*export\s+function\s+pickDefault(?:Interpolation|SuperResolution)Algorithm\b",
-        "direct interpolation lookup": r"\binterpolationAlgorithms\?\.\s*find\s*\(",
-        "super-resolution algorithm list": r"\bsuperResolutionAlgorithms\b",
-        "default engine body": r"^\s*export\s+function\s+pickDefault(?:Interpolation)?Engine\b",
-        "metadata default body": r"^\s*export\s+function\s+pickDefault(?:InterpolationModel|AnimeProfile)\b",
-        "interpolation model lookup": r"\bmodels\?\.\[0\]",
-        "anime profile lookup": r"\banimeProfiles\b",
-        "tensor engine lookup": r"\btensorEngines\b",
-        "gpu vendor lookup": r"\bgpu\?\.adapters\b",
-        "vendor branch": r"\bvendor\s*===\s*['\"](?:hygon|nvidia)['\"]",
-    }
-    for label, pattern in forbidden_patterns.items():
-        if re.search(pattern, text, re.MULTILINE):
-            issues.append(f"enhance default pickers `{label}` remains in {_rel(ENHANCE_DEFAULT_PICKERS)}")
+    if ENHANCE_DEFAULT_PICKERS.exists():
+        issues.append(f"obsolete enhance default pickers file remains in {_rel(ENHANCE_DEFAULT_PICKERS)}")
 
 
 def _check_frontend_enhance_onnx_defaults_boundary(issues: list[str]) -> None:
