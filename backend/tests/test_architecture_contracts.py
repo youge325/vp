@@ -989,6 +989,21 @@ def test_frontend_enhance_projection_boundary_flags_algorithm_and_view_leaks(tmp
     assert any("enhance projection rule" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_binding_type_boundary_flags_local_video_dimensions(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_form_bindings = tmp_path / "enhance-form-bindings.ts"
+    fake_view_bindings = tmp_path / "enhance-view-bindings.ts"
+    fake_form_bindings.write_text("interface VideoDimensions { width: number; height: number }\n", encoding="utf-8")
+    fake_view_bindings.write_text("interface VideoDimensions { width: number; height: number }\n", encoding="utf-8")
+    monkeypatch.setattr(module, "ENHANCE_FORM_BINDINGS", fake_form_bindings)
+    monkeypatch.setattr(module, "ENHANCE_VIEW_BINDINGS", fake_view_bindings, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_binding_type_boundary(issues)
+
+    assert any("enhance binding type" in issue for issue in issues), issues
+
+
 def test_frontend_enhance_lens_boundary_flags_inline_backend_support_check(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_lens = tmp_path / "enhance-lens.ts"
