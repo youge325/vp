@@ -1,11 +1,6 @@
 import type { ModelVariantInfo } from '@/types/domain/env'
+import type { MetricRow, RuntimeMetricEstimate } from '@/types/view/model-metrics'
 import { formatBytes, formatGflops, formatParameterCount } from './model-metric-format'
-import type { RuntimeMetricEstimate } from './model-runtime-estimates'
-
-export interface MetricRow {
-  label: string
-  value: string
-}
 
 export function metricRows(
   detail: ModelVariantInfo | null | undefined,

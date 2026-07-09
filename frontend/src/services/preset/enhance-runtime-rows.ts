@@ -3,14 +3,8 @@
 
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
-import {
-  combinedVramMetricRows,
-  metricRows,
-  type MetricRow,
-} from '@/services/model-metric-rows'
-import {
-  type RuntimeMetricEstimate,
-} from '@/services/model-runtime-estimates'
+import type { MetricRow, RuntimeMetricEstimate } from '@/types/view/model-metrics'
+import { combinedVramMetricRows, metricRows } from '@/services/model-metric-rows'
 import {
   fixedRuntimeFrameCount,
   isPaddleGanVsrAlgorithm,

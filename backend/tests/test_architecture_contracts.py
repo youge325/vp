@@ -544,6 +544,23 @@ def test_worker_pipeline_chain_runtime_boundary_flags_local_thread_and_io_runtim
     assert any("worker chain runtime" in issue for issue in issues), issues
 
 
+def test_worker_pipeline_queue_boundary_flags_local_encode_queue_internals(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_pipeline = tmp_path / "worker_pipeline.py"
+    fake_pipeline.write_text(
+        "from app.processing.streaming.queues import StreamEnd, _ENCODE_END, _queue_put, _queue_put_nowait\n"
+        "_queue_put(encode_queue, StreamEnd(next_source_frame=3), stop_event)\n"
+        "_queue_put_nowait(encode_queue, _ENCODE_END)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKER_PIPELINE", fake_pipeline)
+    issues: list[str] = []
+
+    module._check_worker_pipeline_queue_boundary(issues)
+
+    assert any("worker pipeline encode queue" in issue for issue in issues), issues
+
+
 def test_worker_processes_event_io_boundary_flags_local_event_and_rawvideo_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_processes = tmp_path / "worker_processes.py"
@@ -1292,6 +1309,24 @@ def test_frontend_model_metrics_barrel_boundary_allows_missing_barrel(tmp_path, 
     module._check_frontend_model_metrics_barrel_boundary(issues)
 
     assert issues == []
+
+
+def test_frontend_model_metric_view_type_boundary_flags_service_type_exports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runtime = tmp_path / "model-runtime-estimates.ts"
+    fake_rows = tmp_path / "model-metric-rows.ts"
+    fake_runtime.write_text(
+        "export interface VideoDimensions {}\nexport interface RuntimeMetricEstimate {}\n",
+        encoding="utf-8",
+    )
+    fake_rows.write_text("export interface MetricRow {}\n", encoding="utf-8")
+    monkeypatch.setattr(module, "MODEL_RUNTIME_ESTIMATES", fake_runtime, raising=False)
+    monkeypatch.setattr(module, "MODEL_METRIC_ROWS", fake_rows, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_model_metric_view_type_boundary(issues)
+
+    assert any("model metric view type" in issue for issue in issues), issues
 
 
 def test_frontend_domain_preset_barrel_boundary_flags_obsolete_barrel(tmp_path, monkeypatch) -> None:

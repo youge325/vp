@@ -1,7 +1,7 @@
 import { computed, type ComputedRef } from 'vue'
 
 import { buildEnhanceViewModel } from '@/services/preset/enhance-view-model'
-import type { VideoDimensions } from '@/services/model-runtime-estimates'
+import type { VideoDimensions } from '@/types/view/model-metrics'
 import type { AlgorithmInfo } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
 

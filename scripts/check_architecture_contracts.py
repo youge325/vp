@@ -119,6 +119,8 @@ CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_proce
 CLI_PROCESS_PLANNING = ROOT / "backend" / "app" / "cli" / "commands" / "_process_planning.py"
 CLI_PROCESS_EXECUTION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_execution.py"
 MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
+MODEL_RUNTIME_ESTIMATES = FRONTEND_SRC / "services" / "model-runtime-estimates.ts"
+MODEL_METRIC_ROWS = FRONTEND_SRC / "services" / "model-metric-rows.ts"
 DOMAIN_PRESET_TYPES = FRONTEND_SRC / "types" / "domain" / "preset.ts"
 DOMAIN_WORKFLOW_TYPES = FRONTEND_SRC / "types" / "domain" / "workflow.ts"
 DOMAIN_MEDIA_TYPES = FRONTEND_SRC / "types" / "domain" / "media.ts"
@@ -1089,6 +1091,18 @@ def _check_frontend_model_metrics_barrel_boundary(issues: list[str]) -> None:
             issues.append(f"obsolete model metrics barrel import remains in {_rel(path)}")
 
 
+def _check_frontend_model_metric_view_type_boundary(issues: list[str]) -> None:
+    checks = (
+        (MODEL_RUNTIME_ESTIMATES, ("VideoDimensions", "RuntimeMetricEstimate")),
+        (MODEL_METRIC_ROWS, ("MetricRow",)),
+    )
+    for path, names in checks:
+        text = _read(path)
+        for name in names:
+            if re.search(rf"\bexport\s+(?:interface|type)\s+{re.escape(name)}\b", text):
+                issues.append(f"model metric view type `{name}` exported from {_rel(path)}")
+
+
 def _check_frontend_domain_preset_barrel_boundary(issues: list[str]) -> None:
     if DOMAIN_PRESET_TYPES.exists():
         issues.append(f"obsolete domain preset type barrel remains in {_rel(DOMAIN_PRESET_TYPES)}")
@@ -1529,6 +1543,20 @@ def _check_worker_pipeline_chain_runtime_boundary(issues: list[str]) -> None:
             issues.append(
                 f"worker chain runtime `{label}` remains in backend/app/processing/streaming/worker_pipeline.py"
             )
+
+
+def _check_worker_pipeline_queue_boundary(issues: list[str]) -> None:
+    text = _read(WORKER_PIPELINE)
+    forbidden_patterns = {
+        "StreamEnd queue import": (
+            r"from\s+app\.processing\.streaming\.queues\s+import\s*(?:\([\s\S]*?\bStreamEnd\b|[^\n]*\bStreamEnd\b)"
+        ),
+        "encode sentinel": r"\b_ENCODE_END\b",
+        "queue put helper": r"\b_queue_put(?:_nowait)?\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"worker pipeline encode queue `{label}` remains in {_rel(WORKER_PIPELINE)}")
 
 
 def _check_worker_pipeline_file_boundary(issues: list[str]) -> None:
@@ -2291,6 +2319,7 @@ def main() -> int:
         _check_frontend_enhance_runtime_view_split_boundary(issues)
         _check_frontend_enhance_read_model_type_boundary(issues)
         _check_frontend_model_metrics_barrel_boundary(issues)
+        _check_frontend_model_metric_view_type_boundary(issues)
         _check_frontend_domain_preset_barrel_boundary(issues)
         _check_frontend_ipc_barrel_boundary(issues)
         _check_frontend_task_orchestrator_runtime_boundary(issues)
@@ -2321,6 +2350,7 @@ def main() -> int:
         _check_worker_pipeline_test_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)
         _check_worker_pipeline_chain_runtime_boundary(issues)
+        _check_worker_pipeline_queue_boundary(issues)
         _check_worker_pipeline_file_boundary(issues)
         _check_worker_processes_event_io_boundary(issues)
         _check_worker_process_helper_import_boundary(issues)
