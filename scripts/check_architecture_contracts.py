@@ -30,6 +30,7 @@ DOC_ROOT = ROOT / "docs"
 README = ROOT / "README.md"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
+STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
 STAGE_WORKER_FACTORY = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_factory.py"
 STAGE_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_runtime.py"
 STAGE_WORKER_IO = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_io.py"
@@ -1593,6 +1594,23 @@ def _check_stage_worker_execution_boundary(issues: list[str]) -> None:
             )
 
 
+def _check_stage_worker_sequence_metrics_boundary(issues: list[str]) -> None:
+    execution_text = _read(STAGE_WORKER_EXECUTION)
+    sequence_signature = re.search(
+        r"def\s+run_sequence_stage\s*\((?P<params>[\s\S]*?)\)\s*(?:->\s*[^:]+)?\s*:",
+        execution_text,
+    )
+    if sequence_signature and re.search(r"\bmetrics\b", sequence_signature.group("params")):
+        issues.append(f"stage worker sequence metrics parameter remains in {_rel(STAGE_WORKER_EXECUTION)}")
+    if re.search(r"\bdel\s+metrics\b", execution_text):
+        issues.append(f"stage worker sequence metrics discard remains in {_rel(STAGE_WORKER_EXECUTION)}")
+
+    worker_text = _read(STAGE_WORKER)
+    sequence_call = re.search(r"(?<!def )\brun_sequence_stage\s*\((?P<args>[\s\S]*?)\)", worker_text)
+    if sequence_call and re.search(r"\bmetrics\b", sequence_call.group("args")):
+        issues.append(f"stage worker sequence metrics forwarding remains in {_rel(STAGE_WORKER)}")
+
+
 def _check_stage_worker_config_boundary(issues: list[str]) -> None:
     text = _read(STAGE_WORKER)
     forbidden_patterns = {
@@ -2105,6 +2123,7 @@ def main() -> int:
         _check_stage_file_pipeline_test_boundary(issues)
         _check_stage_file_chunk_runtime_encoding_boundary(issues)
         _check_stage_worker_execution_boundary(issues)
+        _check_stage_worker_sequence_metrics_boundary(issues)
         _check_stage_worker_config_boundary(issues)
         _check_streaming_pipeline_rule_boundary(issues)
         _check_streaming_pipeline_raw_boundary(issues)

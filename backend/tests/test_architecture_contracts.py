@@ -1611,6 +1611,27 @@ def test_stage_worker_execution_boundary_flags_local_stage_loops(tmp_path, monke
     assert any("stage execution alias call" in issue for issue in issues), issues
 
 
+def test_stage_worker_sequence_metrics_boundary_flags_dead_metrics_forwarding(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_execution = tmp_path / "stage_worker_execution.py"
+    fake_worker = tmp_path / "stage_worker.py"
+    fake_execution.write_text(
+        "def run_sequence_stage(config, metrics):\n    del metrics\n    return 0\n",
+        encoding="utf-8",
+    )
+    fake_worker.write_text(
+        "def run_stage_worker_stream(config, metrics):\n    return run_sequence_stage(config, metrics)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_WORKER_EXECUTION", fake_execution, raising=False)
+    monkeypatch.setattr(module, "STAGE_WORKER", fake_worker, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_worker_sequence_metrics_boundary(issues)
+
+    assert any("stage worker sequence metrics" in issue for issue in issues), issues
+
+
 def test_stage_worker_config_boundary_flags_local_config_model(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_stage_worker = tmp_path / "stage_worker.py"
