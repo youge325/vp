@@ -169,8 +169,7 @@ class CliProgressReporter:
             metrics=self._metrics.snapshot() if self._metrics is not None else None,
         )
 
-    def finish(self, processed_frames: int) -> None:
-        del processed_frames
+    def finish(self) -> None:
         self.update(self._stage_frame_total, progress_state="end", force=True)
 
     def _effective_fps(self, current_frame: int, fps: float | None) -> float | None:
