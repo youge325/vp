@@ -17,21 +17,19 @@ import {
   superResolutionInputFrameMode,
 } from './enhance-algorithm-capabilities'
 
-export type { MetricRow }
-
-export interface EnhanceRuntimeFrameStateInput {
+interface EnhanceRuntimeFrameStateInput {
   workflow: WorkflowConfig
   currentSuperResolutionAlgorithm: AlgorithmInfo | undefined
 }
 
-export interface EnhanceRuntimeFrameState {
+interface EnhanceRuntimeFrameState {
   isPaddleGanSuperResolution: boolean
   isSuperResolutionInputFramesEditable: boolean
   effectiveSuperResolutionNumFrames: number
   superResolutionFixedWindowRows: MetricRow[]
 }
 
-export interface EnhanceRuntimeRowsInput extends EnhanceRuntimeFrameStateInput {
+interface EnhanceRuntimeRowsInput extends EnhanceRuntimeFrameStateInput {
   frameState?: EnhanceRuntimeFrameState
   currentInterpolationRuntimeDetail: ModelVariantInfo | null
   currentSuperResolutionRuntimeDetail: ModelVariantInfo | null
@@ -40,7 +38,7 @@ export interface EnhanceRuntimeRowsInput extends EnhanceRuntimeFrameStateInput {
   combinedPeakVramBytes: number | null
 }
 
-export interface EnhanceRuntimeRows extends EnhanceRuntimeFrameState {
+interface EnhanceRuntimeRows extends EnhanceRuntimeFrameState {
   interpolationMetricRows: MetricRow[]
   superResolutionMetricRows: MetricRow[]
   combinedVramMetricRows: MetricRow[]

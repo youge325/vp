@@ -182,6 +182,35 @@ FRONTEND_FORM_BINDING_PARAM_FILES = {
     ENHANCE_VIEW_BINDINGS: ("EnhanceViewBindingParams",),
     FRONTEND_SRC / "composables" / "forms" / "io-profile-state.ts": ("IoProfileStateParams",),
 }
+FRONTEND_ENHANCE_READ_MODEL_INTERNAL_TYPE_FILES = {
+    FRONTEND_SRC / "services" / "preset" / "enhance-model-selection.ts": (
+        "EnhanceModelSelectionInput",
+        "EnhanceModelSelection",
+    ),
+    FRONTEND_SRC / "services" / "preset" / "enhance-runtime-estimates.ts": (
+        "EnhanceRuntimeEstimatesInput",
+        "EnhanceRuntimeEstimates",
+    ),
+    FRONTEND_SRC / "services" / "preset" / "enhance-runtime-rows.ts": (
+        "EnhanceRuntimeFrameStateInput",
+        "EnhanceRuntimeFrameState",
+        "EnhanceRuntimeRowsInput",
+        "EnhanceRuntimeRows",
+    ),
+    ENHANCE_RUNTIME_VIEW: (
+        "EnhanceRuntimeViewInput",
+        "EnhanceRuntimeView",
+    ),
+    ENHANCE_VIEW_MODEL: (
+        "EnhanceViewModelInput",
+        "EnhanceViewModel",
+    ),
+}
+FRONTEND_ENHANCE_READ_MODEL_TYPE_REEXPORT_FILES = (
+    FRONTEND_SRC / "services" / "preset" / "enhance-runtime-estimates.ts",
+    FRONTEND_SRC / "services" / "preset" / "enhance-runtime-rows.ts",
+    ENHANCE_RUNTIME_VIEW,
+)
 
 
 def _read(path: Path) -> str:
@@ -980,6 +1009,18 @@ def _check_frontend_enhance_runtime_view_split_boundary(issues: list[str]) -> No
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
             issues.append(f"enhance runtime-view split `{label}` remains in {_rel(ENHANCE_RUNTIME_VIEW)}")
+
+
+def _check_frontend_enhance_read_model_type_boundary(issues: list[str]) -> None:
+    for path, names in FRONTEND_ENHANCE_READ_MODEL_INTERNAL_TYPE_FILES.items():
+        text = _read(path)
+        for name in names:
+            if re.search(rf"\bexport\s+(?:interface|type)\s+{re.escape(name)}\b", text):
+                issues.append(f"enhance read-model type `{name}` exported from {_rel(path)}")
+
+    for path in FRONTEND_ENHANCE_READ_MODEL_TYPE_REEXPORT_FILES:
+        if re.search(r"\bexport\s+type\s+\{", _read(path)):
+            issues.append(f"enhance read-model type re-export remains in {_rel(path)}")
 
 
 def _check_frontend_model_metrics_barrel_boundary(issues: list[str]) -> None:
@@ -2192,6 +2233,7 @@ def main() -> int:
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_view_model_split_boundary(issues)
         _check_frontend_enhance_runtime_view_split_boundary(issues)
+        _check_frontend_enhance_read_model_type_boundary(issues)
         _check_frontend_model_metrics_barrel_boundary(issues)
         _check_frontend_domain_preset_barrel_boundary(issues)
         _check_frontend_ipc_barrel_boundary(issues)

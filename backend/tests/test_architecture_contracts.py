@@ -1061,6 +1061,92 @@ def test_frontend_enhance_runtime_view_split_boundary_flags_local_runtime_rules(
     assert any("enhance runtime-view split" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_read_model_internal_types_are_not_exported() -> None:
+    module = _load_module()
+    preset_dir = module.FRONTEND_SRC / "services" / "preset"
+    internal_types = {
+        preset_dir / "enhance-model-selection.ts": (
+            "EnhanceModelSelectionInput",
+            "EnhanceModelSelection",
+        ),
+        preset_dir / "enhance-runtime-estimates.ts": (
+            "EnhanceRuntimeEstimatesInput",
+            "EnhanceRuntimeEstimates",
+        ),
+        preset_dir / "enhance-runtime-rows.ts": (
+            "EnhanceRuntimeFrameStateInput",
+            "EnhanceRuntimeFrameState",
+            "EnhanceRuntimeRowsInput",
+            "EnhanceRuntimeRows",
+        ),
+        preset_dir / "enhance-runtime-view.ts": (
+            "EnhanceRuntimeViewInput",
+            "EnhanceRuntimeView",
+        ),
+        preset_dir / "enhance-view-model.ts": (
+            "EnhanceViewModelInput",
+            "EnhanceViewModel",
+        ),
+    }
+    type_reexport_files = (
+        preset_dir / "enhance-runtime-estimates.ts",
+        preset_dir / "enhance-runtime-rows.ts",
+        preset_dir / "enhance-runtime-view.ts",
+    )
+
+    exported = []
+    for path, names in internal_types.items():
+        text = path.read_text(encoding="utf-8")
+        exported.extend(
+            f"{path.name}:{name}"
+            for name in names
+            if f"export interface {name}" in text or f"export type {name}" in text
+        )
+    exported.extend(
+        f"{path.name}:type-reexport"
+        for path in type_reexport_files
+        if "export type {" in path.read_text(encoding="utf-8")
+    )
+
+    assert exported == []
+
+
+def test_frontend_enhance_read_model_type_boundary_flags_internal_exports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_view_model = tmp_path / "enhance-view-model.ts"
+    fake_runtime_view = tmp_path / "enhance-runtime-view.ts"
+    fake_view_model.write_text(
+        "export interface EnhanceViewModelInput { workflow: unknown }\n"
+        "export interface EnhanceViewModel { rows: unknown[] }\n",
+        encoding="utf-8",
+    )
+    fake_runtime_view.write_text(
+        "export type { MetricRow, RuntimeMetricEstimate, VideoDimensions }\n"
+        "export interface EnhanceRuntimeViewInput { workflow: unknown }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        module,
+        "FRONTEND_ENHANCE_READ_MODEL_INTERNAL_TYPE_FILES",
+        {
+            fake_view_model: ("EnhanceViewModelInput", "EnhanceViewModel"),
+            fake_runtime_view: ("EnhanceRuntimeViewInput", "EnhanceRuntimeView"),
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        module,
+        "FRONTEND_ENHANCE_READ_MODEL_TYPE_REEXPORT_FILES",
+        (fake_runtime_view,),
+        raising=False,
+    )
+    issues: list[str] = []
+
+    module._check_frontend_enhance_read_model_type_boundary(issues)
+
+    assert any("enhance read-model type" in issue for issue in issues), issues
+
+
 def test_frontend_model_metrics_barrel_boundary_flags_local_rules(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_model_metrics = tmp_path / "model-metrics.ts"

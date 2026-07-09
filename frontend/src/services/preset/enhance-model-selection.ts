@@ -5,13 +5,13 @@ import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
 import { resolveMetricsForEngine } from '@/services/model-engine-metrics'
 
-export interface EnhanceModelSelectionInput {
+interface EnhanceModelSelectionInput {
   workflow: WorkflowConfig
   currentInterpolationAlgorithm: AlgorithmInfo | undefined
   currentSuperResolutionAlgorithm: AlgorithmInfo | undefined
 }
 
-export interface EnhanceModelSelection {
+interface EnhanceModelSelection {
   interpolationModelDetails: ModelVariantInfo[]
   interpolationOnnxModelDetails: ModelVariantInfo[]
   superResolutionModelDetails: ModelVariantInfo[]

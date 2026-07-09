@@ -3,22 +3,19 @@
 
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
+import type { MetricRow } from '@/services/model-metric-rows'
+import type { RuntimeMetricEstimate, VideoDimensions } from '@/services/model-runtime-estimates'
 import { buildEnhanceModelSelection } from './enhance-model-selection'
-import {
-  buildEnhanceRuntimeView,
-  type MetricRow,
-  type RuntimeMetricEstimate,
-  type VideoDimensions,
-} from './enhance-runtime-view'
+import { buildEnhanceRuntimeView } from './enhance-runtime-view'
 
-export interface EnhanceViewModelInput {
+interface EnhanceViewModelInput {
   workflow: WorkflowConfig
   activeVideoDimensions: VideoDimensions | null
   currentInterpolationAlgorithm: AlgorithmInfo | undefined
   currentSuperResolutionAlgorithm: AlgorithmInfo | undefined
 }
 
-export interface EnhanceViewModel {
+interface EnhanceViewModel {
   interpolationModelDetails: ModelVariantInfo[]
   interpolationOnnxModelDetails: ModelVariantInfo[]
   superResolutionModelDetails: ModelVariantInfo[]

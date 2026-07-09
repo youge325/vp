@@ -10,9 +10,7 @@ import {
   type VideoDimensions,
 } from '@/services/model-runtime-estimates'
 
-export type { RuntimeMetricEstimate, VideoDimensions }
-
-export interface EnhanceRuntimeEstimatesInput {
+interface EnhanceRuntimeEstimatesInput {
   workflow: WorkflowConfig
   activeVideoDimensions: VideoDimensions | null
   isSuperResolutionInputFramesEditable: boolean
@@ -21,7 +19,7 @@ export interface EnhanceRuntimeEstimatesInput {
   superResolutionRuntimeFrameCount: number | null
 }
 
-export interface EnhanceRuntimeEstimates {
+interface EnhanceRuntimeEstimates {
   interpolationInputDimensions: VideoDimensions | null
   interpolationRuntimeEstimate: RuntimeMetricEstimate | null
   superResolutionRuntimeEstimate: RuntimeMetricEstimate | null

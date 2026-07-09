@@ -3,20 +3,12 @@
 
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
-import {
-  buildEnhanceRuntimeEstimates,
-  type RuntimeMetricEstimate,
-  type VideoDimensions,
-} from './enhance-runtime-estimates'
-import {
-  buildEnhanceRuntimeFrameState,
-  buildEnhanceRuntimeRows,
-  type MetricRow,
-} from './enhance-runtime-rows'
+import type { MetricRow } from '@/services/model-metric-rows'
+import type { RuntimeMetricEstimate, VideoDimensions } from '@/services/model-runtime-estimates'
+import { buildEnhanceRuntimeEstimates } from './enhance-runtime-estimates'
+import { buildEnhanceRuntimeFrameState, buildEnhanceRuntimeRows } from './enhance-runtime-rows'
 
-export type { MetricRow, RuntimeMetricEstimate, VideoDimensions }
-
-export interface EnhanceRuntimeViewInput {
+interface EnhanceRuntimeViewInput {
   workflow: WorkflowConfig
   activeVideoDimensions: VideoDimensions | null
   currentSuperResolutionAlgorithm: AlgorithmInfo | undefined
@@ -25,7 +17,7 @@ export interface EnhanceRuntimeViewInput {
   superResolutionRuntimeFrameCount: number | null
 }
 
-export interface EnhanceRuntimeView {
+interface EnhanceRuntimeView {
   isPaddleGanSuperResolution: boolean
   isSuperResolutionInputFramesEditable: boolean
   effectiveSuperResolutionNumFrames: number
