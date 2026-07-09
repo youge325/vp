@@ -71,4 +71,4 @@ def build_stage_file_stage_context(
     )
 
 
-__all__ = ["StageFileStageContext", "build_stage_file_stage_context"]
+__all__ = ["build_stage_file_stage_context"]

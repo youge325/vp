@@ -1987,9 +1987,18 @@ def test_stage_runtime_rule_helper_boundary_flags_rule_reexports(tmp_path, monke
     fake_stage_runtime = tmp_path / "stage_runtime.py"
     fake_stage_runtime.write_text(
         "from app.processing.streaming.stage_rules import algorithm_kwargs_for_create\n\n"
+        "def get_cached_backend(cache, backend_name):\n"
+        "    return cache[backend_name]\n\n"
+        "def entry_needs_sequence(entry):\n"
+        "    return entry.algorithm.needs_frame_sequence()\n\n"
+        "def should_prefer_tensor_stage(*, entry, payload, remaining, has_tensor_stage_after_chain):\n"
+        "    return True\n\n"
         "__all__ = [\n"
         '    "StepAlgorithm",\n'
         '    "algorithm_kwargs_for_create",\n'
+        '    "get_cached_backend",\n'
+        '    "entry_needs_sequence",\n'
+        '    "should_prefer_tensor_stage",\n'
         "]\n",
         encoding="utf-8",
     )
@@ -1999,6 +2008,28 @@ def test_stage_runtime_rule_helper_boundary_flags_rule_reexports(tmp_path, monke
     module._check_stage_runtime_rule_helper_boundary(issues)
 
     assert any("stage runtime rule helper" in issue for issue in issues), issues
+    assert any("get_cached_backend" in issue for issue in issues), issues
+    assert any("entry_needs_sequence" in issue for issue in issues), issues
+    assert any("should_prefer_tensor_stage" in issue for issue in issues), issues
+
+
+def test_stage_file_stage_context_surface_boundary_flags_dataclass_export(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_stage_context = tmp_path / "stage_file_stage_context.py"
+    fake_stage_context.write_text(
+        "class StageFileStageContext:\n"
+        "    pass\n\n"
+        "def build_stage_file_stage_context():\n"
+        "    return StageFileStageContext()\n\n"
+        '__all__ = ["StageFileStageContext", "build_stage_file_stage_context"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_STAGE_CONTEXT", fake_stage_context, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_file_stage_context_surface_boundary(issues)
+
+    assert any("StageFileStageContext" in issue for issue in issues), issues
 
 
 def test_stage_worker_io_surface_boundary_flags_declared_frame_helpers(tmp_path, monkeypatch) -> None:

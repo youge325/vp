@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.algorithms.tensor_backend import get_tensor_backend
 from app.planning import ProcessingStep
 from app.processing.streaming.frame_payload import FramePayload
 from app.processing.streaming.metrics import PipelineMetrics
@@ -18,12 +17,6 @@ class StepAlgorithm:
     algorithm: Any
 
 
-def get_cached_backend(cache: dict[str, Any], backend_name: str) -> Any:
-    if backend_name not in cache:
-        cache[backend_name] = get_tensor_backend(backend_name)
-    return cache[backend_name]
-
-
 def algorithm_needs_sequence(algorithm: Any) -> bool:
     needs_sequence = getattr(algorithm, "needs_frame_sequence", None)
     return callable(needs_sequence) and bool(needs_sequence())
@@ -34,26 +27,8 @@ def algorithm_needs_pairs(algorithm: Any) -> bool:
     return callable(needs_pairs) and bool(needs_pairs())
 
 
-def entry_needs_sequence(entry: StepAlgorithm) -> bool:
-    return algorithm_needs_sequence(entry.algorithm)
-
-
 def is_cpu_frame_stage(entry: StepAlgorithm) -> bool:
     return entry.step.algorithm_type == "frame_filter_chain"
-
-
-def should_prefer_tensor_stage(
-    *,
-    entry: StepAlgorithm,
-    payload: FramePayload,
-    remaining: list[StepAlgorithm],
-    has_tensor_stage_after_chain: bool,
-) -> bool:
-    if not is_cpu_frame_stage(entry):
-        return True
-    if payload.has_tensor_for(entry.backend):
-        return True
-    return any(not is_cpu_frame_stage(next_entry) for next_entry in remaining) or has_tensor_stage_after_chain
 
 
 def run_stage(
@@ -108,9 +83,6 @@ __all__ = [
     "StepAlgorithm",
     "algorithm_needs_pairs",
     "algorithm_needs_sequence",
-    "entry_needs_sequence",
-    "get_cached_backend",
     "is_cpu_frame_stage",
     "run_stage",
-    "should_prefer_tensor_stage",
 ]
