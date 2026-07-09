@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.cli import build_parser, cmd_check
+from app.cli.commands import _process_validation
 from app.cli.commands._process_validation import load_runtime_configs
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
@@ -74,6 +75,10 @@ def _make_runtime_args(**overrides):
     }
     values.update(overrides)
     return argparse.Namespace(**values)
+
+
+def test_process_validation_config_section_collector_is_private():
+    assert not hasattr(_process_validation, "collect_config_sections")
 
 
 def _make_workflow_config(**overrides):
