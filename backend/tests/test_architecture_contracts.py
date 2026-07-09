@@ -1734,6 +1734,26 @@ def test_stage_worker_runtime_test_boundary_flags_obsolete_test_file(tmp_path, m
     assert any("obsolete stage worker runtime test" in issue for issue in issues), issues
 
 
+def test_stage_worker_entrypoint_test_boundary_flags_split_helper_tests(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_stage_worker_test = tmp_path / "test_stage_worker.py"
+    fake_stage_worker_test.write_text(
+        "from app.processing.streaming.stage_worker_config import StageWorkerConfig\n"
+        "from app.processing.streaming.stage_worker_io import RawVideoFrameError, read_rgb_frame\n\n"
+        "def test_stage_worker_config_accepts_jsonable_stage_shape():\n"
+        "    return StageWorkerConfig.from_mapping({})\n\n"
+        "def test_read_rgb_frame_rejects_partial_frame():\n"
+        "    return read_rgb_frame(None, width=1, height=1)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_WORKER_TEST", fake_stage_worker_test, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_worker_entrypoint_test_boundary(issues)
+
+    assert any("stage worker entrypoint test boundary" in issue for issue in issues), issues
+
+
 def test_stage_worker_execution_boundary_flags_local_stage_loops(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_stage_worker = tmp_path / "stage_worker.py"
