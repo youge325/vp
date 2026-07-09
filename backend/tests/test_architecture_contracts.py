@@ -703,6 +703,26 @@ def test_worker_process_helper_import_boundary_flags_helper_imports_from_entrypo
     assert any("worker process helper" in issue for issue in issues), issues
 
 
+def test_worker_processes_test_boundary_flags_event_and_io_helper_tests(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_test = tmp_path / "test_worker_processes.py"
+    fake_test.write_text(
+        "from app.processing.streaming.worker_process_events import parse_stage_event_line, read_worker_stderr\n"
+        "from app.processing.streaming.worker_process_io import drain_final_worker_output\n\n"
+        "def test_parse_stage_event_line_returns_json_event_only_for_prefixed_lines():\n"
+        "    assert parse_stage_event_line('x') is None\n\n"
+        "def test_drain_final_worker_output_stops_after_expected_frame_count():\n"
+        "    drain_final_worker_output()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKER_PROCESSES_TEST", fake_test, raising=False)
+    issues: list[str] = []
+
+    module._check_worker_processes_test_boundary(issues)
+
+    assert any("worker processes test boundary" in issue for issue in issues), issues
+
+
 def test_enhance_view_option_boundary_flags_view_local_option_rules(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_view = tmp_path / "EnhanceModuleView.vue"

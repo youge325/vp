@@ -53,6 +53,7 @@ STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "sta
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 PROCESSOR_TESTS = ROOT / "backend" / "tests" / "test_processing"
+WORKER_PROCESSES_TEST = PROCESSOR_TESTS / "test_worker_processes.py"
 STAGE_WORKER_RUNTIME_TEST = PROCESSOR_TESTS / "test_stage_worker_runtime.py"
 SEGMENT_MANIFEST = ROOT / "backend" / "app" / "planning" / "manifest.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
@@ -1390,6 +1391,27 @@ def _check_worker_process_helper_import_boundary(issues: list[str]) -> None:
                 issues.append(f"worker process helper `{token}` import remains in {_rel(path)}")
 
 
+def _check_worker_processes_test_boundary(issues: list[str]) -> None:
+    if not WORKER_PROCESSES_TEST.exists():
+        return
+
+    text = _read(WORKER_PROCESSES_TEST)
+    forbidden_patterns = {
+        "event helper import": r"from\s+app\.processing\.streaming\.worker_process_events\s+import\b",
+        "io helper import": r"from\s+app\.processing\.streaming\.worker_process_io\s+import\b",
+        "event helper test": r"^\s*def\s+test_(?:parse_stage_event_line|read_worker_stderr)\b",
+        "io helper test": r"^\s*def\s+test_(?:drain_final_worker_output|write_decoded_frames_to_worker|close_pipe)\b",
+        "parse_stage_event_line": r"\bparse_stage_event_line\b",
+        "read_worker_stderr": r"\bread_worker_stderr\b",
+        "drain_final_worker_output": r"\bdrain_final_worker_output\b",
+        "write_decoded_frames_to_worker": r"\bwrite_decoded_frames_to_worker\b",
+        "close_pipe": r"\bclose_pipe\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"worker processes test boundary `{label}` remains in {_rel(WORKER_PROCESSES_TEST)}")
+
+
 def _check_stage_file_pipeline_chunk_boundary(issues: list[str]) -> None:
     text = _read(STAGE_FILE_PIPELINE)
     forbidden_patterns = {
@@ -1953,6 +1975,7 @@ def main() -> int:
         _check_worker_pipeline_file_boundary(issues)
         _check_worker_processes_event_io_boundary(issues)
         _check_worker_process_helper_import_boundary(issues)
+        _check_worker_processes_test_boundary(issues)
         _check_stage_file_pipeline_chunk_boundary(issues)
         _check_stage_file_chunks_runtime_boundary(issues)
         _check_stage_file_chunk_runtime_encoding_boundary(issues)
