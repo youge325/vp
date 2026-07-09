@@ -517,13 +517,6 @@ def _first_image_input_pixels(
     return None
 
 
-def _attribute_int(node: Any, name: str, default: int) -> int:
-    for attr in node.attribute:
-        if attr.name == name:
-            return int(attr.i)
-    return default
-
-
 def _estimate_graph_flops(
     graph: Any,
     initializers: dict[str, Any],
