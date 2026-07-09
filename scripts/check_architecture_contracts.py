@@ -29,6 +29,7 @@ FRONTEND_SRC = ROOT / "frontend" / "src"
 DOC_ROOT = ROOT / "docs"
 README = ROOT / "README.md"
 DLL_PATHS = ROOT / "backend" / "app" / "utils" / "dll_paths.py"
+BACKEND_MODEL_METRICS = ROOT / "backend" / "app" / "utils" / "model_metrics.py"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
@@ -732,6 +733,12 @@ def _check_dll_paths_test_helper_boundary(issues: list[str]) -> None:
     text = _read(DLL_PATHS)
     if re.search(r"^\s*def\s+reset_registry_for_tests\b", text, re.MULTILINE):
         issues.append(f"DLL path test helper remains in production module {_rel(DLL_PATHS)}")
+
+
+def _check_backend_model_metrics_dead_helper_boundary(issues: list[str]) -> None:
+    text = _read(BACKEND_MODEL_METRICS)
+    if re.search(r"^\s*def\s+_attribute_int\b", text, re.MULTILINE):
+        issues.append(f"model metrics dead helper `_attribute_int` remains in {_rel(BACKEND_MODEL_METRICS)}")
 
 
 def _check_backend_test_private_cli_defaults_boundary(issues: list[str]) -> None:
@@ -2090,6 +2097,7 @@ def main() -> int:
         _check_cli_defaults_planning_boundary(issues)
         _check_cli_process_validation_compat_boundary(issues)
         _check_dll_paths_test_helper_boundary(issues)
+        _check_backend_model_metrics_dead_helper_boundary(issues)
         _check_backend_test_private_cli_defaults_boundary(issues)
         _check_segment_manifest_compat_boundary(issues)
         _check_cli_process_planning_validation_boundary(issues)

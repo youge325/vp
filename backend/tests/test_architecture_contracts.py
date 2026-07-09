@@ -136,6 +136,24 @@ def test_dll_paths_test_helper_boundary_flags_production_reset_helper(tmp_path, 
     assert any("DLL path test helper" in issue for issue in issues), issues
 
 
+def test_backend_model_metrics_has_no_obsolete_attribute_int_helper() -> None:
+    model_metrics = REPO_ROOT / "backend" / "app" / "utils" / "model_metrics.py"
+
+    assert "def _attribute_int(" not in model_metrics.read_text(encoding="utf-8")
+
+
+def test_backend_model_metrics_dead_helper_boundary_flags_obsolete_attribute_helper(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_model_metrics = tmp_path / "model_metrics.py"
+    fake_model_metrics.write_text("def _attribute_int(node, name, default):\n    return default\n", encoding="utf-8")
+    monkeypatch.setattr(module, "BACKEND_MODEL_METRICS", fake_model_metrics, raising=False)
+    issues: list[str] = []
+
+    module._check_backend_model_metrics_dead_helper_boundary(issues)
+
+    assert any("model metrics dead helper" in issue for issue in issues), issues
+
+
 def test_cli_defaults_planning_boundary_flags_model_path_helper(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_defaults = tmp_path / "defaults.py"
