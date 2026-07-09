@@ -50,11 +50,11 @@ export function createEventHandlers(
   lifecycle: BatchLifecycle,
   conflict: ConflictResolver,
 ): EventHandlers {
-  function onProgress(payload: TaskProgressPayload): void {
+  function onProgress(): void {
     const item = lifecycle.getConsoleItem()
     const runState = lifecycle.getConsoleRunState()
     if (item && runState) {
-      deps.setItemTaskState(item.id, applyTaskProgress(runState.taskState, payload))
+      deps.setItemTaskState(item.id, applyTaskProgress(runState.taskState))
     }
   }
 
@@ -70,7 +70,7 @@ export function createEventHandlers(
     const item = lifecycle.getCurrentItem()
     const runState = lifecycle.getCurrentRunState()
     if (item && runState) {
-      deps.setItemTaskState(item.id, applyTaskCompleted(runState.taskState, payload))
+      deps.setItemTaskState(item.id, applyTaskCompleted(runState.taskState))
       if (payload.outputPath) {
         deps.setItemLastOutputPath(item.id, payload.outputPath)
       }

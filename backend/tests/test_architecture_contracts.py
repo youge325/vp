@@ -192,6 +192,33 @@ def test_dead_type_alias_boundary_flags_obsolete_aliases(tmp_path, monkeypatch) 
     assert any("ItemConfigSnapshot" in issue for issue in issues), issues
 
 
+def test_frontend_task_event_reducers_have_no_dead_payload_params() -> None:
+    reducer = REPO_ROOT / "frontend" / "src" / "services" / "task" / "events.ts"
+    text = reducer.read_text(encoding="utf-8")
+
+    assert "TaskProgressPayload" not in text
+    assert "TaskCompletedPayload" not in text
+    assert "applyTaskProgress(state: MediaTaskState, _payload" not in text
+    assert "applyTaskCompleted(state: MediaTaskState, _payload" not in text
+
+
+def test_frontend_task_event_reducer_payload_boundary_flags_dead_payload_params(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_reducer = tmp_path / "events.ts"
+    fake_reducer.write_text(
+        "import type { TaskCompletedPayload, TaskProgressPayload } from '@/types/protocol'\n"
+        "export function applyTaskProgress(state: MediaTaskState, _payload: TaskProgressPayload) { return state }\n"
+        "export function applyTaskCompleted(state: MediaTaskState, _payload: TaskCompletedPayload) { return state }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "TASK_EVENT_REDUCERS", fake_reducer, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_task_event_reducer_payload_boundary(issues)
+
+    assert any("task event reducer payload" in issue for issue in issues), issues
+
+
 def test_cli_defaults_planning_boundary_flags_model_path_helper(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_defaults = tmp_path / "defaults.py"

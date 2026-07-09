@@ -147,6 +147,7 @@ DECODE_PROFILE_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-profi
 ENCODE_PROFILE_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-profile-bindings.ts"
 ENCODE_OUTPUT_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-output-bindings.ts"
 USE_TASK_ORCHESTRATOR = FRONTEND_SRC / "composables" / "app" / "useTaskOrchestrator.ts"
+TASK_EVENT_REDUCERS = FRONTEND_SRC / "services" / "task" / "events.ts"
 ENHANCE_VIEW = FRONTEND_SRC / "views" / "EnhanceModuleView.vue"
 DECODE_VIEW = FRONTEND_SRC / "views" / "DecodeModuleView.vue"
 ENCODE_VIEW = FRONTEND_SRC / "views" / "EncodeModuleView.vue"
@@ -754,6 +755,19 @@ def _check_dead_type_alias_boundary(issues: list[str]) -> None:
     for path, name, pattern in checks:
         if re.search(pattern, _read(path), re.MULTILINE):
             issues.append(f"dead type alias `{name}` remains in {_rel(path)}")
+
+
+def _check_frontend_task_event_reducer_payload_boundary(issues: list[str]) -> None:
+    text = _read(TASK_EVENT_REDUCERS)
+    forbidden_patterns = {
+        "TaskProgressPayload import": r"\bTaskProgressPayload\b",
+        "TaskCompletedPayload import": r"\bTaskCompletedPayload\b",
+        "progress dead payload parameter": r"applyTaskProgress\s*\([^)]*_payload",
+        "completed dead payload parameter": r"applyTaskCompleted\s*\([^)]*_payload",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(f"task event reducer payload `{label}` remains in {_rel(TASK_EVENT_REDUCERS)}")
 
 
 def _check_backend_test_private_cli_defaults_boundary(issues: list[str]) -> None:
@@ -2114,6 +2128,7 @@ def main() -> int:
         _check_dll_paths_test_helper_boundary(issues)
         _check_backend_model_metrics_dead_helper_boundary(issues)
         _check_dead_type_alias_boundary(issues)
+        _check_frontend_task_event_reducer_payload_boundary(issues)
         _check_backend_test_private_cli_defaults_boundary(issues)
         _check_segment_manifest_compat_boundary(issues)
         _check_cli_process_planning_validation_boundary(issues)
