@@ -30,6 +30,7 @@ DOC_ROOT = ROOT / "docs"
 README = ROOT / "README.md"
 DLL_PATHS = ROOT / "backend" / "app" / "utils" / "dll_paths.py"
 BACKEND_MODEL_METRICS = ROOT / "backend" / "app" / "utils" / "model_metrics.py"
+BACKEND_ONNX_MODELS = ROOT / "backend" / "app" / "utils" / "onnx_models.py"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
@@ -118,6 +119,8 @@ CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_proce
 CLI_PROCESS_PLANNING = ROOT / "backend" / "app" / "cli" / "commands" / "_process_planning.py"
 MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
 DOMAIN_PRESET_TYPES = FRONTEND_SRC / "types" / "domain" / "preset.ts"
+DOMAIN_WORKFLOW_TYPES = FRONTEND_SRC / "types" / "domain" / "workflow.ts"
+DOMAIN_MEDIA_TYPES = FRONTEND_SRC / "types" / "domain" / "media.ts"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 WORKFLOW_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "workflow-defaults.ts"
 PRESET_NORMALIZE = FRONTEND_SRC / "services" / "preset" / "normalize.ts"
@@ -739,6 +742,18 @@ def _check_backend_model_metrics_dead_helper_boundary(issues: list[str]) -> None
     text = _read(BACKEND_MODEL_METRICS)
     if re.search(r"^\s*def\s+_attribute_int\b", text, re.MULTILINE):
         issues.append(f"model metrics dead helper `_attribute_int` remains in {_rel(BACKEND_MODEL_METRICS)}")
+
+
+def _check_dead_type_alias_boundary(issues: list[str]) -> None:
+    checks = (
+        (BACKEND_ONNX_MODELS, "OnnxEngine", r"^\s*OnnxEngine\s*="),
+        (DOMAIN_WORKFLOW_TYPES, "WorkflowMode", r"^\s*export\s+type\s+WorkflowMode\b"),
+        (DOMAIN_WORKFLOW_TYPES, "EditingScope", r"^\s*export\s+type\s+EditingScope\b"),
+        (DOMAIN_MEDIA_TYPES, "ItemConfigSnapshot", r"^\s*export\s+type\s+ItemConfigSnapshot\b"),
+    )
+    for path, name, pattern in checks:
+        if re.search(pattern, _read(path), re.MULTILINE):
+            issues.append(f"dead type alias `{name}` remains in {_rel(path)}")
 
 
 def _check_backend_test_private_cli_defaults_boundary(issues: list[str]) -> None:
@@ -2098,6 +2113,7 @@ def main() -> int:
         _check_cli_process_validation_compat_boundary(issues)
         _check_dll_paths_test_helper_boundary(issues)
         _check_backend_model_metrics_dead_helper_boundary(issues)
+        _check_dead_type_alias_boundary(issues)
         _check_backend_test_private_cli_defaults_boundary(issues)
         _check_segment_manifest_compat_boundary(issues)
         _check_cli_process_planning_validation_boundary(issues)

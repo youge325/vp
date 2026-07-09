@@ -5,7 +5,6 @@ import type {
   EncodeConfig,
   OutputConfig,
   TaskErrorPayload,
-  WorkbenchPreset,
   WorkflowConfig,
 } from '../protocol'
 import type { ResumeStatus } from './batch'
@@ -24,18 +23,6 @@ export interface OperationIssue {
   scope: OperationIssueScope
   error: TaskError
 }
-
-/**
- * Per-item snapshot of the workbench preset, taken when the media item is
- * created. Same shape as ``WorkbenchPreset`` but semantically distinct: this
- * is the immutable run-time config locked to one media file, whereas
- * ``WorkbenchPreset`` in the preset store is the mutable draft the user is
- * editing.
- */
-export type ItemConfigSnapshot = Pick<
-  WorkbenchPreset,
-  'decodeConfig' | 'workflowConfig' | 'encodeConfig' | 'outputConfig'
->
 
 export interface VideoInfoResult {
   type: 'info'

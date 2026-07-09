@@ -1,11 +1,5 @@
 // 领域层 — 业务联合类型与枚举,不依赖 vue / pinia / tauri。
 
-export type WorkflowMode =
-  | 'frame_interpolation'
-  | 'super_resolution'
-  | 'anime_optimization'
-  | 'format_conversion'
-
 export type ProcessOrder =
   | 'super_resolution_then_interpolation'
   | 'frame_interpolation_then_super_resolution'
@@ -19,5 +13,4 @@ export type GpuDeviceType = 'integrated' | 'discrete' | 'virtual' | 'other'
 export type InferenceEngine = 'cuda' | 'tensorrt' | 'dcu'
 export type RateControlMode = 'crf' | 'cq' | 'qp' | 'bitrate'
 export type EnvironmentCheckSource = 'cache' | 'probe'
-export type EditingScope = 'preset' | 'selection'
 export type FilterStepKind = 'scale' | 'crop' | 'pad' | 'sharpen' | 'denoise' | 'color'
