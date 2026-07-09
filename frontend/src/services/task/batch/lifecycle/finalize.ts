@@ -22,14 +22,16 @@ import type { TaskError } from '@/types/domain/media'
 
 import { applyTaskError } from '../../events'
 
-import type { CommonHelpers } from './common'
+import type { createCommonHelpers } from './common'
 import type { BatchLifecycleDeps } from './types'
+
+type CommonHelpers = ReturnType<typeof createCommonHelpers>
 
 interface FinalizeInternalRefs {
   runNextQueuedItem: () => Promise<void>
 }
 
-export interface FinalizeOps {
+interface FinalizeOps {
   finalizeCurrent(state: 'completed' | 'error' | 'cancelled'): Promise<void>
   handleErrored(error: TaskError): Promise<void>
 }

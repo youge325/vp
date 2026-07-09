@@ -225,8 +225,17 @@ FRONTEND_UTILITY_INTERNAL_TYPE_FILES = {
     ),
     FRONTEND_SRC / "services" / "task" / "batch" / "conflict.ts": ("ConflictResolverDeps",),
     FRONTEND_SRC / "services" / "task" / "batch" / "events.ts": ("EventHandlersDeps", "EventHandlers"),
-    FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "finalize.ts": ("FinalizeInternalRefs",),
-    FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "queue.ts": ("QueueInternalRefs",),
+    FRONTEND_SRC / "composables" / "forms" / "enhance-effect-bindings.ts": ("EnhanceEffectBindingParams",),
+    FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "common.ts": ("CommonHelpers",),
+    FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "control.ts": ("ControlOps",),
+    FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "finalize.ts": (
+        "FinalizeInternalRefs",
+        "FinalizeOps",
+    ),
+    FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "queue.ts": (
+        "QueueInternalRefs",
+        "QueueOps",
+    ),
 }
 
 
