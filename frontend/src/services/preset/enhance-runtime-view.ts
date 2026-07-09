@@ -3,8 +3,7 @@
 
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
-import type { MetricRow } from '@/services/model-metric-rows'
-import type { RuntimeMetricEstimate, VideoDimensions } from '@/services/model-runtime-estimates'
+import type { MetricRow, RuntimeMetricEstimate, VideoDimensions } from '@/types/view/model-metrics'
 import { buildEnhanceRuntimeEstimates } from './enhance-runtime-estimates'
 import { buildEnhanceRuntimeFrameState, buildEnhanceRuntimeRows } from './enhance-runtime-rows'
 

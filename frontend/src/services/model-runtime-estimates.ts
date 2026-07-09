@@ -1,23 +1,11 @@
 import type { ModelVariantInfo } from '@/types/domain/env'
-
-export interface VideoDimensions {
-  width: number
-  height: number
-}
+import type { RuntimeMetricEstimate, VideoDimensions } from '@/types/view/model-metrics'
 
 interface RuntimeMetricOptions {
   scale?: number
   precisionBytes?: number
   temporalFrames?: number
   runtimeFrameCount?: number | null
-}
-
-export interface RuntimeMetricEstimate {
-  effectiveWidth: number
-  effectiveHeight: number
-  megapixels: number
-  gflops: number | null
-  vramBytes: number | null
 }
 
 function finiteOrNull(value: number | null | undefined): number | null {

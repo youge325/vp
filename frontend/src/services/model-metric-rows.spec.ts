@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { combinedVramMetricRows, metricRows } from './model-metric-rows'
 import type { ModelVariantInfo } from '@/types/domain/env'
-import type { RuntimeMetricEstimate } from './model-runtime-estimates'
+import type { RuntimeMetricEstimate } from '@/types/view/model-metrics'
 
 const detail: ModelVariantInfo = {
   name: '4.25',

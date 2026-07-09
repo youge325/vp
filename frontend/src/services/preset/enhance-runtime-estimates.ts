@@ -3,11 +3,10 @@
 
 import type { ModelVariantInfo } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
+import type { RuntimeMetricEstimate, VideoDimensions } from '@/types/view/model-metrics'
 import {
   estimateCombinedPeakVram,
   estimateModelRuntimeMetrics,
-  type RuntimeMetricEstimate,
-  type VideoDimensions,
 } from '@/services/model-runtime-estimates'
 
 interface EnhanceRuntimeEstimatesInput {
