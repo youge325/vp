@@ -538,6 +538,27 @@ def test_worker_pipeline_plan_boundary_flags_obsolete_plan_reexports(tmp_path, m
     assert any("obsolete plan export" in issue for issue in issues), issues
 
 
+def test_worker_pipeline_test_boundary_flags_pure_plan_rule_tests(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_test = tmp_path / "test_worker_pipeline.py"
+    fake_test.write_text(
+        "import app.processing.streaming.stage_rules as stage_rules\n"
+        "from app.processing.streaming.pipeline_rules import stage_file_resume_source_frames\n"
+        "from app.processing.streaming.worker_plans import build_stage_chunk_plans, build_stage_worker_plans\n\n"
+        "def test_worker_plan_tracks_dimensions_for_super_resolution_then_interpolation():\n"
+        "    return build_stage_worker_plans()\n\n"
+        "def test_boundary_schedule_matches_interpolation_output_groups():\n"
+        "    return stage_file_resume_source_frames()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKER_PIPELINE_TEST", fake_test, raising=False)
+    issues: list[str] = []
+
+    module._check_worker_pipeline_test_boundary(issues)
+
+    assert any("worker pipeline test boundary" in issue for issue in issues), issues
+
+
 def test_enhance_form_view_model_boundary_flags_derived_rule_leaks(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_form = tmp_path / "useEnhanceForm.ts"

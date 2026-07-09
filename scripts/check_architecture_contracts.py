@@ -53,6 +53,7 @@ STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "sta
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 PROCESSOR_TESTS = ROOT / "backend" / "tests" / "test_processing"
+WORKER_PIPELINE_TEST = PROCESSOR_TESTS / "test_worker_pipeline.py"
 WORKER_PROCESSES_TEST = PROCESSOR_TESTS / "test_worker_processes.py"
 STAGE_WORKER_TEST = PROCESSOR_TESTS / "test_stage_worker.py"
 STAGE_WORKER_RUNTIME_TEST = PROCESSOR_TESTS / "test_stage_worker_runtime.py"
@@ -1288,6 +1289,31 @@ def _check_worker_pipeline_plan_boundary(issues: list[str]) -> None:
             issues.append(f"worker plan rule `{label}` remains in backend/app/processing/streaming/worker_pipeline.py")
 
 
+def _check_worker_pipeline_test_boundary(issues: list[str]) -> None:
+    if not WORKER_PIPELINE_TEST.exists():
+        return
+
+    text = _read(WORKER_PIPELINE_TEST)
+    forbidden_patterns = {
+        "worker plans import": r"from\s+app\.processing\.streaming\.worker_plans\s+import\b",
+        "stage rules import": r"import\s+app\.processing\.streaming\.stage_rules\b|from\s+app\.processing\.streaming\.stage_rules\s+import\b",
+        "pipeline rules import": r"from\s+app\.processing\.streaming\.pipeline_rules\s+import\b",
+        "worker plan test": r"^\s*def\s+test_worker_plan_\w+\b",
+        "stage rules test": r"^\s*def\s+test_stage_rules_\w+\b",
+        "chunk plan test": r"^\s*def\s+test_\w*stage_chunks_\w+\b",
+        "boundary schedule test": r"^\s*def\s+test_boundary_schedule_\w+\b",
+        "stage-file resume domain test": r"^\s*def\s+test_stage_file_resume_source_frames_\w+\b",
+        "worker plan builder": r"\bbuild_stage_worker_plans\b",
+        "chunk plan builder": r"\bbuild_stage_chunk_plans\b",
+        "boundary schedule helper": r"\bboundary_schedule_for_stage_plan\b",
+        "stage rule helper": r"\b(?:ordered_steps|stage_output_dimensions|stage_output_frame_count|stage_tensor_backend_name)\b",
+        "stage-file resume helper": r"\bstage_file_resume_source_frames\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"worker pipeline test boundary `{label}` remains in {_rel(WORKER_PIPELINE_TEST)}")
+
+
 def _check_worker_pipeline_process_boundary(issues: list[str]) -> None:
     text = _read(WORKER_PIPELINE)
     forbidden_patterns = {
@@ -1992,6 +2018,7 @@ def main() -> int:
         _check_frontend_preset_select_option_type_boundary(issues)
         _check_frontend_encode_output_binding_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
+        _check_worker_pipeline_test_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)
         _check_worker_pipeline_chain_runtime_boundary(issues)
         _check_worker_pipeline_file_boundary(issues)
