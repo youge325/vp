@@ -53,6 +53,7 @@ STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "sta
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 PROCESSOR_TESTS = ROOT / "backend" / "tests" / "test_processing"
+STAGE_WORKER_RUNTIME_TEST = PROCESSOR_TESTS / "test_stage_worker_runtime.py"
 SEGMENT_MANIFEST = ROOT / "backend" / "app" / "planning" / "manifest.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_validation.py"
@@ -597,6 +598,11 @@ def _check_stage_worker_runtime_split_boundary(issues: list[str]) -> None:
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
             issues.append(f"stage worker runtime split `{label}` remains in {_rel(STAGE_WORKER_RUNTIME)}")
+
+
+def _check_stage_worker_runtime_test_boundary(issues: list[str]) -> None:
+    if STAGE_WORKER_RUNTIME_TEST.exists():
+        issues.append(f"obsolete stage worker runtime test remains in {_rel(STAGE_WORKER_RUNTIME_TEST)}")
 
 
 def _check_frontend_form_profile_rule_boundary(issues: list[str]) -> None:
@@ -1881,6 +1887,7 @@ def main() -> int:
         _check_stage_worker_io_surface_boundary(issues)
         _check_stage_worker_helper_import_boundary(issues)
         _check_stage_worker_runtime_split_boundary(issues)
+        _check_stage_worker_runtime_test_boundary(issues)
         _check_frontend_form_profile_rule_boundary(issues)
         _check_cli_defaults_planning_boundary(issues)
         _check_cli_process_validation_compat_boundary(issues)

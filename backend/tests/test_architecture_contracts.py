@@ -1686,6 +1686,18 @@ def test_stage_worker_runtime_split_boundary_flags_obsolete_runtime_barrel(tmp_p
     assert any("obsolete stage worker runtime barrel" in issue for issue in issues), issues
 
 
+def test_stage_worker_runtime_test_boundary_flags_obsolete_test_file(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runtime_test = tmp_path / "test_stage_worker_runtime.py"
+    fake_runtime_test.write_text("def test_legacy_runtime_surface():\n    pass\n", encoding="utf-8")
+    monkeypatch.setattr(module, "STAGE_WORKER_RUNTIME_TEST", fake_runtime_test, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_worker_runtime_test_boundary(issues)
+
+    assert any("obsolete stage worker runtime test" in issue for issue in issues), issues
+
+
 def test_stage_worker_execution_boundary_flags_local_stage_loops(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_stage_worker = tmp_path / "stage_worker.py"
