@@ -2,7 +2,9 @@ import { reactive } from 'vue'
 import { describe, expect, it } from 'vitest'
 
 import { createEnhanceOptionSetters } from '@/composables/forms/enhance-option-setters'
-import type { EnhanceOptionForm } from '@/composables/forms/enhance-option-bindings'
+import type { createEnhanceOptionBindings } from '@/composables/forms/enhance-option-bindings'
+
+type EnhanceOptionForm = Parameters<typeof createEnhanceOptionBindings>[0]
 
 function makeForm(): EnhanceOptionForm {
   return reactive({

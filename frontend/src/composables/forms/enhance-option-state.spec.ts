@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createEnhanceOptionState } from '@/composables/forms/enhance-option-state'
 import { useEnvStore } from '@/stores/env'
-import type { EnhanceOptionForm } from '@/composables/forms/enhance-option-bindings'
+import type { createEnhanceOptionBindings } from '@/composables/forms/enhance-option-bindings'
 import type { EnvironmentCheckResult, ModelVariantInfo } from '@/types/domain/env'
+
+type EnhanceOptionForm = Parameters<typeof createEnhanceOptionBindings>[0]
 
 const detail = (name: string): ModelVariantInfo => ({
   name,

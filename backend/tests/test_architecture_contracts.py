@@ -886,8 +886,10 @@ def test_frontend_utility_internal_types_are_not_exported() -> None:
         ),
         frontend_src / "composables" / "forms" / "useFilterChainForm.ts": ("FilterStage",),
         frontend_src / "composables" / "selectors" / "useGpuCapabilities.ts": ("GpuCapabilitiesView",),
+        frontend_src / "composables" / "forms" / "enhance-option-bindings.ts": ("EnhanceOptionForm",),
         frontend_src / "lib" / "ipc" / "events.ts": ("TaskEventHandlers",),
         frontend_src / "services" / "model-runtime-estimates.ts": ("RuntimeMetricOptions",),
+        frontend_src / "services" / "preset" / "io-form-rules.ts": ("RateControlViewState",),
         frontend_src / "services" / "task" / "events.ts": ("TaskLogLineKind",),
         frontend_src / "services" / "task" / "preflight.ts": (
             "BatchPreflightItem",

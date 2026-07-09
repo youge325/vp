@@ -22,7 +22,7 @@ import type { SelectOption } from './select-options'
 
 const RATE_CONTROL_UNAVAILABLE_HINT = '未探测到可用码率控制模式'
 
-export interface RateControlViewState {
+interface RateControlViewState {
   options: SelectOption[]
   disabled: boolean
   modeHint?: string
