@@ -1122,7 +1122,7 @@ def test_frontend_model_metrics_barrel_boundary_flags_local_rules(tmp_path, monk
     assert any("model metrics barrel" in issue for issue in issues), issues
 
 
-def test_frontend_model_metrics_barrel_boundary_allows_compat_reexports(tmp_path, monkeypatch) -> None:
+def test_frontend_model_metrics_barrel_boundary_flags_obsolete_barrel(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_model_metrics = tmp_path / "model-metrics.ts"
     fake_model_metrics.write_text(
@@ -1138,10 +1138,10 @@ def test_frontend_model_metrics_barrel_boundary_allows_compat_reexports(tmp_path
 
     module._check_frontend_model_metrics_barrel_boundary(issues)
 
-    assert issues == []
+    assert any("obsolete model metrics barrel" in issue for issue in issues), issues
 
 
-def test_frontend_model_metrics_barrel_boundary_flags_missing_compat_barrel(tmp_path, monkeypatch) -> None:
+def test_frontend_model_metrics_barrel_boundary_allows_missing_barrel(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_model_metrics = tmp_path / "missing-model-metrics.ts"
     monkeypatch.setattr(module, "MODEL_METRICS", fake_model_metrics, raising=False)
@@ -1149,7 +1149,7 @@ def test_frontend_model_metrics_barrel_boundary_flags_missing_compat_barrel(tmp_
 
     module._check_frontend_model_metrics_barrel_boundary(issues)
 
-    assert any("model metrics compatibility barrel missing" in issue for issue in issues), issues
+    assert issues == []
 
 
 def test_frontend_task_orchestrator_runtime_boundary_flags_runtime_reexports(tmp_path, monkeypatch) -> None:

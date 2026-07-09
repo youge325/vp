@@ -927,35 +927,20 @@ def _check_frontend_enhance_runtime_view_split_boundary(issues: list[str]) -> No
 
 
 def _check_frontend_model_metrics_barrel_boundary(issues: list[str]) -> None:
-    if not MODEL_METRICS.exists():
-        issues.append(f"model metrics compatibility barrel missing: {_rel(MODEL_METRICS)}")
-        return
-    text = _read(MODEL_METRICS)
-    required_reexports = {
-        "metric format": r"export\s+(?:type\s+)?(?:\{[\s\S]*?\}|\*)\s+from\s+['\"]\./model-metric-format['\"]",
-        "engine metrics": r"export\s+(?:type\s+)?(?:\{[\s\S]*?\}|\*)\s+from\s+['\"]\./model-engine-metrics['\"]",
-        "runtime estimates": r"export\s+(?:type\s+)?(?:\{[\s\S]*?\}|\*)\s+from\s+['\"]\./model-runtime-estimates['\"]",
-        "metric rows": r"export\s+(?:type\s+)?(?:\{[\s\S]*?\}|\*)\s+from\s+['\"]\./model-metric-rows['\"]",
-    }
-    for label, pattern in required_reexports.items():
-        if not re.search(pattern, text, re.MULTILINE):
-            issues.append(f"model metrics barrel missing `{label}` re-export in {_rel(MODEL_METRICS)}")
-    forbidden_patterns = {
-        "format function": r"^\s*export\s+function\s+format(?:Bytes|Gflops|ParameterCount)\b",
-        "model option label": r"^\s*export\s+function\s+modelOptionLabel\b",
-        "engine resolver": r"^\s*export\s+function\s+resolveMetricsForEngine\b",
-        "runtime estimate": r"^\s*export\s+function\s+estimateModelRuntimeMetrics\b",
-        "combined vram estimate": r"^\s*export\s+function\s+estimateCombinedPeakVram\b",
-        "metric rows": r"^\s*export\s+function\s+(?:metricRows|combinedVramMetricRows)\b",
-        "local finite helper": r"^\s*function\s+finiteOrNull\b",
-        "local padding helper": r"^\s*function\s+padToModulo\b",
-        "local unknown sentinel": r"^\s*const\s+UNKNOWN\b",
-        "runtime interface": r"^\s*export\s+interface\s+(?:VideoDimensions|RuntimeMetricOptions|RuntimeMetricEstimate)\b",
-        "metric row interface": r"^\s*export\s+interface\s+MetricRow\b",
-    }
-    for label, pattern in forbidden_patterns.items():
-        if re.search(pattern, text, re.MULTILINE):
-            issues.append(f"model metrics barrel `{label}` remains in {_rel(MODEL_METRICS)}")
+    if MODEL_METRICS.exists():
+        issues.append(f"obsolete model metrics barrel remains in {_rel(MODEL_METRICS)}")
+
+    import_patterns = (
+        r"from\s+['\"]@/services/model-metrics['\"]",
+        r"from\s+['\"]\./model-metrics['\"]",
+        r"from\s+['\"]\.\./model-metrics['\"]",
+    )
+    for path in _iter_source_files(FRONTEND_SRC):
+        if path == MODEL_METRICS:
+            continue
+        text = _read(path)
+        if any(re.search(pattern, text) for pattern in import_patterns):
+            issues.append(f"obsolete model metrics barrel import remains in {_rel(path)}")
 
 
 def _check_frontend_task_orchestrator_runtime_boundary(issues: list[str]) -> None:
