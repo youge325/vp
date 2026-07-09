@@ -1081,13 +1081,15 @@ def test_frontend_model_metrics_barrel_boundary_flags_local_rules(tmp_path, monk
     assert any("model metrics barrel" in issue for issue in issues), issues
 
 
-def test_frontend_model_metrics_barrel_boundary_flags_obsolete_reexports(tmp_path, monkeypatch) -> None:
+def test_frontend_model_metrics_barrel_boundary_allows_compat_reexports(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_model_metrics = tmp_path / "model-metrics.ts"
     fake_model_metrics.write_text(
         "export { formatBytes, modelOptionLabel } from './model-metric-format'\n"
         "export { resolveMetricsForEngine } from './model-engine-metrics'\n"
-        "export type { RuntimeMetricEstimate } from './model-runtime-estimates'\n",
+        "export { estimateModelRuntimeMetrics } from './model-runtime-estimates'\n"
+        "export type { RuntimeMetricEstimate } from './model-runtime-estimates'\n"
+        "export { metricRows } from './model-metric-rows'\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(module, "MODEL_METRICS", fake_model_metrics, raising=False)
@@ -1095,19 +1097,18 @@ def test_frontend_model_metrics_barrel_boundary_flags_obsolete_reexports(tmp_pat
 
     module._check_frontend_model_metrics_barrel_boundary(issues)
 
-    assert any("obsolete model metrics barrel" in issue for issue in issues), issues
+    assert issues == []
 
 
-def test_frontend_model_metrics_barrel_boundary_flags_recreated_entrypoint(tmp_path, monkeypatch) -> None:
+def test_frontend_model_metrics_barrel_boundary_flags_missing_compat_barrel(tmp_path, monkeypatch) -> None:
     module = _load_module()
-    fake_model_metrics = tmp_path / "model-metrics.ts"
-    fake_model_metrics.write_text("", encoding="utf-8")
+    fake_model_metrics = tmp_path / "missing-model-metrics.ts"
     monkeypatch.setattr(module, "MODEL_METRICS", fake_model_metrics, raising=False)
     issues: list[str] = []
 
     module._check_frontend_model_metrics_barrel_boundary(issues)
 
-    assert any("obsolete model metrics entrypoint" in issue for issue in issues), issues
+    assert any("model metrics compatibility barrel missing" in issue for issue in issues), issues
 
 
 def test_frontend_task_orchestrator_runtime_boundary_flags_runtime_reexports(tmp_path, monkeypatch) -> None:
