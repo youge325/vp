@@ -82,7 +82,9 @@ def _run_format_conversion(
     configs: RuntimeConfigs,
     resume_mode: str,
 ) -> dict[str, Any]:
-    decode_config, encode_config, _workflow_config, _output_config = configs.legacy_tuple()
+    sections = configs.legacy_sections()
+    decode_config = sections["decode"]
+    encode_config = sections["encode"]
     _enforce_format_conversion_resume_mode(output_path=plan.output_path, resume_mode=resume_mode)
     ffmpeg.transcode_video(
         input_path=input_path,

@@ -117,6 +117,7 @@ SEGMENT_MANIFEST = ROOT / "backend" / "app" / "planning" / "manifest.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_validation.py"
 CLI_PROCESS_PLANNING = ROOT / "backend" / "app" / "cli" / "commands" / "_process_planning.py"
+CLI_PROCESS_EXECUTION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_execution.py"
 MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
 DOMAIN_PRESET_TYPES = FRONTEND_SRC / "types" / "domain" / "preset.ts"
 DOMAIN_WORKFLOW_TYPES = FRONTEND_SRC / "types" / "domain" / "workflow.ts"
@@ -768,6 +769,19 @@ def _check_frontend_task_event_reducer_payload_boundary(issues: list[str]) -> No
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text):
             issues.append(f"task event reducer payload `{label}` remains in {_rel(TASK_EVENT_REDUCERS)}")
+
+
+def _check_cli_process_execution_dead_config_unpack_boundary(issues: list[str]) -> None:
+    text = _read(CLI_PROCESS_EXECUTION)
+    forbidden_patterns = {
+        "workflow config discard": r"\b_workflow_config\b",
+        "output config discard": r"\b_output_config\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(
+                f"CLI process execution dead config unpack `{label}` remains in {_rel(CLI_PROCESS_EXECUTION)}"
+            )
 
 
 def _check_backend_test_private_cli_defaults_boundary(issues: list[str]) -> None:
@@ -2129,6 +2143,7 @@ def main() -> int:
         _check_backend_model_metrics_dead_helper_boundary(issues)
         _check_dead_type_alias_boundary(issues)
         _check_frontend_task_event_reducer_payload_boundary(issues)
+        _check_cli_process_execution_dead_config_unpack_boundary(issues)
         _check_backend_test_private_cli_defaults_boundary(issues)
         _check_segment_manifest_compat_boundary(issues)
         _check_cli_process_planning_validation_boundary(issues)
