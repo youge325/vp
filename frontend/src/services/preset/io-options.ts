@@ -4,11 +4,7 @@
 import type { CodecProfileSpec } from '@/types/domain/capability'
 import type { RateControlMode } from '@/types/domain/workflow'
 import { CONTAINER_OPTIONS } from '@/config/constants'
-
-export interface SelectOption {
-  value: string
-  label: string
-}
+import type { SelectOption } from './select-options'
 
 export function buildProfileOptions(profiles: readonly Pick<CodecProfileSpec, 'name' | 'label'>[]): SelectOption[] {
   return profiles.map((profile) => ({ value: profile.name, label: profile.label }))

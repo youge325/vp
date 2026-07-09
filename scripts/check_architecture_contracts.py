@@ -62,6 +62,9 @@ MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 WORKFLOW_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "workflow-defaults.ts"
 PRESET_NORMALIZE = FRONTEND_SRC / "services" / "preset" / "normalize.ts"
+PRESET_ENHANCE_OPTIONS = FRONTEND_SRC / "services" / "preset" / "enhance-options.ts"
+PRESET_IO_OPTIONS = FRONTEND_SRC / "services" / "preset" / "io-options.ts"
+PRESET_RATE_CONTROL = FRONTEND_SRC / "services" / "preset" / "rate-control.ts"
 ENHANCE_RULES = FRONTEND_SRC / "services" / "preset" / "enhance-rules.ts"
 ENHANCE_DEFAULT_SELECTION = FRONTEND_SRC / "services" / "preset" / "enhance-default-selection.ts"
 ENHANCE_DEFAULT_PICKERS = FRONTEND_SRC / "services" / "preset" / "enhance-default-pickers.ts"
@@ -1212,6 +1215,13 @@ def _check_frontend_preset_normalize_boundary(issues: list[str]) -> None:
             issues.append(f"preset normalize boundary `{label}` remains in {_rel(PRESET_NORMALIZE)}")
 
 
+def _check_frontend_preset_select_option_type_boundary(issues: list[str]) -> None:
+    for path in (PRESET_ENHANCE_OPTIONS, PRESET_IO_OPTIONS, PRESET_RATE_CONTROL):
+        text = _read(path)
+        if re.search(r"^\s*(?:export\s+)?interface\s+SelectOption\b", text, re.MULTILINE):
+            issues.append(f"preset select option type local SelectOption remains in {_rel(path)}")
+
+
 def _check_frontend_encode_output_binding_boundary(issues: list[str]) -> None:
     text = _read(ENCODE_OUTPUT_BINDINGS)
     forbidden_patterns = {
@@ -1932,6 +1942,7 @@ def main() -> int:
         _check_frontend_workflow_defaults_lookup_boundary(issues)
         _check_frontend_workflow_defaults_engine_boundary(issues)
         _check_frontend_preset_normalize_boundary(issues)
+        _check_frontend_preset_select_option_type_boundary(issues)
         _check_frontend_encode_output_binding_boundary(issues)
         _check_worker_pipeline_plan_boundary(issues)
         _check_worker_pipeline_process_boundary(issues)

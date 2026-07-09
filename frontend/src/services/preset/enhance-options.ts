@@ -5,11 +5,7 @@ import { BACKEND_LABELS, ENGINE_LABELS } from '@/config/gpu-labels'
 import { modelOptionLabel } from '@/services/model-metric-format'
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
 import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/domain/workflow'
-
-export interface SelectOption {
-  value: string
-  label: string
-}
+import type { SelectOption } from './select-options'
 
 export const FPS_MODE_OPTIONS: readonly SelectOption[] = [
   { value: 'target', label: '目标 FPS' },
