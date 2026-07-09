@@ -116,3 +116,40 @@ def test_read_worker_stderr_forwards_second_stage_zero_progress() -> None:
     read_worker_stderr(handle, callbacks, queue.Queue(), threading.Event())
 
     assert progress_calls == [(1, 100, 100, False, False), (2, 0, 200, True, True)]
+
+
+def test_read_worker_stderr_skips_empty_progress_callback_slots() -> None:
+    events = [
+        {
+            "type": "progress",
+            "stageIndex": 1,
+            "current": 10,
+            "total": 10,
+        },
+        {
+            "type": "progress",
+            "stageIndex": 2,
+            "current": 3,
+            "total": 5,
+        },
+    ]
+    stderr = io.BytesIO("".join(f"VP_STAGE_EVENT {json.dumps(event)}\n" for event in events).encode("utf-8"))
+    handle = SimpleNamespace(
+        process=SimpleNamespace(stderr=stderr),
+        plan=SimpleNamespace(config=SimpleNamespace(stage_index=1)),
+        stderr_tail=deque(maxlen=20),
+    )
+    error_queue: queue.Queue[BaseException] = queue.Queue()
+    stop_event = threading.Event()
+    progress_calls: list[tuple[int, int]] = []
+
+    read_worker_stderr(
+        handle,
+        [None, lambda current, total, **_kwargs: progress_calls.append((current, total))],
+        error_queue,
+        stop_event,
+    )
+
+    assert progress_calls == [(3, 5)]
+    assert error_queue.empty()
+    assert not stop_event.is_set()

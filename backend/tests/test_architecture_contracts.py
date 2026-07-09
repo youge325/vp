@@ -1429,6 +1429,21 @@ def test_stage_file_chunk_progress_boundary_flags_explicit_progress_total_discar
     assert any("stage file chunk progress" in issue for issue in issues), issues
 
 
+def test_stage_file_chunk_progress_boundary_flags_named_ignored_progress_total(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_progress = tmp_path / "stage_file_chunk_progress.py"
+    fake_progress.write_text(
+        "def chunk_progress_adapter():\n    def adapter(current, _progress_total, **kwargs):\n        return current\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_CHUNK_PROGRESS", fake_progress, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_file_chunk_progress_boundary(issues)
+
+    assert any("stage file chunk progress" in issue for issue in issues), issues
+
+
 def test_stage_file_chunks_test_boundary_flags_stage_file_rule_tests(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_test = tmp_path / "test_stage_file_chunks.py"
@@ -1489,6 +1504,22 @@ def test_stage_file_chunk_runtime_encoding_boundary_flags_local_encoding_loop(tm
     module._check_stage_file_chunk_runtime_encoding_boundary(issues)
 
     assert any("stage file chunk encoding" in issue for issue in issues), issues
+
+
+def test_stage_file_chunk_runtime_encoding_boundary_flags_noop_progress_placeholders(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runtime = tmp_path / "stage_file_chunk_runtime.py"
+    fake_runtime.write_text(
+        "def run_stage_chunk_to_file(stage_total):\n"
+        "    return [(lambda *_args, **_kwargs: None) for _ in range(stage_total)]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_CHUNK_RUNTIME", fake_runtime, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_file_chunk_runtime_encoding_boundary(issues)
+
+    assert any("stage file chunk progress placeholders" in issue for issue in issues), issues
 
 
 def test_stage_worker_runtime_boundary_flags_local_io_and_runtime_helpers(tmp_path, monkeypatch) -> None:
