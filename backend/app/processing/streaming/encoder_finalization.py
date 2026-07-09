@@ -17,12 +17,10 @@ def finalize_segmented_output(
     output_path: str,
     encode_config: dict[str, Any],
     manifest: SegmentManifest,
-    signature: str,
     completed_output_frames: int,
     total_output_frames: int,
     strict_total_frames: bool,
 ) -> str:
-    del signature
     completed_segments = manifest.scan_completed_chunks()
     segment_paths = [str(manifest.sidecar_dir / record.path) for record in completed_segments]
     if strict_total_frames and completed_output_frames != total_output_frames:

@@ -95,7 +95,6 @@ def process_video_streaming(
         output_path=output_path,
         encode_config=encode_config,
         manifest=manifest,
-        signature=preflight.signature,
         completed_output_frames=completed_output_frames,
         total_output_frames=preflight.stage_plan.total_encoded_frames,
         strict_total_frames=output_fps is None,
