@@ -219,6 +219,30 @@ def test_frontend_task_event_reducer_payload_boundary_flags_dead_payload_params(
     assert any("task event reducer payload" in issue for issue in issues), issues
 
 
+def test_cli_process_execution_has_no_format_conversion_dead_config_unpack() -> None:
+    process_execution = REPO_ROOT / "backend" / "app" / "cli" / "commands" / "_process_execution.py"
+    text = process_execution.read_text(encoding="utf-8")
+
+    assert "_workflow_config" not in text
+    assert "_output_config" not in text
+
+
+def test_cli_process_execution_dead_config_unpack_boundary_flags_dead_unpack(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_execution = tmp_path / "_process_execution.py"
+    fake_execution.write_text(
+        "def _run_format_conversion(configs):\n"
+        "    decode_config, encode_config, _workflow_config, _output_config = configs.legacy_tuple()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "CLI_PROCESS_EXECUTION", fake_execution, raising=False)
+    issues: list[str] = []
+
+    module._check_cli_process_execution_dead_config_unpack_boundary(issues)
+
+    assert any("dead config unpack" in issue for issue in issues), issues
+
+
 def test_cli_defaults_planning_boundary_flags_model_path_helper(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_defaults = tmp_path / "defaults.py"
