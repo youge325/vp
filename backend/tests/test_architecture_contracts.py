@@ -2321,6 +2321,26 @@ def test_frontend_preset_normalize_boundary_flags_decoder_hardware_reexport(tmp_
     assert any("preset normalize boundary" in issue for issue in issues), issues
 
 
+def test_frontend_preset_select_option_type_boundary_flags_local_select_option(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_enhance_options = tmp_path / "enhance-options.ts"
+    fake_io_options = tmp_path / "io-options.ts"
+    fake_rate_control = tmp_path / "rate-control.ts"
+    fake_enhance_options.write_text(
+        "export interface SelectOption { value: string; label: string }\n", encoding="utf-8"
+    )
+    fake_io_options.write_text("export interface SelectOption { value: string; label: string }\n", encoding="utf-8")
+    fake_rate_control.write_text("interface SelectOption { value: string; label: string }\n", encoding="utf-8")
+    monkeypatch.setattr(module, "PRESET_ENHANCE_OPTIONS", fake_enhance_options, raising=False)
+    monkeypatch.setattr(module, "PRESET_IO_OPTIONS", fake_io_options, raising=False)
+    monkeypatch.setattr(module, "PRESET_RATE_CONTROL", fake_rate_control, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_preset_select_option_type_boundary(issues)
+
+    assert any("preset select option type" in issue for issue in issues), issues
+
+
 def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(
