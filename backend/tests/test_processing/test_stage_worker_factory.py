@@ -41,6 +41,19 @@ def test_stage_worker_factory_skips_backend_for_frame_filter_chain() -> None:
     assert calls == []
 
 
+def test_stage_worker_factory_uses_backend_factory_for_tensor_stages() -> None:
+    config = SimpleNamespace(
+        stage=ProcessingStep(
+            algorithm_type="super_resolution",
+            algorithm_kwargs={"sr_algorithm": "ppmsvsr"},
+            stage_name="01_super_resolution",
+        ),
+        tensor_backend_name="paddle",
+    )
+
+    assert stage_worker_factory.create_backend(config, lambda name: {"backend": name}) == {"backend": "paddle"}
+
+
 def test_stage_worker_factory_passes_filtered_kwargs_to_algorithm_factory(monkeypatch) -> None:
     captured = {}
 
