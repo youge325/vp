@@ -2731,19 +2731,39 @@ def test_frontend_preset_select_option_type_boundary_flags_local_select_option(t
     fake_enhance_options = tmp_path / "enhance-options.ts"
     fake_io_options = tmp_path / "io-options.ts"
     fake_rate_control = tmp_path / "rate-control.ts"
+    fake_base_select = tmp_path / "BaseSelect.vue"
+    fake_preset_select_options = tmp_path / "select-options.ts"
     fake_enhance_options.write_text(
         "export interface SelectOption { value: string; label: string }\n", encoding="utf-8"
     )
     fake_io_options.write_text("export interface SelectOption { value: string; label: string }\n", encoding="utf-8")
     fake_rate_control.write_text("interface SelectOption { value: string; label: string }\n", encoding="utf-8")
+    fake_base_select.write_text("interface SelectOption { value: string; label: string }\n", encoding="utf-8")
+    fake_preset_select_options.write_text(
+        "export interface SelectOption { value: string; label: string }\n", encoding="utf-8"
+    )
     monkeypatch.setattr(module, "PRESET_ENHANCE_OPTIONS", fake_enhance_options, raising=False)
     monkeypatch.setattr(module, "PRESET_IO_OPTIONS", fake_io_options, raising=False)
     monkeypatch.setattr(module, "PRESET_RATE_CONTROL", fake_rate_control, raising=False)
+    monkeypatch.setattr(module, "BASE_SELECT", fake_base_select, raising=False)
+    monkeypatch.setattr(module, "PRESET_SELECT_OPTIONS", fake_preset_select_options, raising=False)
     issues: list[str] = []
 
     module._check_frontend_preset_select_option_type_boundary(issues)
 
     assert any("preset select option type" in issue for issue in issues), issues
+    assert any("BaseSelect" in issue for issue in issues), issues
+    assert any("obsolete preset select option type" in issue for issue in issues), issues
+
+
+def test_frontend_select_option_shape_is_shared_from_view_types() -> None:
+    module = _load_module()
+    base_select_text = (module.FRONTEND_SRC / "components" / "forms" / "BaseSelect.vue").read_text(encoding="utf-8")
+    preset_select_options = module.FRONTEND_SRC / "services" / "preset" / "select-options.ts"
+
+    assert not preset_select_options.exists()
+    assert "interface SelectOption" not in base_select_text
+    assert "@/types/view/select-option" in base_select_text
 
 
 def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:

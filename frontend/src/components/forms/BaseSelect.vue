@@ -3,11 +3,7 @@
 // 替代视图里 `<select :value="..." @change="setX(($event.target as HTMLSelectElement).value)">` 模板。
 
 import BaseField from './BaseField.vue'
-
-interface SelectOption {
-  value: string
-  label: string
-}
+import type { SelectOption } from '@/types/view/select-option'
 
 defineProps<{
   modelValue: string
