@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 
 import numpy as np
+import pytest
 
 from app.planning import ProcessingStep
 from app.processing.streaming.metrics import PipelineMetrics
@@ -12,6 +13,7 @@ from app.processing.streaming.stage_worker_execution import (
     run_sequence_stage,
     run_single_frame_stage,
 )
+from app.processing.streaming.stage_worker_io import RawVideoFrameError
 
 
 class _IdentityBackend:
@@ -157,3 +159,24 @@ def test_sequence_execution_uses_algorithm_progress_instead_of_write_progress() 
     assert written == 3
     assert [int(frame[0, 0, 0]) for frame in frames] == [11, 12, 13]
     assert [event["current"] for event in progress_events] == [0, 3, 3]
+
+
+def test_sequence_execution_rejects_streams_shorter_than_configured_count() -> None:
+    config = _config(
+        ProcessingStep(
+            algorithm_type="super_resolution",
+            algorithm_kwargs={"sr_algorithm": "ppmsvsr"},
+            stage_name="01_super_resolution",
+        ),
+        input_frame_count=2,
+    )
+
+    with pytest.raises(RawVideoFrameError, match="declared input frames"):
+        run_sequence_stage(
+            config,
+            _stream_of([_frame(1)]),
+            io.BytesIO(),
+            _ProgressSequenceAlgorithm(),
+            lambda _event: None,
+            PipelineMetrics(),
+        )

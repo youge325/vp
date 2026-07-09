@@ -9,7 +9,6 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_runtime import StepAlgorithm, is_cpu_frame_stage, run_stage
 from app.processing.streaming.stage_worker_io import (
     RawVideoFrameError,
-    read_declared_frames,
     read_rgb_frame,
     write_rgb_frame,
 )
@@ -33,7 +32,7 @@ def run_sequence_stage(
     heartbeat_seconds: float = SEQUENCE_STAGE_HEARTBEAT_SECONDS,
 ) -> int:
     del metrics
-    frames = read_declared_frames(config, input_stream)
+    frames = _read_declared_frames(config, input_stream)
     total = max(int(config.output_frame_count or config.input_frame_count or len(frames)), 1)
     progress_state = StageProgressState()
     event_sink(progress_event(config, 0, total, force=True))
@@ -83,7 +82,7 @@ def run_interpolation_stage(
     event_sink: EventSink,
     metrics: PipelineMetrics,
 ) -> int:
-    frames = read_declared_frames(config, input_stream)
+    frames = _read_declared_frames(config, input_stream)
     if not frames:
         return 0
     if len(frames) == 1:
@@ -157,6 +156,18 @@ def run_single_frame_stage(
         written += 1
         event_sink(progress_event(config, index + 1, total))
     return written
+
+
+def _read_declared_frames(config: Any, input_stream: BinaryIO) -> list[Any]:
+    frames: list[Any] = []
+    for _index in range(max(config.input_frame_count, 0)):
+        frame = read_rgb_frame(input_stream, width=config.input_width, height=config.input_height)
+        if frame is None:
+            raise RawVideoFrameError(
+                f"rawvideo stream ended before {config.input_frame_count} declared input frames were read."
+            )
+        frames.append(frame)
+    return frames
 
 
 __all__ = [

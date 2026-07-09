@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import io
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
+from app.processing.streaming import stage_worker_io
 from app.processing.streaming.stage_worker_io import (
     RawVideoFrameError,
-    read_declared_frames,
     read_rgb_frame,
     write_rgb_frame,
 )
+
+
+def test_stage_worker_io_keeps_declared_frame_reads_out_of_raw_io_surface() -> None:
+    assert not hasattr(stage_worker_io, "read_declared_frames")
+    assert "read_declared_frames" not in stage_worker_io.__all__
 
 
 def test_read_rgb_frame_returns_none_on_clean_eof() -> None:
@@ -32,11 +36,3 @@ def test_write_rgb_frame_validates_shape_and_writes_contiguous_uint8_bytes() -> 
     assert stream.getvalue() == np.array([[[1, 2, 3]]], dtype=np.uint8).tobytes()
     with pytest.raises(RawVideoFrameError, match="Frame shape mismatch"):
         write_rgb_frame(stream, np.zeros((1, 2, 3), dtype=np.uint8), width=1, height=1)
-
-
-def test_read_declared_frames_rejects_streams_shorter_than_configured_count() -> None:
-    config = SimpleNamespace(input_frame_count=2, input_width=1, input_height=1)
-    stream = io.BytesIO(np.array([[[1, 2, 3]]], dtype=np.uint8).tobytes())
-
-    with pytest.raises(RawVideoFrameError, match="declared input frames"):
-        read_declared_frames(config, stream)
