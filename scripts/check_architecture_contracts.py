@@ -1602,6 +1602,10 @@ def _check_stage_file_chunk_progress_boundary(issues: list[str]) -> None:
         issues.append(
             f"stage file chunk progress explicit progress_total discard remains in {_rel(STAGE_FILE_CHUNK_PROGRESS)}"
         )
+    if re.search(r"\b_progress_total\b", text):
+        issues.append(
+            f"stage file chunk progress named ignored progress total remains in {_rel(STAGE_FILE_CHUNK_PROGRESS)}"
+        )
 
 
 def _check_stage_file_pipeline_test_boundary(issues: list[str]) -> None:
@@ -1639,6 +1643,11 @@ def _check_stage_file_chunk_runtime_encoding_boundary(issues: list[str]) -> None
                 f"stage file chunk encoding `{label}` remains in "
                 "backend/app/processing/streaming/stage_file_chunk_runtime.py"
             )
+    if re.search(r"\blambda\s+\*_[A-Za-z0-9_]*\s*,\s*\*\*_[A-Za-z0-9_]*\s*:\s*None\b", text):
+        issues.append(
+            "stage file chunk progress placeholders remain in "
+            "backend/app/processing/streaming/stage_file_chunk_runtime.py"
+        )
 
 
 def _check_stage_worker_execution_boundary(issues: list[str]) -> None:

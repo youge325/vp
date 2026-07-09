@@ -64,8 +64,9 @@ def run_stage_chunk_to_file(
 
     with tempfile.TemporaryDirectory(prefix="vp-stage-chunk-") as config_dir:
         handle = spawn_stage_workers([plan], config_dir=Path(config_dir), python_executable=python_executable)[0]
-        callbacks = [(lambda *_args, **_kwargs: None) for _ in range(stage_total)]
+        callbacks: list[Any | None] = []
         if progress_callback is not None:
+            callbacks = [None] * stage_total
             callbacks[stage_index - 1] = chunk_progress_adapter(
                 step,
                 chunk=chunk,

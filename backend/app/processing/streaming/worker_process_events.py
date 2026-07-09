@@ -46,8 +46,11 @@ def read_worker_stderr(
         if event.get("type") == "progress":
             callback_index = int(event.get("stageIndex") or handle.plan.config.stage_index) - 1
             if 0 <= callback_index < len(progress_callbacks):
+                callback = progress_callbacks[callback_index]
+                if callback is None:
+                    continue
                 try:
-                    progress_callbacks[callback_index](
+                    callback(
                         int(event.get("current") or 0),
                         int(event.get("total") or 1),
                         force=bool(event.get("force") or False),
