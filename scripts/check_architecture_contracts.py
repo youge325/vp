@@ -53,6 +53,7 @@ STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "sta
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
 PROCESSOR_TESTS = ROOT / "backend" / "tests" / "test_processing"
+STAGE_FILE_PIPELINE_TEST = PROCESSOR_TESTS / "test_stage_file_pipeline.py"
 STAGE_FILE_CHUNKS_TEST = PROCESSOR_TESTS / "test_stage_file_chunks.py"
 WORKER_PIPELINE_TEST = PROCESSOR_TESTS / "test_worker_pipeline.py"
 WORKER_PROCESSES_TEST = PROCESSOR_TESTS / "test_worker_processes.py"
@@ -1537,6 +1538,25 @@ def _check_stage_file_chunks_test_boundary(issues: list[str]) -> None:
             issues.append(f"stage file chunks test boundary `{label}` remains in {_rel(STAGE_FILE_CHUNKS_TEST)}")
 
 
+def _check_stage_file_pipeline_test_boundary(issues: list[str]) -> None:
+    if not STAGE_FILE_PIPELINE_TEST.exists():
+        return
+
+    text = _read(STAGE_FILE_PIPELINE_TEST)
+    forbidden_patterns = {
+        "chunk runtime import": r"\bstage_file_chunk_runtime\b",
+        "chunk runtime call": r"\brun_stage_chunk_to_file\b",
+        "chunk input start": r"\bchunk\.input_start_frame\b",
+        "chunk input frame count": r"\bchunk\.input_frame_count\b",
+        "chunk written frames": r"\bchunk\.written_output_frame_count\b",
+        "chunk raw frames": r"\bchunk\.raw_output_frame_count\b",
+        "chunk skipped frames": r"\bchunk\.skip_output_frames\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"stage file pipeline test boundary `{label}` remains in {_rel(STAGE_FILE_PIPELINE_TEST)}")
+
+
 def _check_stage_file_chunk_runtime_encoding_boundary(issues: list[str]) -> None:
     text = _read(STAGE_FILE_CHUNK_RUNTIME)
     forbidden_patterns = {
@@ -2046,6 +2066,7 @@ def main() -> int:
         _check_stage_file_pipeline_chunk_boundary(issues)
         _check_stage_file_chunks_runtime_boundary(issues)
         _check_stage_file_chunks_test_boundary(issues)
+        _check_stage_file_pipeline_test_boundary(issues)
         _check_stage_file_chunk_runtime_encoding_boundary(issues)
         _check_stage_worker_execution_boundary(issues)
         _check_stage_worker_config_boundary(issues)

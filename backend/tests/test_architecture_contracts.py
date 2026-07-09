@@ -1525,6 +1525,25 @@ def test_stage_file_chunks_test_boundary_flags_stage_file_rule_tests(tmp_path, m
     assert any("stage file chunks test boundary" in issue for issue in issues), issues
 
 
+def test_stage_file_pipeline_test_boundary_flags_chunk_runtime_tests(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_test = tmp_path / "test_stage_file_pipeline.py"
+    fake_test.write_text(
+        "import app.processing.streaming.stage_file_chunk_runtime as stage_file_chunk_runtime\n\n"
+        "def test_stage_file_pipeline_runs_each_stage_as_bounded_segments():\n"
+        "    stage_file_chunk_runtime.run_stage_chunk_to_file()\n"
+        "    chunk.input_start_frame\n"
+        "    chunk.written_output_frame_count\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_PIPELINE_TEST", fake_test, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_file_pipeline_test_boundary(issues)
+
+    assert any("stage file pipeline test boundary" in issue for issue in issues), issues
+
+
 def test_stage_file_chunk_runtime_encoding_boundary_flags_local_encoding_loop(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_runtime = tmp_path / "stage_file_chunk_runtime.py"
