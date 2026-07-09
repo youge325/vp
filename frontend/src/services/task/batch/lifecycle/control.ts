@@ -19,10 +19,12 @@ import { TASK_ERROR_CODES } from '@/types/protocol/errors'
 
 import { applyTaskCancelling, applyTaskPaused, applyTaskResumed } from '../../events'
 
-import type { CommonHelpers } from './common'
+import type { createCommonHelpers } from './common'
 import type { BatchLifecycleDeps } from './types'
 
-export interface ControlOps {
+type CommonHelpers = ReturnType<typeof createCommonHelpers>
+
+interface ControlOps {
   pause(): Promise<void>
   resume(): Promise<void>
   cancel(): Promise<void>

@@ -899,8 +899,17 @@ def test_frontend_utility_internal_types_are_not_exported() -> None:
             "EventHandlersDeps",
             "EventHandlers",
         ),
-        frontend_src / "services" / "task" / "batch" / "lifecycle" / "finalize.ts": ("FinalizeInternalRefs",),
-        frontend_src / "services" / "task" / "batch" / "lifecycle" / "queue.ts": ("QueueInternalRefs",),
+        frontend_src / "composables" / "forms" / "enhance-effect-bindings.ts": ("EnhanceEffectBindingParams",),
+        frontend_src / "services" / "task" / "batch" / "lifecycle" / "common.ts": ("CommonHelpers",),
+        frontend_src / "services" / "task" / "batch" / "lifecycle" / "control.ts": ("ControlOps",),
+        frontend_src / "services" / "task" / "batch" / "lifecycle" / "finalize.ts": (
+            "FinalizeInternalRefs",
+            "FinalizeOps",
+        ),
+        frontend_src / "services" / "task" / "batch" / "lifecycle" / "queue.ts": (
+            "QueueInternalRefs",
+            "QueueOps",
+        ),
     }
 
     exported = []

@@ -15,7 +15,7 @@ import type { MediaItem, MediaRunState } from '@/types/domain/media'
 
 import type { BatchLifecycleDeps } from './types'
 
-export interface CommonHelpers {
+interface CommonHelpers {
   getCurrentItem(): MediaItem | null
   getConsoleItem(): MediaItem | null
   getCurrentRunState(): MediaRunState | null

@@ -14,7 +14,7 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { TensorBackend } from '@/types/domain/workflow'
 import type { WorkflowConfig } from '@/types/protocol'
 
-export interface EnhanceEffectBindingParams {
+interface EnhanceEffectBindingParams {
   workflow: ComputedRef<WorkflowConfig>
   checkResult: ComputedRef<EnvironmentCheckResult | null>
   effectiveSuperResolutionNumFrames: ComputedRef<number>

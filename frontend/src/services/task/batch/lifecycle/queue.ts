@@ -17,14 +17,16 @@ import { TASK_ERROR_CODES } from '@/types/protocol/errors'
 import { createIdleTaskState } from '../../events'
 import { classifyResumeConflict } from '../../resume-classifier'
 
-import type { CommonHelpers } from './common'
+import type { createCommonHelpers } from './common'
 import type { BatchLifecycleDeps } from './types'
+
+type CommonHelpers = ReturnType<typeof createCommonHelpers>
 
 interface QueueInternalRefs {
   handleErrored: (error: ReturnType<typeof normalizeError>) => Promise<void>
 }
 
-export interface QueueOps {
+interface QueueOps {
   start(ids: string[]): Promise<void>
   runNextQueuedItem(): Promise<void>
   launchCurrentItem(item: MediaItem, resumeMode?: ResumeMode): Promise<void>

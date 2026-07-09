@@ -16,8 +16,8 @@
 
 import { createCommonHelpers } from './common'
 import { createControlOps } from './control'
-import { createFinalizeOps, type FinalizeOps } from './finalize'
-import { createQueueOps, type QueueOps } from './queue'
+import { createFinalizeOps } from './finalize'
+import { createQueueOps } from './queue'
 import type { BatchLifecycle, BatchLifecycleDeps } from './types'
 
 export type { BatchLifecycle, BatchLifecycleDeps } from './types'
@@ -29,8 +29,8 @@ export function createBatchLifecycle(deps: BatchLifecycleDeps): BatchLifecycle {
   // We initialise both with ``let`` + closure indirection so each side
   // sees the fully-constructed sibling when it actually invokes the
   // delegated function (not at construction time).
-  let finalizeOps: FinalizeOps
-  let queueOps: QueueOps
+  let finalizeOps: ReturnType<typeof createFinalizeOps>
+  let queueOps: ReturnType<typeof createQueueOps>
 
   queueOps = createQueueOps(deps, helpers, {
     handleErrored: (error) => finalizeOps.handleErrored(error),
