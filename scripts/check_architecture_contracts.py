@@ -42,7 +42,9 @@ WORKER_PROCESS_EVENTS = ROOT / "backend" / "app" / "processing" / "streaming" / 
 WORKER_PROCESS_IO = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_process_io.py"
 ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder.py"
 ENCODER_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_worker.py"
+STREAMING_QUEUES = ROOT / "backend" / "app" / "processing" / "streaming" / "queues.py"
 PIPELINE_RAW = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw.py"
+PIPELINE_RAW_ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_encoder.py"
 PIPELINE_RAW_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_runtime.py"
 PIPELINE_RAW_STAGE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_stage.py"
 PIPELINE_DISPATCH = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_dispatch.py"
@@ -92,6 +94,12 @@ OBSOLETE_IN_PROCESS_STREAMING_TESTS = (
     PROCESSOR_TESTS / "test_transfer_counts.py",
 )
 OBSOLETE_IN_PROCESS_STREAMING_REFERENCE_ROOTS = (
+    ROOT / "backend" / "app",
+    BACKEND_TESTS,
+    DOC_ROOT,
+    README,
+)
+OBSOLETE_DECODE_QUEUE_REFERENCE_ROOTS = (
     ROOT / "backend" / "app",
     BACKEND_TESTS,
     DOC_ROOT,
@@ -1921,6 +1929,44 @@ def _check_obsolete_in_process_streaming_workers_boundary(issues: list[str]) -> 
                 issues.append(f"obsolete in-process streaming worker reference remains in {_rel(path)}")
 
 
+def _check_obsolete_decode_queue_boundary(issues: list[str]) -> None:
+    queue_text = _read(STREAMING_QUEUES)
+    forbidden_queue_patterns = {
+        "DecodedFrame": r"\bclass\s+DecodedFrame\b|\bDecodedFrame\b",
+        "_DECODE_END": r"\b_DECODE_END\b",
+    }
+    for label, pattern in forbidden_queue_patterns.items():
+        if re.search(pattern, queue_text):
+            issues.append(f"obsolete decode queue symbol `{label}` remains in {_rel(STREAMING_QUEUES)}")
+
+    encoder_text = _read(ENCODER_WORKER)
+    if re.search(r"\bdecode_queue\b", encoder_text):
+        issues.append(f"obsolete decode queue parameter remains in {_rel(ENCODER_WORKER)}")
+
+    raw_encoder_text = _read(PIPELINE_RAW_ENCODER)
+    if re.search(r"\bdecode_queue\b", raw_encoder_text):
+        issues.append(f"obsolete decode queue wiring remains in {_rel(PIPELINE_RAW_ENCODER)}")
+
+    checked_paths = {STREAMING_QUEUES, ENCODER_WORKER, PIPELINE_RAW_ENCODER}
+    forbidden_reference_patterns = (
+        r"\bdecoder_worker\b",
+        r"\bprocessor_worker\b",
+        r"\bDecodedFrame\b",
+        r"\b_DECODE_END\b",
+        r"\bdecode_queue\b",
+    )
+    for root in OBSOLETE_DECODE_QUEUE_REFERENCE_ROOTS:
+        paths = [root] if root.is_file() else sorted(root.rglob("*"))
+        for path in paths:
+            if not path.is_file() or path in checked_paths or path.name == "test_architecture_contracts.py":
+                continue
+            if path.suffix not in {".py", ".md", ".rst", ".txt"}:
+                continue
+            text = _read(path)
+            if any(re.search(pattern, text) for pattern in forbidden_reference_patterns):
+                issues.append(f"obsolete decode queue reference remains in {_rel(path)}")
+
+
 def main() -> int:
     issues: list[str] = []
     try:
@@ -2012,6 +2058,7 @@ def main() -> int:
         _check_pipeline_test_private_alias_boundary(issues)
         _check_obsolete_tensor_chain_boundary(issues)
         _check_obsolete_in_process_streaming_workers_boundary(issues)
+        _check_obsolete_decode_queue_boundary(issues)
     except RuntimeError as exc:
         sys.stderr.write(f"[check-architecture-contracts] PARSE ERROR: {exc}\n")
         return 2

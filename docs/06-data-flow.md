@@ -28,9 +28,11 @@ graph TD
     end
 
     subgraph EX["流式执行器"]
-        E1["decoder_worker"]
-        E2["processor_worker"]
-        E3["encoder_worker"]
+        E1["pipeline_preflight.py"]
+        E2["pipeline_dispatch.py"]
+        E3["worker_pipeline.py / stage_file_pipeline.py"]
+        E4["stage-worker subprocess"]
+        E5["encoder_worker"]
     end
 
     subgraph FF["FFmpeg Wrapper"]
@@ -50,10 +52,12 @@ graph TD
     P3 --> P4
     P4 --> P5
     P5 --> E1
-    P5 --> E2
-    P5 --> E3
-    E1 --> FFD
-    E3 --> FFE
+    E1 --> E2
+    E2 --> E3
+    E3 --> E4
+    E3 --> E5
+    E4 --> FFD
+    E5 --> FFE
 ```
 
 ## 前端层：配置构建

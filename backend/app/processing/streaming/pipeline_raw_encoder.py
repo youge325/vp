@@ -36,7 +36,6 @@ def start_raw_encoder_thread(
         target=run_encoder_worker,
         name="vp-encoder",
         kwargs={
-            "decode_queue": queue.Queue(maxsize=1),
             "encode_queue": encode_queue,
             "error_queue": error_queue,
             "stop_event": stop_event,

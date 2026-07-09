@@ -137,8 +137,7 @@ rawvideo 路径由 stage-worker 子进程链执行算法，主进程只保留编
 
 [`backend/app/processing/streaming/queues.py`](../backend/app/processing/streaming/queues.py):
 
-- `DecodedFrame` — 解码后的原始帧（numpy array + 元数据）
-- `EncodedFrame` — 处理后的帧（传递给编码器）
+- `EncodedFrame` — stage-worker 输出的处理后帧（传递给编码器）
 - `SegmentBoundary` — 分段边界信号
 - `StreamEnd` — 流结束哨兵
 
