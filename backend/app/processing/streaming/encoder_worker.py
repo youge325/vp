@@ -26,14 +26,13 @@ def run_encoder_worker(
     segment_frames: int,
     resume_state: ResumeState,
     output_path: str,
-    decode_queue: queue.Queue[Any],
     encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object],
     error_queue: queue.Queue[BaseException],
     stop_event: threading.Event,
     encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
     metrics: PipelineMetrics,
 ) -> None:
-    del decode_queue, signature
+    del signature
     segment_writer = EncoderSegmentWriter(
         ffmpeg=ffmpeg,
         encode_config=encode_config,

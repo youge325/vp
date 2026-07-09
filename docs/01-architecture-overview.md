@@ -93,9 +93,9 @@ Rust 与 Python 之间的通信不通过 HTTP 或 gRPC，而是通过子进程 s
 
 Rust 模型使用 `#[derive(TS)]` 宏，编译时自动生成 TypeScript 类型定义到 `frontend/src/types/generated/`（约 40 个文件）。前端代码禁止直接深路径引用这些生成文件，而是通过 `types/protocol/index.ts` 统一 re-export。这确保了 Rust 与前端之间的类型一致性。
 
-### 3. 三线程流式处理
+### 3. stage-worker 流式处理
 
-Python 后端采用三线程流水线架构：`decoder_worker`（FFmpeg rawvideo 解码）→ `processor_worker`（算法推理）→ `encoder_worker`（FFmpeg 编码）。三者通过 `queue.Queue` 解耦，帧数据全部在内存中流转，不经过临时帧目录，显著减少磁盘 I/O。
+Python 后端通过 `pipeline_preflight` 规划 stage plan，再由 `pipeline_dispatch` 选择 rawvideo stage-worker chain 或 stage-file pipeline。rawvideo 路径中 stage-worker 子进程负责解码与算法 stage 链，主进程只维护 `encode_queue` 和 `encoder_worker`，帧数据不经过临时帧目录，显著减少磁盘 I/O。
 
 ### 4. 断点续传（filesystem-as-state）
 

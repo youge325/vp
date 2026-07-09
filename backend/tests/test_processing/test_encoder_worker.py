@@ -45,7 +45,6 @@ def test_run_encoder_worker_seals_stream_end_and_discards_open_segment(monkeypat
         segment_frames=1000,
         resume_state=object(),
         output_path="out.mp4",
-        decode_queue=queue.Queue(),
         encode_queue=encode_queue,
         error_queue=queue.Queue(),
         stop_event=threading.Event(),

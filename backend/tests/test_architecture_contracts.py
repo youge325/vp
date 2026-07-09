@@ -1132,6 +1132,30 @@ def test_obsolete_in_process_streaming_workers_boundary_flags_files_tests_and_re
     assert any("obsolete in-process streaming worker reference" in issue for issue in issues), issues
 
 
+def test_obsolete_decode_queue_boundary_flags_queue_worker_and_doc_references(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_queues = tmp_path / "queues.py"
+    fake_encoder_worker = tmp_path / "encoder_worker.py"
+    fake_raw_encoder = tmp_path / "pipeline_raw_encoder.py"
+    fake_doc = tmp_path / "data-flow.md"
+    fake_queues.write_text("class DecodedFrame:\n    pass\n\n_DECODE_END = object()\n", encoding="utf-8")
+    fake_encoder_worker.write_text("def run_encoder_worker(decode_queue, encode_queue):\n    pass\n", encoding="utf-8")
+    fake_raw_encoder.write_text('"decode_queue": queue.Queue(maxsize=1)\n', encoding="utf-8")
+    fake_doc.write_text("decoder_worker -> processor_worker -> encoder_worker\nDecodedFrame\n", encoding="utf-8")
+    monkeypatch.setattr(module, "STREAMING_QUEUES", fake_queues, raising=False)
+    monkeypatch.setattr(module, "ENCODER_WORKER", fake_encoder_worker, raising=False)
+    monkeypatch.setattr(module, "PIPELINE_RAW_ENCODER", fake_raw_encoder, raising=False)
+    monkeypatch.setattr(module, "OBSOLETE_DECODE_QUEUE_REFERENCE_ROOTS", (fake_doc,), raising=False)
+    issues: list[str] = []
+
+    module._check_obsolete_decode_queue_boundary(issues)
+
+    assert any("obsolete decode queue symbol" in issue for issue in issues), issues
+    assert any("obsolete decode queue parameter" in issue for issue in issues), issues
+    assert any("obsolete decode queue wiring" in issue for issue in issues), issues
+    assert any("obsolete decode queue reference" in issue for issue in issues), issues
+
+
 def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_pipeline = tmp_path / "stage_file_pipeline.py"
