@@ -124,6 +124,18 @@ def test_cli_process_validation_compat_boundary_flags_legacy_wrappers(tmp_path, 
     assert any("CLI process validation compatibility" in issue for issue in issues), issues
 
 
+def test_dll_paths_test_helper_boundary_flags_production_reset_helper(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_dll_paths = tmp_path / "dll_paths.py"
+    fake_dll_paths.write_text("def reset_registry_for_tests():\n    pass\n", encoding="utf-8")
+    monkeypatch.setattr(module, "DLL_PATHS", fake_dll_paths, raising=False)
+    issues: list[str] = []
+
+    module._check_dll_paths_test_helper_boundary(issues)
+
+    assert any("DLL path test helper" in issue for issue in issues), issues
+
+
 def test_cli_defaults_planning_boundary_flags_model_path_helper(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_defaults = tmp_path / "defaults.py"

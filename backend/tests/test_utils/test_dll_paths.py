@@ -13,12 +13,11 @@ from app.utils import dll_paths
 
 @pytest.fixture(autouse=True)
 def _reset_registry(monkeypatch):
-    dll_paths.reset_registry_for_tests()
+    monkeypatch.setattr(dll_paths, "_registered", set())
+    monkeypatch.setattr(dll_paths, "_scanned_tensorrt_roots", None)
     monkeypatch.delenv("VP_OPENCV_BIN_DIR", raising=False)
     monkeypatch.delenv("VP_OPENCV_DIR", raising=False)
     monkeypatch.setattr(dll_paths, "_python_package_dll_dirs", lambda: [], raising=False)
-    yield
-    dll_paths.reset_registry_for_tests()
 
 
 def test_register_native_dll_paths_is_noop_off_windows(monkeypatch):
