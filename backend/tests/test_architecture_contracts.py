@@ -943,6 +943,21 @@ def test_frontend_model_metrics_barrel_boundary_allows_missing_barrel(tmp_path, 
     assert issues == []
 
 
+def test_frontend_domain_preset_barrel_boundary_flags_obsolete_barrel(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_domain_preset = tmp_path / "preset.ts"
+    fake_domain_preset.write_text(
+        "export type { WorkbenchPreset, DecodeConfig } from '../protocol'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "DOMAIN_PRESET_TYPES", fake_domain_preset, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_domain_preset_barrel_boundary(issues)
+
+    assert any("obsolete domain preset type barrel" in issue for issue in issues), issues
+
+
 def test_frontend_task_orchestrator_runtime_boundary_flags_runtime_reexports(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_orchestrator = tmp_path / "useTaskOrchestrator.ts"
