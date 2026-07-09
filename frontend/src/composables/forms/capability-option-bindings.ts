@@ -3,7 +3,7 @@ import type { ComputedRef } from 'vue'
 import { getOptionValue, coerceOptionValue, updateProfileOption } from '@/services/preset/options'
 import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
 
-export interface CapabilityOptionBindingParams {
+interface CapabilityOptionBindingParams {
   optionValues: ComputedRef<Record<string, CapabilityValue>>
   patchOptions: (options: Record<string, CapabilityValue>) => void
 }

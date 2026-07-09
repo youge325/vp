@@ -7,7 +7,7 @@ import type { EncoderProfileSpec } from '@/types/domain/capability'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { EncodeConfig, WorkbenchPreset } from '@/types/protocol'
 
-export interface EncodeProfileBindingParams {
+interface EncodeProfileBindingParams {
   checkResult: ComputedRef<EnvironmentCheckResult | null>
   editorConfig: ComputedRef<Pick<WorkbenchPreset, 'encodeConfig'>>
   patchEncode: (mutator: (config: EncodeConfig) => void) => void

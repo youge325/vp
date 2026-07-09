@@ -827,6 +827,55 @@ def test_frontend_io_form_aggregator_boundary_flags_rule_leaks(tmp_path, monkeyp
     assert any("io form rule" in issue and "aggregator" in issue for issue in issues), issues
 
 
+def test_frontend_form_binding_internal_params_are_not_exported() -> None:
+    module = _load_module()
+    form_dir = module.FRONTEND_SRC / "composables" / "forms"
+    internal_params = {
+        form_dir / "capability-option-bindings.ts": ("CapabilityOptionBindingParams",),
+        form_dir / "decode-form-bindings.ts": ("DecodeFormBindingParams",),
+        form_dir / "decode-hardware-bindings.ts": ("DecodeHardwareBindingParams",),
+        form_dir / "decode-profile-bindings.ts": ("DecodeProfileBindingParams",),
+        form_dir / "encode-form-bindings.ts": ("EncodeFormBindingParams",),
+        form_dir / "encode-output-bindings.ts": ("EncodeOutputBindingParams",),
+        form_dir / "encode-output-setters.ts": ("EncodeOutputSetterParams",),
+        form_dir / "encode-output-state.ts": ("EncodeOutputStateParams",),
+        form_dir / "encode-profile-bindings.ts": ("EncodeProfileBindingParams",),
+        form_dir / "encode-rate-control-bindings.ts": ("EncodeRateControlBindingParams",),
+        form_dir / "enhance-algorithm-bindings.ts": ("EnhanceAlgorithmBindingParams",),
+        form_dir / "enhance-field-bindings.ts": ("EnhanceFieldBindingParams",),
+        form_dir / "enhance-form-bindings.ts": ("EnhanceFormBindingParams",),
+        form_dir / "enhance-scalar-field-bindings.ts": ("EnhanceScalarFieldBindingParams",),
+        form_dir / "enhance-view-bindings.ts": ("EnhanceViewBindingParams",),
+        form_dir / "io-profile-state.ts": ("IoProfileStateParams",),
+    }
+
+    exported = [
+        f"{path.name}:{name}"
+        for path, names in internal_params.items()
+        for name in names
+        if f"export interface {name}" in path.read_text(encoding="utf-8")
+        or f"export type {name}" in path.read_text(encoding="utf-8")
+    ]
+
+    assert exported == []
+
+
+def test_frontend_form_binding_param_export_boundary_flags_internal_exports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_binding = tmp_path / "decode-form-bindings.ts"
+    fake_binding.write_text(
+        "export interface DecodeFormBindingParams { patchDecode: () => void }\n"
+        "export function createDecodeFormBindings(params: DecodeFormBindingParams) { return params }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "FRONTEND_FORM_BINDING_PARAM_FILES", {fake_binding: ("DecodeFormBindingParams",)})
+    issues: list[str] = []
+
+    module._check_frontend_form_binding_param_export_boundary(issues)
+
+    assert any("form binding params" in issue for issue in issues), issues
+
+
 def test_frontend_io_profile_state_boundary_flags_local_profile_derivation(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_decode_profile = tmp_path / "decode-profile-bindings.ts"

@@ -4,7 +4,7 @@ import { createEncodeOutputSetters } from '@/composables/forms/encode-output-set
 import { createEncodeOutputState } from '@/composables/forms/encode-output-state'
 import type { EncodeConfig, OutputConfig, WorkbenchPreset } from '@/types/protocol'
 
-export interface EncodeOutputBindingParams {
+interface EncodeOutputBindingParams {
   editorConfig: ComputedRef<Pick<WorkbenchPreset, 'encodeConfig' | 'outputConfig'>>
   patchEncode: (mutator: (config: EncodeConfig) => void) => void
   patchOutput: (mutator: (config: OutputConfig) => void) => void

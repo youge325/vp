@@ -8,7 +8,7 @@ import type { CapabilityValue } from '@/types/domain/capability'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { EncodeConfig, OutputConfig, WorkbenchPreset } from '@/types/protocol'
 
-export interface EncodeFormBindingParams {
+interface EncodeFormBindingParams {
   checkResult: ComputedRef<EnvironmentCheckResult | null>
   editorConfig: ComputedRef<Pick<WorkbenchPreset, 'encodeConfig' | 'outputConfig'>>
   patchEncode: (mutator: (config: EncodeConfig) => void) => void

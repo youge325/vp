@@ -8,7 +8,7 @@ import { toNumberValue, toRateControlMode } from '@/services/preset/io-options'
 import type { EncoderProfileSpec } from '@/types/domain/capability'
 import type { EncodeConfig, WorkbenchPreset } from '@/types/protocol'
 
-export interface EncodeRateControlBindingParams {
+interface EncodeRateControlBindingParams {
   currentEncoderProfile: ComputedRef<EncoderProfileSpec | null>
   editorConfig: ComputedRef<Pick<WorkbenchPreset, 'encodeConfig'>>
   patchEncode: (mutator: (config: EncodeConfig) => void) => void

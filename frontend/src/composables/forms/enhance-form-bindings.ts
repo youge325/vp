@@ -6,7 +6,7 @@ import type { VideoDimensions } from '@/services/model-runtime-estimates'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
 
-export interface EnhanceFormBindingParams {
+interface EnhanceFormBindingParams {
   workflow: ComputedRef<WorkflowConfig>
   checkResult: ComputedRef<EnvironmentCheckResult | null>
   activeVideoDimensions: ComputedRef<VideoDimensions | null>
