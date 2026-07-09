@@ -37,7 +37,6 @@ def test_run_encoder_worker_seals_stream_end_and_discards_open_segment(monkeypat
         ffmpeg=object(),
         encode_config={},
         manifest=object(),
-        signature="sig",
         width=128,
         height=72,
         fps=24.0,

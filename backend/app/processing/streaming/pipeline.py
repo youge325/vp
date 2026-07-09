@@ -74,7 +74,6 @@ def process_video_streaming(
             decode_config=decode_config,
             encode_config=encode_config,
             manifest=manifest,
-            signature=preflight.signature,
             stage_plan=preflight.stage_plan,
             tensor_backend_name=tensor_backend_name,
             progress_callbacks=progress_callbacks,

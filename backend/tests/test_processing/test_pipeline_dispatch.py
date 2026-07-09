@@ -50,7 +50,6 @@ def test_run_streaming_pipeline_dispatches_stage_file_pipeline_and_emits_resume_
         decode_config={"mode": "software"},
         encode_config={"codec": "libx264"},
         manifest=manifest,
-        signature="sig",
         stage_plan=stage_plan,
         tensor_backend_name="onnx",
         progress_callbacks=[],
@@ -99,7 +98,6 @@ def test_run_streaming_pipeline_dispatches_raw_pipeline_without_worker_chain_cou
         decode_config={"mode": "software"},
         encode_config={"codec": "libx264"},
         manifest=manifest,
-        signature="sig",
         stage_plan=stage_plan,
         tensor_backend_name="onnx",
         progress_callbacks=[],
@@ -117,7 +115,7 @@ def test_run_streaming_pipeline_dispatches_raw_pipeline_without_worker_chain_cou
 
     assert result == 7
     assert events == [(0, 4)]
-    assert calls["signature"] == "sig"
+    assert "signature" not in calls
     assert calls["output_width"] == 640
     assert calls["output_height"] == 360
     assert "stage_worker_runner" not in calls

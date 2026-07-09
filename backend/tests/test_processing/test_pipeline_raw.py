@@ -86,7 +86,6 @@ def test_raw_pipeline_runs_stage_worker_chain_into_segmented_encoder(tmp_path: P
         decode_config={"mode": "software"},
         encode_config={"container": "mp4"},
         manifest=manifest,
-        signature="sig",
         stage_plan=StagePlan(
             pre_steps=[],
             interpolation_step=None,
