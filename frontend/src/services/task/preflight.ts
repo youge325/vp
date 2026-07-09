@@ -9,18 +9,18 @@
 // outputDir 是否填写,而不直接耦合 ``MediaItem`` / Pinia store。让规则
 // 与具体 store 形状解耦,未来加新校验项时不会牵动 store schema。
 
-export interface BatchPreflightItem {
+interface BatchPreflightItem {
   displayName: string
   inputPath: string | null | undefined
   outputDir: string | null | undefined
 }
 
-export interface BatchPreflightInput {
+interface BatchPreflightInput {
   isRunning: boolean
   selectedItems: BatchPreflightItem[]
 }
 
-export interface BatchPreflightVerdict {
+interface BatchPreflightVerdict {
   ok: boolean
   reason: string | null
 }

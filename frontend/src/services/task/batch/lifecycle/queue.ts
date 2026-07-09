@@ -20,7 +20,7 @@ import { classifyResumeConflict } from '../../resume-classifier'
 import type { CommonHelpers } from './common'
 import type { BatchLifecycleDeps } from './types'
 
-export interface QueueInternalRefs {
+interface QueueInternalRefs {
   handleErrored: (error: ReturnType<typeof normalizeError>) => Promise<void>
 }
 

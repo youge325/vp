@@ -9,9 +9,9 @@ import { algorithmSupportsBackend } from '@/services/preset/enhance-workflow-loo
 import type { AlgorithmInfo } from '@/types/domain/env'
 import type { TensorBackend } from '@/types/domain/workflow'
 
-export type AlgorithmSpec = AlgorithmInfo
+type AlgorithmSpec = AlgorithmInfo
 
-export interface AlgorithmLens {
+interface AlgorithmLens {
   algorithms: ComputedRef<AlgorithmSpec[]>
   current: ComputedRef<AlgorithmSpec | undefined>
   onnxModels: ComputedRef<string[]>

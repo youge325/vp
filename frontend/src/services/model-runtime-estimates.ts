@@ -5,7 +5,7 @@ export interface VideoDimensions {
   height: number
 }
 
-export interface RuntimeMetricOptions {
+interface RuntimeMetricOptions {
   scale?: number
   precisionBytes?: number
   temporalFrames?: number

@@ -31,12 +31,12 @@ import {
 import type { BatchLifecycle, BatchLifecycleDeps } from './lifecycle'
 import type { ConflictResolver } from './conflict'
 
-export type EventHandlersDeps = Pick<
+type EventHandlersDeps = Pick<
   BatchLifecycleDeps,
   'setItemTaskState' | 'setItemLastOutputPath' | 'setTaskIssue'
 >
 
-export interface EventHandlers {
+interface EventHandlers {
   onProgress(payload: TaskProgressPayload): void
   onLog(payload: TaskLogPayload): void
   onCompleted(payload: TaskCompletedPayload): Promise<void>

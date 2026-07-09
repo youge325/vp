@@ -23,7 +23,7 @@ import type { ResumeStatus } from '@/types/domain/batch'
 const STAGE_PROGRESS_KEY_RE = /^\[VP_PROGRESS\]\s+\[(\d+\/\d+\s+[^\]]+)\]/
 const TENSORRT_LOG_PREFIX = '[VP_TRT]'
 
-export type TaskLogLineKind = 'progress' | 'tensorrt' | 'default'
+type TaskLogLineKind = 'progress' | 'tensorrt' | 'default'
 
 function classifyTaskLogLine(line: string): TaskLogLineKind {
   if (line.startsWith(TERMINAL_PROGRESS_PREFIX)) {

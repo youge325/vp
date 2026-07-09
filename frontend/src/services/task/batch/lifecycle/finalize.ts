@@ -25,7 +25,7 @@ import { applyTaskError } from '../../events'
 import type { CommonHelpers } from './common'
 import type { BatchLifecycleDeps } from './types'
 
-export interface FinalizeInternalRefs {
+interface FinalizeInternalRefs {
   runNextQueuedItem: () => Promise<void>
 }
 
