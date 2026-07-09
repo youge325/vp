@@ -223,10 +223,3 @@ def _prepend_to_path(directory: str) -> None:
     if any(part.lower() == directory.lower() for part in parts):
         return
     os.environ["PATH"] = directory + (os.pathsep + current if current else "")
-
-
-def reset_registry_for_tests() -> None:
-    """Test-only helper to forget previously-registered directories."""
-    global _scanned_tensorrt_roots
-    _registered.clear()
-    _scanned_tensorrt_roots = None
