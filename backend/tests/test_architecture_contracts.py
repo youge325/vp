@@ -1345,6 +1345,20 @@ def test_frontend_preset_clone_boundary_flags_generic_clone_export(tmp_path, mon
     assert any("preset clone surface" in issue for issue in issues), issues
 
 
+def test_frontend_format_numbers_boundary_flags_obsolete_single_use_helper(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_numbers = tmp_path / "numbers.ts"
+    fake_numbers.write_text(
+        "export function formatNumber(value: number): string { return `${value}` }\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(module, "FRONTEND_FORMAT_NUMBERS", fake_numbers, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_format_numbers_boundary(issues)
+
+    assert any("obsolete format numbers helper" in issue for issue in issues), issues
+
+
 def test_frontend_domain_preset_barrel_boundary_flags_obsolete_barrel(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_domain_preset = tmp_path / "preset.ts"
@@ -2311,6 +2325,7 @@ def test_pipeline_raw_state_boundary_flags_public_encode_queue_item_alias(tmp_pa
     module._check_pipeline_raw_state_boundary(issues)
 
     assert any("pipeline raw state public type" in issue for issue in issues), issues
+    assert any("RawPipelineState" in issue for issue in issues), issues
 
 
 def test_pipeline_raw_runtime_stage_boundary_flags_local_worker_runner(tmp_path, monkeypatch) -> None:

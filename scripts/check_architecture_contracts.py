@@ -122,6 +122,7 @@ CLI_PROCESS_EXECUTION = ROOT / "backend" / "app" / "cli" / "commands" / "_proces
 MODEL_METRICS = FRONTEND_SRC / "services" / "model-metrics.ts"
 MODEL_RUNTIME_ESTIMATES = FRONTEND_SRC / "services" / "model-runtime-estimates.ts"
 MODEL_METRIC_ROWS = FRONTEND_SRC / "services" / "model-metric-rows.ts"
+FRONTEND_FORMAT_NUMBERS = FRONTEND_SRC / "services" / "format" / "numbers.ts"
 DOMAIN_PRESET_TYPES = FRONTEND_SRC / "types" / "domain" / "preset.ts"
 DOMAIN_WORKFLOW_TYPES = FRONTEND_SRC / "types" / "domain" / "workflow.ts"
 DOMAIN_MEDIA_TYPES = FRONTEND_SRC / "types" / "domain" / "media.ts"
@@ -1111,6 +1112,11 @@ def _check_frontend_preset_clone_boundary(issues: list[str]) -> None:
         issues.append(f"preset clone surface generic `clone` exported from {_rel(PRESET_CLONE)}")
 
 
+def _check_frontend_format_numbers_boundary(issues: list[str]) -> None:
+    if FRONTEND_FORMAT_NUMBERS.exists():
+        issues.append(f"obsolete format numbers helper remains in {_rel(FRONTEND_FORMAT_NUMBERS)}")
+
+
 def _check_frontend_domain_preset_barrel_boundary(issues: list[str]) -> None:
     if DOMAIN_PRESET_TYPES.exists():
         issues.append(f"obsolete domain preset type barrel remains in {_rel(DOMAIN_PRESET_TYPES)}")
@@ -1966,6 +1972,7 @@ def _check_pipeline_raw_state_boundary(issues: list[str]) -> None:
     forbidden_patterns = {
         "public encode queue item alias": r"^RawEncodeQueueItem\s*=",
         "encode queue item export": r"__all__\s*=\s*\[[\s\S]*\"RawEncodeQueueItem\"",
+        "RawPipelineState export": r"__all__\s*=\s*\[[\s\S]*\"RawPipelineState\"",
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
@@ -2340,6 +2347,7 @@ def main() -> int:
         _check_frontend_model_metrics_barrel_boundary(issues)
         _check_frontend_model_metric_view_type_boundary(issues)
         _check_frontend_preset_clone_boundary(issues)
+        _check_frontend_format_numbers_boundary(issues)
         _check_frontend_domain_preset_barrel_boundary(issues)
         _check_frontend_ipc_barrel_boundary(issues)
         _check_frontend_task_orchestrator_runtime_boundary(issues)

@@ -10,9 +10,15 @@
 
 import { useMediaStore } from '@/stores/media'
 import { useMediaRunState } from '@/stores/mediaRunState'
-import { formatNumber } from '@/services/format/numbers'
 import { getWorkflowSummaryLabel } from '@/services/format/labels'
 import type { MediaItem } from '@/types/domain/media'
+
+function formatFps(value: number): string {
+  if (Math.abs(value - Math.round(value)) < 0.01) {
+    return `${Math.round(value)}`
+  }
+  return value.toFixed(2).replace(/\.?0+$/, '')
+}
 
 export function useMediaListEditor() {
   const mediaStore = useMediaStore()
@@ -26,7 +32,7 @@ export function useMediaListEditor() {
   return {
     removeItem,
     fpsLabelOf: (item: MediaItem) =>
-      item.info ? `${formatNumber(item.info.fps)} FPS` : '--',
+      item.info ? `${formatFps(item.info.fps)} FPS` : '--',
     workflowLabelOf: (item: MediaItem) => getWorkflowSummaryLabel(item),
   }
 }
