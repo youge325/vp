@@ -5,9 +5,9 @@ import type { CodecFamily } from './workflow'
 import type { RateControlMode } from './workflow'
 
 export type CapabilityValue = string | number | boolean
-export type CapabilityOptionType = 'boolean' | 'number' | 'string' | 'choice'
+type CapabilityOptionType = 'boolean' | 'number' | 'string' | 'choice'
 
-export interface CapabilityChoice {
+interface CapabilityChoice {
   label: string
   value: CapabilityValue
 }

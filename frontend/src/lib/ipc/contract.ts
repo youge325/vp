@@ -10,7 +10,7 @@ import type { EnvironmentCheckPayload } from '@/types/domain/env'
 import type { VideoInfoResult } from '@/types/domain/media'
 import type { TaskRequest, WorkbenchPreset } from '@/types/protocol'
 
-export const IPC_COMMAND_NAMES = [
+const IPC_COMMAND_NAMES = [
   'pick_inputs',
   'pick_output_directory',
   'check_environment',
@@ -25,9 +25,9 @@ export const IPC_COMMAND_NAMES = [
 ] as const
 
 export type IpcCommand = typeof IPC_COMMAND_NAMES[number]
-export type TaskControlKind = 'pause' | 'resume'
+type TaskControlKind = 'pause' | 'resume'
 
-export interface IpcCommandArgs {
+interface IpcCommandArgs {
   pick_inputs: undefined
   pick_output_directory: undefined
   check_environment: { forceRefresh: boolean }
@@ -41,7 +41,7 @@ export interface IpcCommandArgs {
   open_output_location: { path: string }
 }
 
-export interface IpcCommandResult {
+interface IpcCommandResult {
   pick_inputs: string[]
   pick_output_directory: string | null
   check_environment: EnvironmentCheckPayload

@@ -12,7 +12,7 @@ export interface GpuAdapter {
   driverVersion?: string
 }
 
-export interface ResourceSummary {
+interface ResourceSummary {
   backendRoot?: string
   runtimeRoot?: string
   runtimeMode?: string
@@ -23,7 +23,7 @@ export interface ResourceSummary {
   [key: string]: string | boolean | number | null | undefined
 }
 
-export type ModelAnalysisStatus = 'ok' | 'partial' | 'unknown' | string
+type ModelAnalysisStatus = 'ok' | 'partial' | 'unknown' | string
 
 export interface ModelEngineMetricInfo {
   gflopsPerMegapixel?: number | null
@@ -35,7 +35,7 @@ export interface ModelEngineMetricInfo {
   analysisNotes?: string[]
 }
 
-export interface ModelMetricInfo {
+interface ModelMetricInfo {
   parameterCount?: number | null
   parameterBytes?: number | null
   gflopsPerMegapixel?: number | null

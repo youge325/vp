@@ -126,6 +126,8 @@ FRONTEND_FORMAT_NUMBERS = FRONTEND_SRC / "services" / "format" / "numbers.ts"
 DOMAIN_PRESET_TYPES = FRONTEND_SRC / "types" / "domain" / "preset.ts"
 DOMAIN_WORKFLOW_TYPES = FRONTEND_SRC / "types" / "domain" / "workflow.ts"
 DOMAIN_MEDIA_TYPES = FRONTEND_SRC / "types" / "domain" / "media.ts"
+DOMAIN_ENV_TYPES = FRONTEND_SRC / "types" / "domain" / "env.ts"
+DOMAIN_CAPABILITY_TYPES = FRONTEND_SRC / "types" / "domain" / "capability.ts"
 PRESET_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "defaults.ts"
 PRESET_CLONE = FRONTEND_SRC / "services" / "preset" / "clone.ts"
 WORKFLOW_DEFAULTS = FRONTEND_SRC / "services" / "preset" / "workflow-defaults.ts"
@@ -399,7 +401,7 @@ def _collect_rust_command_args() -> dict[str, set[str]]:
 
 def _collect_typed_ipc_contract_args() -> dict[str, set[str]]:
     text = _read(IPC_CONTRACT)
-    match = re.search(r"export\s+interface\s+IpcCommandArgs\s*\{", text)
+    match = re.search(r"(?:export\s+)?interface\s+IpcCommandArgs\s*\{", text)
     if not match:
         raise RuntimeError("could not parse IpcCommandArgs in frontend IPC contract")
     body_start = text.find("{", match.start())
@@ -425,6 +427,19 @@ def _collect_typed_ipc_contract_args() -> dict[str, set[str]]:
         raise RuntimeError(f"unsupported IpcCommandArgs shape for `{command}`: {value}")
 
     return command_args
+
+
+def _check_frontend_ipc_contract_surface_boundary(issues: list[str]) -> None:
+    text = _read(IPC_CONTRACT)
+    forbidden_patterns = {
+        "IPC_COMMAND_NAMES": r"export\s+const\s+IPC_COMMAND_NAMES\b",
+        "TaskControlKind": r"export\s+type\s+TaskControlKind\b",
+        "IpcCommandArgs": r"export\s+interface\s+IpcCommandArgs\b",
+        "IpcCommandResult": r"export\s+interface\s+IpcCommandResult\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(f"internal IPC contract surface `{label}` exported from {_rel(IPC_CONTRACT)}")
 
 
 def _check_command_surface(issues: list[str]) -> None:
@@ -839,6 +854,11 @@ def _check_dead_type_alias_boundary(issues: list[str]) -> None:
         (DOMAIN_WORKFLOW_TYPES, "WorkflowMode", r"^\s*export\s+type\s+WorkflowMode\b"),
         (DOMAIN_WORKFLOW_TYPES, "EditingScope", r"^\s*export\s+type\s+EditingScope\b"),
         (DOMAIN_MEDIA_TYPES, "ItemConfigSnapshot", r"^\s*export\s+type\s+ItemConfigSnapshot\b"),
+        (DOMAIN_ENV_TYPES, "ResourceSummary", r"^\s*export\s+interface\s+ResourceSummary\b"),
+        (DOMAIN_ENV_TYPES, "ModelAnalysisStatus", r"^\s*export\s+type\s+ModelAnalysisStatus\b"),
+        (DOMAIN_ENV_TYPES, "ModelMetricInfo", r"^\s*export\s+interface\s+ModelMetricInfo\b"),
+        (DOMAIN_CAPABILITY_TYPES, "CapabilityOptionType", r"^\s*export\s+type\s+CapabilityOptionType\b"),
+        (DOMAIN_CAPABILITY_TYPES, "CapabilityChoice", r"^\s*export\s+interface\s+CapabilityChoice\b"),
     )
     for path, name, pattern in checks:
         if re.search(pattern, _read(path), re.MULTILINE):
@@ -2308,6 +2328,7 @@ def main() -> int:
     issues: list[str] = []
     try:
         _check_command_surface(issues)
+        _check_frontend_ipc_contract_surface_boundary(issues)
         _check_docs_do_not_reference_legacy_commands(issues)
         _check_generated_type_import_boundary(issues)
         _check_ui_and_store_ipc_boundary(issues)

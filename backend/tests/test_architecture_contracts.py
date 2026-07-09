@@ -158,12 +158,21 @@ def test_dead_type_aliases_do_not_remain_in_current_repo() -> None:
     backend_onnx_models = REPO_ROOT / "backend" / "app" / "utils" / "onnx_models.py"
     workflow_types = REPO_ROOT / "frontend" / "src" / "types" / "domain" / "workflow.ts"
     media_types = REPO_ROOT / "frontend" / "src" / "types" / "domain" / "media.ts"
+    env_types = REPO_ROOT / "frontend" / "src" / "types" / "domain" / "env.ts"
+    capability_types = REPO_ROOT / "frontend" / "src" / "types" / "domain" / "capability.ts"
 
     assert "OnnxEngine =" not in backend_onnx_models.read_text(encoding="utf-8")
     workflow_text = workflow_types.read_text(encoding="utf-8")
     assert "export type WorkflowMode" not in workflow_text
     assert "export type EditingScope" not in workflow_text
     assert "export type ItemConfigSnapshot" not in media_types.read_text(encoding="utf-8")
+    env_text = env_types.read_text(encoding="utf-8")
+    assert "export interface ResourceSummary" not in env_text
+    assert "export type ModelAnalysisStatus" not in env_text
+    assert "export interface ModelMetricInfo" not in env_text
+    capability_text = capability_types.read_text(encoding="utf-8")
+    assert "export type CapabilityOptionType" not in capability_text
+    assert "export interface CapabilityChoice" not in capability_text
 
 
 def test_dead_type_alias_boundary_flags_obsolete_aliases(tmp_path, monkeypatch) -> None:
@@ -171,6 +180,8 @@ def test_dead_type_alias_boundary_flags_obsolete_aliases(tmp_path, monkeypatch) 
     fake_onnx_models = tmp_path / "onnx_models.py"
     fake_workflow_types = tmp_path / "workflow.ts"
     fake_media_types = tmp_path / "media.ts"
+    fake_env_types = tmp_path / "env.ts"
+    fake_capability_types = tmp_path / "capability.ts"
     fake_onnx_models.write_text("OnnxEngine = Literal['cuda']\n", encoding="utf-8")
     fake_workflow_types.write_text(
         "export type WorkflowMode = 'frame_interpolation'\nexport type EditingScope = 'preset'\n",
@@ -179,9 +190,21 @@ def test_dead_type_alias_boundary_flags_obsolete_aliases(tmp_path, monkeypatch) 
     fake_media_types.write_text(
         "export type ItemConfigSnapshot = Pick<WorkbenchPreset, 'decodeConfig'>\n", encoding="utf-8"
     )
+    fake_env_types.write_text(
+        "export interface ResourceSummary {}\n"
+        "export type ModelAnalysisStatus = 'ok'\n"
+        "export interface ModelMetricInfo {}\n",
+        encoding="utf-8",
+    )
+    fake_capability_types.write_text(
+        "export type CapabilityOptionType = 'choice'\nexport interface CapabilityChoice {}\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(module, "BACKEND_ONNX_MODELS", fake_onnx_models, raising=False)
     monkeypatch.setattr(module, "DOMAIN_WORKFLOW_TYPES", fake_workflow_types, raising=False)
     monkeypatch.setattr(module, "DOMAIN_MEDIA_TYPES", fake_media_types, raising=False)
+    monkeypatch.setattr(module, "DOMAIN_ENV_TYPES", fake_env_types, raising=False)
+    monkeypatch.setattr(module, "DOMAIN_CAPABILITY_TYPES", fake_capability_types, raising=False)
     issues: list[str] = []
 
     module._check_dead_type_alias_boundary(issues)
@@ -190,6 +213,11 @@ def test_dead_type_alias_boundary_flags_obsolete_aliases(tmp_path, monkeypatch) 
     assert any("WorkflowMode" in issue for issue in issues), issues
     assert any("EditingScope" in issue for issue in issues), issues
     assert any("ItemConfigSnapshot" in issue for issue in issues), issues
+    assert any("ResourceSummary" in issue for issue in issues), issues
+    assert any("ModelAnalysisStatus" in issue for issue in issues), issues
+    assert any("ModelMetricInfo" in issue for issue in issues), issues
+    assert any("CapabilityOptionType" in issue for issue in issues), issues
+    assert any("CapabilityChoice" in issue for issue in issues), issues
 
 
 def test_frontend_task_event_reducers_have_no_dead_payload_params() -> None:
@@ -217,6 +245,48 @@ def test_frontend_task_event_reducer_payload_boundary_flags_dead_payload_params(
     module._check_frontend_task_event_reducer_payload_boundary(issues)
 
     assert any("task event reducer payload" in issue for issue in issues), issues
+
+
+def test_collect_typed_ipc_contract_args_allows_private_mapping(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_contract = tmp_path / "contract.ts"
+    fake_contract.write_text(
+        "const IPC_COMMAND_NAMES = ['pick_inputs', 'control_task'] as const\n"
+        "type TaskControlKind = 'pause' | 'resume'\n"
+        "interface IpcCommandArgs {\n"
+        "  pick_inputs: undefined\n"
+        "  control_task: { kind: TaskControlKind }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "IPC_CONTRACT", fake_contract, raising=False)
+
+    assert module._collect_typed_ipc_contract_args() == {
+        "pick_inputs": set(),
+        "control_task": {"kind"},
+    }
+
+
+def test_frontend_ipc_contract_surface_boundary_flags_internal_exports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_contract = tmp_path / "contract.ts"
+    fake_contract.write_text(
+        "export const IPC_COMMAND_NAMES = ['pick_inputs'] as const\n"
+        "export type IpcCommand = typeof IPC_COMMAND_NAMES[number]\n"
+        "export type TaskControlKind = 'pause' | 'resume'\n"
+        "export interface IpcCommandArgs { pick_inputs: undefined }\n"
+        "export interface IpcCommandResult { pick_inputs: string[] }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "IPC_CONTRACT", fake_contract, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_ipc_contract_surface_boundary(issues)
+
+    assert any("IPC_COMMAND_NAMES" in issue for issue in issues), issues
+    assert any("TaskControlKind" in issue for issue in issues), issues
+    assert any("IpcCommandArgs" in issue for issue in issues), issues
+    assert any("IpcCommandResult" in issue for issue in issues), issues
 
 
 def test_cli_process_execution_has_no_format_conversion_dead_config_unpack() -> None:
