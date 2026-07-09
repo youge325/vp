@@ -154,6 +154,44 @@ def test_backend_model_metrics_dead_helper_boundary_flags_obsolete_attribute_hel
     assert any("model metrics dead helper" in issue for issue in issues), issues
 
 
+def test_dead_type_aliases_do_not_remain_in_current_repo() -> None:
+    backend_onnx_models = REPO_ROOT / "backend" / "app" / "utils" / "onnx_models.py"
+    workflow_types = REPO_ROOT / "frontend" / "src" / "types" / "domain" / "workflow.ts"
+    media_types = REPO_ROOT / "frontend" / "src" / "types" / "domain" / "media.ts"
+
+    assert "OnnxEngine =" not in backend_onnx_models.read_text(encoding="utf-8")
+    workflow_text = workflow_types.read_text(encoding="utf-8")
+    assert "export type WorkflowMode" not in workflow_text
+    assert "export type EditingScope" not in workflow_text
+    assert "export type ItemConfigSnapshot" not in media_types.read_text(encoding="utf-8")
+
+
+def test_dead_type_alias_boundary_flags_obsolete_aliases(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_onnx_models = tmp_path / "onnx_models.py"
+    fake_workflow_types = tmp_path / "workflow.ts"
+    fake_media_types = tmp_path / "media.ts"
+    fake_onnx_models.write_text("OnnxEngine = Literal['cuda']\n", encoding="utf-8")
+    fake_workflow_types.write_text(
+        "export type WorkflowMode = 'frame_interpolation'\nexport type EditingScope = 'preset'\n",
+        encoding="utf-8",
+    )
+    fake_media_types.write_text(
+        "export type ItemConfigSnapshot = Pick<WorkbenchPreset, 'decodeConfig'>\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(module, "BACKEND_ONNX_MODELS", fake_onnx_models, raising=False)
+    monkeypatch.setattr(module, "DOMAIN_WORKFLOW_TYPES", fake_workflow_types, raising=False)
+    monkeypatch.setattr(module, "DOMAIN_MEDIA_TYPES", fake_media_types, raising=False)
+    issues: list[str] = []
+
+    module._check_dead_type_alias_boundary(issues)
+
+    assert any("OnnxEngine" in issue for issue in issues), issues
+    assert any("WorkflowMode" in issue for issue in issues), issues
+    assert any("EditingScope" in issue for issue in issues), issues
+    assert any("ItemConfigSnapshot" in issue for issue in issues), issues
+
+
 def test_cli_defaults_planning_boundary_flags_model_path_helper(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_defaults = tmp_path / "defaults.py"

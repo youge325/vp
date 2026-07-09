@@ -10,7 +10,6 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 OnnxModelKind = Literal["interpolation", "super_resolution"]
-OnnxEngine = Literal["tensorrt", "cuda", "auto"]
 
 ONNX_MODEL_SUBDIRS: dict[OnnxModelKind, str] = {
     "interpolation": "interpolation",
