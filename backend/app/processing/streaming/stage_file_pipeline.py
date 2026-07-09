@@ -99,7 +99,6 @@ def run_stage_file_pipeline(
             output_height=output_height,
             input_frame_count=current_frame_count,
             output_frame_count=stage_output_frames,
-            input_fps=current_fps,
             output_fps=stage_fps,
             encode_output_fps=stage_context.encode_output_fps,
             resume_state=stage_context.resume_state,

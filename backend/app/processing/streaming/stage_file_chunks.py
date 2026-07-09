@@ -32,7 +32,6 @@ def run_single_stage_file_chunks(
     output_height: int,
     input_frame_count: int,
     output_frame_count: int,
-    input_fps: float,
     output_fps: float,
     encode_output_fps: float | None,
     resume_state: ResumeState,
@@ -42,7 +41,6 @@ def run_single_stage_file_chunks(
     metrics: PipelineMetrics,
     python_executable: str,
 ) -> int:
-    del input_fps
     extension = os.path.splitext(str(manifest.output_path))[1] or f".{encode_config.get('container') or 'mp4'}"
     chunks = [
         chunk

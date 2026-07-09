@@ -35,7 +35,6 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
                 "algorithm": kwargs["step"].algorithm_type,
                 "encode_config": kwargs["encode_config"],
                 "encode_output_fps": kwargs["encode_output_fps"],
-                "input_fps": kwargs["input_fps"],
                 "input_frame_count": kwargs["input_frame_count"],
                 "input_height": kwargs["input_height"],
                 "input_path": kwargs["input_path"],
@@ -92,7 +91,6 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
     assert stage_calls[0]["input_path"] == input_path
     assert stage_calls[0]["input_frame_count"] == 5
     assert stage_calls[0]["output_frame_count"] == 9
-    assert stage_calls[0]["input_fps"] == 24.0
     assert stage_calls[0]["output_fps"] == 48.0
     assert stage_calls[0]["input_width"] == 1
     assert stage_calls[0]["output_width"] == 1
@@ -104,7 +102,6 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
     assert stage_calls[1]["input_path"] == intermediate_output_path
     assert stage_calls[1]["input_frame_count"] == 9
     assert stage_calls[1]["output_frame_count"] == 9
-    assert stage_calls[1]["input_fps"] == 48.0
     assert stage_calls[1]["output_fps"] == 48.0
     assert stage_calls[1]["input_width"] == 1
     assert stage_calls[1]["output_width"] == 4

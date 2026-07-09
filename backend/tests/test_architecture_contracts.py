@@ -1251,6 +1251,30 @@ def test_stage_file_chunks_runtime_boundary_flags_compatibility_exports(tmp_path
     assert any("helper __all__ export" in issue for issue in issues), issues
 
 
+def test_stage_file_chunk_input_fps_boundary_flags_dead_input_fps_forwarding(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_chunks = tmp_path / "stage_file_chunks.py"
+    fake_pipeline = tmp_path / "stage_file_pipeline.py"
+    fake_chunks.write_text(
+        "def run_single_stage_file_chunks(*, input_fps: float, output_fps: float):\n"
+        "    del input_fps\n"
+        "    return output_fps\n",
+        encoding="utf-8",
+    )
+    fake_pipeline.write_text(
+        "def run_stage_file_pipeline(current_fps):\n"
+        "    return run_single_stage_file_chunks(input_fps=current_fps, output_fps=current_fps)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_CHUNKS", fake_chunks, raising=False)
+    monkeypatch.setattr(module, "STAGE_FILE_PIPELINE", fake_pipeline, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_file_chunk_input_fps_boundary(issues)
+
+    assert any("stage file chunk input_fps" in issue for issue in issues), issues
+
+
 def test_stage_file_chunks_test_boundary_flags_stage_file_rule_tests(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_test = tmp_path / "test_stage_file_chunks.py"

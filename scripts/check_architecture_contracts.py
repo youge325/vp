@@ -1525,6 +1525,18 @@ def _check_stage_file_chunks_test_boundary(issues: list[str]) -> None:
             issues.append(f"stage file chunks test boundary `{label}` remains in {_rel(STAGE_FILE_CHUNKS_TEST)}")
 
 
+def _check_stage_file_chunk_input_fps_boundary(issues: list[str]) -> None:
+    chunks_text = _read(STAGE_FILE_CHUNKS)
+    if re.search(r"def\s+run_single_stage_file_chunks\s*\([\s\S]*?\binput_fps\b", chunks_text):
+        issues.append(f"stage file chunk input_fps parameter remains in {_rel(STAGE_FILE_CHUNKS)}")
+    if re.search(r"\bdel\s+input_fps\b", chunks_text):
+        issues.append(f"stage file chunk input_fps discard remains in {_rel(STAGE_FILE_CHUNKS)}")
+
+    pipeline_text = _read(STAGE_FILE_PIPELINE)
+    if re.search(r"run_single_stage_file_chunks\s*\([\s\S]*?\binput_fps\s*=", pipeline_text):
+        issues.append(f"stage file chunk input_fps forwarding remains in {_rel(STAGE_FILE_PIPELINE)}")
+
+
 def _check_stage_file_pipeline_test_boundary(issues: list[str]) -> None:
     if not STAGE_FILE_PIPELINE_TEST.exists():
         return
@@ -2089,6 +2101,7 @@ def main() -> int:
         _check_stage_file_pipeline_chunk_boundary(issues)
         _check_stage_file_chunks_runtime_boundary(issues)
         _check_stage_file_chunks_test_boundary(issues)
+        _check_stage_file_chunk_input_fps_boundary(issues)
         _check_stage_file_pipeline_test_boundary(issues)
         _check_stage_file_chunk_runtime_encoding_boundary(issues)
         _check_stage_worker_execution_boundary(issues)
