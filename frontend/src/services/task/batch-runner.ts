@@ -25,7 +25,7 @@ import { createBatchLifecycle } from './batch/lifecycle'
 import { createConflictResolver } from './batch/conflict'
 import { createEventHandlers } from './batch/events'
 
-export interface BatchRunnerDeps {
+interface BatchRunnerDeps {
   startTask: (req: TaskRequest) => Promise<void>
   cancelTask: () => Promise<void>
   pauseTask: () => Promise<void>

@@ -29,7 +29,9 @@ import {
   applyTaskResumeStatus,
 } from '../events'
 import type { BatchLifecycle, BatchLifecycleDeps } from './lifecycle'
-import type { ConflictResolver } from './conflict'
+import type { createConflictResolver } from './conflict'
+
+type ConflictResolver = ReturnType<typeof createConflictResolver>
 
 type EventHandlersDeps = Pick<
   BatchLifecycleDeps,

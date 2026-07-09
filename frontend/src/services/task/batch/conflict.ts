@@ -12,7 +12,7 @@ type ConflictResolverDeps = Pick<
   'getBatch' | 'setBatch' | 'getMediaItem' | 'setPendingConflict'
 >
 
-export interface ConflictResolver {
+interface ConflictResolver {
   resolveConflict(action: ResumeConflictAction): Promise<void>
   /**
    * 尝试把 ``TaskError`` 解析为续传冲突;返回 ``true`` 表示已暂存为待解决冲突,
