@@ -56,6 +56,7 @@ PIPELINE_RULES = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeli
 PIPELINE_LIFECYCLE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_lifecycle.py"
 STAGE_FILE_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_pipeline.py"
 STAGE_FILE_CHUNK_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_runtime.py"
+STAGE_FILE_CHUNK_PROGRESS = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_progress.py"
 STAGE_FILE_CHUNKS = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunks.py"
 PROCESSOR = ROOT / "backend" / "app" / "processing" / "streaming" / "processor.py"
 PROCESSOR_STREAMS = ROOT / "backend" / "app" / "processing" / "streaming" / "processor_streams.py"
@@ -1538,6 +1539,14 @@ def _check_stage_file_chunk_input_fps_boundary(issues: list[str]) -> None:
         issues.append(f"stage file chunk input_fps forwarding remains in {_rel(STAGE_FILE_PIPELINE)}")
 
 
+def _check_stage_file_chunk_progress_boundary(issues: list[str]) -> None:
+    text = _read(STAGE_FILE_CHUNK_PROGRESS)
+    if re.search(r"\bdel\s+progress_total\b", text):
+        issues.append(
+            f"stage file chunk progress explicit progress_total discard remains in {_rel(STAGE_FILE_CHUNK_PROGRESS)}"
+        )
+
+
 def _check_stage_file_pipeline_test_boundary(issues: list[str]) -> None:
     if not STAGE_FILE_PIPELINE_TEST.exists():
         return
@@ -2120,6 +2129,7 @@ def main() -> int:
         _check_stage_file_chunks_runtime_boundary(issues)
         _check_stage_file_chunks_test_boundary(issues)
         _check_stage_file_chunk_input_fps_boundary(issues)
+        _check_stage_file_chunk_progress_boundary(issues)
         _check_stage_file_pipeline_test_boundary(issues)
         _check_stage_file_chunk_runtime_encoding_boundary(issues)
         _check_stage_worker_execution_boundary(issues)

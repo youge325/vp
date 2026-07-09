@@ -1275,6 +1275,24 @@ def test_stage_file_chunk_input_fps_boundary_flags_dead_input_fps_forwarding(tmp
     assert any("stage file chunk input_fps" in issue for issue in issues), issues
 
 
+def test_stage_file_chunk_progress_boundary_flags_explicit_progress_total_discard(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_progress = tmp_path / "stage_file_chunk_progress.py"
+    fake_progress.write_text(
+        "def chunk_progress_adapter():\n"
+        "    def adapter(current, progress_total):\n"
+        "        del progress_total\n"
+        "        return current\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_FILE_CHUNK_PROGRESS", fake_progress, raising=False)
+    issues: list[str] = []
+
+    module._check_stage_file_chunk_progress_boundary(issues)
+
+    assert any("stage file chunk progress" in issue for issue in issues), issues
+
+
 def test_stage_file_chunks_test_boundary_flags_stage_file_rule_tests(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_test = tmp_path / "test_stage_file_chunks.py"
