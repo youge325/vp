@@ -85,7 +85,3 @@ export function toFpsMode(value: string): FpsMode {
 export function toProcessOrder(value: string): ProcessOrder {
   return value as ProcessOrder
 }
-
-export function toNumberOption(value: string): number {
-  return Number(value)
-}

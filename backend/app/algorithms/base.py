@@ -13,23 +13,9 @@ class IAlgorithm(ABC):
         pass
 
     @abstractmethod
-    def process_frame_batch(self, frames: list[Any], **kwargs) -> list[Any]:
-        """批量处理帧。"""
-        pass
-
-    @abstractmethod
     def get_name(self) -> str:
         """返回算法名称。"""
         pass
-
-    @abstractmethod
-    def validate(self) -> bool:
-        """验证算法是否可运行（如依赖是否可用）。"""
-        pass
-
-    def get_description(self) -> str:
-        """返回算法的可读描述。"""
-        return ""
 
     # ------------------------------------------------------------------
     # 帧对处理接口（补帧算法需要实现）

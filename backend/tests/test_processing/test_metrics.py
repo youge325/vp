@@ -7,7 +7,6 @@ the ``snapshot()`` output shape consumed by the NDJSON progress frame.
 from __future__ import annotations
 
 import threading
-import time
 
 from app.processing.streaming.metrics import PipelineMetrics
 
@@ -41,26 +40,6 @@ def test_set_queue_depth_clamps_negative_to_zero() -> None:
     metrics.set_queue_depth("encoded", -5)
     snapshot = metrics.snapshot()
     assert snapshot["queueDepths"] == {"decoded": 12, "encoded": 0}
-
-
-def test_timed_context_accumulates_across_invocations() -> None:
-    metrics = PipelineMetrics()
-    with metrics.timed("decode"):
-        time.sleep(0.01)
-    with metrics.timed("decode"):
-        time.sleep(0.01)
-    snapshot = metrics.snapshot()
-    decode_duration = snapshot["stageDurationsSeconds"]["decode"]
-    # Two ~10 ms sleeps should sum to >= 20 ms; allow some slack for slow CI
-    assert decode_duration >= 0.015, f"decode duration {decode_duration} < 0.015"
-
-
-def test_record_stage_duration_adds_directly() -> None:
-    metrics = PipelineMetrics()
-    metrics.record_stage_duration("process", 0.5)
-    metrics.record_stage_duration("process", 0.25)
-    snapshot = metrics.snapshot()
-    assert snapshot["stageDurationsSeconds"]["process"] == 0.75
 
 
 def test_record_processed_frames_increments_fps() -> None:

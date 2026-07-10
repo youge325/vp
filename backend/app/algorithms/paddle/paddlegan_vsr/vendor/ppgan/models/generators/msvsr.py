@@ -750,45 +750,6 @@ class ModifiedSPyNet(nn.Layer):
 
         return flow
 
-    def compute_flow_list(self, ref, supp):
-        n, _, h, w = ref.shape
-
-        # normalize the input images
-        ref = [(ref - self.mean) / self.std]
-        supp = [(supp - self.mean) / self.std]
-
-        # generate downsampled frames
-        for level in range(self.num_blocks - 1):
-            ref.append(F.avg_pool2d(ref[-1], kernel_size=2, stride=2))
-            supp.append(F.avg_pool2d(supp[-1], kernel_size=2, stride=2))
-        ref = ref[::-1]
-        supp = supp[::-1]
-
-        # flow computation
-        flow_list = []
-        flow = paddle.to_tensor(
-            np.zeros([n, 2, h // (2 ** (self.num_blocks - 1)), w // (2 ** (self.num_blocks - 1))], "float32")
-        )
-        for level in range(len(ref)):
-            if level == 0:
-                flow_up = flow
-            else:
-                flow_up = F.interpolate(flow, scale_factor=2, mode="bilinear", align_corners=True) * 2.0
-
-            # add the residue to the upsampled flow
-            flow = flow_up + self.basic_module[level](
-                paddle.concat(
-                    [
-                        ref[level],
-                        flow_warp(supp[level], flow_up.transpose([0, 2, 3, 1]), padding_mode="border"),
-                        flow_up,
-                    ],
-                    axis=1,
-                )
-            )
-            flow_list.append(flow)
-        return flow_list
-
     def forward(self, ref, supp):
         """Forward function of Modified SPyNet.
 

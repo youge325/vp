@@ -34,11 +34,6 @@ def _make_pytorch_algorithm(filters: list[dict]) -> FrameFilterChainAlgorithm:
     return FrameFilterChainAlgorithm(tensor_backend=_FakePyTorchBackend(), filters=filters)
 
 
-def test_validate_empty_filters():
-    algo = _make_algorithm([])
-    assert algo.validate() is True
-
-
 def test_validate_unknown_kind_raises():
     with pytest.raises(ValueError, match="Unknown filter kind"):
         _make_algorithm([{"kind": "unknown", "enabled": True, "params": {}}])
@@ -298,34 +293,6 @@ def test_multiple_filters_applied_in_order():
     )
     out = algo.process_frame(frame)
     assert out.shape == (70, 70, 3)
-
-
-def test_process_frame_batch():
-    frames = [np.ones((100, 100, 3), dtype=np.uint8) * i for i in range(3)]
-    algo = _make_algorithm(
-        [
-            {
-                "kind": "scale",
-                "enabled": True,
-                "params": {"mode": "factor", "factor": 0.5, "interpolation": "area"},
-            }
-        ]
-    )
-    outs = algo.process_frame_batch(frames)
-    assert len(outs) == 3
-    for out in outs:
-        assert out.shape == (50, 50, 3)
-
-
-def test_get_description():
-    algo = _make_algorithm(
-        [
-            {"kind": "scale", "enabled": True, "params": {}},
-            {"kind": "sharpen", "enabled": True, "params": {}},
-        ]
-    )
-    assert "scale" in algo.get_description()
-    assert "sharpen" in algo.get_description()
 
 
 def test_can_process_tensor_accepts_supported_pytorch_filters():

@@ -59,7 +59,6 @@ def test_paddlegan_super_resolution_delegates_to_sequence_runner(monkeypatch):
         auto_download_weights=True,
     )
 
-    assert algorithm.validate()
     assert algorithm.needs_frame_sequence()
     progress_calls = []
     output = algorithm.process_frame_sequence(

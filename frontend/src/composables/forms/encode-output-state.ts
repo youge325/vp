@@ -1,6 +1,7 @@
 import { computed, type ComputedRef } from 'vue'
 
-import { CONTAINER_SELECT_OPTIONS, toNumberValue } from '@/services/preset/io-options'
+import { CONTAINER_SELECT_OPTIONS } from '@/services/preset/io-options'
+import { toNumberValue } from '@/services/preset/options'
 import type { WorkbenchPreset } from '@/types/protocol'
 
 interface EncodeOutputStateParams {

@@ -37,6 +37,7 @@ BACKEND_MODEL_METRICS = ROOT / "backend" / "app" / "utils" / "model_metrics.py"
 BACKEND_ONNX_MODELS = ROOT / "backend" / "app" / "utils" / "onnx_models.py"
 BACKEND_OPENCV_RUNTIME = ROOT / "backend" / "app" / "utils" / "opencv_runtime.py"
 ALGORITHM_FACTORY = ROOT / "backend" / "app" / "algorithms" / "factory.py"
+ALGORITHM_BASE = ROOT / "backend" / "app" / "algorithms" / "base.py"
 TENSOR_BACKEND = ROOT / "backend" / "app" / "algorithms" / "tensor_backend.py"
 PROCESSING_PACKAGE = ROOT / "backend" / "app" / "processing" / "__init__.py"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
@@ -44,6 +45,7 @@ PADDLEGAN_VSR_PACKAGE = PADDLEGAN_WEIGHTS.parent / "__init__.py"
 PADDLEGAN_VENDOR = PADDLEGAN_WEIGHTS.parent / "vendor" / "ppgan"
 PADDLEGAN_VENDOR_INIT = PADDLEGAN_VENDOR / "modules" / "init.py"
 PADDLEGAN_GENERATOR_BUILDER = PADDLEGAN_VENDOR / "models" / "generators" / "builder.py"
+PADDLEGAN_MSVSR = PADDLEGAN_VENDOR / "models" / "generators" / "msvsr.py"
 PADDLEGAN_REGISTRY = PADDLEGAN_VENDOR / "utils" / "registry.py"
 PADDLE_PACKAGE = PADDLEGAN_WEIGHTS.parents[1] / "__init__.py"
 PYTORCH_PACKAGE = ROOT / "backend" / "app" / "algorithms" / "pytorch" / "__init__.py"
@@ -57,6 +59,7 @@ FFMPEG_ENCODE = FFMPEG_PACKAGE.parent / "encode.py"
 RIFE_MODEL_LOADER = ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife" / "model_loader.py"
 RIFE_MODEL_SPEC = RIFE_MODEL_LOADER.parent / "_model_spec.py"
 RIFE_PACKAGE = RIFE_MODEL_LOADER.parent / "__init__.py"
+RIFE_SOLVERS = (RIFE_MODEL_LOADER.parent / "solver.py", RIFE_MODEL_LOADER.parent / "onnx_solver.py")
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
 STAGE_WORKER_FACTORY = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_factory.py"
@@ -74,6 +77,7 @@ ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder.py"
 ENCODER_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_worker.py"
 ENCODER_FINALIZATION = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_finalization.py"
 ENCODER_SEGMENT_WRITER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_segment_writer.py"
+PIPELINE_METRICS = ROOT / "backend" / "app" / "processing" / "streaming" / "metrics.py"
 STREAMING_QUEUES = ROOT / "backend" / "app" / "processing" / "streaming" / "queues.py"
 PIPELINE_RAW = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw.py"
 PIPELINE_RAW_ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_encoder.py"
@@ -142,6 +146,12 @@ OBSOLETE_DECODE_QUEUE_REFERENCE_ROOTS = (
     BACKEND_TESTS,
     DOC_ROOT,
     README,
+)
+ALGORITHM_IMPLEMENTATIONS = (
+    ROOT / "backend" / "app" / "processing" / "anime_optimization.py",
+    ROOT / "backend" / "app" / "processing" / "frame_filters.py",
+    ROOT / "backend" / "app" / "processing" / "interpolation.py",
+    ROOT / "backend" / "app" / "processing" / "super_resolution.py",
 )
 SEGMENT_MANIFEST = ROOT / "backend" / "app" / "planning" / "manifest.py"
 SEGMENT_MANIFEST_STORE = ROOT / "backend" / "app" / "planning" / "manifest_store.py"
@@ -742,6 +752,35 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
     for path, pattern, label in checks:
         if re.search(pattern, _read(path), re.MULTILINE):
             issues.append(f"dead surface `{label}` remains in {_rel(path)}")
+
+
+def _check_round_26_dead_interface_boundary(issues: list[str]) -> None:
+    option_checks = (
+        (PRESET_ENHANCE_OPTIONS, r"^\s*export\s+function\s+toNumberOption\b", "enhance number converter"),
+        (PRESET_IO_OPTIONS, r"^\s*export\s+function\s+toNumberValue\b", "IO number converter"),
+    )
+    for path, pattern, label in option_checks:
+        if re.search(pattern, _read(path), re.MULTILINE):
+            issues.append(f"duplicate frontend option rule `{label}` remains in {_rel(path)}")
+
+    algorithm_pattern = r"^\s*def\s+(?:process_frame_batch|validate|get_description)\b"
+    if re.search(algorithm_pattern, _read(ALGORITHM_BASE), re.MULTILINE):
+        issues.append(f"test-only algorithm base API remains in {_rel(ALGORITHM_BASE)}")
+    for path in ALGORITHM_IMPLEMENTATIONS:
+        if re.search(algorithm_pattern, _read(path), re.MULTILINE):
+            issues.append(f"test-only concrete algorithm API remains in {_rel(path)}")
+
+    solver_pattern = r"^\s*def\s+(?:interpolate_multi|clear_cache)\b"
+    for path in RIFE_SOLVERS:
+        if re.search(solver_pattern, _read(path), re.MULTILINE):
+            issues.append(f"unused RIFE solver API remains in {_rel(path)}")
+
+    if re.search(r"^\s*def\s+compute_flow_list\b", _read(PADDLEGAN_MSVSR), re.MULTILINE):
+        issues.append(f"unused PaddleGAN flow helper remains in {_rel(PADDLEGAN_MSVSR)}")
+
+    metrics_pattern = r"^\s*def\s+(?:timed|record_stage_duration)\b|\bstage_durations\b"
+    if re.search(metrics_pattern, _read(PIPELINE_METRICS), re.MULTILINE):
+        issues.append(f"unused pipeline metrics timing API remains in {_rel(PIPELINE_METRICS)}")
 
 
 def _check_stage_worker_private_import_boundary(issues: list[str]) -> None:
@@ -2582,6 +2621,7 @@ def main() -> int:
         _check_ui_and_store_ipc_boundary(issues)
         _check_paddlegan_vsr_contract(issues)
         _check_dead_surface_boundary(issues)
+        _check_round_26_dead_interface_boundary(issues)
         _check_stage_worker_private_import_boundary(issues)
         _check_stage_worker_runtime_boundary(issues)
         _check_stage_worker_entrypoint_export_boundary(issues)

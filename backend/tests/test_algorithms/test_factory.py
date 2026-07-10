@@ -16,14 +16,8 @@ class MockAlgorithm(IAlgorithm):
     def process_frame(self, frame, **kwargs):
         return frame
 
-    def process_frame_batch(self, frames, **kwargs):
-        return frames
-
     def get_name(self):
         return "MockAlgorithm"
-
-    def validate(self):
-        return True
 
 
 class TestAlgorithmFactory:

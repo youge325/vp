@@ -13,9 +13,7 @@ from app.algorithms.tensor_backend import ITensorBackend
 
 
 SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
-    # Phase 8 — ``tensorBackends`` 显式声明该算法支持的 tensor 后端。
-    # 当前两个算法都只在 ONNX 路径下有完整实现(见下方 class doc),
-    # PyTorch / Paddle 路径返回 NotImplementedError。
+    # ``tensorBackends`` 显式声明每个算法支持的 tensor 后端。
     {
         "name": "placeholder",
         "family": "onnx_super_resolution",
@@ -50,12 +48,12 @@ SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
 
 class SuperResolutionAlgorithm(IAlgorithm):
     """
-    超分辨率算法。当前仅 ONNX 后端有完整实现。
+    超分辨率算法。
 
     - ONNX backend:运行 NCHW RGB float32 image-to-image 推理,按 scale_factor 验证输出尺寸。
-    - 其它 backend(pytorch / paddle / numpy):**未实现**。``validate()`` 返回 False,
-      ``process_frame`` 抛 ``NotImplementedError``;planning 层会通过
-      ``verify_super_resolution_backend`` 提前拦截无效组合。
+    - Paddle backend:通过 ``process_frame_sequence`` 运行 PaddleGAN VSR。
+    - 不支持的 backend/algorithm 组合由 planning 层提前拦截；不支持的逐帧路径抛出
+      ``NotImplementedError``。
 
     未来计划:Real-ESRGAN 等其它算法、多倍率(2x/4x)、Tensor 后端实现。
     """
@@ -147,10 +145,6 @@ class SuperResolutionAlgorithm(IAlgorithm):
             )
         return self._paddlegan_runner
 
-    def process_frame_batch(self, frames: list[Any], **kwargs) -> list[Any]:
-        """逐帧处理批量输入。"""
-        return [self.process_frame(frame, **kwargs) for frame in frames]
-
     def needs_frame_sequence(self) -> bool:
         return self._is_paddlegan_vsr()
 
@@ -168,26 +162,3 @@ class SuperResolutionAlgorithm(IAlgorithm):
         if self._backend_name() == "onnx":
             return f"超分辨率算法(ONNX {self._onnx_model or '未选择'})"
         return "超分辨率算法(占位)"
-
-    def validate(self) -> bool:
-        """验证超分算法配置。
-
-        Phase D.1.1 — 非 ONNX backend 不支持 SR,直接 fail validation。
-        正常路径应该在 ``planning.verify_super_resolution_backend``
-        提前拦截;此处是第二道防线,防止单独调用算法时静默 no-op。
-        """
-        if self._is_paddlegan_vsr():
-            return self._backend_name() == "paddle" and float(self._scale_factor) == 4.0
-        if self._backend_name() != "onnx":
-            return False
-        return bool(self._onnx_model)
-
-    def get_description(self) -> str:
-        if self._is_paddlegan_vsr():
-            return f"基于 PaddleGAN 的 4x 视频超分辨率处理({self._algorithm_name})。"
-        if self._backend_name() == "onnx":
-            return f"基于 ONNX Runtime 的 {self._scale_factor:g}x 视频超分辨率处理。"
-        return (
-            "视频超分辨率处理占位算法。当前实现：帧→Tensor→帧往返转换，"
-            "不做实际超分处理。未来将集成Real-ESRGAN等至少5种超分算法。"
-        )

@@ -184,23 +184,3 @@ class RIFEONNXSolver:
         output = _np_unpad_frame(output, padding, orig_h, orig_w)
 
         return np.clip(output, 0.0, 1.0).astype(np.float32)
-
-    def interpolate_multi(
-        self,
-        img0: np.ndarray,
-        img1: np.ndarray,
-        multi: int = 2,
-    ) -> list[np.ndarray]:
-        """多倍插值，生成 (multi-1) 个中间帧。"""
-        results = []
-        for j in range(1, multi):
-            t = j / multi
-            mid = self.interpolate(img0, img1, timestep=t)
-            results.append(mid)
-        return results
-
-    def clear_cache(self):
-        """清除网格缓存。"""
-        self._cached_size = None
-        self._backwarp_grid = None
-        self._flow_div = None

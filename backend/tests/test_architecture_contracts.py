@@ -3611,3 +3611,90 @@ def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:
     )
 
     assert any("metadata" in issue.lower() and "edvr" in issue for issue in issues), issues
+
+
+def test_round_26_duplicate_and_dead_interfaces_are_removed() -> None:
+    frontend_preset = REPO_ROOT / "frontend" / "src" / "services" / "preset"
+    algorithm_base = REPO_ROOT / "backend" / "app" / "algorithms" / "base.py"
+    algorithm_implementations = (
+        REPO_ROOT / "backend" / "app" / "processing" / "anime_optimization.py",
+        REPO_ROOT / "backend" / "app" / "processing" / "frame_filters.py",
+        REPO_ROOT / "backend" / "app" / "processing" / "interpolation.py",
+        REPO_ROOT / "backend" / "app" / "processing" / "super_resolution.py",
+    )
+    rife_solvers = (
+        REPO_ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife" / "solver.py",
+        REPO_ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife" / "onnx_solver.py",
+    )
+    msvsr = (
+        REPO_ROOT
+        / "backend"
+        / "app"
+        / "algorithms"
+        / "paddle"
+        / "paddlegan_vsr"
+        / "vendor"
+        / "ppgan"
+        / "models"
+        / "generators"
+        / "msvsr.py"
+    )
+    metrics = REPO_ROOT / "backend" / "app" / "processing" / "streaming" / "metrics.py"
+
+    assert "export function toNumberOption" not in (frontend_preset / "enhance-options.ts").read_text(encoding="utf-8")
+    assert "export function toNumberValue" not in (frontend_preset / "io-options.ts").read_text(encoding="utf-8")
+
+    dead_algorithm_methods = re.compile(r"^\s*def\s+(?:process_frame_batch|validate|get_description)\b", re.MULTILINE)
+    assert not dead_algorithm_methods.search(algorithm_base.read_text(encoding="utf-8"))
+    for path in algorithm_implementations:
+        assert not dead_algorithm_methods.search(path.read_text(encoding="utf-8")), path
+
+    dead_solver_methods = re.compile(r"^\s*def\s+(?:interpolate_multi|clear_cache)\b", re.MULTILINE)
+    for path in rife_solvers:
+        assert not dead_solver_methods.search(path.read_text(encoding="utf-8")), path
+
+    assert "def compute_flow_list" not in msvsr.read_text(encoding="utf-8")
+    metrics_text = metrics.read_text(encoding="utf-8")
+    assert "def timed" not in metrics_text
+    assert "def record_stage_duration" not in metrics_text
+    assert "stage_durations" not in metrics_text
+    assert '"stageDurationsSeconds": {}' in metrics_text
+
+
+def test_round_26_dead_interface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_enhance_options = tmp_path / "enhance-options.ts"
+    fake_io_options = tmp_path / "io-options.ts"
+    fake_algorithm_base = tmp_path / "base.py"
+    fake_algorithm_impl = tmp_path / "algorithm.py"
+    fake_rife_solver = tmp_path / "solver.py"
+    fake_msvsr = tmp_path / "msvsr.py"
+    fake_metrics = tmp_path / "metrics.py"
+
+    fake_enhance_options.write_text(
+        "export function toNumberOption(value) { return Number(value) }\n", encoding="utf-8"
+    )
+    fake_io_options.write_text("export function toNumberValue(value) { return Number(value) }\n", encoding="utf-8")
+    fake_algorithm_base.write_text("def process_frame_batch(self, frames):\n    return frames\n", encoding="utf-8")
+    fake_algorithm_impl.write_text("def validate(self):\n    return True\n", encoding="utf-8")
+    fake_rife_solver.write_text("def interpolate_multi(self):\n    return []\n", encoding="utf-8")
+    fake_msvsr.write_text("def compute_flow_list(self):\n    return []\n", encoding="utf-8")
+    fake_metrics.write_text(
+        "stage_durations = {}\n"
+        "def timed(self, stage):\n    pass\n"
+        "def record_stage_duration(self, stage, seconds):\n    pass\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(module, "PRESET_ENHANCE_OPTIONS", fake_enhance_options, raising=False)
+    monkeypatch.setattr(module, "PRESET_IO_OPTIONS", fake_io_options, raising=False)
+    monkeypatch.setattr(module, "ALGORITHM_BASE", fake_algorithm_base, raising=False)
+    monkeypatch.setattr(module, "ALGORITHM_IMPLEMENTATIONS", (fake_algorithm_impl,), raising=False)
+    monkeypatch.setattr(module, "RIFE_SOLVERS", (fake_rife_solver,), raising=False)
+    monkeypatch.setattr(module, "PADDLEGAN_MSVSR", fake_msvsr, raising=False)
+    monkeypatch.setattr(module, "PIPELINE_METRICS", fake_metrics, raising=False)
+    issues: list[str] = []
+
+    getattr(module, "_check_round_26_dead_interface_boundary", lambda _issues: None)(issues)
+
+    assert len(issues) == 7, issues

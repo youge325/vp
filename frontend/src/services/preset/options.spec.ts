@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { seedProfileOptions, updateProfileOption } from './options'
+import { seedProfileOptions, toNumberValue, updateProfileOption } from './options'
 import type { CapabilityOptionSpec } from '@/types/domain/capability'
 
 const option = (
@@ -61,5 +61,11 @@ describe('preset option rules', () => {
 
     expect(next).toEqual({ preset: 'slow' })
     expect(previous).toEqual({ preset: 'medium' })
+  })
+
+  it('coerces select and numeric input values through one shared rule', () => {
+    expect(toNumberValue('24')).toBe(24)
+    expect(toNumberValue(1000)).toBe(1000)
+    expect(Number.isNaN(toNumberValue(undefined))).toBe(true)
   })
 })

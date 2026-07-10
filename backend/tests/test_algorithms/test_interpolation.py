@@ -43,13 +43,6 @@ class TestFrameInterpolationAlgorithm:
         except RuntimeError:
             pytest.skip("Tensor 后端不可用")
 
-    def test_validate(self):
-        try:
-            algo = AlgorithmFactory.create("frame_interpolation", tensor_backend_name="pytorch")
-            assert algo.validate() is True
-        except RuntimeError:
-            pytest.skip("Tensor 后端不可用")
-
     def test_process_frame_returns_input(self):
         """单帧处理模式应直接返回输入帧。"""
         try:
@@ -59,20 +52,6 @@ class TestFrameInterpolationAlgorithm:
             frame = torch.rand(1, 3, 64, 64)
             result = algo.process_frame(frame)
             assert result is frame
-        except RuntimeError:
-            pytest.skip("Tensor 后端不可用")
-
-    def test_get_description(self):
-        """描述信息应包含 RIFE 和倍率。"""
-        try:
-            algo = AlgorithmFactory.create(
-                "frame_interpolation",
-                tensor_backend_name="pytorch",
-                multi=4,
-            )
-            desc = algo.get_description()
-            assert "RIFE" in desc
-            assert "4x" in desc
         except RuntimeError:
             pytest.skip("Tensor 后端不可用")
 

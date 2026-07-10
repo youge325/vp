@@ -205,16 +205,6 @@ class TestRIFEONNXSolver:
         assert mid.min() >= 0.0
         assert mid.max() <= 1.0
 
-    def test_interpolate_multi(self, solver):
-        """多倍插值返回正确数量的中间帧。"""
-        h, w = 120, 160
-        img0 = np.random.rand(1, 3, h, w).astype(np.float32)
-        img1 = np.random.rand(1, 3, h, w).astype(np.float32)
-        mids = solver.interpolate_multi(img0, img1, multi=4)
-        assert len(mids) == 3
-        for mid in mids:
-            assert mid.shape == (1, 3, h, w)
-
 
 @pytest.mark.skipif(not _is_onnxruntime_available(), reason="onnxruntime 未安装")
 @pytest.mark.skipif(not _weight_exists("4.25"), reason="RIFE v4.25 权重不存在")
