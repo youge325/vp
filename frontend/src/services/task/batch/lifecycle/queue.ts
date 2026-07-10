@@ -17,10 +17,7 @@ import { TASK_ERROR_CODES } from '@/types/protocol/errors'
 import { createIdleTaskState } from '../../events'
 import { classifyResumeConflict } from '../../resume-classifier'
 
-import type { createCommonHelpers } from './common'
 import type { BatchLifecycleDeps } from './types'
-
-type CommonHelpers = ReturnType<typeof createCommonHelpers>
 
 interface QueueInternalRefs {
   handleErrored: (error: ReturnType<typeof normalizeError>) => Promise<void>
@@ -34,7 +31,6 @@ interface QueueOps {
 
 export function createQueueOps(
   deps: BatchLifecycleDeps,
-  _helpers: CommonHelpers,
   internal: QueueInternalRefs,
 ): QueueOps {
   function resetBatchRunState(ids: string[]): void {

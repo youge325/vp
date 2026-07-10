@@ -33,6 +33,7 @@ DLL_PATHS = ROOT / "backend" / "app" / "utils" / "dll_paths.py"
 BACKEND_MODEL_METRICS = ROOT / "backend" / "app" / "utils" / "model_metrics.py"
 BACKEND_ONNX_MODELS = ROOT / "backend" / "app" / "utils" / "onnx_models.py"
 BACKEND_OPENCV_RUNTIME = ROOT / "backend" / "app" / "utils" / "opencv_runtime.py"
+ALGORITHM_FACTORY = ROOT / "backend" / "app" / "algorithms" / "factory.py"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
@@ -41,6 +42,7 @@ STAGE_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_r
 STAGE_WORKER_IO = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_io.py"
 STAGE_WORKER_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_runtime.py"
 STAGE_FILE_CHUNK_ENCODING = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_encoding.py"
+FRAME_PAYLOAD = ROOT / "backend" / "app" / "processing" / "streaming" / "frame_payload.py"
 WORKER_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_pipeline.py"
 WORKER_CHAIN_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_chain_runtime.py"
 WORKER_PROCESSES = ROOT / "backend" / "app" / "processing" / "streaming" / "worker_processes.py"
@@ -157,6 +159,8 @@ ENHANCE_LENS = FRONTEND_SRC / "composables" / "forms" / "enhance-lens.ts"
 ENHANCE_FIELD_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-field-bindings.ts"
 ENHANCE_OPTION_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-option-bindings.ts"
 FRONTEND_BATCH_LIFECYCLE_INDEX = FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "index.ts"
+FRONTEND_BATCH_QUEUE = FRONTEND_SRC / "services" / "task" / "batch" / "lifecycle" / "queue.ts"
+FRONTEND_BATCH_RUNNER = FRONTEND_SRC / "services" / "task" / "batch-runner.ts"
 DECODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-form-bindings.ts"
 ENCODE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "encode-form-bindings.ts"
 DECODE_PROFILE_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "decode-profile-bindings.ts"
@@ -240,7 +244,6 @@ FRONTEND_UTILITY_INTERNAL_TYPE_FILES = {
         "BatchPreflightInput",
         "BatchPreflightVerdict",
     ),
-    FRONTEND_SRC / "services" / "task" / "batch-runner.ts": ("BatchRunnerDeps",),
     FRONTEND_SRC / "services" / "task" / "batch" / "conflict.ts": (
         "ConflictResolverDeps",
         "ConflictResolver",
@@ -365,14 +368,6 @@ def _collect_frontend_invoke_commands() -> set[str]:
     return commands
 
 
-def _collect_typed_ipc_contract_commands() -> set[str]:
-    text = _read(IPC_CONTRACT)
-    match = re.search(r"IPC_COMMAND_NAMES\s*=\s*\[(?P<body>.*?)\]\s*as\s+const", text, re.DOTALL)
-    if not match:
-        raise RuntimeError("could not parse IPC_COMMAND_NAMES in frontend IPC contract")
-    return set(re.findall(r"['\"]([a-z_]+)['\"]", match.group("body")))
-
-
 def _collect_rust_command_args() -> dict[str, set[str]]:
     command_args: dict[str, set[str]] = {}
     command_attr = re.compile(r"^\s*#\s*\[\s*tauri::command\s*\]", re.MULTILINE)
@@ -437,7 +432,7 @@ def _collect_typed_ipc_contract_args() -> dict[str, set[str]]:
 def _check_frontend_ipc_contract_surface_boundary(issues: list[str]) -> None:
     text = _read(IPC_CONTRACT)
     forbidden_patterns = {
-        "IPC_COMMAND_NAMES": r"export\s+const\s+IPC_COMMAND_NAMES\b",
+        "IPC_COMMAND_NAMES command name list": r"\b(?:export\s+)?const\s+IPC_COMMAND_NAMES\b",
         "TaskControlKind": r"export\s+type\s+TaskControlKind\b",
         "IpcCommandArgs": r"export\s+interface\s+IpcCommandArgs\b",
         "IpcCommandResult": r"export\s+interface\s+IpcCommandResult\b",
@@ -446,15 +441,18 @@ def _check_frontend_ipc_contract_surface_boundary(issues: list[str]) -> None:
         if re.search(pattern, text):
             issues.append(f"internal IPC contract surface `{label}` exported from {_rel(IPC_CONTRACT)}")
 
+    if not re.search(r"\bexport\s+type\s+IpcCommand\s*=\s*keyof\s+IpcCommandArgs\b", text):
+        issues.append(f"IPC keyof command source is missing from {_rel(IPC_CONTRACT)}")
+
 
 def _check_command_surface(issues: list[str]) -> None:
     manifest = _collect_manifest_commands()
     permissions = _collect_permission_commands()
     invokes = _collect_frontend_invoke_commands()
-    contract = _collect_typed_ipc_contract_commands()
     rust_args = _collect_rust_command_args()
     rust_commands = set(rust_args)
     contract_args = _collect_typed_ipc_contract_args()
+    contract = set(contract_args)
 
     expected_permissions = {_allow_token(command) for command in manifest}
     raw_permission_tokens = set(re.findall(r'"(allow-[a-z-]+)"', _read(DEFAULT_PERMISSIONS)))
@@ -872,6 +870,32 @@ def _check_backend_opencv_runtime_dead_helper_boundary(issues: list[str]) -> Non
             issues.append(f"OpenCV runtime dead helper `{label}` remains in {_rel(BACKEND_OPENCV_RUNTIME)}")
 
 
+def _check_backend_dead_algorithm_helper_boundary(issues: list[str]) -> None:
+    checks = {
+        FRAME_PAYLOAD: ("FramePayload", {"has_tensor_for", "_ensure_backend_matches"}, {"_backend_label"}),
+        ALGORITHM_FACTORY: ("AlgorithmFactory", {"get_available_algorithms"}, set()),
+    }
+    for path, (class_name, class_methods, module_functions) in checks.items():
+        tree = ast.parse(_read(path), filename=str(path))
+        class_node = next(
+            (node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name),
+            None,
+        )
+        if class_node is None:
+            issues.append(f"missing algorithm helper owner `{class_name}` in {_rel(path)}")
+            continue
+        defined_methods = {
+            node.name for node in class_node.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        defined_functions = {
+            node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        for name in sorted(class_methods & defined_methods):
+            issues.append(f"dead algorithm helper `{name}` remains in {_rel(path)}")
+        for name in sorted(module_functions & defined_functions):
+            issues.append(f"dead algorithm helper `{name}` remains in {_rel(path)}")
+
+
 def _check_dead_type_alias_boundary(issues: list[str]) -> None:
     checks = (
         (BACKEND_ONNX_MODELS, "OnnxEngine", r"^\s*OnnxEngine\s*="),
@@ -1154,6 +1178,16 @@ def _check_frontend_batch_lifecycle_facade_boundary(issues: list[str]) -> None:
     text = _read(FRONTEND_BATCH_LIFECYCLE_INDEX)
     if re.search(r"\bexport\s+type\s*\{[^}]*\bBatchLifecycle(?:Deps)?\b", text, re.DOTALL):
         issues.append(f"batch lifecycle facade type re-export remains in {_rel(FRONTEND_BATCH_LIFECYCLE_INDEX)}")
+
+
+def _check_frontend_batch_runner_dead_boundary(issues: list[str]) -> None:
+    runner_text = _read(FRONTEND_BATCH_RUNNER)
+    if re.search(r"^\s*interface\s+BatchRunnerDeps\b", runner_text, re.MULTILINE):
+        issues.append(f"duplicate BatchRunnerDeps remains in {_rel(FRONTEND_BATCH_RUNNER)}")
+
+    queue_text = _read(FRONTEND_BATCH_QUEUE)
+    if re.search(r"\b_helpers\s*:\s*CommonHelpers\b", queue_text):
+        issues.append(f"unused queue helpers dependency remains in {_rel(FRONTEND_BATCH_QUEUE)}")
 
 
 def _check_frontend_model_metrics_barrel_boundary(issues: list[str]) -> None:
@@ -2422,6 +2456,7 @@ def main() -> int:
         _check_dll_paths_test_helper_boundary(issues)
         _check_backend_model_metrics_dead_helper_boundary(issues)
         _check_backend_opencv_runtime_dead_helper_boundary(issues)
+        _check_backend_dead_algorithm_helper_boundary(issues)
         _check_dead_type_alias_boundary(issues)
         _check_frontend_task_event_reducer_payload_boundary(issues)
         _check_cli_process_execution_dead_config_unpack_boundary(issues)
@@ -2463,6 +2498,7 @@ def main() -> int:
         _check_frontend_form_binding_param_export_boundary(issues)
         _check_frontend_utility_internal_type_boundary(issues)
         _check_frontend_batch_lifecycle_facade_boundary(issues)
+        _check_frontend_batch_runner_dead_boundary(issues)
         _check_frontend_io_profile_state_boundary(issues)
         _check_frontend_decode_hardware_binding_boundary(issues)
         _check_frontend_defaults_workflow_boundary(issues)

@@ -49,7 +49,7 @@ Tauri v2 的权限系统要求每个 command 在 ACL 中显式声明。权限文
 [`frontend/src/lib/ipc/client.ts`](../frontend/src/lib/ipc/client.ts)：
 
 ```typescript
-export type IpcCommand = typeof IPC_COMMAND_NAMES[number]
+export type IpcCommand = keyof IpcCommandArgs
 
 export class InvokeError extends Error {
   readonly code: string

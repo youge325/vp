@@ -68,31 +68,5 @@ class FramePayload:
             metrics.record_transfer("d2h", seconds=elapsed)
         return self._numpy_frame
 
-    def has_tensor_for(self, backend: Any) -> bool:
-        """Return whether a tensor for *backend* is already cached."""
-        if self._tensor is None:
-            return False
-        return self._tensor_backend is backend
-
-    def _ensure_backend_matches(self, backend: Any) -> None:
-        if self._tensor_backend is backend:
-            return
-        raise RuntimeError(
-            "FramePayload tensor backend mismatch: cached tensor belongs to "
-            f"{_backend_label(self._tensor_backend)}, requested {_backend_label(backend)}."
-        )
-
-
-def _backend_label(backend: Any) -> str:
-    if backend is None:
-        return "<none>"
-    get_name = getattr(backend, "get_name", None)
-    if callable(get_name):
-        try:
-            return str(get_name())
-        except Exception:
-            pass
-    return type(backend).__name__
-
 
 __all__ = ["FramePayload"]

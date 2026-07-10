@@ -109,7 +109,7 @@ graph TB
 [`frontend/src/lib/ipc/client.ts`](../frontend/src/lib/ipc/client.ts) 封装所有 Tauri `invoke()` 调用：
 
 ```typescript
-export type IpcCommand = typeof IPC_COMMAND_NAMES[number]
+export type IpcCommand = keyof IpcCommandArgs
 
 export class InvokeError extends Error {
   readonly code: string

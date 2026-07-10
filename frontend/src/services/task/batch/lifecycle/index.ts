@@ -30,7 +30,7 @@ export function createBatchLifecycle(deps: BatchLifecycleDeps): BatchLifecycle {
   let finalizeOps: ReturnType<typeof createFinalizeOps>
   let queueOps: ReturnType<typeof createQueueOps>
 
-  queueOps = createQueueOps(deps, helpers, {
+  queueOps = createQueueOps(deps, {
     handleErrored: (error) => finalizeOps.handleErrored(error),
   })
 
