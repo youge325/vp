@@ -79,9 +79,6 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
 }
 
 
-DISABLED_PADDLEGAN_VSR_MODELS: dict[str, tuple[str, ...]] = {}
-
-
 def fixed_weight_root() -> Path:
     """Return the hard-coded repository-local PaddleGAN VSR weight root."""
     return Path(settings.backend_root) / "models" / "super_resolution" / "paddlegan"

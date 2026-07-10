@@ -115,22 +115,8 @@ def verify_super_resolution_backend(
         super_resolution.get("tensorBackend") or super_resolution.get("tensor_backend") or tensor_backend_name
     )
 
-    from app.algorithms.paddle.paddlegan_vsr.weights import DISABLED_PADDLEGAN_VSR_MODELS, PADDLEGAN_VSR_SPECS
+    from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
 
-    if algorithm in DISABLED_PADDLEGAN_VSR_MODELS:
-        missing = DISABLED_PADDLEGAN_VSR_MODELS[algorithm]
-        raise_error(
-            TaskErrorCode.INVALID_CONFIG,
-            (
-                f"PaddleGAN VSR model '{algorithm}' is unavailable because required auxiliary "
-                f"weights are not available: {', '.join(missing)}."
-            ),
-            details={
-                "algorithm": algorithm,
-                "missingAuxiliaryWeights": list(missing),
-                "available": sorted(PADDLEGAN_VSR_SPECS),
-            },
-        )
     if algorithm in PADDLEGAN_VSR_SPECS:
         scale_factor = float(super_resolution.get("scaleFactor") or super_resolution.get("scale_factor") or 1.0)
         if scale_factor != 4.0:

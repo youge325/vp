@@ -27,6 +27,7 @@ IPC_CONTRACT = ROOT / "frontend" / "src" / "lib" / "ipc" / "contract.ts"
 FRONTEND_IPC_INDEX = ROOT / "frontend" / "src" / "lib" / "ipc" / "index.ts"
 TAURI_SRC = ROOT / "frontend" / "src-tauri" / "src"
 FRONTEND_SRC = ROOT / "frontend" / "src"
+FRONTEND_PROTOCOL_CONTRACT_CHECK = FRONTEND_SRC / "types" / "protocol" / "_contract_check.ts"
 DOC_ROOT = ROOT / "docs"
 README = ROOT / "README.md"
 DLL_PATHS = ROOT / "backend" / "app" / "utils" / "dll_paths.py"
@@ -35,6 +36,9 @@ BACKEND_ONNX_MODELS = ROOT / "backend" / "app" / "utils" / "onnx_models.py"
 BACKEND_OPENCV_RUNTIME = ROOT / "backend" / "app" / "utils" / "opencv_runtime.py"
 ALGORITHM_FACTORY = ROOT / "backend" / "app" / "algorithms" / "factory.py"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
+PADDLEGAN_VSR_PACKAGE = PADDLEGAN_WEIGHTS.parent / "__init__.py"
+BENCHMARK_PACKAGE = ROOT / "backend" / "app" / "benchmark" / "__init__.py"
+WORKFLOW_VALIDATION = ROOT / "backend" / "app" / "planning" / "workflow_validation.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
 STAGE_WORKER_FACTORY = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_factory.py"
@@ -550,10 +554,6 @@ def _collect_backend_paddlegan_enabled_models() -> set[str]:
     return _collect_python_dict_keys(_read(PADDLEGAN_WEIGHTS), "PADDLEGAN_VSR_SPECS")
 
 
-def _collect_backend_paddlegan_disabled_models() -> set[str]:
-    return _collect_python_dict_keys(_read(PADDLEGAN_WEIGHTS), "DISABLED_PADDLEGAN_VSR_MODELS")
-
-
 def _collect_backend_algorithm_metadata() -> dict[str, dict[str, object]]:
     backend_dir = ROOT / "backend"
     inserted = False
@@ -582,7 +582,6 @@ def _collect_backend_algorithm_metadata() -> dict[str, dict[str, object]]:
 
 def _diff_paddlegan_vsr_contract(
     backend_specs: set[str],
-    backend_disabled: set[str],
     algorithm_metadata: dict[str, dict[str, object]],
 ) -> list[str]:
     issues: list[str] = []
@@ -596,16 +595,6 @@ def _diff_paddlegan_vsr_contract(
         issues.append(
             "PaddleGAN VSR backend specs and algorithm metadata drift: "
             f"missing-metadata={sorted(missing_metadata)}, extra-metadata={sorted(extra_metadata)}"
-        )
-
-    enabled_disabled_overlap = backend_specs & backend_disabled
-    if enabled_disabled_overlap:
-        issues.append(f"PaddleGAN VSR models cannot be both enabled and disabled: {sorted(enabled_disabled_overlap)}")
-
-    metadata_disabled_overlap = metadata_models & backend_disabled
-    if metadata_disabled_overlap:
-        issues.append(
-            f"Algorithm metadata re-exposes disabled PaddleGAN VSR models: {sorted(metadata_disabled_overlap)}"
         )
 
     for model_id in sorted(backend_specs & metadata_models):
@@ -628,10 +617,26 @@ def _check_paddlegan_vsr_contract(issues: list[str]) -> None:
     issues.extend(
         _diff_paddlegan_vsr_contract(
             _collect_backend_paddlegan_enabled_models(),
-            _collect_backend_paddlegan_disabled_models(),
             _collect_backend_algorithm_metadata(),
         )
     )
+
+
+def _check_dead_surface_boundary(issues: list[str]) -> None:
+    checks = (
+        (
+            FRONTEND_PROTOCOL_CONTRACT_CHECK,
+            r"^\s*export\s+const\s+_[A-Z0-9_]+_CONTRACT\b",
+            "frontend compile-only contract export",
+        ),
+        (PADDLEGAN_WEIGHTS, r"\bDISABLED_PADDLEGAN_VSR_MODELS\b", "PaddleGAN disabled model registry"),
+        (WORKFLOW_VALIDATION, r"\bDISABLED_PADDLEGAN_VSR_MODELS\b", "PaddleGAN disabled validation branch"),
+        (BENCHMARK_PACKAGE, r"^\s*from\s+app\.benchmark\b", "benchmark package re-export"),
+        (PADDLEGAN_VSR_PACKAGE, r"\bPADDLEGAN_VSR_SPECS\b", "PaddleGAN package re-export"),
+    )
+    for path, pattern, label in checks:
+        if re.search(pattern, _read(path), re.MULTILINE):
+            issues.append(f"dead surface `{label}` remains in {_rel(path)}")
 
 
 def _check_stage_worker_private_import_boundary(issues: list[str]) -> None:
@@ -2468,6 +2473,7 @@ def main() -> int:
         _check_generated_type_import_boundary(issues)
         _check_ui_and_store_ipc_boundary(issues)
         _check_paddlegan_vsr_contract(issues)
+        _check_dead_surface_boundary(issues)
         _check_stage_worker_private_import_boundary(issues)
         _check_stage_worker_runtime_boundary(issues)
         _check_stage_worker_entrypoint_export_boundary(issues)

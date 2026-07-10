@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -27,42 +28,74 @@ def _load_module():
     return module
 
 
+def test_frontend_compile_only_contracts_are_not_exported() -> None:
+    contract_check = REPO_ROOT / "frontend" / "src" / "types" / "protocol" / "_contract_check.ts"
+    text = contract_check.read_text(encoding="utf-8")
+
+    assert not re.search(r"^\s*export\s+const\s+_[A-Z0-9_]+_CONTRACT\b", text, re.MULTILINE)
+
+
+def test_paddlegan_disabled_model_registry_is_removed() -> None:
+    weights = REPO_ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
+    validation = REPO_ROOT / "backend" / "app" / "planning" / "workflow_validation.py"
+
+    assert "DISABLED_PADDLEGAN_VSR_MODELS" not in weights.read_text(encoding="utf-8")
+    assert "DISABLED_PADDLEGAN_VSR_MODELS" not in validation.read_text(encoding="utf-8")
+
+
+def test_package_initializers_do_not_reexport_owned_symbols() -> None:
+    benchmark_init = REPO_ROOT / "backend" / "app" / "benchmark" / "__init__.py"
+    paddlegan_init = REPO_ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "__init__.py"
+
+    assert "from app.benchmark" not in benchmark_init.read_text(encoding="utf-8")
+    assert "PADDLEGAN_VSR_SPECS" not in paddlegan_init.read_text(encoding="utf-8")
+
+
+def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_contract_check = tmp_path / "_contract_check.ts"
+    fake_weights = tmp_path / "weights.py"
+    fake_validation = tmp_path / "workflow_validation.py"
+    fake_benchmark_init = tmp_path / "benchmark_init.py"
+    fake_paddlegan_init = tmp_path / "paddlegan_init.py"
+    fake_contract_check.write_text("export const _TASK_REQUEST_CONTRACT = {}\n", encoding="utf-8")
+    fake_weights.write_text("DISABLED_PADDLEGAN_VSR_MODELS = {}\n", encoding="utf-8")
+    fake_validation.write_text("if algorithm in DISABLED_PADDLEGAN_VSR_MODELS:\n    pass\n", encoding="utf-8")
+    fake_benchmark_init.write_text("from app.benchmark.runner import run_benchmark\n", encoding="utf-8")
+    fake_paddlegan_init.write_text(
+        "from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "FRONTEND_PROTOCOL_CONTRACT_CHECK", fake_contract_check, raising=False)
+    monkeypatch.setattr(module, "PADDLEGAN_WEIGHTS", fake_weights, raising=False)
+    monkeypatch.setattr(module, "WORKFLOW_VALIDATION", fake_validation, raising=False)
+    monkeypatch.setattr(module, "BENCHMARK_PACKAGE", fake_benchmark_init, raising=False)
+    monkeypatch.setattr(module, "PADDLEGAN_VSR_PACKAGE", fake_paddlegan_init, raising=False)
+    issues: list[str] = []
+
+    getattr(module, "_check_dead_surface_boundary", lambda _issues: None)(issues)
+
+    assert len(issues) == 5, issues
+
+
 def test_paddlegan_vsr_contract_matches_current_repo() -> None:
     module = _load_module()
     backend_specs = module._collect_backend_paddlegan_enabled_models()
-    backend_disabled = module._collect_backend_paddlegan_disabled_models()
     algorithm_metadata = module._collect_backend_algorithm_metadata()
 
-    issues = module._diff_paddlegan_vsr_contract(backend_specs, backend_disabled, algorithm_metadata)
+    issues = module._diff_paddlegan_vsr_contract(backend_specs, algorithm_metadata)
 
     assert backend_specs == ALL_PADDLEGAN_VSR_MODELS
-    assert backend_disabled == set()
     assert {
         name for name, metadata in algorithm_metadata.items() if metadata["family"] == "paddlegan_vsr"
     } == backend_specs
     assert issues == []
 
 
-def test_paddlegan_vsr_contract_flags_frontend_reexposing_disabled_model() -> None:
-    module = _load_module()
-    issues = module._diff_paddlegan_vsr_contract(
-        backend_specs={"ppmsvsr", "edvr"},
-        backend_disabled={"basicvsr"},
-        algorithm_metadata={
-            "ppmsvsr": {"family": "paddlegan_vsr", "fixedScaleFactor": 4, "inputFrameMode": "editable_chunk"},
-            "edvr": {"family": "paddlegan_vsr", "fixedScaleFactor": 4, "inputFrameMode": "fixed_window"},
-            "basicvsr": {"family": "paddlegan_vsr", "fixedScaleFactor": 4, "inputFrameMode": "editable_chunk"},
-        },
-    )
-
-    assert any("disabled" in issue.lower() and "basicvsr" in issue for issue in issues), issues
-
-
 def test_paddlegan_vsr_contract_flags_missing_metadata() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(
         backend_specs={"ppmsvsr", "edvr"},
-        backend_disabled=set(),
         algorithm_metadata={
             "ppmsvsr": {"family": "paddlegan_vsr", "fixedScaleFactor": 4, "inputFrameMode": "editable_chunk"},
         },
@@ -75,7 +108,6 @@ def test_paddlegan_vsr_contract_flags_wrong_metadata_shape() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(
         backend_specs={"edvr"},
-        backend_disabled=set(),
         algorithm_metadata={
             "edvr": {"family": "paddlegan_vsr", "fixedScaleFactor": 2, "inputFrameMode": "editable_chunk"},
         },
@@ -3233,7 +3265,6 @@ def test_paddlegan_vsr_contract_flags_backend_frontend_drift() -> None:
     module = _load_module()
     issues = module._diff_paddlegan_vsr_contract(
         backend_specs={"ppmsvsr", "edvr"},
-        backend_disabled=set(),
         algorithm_metadata={
             "ppmsvsr": {"family": "paddlegan_vsr", "fixedScaleFactor": 4, "inputFrameMode": "editable_chunk"},
         },

@@ -10,7 +10,6 @@ def test_paddlegan_weight_paths_are_fixed_under_backend_models(monkeypatch):
     monkeypatch.setenv("VP_RIFE_MODEL_DIR", "D:/should/not/be/used")
 
     from app.algorithms.paddle.paddlegan_vsr.weights import (
-        DISABLED_PADDLEGAN_VSR_MODELS,
         PADDLEGAN_VSR_SPECS,
         resolve_weight_path,
     )
@@ -29,8 +28,6 @@ def test_paddlegan_weight_paths_are_fixed_under_backend_models(monkeypatch):
         "iconvsr",
         "basicvsr-plus-plus",
     }
-    assert DISABLED_PADDLEGAN_VSR_MODELS == {}
-    assert not set(PADDLEGAN_VSR_SPECS) & set(DISABLED_PADDLEGAN_VSR_MODELS)
 
 
 def test_ensure_weight_file_reports_missing_even_when_auto_download_requested(tmp_path, monkeypatch):
