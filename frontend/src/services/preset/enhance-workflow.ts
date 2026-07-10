@@ -9,13 +9,6 @@ import {
   resolveSuperResolutionScale,
 } from './enhance-workflow-selection'
 
-export {
-  applyInterpolationAlgorithmSelectionDefaults as applyInterpolationAlgorithmSelection,
-  applyInterpolationBackendSelectionDefaults as applyInterpolationBackendSelection,
-  applySuperResolutionAlgorithmSelectionDefaults as applySuperResolutionAlgorithmSelection,
-  applySuperResolutionBackendSelectionDefaults as applySuperResolutionBackendSelection,
-} from './enhance-workflow-selection'
-
 export function applyInterpolationEnabled(
   config: WorkflowConfig,
   value: boolean,

@@ -1121,6 +1121,12 @@ def _check_frontend_enhance_workflow_selection_boundary(issues: list[str]) -> No
             issues.append(
                 f"enhance workflow selection pass-through `{export_name}` remains in {_rel(ENHANCE_WORKFLOW)}"
             )
+    if re.search(
+        r"\bapply(?:Interpolation|SuperResolution)(?:Algorithm|Backend)SelectionDefaults\s+as\s+"
+        r"apply(?:Interpolation|SuperResolution)(?:Algorithm|Backend)Selection\b",
+        text,
+    ):
+        issues.append(f"enhance workflow selection alias re-export remains in {_rel(ENHANCE_WORKFLOW)}")
 
 
 def _check_frontend_enhance_workflow_lookup_boundary(issues: list[str]) -> None:

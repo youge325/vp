@@ -753,6 +753,23 @@ def test_frontend_enhance_workflow_selection_boundary_flags_pass_through_wrapper
     assert any("selection pass-through" in issue for issue in issues), issues
 
 
+def test_frontend_enhance_workflow_selection_boundary_flags_alias_reexports(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_workflow = tmp_path / "enhance-workflow.ts"
+    fake_workflow.write_text(
+        "export {\n"
+        "  applyInterpolationBackendSelectionDefaults as applyInterpolationBackendSelection,\n"
+        "} from './enhance-workflow-selection'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_WORKFLOW", fake_workflow)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_workflow_selection_boundary(issues)
+
+    assert any("selection alias re-export" in issue for issue in issues), issues
+
+
 def test_frontend_enhance_workflow_lookup_boundary_flags_local_lookup_helpers(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_selection = tmp_path / "enhance-workflow-selection.ts"
