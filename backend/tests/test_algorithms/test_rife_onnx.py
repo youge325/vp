@@ -101,16 +101,16 @@ class TestRIFEONNXExport:
         import torch
         import onnxruntime as ort
 
-        from app.algorithms.pytorch.rife._model_spec import MODEL_CONFIGS
+        from app.algorithms.pytorch.rife._model_spec import get_spec
         from app.algorithms.pytorch.rife.model_loader import create_backwarp_grid, create_flow_div, load_rife_model
 
         # 加载 PyTorch 模型
-        flownet, encode, config = load_rife_model(model_version="4.25", device="cpu", fp16=False)
+        flownet, encode, _ = load_rife_model(model_version="4.25", device="cpu", fp16=False)
         flownet.eval()
 
         # 使用非 256 的原始尺寸，验证 padding 后 ONNX 与 PyTorch 一致
         orig_h, orig_w = 240, 360
-        modulo = MODEL_CONFIGS["4.25"]["modulo"]
+        modulo = get_spec("4.25").modulo
         pad_h = ((orig_h - 1) // modulo + 1) * modulo
         pad_w = ((orig_w - 1) // modulo + 1) * modulo
         h, w = pad_h, pad_w
@@ -145,10 +145,10 @@ class TestRIFEONNXExport:
     def test_onnx_dynamic_shape(self, onnx_path):
         """ONNX 模型支持动态尺寸（使用 modulo 倍数尺寸验证）。"""
         import onnxruntime as ort
-        from app.algorithms.pytorch.rife._model_spec import MODEL_CONFIGS
+        from app.algorithms.pytorch.rife._model_spec import get_spec
 
         session = ort.InferenceSession(onnx_path)
-        modulo = MODEL_CONFIGS["4.25"]["modulo"]
+        modulo = get_spec("4.25").modulo
         # 使用非 256 但为 modulo 倍数的尺寸
         h, w = modulo * 3, modulo * 5  # 192 x 320
         img0 = np.random.rand(1, 3, h, w).astype(np.float32)

@@ -30,8 +30,16 @@ TAURI_SRC = ROOT / "frontend" / "src-tauri" / "src"
 FRONTEND_SRC = ROOT / "frontend" / "src"
 FRONTEND_IPC_CLIENT = FRONTEND_SRC / "lib" / "ipc" / "client.ts"
 FRONTEND_PROTOCOL_CONTRACT_CHECK = FRONTEND_SRC / "types" / "protocol" / "_contract_check.ts"
+FRONTEND_FINITE_NUMBER_CONSUMERS = (
+    FRONTEND_SRC / "services" / "model-metric-format.ts",
+    FRONTEND_SRC / "services" / "model-runtime-estimates.ts",
+)
 DOC_ROOT = ROOT / "docs"
 README = ROOT / "README.md"
+PYDANTIC_CAMEL_MODELS = (
+    ROOT / "backend" / "app" / "models" / "__init__.py",
+    ROOT / "backend" / "app" / "protocol" / "payloads.py",
+)
 DLL_PATHS = ROOT / "backend" / "app" / "utils" / "dll_paths.py"
 BACKEND_MODEL_METRICS = ROOT / "backend" / "app" / "utils" / "model_metrics.py"
 BACKEND_ONNX_MODELS = ROOT / "backend" / "app" / "utils" / "onnx_models.py"
@@ -47,6 +55,7 @@ PADDLEGAN_VENDOR_INIT = PADDLEGAN_VENDOR / "modules" / "init.py"
 PADDLEGAN_GENERATOR_BUILDER = PADDLEGAN_VENDOR / "models" / "generators" / "builder.py"
 PADDLEGAN_MSVSR = PADDLEGAN_VENDOR / "models" / "generators" / "msvsr.py"
 PADDLEGAN_REGISTRY = PADDLEGAN_VENDOR / "utils" / "registry.py"
+PADDLEGAN_VENDOR_LOGGER = PADDLEGAN_VENDOR / "utils" / "logger.py"
 PADDLE_PACKAGE = PADDLEGAN_WEIGHTS.parents[1] / "__init__.py"
 PYTORCH_PACKAGE = ROOT / "backend" / "app" / "algorithms" / "pytorch" / "__init__.py"
 BENCHMARK_PACKAGE = ROOT / "backend" / "app" / "benchmark" / "__init__.py"
@@ -60,6 +69,7 @@ RIFE_MODEL_LOADER = ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife"
 RIFE_MODEL_SPEC = RIFE_MODEL_LOADER.parent / "_model_spec.py"
 RIFE_PACKAGE = RIFE_MODEL_LOADER.parent / "__init__.py"
 RIFE_SOLVERS = (RIFE_MODEL_LOADER.parent / "solver.py", RIFE_MODEL_LOADER.parent / "onnx_solver.py")
+RIFE_TYPED_SPEC_CONSUMERS = (RIFE_MODEL_LOADER.parent / "onnx_export.py", RIFE_MODEL_LOADER.parent / "onnx_solver.py")
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
 STAGE_WORKER_FACTORY = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_factory.py"
@@ -781,6 +791,27 @@ def _check_round_26_dead_interface_boundary(issues: list[str]) -> None:
     metrics_pattern = r"^\s*def\s+(?:timed|record_stage_duration)\b|\bstage_durations\b"
     if re.search(metrics_pattern, _read(PIPELINE_METRICS), re.MULTILINE):
         issues.append(f"unused pipeline metrics timing API remains in {_rel(PIPELINE_METRICS)}")
+
+
+def _check_round_27_data_rule_boundary(issues: list[str]) -> None:
+    for path in FRONTEND_FINITE_NUMBER_CONSUMERS:
+        if re.search(r"\bfunction\s+finite(?:Number)?OrNull\b", _read(path)):
+            issues.append(f"duplicate finite-number rule remains in {_rel(path)}")
+
+    for path in PYDANTIC_CAMEL_MODELS:
+        text = _read(path)
+        if re.search(r"^\s*def\s+_to_camel\b", text, re.MULTILINE) or (
+            "from pydantic.alias_generators import to_camel" not in text
+        ):
+            issues.append(f"duplicate camel alias rule remains in {_rel(path)}")
+
+    rife_paths = (RIFE_MODEL_SPEC, *RIFE_TYPED_SPEC_CONSUMERS)
+    for path in rife_paths:
+        if re.search(r"\bMODEL_CONFIGS\b", _read(path)):
+            issues.append(f"RIFE legacy model config remains in {_rel(path)}")
+
+    if PADDLEGAN_VENDOR_LOGGER.exists():
+        issues.append(f"dead PaddleGAN vendor logger remains in {_rel(PADDLEGAN_VENDOR_LOGGER)}")
 
 
 def _check_stage_worker_private_import_boundary(issues: list[str]) -> None:
@@ -2622,6 +2653,7 @@ def main() -> int:
         _check_paddlegan_vsr_contract(issues)
         _check_dead_surface_boundary(issues)
         _check_round_26_dead_interface_boundary(issues)
+        _check_round_27_data_rule_boundary(issues)
         _check_stage_worker_private_import_boundary(issues)
         _check_stage_worker_runtime_boundary(issues)
         _check_stage_worker_entrypoint_export_boundary(issues)

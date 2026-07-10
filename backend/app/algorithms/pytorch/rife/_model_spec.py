@@ -1,10 +1,8 @@
 """Compact spec table for the 36 supported RIFE checkpoints.
 
-Phase C.1.2 replaced the 250-line hand-written ``MODEL_CONFIGS`` dict in
+Phase C.1.2 replaced the 250-line hand-written model configuration dict in
 ``model_loader.py`` with a frozen-dataclass + grouped tuple list defined
-here. The legacy dict form ``MODEL_CONFIGS`` is still derived and exported
-verbatim because external callers (``onnx_export``, ``onnx_solver``,
-tests) read fields like ``MODEL_CONFIGS[v]["head_type"]``.
+here. All metadata consumers read the typed ``RifeModelSpec`` objects.
 
 Adding a new model version means appending one line to ``_VERSION_GROUPS``
 — no boilerplate, no extra dict literal.
@@ -43,11 +41,10 @@ class RifeModelSpec:
     head_config: dict[str, int] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        """Render this spec as the legacy ``MODEL_CONFIGS[v]`` dict shape.
+        """Render this spec as the config dict returned by ``load_rife_model``.
 
-        A fresh ``dict`` is returned each call so external code that does
-        ``MODEL_CONFIGS[v].copy()`` cannot accidentally mutate the shared
-        spec instance.
+        A fresh ``dict`` prevents runtime consumers from mutating shared model
+        metadata.
         """
         out: dict[str, Any] = {
             "encode_channel": self.encode_channel,
@@ -144,29 +141,18 @@ SUPPORTED_MODELS: list[str] = [v for versions, _ in _VERSION_GROUPS for v in ver
 MODEL_SPECS: dict[str, RifeModelSpec] = {version: spec for versions, spec in _VERSION_GROUPS for version in versions}
 
 
-# Legacy dict form retained for backward compatibility with external
-# callers (``onnx_export``, ``onnx_solver``, tests) that read fields
-# like ``MODEL_CONFIGS[v]["head_type"]``.
-MODEL_CONFIGS: dict[str, dict[str, Any]] = {version: spec.to_dict() for version, spec in MODEL_SPECS.items()}
-
-
 def get_spec(version: str) -> RifeModelSpec:
     """Look up the immutable spec for a model version.
 
-    Use this in new code instead of ``MODEL_CONFIGS[version]`` — the spec
-    has the same fields but with typed access and no risk of accidental
-    mutation. ``dataclasses.replace`` lets you derive a tweaked
-    copy when needed (e.g. ``replace(spec, ensemble=False)``).
+    The spec exposes typed fields with no risk of accidental mutation.
     """
     return MODEL_SPECS[version]
 
 
-# Re-export for callers that previously imported these from ``model_loader``
 __all__ = [
     "HEAD_CUSTOM",
     "HEAD_NONE",
     "HEAD_SEQUENTIAL",
-    "MODEL_CONFIGS",
     "MODEL_SPECS",
     "RifeModelSpec",
     "SUPPORTED_MODELS",

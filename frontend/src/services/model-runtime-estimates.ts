@@ -1,15 +1,12 @@
 import type { ModelVariantInfo } from '@/types/domain/env'
 import type { RuntimeMetricEstimate, VideoDimensions } from '@/types/view/model-metrics'
+import { finiteNumberOrNull } from '@/services/finite-number'
 
 interface RuntimeMetricOptions {
   scale?: number
   precisionBytes?: number
   temporalFrames?: number
   runtimeFrameCount?: number | null
-}
-
-function finiteOrNull(value: number | null | undefined): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 function padToModulo(value: number, modulo: number | null | undefined): number {
@@ -29,11 +26,11 @@ export function estimateModelRuntimeMetrics(
     return null
   }
 
-  const scale = finiteOrNull(options.scale) ?? 1
-  const precisionBytes = finiteOrNull(options.precisionBytes) ?? 4
+  const scale = finiteNumberOrNull(options.scale) ?? 1
+  const precisionBytes = finiteNumberOrNull(options.precisionBytes) ?? 4
   const temporalFrames = Math.max(
     1,
-    Math.round(finiteOrNull(options.runtimeFrameCount) ?? finiteOrNull(options.temporalFrames) ?? 1),
+    Math.round(finiteNumberOrNull(options.runtimeFrameCount) ?? finiteNumberOrNull(options.temporalFrames) ?? 1),
   )
   const scaledWidth = Math.max(1, Math.round(video.width * scale))
   const scaledHeight = Math.max(1, Math.round(video.height * scale))
@@ -41,14 +38,12 @@ export function estimateModelRuntimeMetrics(
   const effectiveHeight = padToModulo(scaledHeight, detail.metrics.inputModulo)
   const megapixels = (effectiveWidth * effectiveHeight) / 1_000_000
   const vramMegapixels = (scaledWidth * scaledHeight) / 1_000_000
-  const gflopsPerMegapixel = finiteOrNull(detail.metrics.gflopsPerMegapixel)
-  const activationBytesPerMegapixel = finiteOrNull(detail.metrics.activationBytesPerMegapixel)
-  const runtimeOverheadBytes = finiteOrNull(detail.metrics.runtimeOverheadBytes)
+  const gflopsPerMegapixel = finiteNumberOrNull(detail.metrics.gflopsPerMegapixel)
+  const activationBytesPerMegapixel = finiteNumberOrNull(detail.metrics.activationBytesPerMegapixel)
+  const runtimeOverheadBytes = finiteNumberOrNull(detail.metrics.runtimeOverheadBytes)
+  const parameterCount = finiteNumberOrNull(detail.metrics.parameterCount)
   const parameterBytes =
-    finiteOrNull(detail.metrics.parameterBytes) ??
-    (finiteOrNull(detail.metrics.parameterCount) !== null
-      ? (finiteOrNull(detail.metrics.parameterCount) as number) * 4
-      : null)
+    finiteNumberOrNull(detail.metrics.parameterBytes) ?? (parameterCount === null ? null : parameterCount * 4)
   const precisionScale = precisionBytes / 4
 
   const gflops = gflopsPerMegapixel === null ? null : gflopsPerMegapixel * megapixels
@@ -72,7 +67,7 @@ export function estimateCombinedPeakVram(
   first: Pick<RuntimeMetricEstimate, 'vramBytes'> | null | undefined,
   second: Pick<RuntimeMetricEstimate, 'vramBytes'> | null | undefined,
 ): number | null {
-  const values = [finiteOrNull(first?.vramBytes), finiteOrNull(second?.vramBytes)]
+  const values = [finiteNumberOrNull(first?.vramBytes), finiteNumberOrNull(second?.vramBytes)]
     .filter((value): value is number => value !== null)
   return values.length ? Math.max(...values) : null
 }

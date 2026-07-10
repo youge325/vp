@@ -27,7 +27,7 @@ from app.algorithms.pytorch.rife._model_spec import (
     HEAD_CUSTOM,
     HEAD_NONE,
     HEAD_SEQUENTIAL,
-    MODEL_CONFIGS,
+    MODEL_SPECS,
     SUPPORTED_MODELS,
 )
 from app.algorithms.pytorch.rife.model_loader import (
@@ -37,28 +37,27 @@ from app.algorithms.pytorch.rife.model_loader import (
 )
 
 
-class TestModelConfigs:
+class TestModelSpecs:
     """测试模型配置完整性。"""
 
     def test_all_versions_have_config(self):
         """每个支持的版本都有配置。"""
         for version in SUPPORTED_MODELS:
-            assert version in MODEL_CONFIGS, f"缺少版本 {version} 的配置"
+            assert version in MODEL_SPECS, f"缺少版本 {version} 的配置"
 
     def test_config_fields(self):
         """每个配置都有必要的字段。"""
-        for version, config in MODEL_CONFIGS.items():
-            assert "encode_channel" in config, f"{version} 缺少 encode_channel"
-            assert "modulo" in config, f"{version} 缺少 modulo"
-            assert "ensemble" in config, f"{version} 缺少 ensemble"
-            assert "head_type" in config, f"{version} 缺少 head_type"
-            assert config["head_type"] in (HEAD_NONE, HEAD_SEQUENTIAL, HEAD_CUSTOM)
+        for version, spec in MODEL_SPECS.items():
+            assert spec.encode_channel >= 0, f"{version} 的 encode_channel 无效"
+            assert spec.modulo > 0, f"{version} 的 modulo 无效"
+            assert isinstance(spec.ensemble, bool), f"{version} 的 ensemble 无效"
+            assert spec.head_type in (HEAD_NONE, HEAD_SEQUENTIAL, HEAD_CUSTOM)
 
     def test_no_head_versions(self):
         """v4.0~v4.6 无 Head。"""
         for v in ["4.0", "4.1", "4.2", "4.3", "4.4", "4.5", "4.6"]:
-            assert MODEL_CONFIGS[v]["head_type"] == HEAD_NONE
-            assert MODEL_CONFIGS[v]["encode_channel"] == 0
+            assert MODEL_SPECS[v].head_type == HEAD_NONE
+            assert MODEL_SPECS[v].encode_channel == 0
 
     def test_sequential_head_versions(self):
         """v4.7~v4.9, v4.10~v4.12, v4.12.lite, v4.13.lite 使用 nn.Sequential Head。"""
@@ -73,12 +72,12 @@ class TestModelConfigs:
             "4.13.lite",
         ]
         for v in seq_versions:
-            assert MODEL_CONFIGS[v]["head_type"] == HEAD_SEQUENTIAL, f"{v} 应该是 SEQUENTIAL Head"
-            assert "head_config" in MODEL_CONFIGS[v], f"{v} 缺少 head_config"
+            assert MODEL_SPECS[v].head_type == HEAD_SEQUENTIAL, f"{v} 应该是 SEQUENTIAL Head"
+            assert MODEL_SPECS[v].head_config is not None, f"{v} 缺少 head_config"
 
     def test_custom_head_versions(self):
         """v4.13+ 使用自定义 Head。"""
-        custom_versions = [v for v in SUPPORTED_MODELS if MODEL_CONFIGS[v]["head_type"] == HEAD_CUSTOM]
+        custom_versions = [v for v in SUPPORTED_MODELS if MODEL_SPECS[v].head_type == HEAD_CUSTOM]
         # v4.13 ~ v4.26.heavy 的大部分版本
         assert "4.13" in custom_versions
         assert "4.25" in custom_versions
@@ -88,20 +87,20 @@ class TestModelConfigs:
         """modulo 值正确。"""
         # 大部分版本 modulo=32
         for v in ["4.0", "4.13", "4.21", "4.24"]:
-            assert MODEL_CONFIGS[v]["modulo"] == 32
+            assert MODEL_SPECS[v].modulo == 32
 
         # v4.25+ modulo=64
         for v in ["4.25", "4.25.heavy", "4.26", "4.26.heavy"]:
-            assert MODEL_CONFIGS[v]["modulo"] == 64
+            assert MODEL_SPECS[v].modulo == 64
 
         # v4.25.lite modulo=128
-        assert MODEL_CONFIGS["4.25.lite"]["modulo"] == 128
+        assert MODEL_SPECS["4.25.lite"].modulo == 128
 
     def test_ensemble_flags(self):
         """ensemble 标志正确。"""
         # v4.0~v4.20 支持 ensemble
         for v in SUPPORTED_MODELS[:24]:  # 前24个版本
-            if MODEL_CONFIGS[v]["head_type"] != HEAD_NONE or v >= "4.13":
+            if MODEL_SPECS[v].head_type != HEAD_NONE or v >= "4.13":
                 pass  # 不用严格检查，vs-rife 源码中 4.0~4.20 全部 ensemble=True
             if v in [
                 "4.21",
@@ -115,12 +114,12 @@ class TestModelConfigs:
                 "4.26",
                 "4.26.heavy",
             ]:
-                assert MODEL_CONFIGS[v]["ensemble"] is False
+                assert MODEL_SPECS[v].ensemble is False
 
     def test_version_count(self):
         """总共 36 个版本。"""
         assert len(SUPPORTED_MODELS) == 36
-        assert len(MODEL_CONFIGS) == 36
+        assert len(MODEL_SPECS) == 36
 
 
 class TestVersionToModuleName:
@@ -184,8 +183,8 @@ class TestIFNetCreation:
         mod = importlib.import_module(rife_package)
         IFNet = mod.IFNet
 
-        config = MODEL_CONFIGS[version]
-        ensemble = config.get("ensemble", False)
+        spec = MODEL_SPECS[version]
+        ensemble = spec.ensemble
 
         # 使用 meta device 避免实际分配内存
         with torch.device("meta"):
@@ -207,7 +206,7 @@ class TestIFNetCreation:
 
     @pytest.mark.parametrize(
         "version",
-        [v for v in SUPPORTED_MODELS if MODEL_CONFIGS[v]["head_type"] == HEAD_CUSTOM],
+        [v for v in SUPPORTED_MODELS if MODEL_SPECS[v].head_type == HEAD_CUSTOM],
     )
     def test_custom_head_class_exists(self, version):
         """有自定义 Head 的版本都有 Head 类可导入。"""
@@ -221,7 +220,7 @@ class TestIFNetCreation:
 
     @pytest.mark.parametrize(
         "version",
-        [v for v in SUPPORTED_MODELS if MODEL_CONFIGS[v]["head_type"] == HEAD_CUSTOM],
+        [v for v in SUPPORTED_MODELS if MODEL_SPECS[v].head_type == HEAD_CUSTOM],
     )
     def test_custom_head_can_be_created(self, version):
         """自定义 Head 类可以正常实例化。"""
@@ -239,7 +238,7 @@ class TestIFNetCreation:
 
     @pytest.mark.parametrize(
         "version",
-        [v for v in SUPPORTED_MODELS if MODEL_CONFIGS[v]["head_type"] == HEAD_NONE],
+        [v for v in SUPPORTED_MODELS if MODEL_SPECS[v].head_type == HEAD_NONE],
     )
     def test_no_head_versions_no_head_class(self, version):
         """无 Head 版本不需要 Head 类。"""
@@ -259,7 +258,7 @@ class TestStateDictStructure:
 
     @pytest.mark.parametrize(
         "version",
-        [v for v in SUPPORTED_MODELS if MODEL_CONFIGS[v]["head_type"] != HEAD_NONE],
+        [v for v in SUPPORTED_MODELS if MODEL_SPECS[v].head_type != HEAD_NONE],
     )
     def test_encode_keys_exist(self, version):
         """有 Head 的版本，IFNet 的 state_dict 包含 encode.* 键。"""
@@ -270,8 +269,8 @@ class TestStateDictStructure:
         mod = importlib.import_module(rife_package)
         IFNet = mod.IFNet
 
-        config = MODEL_CONFIGS[version]
-        ensemble = config.get("ensemble", False)
+        spec = MODEL_SPECS[version]
+        ensemble = spec.ensemble
 
         # 在 CPU 上创建小模型检查 state_dict 结构
         model = IFNet(scale=1.0, ensemble=ensemble)
@@ -282,7 +281,7 @@ class TestStateDictStructure:
 
     @pytest.mark.parametrize(
         "version",
-        [v for v in SUPPORTED_MODELS if MODEL_CONFIGS[v]["head_type"] == HEAD_NONE],
+        [v for v in SUPPORTED_MODELS if MODEL_SPECS[v].head_type == HEAD_NONE],
     )
     def test_no_encode_keys_for_headless(self, version):
         """无 Head 的版本，IFNet 的 state_dict 不包含 encode.* 键。"""
@@ -293,8 +292,8 @@ class TestStateDictStructure:
         mod = importlib.import_module(rife_package)
         IFNet = mod.IFNet
 
-        config = MODEL_CONFIGS[version]
-        ensemble = config.get("ensemble", False)
+        spec = MODEL_SPECS[version]
+        ensemble = spec.ensemble
 
         model = IFNet(scale=1.0, ensemble=ensemble)
         sd = model.state_dict()
@@ -336,8 +335,8 @@ class TestWeightLoadingWithRealWeights:
         mod = importlib.import_module(rife_package)
         IFNet = mod.IFNet
 
-        config = MODEL_CONFIGS[version]
-        ensemble = config.get("ensemble", False)
+        spec = MODEL_SPECS[version]
+        ensemble = spec.ensemble
 
         # 加载权重（旧格式 pkl 不支持 mmap，需使用 weights_only=False）
         weight_path = self._get_weight_path(version)
@@ -351,7 +350,7 @@ class TestWeightLoadingWithRealWeights:
         missing, unexpected = model.load_state_dict(state_dict, strict=False, assign=True)
 
         # 检查：encode.* 应该匹配到 IFNet 的 self.encode
-        if config["head_type"] == HEAD_NONE:
+        if spec.head_type == HEAD_NONE:
             # 无 Head 版本不应有 encode 键
             encode_missing = [k for k in missing if k.startswith("encode.")]
             assert len(encode_missing) == 0, f"{version}: 不应有缺失的 encode 键，但缺失: {encode_missing}"
@@ -370,8 +369,8 @@ class TestWeightLoadingWithRealWeights:
         if not self._weight_exists(version):
             pytest.skip(f"权重文件不存在或为空: flownet_v{version}.pkl")
 
-        config = MODEL_CONFIGS[version]
-        head_type = config["head_type"]
+        spec = MODEL_SPECS[version]
+        head_type = spec.head_type
 
         if head_type == HEAD_NONE:
             pytest.skip(f"{version} 无 Head 编码器")
@@ -397,7 +396,7 @@ class TestWeightLoadingWithRealWeights:
             with torch.device("meta"):
                 head = Head()
         elif head_type == HEAD_SEQUENTIAL:
-            head_config = config.get("head_config", {})
+            head_config = spec.head_config or {}
             with torch.device("meta"):
                 head = _build_sequential_head(
                     in_channels=head_config.get("in_channels", 3),

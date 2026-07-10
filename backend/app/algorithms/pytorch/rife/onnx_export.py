@@ -11,7 +11,7 @@ import torch.nn as nn
 
 from app.utils.logger import get_logger
 
-from ._model_spec import HEAD_NONE, MODEL_CONFIGS
+from ._model_spec import HEAD_NONE, get_spec
 from .model_loader import get_model_dir, load_rife_model
 
 logger = get_logger(__name__)
@@ -67,11 +67,12 @@ def export_rife_to_onnx(
     返回:
         导出的 ONNX 文件路径
     """
-    if model_version not in MODEL_CONFIGS:
-        raise ValueError(f"不支持的模型版本: {model_version}")
+    try:
+        spec = get_spec(model_version)
+    except KeyError:
+        raise ValueError(f"不支持的模型版本: {model_version}") from None
 
-    config = MODEL_CONFIGS[model_version]
-    has_head = config["head_type"] != HEAD_NONE
+    has_head = spec.head_type != HEAD_NONE
 
     # 加载 PyTorch 模型（CPU, float32）
     logger.info(f"加载 RIFE v{model_version} 用于 ONNX 导出 ...")
