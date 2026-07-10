@@ -98,6 +98,18 @@ def test_streaming_internal_types_and_parser_are_not_public_surfaces() -> None:
     assert '"TENSORRT_LOG_PREFIX"' not in events_text
 
 
+def test_paddlegan_vendor_has_no_unused_generic_builder_or_initializers() -> None:
+    vendor = REPO_ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "vendor" / "ppgan"
+    init_text = (vendor / "modules" / "init.py").read_text(encoding="utf-8")
+    builder_text = (vendor / "models" / "generators" / "builder.py").read_text(encoding="utf-8")
+    registry_text = (vendor / "utils" / "registry.py").read_text(encoding="utf-8")
+
+    for name in ("xavier_init", "normal_init", "uniform_init", "kaiming_init", "init_weights", "reset_parameters"):
+        assert f"def {name}" not in init_text
+    assert "def build_generator" not in builder_text
+    assert "def build_from_config" not in registry_text
+
+
 def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_contract_check = tmp_path / "_contract_check.ts"
@@ -123,6 +135,9 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     fake_pipeline_preflight = tmp_path / "pipeline_preflight.py"
     fake_worker_processes = tmp_path / "worker_processes.py"
     fake_worker_process_events = tmp_path / "worker_process_events.py"
+    fake_paddlegan_vendor_init = tmp_path / "paddlegan_vendor_init.py"
+    fake_paddlegan_generator_builder = tmp_path / "paddlegan_generator_builder.py"
+    fake_paddlegan_registry = tmp_path / "paddlegan_registry.py"
     fake_contract_check.write_text("export const _TASK_REQUEST_CONTRACT = {}\n", encoding="utf-8")
     fake_weights.write_text(
         "DISABLED_PADDLEGAN_VSR_MODELS = {}\n"
@@ -206,6 +221,23 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
         '__all__ = ["TENSORRT_LOG_PREFIX", "parse_stage_event_line", "read_worker_stderr"]\n',
         encoding="utf-8",
     )
+    fake_paddlegan_vendor_init.write_text(
+        "def xavier_init(layer):\n    pass\n"
+        "def normal_init(layer):\n    pass\n"
+        "def uniform_init(layer):\n    pass\n"
+        "def kaiming_init(layer):\n    pass\n"
+        "def init_weights(net):\n    pass\n"
+        "def reset_parameters(layer):\n    pass\n",
+        encoding="utf-8",
+    )
+    fake_paddlegan_generator_builder.write_text(
+        "def build_generator(config):\n    pass\n",
+        encoding="utf-8",
+    )
+    fake_paddlegan_registry.write_text(
+        "def build_from_config(config, registry):\n    pass\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(module, "FRONTEND_PROTOCOL_CONTRACT_CHECK", fake_contract_check, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_WEIGHTS", fake_weights, raising=False)
     monkeypatch.setattr(module, "WORKFLOW_VALIDATION", fake_validation, raising=False)
@@ -229,11 +261,14 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     monkeypatch.setattr(module, "PIPELINE_PREFLIGHT", fake_pipeline_preflight, raising=False)
     monkeypatch.setattr(module, "WORKER_PROCESSES", fake_worker_processes, raising=False)
     monkeypatch.setattr(module, "WORKER_PROCESS_EVENTS", fake_worker_process_events, raising=False)
+    monkeypatch.setattr(module, "PADDLEGAN_VENDOR_INIT", fake_paddlegan_vendor_init, raising=False)
+    monkeypatch.setattr(module, "PADDLEGAN_GENERATOR_BUILDER", fake_paddlegan_generator_builder, raising=False)
+    monkeypatch.setattr(module, "PADDLEGAN_REGISTRY", fake_paddlegan_registry, raising=False)
     issues: list[str] = []
 
     getattr(module, "_check_dead_surface_boundary", lambda _issues: None)(issues)
 
-    assert len(issues) == 25, issues
+    assert len(issues) == 28, issues
 
 
 def test_production_processing_has_no_global_algorithm_bootstrap() -> None:
