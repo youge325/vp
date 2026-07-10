@@ -11,7 +11,3 @@ sub-package (e.g. ``pytorch.rife``) decides for itself when to import
 PyTorch, mirroring the lazy ``__getattr__`` pattern documented in
 ``pytorch/rife/__init__.py``.
 """
-
-from __future__ import annotations
-
-__all__: list[str] = []

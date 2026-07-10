@@ -6,11 +6,6 @@ import json
 import os
 
 from app.planning import ProcessingStep
-from app.planning.manifest import ResumeState
-
-
-def empty_resume_state() -> ResumeState:
-    return ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[])
 
 
 def stage_signature(stage_position: int, step: ProcessingStep, input_path: str, output_path: str) -> str:
@@ -32,7 +27,6 @@ def safe_stage_name(step: ProcessingStep) -> str:
 
 
 __all__ = [
-    "empty_resume_state",
     "safe_stage_name",
     "stage_signature",
 ]

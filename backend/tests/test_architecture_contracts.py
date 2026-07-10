@@ -60,8 +60,16 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     fake_paddlegan_init = tmp_path / "paddlegan_init.py"
     fake_processing_init = tmp_path / "processing_init.py"
     fake_algorithm_factory = tmp_path / "factory.py"
+    fake_stage_file_rules = tmp_path / "stage_file_rules.py"
+    fake_paddle_package = tmp_path / "paddle_init.py"
+    fake_pytorch_package = tmp_path / "pytorch_init.py"
     fake_contract_check.write_text("export const _TASK_REQUEST_CONTRACT = {}\n", encoding="utf-8")
-    fake_weights.write_text("DISABLED_PADDLEGAN_VSR_MODELS = {}\n", encoding="utf-8")
+    fake_weights.write_text(
+        "DISABLED_PADDLEGAN_VSR_MODELS = {}\n"
+        "def resolve_auxiliary_weight_path(filename):\n    pass\n"
+        "def ensure_auxiliary_weight_file(model_id, filename):\n    pass\n",
+        encoding="utf-8",
+    )
     fake_validation.write_text("if algorithm in DISABLED_PADDLEGAN_VSR_MODELS:\n    pass\n", encoding="utf-8")
     fake_benchmark_init.write_text("from app.benchmark.runner import run_benchmark\n", encoding="utf-8")
     fake_paddlegan_init.write_text(
@@ -73,6 +81,9 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
         'message = "call register_default_algorithms() first"\n',
         encoding="utf-8",
     )
+    fake_stage_file_rules.write_text("def empty_resume_state():\n    pass\n", encoding="utf-8")
+    fake_paddle_package.write_text("__all__: list[str] = []\n", encoding="utf-8")
+    fake_pytorch_package.write_text("__all__: list[str] = []\n", encoding="utf-8")
     monkeypatch.setattr(module, "FRONTEND_PROTOCOL_CONTRACT_CHECK", fake_contract_check, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_WEIGHTS", fake_weights, raising=False)
     monkeypatch.setattr(module, "WORKFLOW_VALIDATION", fake_validation, raising=False)
@@ -80,11 +91,14 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     monkeypatch.setattr(module, "PADDLEGAN_VSR_PACKAGE", fake_paddlegan_init, raising=False)
     monkeypatch.setattr(module, "PROCESSING_PACKAGE", fake_processing_init, raising=False)
     monkeypatch.setattr(module, "ALGORITHM_FACTORY", fake_algorithm_factory, raising=False)
+    monkeypatch.setattr(module, "STAGE_FILE_RULES", fake_stage_file_rules, raising=False)
+    monkeypatch.setattr(module, "PADDLE_PACKAGE", fake_paddle_package, raising=False)
+    monkeypatch.setattr(module, "PYTORCH_PACKAGE", fake_pytorch_package, raising=False)
     issues: list[str] = []
 
     getattr(module, "_check_dead_surface_boundary", lambda _issues: None)(issues)
 
-    assert len(issues) == 7, issues
+    assert len(issues) == 11, issues
 
 
 def test_production_processing_has_no_global_algorithm_bootstrap() -> None:
@@ -93,6 +107,20 @@ def test_production_processing_has_no_global_algorithm_bootstrap() -> None:
 
     assert "register_default_algorithms" not in processing_init.read_text(encoding="utf-8")
     assert "register_default_algorithms" not in algorithm_factory.read_text(encoding="utf-8")
+
+
+def test_single_use_helpers_and_empty_package_exports_are_removed() -> None:
+    weights = REPO_ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
+    stage_file_rules = REPO_ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_rules.py"
+    paddle_package = REPO_ROOT / "backend" / "app" / "algorithms" / "paddle" / "__init__.py"
+    pytorch_package = REPO_ROOT / "backend" / "app" / "algorithms" / "pytorch" / "__init__.py"
+
+    weights_text = weights.read_text(encoding="utf-8")
+    assert "resolve_auxiliary_weight_path" not in weights_text
+    assert "ensure_auxiliary_weight_file" not in weights_text
+    assert "empty_resume_state" not in stage_file_rules.read_text(encoding="utf-8")
+    assert "__all__" not in paddle_package.read_text(encoding="utf-8")
+    assert "__all__" not in pytorch_package.read_text(encoding="utf-8")
 
 
 def test_paddlegan_vsr_contract_matches_current_repo() -> None:
@@ -1969,14 +1997,12 @@ def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(t
     fake_pipeline = tmp_path / "stage_file_pipeline.py"
     fake_pipeline.write_text(
         "from app.planning import SegmentManifest\n"
-        "from app.processing.streaming.stage_file_rules import empty_resume_state, safe_stage_name, stage_signature\n\n"
+        "from app.processing.streaming.stage_file_rules import safe_stage_name, stage_signature\n\n"
         "def _run_single_stage_file_chunks():\n"
         "    pass\n\n"
         "def _run_stage_chunk_to_file():\n"
         "    pass\n\n"
         "def _chunk_progress_adapter():\n"
-        "    pass\n\n"
-        "def _empty_resume_state():\n"
         "    pass\n\n"
         "def _stage_signature():\n"
         "    pass\n\n"
@@ -1985,8 +2011,7 @@ def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(t
         "def run_stage_file_pipeline(step):\n"
         "    SegmentManifest('stage.mp4')\n"
         "    stage_signature(1, step, 'input.mp4', 'stage.mp4')\n"
-        "    safe_stage_name(step)\n"
-        "    empty_resume_state()\n",
+        "    safe_stage_name(step)\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(module, "STAGE_FILE_PIPELINE", fake_pipeline)
@@ -1999,7 +2024,6 @@ def test_stage_file_pipeline_chunk_boundary_flags_local_chunk_and_rule_helpers(t
     assert any("intermediate manifest construction" in issue for issue in issues), issues
     assert any("direct intermediate stage signature" in issue for issue in issues), issues
     assert any("direct safe stage name" in issue for issue in issues), issues
-    assert any("direct empty resume state" in issue for issue in issues), issues
 
 
 def test_stage_file_chunks_runtime_boundary_flags_local_runtime_helpers(tmp_path, monkeypatch) -> None:
@@ -2121,10 +2145,9 @@ def test_stage_file_chunks_test_boundary_flags_stage_file_rule_tests(tmp_path, m
     fake_test = tmp_path / "test_stage_file_chunks.py"
     fake_test.write_text(
         "from app.processing.streaming import stage_file_rules\n\n"
-        "def test_stage_file_rules_build_safe_signature_and_empty_resume():\n"
+        "def test_stage_file_rules_build_safe_signature():\n"
         "    stage_file_rules.stage_signature(1, step, 'input.mp4', 'stage.mp4')\n"
-        "    stage_file_rules.safe_stage_name(step)\n"
-        "    stage_file_rules.empty_resume_state()\n",
+        "    stage_file_rules.safe_stage_name(step)\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(module, "STAGE_FILE_CHUNKS_TEST", fake_test, raising=False)

@@ -38,6 +38,8 @@ ALGORITHM_FACTORY = ROOT / "backend" / "app" / "algorithms" / "factory.py"
 PROCESSING_PACKAGE = ROOT / "backend" / "app" / "processing" / "__init__.py"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 PADDLEGAN_VSR_PACKAGE = PADDLEGAN_WEIGHTS.parent / "__init__.py"
+PADDLE_PACKAGE = PADDLEGAN_WEIGHTS.parents[1] / "__init__.py"
+PYTORCH_PACKAGE = ROOT / "backend" / "app" / "algorithms" / "pytorch" / "__init__.py"
 BENCHMARK_PACKAGE = ROOT / "backend" / "app" / "benchmark" / "__init__.py"
 WORKFLOW_VALIDATION = ROOT / "backend" / "app" / "planning" / "workflow_validation.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
@@ -68,6 +70,7 @@ PIPELINE_PREFLIGHT = ROOT / "backend" / "app" / "processing" / "streaming" / "pi
 PIPELINE_RULES = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_rules.py"
 PIPELINE_LIFECYCLE = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_lifecycle.py"
 STAGE_FILE_PIPELINE = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_pipeline.py"
+STAGE_FILE_RULES = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_rules.py"
 STAGE_FILE_STAGE_CONTEXT = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_stage_context.py"
 STAGE_FILE_CHUNK_RUNTIME = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_runtime.py"
 STAGE_FILE_CHUNK_PROGRESS = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_progress.py"
@@ -636,6 +639,14 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
         (PADDLEGAN_VSR_PACKAGE, r"\bPADDLEGAN_VSR_SPECS\b", "PaddleGAN package re-export"),
         (PROCESSING_PACKAGE, r"\bregister_default_algorithms\b", "global algorithm bootstrap"),
         (ALGORITHM_FACTORY, r"\bregister_default_algorithms\b", "global algorithm bootstrap guidance"),
+        (
+            PADDLEGAN_WEIGHTS,
+            r"^\s*def\s+(?:resolve_auxiliary_weight_path|ensure_auxiliary_weight_file)\b",
+            "single-use PaddleGAN auxiliary weight helper",
+        ),
+        (STAGE_FILE_RULES, r"^\s*def\s+empty_resume_state\b", "single-use empty resume state helper"),
+        (PADDLE_PACKAGE, r"^\s*__all__\s*(?::[^=]+)?=\s*\[\s*\]", "empty Paddle package export list"),
+        (PYTORCH_PACKAGE, r"^\s*__all__\s*(?::[^=]+)?=\s*\[\s*\]", "empty PyTorch package export list"),
     )
     for path, pattern, label in checks:
         if re.search(pattern, _read(path), re.MULTILINE):
@@ -1834,14 +1845,12 @@ def _check_stage_file_pipeline_chunk_boundary(issues: list[str]) -> None:
         "_run_stage_chunk_to_file": r"^\s*def\s+_run_stage_chunk_to_file\b",
         "_chunk_progress_adapter": r"^\s*def\s+_chunk_progress_adapter\b",
         "_stage_chunk_output_start": r"^\s*def\s+_stage_chunk_output_start\b",
-        "_empty_resume_state": r"^\s*def\s+_empty_resume_state\b",
         "_stage_signature": r"^\s*def\s+_stage_signature\b",
         "_safe_stage_name": r"^\s*def\s+_safe_stage_name\b",
         "direct stage-file rule import": r"from\s+app\.processing\.streaming\.stage_file_rules\s+import\b",
         "intermediate manifest construction": r"\bSegmentManifest\s*\(",
         "direct intermediate stage signature": r"\bstage_signature\s*\(",
         "direct safe stage name": r"\bsafe_stage_name\s*\(",
-        "direct empty resume state": r"\bempty_resume_state\s*\(",
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
@@ -1905,7 +1914,6 @@ def _check_stage_file_chunks_test_boundary(issues: list[str]) -> None:
         "stage-file rules test": r"^\s*def\s+test_stage_file_rules_\w+\b",
         "stage signature": r"\bstage_signature\b",
         "safe stage name": r"\bsafe_stage_name\b",
-        "empty resume state": r"\bempty_resume_state\b",
     }
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):

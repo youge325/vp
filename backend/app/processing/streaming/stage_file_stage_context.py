@@ -8,7 +8,7 @@ from typing import Any
 
 from app.planning import ProcessingStep
 from app.planning.manifest import ResumeState, SegmentManifest
-from app.processing.streaming.stage_file_rules import empty_resume_state, safe_stage_name, stage_signature
+from app.processing.streaming.stage_file_rules import safe_stage_name, stage_signature
 
 
 @dataclass(slots=True)
@@ -63,7 +63,7 @@ def build_stage_file_stage_context(
     return StageFileStageContext(
         manifest=stage_manifest,
         output_path=stage_output_path,
-        resume_state=empty_resume_state(),
+        resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
         start_frame=0,
         chunk_start_index=1,
         encode_output_fps=None,
