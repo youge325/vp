@@ -29,7 +29,7 @@ import type {
 // --- TaskRequest --------------------------------------------------------
 // 前端通过 `safeInvoke('start_task', { request })` 跨层传 TaskRequest。
 // 字段消失或类型改变都会让下面的常量断言编译失败。
-export const _TASK_REQUEST_CONTRACT = {
+const _TASK_REQUEST_CONTRACT = {
   inputPath: '',
   decodeConfig: {} as TaskRequest['decodeConfig'],
   workflowConfig: {} as TaskRequest['workflowConfig'],
@@ -39,7 +39,7 @@ export const _TASK_REQUEST_CONTRACT = {
 
 // --- WorkbenchPreset ---------------------------------------------------
 // preset 持久化 / 导入导出走这条形状,需要与 TaskRequest 子集严格对齐。
-export const _WORKBENCH_PRESET_CONTRACT = {
+const _WORKBENCH_PRESET_CONTRACT = {
   decodeConfig: {} as WorkbenchPreset['decodeConfig'],
   workflowConfig: {} as WorkbenchPreset['workflowConfig'],
   encodeConfig: {} as WorkbenchPreset['encodeConfig'],
@@ -49,7 +49,7 @@ export const _WORKBENCH_PRESET_CONTRACT = {
 // --- TaskProgressPayload -----------------------------------------------
 // 前端进度条渲染依赖 current/total/percent + stage 三元;metrics 是
 // 可选自由 bag(Phase D.2.3),不进硬契约。
-export const _TASK_PROGRESS_CONTRACT = {
+const _TASK_PROGRESS_CONTRACT = {
   current: 0,
   total: 0,
   percent: 0,
@@ -61,7 +61,7 @@ export const _TASK_PROGRESS_CONTRACT = {
 // --- TaskErrorPayload --------------------------------------------------
 // IPC 错误响应的硬形状:code 必须是 TaskErrorCode union,details 是
 // `Record<string, unknown> | null` 而非 undefined / object literal。
-export const _TASK_ERROR_CONTRACT = {
+const _TASK_ERROR_CONTRACT = {
   code: 'process_failed' as TaskErrorCode,
   message: '',
   details: null,
@@ -69,7 +69,7 @@ export const _TASK_ERROR_CONTRACT = {
 
 // --- ResumeStatusPayload -----------------------------------------------
 // `inspect-output` 命令的返回 payload,batch lifecycle 与续传 UI 依赖。
-export const _RESUME_STATUS_CONTRACT = {
+const _RESUME_STATUS_CONTRACT = {
   resumed: false,
   completedChunks: 0,
   completedOutputFrames: 0,
@@ -80,8 +80,15 @@ export const _RESUME_STATUS_CONTRACT = {
 // --- EnvironmentCheckPayload -------------------------------------------
 // `check` 命令的环境探测结果,启动流程必读。result 内部结构由
 // EnvironmentCheckResult 单独锁定(`@/types/generated/`),这里只断言外壳。
-export const _ENVIRONMENT_CHECK_CONTRACT = {
+const _ENVIRONMENT_CHECK_CONTRACT = {
   result: {} as EnvironmentCheckPayload['result'],
   source: '',
   checkedAt: '',
 } satisfies EnvironmentCheckPayload
+
+void _TASK_REQUEST_CONTRACT
+void _WORKBENCH_PRESET_CONTRACT
+void _TASK_PROGRESS_CONTRACT
+void _TASK_ERROR_CONTRACT
+void _RESUME_STATUS_CONTRACT
+void _ENVIRONMENT_CHECK_CONTRACT
