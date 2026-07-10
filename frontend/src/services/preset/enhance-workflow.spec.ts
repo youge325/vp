@@ -10,6 +10,12 @@ import {
   applySuperResolutionNumFrames,
   applySuperResolutionScale,
 } from './enhance-workflow'
+import {
+  applyInterpolationAlgorithmSelectionDefaults,
+  applyInterpolationBackendSelectionDefaults,
+  applySuperResolutionAlgorithmSelectionDefaults,
+  applySuperResolutionBackendSelectionDefaults,
+} from './enhance-workflow-selection'
 import { createDefaultWorkflowConfigForEnvironment } from './workflow-defaults'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 
@@ -60,6 +66,13 @@ function makeEnv(): EnvironmentCheckResult {
 }
 
 describe('enhance workflow mutation rules', () => {
+  it('exposes selection implementations without pass-through wrappers', () => {
+    expect(applyInterpolationBackendSelection).toBe(applyInterpolationBackendSelectionDefaults)
+    expect(applySuperResolutionBackendSelection).toBe(applySuperResolutionBackendSelectionDefaults)
+    expect(applyInterpolationAlgorithmSelection).toBe(applyInterpolationAlgorithmSelectionDefaults)
+    expect(applySuperResolutionAlgorithmSelection).toBe(applySuperResolutionAlgorithmSelectionDefaults)
+  })
+
   it('switches interpolation backend and repairs unsupported algorithm/model defaults', () => {
     const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.interpolation.algorithm = 'rife-lite'
