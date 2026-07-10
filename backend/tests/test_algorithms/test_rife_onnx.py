@@ -101,12 +101,8 @@ class TestRIFEONNXExport:
         import torch
         import onnxruntime as ort
 
-        from app.algorithms.pytorch.rife.model_loader import (
-            load_rife_model,
-            create_backwarp_grid,
-            create_flow_div,
-            MODEL_CONFIGS,
-        )
+        from app.algorithms.pytorch.rife._model_spec import MODEL_CONFIGS
+        from app.algorithms.pytorch.rife.model_loader import create_backwarp_grid, create_flow_div, load_rife_model
 
         # 加载 PyTorch 模型
         flownet, encode, config = load_rife_model(model_version="4.25", device="cpu", fp16=False)
@@ -149,7 +145,7 @@ class TestRIFEONNXExport:
     def test_onnx_dynamic_shape(self, onnx_path):
         """ONNX 模型支持动态尺寸（使用 modulo 倍数尺寸验证）。"""
         import onnxruntime as ort
-        from app.algorithms.pytorch.rife.model_loader import MODEL_CONFIGS
+        from app.algorithms.pytorch.rife._model_spec import MODEL_CONFIGS
 
         session = ort.InferenceSession(onnx_path)
         modulo = MODEL_CONFIGS["4.25"]["modulo"]

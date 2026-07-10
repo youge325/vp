@@ -51,6 +51,16 @@ def test_package_initializers_do_not_reexport_owned_symbols() -> None:
     assert "PADDLEGAN_VSR_SPECS" not in paddlegan_init.read_text(encoding="utf-8")
 
 
+def test_rife_model_config_is_owned_only_by_model_spec() -> None:
+    model_loader = REPO_ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife" / "model_loader.py"
+    model_spec = REPO_ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife" / "_model_spec.py"
+
+    loader_text = model_loader.read_text(encoding="utf-8")
+    assert "MODEL_CONFIGS" not in loader_text
+    assert "MODEL_SPECS" not in loader_text
+    assert "def _to_legacy_dict" not in model_spec.read_text(encoding="utf-8")
+
+
 def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_contract_check = tmp_path / "_contract_check.ts"
@@ -69,6 +79,8 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     fake_planning_package = tmp_path / "planning_init.py"
     fake_workflow_steps = tmp_path / "workflow_steps.py"
     fake_ffmpeg_package = tmp_path / "ffmpeg_init.py"
+    fake_rife_model_loader = tmp_path / "rife_model_loader.py"
+    fake_rife_model_spec = tmp_path / "rife_model_spec.py"
     fake_contract_check.write_text("export const _TASK_REQUEST_CONTRACT = {}\n", encoding="utf-8")
     fake_weights.write_text(
         "DISABLED_PADDLEGAN_VSR_MODELS = {}\n"
@@ -115,6 +127,14 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
         '__all__ = ["FFmpegWrapper", "RawVideoReader", "open_rawvideo_decoder"]\n',
         encoding="utf-8",
     )
+    fake_rife_model_loader.write_text(
+        "from app.algorithms.pytorch.rife._model_spec import MODEL_CONFIGS, MODEL_SPECS\n",
+        encoding="utf-8",
+    )
+    fake_rife_model_spec.write_text(
+        "def _to_legacy_dict(spec):\n    return spec.to_dict()\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(module, "FRONTEND_PROTOCOL_CONTRACT_CHECK", fake_contract_check, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_WEIGHTS", fake_weights, raising=False)
     monkeypatch.setattr(module, "WORKFLOW_VALIDATION", fake_validation, raising=False)
@@ -131,11 +151,13 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     monkeypatch.setattr(module, "PLANNING_PACKAGE", fake_planning_package, raising=False)
     monkeypatch.setattr(module, "WORKFLOW_STEPS", fake_workflow_steps, raising=False)
     monkeypatch.setattr(module, "FFMPEG_PACKAGE", fake_ffmpeg_package, raising=False)
+    monkeypatch.setattr(module, "RIFE_MODEL_LOADER", fake_rife_model_loader, raising=False)
+    monkeypatch.setattr(module, "RIFE_MODEL_SPEC", fake_rife_model_spec, raising=False)
     issues: list[str] = []
 
     getattr(module, "_check_dead_surface_boundary", lambda _issues: None)(issues)
 
-    assert len(issues) == 17, issues
+    assert len(issues) == 19, issues
 
 
 def test_production_processing_has_no_global_algorithm_bootstrap() -> None:

@@ -144,14 +144,10 @@ SUPPORTED_MODELS: list[str] = [v for versions, _ in _VERSION_GROUPS for v in ver
 MODEL_SPECS: dict[str, RifeModelSpec] = {version: spec for versions, spec in _VERSION_GROUPS for version in versions}
 
 
-def _to_legacy_dict(spec: RifeModelSpec) -> dict[str, Any]:
-    return spec.to_dict()
-
-
 # Legacy dict form retained for backward compatibility with external
 # callers (``onnx_export``, ``onnx_solver``, tests) that read fields
 # like ``MODEL_CONFIGS[v]["head_type"]``.
-MODEL_CONFIGS: dict[str, dict[str, Any]] = {version: _to_legacy_dict(spec) for version, spec in MODEL_SPECS.items()}
+MODEL_CONFIGS: dict[str, dict[str, Any]] = {version: spec.to_dict() for version, spec in MODEL_SPECS.items()}
 
 
 def get_spec(version: str) -> RifeModelSpec:
