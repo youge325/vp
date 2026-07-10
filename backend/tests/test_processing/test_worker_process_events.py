@@ -8,15 +8,7 @@ import threading
 from types import SimpleNamespace
 
 from app.errors import ProcessError, TaskErrorCode
-from app.processing.streaming.worker_process_events import parse_stage_event_line, read_worker_stderr
-
-
-def test_parse_stage_event_line_returns_json_event_only_for_prefixed_lines() -> None:
-    assert parse_stage_event_line('VP_STAGE_EVENT {"type":"progress","current":2}') == {
-        "type": "progress",
-        "current": 2,
-    }
-    assert parse_stage_event_line("ordinary stderr") is None
+from app.processing.streaming.worker_process_events import read_worker_stderr
 
 
 def test_read_worker_stderr_forwards_tensorrt_lifecycle_logs_to_parent_stderr(capsys) -> None:

@@ -86,6 +86,18 @@ def test_stage_file_chunk_progress_has_no_dead_output_start_helper() -> None:
     assert "stage_chunk_output_start" not in progress.read_text(encoding="utf-8")
 
 
+def test_streaming_internal_types_and_parser_are_not_public_surfaces() -> None:
+    streaming = REPO_ROOT / "backend" / "app" / "processing" / "streaming"
+    preflight_text = (streaming / "pipeline_preflight.py").read_text(encoding="utf-8")
+    processes_text = (streaming / "worker_processes.py").read_text(encoding="utf-8")
+    events_text = (streaming / "worker_process_events.py").read_text(encoding="utf-8")
+
+    assert "class StreamingPipelinePreflight" not in preflight_text
+    assert "class WorkerHandle" not in processes_text
+    assert "def parse_stage_event_line" not in events_text
+    assert '"TENSORRT_LOG_PREFIX"' not in events_text
+
+
 def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_contract_check = tmp_path / "_contract_check.ts"
@@ -108,6 +120,9 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     fake_rife_model_spec = tmp_path / "rife_model_spec.py"
     fake_rife_package = tmp_path / "rife_init.py"
     fake_stage_file_chunk_progress = tmp_path / "stage_file_chunk_progress.py"
+    fake_pipeline_preflight = tmp_path / "pipeline_preflight.py"
+    fake_worker_processes = tmp_path / "worker_processes.py"
+    fake_worker_process_events = tmp_path / "worker_process_events.py"
     fake_contract_check.write_text("export const _TASK_REQUEST_CONTRACT = {}\n", encoding="utf-8")
     fake_weights.write_text(
         "DISABLED_PADDLEGAN_VSR_MODELS = {}\n"
@@ -176,6 +191,21 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
         "def stage_chunk_output_start(step, chunk):\n    return chunk.input_start_frame\n",
         encoding="utf-8",
     )
+    fake_pipeline_preflight.write_text(
+        "class StreamingPipelinePreflight:\n    pass\n"
+        '__all__ = ["StreamingPipelinePreflight", "build_streaming_pipeline_preflight"]\n',
+        encoding="utf-8",
+    )
+    fake_worker_processes.write_text(
+        'class WorkerHandle:\n    pass\n__all__ = ["WorkerHandle", "spawn_stage_workers", "wait_for_workers"]\n',
+        encoding="utf-8",
+    )
+    fake_worker_process_events.write_text(
+        "TENSORRT_LOG_PREFIX = '[VP_TRT]'\n"
+        "def parse_stage_event_line(line):\n    return None\n"
+        '__all__ = ["TENSORRT_LOG_PREFIX", "parse_stage_event_line", "read_worker_stderr"]\n',
+        encoding="utf-8",
+    )
     monkeypatch.setattr(module, "FRONTEND_PROTOCOL_CONTRACT_CHECK", fake_contract_check, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_WEIGHTS", fake_weights, raising=False)
     monkeypatch.setattr(module, "WORKFLOW_VALIDATION", fake_validation, raising=False)
@@ -196,11 +226,14 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     monkeypatch.setattr(module, "RIFE_MODEL_SPEC", fake_rife_model_spec, raising=False)
     monkeypatch.setattr(module, "RIFE_PACKAGE", fake_rife_package, raising=False)
     monkeypatch.setattr(module, "STAGE_FILE_CHUNK_PROGRESS", fake_stage_file_chunk_progress, raising=False)
+    monkeypatch.setattr(module, "PIPELINE_PREFLIGHT", fake_pipeline_preflight, raising=False)
+    monkeypatch.setattr(module, "WORKER_PROCESSES", fake_worker_processes, raising=False)
+    monkeypatch.setattr(module, "WORKER_PROCESS_EVENTS", fake_worker_process_events, raising=False)
     issues: list[str] = []
 
     getattr(module, "_check_dead_surface_boundary", lambda _issues: None)(issues)
 
-    assert len(issues) == 22, issues
+    assert len(issues) == 25, issues
 
 
 def test_production_processing_has_no_global_algorithm_bootstrap() -> None:
