@@ -6,10 +6,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.cli import build_parser, cmd_check
 from app.cli.commands import _process_validation
+from app.cli.commands.check import cmd_check
 from app.cli.commands._process_planning import ProcessingPlan
 from app.cli.commands._process_validation import load_runtime_configs
+from app.cli.parser import build_parser
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import (
@@ -424,8 +425,6 @@ def test_stage_worker_main_runs_logging_and_handler_only(monkeypatch):
 
     monkeypatch.setattr(cli_main, "build_parser", lambda: _Parser())
     monkeypatch.setattr(cli_main, "setup_logging", lambda: calls.append("logging"))
-    monkeypatch.setattr(cli_main, "register_native_dll_paths", lambda: calls.append("dll"), raising=False)
-
     cli_main.main()
 
     assert calls == ["logging", "func"]
