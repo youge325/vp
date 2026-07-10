@@ -40,9 +40,11 @@ class TestAlgorithmFactory:
 
     def test_register_and_create(self):
         AlgorithmFactory.register("mock", MockAlgorithm)
-        algo = AlgorithmFactory.create("mock")
+        tensor_backend = object()
+        algo = AlgorithmFactory.create("mock", tensor_backend=tensor_backend)
         assert isinstance(algo, MockAlgorithm)
         assert algo.get_name() == "MockAlgorithm"
+        assert algo._tensor_backend is tensor_backend
 
     def test_create_unknown_type_raises(self):
         # 先注册一个无关项,确保走的是"未知类型"分支而不是空注册表早失败分支。
@@ -73,7 +75,15 @@ class TestAlgorithmFactory:
         assert "super_resolution" in types
         assert "anime_optimization" in types
 
-    def test_create_with_tensor_backend_name(self):
+    def test_create_with_tensor_backend_name(self, monkeypatch):
         AlgorithmFactory.register("mock", MockAlgorithm)
+        tensor_backend = object()
+        requested_backends = []
+        monkeypatch.setattr(
+            "app.algorithms.factory.get_tensor_backend",
+            lambda name: requested_backends.append(name) or tensor_backend,
+        )
+
         algo = AlgorithmFactory.create("mock", tensor_backend_name="pytorch")
-        assert algo is not None
+        assert requested_backends == ["pytorch"]
+        assert algo._tensor_backend is tensor_backend

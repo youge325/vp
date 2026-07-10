@@ -196,6 +196,42 @@ def test_dead_type_aliases_do_not_remain_in_current_repo() -> None:
     assert "export interface CapabilityChoice" not in capability_text
 
 
+def test_backend_dead_algorithm_helper_boundary_matches_current_repo() -> None:
+    module = _load_module()
+    issues: list[str] = []
+
+    module._check_backend_dead_algorithm_helper_boundary(issues)
+
+    assert issues == []
+
+
+def test_backend_dead_algorithm_helper_boundary_flags_unused_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_payload = tmp_path / "frame_payload.py"
+    fake_factory = tmp_path / "factory.py"
+    fake_payload.write_text(
+        "class FramePayload:\n"
+        "    def has_tensor_for(self, backend): return False\n"
+        "    def _ensure_backend_matches(self, backend): return None\n\n"
+        "def _backend_label(backend): return str(backend)\n",
+        encoding="utf-8",
+    )
+    fake_factory.write_text(
+        "class AlgorithmFactory:\n    def get_available_algorithms(self): return {}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "FRAME_PAYLOAD", fake_payload, raising=False)
+    monkeypatch.setattr(module, "ALGORITHM_FACTORY", fake_factory, raising=False)
+    issues: list[str] = []
+
+    module._check_backend_dead_algorithm_helper_boundary(issues)
+
+    assert any("has_tensor_for" in issue for issue in issues), issues
+    assert any("_ensure_backend_matches" in issue for issue in issues), issues
+    assert any("_backend_label" in issue for issue in issues), issues
+    assert any("get_available_algorithms" in issue for issue in issues), issues
+
+
 def test_enhance_runtime_rows_requires_precomputed_frame_state() -> None:
     module = _load_module()
     issues: list[str] = []
@@ -304,7 +340,6 @@ def test_collect_typed_ipc_contract_args_allows_private_mapping(tmp_path, monkey
     module = _load_module()
     fake_contract = tmp_path / "contract.ts"
     fake_contract.write_text(
-        "const IPC_COMMAND_NAMES = ['pick_inputs', 'control_task'] as const\n"
         "type TaskControlKind = 'pause' | 'resume'\n"
         "interface IpcCommandArgs {\n"
         "  pick_inputs: undefined\n"
@@ -318,6 +353,50 @@ def test_collect_typed_ipc_contract_args_allows_private_mapping(tmp_path, monkey
         "pick_inputs": set(),
         "control_task": {"kind"},
     }
+
+
+def test_frontend_ipc_contract_uses_args_mapping_as_command_source() -> None:
+    module = _load_module()
+    issues: list[str] = []
+
+    module._check_frontend_ipc_contract_surface_boundary(issues)
+
+    assert issues == []
+
+
+def test_frontend_ipc_contract_surface_boundary_flags_handwritten_command_union(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_contract = tmp_path / "contract.ts"
+    fake_contract.write_text(
+        "export type IpcCommand = 'pick_inputs' | 'control_task'\n"
+        "interface IpcCommandArgs { pick_inputs: undefined; control_task: { kind: string } }\n"
+        "interface IpcCommandResult { pick_inputs: string[]; control_task: void }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "IPC_CONTRACT", fake_contract, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_ipc_contract_surface_boundary(issues)
+
+    assert any("keyof command source" in issue for issue in issues), issues
+
+
+def test_frontend_ipc_contract_surface_boundary_flags_private_command_name_list(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_contract = tmp_path / "contract.ts"
+    fake_contract.write_text(
+        "const IPC_COMMAND_NAMES = ['pick_inputs'] as const\n"
+        "export type IpcCommand = typeof IPC_COMMAND_NAMES[number]\n"
+        "interface IpcCommandArgs { pick_inputs: undefined }\n"
+        "interface IpcCommandResult { pick_inputs: string[] }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "IPC_CONTRACT", fake_contract, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_ipc_contract_surface_boundary(issues)
+
+    assert any("command name list" in issue for issue in issues), issues
 
 
 def test_frontend_ipc_contract_surface_boundary_flags_internal_exports(tmp_path, monkeypatch) -> None:
@@ -1036,7 +1115,6 @@ def test_frontend_utility_internal_types_are_not_exported() -> None:
             "BatchPreflightInput",
             "BatchPreflightVerdict",
         ),
-        frontend_src / "services" / "task" / "batch-runner.ts": ("BatchRunnerDeps",),
         frontend_src / "services" / "task" / "batch" / "conflict.ts": (
             "ConflictResolverDeps",
             "ConflictResolver",
@@ -1096,6 +1174,64 @@ def test_frontend_batch_lifecycle_facade_does_not_reexport_internal_types() -> N
     text = lifecycle_index.read_text(encoding="utf-8")
 
     assert "export type { BatchLifecycle" not in text
+
+
+def test_frontend_batch_runner_dead_boundary_matches_current_repo() -> None:
+    module = _load_module()
+    issues: list[str] = []
+
+    module._check_frontend_batch_runner_dead_boundary(issues)
+
+    assert issues == []
+
+
+def test_frontend_batch_runner_dead_boundary_flags_duplicate_deps_and_unused_helper(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runner = tmp_path / "batch-runner.ts"
+    fake_queue = tmp_path / "queue.ts"
+    fake_runner.write_text(
+        "interface BatchRunnerDeps { startTask: () => Promise<void> }\n"
+        "export function createBatchRunner(deps: BatchRunnerDeps) { return deps }\n",
+        encoding="utf-8",
+    )
+    fake_queue.write_text(
+        "import type { createCommonHelpers } from './common'\n"
+        "type CommonHelpers = ReturnType<typeof createCommonHelpers>\n"
+        "export function createQueueOps(deps: unknown, _helpers: CommonHelpers) { return deps }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "FRONTEND_BATCH_RUNNER", fake_runner, raising=False)
+    monkeypatch.setattr(module, "FRONTEND_BATCH_QUEUE", fake_queue, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_batch_runner_dead_boundary(issues)
+
+    assert any("BatchRunnerDeps" in issue for issue in issues), issues
+    assert any("unused queue helpers" in issue for issue in issues), issues
+
+
+def test_frontend_batch_runner_dead_boundary_allows_used_common_helpers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runner = tmp_path / "batch-runner.ts"
+    fake_queue = tmp_path / "queue.ts"
+    fake_runner.write_text(
+        "import type { BatchLifecycleDeps } from './batch/lifecycle/types'\n"
+        "export function createBatchRunner(deps: BatchLifecycleDeps) { return deps }\n",
+        encoding="utf-8",
+    )
+    fake_queue.write_text(
+        "import type { createCommonHelpers } from './common'\n"
+        "type CommonHelpers = ReturnType<typeof createCommonHelpers>\n"
+        "export function createQueueOps(helpers: CommonHelpers) { return helpers.getCurrentItem() }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "FRONTEND_BATCH_RUNNER", fake_runner, raising=False)
+    monkeypatch.setattr(module, "FRONTEND_BATCH_QUEUE", fake_queue, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_batch_runner_dead_boundary(issues)
+
+    assert issues == []
 
 
 def test_frontend_batch_lifecycle_facade_boundary_flags_type_reexports(tmp_path, monkeypatch) -> None:

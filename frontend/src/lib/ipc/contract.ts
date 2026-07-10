@@ -10,21 +10,6 @@ import type { EnvironmentCheckPayload } from '@/types/domain/env'
 import type { VideoInfoResult } from '@/types/domain/media'
 import type { TaskRequest, WorkbenchPreset } from '@/types/protocol'
 
-const IPC_COMMAND_NAMES = [
-  'pick_inputs',
-  'pick_output_directory',
-  'check_environment',
-  'load_workbench_preset',
-  'save_workbench_preset',
-  'inspect_video',
-  'check_resume_state',
-  'start_task',
-  'cancel_task',
-  'control_task',
-  'open_output_location',
-] as const
-
-export type IpcCommand = typeof IPC_COMMAND_NAMES[number]
 type TaskControlKind = 'pause' | 'resume'
 
 interface IpcCommandArgs {
@@ -40,6 +25,8 @@ interface IpcCommandArgs {
   control_task: { kind: TaskControlKind }
   open_output_location: { path: string }
 }
+
+export type IpcCommand = keyof IpcCommandArgs
 
 interface IpcCommandResult {
   pick_inputs: string[]
@@ -58,16 +45,10 @@ interface IpcCommandResult {
 export type IpcInvokeArgs<C extends IpcCommand> = IpcCommandArgs[C]
 export type IpcInvokeResult<C extends IpcCommand> = IpcCommandResult[C]
 
-type _ArgsCoverEveryCommand =
-  keyof IpcCommandArgs extends IpcCommand
-    ? IpcCommand extends keyof IpcCommandArgs ? true : never
-    : never
 type _ResultsCoverEveryCommand =
   keyof IpcCommandResult extends IpcCommand
     ? IpcCommand extends keyof IpcCommandResult ? true : never
     : never
 
-const _ARGS_COVERAGE_CHECK: _ArgsCoverEveryCommand = true
 const _RESULTS_COVERAGE_CHECK: _ResultsCoverEveryCommand = true
-void _ARGS_COVERAGE_CHECK
 void _RESULTS_COVERAGE_CHECK

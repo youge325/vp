@@ -1,12 +1,8 @@
 """算法工厂 — 根据任务类型创建算法实例。
 
-Phase D.6.1:
-- ``create`` 在注册表为空时抛出 ``ProcessError(INVALID_CONFIG)``,把
-  "忘记调用 ``register_default_algorithms``" 这种启动顺序错误从一个
-  晦涩的 ``ValueError`` 升级为带 TaskErrorCode 的强类型异常。
-- ``get_available_algorithms`` 改为返回元数据 ``{type_name: class_name}``,
-  不再为每个注册类实例化一次(老实现要求所有算法都能用 0 参构造,这与
-  实际的 ``__init__(tensor_backend, **kwargs)`` 签名相违)。
+``create`` 在注册表为空时抛出 ``ProcessError(INVALID_CONFIG)``,把
+"忘记调用 ``register_default_algorithms``" 这种启动顺序错误从一个
+晦涩的 ``ValueError`` 升级为带 TaskErrorCode 的强类型异常。
 """
 
 from typing import Optional
@@ -66,8 +62,3 @@ class AlgorithmFactory:
     def get_available_types(cls) -> list[str]:
         """返回已注册的算法类型列表。"""
         return list(cls._registry.keys())
-
-    @classmethod
-    def get_available_algorithms(cls) -> dict[str, str]:
-        """返回算法类型到注册类名的映射(只读元数据,不实例化)。"""
-        return {type_name: algo_cls.__name__ for type_name, algo_cls in cls._registry.items()}
