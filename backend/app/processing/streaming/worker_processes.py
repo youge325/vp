@@ -15,7 +15,7 @@ from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
 
 @dataclass(slots=True)
-class WorkerHandle:
+class _WorkerHandle:
     process: subprocess.Popen[bytes]
     plan: StageWorkerPlan
     stderr_tail: deque[str]
@@ -26,8 +26,8 @@ def spawn_stage_workers(
     *,
     config_dir: Path,
     python_executable: str,
-) -> list[WorkerHandle]:
-    handles: list[WorkerHandle] = []
+) -> list[_WorkerHandle]:
+    handles: list[_WorkerHandle] = []
     previous_stdout = None
     root = _backend_dir()
 
@@ -54,7 +54,7 @@ def spawn_stage_workers(
             previous_stdout.close()
         if process.stdout is None:
             raise RuntimeError("Unable to capture stage-worker stdout.")
-        handles.append(WorkerHandle(process=process, plan=plan, stderr_tail=deque(maxlen=20)))
+        handles.append(_WorkerHandle(process=process, plan=plan, stderr_tail=deque(maxlen=20)))
         previous_stdout = process.stdout
 
     return handles
@@ -64,7 +64,7 @@ def _backend_dir() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def wait_for_workers(handles: list[WorkerHandle], error_queue: queue.Queue[BaseException]) -> None:
+def wait_for_workers(handles: list[_WorkerHandle], error_queue: queue.Queue[BaseException]) -> None:
     for handle in handles:
         return_code = handle.process.wait()
         if return_code == 0:
@@ -83,7 +83,6 @@ def wait_for_workers(handles: list[WorkerHandle], error_queue: queue.Queue[BaseE
 
 
 __all__ = [
-    "WorkerHandle",
     "spawn_stage_workers",
     "wait_for_workers",
 ]

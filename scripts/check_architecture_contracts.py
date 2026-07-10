@@ -687,6 +687,21 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
             r"\bstage_chunk_output_start\b",
             "dead stage chunk output start helper",
         ),
+        (
+            PIPELINE_PREFLIGHT,
+            r"\bclass\s+StreamingPipelinePreflight\b|__all__\s*=\s*\[[^\]]*\bStreamingPipelinePreflight\b",
+            "public streaming preflight implementation type",
+        ),
+        (
+            WORKER_PROCESSES,
+            r"\bclass\s+WorkerHandle\b|__all__\s*=\s*\[[^\]]*\bWorkerHandle\b",
+            "public stage worker handle implementation type",
+        ),
+        (
+            WORKER_PROCESS_EVENTS,
+            r"\bdef\s+parse_stage_event_line\b|__all__\s*=\s*\[[^\]]*\b(?:parse_stage_event_line|TENSORRT_LOG_PREFIX)\b",
+            "public worker event implementation helper",
+        ),
     )
     for path, pattern, label in checks:
         if re.search(pattern, _read(path), re.MULTILINE):

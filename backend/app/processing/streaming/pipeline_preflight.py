@@ -24,7 +24,7 @@ from app.utils.ffmpeg import FFmpegWrapper
 
 
 @dataclass(slots=True)
-class StreamingPipelinePreflight:
+class _StreamingPipelinePreflight:
     resolved_steps: list[ProcessingStep]
     video_info: dict[str, Any]
     stage_plan: StagePlan
@@ -48,7 +48,7 @@ def build_streaming_pipeline_preflight(
     output_config: dict[str, Any],
     processing_steps: list[ProcessingStepInput],
     output_fps: float | None,
-) -> StreamingPipelinePreflight:
+) -> _StreamingPipelinePreflight:
     resolved_steps = normalize_processing_steps(processing_steps)
     video_info = resolve_video_info(ffmpeg, input_path)
     stage_plan = build_stage_plan(
@@ -88,7 +88,7 @@ def build_streaming_pipeline_preflight(
         stage_plan=stage_plan,
     )
 
-    return StreamingPipelinePreflight(
+    return _StreamingPipelinePreflight(
         resolved_steps=resolved_steps,
         video_info=video_info,
         stage_plan=stage_plan,
@@ -102,4 +102,4 @@ def build_streaming_pipeline_preflight(
     )
 
 
-__all__ = ["StreamingPipelinePreflight", "build_streaming_pipeline_preflight"]
+__all__ = ["build_streaming_pipeline_preflight"]

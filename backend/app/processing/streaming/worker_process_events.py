@@ -10,10 +10,10 @@ from typing import Any
 from app.errors import ProcessError, TaskErrorCode, error_code_to_wire
 from app.processing.streaming.stage_worker_progress import STAGE_EVENT_PREFIX
 
-TENSORRT_LOG_PREFIX = "[VP_TRT]"
+_TENSORRT_LOG_PREFIX = "[VP_TRT]"
 
 
-def parse_stage_event_line(line: str) -> dict[str, Any] | None:
+def _parse_stage_event_line(line: str) -> dict[str, Any] | None:
     """Parse a structured worker stderr line, ignoring ordinary stderr."""
     if not line.startswith(STAGE_EVENT_PREFIX):
         return None
@@ -37,10 +37,10 @@ def read_worker_stderr(
         line = raw_line.decode("utf-8", errors="replace").strip()
         if not line:
             continue
-        event = parse_stage_event_line(line)
+        event = _parse_stage_event_line(line)
         if event is None:
             handle.stderr_tail.append(line)
-            if TENSORRT_LOG_PREFIX in line:
+            if _TENSORRT_LOG_PREFIX in line:
                 print(line, file=sys.stderr, flush=True)
             continue
         if event.get("type") == "progress":
@@ -71,4 +71,4 @@ def read_worker_stderr(
             )
 
 
-__all__ = ["TENSORRT_LOG_PREFIX", "parse_stage_event_line", "read_worker_stderr"]
+__all__ = ["read_worker_stderr"]
