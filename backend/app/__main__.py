@@ -10,6 +10,18 @@ def _emit(payload: dict) -> None:
     print(json.dumps(payload, ensure_ascii=False), flush=True)
 
 
+def _emit_error_payload(code: object, message: str, details: dict) -> None:
+    """Emit an import-safe error envelope before protocol modules are available."""
+    _emit(
+        {
+            "type": "error",
+            "code": _wire_error_code(code),
+            "message": message,
+            "details": details,
+        }
+    )
+
+
 try:
     from app.errors import ProcessError, error_code_to_wire
     from app.errors._bootstrap import infer_error_code
@@ -77,55 +89,43 @@ def _run() -> None:
     """Execute the CLI. Wrapped so `import app.__main__` does not invoke it."""
     try:
         from app.cli import main
+        from app.protocol import ndjson
     except Exception as exc:  # pragma: no cover - defensive bootstrap boundary
-        code = _wire_error_code(_bootstrap_error_code(exc))
-        _emit(
+        _emit_error_payload(
+            _bootstrap_error_code(exc),
+            str(exc) or exc.__class__.__name__,
             {
-                "type": "error",
-                "code": code,
-                "message": str(exc) or exc.__class__.__name__,
-                "details": {
-                    "exception": exc.__class__.__name__,
-                    "traceback": traceback.format_exc(),
-                },
-            }
+                "exception": exc.__class__.__name__,
+                "traceback": traceback.format_exc(),
+            },
         )
         raise SystemExit(1) from exc
 
     try:
         main()
     except ProcessError as exc:
-        _emit(
-            {
-                "type": "error",
-                "code": _wire_error_code(exc.code),
-                "message": exc.message,
-                "details": exc.details,
-            }
+        ndjson.error(
+            code=_wire_error_code(exc.code),
+            message=exc.message,
+            details=exc.details,
         )
         raise SystemExit(1) from exc
     except Exception as exc:  # pragma: no cover - defensive boundary
         if ProcessError is not None:
             pe = ProcessError.from_exception(exc)
-            _emit(
-                {
-                    "type": "error",
-                    "code": _wire_error_code(pe.code),
-                    "message": pe.message,
-                    "details": pe.details,
-                }
+            ndjson.error(
+                code=_wire_error_code(pe.code),
+                message=pe.message,
+                details=pe.details,
             )
         else:
-            _emit(
+            _emit_error_payload(
+                _bootstrap_error_code(exc),
+                str(exc) or exc.__class__.__name__,
                 {
-                    "type": "error",
-                    "code": _wire_error_code(_bootstrap_error_code(exc)),
-                    "message": str(exc) or exc.__class__.__name__,
-                    "details": {
-                        "exception": exc.__class__.__name__,
-                        "traceback": traceback.format_exc(),
-                    },
-                }
+                    "exception": exc.__class__.__name__,
+                    "traceback": traceback.format_exc(),
+                },
             )
         raise SystemExit(1) from exc
 

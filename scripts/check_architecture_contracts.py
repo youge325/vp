@@ -20,6 +20,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 BACKEND_TESTS = ROOT / "backend" / "tests"
+APP_MAIN = ROOT / "backend" / "app" / "__main__.py"
+PROTOCOL_PACKAGE = ROOT / "backend" / "app" / "protocol" / "__init__.py"
 CLI_TEST = BACKEND_TESTS / "test_cli.py"
 COMMANDS_MANIFEST = ROOT / "frontend" / "src-tauri" / "src" / "commands_manifest.rs"
 DEFAULT_PERMISSIONS = ROOT / "frontend" / "src-tauri" / "permissions" / "default.toml"
@@ -812,6 +814,26 @@ def _check_round_27_data_rule_boundary(issues: list[str]) -> None:
 
     if PADDLEGAN_VENDOR_LOGGER.exists():
         issues.append(f"dead PaddleGAN vendor logger remains in {_rel(PADDLEGAN_VENDOR_LOGGER)}")
+
+
+def _check_round_28_error_emission_boundary(issues: list[str]) -> None:
+    main_text = _read(APP_MAIN)
+    manual_error_envelopes = re.findall(r"[\"']type[\"']\s*:\s*[\"']error[\"']", main_text)
+    if (
+        "from app.protocol import ndjson" not in main_text
+        or main_text.count("ndjson.error(") < 2
+        or len(manual_error_envelopes) != 1
+    ):
+        issues.append(f"normal CLI failures must use the typed NDJSON error emitter in {_rel(APP_MAIN)}")
+
+    protocol_text = _read(PROTOCOL_PACKAGE)
+    if (
+        "class _NdjsonEmitter" not in protocol_text
+        or "class NdjsonEmitter" in protocol_text
+        or "_instance" in protocol_text
+        or re.search(r"^\s*def\s+__new__\b", protocol_text, re.MULTILINE)
+    ):
+        issues.append(f"unused emitter singleton remains in {_rel(PROTOCOL_PACKAGE)}")
 
 
 def _check_stage_worker_private_import_boundary(issues: list[str]) -> None:
@@ -2654,6 +2676,7 @@ def main() -> int:
         _check_dead_surface_boundary(issues)
         _check_round_26_dead_interface_boundary(issues)
         _check_round_27_data_rule_boundary(issues)
+        _check_round_28_error_emission_boundary(issues)
         _check_stage_worker_private_import_boundary(issues)
         _check_stage_worker_runtime_boundary(issues)
         _check_stage_worker_entrypoint_export_boundary(issues)

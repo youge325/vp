@@ -3774,3 +3774,43 @@ def test_round_27_data_rule_boundary_flags_reintroduced_sources(tmp_path, monkey
     assert "camel alias" in joined
     assert "RIFE legacy model config" in joined
     assert "PaddleGAN vendor logger" in joined
+
+
+def test_round_28_normal_errors_use_private_stateless_emitter() -> None:
+    app_main = (REPO_ROOT / "backend" / "app" / "__main__.py").read_text(encoding="utf-8")
+    protocol = (REPO_ROOT / "backend" / "app" / "protocol" / "__init__.py").read_text(encoding="utf-8")
+
+    assert "class NdjsonEmitter" not in protocol
+    assert "class _NdjsonEmitter" in protocol
+    assert "_instance" not in protocol
+    assert "def __new__" not in protocol
+    assert "from app.protocol import ndjson" in app_main
+    assert app_main.count("ndjson.error(") == 2
+    assert app_main.count('"type": "error"') == 1
+
+
+def test_round_28_error_emission_boundary_flags_reintroduced_sources(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_main = tmp_path / "__main__.py"
+    fake_protocol = tmp_path / "protocol.py"
+
+    fake_main.write_text(
+        "def run(exc):\n"
+        "    _emit({'type': 'error', 'code': exc.code})\n"
+        "    _emit({'type': 'error', 'code': 'process_failed'})\n",
+        encoding="utf-8",
+    )
+    fake_protocol.write_text(
+        "class NdjsonEmitter:\n    _instance = None\n    def __new__(cls):\n        return super().__new__(cls)\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(module, "APP_MAIN", fake_main, raising=False)
+    monkeypatch.setattr(module, "PROTOCOL_PACKAGE", fake_protocol, raising=False)
+    issues: list[str] = []
+
+    getattr(module, "_check_round_28_error_emission_boundary", lambda _issues: None)(issues)
+
+    joined = "\n".join(issues)
+    assert "typed NDJSON error emitter" in joined
+    assert "emitter singleton" in joined
