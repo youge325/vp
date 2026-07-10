@@ -70,6 +70,10 @@ chunk-{序号}-out{起始输出帧}-{结束输出帧}-src{下一源帧}.{扩展�
 
 [`backend/app/planning/manifest.py`](../backend/app/planning/manifest.py) 的 `prepare()` 方法根据三个因素做决策：
 
+`SegmentManifest` 不直接解析或写入 JSON；[`backend/app/planning/manifest_store.py`](../backend/app/planning/manifest_store.py)
+集中处理 manifest 版本校验、UTC 创建时间和 `.tmp` 文件原子替换。续传进度仍由 chunk 文件名恢复，
+JSON 中不维护可漂移的片段列表。
+
 ```mermaid
 graph TD
     A[启动任务] --> B{resume_mode}

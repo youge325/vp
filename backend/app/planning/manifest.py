@@ -7,8 +7,6 @@ Owns ``SegmentManifest`` plus the resume-related dataclasses
 
 from __future__ import annotations
 
-import datetime as _dt
-import json
 import os
 import re
 import shutil
@@ -16,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from app.planning.manifest_store import MANIFEST_VERSION as CURRENT_MANIFEST_VERSION
+from app.planning.manifest_store import load_manifest, write_manifest
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -70,7 +70,7 @@ class SegmentManifest:
     crash the sentinel remains and is purged at the start of the next run.
     """
 
-    MANIFEST_VERSION = 2
+    MANIFEST_VERSION = CURRENT_MANIFEST_VERSION
     CHUNK_PATTERN = re.compile(
         r"^chunk-(?P<index>\d{4})-out(?P<start>\d{8})-(?P<end>\d{8})-src(?P<next_src>\d{8})\."
         r"(?P<ext>[^.]+)$"
@@ -110,7 +110,7 @@ class SegmentManifest:
         # else; whatever was being written last time is unrecoverable.
         self.cleanup_partial()
 
-        manifest_data = self._load_manifest_safe()
+        manifest_data = load_manifest(self.manifest_path)
         signature_match = bool(manifest_data and manifest_data.get("signature") == signature)
 
         if self.output_path.exists():
@@ -122,16 +122,12 @@ class SegmentManifest:
                     sidecar_signature_match=signature_match,
                 )
             if mode == "force-fresh":
-                self._reset_sidecar()
-                self._delete_final_output()
-                self._write_manifest(signature, config_snapshot)
-                return ResumeDecision(kind="fresh", state=self._empty_state())
+                return self._prepare_fresh(signature, config_snapshot, delete_final=True)
             if mode == "force-resume":
                 if not signature_match:
-                    self._reset_sidecar()
-                    self._write_manifest(signature, config_snapshot)
+                    decision = self._prepare_fresh(signature, config_snapshot)
                     logger.info("Configuration changed; previous progress invalidated.")
-                    return ResumeDecision(kind="fresh", state=self._empty_state())
+                    return decision
                 state = self._scan_resume_state()
                 return ResumeDecision(
                     kind="resume" if state.completed_output_frames > 0 else "fresh",
@@ -140,15 +136,12 @@ class SegmentManifest:
                 )
 
         if not self.manifest_path.is_file():
-            self._reset_sidecar()
-            self._write_manifest(signature, config_snapshot)
-            return ResumeDecision(kind="fresh", state=self._empty_state())
+            return self._prepare_fresh(signature, config_snapshot)
 
         if not signature_match:
-            self._reset_sidecar()
-            self._write_manifest(signature, config_snapshot)
+            decision = self._prepare_fresh(signature, config_snapshot)
             logger.info("Configuration changed; previous progress invalidated.")
-            return ResumeDecision(kind="fresh", state=self._empty_state())
+            return decision
 
         state = self._scan_resume_state()
         return ResumeDecision(
@@ -165,7 +158,7 @@ class SegmentManifest:
         total_output_frames: int = 0,
     ) -> dict[str, Any]:
         """Read-only probe of the sidecar state used by ``inspect-output``."""
-        manifest_data = self._load_manifest_safe()
+        manifest_data = load_manifest(self.manifest_path)
         signature_match = bool(manifest_data and manifest_data.get("signature") == signature)
 
         if signature_match:
@@ -352,37 +345,24 @@ class SegmentManifest:
         if self.sidecar_dir.is_dir():
             shutil.rmtree(self.sidecar_dir, ignore_errors=True)
 
+    def _prepare_fresh(
+        self,
+        signature: str,
+        config_snapshot: dict[str, Any],
+        *,
+        delete_final: bool = False,
+    ) -> ResumeDecision:
+        self._reset_sidecar()
+        if delete_final:
+            self._delete_final_output()
+        write_manifest(
+            self.manifest_path,
+            signature=signature,
+            output_path=self.output_path,
+            config_snapshot=config_snapshot,
+        )
+        return ResumeDecision(kind="fresh", state=self._empty_state())
+
     def _delete_final_output(self) -> None:
         if self.output_path.is_file():
             self.output_path.unlink()
-
-    def _write_manifest(self, signature: str, config_snapshot: dict[str, Any]) -> None:
-        self.sidecar_dir.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "version": self.MANIFEST_VERSION,
-            "signature": signature,
-            "created_at": _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-            "input_path": str(config_snapshot.get("input_path", "")),
-            "output_path": str(self.output_path),
-            "config_snapshot": config_snapshot,
-        }
-        tmp_path = self.manifest_path.with_suffix(self.manifest_path.suffix + ".tmp")
-        with tmp_path.open("w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
-            handle.flush()
-            try:
-                os.fsync(handle.fileno())
-            except OSError:
-                pass
-        os.replace(tmp_path, self.manifest_path)
-
-    def _load_manifest_safe(self) -> dict[str, Any] | None:
-        if not self.manifest_path.is_file():
-            return None
-        try:
-            data = json.loads(self.manifest_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return None
-        if not isinstance(data, dict) or data.get("version") != self.MANIFEST_VERSION:
-            return None
-        return data
