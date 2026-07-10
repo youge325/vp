@@ -257,15 +257,15 @@ def test_manifest_write_uses_tmp_then_replace(tmp_path, monkeypatch):
 
     captured: list[tuple[str, str]] = []
 
-    import app.planning.manifest as planning_module
+    import app.planning.manifest_store as manifest_store
 
-    real_replace = planning_module.os.replace
+    real_replace = manifest_store.os.replace
 
     def tracking_replace(src, dst):
         captured.append((str(src), str(dst)))
         return real_replace(src, dst)
 
-    monkeypatch.setattr(planning_module.os, "replace", tracking_replace)
+    monkeypatch.setattr(manifest_store.os, "replace", tracking_replace)
 
     decision = manifest.prepare("sig-a", {}, mode="auto")
     assert decision.kind == "fresh"

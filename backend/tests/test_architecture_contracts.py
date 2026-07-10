@@ -493,6 +493,24 @@ def test_segment_manifest_compat_boundary_flags_completed_segments_shim(tmp_path
     assert any("SegmentManifest compatibility shim" in issue for issue in issues), issues
 
 
+def test_segment_manifest_boundary_flags_local_json_persistence(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_manifest = tmp_path / "manifest.py"
+    fake_manifest.write_text(
+        "import json\n"
+        "class SegmentManifest:\n"
+        "    def _write_manifest(self, payload):\n"
+        "        json.dump(payload, self.manifest_path)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "SEGMENT_MANIFEST", fake_manifest, raising=False)
+    issues: list[str] = []
+
+    module._check_segment_manifest_compat_boundary(issues)
+
+    assert any("SegmentManifest persistence" in issue for issue in issues), issues
+
+
 def test_enhance_form_workflow_rule_boundary_flags_mutation_leaks(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_form = tmp_path / "useEnhanceForm.ts"
@@ -526,6 +544,23 @@ def test_frontend_enhance_workflow_selection_boundary_flags_local_selection_help
     module._check_frontend_enhance_workflow_selection_boundary(issues)
 
     assert any("enhance workflow selection" in issue for issue in issues), issues
+
+
+def test_frontend_enhance_workflow_selection_boundary_flags_pass_through_wrappers(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_workflow = tmp_path / "enhance-workflow.ts"
+    fake_workflow.write_text(
+        "export function applyInterpolationBackendSelection(config, value, checkResult) {\n"
+        "  applyInterpolationBackendSelectionDefaults(config, value, checkResult)\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_WORKFLOW", fake_workflow)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_workflow_selection_boundary(issues)
+
+    assert any("selection pass-through" in issue for issue in issues), issues
 
 
 def test_frontend_enhance_workflow_lookup_boundary_flags_local_lookup_helpers(tmp_path, monkeypatch) -> None:

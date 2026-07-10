@@ -120,6 +120,7 @@ OBSOLETE_DECODE_QUEUE_REFERENCE_ROOTS = (
     README,
 )
 SEGMENT_MANIFEST = ROOT / "backend" / "app" / "planning" / "manifest.py"
+SEGMENT_MANIFEST_STORE = ROOT / "backend" / "app" / "planning" / "manifest_store.py"
 STAGE_PLAN = ROOT / "backend" / "app" / "planning" / "stage_plan.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_validation.py"
@@ -967,6 +968,21 @@ def _check_segment_manifest_compat_boundary(issues: list[str]) -> None:
         if re.search(pattern, text, re.MULTILINE):
             issues.append(f"SegmentManifest compatibility shim `{label}` remains in {_rel(SEGMENT_MANIFEST)}")
 
+    persistence_patterns = {
+        "JSON import": r"^\s*(?:import\s+json\b|from\s+json\s+import\b)",
+        "datetime import": r"^\s*(?:import\s+datetime\b|from\s+datetime\s+import\b)",
+        "JSON serialization": r"\bjson\.(?:dump|dumps|load|loads)\s*\(",
+        "filesystem flush": r"\bos\.fsync\s*\(",
+        "writer helper": r"^\s*def\s+_write_manifest\b",
+        "reader helper": r"^\s*def\s+_load_manifest_safe\b",
+    }
+    for label, pattern in persistence_patterns.items():
+        if re.search(pattern, text, re.MULTILINE):
+            issues.append(f"SegmentManifest persistence `{label}` remains in {_rel(SEGMENT_MANIFEST)}")
+
+    if not SEGMENT_MANIFEST_STORE.is_file():
+        issues.append(f"SegmentManifest persistence owner is missing: {_rel(SEGMENT_MANIFEST_STORE)}")
+
 
 def _check_cli_process_planning_validation_boundary(issues: list[str]) -> None:
     text = _read(CLI_PROCESS_PLANNING)
@@ -1040,6 +1056,18 @@ def _check_frontend_enhance_workflow_selection_boundary(issues: list[str]) -> No
         if re.search(pattern, text, re.MULTILINE):
             issues.append(
                 f"enhance workflow selection `{label}` remains in frontend/src/services/preset/enhance-workflow.ts"
+            )
+
+    selection_exports = (
+        "applyInterpolationAlgorithmSelection",
+        "applyInterpolationBackendSelection",
+        "applySuperResolutionAlgorithmSelection",
+        "applySuperResolutionBackendSelection",
+    )
+    for export_name in selection_exports:
+        if re.search(rf"^\s*export\s+function\s+{export_name}\b", text, re.MULTILINE):
+            issues.append(
+                f"enhance workflow selection pass-through `{export_name}` remains in {_rel(ENHANCE_WORKFLOW)}"
             )
 
 

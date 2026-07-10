@@ -94,11 +94,13 @@ class StagePlan:
 
 ### SegmentManifest
 
-[`backend/app/planning/manifest.py`](../backend/app/planning/manifest.py) 实现断点续传的 filesystem-as-state：
+[`backend/app/planning/manifest.py`](../backend/app/planning/manifest.py) 负责续传决策、片段路径和 sidecar 生命周期；
+[`backend/app/planning/manifest_store.py`](../backend/app/planning/manifest_store.py) 负责 `manifest.json` 的版本校验与原子持久化：
 
 - 在输出目录旁创建 `.vp_segments/` 子目录
 - 片段文件名编码帧范围：`chunk-NNNN-out{start}-{end}-src{next}.{ext}`
-- `manifest.json` 记录已完成的片段和配置签名
+- 已完成进度从片段文件名扫描恢复
+- `manifest.json` 只记录配置签名、配置快照和路径元数据
 
 ## 流式执行器
 
