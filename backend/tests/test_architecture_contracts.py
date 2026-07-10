@@ -81,6 +81,11 @@ def test_rife_package_has_no_unused_lazy_solver_facade() -> None:
     assert "__getattr__" not in text
 
 
+def test_stage_file_chunk_progress_has_no_dead_output_start_helper() -> None:
+    progress = REPO_ROOT / "backend" / "app" / "processing" / "streaming" / "stage_file_chunk_progress.py"
+    assert "stage_chunk_output_start" not in progress.read_text(encoding="utf-8")
+
+
 def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_contract_check = tmp_path / "_contract_check.ts"
@@ -102,6 +107,7 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     fake_rife_model_loader = tmp_path / "rife_model_loader.py"
     fake_rife_model_spec = tmp_path / "rife_model_spec.py"
     fake_rife_package = tmp_path / "rife_init.py"
+    fake_stage_file_chunk_progress = tmp_path / "stage_file_chunk_progress.py"
     fake_contract_check.write_text("export const _TASK_REQUEST_CONTRACT = {}\n", encoding="utf-8")
     fake_weights.write_text(
         "DISABLED_PADDLEGAN_VSR_MODELS = {}\n"
@@ -166,6 +172,10 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
         "        return RIFESolver\n",
         encoding="utf-8",
     )
+    fake_stage_file_chunk_progress.write_text(
+        "def stage_chunk_output_start(step, chunk):\n    return chunk.input_start_frame\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(module, "FRONTEND_PROTOCOL_CONTRACT_CHECK", fake_contract_check, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_WEIGHTS", fake_weights, raising=False)
     monkeypatch.setattr(module, "WORKFLOW_VALIDATION", fake_validation, raising=False)
@@ -185,11 +195,12 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     monkeypatch.setattr(module, "RIFE_MODEL_LOADER", fake_rife_model_loader, raising=False)
     monkeypatch.setattr(module, "RIFE_MODEL_SPEC", fake_rife_model_spec, raising=False)
     monkeypatch.setattr(module, "RIFE_PACKAGE", fake_rife_package, raising=False)
+    monkeypatch.setattr(module, "STAGE_FILE_CHUNK_PROGRESS", fake_stage_file_chunk_progress, raising=False)
     issues: list[str] = []
 
     getattr(module, "_check_dead_surface_boundary", lambda _issues: None)(issues)
 
-    assert len(issues) == 21, issues
+    assert len(issues) == 22, issues
 
 
 def test_production_processing_has_no_global_algorithm_bootstrap() -> None:

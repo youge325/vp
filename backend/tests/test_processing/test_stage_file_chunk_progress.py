@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 from app.planning import ProcessingStep
-from app.processing.streaming.stage_file_chunk_progress import (
-    chunk_progress_adapter,
-    stage_chunk_output_start,
-)
+from app.processing.streaming.stage_file_chunk_progress import chunk_progress_adapter
 from app.processing.streaming.worker_plans import StageChunkPlan
 
 
@@ -32,7 +29,6 @@ def test_chunk_progress_adapter_offsets_interpolation_by_source_frame() -> None:
 
     adapter(3, 999, phase="stage")
 
-    assert stage_chunk_output_start(step, chunk) == 6
     assert calls == [(5, 10, {"phase": "stage"})]
 
 
@@ -59,5 +55,4 @@ def test_chunk_progress_adapter_offsets_non_interpolation_by_output_frame() -> N
 
     adapter(3, 999, phase="stage")
 
-    assert stage_chunk_output_start(step, chunk) == 4
     assert calls == [(7, 10, {"phase": "stage"})]

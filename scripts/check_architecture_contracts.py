@@ -682,6 +682,11 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
         (RIFE_MODEL_SPEC, r"^\s*def\s+_to_legacy_dict\b", "single-use RIFE model config converter"),
         (RIFE_MODEL_SPEC, r'^[\s\S]*__all__\s*=\s*\[[^\]]*["\']replace["\']', "unused RIFE replace re-export"),
         (RIFE_PACKAGE, r"\b(?:RIFESolver|__getattr__)\b", "unused RIFE lazy solver facade"),
+        (
+            STAGE_FILE_CHUNK_PROGRESS,
+            r"\bstage_chunk_output_start\b",
+            "dead stage chunk output start helper",
+        ),
     )
     for path, pattern, label in checks:
         if re.search(pattern, _read(path), re.MULTILINE):
