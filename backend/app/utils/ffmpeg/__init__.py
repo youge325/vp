@@ -19,8 +19,6 @@ from . import encode as _encode, probe as _probe
 from .io import (
     RawVideoReader as _RawVideoReader,
     RawVideoWriter as _RawVideoWriter,
-    build_rawvideo_decode_command as _build_rawvideo_decode_command,
-    build_rawvideo_encode_command as _build_rawvideo_encode_command,
     open_rawvideo_decoder as _open_rawvideo_decoder,
     open_rawvideo_encoder as _open_rawvideo_encoder,
 )
@@ -95,48 +93,6 @@ class FFmpegWrapper:
     # ------------------------------------------------------------------ #
     #  Raw video I/O (delegate to io.py)
     # ------------------------------------------------------------------ #
-
-    def build_rawvideo_decode_command(
-        self,
-        input_path: str,
-        *,
-        width: int,
-        height: int,
-        decode_config: dict[str, Any] | None = None,
-        start_frame: int = 0,
-        frame_count: int | None = None,
-    ) -> list[str]:
-        decode_input_args = self.build_decode_input_args(input_path, decode_config)
-        return _build_rawvideo_decode_command(
-            self.ffmpeg_path,
-            input_path,
-            width=width,
-            height=height,
-            decode_input_args=decode_input_args,
-            start_frame=start_frame,
-            frame_count=frame_count,
-        )
-
-    def build_rawvideo_encode_command(
-        self,
-        output_path: str,
-        *,
-        width: int,
-        height: int,
-        fps: float,
-        output_fps: float | None = None,
-        encode_config: dict[str, Any] | None = None,
-    ) -> list[str]:
-        encode_output_args = self.build_encode_output_args(output_path, encode_config)
-        return _build_rawvideo_encode_command(
-            self.ffmpeg_path,
-            output_path,
-            width=width,
-            height=height,
-            fps=fps,
-            output_fps=output_fps,
-            encode_output_args=encode_output_args,
-        )
 
     def open_rawvideo_decoder(
         self,
@@ -219,17 +175,6 @@ class FFmpegWrapper:
             progress_callback=progress_callback,
             keep_audio=keep_audio,
         )
-
-    def convert_format(
-        self,
-        input_path: str,
-        output_path: str,
-        codec: str = "libx264",
-        crf: int = 18,
-        preset: str = "medium",
-        audio_codec: str = "aac",
-    ) -> str:
-        return _encode.convert_format(self.ffmpeg_path, input_path, output_path, codec, crf, preset, audio_codec)
 
     # ------------------------------------------------------------------ #
     #  Capability discovery (delegate to probe.py)
@@ -380,9 +325,6 @@ class FFmpegWrapper:
 
     def build_decode_input_args(self, input_path: str, decode_config: dict[str, Any] | None = None) -> list[str]:
         return _encode.build_decode_input_args(input_path, decode_config)
-
-    def build_encode_video_args(self, encode_config: dict[str, Any] | None = None) -> list[str]:
-        return _encode.build_encode_video_args(encode_config)
 
     def build_encode_output_args(self, output_path: str, encode_config: dict[str, Any] | None = None) -> list[str]:
         return _encode.build_encode_output_args(output_path, encode_config)

@@ -28,6 +28,7 @@ IPC_CONTRACT = ROOT / "frontend" / "src" / "lib" / "ipc" / "contract.ts"
 FRONTEND_IPC_INDEX = ROOT / "frontend" / "src" / "lib" / "ipc" / "index.ts"
 TAURI_SRC = ROOT / "frontend" / "src-tauri" / "src"
 FRONTEND_SRC = ROOT / "frontend" / "src"
+FRONTEND_IPC_CLIENT = FRONTEND_SRC / "lib" / "ipc" / "client.ts"
 FRONTEND_PROTOCOL_CONTRACT_CHECK = FRONTEND_SRC / "types" / "protocol" / "_contract_check.ts"
 DOC_ROOT = ROOT / "docs"
 README = ROOT / "README.md"
@@ -52,6 +53,7 @@ WORKFLOW_STEPS = ROOT / "backend" / "app" / "planning" / "workflow_steps.py"
 PLANNING_PACKAGE = ROOT / "backend" / "app" / "planning" / "__init__.py"
 CLI_PACKAGE = ROOT / "backend" / "app" / "cli" / "__init__.py"
 FFMPEG_PACKAGE = ROOT / "backend" / "app" / "utils" / "ffmpeg" / "__init__.py"
+FFMPEG_ENCODE = FFMPEG_PACKAGE.parent / "encode.py"
 RIFE_MODEL_LOADER = ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife" / "model_loader.py"
 RIFE_MODEL_SPEC = RIFE_MODEL_LOADER.parent / "_model_spec.py"
 RIFE_PACKAGE = RIFE_MODEL_LOADER.parent / "__init__.py"
@@ -71,6 +73,7 @@ WORKER_PROCESS_IO = ROOT / "backend" / "app" / "processing" / "streaming" / "wor
 ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder.py"
 ENCODER_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_worker.py"
 ENCODER_FINALIZATION = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_finalization.py"
+ENCODER_SEGMENT_WRITER = ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_segment_writer.py"
 STREAMING_QUEUES = ROOT / "backend" / "app" / "processing" / "streaming" / "queues.py"
 PIPELINE_RAW = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw.py"
 PIPELINE_RAW_ENCODER = ROOT / "backend" / "app" / "processing" / "streaming" / "pipeline_raw_encoder.py"
@@ -642,6 +645,11 @@ def _check_paddlegan_vsr_contract(issues: list[str]) -> None:
 def _check_dead_surface_boundary(issues: list[str]) -> None:
     checks = (
         (
+            FRONTEND_IPC_CLIENT,
+            r"^\s*export(?:\s+class\s+InvokeError\b|\s*\{[^}\n]*\bInvokeError\b)",
+            "test-only frontend IPC error export",
+        ),
+        (
             FRONTEND_PROTOCOL_CONTRACT_CHECK,
             r"^\s*export\s+const\s+_[A-Z0-9_]+_CONTRACT\b",
             "frontend compile-only contract export",
@@ -652,6 +660,7 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
         (PADDLEGAN_VSR_PACKAGE, r"\bPADDLEGAN_VSR_SPECS\b", "PaddleGAN package re-export"),
         (PROCESSING_PACKAGE, r"\bregister_default_algorithms\b", "global algorithm bootstrap"),
         (ALGORITHM_FACTORY, r"\bregister_default_algorithms\b", "global algorithm bootstrap guidance"),
+        (ALGORITHM_FACTORY, r"^\s*def\s+get_available_types\b", "test-only algorithm registry query"),
         (
             PADDLEGAN_WEIGHTS,
             r"^\s*def\s+(?:resolve_auxiliary_weight_path|ensure_auxiliary_weight_file)\b",
@@ -668,6 +677,11 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
         (CLI_TEST, r"\bregister_native_dll_paths\b", "removed CLI DLL bootstrap monkeypatch"),
         (TENSOR_BACKEND, r"\b_startup_hooks\b", "stale tensor backend CLI bootstrap documentation"),
         (
+            TENSOR_BACKEND,
+            r"^\s*def\s+(?:get_supported_devices|get_supported_engines|_get_ort)\b|\bself\._ort\b",
+            "unused tensor backend capability API",
+        ),
+        (
             PLANNING_PACKAGE,
             r"\b(?:AlgorithmType|PROCESS_LABEL_MAP|ResumeDecision|estimate_encoded_output_frames|ResumeKind|get_onnx_model_name|processing_needs_interpolation|validate_onnx_models_for_workflow)\b",
             "unused planning package facade",
@@ -677,6 +691,17 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
             FFMPEG_PACKAGE,
             r"__all__\s*=\s*\[[^\]]*\b(?:RawVideoReader|RawVideoWriter|build_rawvideo_|open_rawvideo_)",
             "unused FFmpeg raw I/O facade",
+        ),
+        (
+            FFMPEG_PACKAGE,
+            r"^\s*def\s+(?:build_rawvideo_decode_command|build_rawvideo_encode_command|convert_format|build_encode_video_args)\b",
+            "unused FFmpeg wrapper delegate",
+        ),
+        (FFMPEG_ENCODE, r"^\s*def\s+convert_format\b", "dead FFmpeg format converter"),
+        (
+            ENCODER_SEGMENT_WRITER,
+            r"^\s*def\s+(?:has_open_segment|current_segment_input_frames)\b",
+            "unused encoder segment writer accessor",
         ),
         (
             RIFE_MODEL_LOADER,
@@ -708,7 +733,7 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
         ),
         (
             PADDLEGAN_VENDOR_INIT,
-            r"^\s*def\s+(?:xavier_init|normal_init|uniform_init|kaiming_init|init_weights|reset_parameters)\b",
+            r"^\s*def\s+(?:xavier_init|normal_init|uniform_init|kaiming_init|init_weights|reset_parameters|normal_|uniform_|xavier_uniform_|xavier_normal_|kaiming_uniform_)\b",
             "unused PaddleGAN generic initializer",
         ),
         (PADDLEGAN_GENERATOR_BUILDER, r"^\s*def\s+build_generator\b", "unused PaddleGAN generator builder"),

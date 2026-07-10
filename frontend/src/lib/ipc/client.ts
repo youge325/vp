@@ -3,7 +3,7 @@
 //
 // Phase 6a — 错误规范化逻辑(``{ code, message, details }`` 提取)收敛到
 // ``services/error/normalize.ts``,此处只保留 IPC 层特有的两件事:
-//   1. ``InvokeError`` Error 子类(callsite 用 ``instanceof`` 判断);
+//   1. 内部 ``InvokeError`` 保留结构化 ``code`` / ``details``;
 //   2. Tauri "permission denied" / "Command not found" 嗅探(这是 IPC
 //      路径才会出现的字符串,与通用错误规范化无关)。
 
@@ -30,7 +30,7 @@ export function isTauriRuntime(): boolean {
  * inspect ``error.code`` directly; callers that only need a message can fall
  * back to the standard ``Error`` API.
  */
-export class InvokeError extends Error {
+class InvokeError extends Error {
   readonly code: string
   readonly details: Record<string, unknown> | null
 

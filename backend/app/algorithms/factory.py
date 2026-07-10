@@ -53,8 +53,3 @@ class AlgorithmFactory:
 
         algorithm_class = cls._registry[algorithm_type]
         return algorithm_class(tensor_backend=tensor_backend, **kwargs)
-
-    @classmethod
-    def get_available_types(cls) -> list[str]:
-        """返回已注册的算法类型列表。"""
-        return list(cls._registry.keys())

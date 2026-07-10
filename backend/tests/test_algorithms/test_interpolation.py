@@ -10,10 +10,6 @@ from app.algorithms.factory import AlgorithmFactory
 class TestFrameInterpolationAlgorithm:
     """测试视频补帧算法。"""
 
-    def test_is_registered(self):
-        types = AlgorithmFactory.get_available_types()
-        assert "frame_interpolation" in types
-
     def test_create_instance(self):
         try:
             algo = AlgorithmFactory.create(
@@ -84,10 +80,6 @@ class TestFrameInterpolationAlgorithm:
 class TestSuperResolutionAlgorithm:
     """测试超分辨率占位算法。"""
 
-    def test_is_registered(self):
-        types = AlgorithmFactory.get_available_types()
-        assert "super_resolution" in types
-
     def test_needs_frame_pairs_default(self):
         """非补帧算法默认不需要帧对处理。"""
         try:
@@ -99,10 +91,6 @@ class TestSuperResolutionAlgorithm:
 
 class TestAnimeOptimizationAlgorithm:
     """测试动漫帧优化占位算法。"""
-
-    def test_is_registered(self):
-        types = AlgorithmFactory.get_available_types()
-        assert "anime_optimization" in types
 
     def test_needs_frame_pairs_default(self):
         """非补帧算法默认不需要帧对处理。"""

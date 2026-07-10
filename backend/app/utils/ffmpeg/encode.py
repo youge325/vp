@@ -217,31 +217,3 @@ def transcode_video(
     monitor = _FFmpegPipeBase(process, progress_callback=progress_callback)
     monitor._wait_for_process()
     return output_path
-
-
-def convert_format(
-    ffmpeg_path: str,
-    input_path: str,
-    output_path: str,
-    codec: str = "libx264",
-    crf: int = 18,
-    preset: str = "medium",
-    audio_codec: str = "aac",
-) -> str:
-    cmd = [
-        ffmpeg_path,
-        "-i",
-        input_path,
-        "-c:v",
-        codec,
-        "-crf",
-        str(crf),
-        "-preset",
-        preset,
-        "-c:a",
-        audio_codec,
-        output_path,
-        "-y",
-    ]
-    run_ffmpeg_command(cmd)
-    return output_path

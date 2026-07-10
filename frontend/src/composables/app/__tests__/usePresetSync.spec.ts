@@ -1,10 +1,10 @@
 import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { InvokeError } from '@/lib/ipc/client'
 import { TASK_ERROR_CODES } from '@/types/protocol'
 import { useIssueStore } from '@/stores/issue'
 import { usePresetStore } from '@/stores/preset'
+import { codedError } from './errors'
 
 // Mock the preset IPC endpoints so we can control success/failure per test.
 const loadMock = vi.fn()
@@ -85,7 +85,7 @@ describe('usePresetSync', () => {
 
   it('routes PersistenceFailed errors to the preset operation issue surface', async () => {
     saveMock.mockRejectedValueOnce(
-      new InvokeError(TASK_ERROR_CODES.PersistenceFailed, 'disk is full'),
+      codedError(TASK_ERROR_CODES.PersistenceFailed, 'disk is full'),
     )
     const issueStore = useIssueStore()
 
@@ -99,7 +99,7 @@ describe('usePresetSync', () => {
 
   it('treats SchemaMismatch on save as a reset signal, not a banner-only error', async () => {
     saveMock.mockRejectedValueOnce(
-      new InvokeError(TASK_ERROR_CODES.SchemaMismatch, 'incompatible schema version'),
+      codedError(TASK_ERROR_CODES.SchemaMismatch, 'incompatible schema version'),
     )
     const issueStore = useIssueStore()
     const presetStore = usePresetStore()
@@ -115,7 +115,7 @@ describe('usePresetSync', () => {
 
   it('resets to defaults and reports SchemaMismatch when load detects an incompatible payload', async () => {
     loadMock.mockRejectedValueOnce(
-      new InvokeError(TASK_ERROR_CODES.SchemaMismatch, 'workbench preset schema mismatch'),
+      codedError(TASK_ERROR_CODES.SchemaMismatch, 'workbench preset schema mismatch'),
     )
     const issueStore = useIssueStore()
     const presetStore = usePresetStore()
@@ -131,7 +131,7 @@ describe('usePresetSync', () => {
 
   it('reports generic persistence errors during load but still falls back to defaults', async () => {
     loadMock.mockRejectedValueOnce(
-      new InvokeError(TASK_ERROR_CODES.PersistenceFailed, 'permission denied'),
+      codedError(TASK_ERROR_CODES.PersistenceFailed, 'permission denied'),
     )
     const issueStore = useIssueStore()
     const presetStore = usePresetStore()

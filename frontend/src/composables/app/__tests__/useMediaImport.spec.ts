@@ -1,10 +1,10 @@
 import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { InvokeError } from '@/lib/ipc/client'
 import { TASK_ERROR_CODES } from '@/types/protocol'
 import { useIssueStore } from '@/stores/issue'
 import { useMediaStore } from '@/stores/media'
+import { codedError } from './errors'
 
 // Phase 15 — useMediaImport spec。
 //
@@ -54,7 +54,7 @@ describe('useMediaImport', () => {
     // Phase 14 关键回归:必须写入 issueStore('input'),而不是 mediaRunState
     // (后者没有视图侧消费方,Phase 13.1 时的写入是 dead write)。
     inspectMock.mockRejectedValueOnce(
-      new InvokeError(TASK_ERROR_CODES.ProcessFailed, 'ffprobe spawn failed'),
+      codedError(TASK_ERROR_CODES.ProcessFailed, 'ffprobe spawn failed'),
     )
 
     const issueStore = useIssueStore()
