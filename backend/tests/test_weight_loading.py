@@ -24,9 +24,9 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 import torch
+from app.algorithms.pytorch.rife._model_spec import MODEL_CONFIGS
 from app.algorithms.pytorch.rife.model_loader import (
     SUPPORTED_MODELS,
-    MODEL_CONFIGS,
     _version_to_module_name,
     _build_sequential_head,
     HEAD_NONE,

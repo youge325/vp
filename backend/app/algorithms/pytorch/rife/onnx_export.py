@@ -10,7 +10,9 @@ import torch
 import torch.nn as nn
 
 from app.utils.logger import get_logger
-from .model_loader import load_rife_model, get_model_dir, MODEL_CONFIGS, HEAD_NONE
+
+from ._model_spec import HEAD_NONE, MODEL_CONFIGS
+from .model_loader import get_model_dir, load_rife_model
 
 logger = get_logger(__name__)
 

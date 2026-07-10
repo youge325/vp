@@ -15,9 +15,8 @@
 - v4.13.lite: nn.Sequential Head (3→32→4)
 - v4.13~v4.26.heavy: 自定义 Head 类(从 IFNet 文件导入)
 
-Phase C.1.2 把 36 个 ``MODEL_CONFIGS`` 字面量收到了 ``_model_spec.py`` 的
-``_VERSION_GROUPS`` 表。本文件聚焦"如何加载权重 / 构 Head / 移动到设备"
-这条逻辑流,配置查表统一走 ``_model_spec``。
+Phase C.1.2 把 36 个模型配置收到了 ``_model_spec.py`` 的 ``_VERSION_GROUPS``
+表。本文件聚焦"如何加载权重 / 构 Head / 移动到设备"这条逻辑流。
 """
 
 from __future__ import annotations
@@ -31,8 +30,6 @@ from app.algorithms.pytorch.rife._model_spec import (
     HEAD_CUSTOM,
     HEAD_NONE,
     HEAD_SEQUENTIAL,
-    MODEL_CONFIGS,
-    MODEL_SPECS,
     SUPPORTED_MODELS,
     RifeModelSpec,
     get_spec,
@@ -46,13 +43,10 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-# Re-export 这些常量 / 表,让既有外部代码继续从 model_loader 导入。
 __all__ = [
     "HEAD_CUSTOM",
     "HEAD_NONE",
     "HEAD_SEQUENTIAL",
-    "MODEL_CONFIGS",
-    "MODEL_SPECS",
     "RifeModelSpec",
     "SUPPORTED_MODELS",
     "create_backwarp_grid",
@@ -271,10 +265,10 @@ def load_rife_model(
     """
     import torch
 
-    if model_version not in MODEL_SPECS:
+    try:
+        spec = get_spec(model_version)
+    except KeyError:
         raise ValueError(f"不支持的模型版本: {model_version}。可用版本: {SUPPORTED_MODELS}")
-
-    spec = get_spec(model_version)
 
     # 确定设备 / dtype / 模型目录
     if device is None:

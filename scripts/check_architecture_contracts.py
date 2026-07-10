@@ -48,6 +48,8 @@ WORKFLOW_STEPS = ROOT / "backend" / "app" / "planning" / "workflow_steps.py"
 PLANNING_PACKAGE = ROOT / "backend" / "app" / "planning" / "__init__.py"
 CLI_PACKAGE = ROOT / "backend" / "app" / "cli" / "__init__.py"
 FFMPEG_PACKAGE = ROOT / "backend" / "app" / "utils" / "ffmpeg" / "__init__.py"
+RIFE_MODEL_LOADER = ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife" / "model_loader.py"
+RIFE_MODEL_SPEC = RIFE_MODEL_LOADER.parent / "_model_spec.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
 STAGE_WORKER_FACTORY = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_factory.py"
@@ -671,6 +673,8 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
             r"__all__\s*=\s*\[[^\]]*\b(?:RawVideoReader|RawVideoWriter|build_rawvideo_|open_rawvideo_)",
             "unused FFmpeg raw I/O facade",
         ),
+        (RIFE_MODEL_LOADER, r"\bMODEL_(?:CONFIGS|SPECS)\b", "RIFE model config loader facade"),
+        (RIFE_MODEL_SPEC, r"^\s*def\s+_to_legacy_dict\b", "single-use RIFE model config converter"),
     )
     for path, pattern, label in checks:
         if re.search(pattern, _read(path), re.MULTILINE):

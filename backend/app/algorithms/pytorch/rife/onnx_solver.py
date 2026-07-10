@@ -11,7 +11,9 @@ import numpy as np
 
 from app.utils.logger import get_logger
 from app.utils.onnx_models import create_onnx_session, resolve_onnx_model_path
-from .model_loader import get_model_dir, MODEL_CONFIGS
+
+from ._model_spec import MODEL_CONFIGS
+from .model_loader import get_model_dir
 
 
 # ONNX 模型文件名中常见的版本标记，如 rife_v4.26.onnx -> 4.26
