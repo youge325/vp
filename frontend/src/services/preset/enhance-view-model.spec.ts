@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceViewModel } from './enhance-view-model'
-import { createDefaultWorkflowConfig } from './workflow-defaults'
+import { createDefaultWorkflowConfigForEnvironment } from './workflow-defaults'
 import type { AlgorithmInfo } from '@/types/domain/env'
 
 const rife: AlgorithmInfo = {
@@ -111,7 +111,7 @@ const edvr: AlgorithmInfo = {
 
 describe('enhance view-model rules', () => {
   it('resolves selected models and estimates SR-to-interpolation runtime rows', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.processOrder = 'super_resolution_then_interpolation'
     workflow.interpolation.enabled = true
     workflow.interpolation.tensorBackend = 'pytorch'
@@ -144,7 +144,7 @@ describe('enhance view-model rules', () => {
   })
 
   it('uses fixed-window SR runtime frames instead of stale editable workflow value', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.superResolution.enabled = true
     workflow.superResolution.tensorBackend = 'paddle'
     workflow.superResolution.engine = 'cuda'
@@ -179,7 +179,7 @@ describe('enhance view-model rules', () => {
   })
 
   it('uses selected TensorRT engine metrics for super-resolution estimates', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.superResolution.enabled = true
     workflow.superResolution.tensorBackend = 'paddle'
     workflow.superResolution.engine = 'tensorrt'

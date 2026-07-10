@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceModelSelection } from './enhance-model-selection'
-import { createDefaultWorkflowConfig } from './workflow-defaults'
+import { createDefaultWorkflowConfigForEnvironment } from './workflow-defaults'
 import type { AlgorithmInfo } from '@/types/domain/env'
 
 const interpolationAlgorithm: AlgorithmInfo = {
@@ -65,7 +65,7 @@ const superResolutionAlgorithm: AlgorithmInfo = {
 
 describe('enhance model selection', () => {
   it('selects model lists, current model details, and engine runtime details', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.interpolation.tensorBackend = 'onnx'
     workflow.interpolation.onnxModel = 'rife.onnx'
     workflow.superResolution.tensorBackend = 'paddle'

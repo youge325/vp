@@ -16,9 +16,7 @@ def _stage_plan() -> StagePlan:
         ],
         interpolation_step=None,
         post_steps=[],
-        total_output_frames=4,
         total_encoded_frames=4,
-        total_pairs=3,
     )
 
 

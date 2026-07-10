@@ -49,7 +49,6 @@ export function buildEnhanceRuntimeView({
   })
   const rows = buildEnhanceRuntimeRows({
     workflow,
-    currentSuperResolutionAlgorithm,
     frameState,
     currentInterpolationRuntimeDetail,
     currentSuperResolutionRuntimeDetail,

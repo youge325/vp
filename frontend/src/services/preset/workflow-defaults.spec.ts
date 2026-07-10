@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import * as workflowDefaults from './workflow-defaults'
-import {
-  createDefaultWorkflowConfig,
-  createDefaultWorkflowConfigForEnvironment,
-} from './workflow-defaults'
+import { createDefaultWorkflowConfigForEnvironment } from './workflow-defaults'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function makeEnv(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCheckResult {
@@ -29,12 +26,16 @@ function makeEnv(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCh
 }
 
 describe('workflow defaults', () => {
+  it('keeps the base workflow factory private', () => {
+    expect('createDefaultWorkflowConfig' in workflowDefaults).toBe(false)
+  })
+
   it('keeps environment hydration private to the environment-aware factory', () => {
     expect('applyEnvironmentWorkflowDefaults' in workflowDefaults).toBe(false)
   })
 
-  it('creates the base workflow defaults without environment hydration', () => {
-    const workflow = createDefaultWorkflowConfig()
+  it('creates fallback workflow defaults without environment metadata', () => {
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
 
     expect(workflow.interpolation).toMatchObject({
       enabled: true,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceRuntimeView } from './enhance-runtime-view'
-import { createDefaultWorkflowConfig } from './workflow-defaults'
+import { createDefaultWorkflowConfigForEnvironment } from './workflow-defaults'
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
 
 const interpolationDetail: ModelVariantInfo = {
@@ -47,7 +47,7 @@ const fixedWindowAlgorithm: AlgorithmInfo = {
 
 describe('enhance runtime view', () => {
   it('builds runtime estimates, fixed-window rows, and combined VRAM rows', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.processOrder = 'super_resolution_then_interpolation'
     workflow.interpolation.enabled = true
     workflow.interpolation.scale = 1

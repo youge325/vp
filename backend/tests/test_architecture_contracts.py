@@ -196,6 +196,32 @@ def test_dead_type_aliases_do_not_remain_in_current_repo() -> None:
     assert "export interface CapabilityChoice" not in capability_text
 
 
+def test_enhance_runtime_rows_requires_precomputed_frame_state() -> None:
+    module = _load_module()
+    issues: list[str] = []
+
+    module._check_frontend_enhance_runtime_rows_boundary(issues)
+
+    assert issues == []
+
+
+def test_enhance_runtime_rows_boundary_flags_recomputed_frame_state(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_runtime_rows = tmp_path / "enhance-runtime-rows.ts"
+    fake_runtime_rows.write_text(
+        "interface Input { frameState?: EnhanceRuntimeFrameState }\n"
+        "const resolvedFrameState = frameState ?? buildEnhanceRuntimeFrameState(input)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ENHANCE_RUNTIME_ROWS", fake_runtime_rows, raising=False)
+    issues: list[str] = []
+
+    module._check_frontend_enhance_runtime_rows_boundary(issues)
+
+    assert any("optional precomputed frame state" in issue for issue in issues), issues
+    assert any("precomputed frame state fallback" in issue for issue in issues), issues
+
+
 def test_dead_type_alias_boundary_flags_obsolete_aliases(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_onnx_models = tmp_path / "onnx_models.py"
@@ -1600,6 +1626,38 @@ def test_cli_process_planning_validation_boundary_flags_private_validation_reexp
     assert any("private validation re-export" in issue for issue in issues), issues
 
 
+def test_planning_state_boundary_matches_current_repo() -> None:
+    module = _load_module()
+    issues: list[str] = []
+
+    module._check_planning_state_boundary(issues)
+
+    assert issues == []
+
+
+def test_planning_state_boundary_flags_redundant_fields(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_stage_plan = tmp_path / "stage_plan.py"
+    fake_process_planning = tmp_path / "_process_planning.py"
+    fake_stage_plan.write_text(
+        "class StagePlan:\n    total_output_frames: int\n    total_pairs: int\n",
+        encoding="utf-8",
+    )
+    fake_process_planning.write_text(
+        "class ProcessingPlan:\n    output_dir: str\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "STAGE_PLAN", fake_stage_plan, raising=False)
+    monkeypatch.setattr(module, "CLI_PROCESS_PLANNING", fake_process_planning)
+    issues: list[str] = []
+
+    module._check_planning_state_boundary(issues)
+
+    assert any("total_output_frames" in issue for issue in issues), issues
+    assert any("total_pairs" in issue for issue in issues), issues
+    assert any("output_dir" in issue for issue in issues), issues
+
+
 def test_obsolete_tensor_chain_boundary_flags_helper_and_tests(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_helper = tmp_path / "_tensor_chain.py"
@@ -2868,6 +2926,30 @@ def test_frontend_defaults_workflow_boundary_flags_workflow_default_reexport(tmp
     module._check_frontend_defaults_workflow_boundary(issues)
 
     assert any("workflow default rule" in issue for issue in issues), issues
+
+
+def test_frontend_workflow_defaults_factory_boundary_matches_current_repo() -> None:
+    module = _load_module()
+    issues: list[str] = []
+
+    module._check_frontend_workflow_defaults_factory_boundary(issues)
+
+    assert issues == []
+
+
+def test_frontend_workflow_defaults_factory_boundary_flags_public_base_factory(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_defaults = tmp_path / "workflow-defaults.ts"
+    fake_defaults.write_text(
+        "export function createDefaultWorkflowConfig(): WorkflowConfig { return {} as WorkflowConfig }\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "WORKFLOW_DEFAULTS", fake_defaults)
+    issues: list[str] = []
+
+    module._check_frontend_workflow_defaults_factory_boundary(issues)
+
+    assert any("base workflow factory" in issue for issue in issues), issues
 
 
 def test_frontend_workflow_defaults_lookup_boundary_flags_direct_algorithm_lookup(tmp_path, monkeypatch) -> None:

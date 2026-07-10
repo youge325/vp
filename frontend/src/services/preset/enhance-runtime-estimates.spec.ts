@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceRuntimeEstimates } from './enhance-runtime-estimates'
-import { createDefaultWorkflowConfig } from './workflow-defaults'
+import { createDefaultWorkflowConfigForEnvironment } from './workflow-defaults'
 import type { ModelVariantInfo } from '@/types/domain/env'
 
 const interpolationDetail: ModelVariantInfo = {
@@ -37,7 +37,7 @@ const superResolutionDetail: ModelVariantInfo = {
 
 describe('enhance runtime estimates', () => {
   it('scales interpolation input after super-resolution and combines peak VRAM', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.processOrder = 'super_resolution_then_interpolation'
     workflow.interpolation.enabled = true
     workflow.interpolation.scale = 1

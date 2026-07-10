@@ -66,8 +66,9 @@ def test_build_streaming_pipeline_preflight_resolves_planning_context(tmp_path) 
         "duration": 5 / 24,
         "has_audio": True,
     }
-    assert preflight.stage_plan.total_output_frames == 9
     assert preflight.stage_plan.total_encoded_frames == 9
+    assert not hasattr(preflight.stage_plan, "total_output_frames")
+    assert not hasattr(preflight.stage_plan, "total_pairs")
     assert preflight.use_stage_file_pipeline is True
     assert preflight.resume_source_frames == 9
     assert preflight.output_width == 640

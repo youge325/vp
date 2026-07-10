@@ -1,7 +1,7 @@
 import { computed, reactive, ref } from 'vue'
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultWorkflowConfig } from '@/services/preset/workflow-defaults'
+import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
 import { createEnhanceFormBindings } from './enhance-form-bindings'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
@@ -90,7 +90,7 @@ function makeEnv(): EnvironmentCheckResult {
 }
 
 function makeBindings() {
-  const workflow = reactive(createDefaultWorkflowConfig()) as WorkflowConfig
+  const workflow = reactive(createDefaultWorkflowConfigForEnvironment(null)) as WorkflowConfig
   const checkResult = ref<EnvironmentCheckResult | null>(makeEnv())
   const activeVideoDimensions = ref({ width: 640, height: 288 })
   const form = createEnhanceFormBindings({
