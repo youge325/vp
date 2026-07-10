@@ -50,6 +50,7 @@ CLI_PACKAGE = ROOT / "backend" / "app" / "cli" / "__init__.py"
 FFMPEG_PACKAGE = ROOT / "backend" / "app" / "utils" / "ffmpeg" / "__init__.py"
 RIFE_MODEL_LOADER = ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife" / "model_loader.py"
 RIFE_MODEL_SPEC = RIFE_MODEL_LOADER.parent / "_model_spec.py"
+RIFE_PACKAGE = RIFE_MODEL_LOADER.parent / "__init__.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
 STAGE_WORKER_FACTORY = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_factory.py"
@@ -680,6 +681,7 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
         ),
         (RIFE_MODEL_SPEC, r"^\s*def\s+_to_legacy_dict\b", "single-use RIFE model config converter"),
         (RIFE_MODEL_SPEC, r'^[\s\S]*__all__\s*=\s*\[[^\]]*["\']replace["\']', "unused RIFE replace re-export"),
+        (RIFE_PACKAGE, r"\b(?:RIFESolver|__getattr__)\b", "unused RIFE lazy solver facade"),
     )
     for path, pattern, label in checks:
         if re.search(pattern, _read(path), re.MULTILINE):
