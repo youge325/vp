@@ -9,18 +9,14 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-
-def _to_camel(snake: str) -> str:
-    parts = snake.split("_")
-    return parts[0] + "".join(p.capitalize() for p in parts[1:])
+from pydantic.alias_generators import to_camel
 
 
 class _CamelBase(BaseModel):
     """Base with camelCase alias support so Tauri JSON payloads are accepted."""
 
     model_config = ConfigDict(
-        alias_generator=_to_camel,
+        alias_generator=to_camel,
         populate_by_name=True,
         extra="forbid",
     )

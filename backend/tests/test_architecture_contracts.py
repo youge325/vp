@@ -3698,3 +3698,79 @@ def test_round_26_dead_interface_boundary_flags_reintroduced_sources(tmp_path, m
     getattr(module, "_check_round_26_dead_interface_boundary", lambda _issues: None)(issues)
 
     assert len(issues) == 7, issues
+
+
+def test_round_27_data_rules_have_single_owners() -> None:
+    frontend_services = REPO_ROOT / "frontend" / "src" / "services"
+    metric_consumers = (
+        frontend_services / "model-metric-format.ts",
+        frontend_services / "model-runtime-estimates.ts",
+    )
+    camel_models = (
+        REPO_ROOT / "backend" / "app" / "models" / "__init__.py",
+        REPO_ROOT / "backend" / "app" / "protocol" / "payloads.py",
+    )
+    rife_root = REPO_ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife"
+    rife_sources = (
+        rife_root / "_model_spec.py",
+        rife_root / "onnx_export.py",
+        rife_root / "onnx_solver.py",
+    )
+    vendor_logger = (
+        REPO_ROOT
+        / "backend"
+        / "app"
+        / "algorithms"
+        / "paddle"
+        / "paddlegan_vsr"
+        / "vendor"
+        / "ppgan"
+        / "utils"
+        / "logger.py"
+    )
+
+    for path in metric_consumers:
+        assert not re.search(
+            r"\bfunction\s+finite(?:Number)?OrNull\b",
+            path.read_text(encoding="utf-8"),
+        ), path
+    for path in camel_models:
+        text = path.read_text(encoding="utf-8")
+        assert "def _to_camel" not in text, path
+        assert "from pydantic.alias_generators import to_camel" in text, path
+    for path in rife_sources:
+        assert "MODEL_CONFIGS" not in path.read_text(encoding="utf-8"), path
+    assert not vendor_logger.exists()
+
+
+def test_round_27_data_rule_boundary_flags_reintroduced_sources(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_metric = tmp_path / "model-metric-format.ts"
+    fake_camel = tmp_path / "models.py"
+    fake_rife_spec = tmp_path / "_model_spec.py"
+    fake_rife_consumer = tmp_path / "onnx_solver.py"
+    fake_vendor_logger = tmp_path / "logger.py"
+
+    fake_metric.write_text(
+        "function finiteOrNull(value) { return Number.isFinite(value) ? value : null }\n",
+        encoding="utf-8",
+    )
+    fake_camel.write_text("def _to_camel(value):\n    return value\n", encoding="utf-8")
+    fake_rife_spec.write_text("MODEL_CONFIGS = {}\n", encoding="utf-8")
+    fake_rife_consumer.write_text("from ._model_spec import MODEL_CONFIGS\n", encoding="utf-8")
+    fake_vendor_logger.write_text("def get_logger():\n    pass\n", encoding="utf-8")
+
+    monkeypatch.setattr(module, "FRONTEND_FINITE_NUMBER_CONSUMERS", (fake_metric,), raising=False)
+    monkeypatch.setattr(module, "PYDANTIC_CAMEL_MODELS", (fake_camel,), raising=False)
+    monkeypatch.setattr(module, "RIFE_MODEL_SPEC", fake_rife_spec, raising=False)
+    monkeypatch.setattr(module, "RIFE_TYPED_SPEC_CONSUMERS", (fake_rife_consumer,), raising=False)
+    monkeypatch.setattr(module, "PADDLEGAN_VENDOR_LOGGER", fake_vendor_logger, raising=False)
+    issues: list[str] = []
+
+    getattr(module, "_check_round_27_data_rule_boundary", lambda _issues: None)(issues)
+
+    joined = "\n".join(issues)
+    assert "finite-number" in joined
+    assert "camel alias" in joined
+    assert "RIFE legacy model config" in joined
+    assert "PaddleGAN vendor logger" in joined

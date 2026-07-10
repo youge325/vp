@@ -12,7 +12,7 @@ import numpy as np
 from app.utils.logger import get_logger
 from app.utils.onnx_models import create_onnx_session, resolve_onnx_model_path
 
-from ._model_spec import MODEL_CONFIGS
+from ._model_spec import get_spec
 from .model_loader import get_model_dir
 
 
@@ -64,8 +64,11 @@ def _infer_model_version_from_path(onnx_path: str) -> str | None:
     match = _MODEL_VERSION_RE.search(name)
     if match:
         version = match.group(1)
-        if version in MODEL_CONFIGS:
-            return version
+        try:
+            get_spec(version)
+        except KeyError:
+            return None
+        return version
     return None
 
 
@@ -111,8 +114,7 @@ class RIFEONNXSolver:
                 )
 
         self._model_version = model_version
-        self._config = MODEL_CONFIGS[model_version]
-        self._modulo = self._config["modulo"]
+        self._modulo = get_spec(model_version).modulo
 
         # 根据 engine 参数选择 providers 并显式校验是否真的命中
         self._session = create_onnx_session(onnx_path, engine=engine, ort_module=ort)

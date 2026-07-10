@@ -10,18 +10,14 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, field_validator
+from pydantic.alias_generators import to_camel
 
 from app.errors._codes import TaskErrorCode
 
 
-def _to_camel(snake: str) -> str:
-    parts = snake.split("_")
-    return parts[0] + "".join(part.capitalize() for part in parts[1:])
-
-
 class _PayloadBase(BaseModel):
     model_config = ConfigDict(
-        alias_generator=_to_camel,
+        alias_generator=to_camel,
         populate_by_name=True,
         extra="forbid",
     )

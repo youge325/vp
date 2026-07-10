@@ -28,7 +28,7 @@ from app.algorithms.pytorch.rife._model_spec import (
     HEAD_CUSTOM,
     HEAD_NONE,
     HEAD_SEQUENTIAL,
-    MODEL_CONFIGS,
+    MODEL_SPECS,
     SUPPORTED_MODELS,
 )
 from app.algorithms.pytorch.rife.model_loader import (
@@ -62,10 +62,10 @@ def _test_structure_impl():
     failed = []
 
     for version in SUPPORTED_MODELS:
-        config = MODEL_CONFIGS[version]
-        head_type = config["head_type"]
-        encode_channel = config["encode_channel"]
-        ensemble = config["ensemble"]
+        spec = MODEL_SPECS[version]
+        head_type = spec.head_type
+        encode_channel = spec.encode_channel
+        ensemble = spec.ensemble
 
         try:
             # 动态导入 IFNet 模块
@@ -100,7 +100,7 @@ def _test_structure_impl():
 
                 # 创建 Head 并验证键匹配
                 if head_type == HEAD_SEQUENTIAL:
-                    head_config = config.get("head_config", {})
+                    head_config = spec.head_config or {}
                     with torch.device("meta"):
                         encode = _build_sequential_head(
                             in_channels=head_config.get("in_channels", 3),
@@ -177,10 +177,10 @@ def _test_forward_pass_impl():
     failed = []
 
     for version in SUPPORTED_MODELS:
-        config = MODEL_CONFIGS[version]
-        head_type = config["head_type"]
-        ensemble = config["ensemble"]
-        modulo = config["modulo"]
+        spec = MODEL_SPECS[version]
+        head_type = spec.head_type
+        ensemble = spec.ensemble
+        modulo = spec.modulo
 
         try:
             # 动态导入 IFNet 模块
@@ -195,7 +195,7 @@ def _test_forward_pass_impl():
             # 创建 Head
             encode = None
             if head_type == HEAD_SEQUENTIAL:
-                head_config = config.get("head_config", {})
+                head_config = spec.head_config or {}
                 encode = _build_sequential_head(
                     in_channels=head_config.get("in_channels", 3),
                     mid_channels=head_config.get("mid_channels", 16),
@@ -272,10 +272,10 @@ def _test_weight_loading_impl():
     failed = []
 
     for version in SUPPORTED_MODELS:
-        config = MODEL_CONFIGS[version]
-        head_type = config["head_type"]
-        ensemble = config["ensemble"]
-        encode_channel = config["encode_channel"]
+        spec = MODEL_SPECS[version]
+        head_type = spec.head_type
+        ensemble = spec.ensemble
+        encode_channel = spec.encode_channel
 
         weight_path = os.path.join(model_dir, f"flownet_v{version}.pkl")
 
@@ -328,7 +328,7 @@ def _test_weight_loading_impl():
                 encode_unexpected = enc_result.unexpected_keys
 
             elif head_type == HEAD_SEQUENTIAL:
-                head_config = config.get("head_config", {})
+                head_config = spec.head_config or {}
                 encode_state_dict = {k.replace("encode.", ""): v for k, v in state_dict.items() if "encode." in k}
                 with torch.device("meta"):
                     encode = _build_sequential_head(
