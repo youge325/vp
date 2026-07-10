@@ -13,7 +13,7 @@ import { fallbackInterpolationOnnxModel, fallbackSuperResolutionOnnxModel } from
 import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolution-defaults'
 import { findSuperResolutionAlgorithm } from './enhance-workflow-lookup'
 
-export function createDefaultWorkflowConfig(): WorkflowConfig {
+function createDefaultWorkflowConfig(): WorkflowConfig {
   return {
     fpsMode: 'target',
     processOrder: 'super_resolution_then_interpolation',

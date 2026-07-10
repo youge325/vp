@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildEnhanceRuntimeRows } from './enhance-runtime-rows'
-import { createDefaultWorkflowConfig } from './workflow-defaults'
+import { buildEnhanceRuntimeFrameState, buildEnhanceRuntimeRows } from './enhance-runtime-rows'
+import { createDefaultWorkflowConfigForEnvironment } from './workflow-defaults'
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
 import type { RuntimeMetricEstimate } from '@/types/view/model-metrics'
 
@@ -56,14 +56,17 @@ const estimate: RuntimeMetricEstimate = {
 
 describe('enhance runtime rows', () => {
   it('builds fixed-window, metric, and combined VRAM rows', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.interpolation.enabled = true
     workflow.superResolution.enabled = true
     workflow.superResolution.numFrames = 10
 
     const rows = buildEnhanceRuntimeRows({
       workflow,
-      currentSuperResolutionAlgorithm: fixedWindowAlgorithm,
+      frameState: buildEnhanceRuntimeFrameState({
+        workflow,
+        currentSuperResolutionAlgorithm: fixedWindowAlgorithm,
+      }),
       currentInterpolationRuntimeDetail: interpolationDetail,
       currentSuperResolutionRuntimeDetail: superResolutionDetail,
       interpolationRuntimeEstimate: estimate,

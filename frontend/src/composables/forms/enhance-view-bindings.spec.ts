@@ -1,7 +1,7 @@
 import { computed, reactive } from 'vue'
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultWorkflowConfig } from '@/services/preset/workflow-defaults'
+import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
 import { createEnhanceViewBindings } from './enhance-view-bindings'
 import type { AlgorithmInfo } from '@/types/domain/env'
 import type { WorkflowConfig } from '@/types/protocol'
@@ -58,7 +58,7 @@ const edvr: AlgorithmInfo = {
 }
 
 function makeBindings() {
-  const workflow = reactive(createDefaultWorkflowConfig()) as WorkflowConfig
+  const workflow = reactive(createDefaultWorkflowConfigForEnvironment(null)) as WorkflowConfig
   workflow.interpolation.enabled = true
   workflow.interpolation.algorithm = 'rife'
   workflow.interpolation.model = '4.25'

@@ -10,6 +10,7 @@ boundaries, and direct IPC access from UI/store layers.
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import io
 import re
@@ -117,6 +118,7 @@ OBSOLETE_DECODE_QUEUE_REFERENCE_ROOTS = (
     README,
 )
 SEGMENT_MANIFEST = ROOT / "backend" / "app" / "planning" / "manifest.py"
+STAGE_PLAN = ROOT / "backend" / "app" / "planning" / "stage_plan.py"
 CLI_DEFAULTS = ROOT / "backend" / "app" / "cli" / "defaults.py"
 CLI_PROCESS_VALIDATION = ROOT / "backend" / "app" / "cli" / "commands" / "_process_validation.py"
 CLI_PROCESS_PLANNING = ROOT / "backend" / "app" / "cli" / "commands" / "_process_planning.py"
@@ -147,6 +149,7 @@ ENHANCE_WORKFLOW = FRONTEND_SRC / "services" / "preset" / "enhance-workflow.ts"
 ENHANCE_WORKFLOW_SELECTION = FRONTEND_SRC / "services" / "preset" / "enhance-workflow-selection.ts"
 ENHANCE_VIEW_MODEL = FRONTEND_SRC / "services" / "preset" / "enhance-view-model.ts"
 ENHANCE_RUNTIME_VIEW = FRONTEND_SRC / "services" / "preset" / "enhance-runtime-view.ts"
+ENHANCE_RUNTIME_ROWS = FRONTEND_SRC / "services" / "preset" / "enhance-runtime-rows.ts"
 ENHANCE_FORM = FRONTEND_SRC / "composables" / "forms" / "useEnhanceForm.ts"
 ENHANCE_FORM_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-form-bindings.ts"
 ENHANCE_VIEW_BINDINGS = FRONTEND_SRC / "composables" / "forms" / "enhance-view-bindings.ts"
@@ -955,6 +958,29 @@ def _check_cli_process_planning_validation_boundary(issues: list[str]) -> None:
             issues.append(f"CLI process planning validation `{label}` remains in {_rel(CLI_PROCESS_PLANNING)}")
 
 
+def _check_planning_state_boundary(issues: list[str]) -> None:
+    forbidden_fields = {
+        STAGE_PLAN: ("StagePlan", {"total_output_frames", "total_pairs"}),
+        CLI_PROCESS_PLANNING: ("ProcessingPlan", {"output_dir"}),
+    }
+    for path, (class_name, field_names) in forbidden_fields.items():
+        tree = ast.parse(_read(path), filename=str(path))
+        class_node = next(
+            (node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name),
+            None,
+        )
+        if class_node is None:
+            issues.append(f"missing planning state owner `{class_name}` in {_rel(path)}")
+            continue
+        annotated_fields = {
+            node.target.id
+            for node in class_node.body
+            if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+        }
+        for field_name in sorted(field_names & annotated_fields):
+            issues.append(f"redundant planning state `{field_name}` remains in {_rel(path)}")
+
+
 def _check_frontend_enhance_workflow_boundary(issues: list[str]) -> None:
     text = _read(ENHANCE_FORM)
     forbidden_tokens = (
@@ -1091,6 +1117,17 @@ def _check_frontend_enhance_runtime_view_split_boundary(issues: list[str]) -> No
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text, re.MULTILINE):
             issues.append(f"enhance runtime-view split `{label}` remains in {_rel(ENHANCE_RUNTIME_VIEW)}")
+
+
+def _check_frontend_enhance_runtime_rows_boundary(issues: list[str]) -> None:
+    text = _read(ENHANCE_RUNTIME_ROWS)
+    forbidden_patterns = {
+        "optional precomputed frame state": r"\bframeState\s*\?:",
+        "precomputed frame state fallback": r"\bframeState\s*\?\?\s*buildEnhanceRuntimeFrameState\b",
+    }
+    for label, pattern in forbidden_patterns.items():
+        if re.search(pattern, text):
+            issues.append(f"enhance runtime rows {label} remains in {_rel(ENHANCE_RUNTIME_ROWS)}")
 
 
 def _check_frontend_enhance_read_model_type_boundary(issues: list[str]) -> None:
@@ -1463,6 +1500,12 @@ def _check_frontend_workflow_defaults_engine_boundary(issues: list[str]) -> None
     for label, pattern in forbidden_patterns.items():
         if re.search(pattern, text):
             issues.append(f"workflow defaults engine `{label}` remains in {_rel(WORKFLOW_DEFAULTS)}")
+
+
+def _check_frontend_workflow_defaults_factory_boundary(issues: list[str]) -> None:
+    text = _read(WORKFLOW_DEFAULTS)
+    if re.search(r"^\s*export\s+function\s+createDefaultWorkflowConfig\b", text, re.MULTILINE):
+        issues.append(f"base workflow factory remains public in {_rel(WORKFLOW_DEFAULTS)}")
 
 
 def _check_frontend_preset_normalize_boundary(issues: list[str]) -> None:
@@ -2385,6 +2428,7 @@ def main() -> int:
         _check_backend_test_private_cli_defaults_boundary(issues)
         _check_segment_manifest_compat_boundary(issues)
         _check_cli_process_planning_validation_boundary(issues)
+        _check_planning_state_boundary(issues)
         _check_frontend_enhance_workflow_boundary(issues)
         _check_frontend_enhance_workflow_selection_boundary(issues)
         _check_frontend_enhance_workflow_lookup_boundary(issues)
@@ -2395,6 +2439,7 @@ def main() -> int:
         _check_frontend_enhance_view_model_boundary(issues)
         _check_frontend_enhance_view_model_split_boundary(issues)
         _check_frontend_enhance_runtime_view_split_boundary(issues)
+        _check_frontend_enhance_runtime_rows_boundary(issues)
         _check_frontend_enhance_read_model_type_boundary(issues)
         _check_frontend_model_metrics_barrel_boundary(issues)
         _check_frontend_model_metric_view_type_boundary(issues)
@@ -2423,6 +2468,7 @@ def main() -> int:
         _check_frontend_defaults_workflow_boundary(issues)
         _check_frontend_workflow_defaults_lookup_boundary(issues)
         _check_frontend_workflow_defaults_engine_boundary(issues)
+        _check_frontend_workflow_defaults_factory_boundary(issues)
         _check_frontend_preset_normalize_boundary(issues)
         _check_frontend_preset_select_option_type_boundary(issues)
         _check_frontend_encode_output_binding_boundary(issues)

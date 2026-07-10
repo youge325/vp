@@ -8,6 +8,7 @@ import pytest
 
 from app.cli import build_parser, cmd_check
 from app.cli.commands import _process_validation
+from app.cli.commands._process_planning import ProcessingPlan
 from app.cli.commands._process_validation import load_runtime_configs
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
@@ -31,6 +32,10 @@ class _FakeFFmpeg:
 
     def get_duration(self, _input_path: str) -> float:
         return self._duration
+
+
+def test_processing_plan_does_not_store_unused_output_directory() -> None:
+    assert "output_dir" not in ProcessingPlan.__dataclass_fields__
 
 
 class _FakeCheckFFmpeg:

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultWorkflowConfig } from './workflow-defaults'
+import { createDefaultWorkflowConfigForEnvironment } from './workflow-defaults'
 import {
   applyInterpolationBackendSelectionDefaults,
   applySuperResolutionAlgorithmSelectionDefaults,
@@ -58,7 +58,7 @@ function makeEnv(): EnvironmentCheckResult {
 
 describe('enhance workflow selection rules', () => {
   it('repairs interpolation algorithm/model and ONNX model when backend changes', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.interpolation.algorithm = 'rife-lite'
     workflow.interpolation.model = 'lite'
     workflow.interpolation.onnxModel = ''
@@ -73,7 +73,7 @@ describe('enhance workflow selection rules', () => {
   })
 
   it('moves pytorch interpolation to ONNX when Paddle super-resolution is active', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.interpolation.enabled = true
     workflow.interpolation.tensorBackend = 'pytorch'
     workflow.superResolution.enabled = true
@@ -88,7 +88,7 @@ describe('enhance workflow selection rules', () => {
   })
 
   it('applies supported backend and fixed PaddleGAN value rules', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.superResolution.tensorBackend = 'onnx'
     workflow.superResolution.scaleFactor = 2
     workflow.superResolution.numFrames = 3

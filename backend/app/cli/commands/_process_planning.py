@@ -35,7 +35,6 @@ class ProcessingPlan:
     """Everything ``cmd_process`` needs after planning is done."""
 
     output_path: str
-    output_dir: str
     runtime_configs: RuntimeConfigs
     processing_steps: list[ProcessingStep]
     tensor_backend_name: str
@@ -78,8 +77,8 @@ def _resolve_output_paths(
     args: argparse.Namespace,
     input_path: str,
     configs: RuntimeConfigs,
-) -> tuple[str, str]:
-    """Pick the (output_dir, output_path) pair, materialising parents on disk."""
+) -> str:
+    """Pick the output path and materialise its parent directory."""
     # Phase 18 — Pydantic ``OutputConfig`` validator 保证 outputDir 必填非空,
     # 这里不再 ``or settings.OUTPUT_DIR`` 兜底;若 dict 来源绕过 Pydantic
     # (CLI defaults 路径),直接 KeyError → 立即 fail 暴露上游 bug。
@@ -95,7 +94,7 @@ def _resolve_output_paths(
         Path(output_path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
     else:
         output_path = get_output_path(input_path, output_dir, extension=f".{container}")
-    return output_dir, output_path
+    return output_path
 
 
 def build_plan(
@@ -112,7 +111,7 @@ def build_plan(
     verify_super_resolution_backend(workflow_config, tensor_backend_name)
     verify_model_availability(workflow_config, processing_steps, tensor_backend_name)
 
-    output_dir, output_path = _resolve_output_paths(args, input_path, configs)
+    output_path = _resolve_output_paths(args, input_path, configs)
 
     # Phase D.6.3 — multi 写回 + final_output_fps 推导收敛到 defaults helper,
     # 与 cmd_inspect_output 共享一份"不 mutate 原 dict"的语义。
@@ -151,7 +150,6 @@ def build_plan(
 
     return ProcessingPlan(
         output_path=output_path,
-        output_dir=output_dir,
         runtime_configs=configs,
         processing_steps=processing_steps,
         tensor_backend_name=tensor_backend_name,

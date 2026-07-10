@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultWorkflowConfig } from './workflow-defaults'
+import { createDefaultWorkflowConfigForEnvironment } from './workflow-defaults'
 import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolution-defaults'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 describe('super-resolution algorithm defaults', () => {
   it('applies PaddleGAN VSR fixed backend, scale, ONNX, and frame defaults', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.superResolution.scaleFactor = 2
     workflow.superResolution.numFrames = 3
     workflow.superResolution.onnxModel = 'stale.onnx'
@@ -32,7 +32,7 @@ describe('super-resolution algorithm defaults', () => {
   })
 
   it('repairs unsupported scale and ONNX model for non-Paddle super-resolution algorithms', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.superResolution.tensorBackend = 'onnx'
     workflow.superResolution.algorithm = 'sr'
     workflow.superResolution.scaleFactor = 2

@@ -23,8 +23,9 @@ interface EnhanceRuntimeFrameState {
   superResolutionFixedWindowRows: MetricRow[]
 }
 
-interface EnhanceRuntimeRowsInput extends EnhanceRuntimeFrameStateInput {
-  frameState?: EnhanceRuntimeFrameState
+interface EnhanceRuntimeRowsInput {
+  workflow: WorkflowConfig
+  frameState: EnhanceRuntimeFrameState
   currentInterpolationRuntimeDetail: ModelVariantInfo | null
   currentSuperResolutionRuntimeDetail: ModelVariantInfo | null
   interpolationRuntimeEstimate: RuntimeMetricEstimate | null
@@ -64,7 +65,6 @@ export function buildEnhanceRuntimeFrameState({
 
 export function buildEnhanceRuntimeRows({
   workflow,
-  currentSuperResolutionAlgorithm,
   frameState,
   currentInterpolationRuntimeDetail,
   currentSuperResolutionRuntimeDetail,
@@ -72,8 +72,6 @@ export function buildEnhanceRuntimeRows({
   superResolutionRuntimeEstimate,
   combinedPeakVramBytes,
 }: EnhanceRuntimeRowsInput): EnhanceRuntimeRows {
-  const resolvedFrameState =
-    frameState ?? buildEnhanceRuntimeFrameState({ workflow, currentSuperResolutionAlgorithm })
   const interpolationMetricRows = metricRows(currentInterpolationRuntimeDetail, interpolationRuntimeEstimate)
   const superResolutionMetricRows = metricRows(currentSuperResolutionRuntimeDetail, superResolutionRuntimeEstimate)
   const combinedRows =
@@ -82,7 +80,7 @@ export function buildEnhanceRuntimeRows({
       : []
 
   return {
-    ...resolvedFrameState,
+    ...frameState,
     interpolationMetricRows,
     superResolutionMetricRows,
     combinedVramMetricRows: combinedRows,

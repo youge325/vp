@@ -123,9 +123,7 @@ def test_resolved_output_dimensions_and_stream_fps_follow_stage_plan() -> None:
             stage_name="02_frame_interpolation",
         ),
         post_steps=[],
-        total_output_frames=28,
         total_encoded_frames=28,
-        total_pairs=9,
     )
 
     assert resolved_output_dimensions(

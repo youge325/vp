@@ -29,9 +29,7 @@ class StagePlan:
     pre_steps: list[ProcessingStep]
     interpolation_step: ProcessingStep | None
     post_steps: list[ProcessingStep]
-    total_output_frames: int
     total_encoded_frames: int
-    total_pairs: int
 
 
 def resolve_video_info(ffmpeg: FFmpegWrapper, input_path: str) -> dict[str, Any]:
@@ -102,21 +100,17 @@ def build_stage_plan(
             pre_steps=steps,
             interpolation_step=None,
             post_steps=[],
-            total_output_frames=source_frames,
             total_encoded_frames=total_encoded_frames,
-            total_pairs=max(source_frames - 1, 0),
         )
 
     interpolation_step = steps[interpolation_index]
     multi = int(interpolation_step.algorithm_kwargs.get("multi") or 2)
     if source_frames < 2:
-        total_output_frames = source_frames
-        total_pairs = 0
+        processed_output_frames = source_frames
     else:
-        total_output_frames = source_frames + (source_frames - 1) * (multi - 1)
-        total_pairs = source_frames - 1
+        processed_output_frames = source_frames + (source_frames - 1) * (multi - 1)
     total_encoded_frames = estimate_encoded_output_frames(
-        source_frames=total_output_frames,
+        source_frames=processed_output_frames,
         source_duration=source_duration,
         output_fps=output_fps,
     )
@@ -125,9 +119,7 @@ def build_stage_plan(
         pre_steps=steps[:interpolation_index],
         interpolation_step=interpolation_step,
         post_steps=steps[interpolation_index + 1 :],
-        total_output_frames=total_output_frames,
         total_encoded_frames=total_encoded_frames,
-        total_pairs=total_pairs,
     )
 
 

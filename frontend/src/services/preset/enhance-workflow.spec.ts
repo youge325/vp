@@ -10,7 +10,7 @@ import {
   applySuperResolutionNumFrames,
   applySuperResolutionScale,
 } from './enhance-workflow'
-import { createDefaultWorkflowConfig } from './workflow-defaults'
+import { createDefaultWorkflowConfigForEnvironment } from './workflow-defaults'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function makeEnv(): EnvironmentCheckResult {
@@ -61,7 +61,7 @@ function makeEnv(): EnvironmentCheckResult {
 
 describe('enhance workflow mutation rules', () => {
   it('switches interpolation backend and repairs unsupported algorithm/model defaults', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.interpolation.algorithm = 'rife-lite'
     workflow.interpolation.model = 'lite'
     workflow.interpolation.onnxModel = ''
@@ -76,7 +76,7 @@ describe('enhance workflow mutation rules', () => {
   })
 
   it('keeps interpolation on ONNX when Paddle super-resolution is enabled', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.interpolation.enabled = true
     workflow.interpolation.tensorBackend = 'pytorch'
     workflow.superResolution.enabled = true
@@ -91,7 +91,7 @@ describe('enhance workflow mutation rules', () => {
   })
 
   it('applies PaddleGAN algorithm defaults through algorithm selection', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.superResolution.tensorBackend = 'onnx'
     workflow.superResolution.scaleFactor = 2
     workflow.superResolution.numFrames = 3
@@ -108,7 +108,7 @@ describe('enhance workflow mutation rules', () => {
 
   it('clamps fixed PaddleGAN scale and frame window edits', () => {
     const env = makeEnv()
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
 
     applySuperResolutionAlgorithmSelection(workflow, 'edvr', env)
     applySuperResolutionScale(workflow, 2, env)
@@ -119,7 +119,7 @@ describe('enhance workflow mutation rules', () => {
   })
 
   it('keeps simple toggles as workflow-only mutations', () => {
-    const workflow = createDefaultWorkflowConfig()
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
 
     applyInterpolationEnabled(workflow, false, makeEnv())
     applySuperResolutionEnabled(workflow, false, makeEnv())
