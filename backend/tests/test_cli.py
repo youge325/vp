@@ -412,7 +412,7 @@ def test_stage_worker_parser_requires_config_json():
     assert callable(args.func)
 
 
-def test_stage_worker_main_does_not_run_global_algorithm_startup(monkeypatch):
+def test_stage_worker_main_runs_logging_and_handler_only(monkeypatch):
     import importlib
 
     cli_main = importlib.import_module("app.cli.main")
@@ -424,7 +424,6 @@ def test_stage_worker_main_does_not_run_global_algorithm_startup(monkeypatch):
 
     monkeypatch.setattr(cli_main, "build_parser", lambda: _Parser())
     monkeypatch.setattr(cli_main, "setup_logging", lambda: calls.append("logging"))
-    monkeypatch.setattr(cli_main, "register_default_algorithms", lambda: calls.append("register"), raising=False)
     monkeypatch.setattr(cli_main, "register_native_dll_paths", lambda: calls.append("dll"), raising=False)
 
     cli_main.main()

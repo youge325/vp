@@ -1,8 +1,8 @@
 """算法工厂 — 根据任务类型创建算法实例。
 
 ``create`` 在注册表为空时抛出 ``ProcessError(INVALID_CONFIG)``,把
-"忘记调用 ``register_default_algorithms``" 这种启动顺序错误从一个
-晦涩的 ``ValueError`` 升级为带 TaskErrorCode 的强类型异常。
+"调用者尚未注册当前 stage 算法"这种装配错误从一个晦涩的
+``ValueError`` 升级为带 TaskErrorCode 的强类型异常。
 """
 
 from typing import Optional
@@ -39,13 +39,9 @@ class AlgorithmFactory:
             **kwargs: 其他算法参数(如 multi / model_version / scale 等)
         """
         if not cls._registry:
-            # Phase D.6.1 — 早失败。注册表为空意味着 ``register_default_algorithms``
-            # 没有被调用过,这通常是启动顺序 bug(例如绕开 CLI 直接 import
-            # 子模块的脚本)。给一个清晰的 TaskErrorCode 比 ValueError 更利于
-            # 排查。
             raise_error(
                 TaskErrorCode.INVALID_CONFIG,
-                "Algorithm registry is empty; call register_default_algorithms() first.",
+                "Algorithm registry is empty; register the required algorithm before creating it.",
                 details={"algorithm_type": algorithm_type},
             )
 
