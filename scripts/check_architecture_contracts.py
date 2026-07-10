@@ -664,7 +664,7 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
         (TENSOR_BACKEND, r"\b_startup_hooks\b", "stale tensor backend CLI bootstrap documentation"),
         (
             PLANNING_PACKAGE,
-            r"\b(?:PROCESS_LABEL_MAP|estimate_encoded_output_frames|ResumeKind|get_onnx_model_name|validate_onnx_models_for_workflow)\b",
+            r"\b(?:AlgorithmType|PROCESS_LABEL_MAP|ResumeDecision|estimate_encoded_output_frames|ResumeKind|get_onnx_model_name|processing_needs_interpolation|validate_onnx_models_for_workflow)\b",
             "unused planning package facade",
         ),
         (WORKFLOW_STEPS, r"^\s*PROCESS_LABEL_MAP\s*=", "unused process label map"),

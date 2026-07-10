@@ -221,10 +221,13 @@ def test_planning_and_ffmpeg_facades_expose_only_consumed_symbols() -> None:
 
     planning_text = planning_package.read_text(encoding="utf-8")
     for dead_name in (
+        "AlgorithmType",
         "PROCESS_LABEL_MAP",
+        "ResumeDecision",
         "estimate_encoded_output_frames",
         "ResumeKind",
         "get_onnx_model_name",
+        "processing_needs_interpolation",
         "validate_onnx_models_for_workflow",
     ):
         assert dead_name not in planning_text
