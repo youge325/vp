@@ -2,16 +2,18 @@
 // Workflow mutation rules for the enhance form.
 
 import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { TensorBackend } from '@/types/domain/workflow'
 import type { WorkflowConfig } from '@/types/protocol'
 import {
-  applyInterpolationAlgorithmSelectionDefaults,
-  applyInterpolationBackendSelectionDefaults,
-  applySuperResolutionAlgorithmSelectionDefaults,
-  applySuperResolutionBackendSelectionDefaults,
   preferOnnxInterpolationForPaddleSuperResolution,
   resolveSuperResolutionNumFrames,
   resolveSuperResolutionScale,
+} from './enhance-workflow-selection'
+
+export {
+  applyInterpolationAlgorithmSelectionDefaults as applyInterpolationAlgorithmSelection,
+  applyInterpolationBackendSelectionDefaults as applyInterpolationBackendSelection,
+  applySuperResolutionAlgorithmSelectionDefaults as applySuperResolutionAlgorithmSelection,
+  applySuperResolutionBackendSelectionDefaults as applySuperResolutionBackendSelection,
 } from './enhance-workflow-selection'
 
 export function applyInterpolationEnabled(
@@ -30,38 +32,6 @@ export function applySuperResolutionEnabled(
 ): void {
   config.superResolution.enabled = value
   preferOnnxInterpolationForPaddleSuperResolution(config, checkResult)
-}
-
-export function applyInterpolationBackendSelection(
-  config: WorkflowConfig,
-  value: TensorBackend,
-  checkResult: EnvironmentCheckResult | null,
-): void {
-  applyInterpolationBackendSelectionDefaults(config, value, checkResult)
-}
-
-export function applySuperResolutionBackendSelection(
-  config: WorkflowConfig,
-  value: TensorBackend,
-  checkResult: EnvironmentCheckResult | null,
-): void {
-  applySuperResolutionBackendSelectionDefaults(config, value, checkResult)
-}
-
-export function applyInterpolationAlgorithmSelection(
-  config: WorkflowConfig,
-  value: string,
-  checkResult: EnvironmentCheckResult | null,
-): void {
-  applyInterpolationAlgorithmSelectionDefaults(config, value, checkResult)
-}
-
-export function applySuperResolutionAlgorithmSelection(
-  config: WorkflowConfig,
-  value: string,
-  checkResult: EnvironmentCheckResult | null,
-): void {
-  applySuperResolutionAlgorithmSelectionDefaults(config, value, checkResult)
 }
 
 export function applySuperResolutionScale(
