@@ -20,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 BACKEND_TESTS = ROOT / "backend" / "tests"
+CLI_TEST = BACKEND_TESTS / "test_cli.py"
 COMMANDS_MANIFEST = ROOT / "frontend" / "src-tauri" / "src" / "commands_manifest.rs"
 DEFAULT_PERMISSIONS = ROOT / "frontend" / "src-tauri" / "permissions" / "default.toml"
 IPC_ENDPOINT_DIR = ROOT / "frontend" / "src" / "lib" / "ipc" / "endpoints"
@@ -35,6 +36,7 @@ BACKEND_MODEL_METRICS = ROOT / "backend" / "app" / "utils" / "model_metrics.py"
 BACKEND_ONNX_MODELS = ROOT / "backend" / "app" / "utils" / "onnx_models.py"
 BACKEND_OPENCV_RUNTIME = ROOT / "backend" / "app" / "utils" / "opencv_runtime.py"
 ALGORITHM_FACTORY = ROOT / "backend" / "app" / "algorithms" / "factory.py"
+TENSOR_BACKEND = ROOT / "backend" / "app" / "algorithms" / "tensor_backend.py"
 PROCESSING_PACKAGE = ROOT / "backend" / "app" / "processing" / "__init__.py"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 PADDLEGAN_VSR_PACKAGE = PADDLEGAN_WEIGHTS.parent / "__init__.py"
@@ -42,6 +44,7 @@ PADDLE_PACKAGE = PADDLEGAN_WEIGHTS.parents[1] / "__init__.py"
 PYTORCH_PACKAGE = ROOT / "backend" / "app" / "algorithms" / "pytorch" / "__init__.py"
 BENCHMARK_PACKAGE = ROOT / "backend" / "app" / "benchmark" / "__init__.py"
 WORKFLOW_VALIDATION = ROOT / "backend" / "app" / "planning" / "workflow_validation.py"
+CLI_PACKAGE = ROOT / "backend" / "app" / "cli" / "__init__.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
 STAGE_WORKER_FACTORY = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_factory.py"
@@ -647,6 +650,13 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
         (STAGE_FILE_RULES, r"^\s*def\s+empty_resume_state\b", "single-use empty resume state helper"),
         (PADDLE_PACKAGE, r"^\s*__all__\s*(?::[^=]+)?=\s*\[\s*\]", "empty Paddle package export list"),
         (PYTORCH_PACKAGE, r"^\s*__all__\s*(?::[^=]+)?=\s*\[\s*\]", "empty PyTorch package export list"),
+        (
+            CLI_PACKAGE,
+            r"from\s+app\.cli\.(?:commands|parser)\b|\bPROCESS_(?:LABEL|ORDER)_MAP\b",
+            "unused CLI package facade",
+        ),
+        (CLI_TEST, r"\bregister_native_dll_paths\b", "removed CLI DLL bootstrap monkeypatch"),
+        (TENSOR_BACKEND, r"\b_startup_hooks\b", "stale tensor backend CLI bootstrap documentation"),
     )
     for path, pattern, label in checks:
         if re.search(pattern, _read(path), re.MULTILINE):

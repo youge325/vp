@@ -63,6 +63,9 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     fake_stage_file_rules = tmp_path / "stage_file_rules.py"
     fake_paddle_package = tmp_path / "paddle_init.py"
     fake_pytorch_package = tmp_path / "pytorch_init.py"
+    fake_cli_package = tmp_path / "cli_init.py"
+    fake_cli_test = tmp_path / "test_cli.py"
+    fake_tensor_backend = tmp_path / "tensor_backend.py"
     fake_contract_check.write_text("export const _TASK_REQUEST_CONTRACT = {}\n", encoding="utf-8")
     fake_weights.write_text(
         "DISABLED_PADDLEGAN_VSR_MODELS = {}\n"
@@ -84,6 +87,20 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     fake_stage_file_rules.write_text("def empty_resume_state():\n    pass\n", encoding="utf-8")
     fake_paddle_package.write_text("__all__: list[str] = []\n", encoding="utf-8")
     fake_pytorch_package.write_text("__all__: list[str] = []\n", encoding="utf-8")
+    fake_cli_package.write_text(
+        "from app.cli.commands.check import cmd_check\n"
+        "from app.cli.parser import build_parser\n"
+        '__all__ = ["main", "cmd_check", "build_parser"]\n',
+        encoding="utf-8",
+    )
+    fake_cli_test.write_text(
+        'monkeypatch.setattr(cli_main, "register_native_dll_paths", lambda: None, raising=False)\n',
+        encoding="utf-8",
+    )
+    fake_tensor_backend.write_text(
+        "CLI _startup_hooks calls register_native_dll_paths\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(module, "FRONTEND_PROTOCOL_CONTRACT_CHECK", fake_contract_check, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_WEIGHTS", fake_weights, raising=False)
     monkeypatch.setattr(module, "WORKFLOW_VALIDATION", fake_validation, raising=False)
@@ -94,11 +111,14 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     monkeypatch.setattr(module, "STAGE_FILE_RULES", fake_stage_file_rules, raising=False)
     monkeypatch.setattr(module, "PADDLE_PACKAGE", fake_paddle_package, raising=False)
     monkeypatch.setattr(module, "PYTORCH_PACKAGE", fake_pytorch_package, raising=False)
+    monkeypatch.setattr(module, "CLI_PACKAGE", fake_cli_package, raising=False)
+    monkeypatch.setattr(module, "CLI_TEST", fake_cli_test, raising=False)
+    monkeypatch.setattr(module, "TENSOR_BACKEND", fake_tensor_backend, raising=False)
     issues: list[str] = []
 
     getattr(module, "_check_dead_surface_boundary", lambda _issues: None)(issues)
 
-    assert len(issues) == 11, issues
+    assert len(issues) == 14, issues
 
 
 def test_production_processing_has_no_global_algorithm_bootstrap() -> None:
@@ -121,6 +141,20 @@ def test_single_use_helpers_and_empty_package_exports_are_removed() -> None:
     assert "empty_resume_state" not in stage_file_rules.read_text(encoding="utf-8")
     assert "__all__" not in paddle_package.read_text(encoding="utf-8")
     assert "__all__" not in pytorch_package.read_text(encoding="utf-8")
+
+
+def test_cli_package_exposes_only_main_without_stale_bootstrap_references() -> None:
+    cli_package = REPO_ROOT / "backend" / "app" / "cli" / "__init__.py"
+    cli_test = REPO_ROOT / "backend" / "tests" / "test_cli.py"
+    tensor_backend = REPO_ROOT / "backend" / "app" / "algorithms" / "tensor_backend.py"
+
+    cli_text = cli_package.read_text(encoding="utf-8")
+    assert "from app.cli.commands" not in cli_text
+    assert "build_parser" not in cli_text
+    assert "PROCESS_ORDER_MAP" not in cli_text
+    assert re.search(r"__all__\s*=\s*\[\s*[\"']main[\"']\s*\]", cli_text)
+    assert "register_native_dll_paths" not in cli_test.read_text(encoding="utf-8")
+    assert "_startup_hooks" not in tensor_backend.read_text(encoding="utf-8")
 
 
 def test_paddlegan_vsr_contract_matches_current_repo() -> None:

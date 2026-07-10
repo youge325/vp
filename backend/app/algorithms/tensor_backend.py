@@ -154,12 +154,9 @@ class OnnxBackend(ITensorBackend):
     ONNX Runtime 直接接受 numpy ndarray 作为输入,因此本后端的 "tensor"
     实际上就是 numpy ndarray (1CHW, float32)。
 
-    Phase D.6.1 — 不再在 ``__init__`` 内 ``import onnxruntime`` 或调用
-    ``register_native_dll_paths``。理由:
-    - CLI 入口已在 [cli/main.py](../cli/main.py) 的 ``_startup_hooks`` 显式
-      注册 DLL 路径,这里再调一次属于重复 bootstrap。
-    - ``onnxruntime`` 的 import 涉及 CUDA/TensorRT DLL 探测,放到首次使用
-      时再触发,可让"工厂只构造 PyTorch 后端"这种典型路径不付 ORT 启动成本。
+    ``onnxruntime`` 的 import 涉及 CUDA/TensorRT DLL 探测,因此放到首次
+    使用时再触发。需要原生 DLL 的具体运行时 owner 会在加载框架前注册
+    自己的搜索路径,构造其他 tensor backend 不会承担 ORT 启动成本。
 
     可用性检查走 ``importlib.util.find_spec``,只看包是否存在,不真的 import。
     """
