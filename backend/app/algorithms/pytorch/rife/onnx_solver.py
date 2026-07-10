@@ -113,7 +113,6 @@ class RIFEONNXSolver:
                     f"或运行 export_rife_to_onnx(model_version='{model_version}') 导出模型"
                 )
 
-        self._model_version = model_version
         self._modulo = get_spec(model_version).modulo
 
         # 根据 engine 参数选择 providers 并显式校验是否真的命中

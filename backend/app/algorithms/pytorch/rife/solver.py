@@ -50,12 +50,8 @@ class RIFESolver:
             model_dir: 模型权重目录
             engine: 推理引擎（"cuda" 或 "tensorrt"，默认 "cuda"）
         """
-        self._model_version = model_version
-        self._scale = scale
-        self._fp16 = fp16
-
         # 加载模型
-        self._flownet, self._encode, self._config = load_rife_model(
+        self._flownet, self._encode, config = load_rife_model(
             model_version=model_version,
             scale=scale,
             device=device,
@@ -66,46 +62,19 @@ class RIFESolver:
 
         self._device = next(self._flownet.parameters()).device
         self._dtype = next(self._flownet.parameters()).dtype
-        self._modulo = self._config["modulo"]
-        self._encode_channel = self._config["encode_channel"]
-        self._has_head = self._config["head_type"] != HEAD_NONE
+        self._modulo = config["modulo"]
+        self._has_head = config["head_type"] != HEAD_NONE
 
         # 缓存（同尺寸帧复用）
         self._cached_size = None
         self._backwarp_grid = None
         self._flow_div = None
-        self._padding = None
-        self._orig_h = None
-        self._orig_w = None
-
-        # Head 编码缓存（避免重复计算同一帧的编码）
-        self._encode_cache = {}
 
         logger.info(
             f"RIFESolver 初始化完成: v{model_version}, "
             f"device={self._device}, dtype={self._dtype}, scale={scale}, "
             f"has_head={self._has_head}"
         )
-
-    @property
-    def device(self) -> torch.device:
-        """当前推理设备。"""
-        return self._device
-
-    @property
-    def dtype(self) -> torch.dtype:
-        """当前推理数据类型。"""
-        return self._dtype
-
-    @property
-    def modulo(self) -> int:
-        """padding 模数。"""
-        return self._modulo
-
-    @property
-    def has_head(self) -> bool:
-        """是否使用 Head 编码器。"""
-        return self._has_head
 
     def _ensure_grid_cache(self, height: int, width: int):
         """确保采样网格和归一化除数已缓存（同尺寸帧复用）。"""

@@ -70,8 +70,11 @@ FFMPEG_ENCODE = FFMPEG_PACKAGE.parent / "encode.py"
 RIFE_MODEL_LOADER = ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife" / "model_loader.py"
 RIFE_MODEL_SPEC = RIFE_MODEL_LOADER.parent / "_model_spec.py"
 RIFE_PACKAGE = RIFE_MODEL_LOADER.parent / "__init__.py"
-RIFE_SOLVERS = (RIFE_MODEL_LOADER.parent / "solver.py", RIFE_MODEL_LOADER.parent / "onnx_solver.py")
-RIFE_TYPED_SPEC_CONSUMERS = (RIFE_MODEL_LOADER.parent / "onnx_export.py", RIFE_MODEL_LOADER.parent / "onnx_solver.py")
+RIFE_SOLVER = RIFE_MODEL_LOADER.parent / "solver.py"
+RIFE_ONNX_SOLVER = RIFE_MODEL_LOADER.parent / "onnx_solver.py"
+RIFE_SOLVERS = (RIFE_SOLVER, RIFE_ONNX_SOLVER)
+RIFE_TYPED_SPEC_CONSUMERS = (RIFE_MODEL_LOADER.parent / "onnx_export.py", RIFE_ONNX_SOLVER)
+ANIME_OPTIMIZATION = ROOT / "backend" / "app" / "processing" / "anime_optimization.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
 STAGE_WORKER_FACTORY = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_factory.py"
@@ -834,6 +837,32 @@ def _check_round_28_error_emission_boundary(issues: list[str]) -> None:
         or re.search(r"^\s*def\s+__new__\b", protocol_text, re.MULTILINE)
     ):
         issues.append(f"unused emitter singleton remains in {_rel(PROTOCOL_PACKAGE)}")
+
+
+def _check_round_29_write_only_state_boundary(issues: list[str]) -> None:
+    anime_text = _read(ANIME_OPTIMIZATION)
+    if re.search(r"self\._(?:tensor_backend|duplicate_threshold)\b", anime_text):
+        issues.append(f"Anime write-only state remains in {_rel(ANIME_OPTIMIZATION)}")
+
+    solver_text = _read(RIFE_SOLVER)
+    dead_solver_fields = (
+        "model_version",
+        "scale",
+        "fp16",
+        "config",
+        "encode_channel",
+        "padding",
+        "orig_h",
+        "orig_w",
+        "encode_cache",
+    )
+    if re.search(rf"self\._(?:{'|'.join(dead_solver_fields)})\b", solver_text):
+        issues.append(f"RIFE write-only state remains in {_rel(RIFE_SOLVER)}")
+    if re.search(r"^\s*def\s+(?:device|dtype|modulo|has_head)\b", solver_text, re.MULTILINE):
+        issues.append(f"RIFE zero-call property remains in {_rel(RIFE_SOLVER)}")
+
+    if re.search(r"self\._model_version\b", _read(RIFE_ONNX_SOLVER)):
+        issues.append(f"ONNX RIFE write-only state remains in {_rel(RIFE_ONNX_SOLVER)}")
 
 
 def _check_stage_worker_private_import_boundary(issues: list[str]) -> None:
@@ -2677,6 +2706,7 @@ def main() -> int:
         _check_round_26_dead_interface_boundary(issues)
         _check_round_27_data_rule_boundary(issues)
         _check_round_28_error_emission_boundary(issues)
+        _check_round_29_write_only_state_boundary(issues)
         _check_stage_worker_private_import_boundary(issues)
         _check_stage_worker_runtime_boundary(issues)
         _check_stage_worker_entrypoint_export_boundary(issues)
