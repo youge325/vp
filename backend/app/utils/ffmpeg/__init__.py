@@ -17,25 +17,17 @@ from app.utils.logger import get_logger
 from . import _constants
 from . import encode as _encode, probe as _probe
 from .io import (
-    RawVideoReader,
-    RawVideoWriter,
-    build_rawvideo_decode_command,
-    build_rawvideo_encode_command,
-    open_rawvideo_decoder,
-    open_rawvideo_encoder,
+    RawVideoReader as _RawVideoReader,
+    RawVideoWriter as _RawVideoWriter,
+    build_rawvideo_decode_command as _build_rawvideo_decode_command,
+    build_rawvideo_encode_command as _build_rawvideo_encode_command,
+    open_rawvideo_decoder as _open_rawvideo_decoder,
+    open_rawvideo_encoder as _open_rawvideo_encoder,
 )
 
 logger = get_logger(__name__)
 
-__all__ = [
-    "FFmpegWrapper",
-    "RawVideoReader",
-    "RawVideoWriter",
-    "build_rawvideo_decode_command",
-    "build_rawvideo_encode_command",
-    "open_rawvideo_decoder",
-    "open_rawvideo_encoder",
-]
+__all__ = ["FFmpegWrapper"]
 
 
 class FFmpegWrapper:
@@ -115,7 +107,7 @@ class FFmpegWrapper:
         frame_count: int | None = None,
     ) -> list[str]:
         decode_input_args = self.build_decode_input_args(input_path, decode_config)
-        return build_rawvideo_decode_command(
+        return _build_rawvideo_decode_command(
             self.ffmpeg_path,
             input_path,
             width=width,
@@ -136,7 +128,7 @@ class FFmpegWrapper:
         encode_config: dict[str, Any] | None = None,
     ) -> list[str]:
         encode_output_args = self.build_encode_output_args(output_path, encode_config)
-        return build_rawvideo_encode_command(
+        return _build_rawvideo_encode_command(
             self.ffmpeg_path,
             output_path,
             width=width,
@@ -155,9 +147,9 @@ class FFmpegWrapper:
         decode_config: dict[str, Any] | None = None,
         start_frame: int = 0,
         frame_count: int | None = None,
-    ) -> RawVideoReader:
+    ) -> _RawVideoReader:
         decode_input_args = self.build_decode_input_args(input_path, decode_config)
-        return open_rawvideo_decoder(
+        return _open_rawvideo_decoder(
             self.ffmpeg_path,
             input_path=input_path,
             width=width,
@@ -177,9 +169,9 @@ class FFmpegWrapper:
         output_fps: float | None = None,
         encode_config: dict[str, Any] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
-    ) -> RawVideoWriter:
+    ) -> _RawVideoWriter:
         encode_output_args = self.build_encode_output_args(output_path, encode_config)
-        return open_rawvideo_encoder(
+        return _open_rawvideo_encoder(
             self.ffmpeg_path,
             output_path=output_path,
             width=width,

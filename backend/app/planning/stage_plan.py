@@ -61,7 +61,7 @@ def resolve_video_info(ffmpeg: FFmpegWrapper, input_path: str) -> dict[str, Any]
     }
 
 
-def estimate_encoded_output_frames(
+def _estimate_encoded_output_frames(
     *,
     source_frames: int,
     source_duration: float,
@@ -91,7 +91,7 @@ def build_stage_plan(
             break
 
     if interpolation_index is None:
-        total_encoded_frames = estimate_encoded_output_frames(
+        total_encoded_frames = _estimate_encoded_output_frames(
             source_frames=source_frames,
             source_duration=source_duration,
             output_fps=output_fps,
@@ -109,7 +109,7 @@ def build_stage_plan(
         processed_output_frames = source_frames
     else:
         processed_output_frames = source_frames + (source_frames - 1) * (multi - 1)
-    total_encoded_frames = estimate_encoded_output_frames(
+    total_encoded_frames = _estimate_encoded_output_frames(
         source_frames=processed_output_frames,
         source_duration=source_duration,
         output_fps=output_fps,

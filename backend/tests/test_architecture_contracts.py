@@ -66,6 +66,9 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     fake_cli_package = tmp_path / "cli_init.py"
     fake_cli_test = tmp_path / "test_cli.py"
     fake_tensor_backend = tmp_path / "tensor_backend.py"
+    fake_planning_package = tmp_path / "planning_init.py"
+    fake_workflow_steps = tmp_path / "workflow_steps.py"
+    fake_ffmpeg_package = tmp_path / "ffmpeg_init.py"
     fake_contract_check.write_text("export const _TASK_REQUEST_CONTRACT = {}\n", encoding="utf-8")
     fake_weights.write_text(
         "DISABLED_PADDLEGAN_VSR_MODELS = {}\n"
@@ -101,6 +104,17 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
         "CLI _startup_hooks calls register_native_dll_paths\n",
         encoding="utf-8",
     )
+    fake_planning_package.write_text(
+        "from app.planning.manifest import ResumeKind\n"
+        "from app.planning.stage_plan import estimate_encoded_output_frames\n"
+        "from app.planning.workflow_validation import get_onnx_model_name\n",
+        encoding="utf-8",
+    )
+    fake_workflow_steps.write_text("PROCESS_LABEL_MAP = {}\n", encoding="utf-8")
+    fake_ffmpeg_package.write_text(
+        '__all__ = ["FFmpegWrapper", "RawVideoReader", "open_rawvideo_decoder"]\n',
+        encoding="utf-8",
+    )
     monkeypatch.setattr(module, "FRONTEND_PROTOCOL_CONTRACT_CHECK", fake_contract_check, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_WEIGHTS", fake_weights, raising=False)
     monkeypatch.setattr(module, "WORKFLOW_VALIDATION", fake_validation, raising=False)
@@ -114,11 +128,14 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     monkeypatch.setattr(module, "CLI_PACKAGE", fake_cli_package, raising=False)
     monkeypatch.setattr(module, "CLI_TEST", fake_cli_test, raising=False)
     monkeypatch.setattr(module, "TENSOR_BACKEND", fake_tensor_backend, raising=False)
+    monkeypatch.setattr(module, "PLANNING_PACKAGE", fake_planning_package, raising=False)
+    monkeypatch.setattr(module, "WORKFLOW_STEPS", fake_workflow_steps, raising=False)
+    monkeypatch.setattr(module, "FFMPEG_PACKAGE", fake_ffmpeg_package, raising=False)
     issues: list[str] = []
 
     getattr(module, "_check_dead_surface_boundary", lambda _issues: None)(issues)
 
-    assert len(issues) == 14, issues
+    assert len(issues) == 17, issues
 
 
 def test_production_processing_has_no_global_algorithm_bootstrap() -> None:
@@ -155,6 +172,31 @@ def test_cli_package_exposes_only_main_without_stale_bootstrap_references() -> N
     assert re.search(r"__all__\s*=\s*\[\s*[\"']main[\"']\s*\]", cli_text)
     assert "register_native_dll_paths" not in cli_test.read_text(encoding="utf-8")
     assert "_startup_hooks" not in tensor_backend.read_text(encoding="utf-8")
+
+
+def test_planning_and_ffmpeg_facades_expose_only_consumed_symbols() -> None:
+    planning_package = REPO_ROOT / "backend" / "app" / "planning" / "__init__.py"
+    workflow_steps = REPO_ROOT / "backend" / "app" / "planning" / "workflow_steps.py"
+    manifest = REPO_ROOT / "backend" / "app" / "planning" / "manifest.py"
+    stage_plan = REPO_ROOT / "backend" / "app" / "planning" / "stage_plan.py"
+    validation = REPO_ROOT / "backend" / "app" / "planning" / "workflow_validation.py"
+    ffmpeg_package = REPO_ROOT / "backend" / "app" / "utils" / "ffmpeg" / "__init__.py"
+
+    planning_text = planning_package.read_text(encoding="utf-8")
+    for dead_name in (
+        "PROCESS_LABEL_MAP",
+        "estimate_encoded_output_frames",
+        "ResumeKind",
+        "get_onnx_model_name",
+        "validate_onnx_models_for_workflow",
+    ):
+        assert dead_name not in planning_text
+    assert "PROCESS_LABEL_MAP" not in workflow_steps.read_text(encoding="utf-8")
+    assert not re.search(r"^ResumeKind\s*=", manifest.read_text(encoding="utf-8"), re.MULTILINE)
+    assert "def estimate_encoded_output_frames" not in stage_plan.read_text(encoding="utf-8")
+    assert "def get_onnx_model_name" not in validation.read_text(encoding="utf-8")
+    assert "def validate_onnx_models_for_workflow" not in validation.read_text(encoding="utf-8")
+    assert re.search(r'__all__\s*=\s*\[\s*["\']FFmpegWrapper["\']\s*\]', ffmpeg_package.read_text(encoding="utf-8"))
 
 
 def test_paddlegan_vsr_contract_matches_current_repo() -> None:
