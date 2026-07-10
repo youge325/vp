@@ -73,6 +73,14 @@ def test_rife_model_config_is_owned_only_by_model_spec() -> None:
     assert '"replace"' not in spec_text
 
 
+def test_rife_package_has_no_unused_lazy_solver_facade() -> None:
+    rife_package = REPO_ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife" / "__init__.py"
+    text = rife_package.read_text(encoding="utf-8")
+
+    assert "RIFESolver" not in text
+    assert "__getattr__" not in text
+
+
 def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch) -> None:
     module = _load_module()
     fake_contract_check = tmp_path / "_contract_check.ts"
@@ -93,6 +101,7 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     fake_ffmpeg_package = tmp_path / "ffmpeg_init.py"
     fake_rife_model_loader = tmp_path / "rife_model_loader.py"
     fake_rife_model_spec = tmp_path / "rife_model_spec.py"
+    fake_rife_package = tmp_path / "rife_init.py"
     fake_contract_check.write_text("export const _TASK_REQUEST_CONTRACT = {}\n", encoding="utf-8")
     fake_weights.write_text(
         "DISABLED_PADDLEGAN_VSR_MODELS = {}\n"
@@ -150,6 +159,13 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
         '__all__ = ["replace"]\n',
         encoding="utf-8",
     )
+    fake_rife_package.write_text(
+        "def __getattr__(name):\n"
+        "    if name == 'RIFESolver':\n"
+        "        from app.algorithms.pytorch.rife.solver import RIFESolver\n"
+        "        return RIFESolver\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(module, "FRONTEND_PROTOCOL_CONTRACT_CHECK", fake_contract_check, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_WEIGHTS", fake_weights, raising=False)
     monkeypatch.setattr(module, "WORKFLOW_VALIDATION", fake_validation, raising=False)
@@ -168,11 +184,12 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     monkeypatch.setattr(module, "FFMPEG_PACKAGE", fake_ffmpeg_package, raising=False)
     monkeypatch.setattr(module, "RIFE_MODEL_LOADER", fake_rife_model_loader, raising=False)
     monkeypatch.setattr(module, "RIFE_MODEL_SPEC", fake_rife_model_spec, raising=False)
+    monkeypatch.setattr(module, "RIFE_PACKAGE", fake_rife_package, raising=False)
     issues: list[str] = []
 
     getattr(module, "_check_dead_surface_boundary", lambda _issues: None)(issues)
 
-    assert len(issues) == 20, issues
+    assert len(issues) == 21, issues
 
 
 def test_production_processing_has_no_global_algorithm_bootstrap() -> None:
