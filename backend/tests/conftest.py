@@ -40,14 +40,15 @@ else:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _register_default_algorithms() -> None:
-    """Phase D.6.1 之后,``app.processing`` import 不再有副作用注册算法。
+def _register_test_algorithms() -> None:
+    """Register concrete algorithms for tests that bypass stage-worker setup."""
+    from app.algorithms.factory import AlgorithmFactory
+    from app.processing.anime_optimization import AnimeOptimizationAlgorithm
+    from app.processing.frame_filters import FrameFilterChainAlgorithm
+    from app.processing.interpolation import FrameInterpolationAlgorithm
+    from app.processing.super_resolution import SuperResolutionAlgorithm
 
-    生产入口 ``cli/main._startup_hooks`` 显式调用 ``register_default_algorithms()``,
-    但绕开 CLI 直接 ``AlgorithmFactory.create(...)`` 的测试拿到的会是空注册表
-    并被 ``INVALID_CONFIG`` 早失败拦截。session 级 autouse fixture 提供与
-    CLI 入口同等的"算法已注册"前置,使测试不必关心启动顺序。
-    """
-    from app.processing import register_default_algorithms
-
-    register_default_algorithms()
+    AlgorithmFactory.register("frame_interpolation", FrameInterpolationAlgorithm)
+    AlgorithmFactory.register("super_resolution", SuperResolutionAlgorithm)
+    AlgorithmFactory.register("anime_optimization", AnimeOptimizationAlgorithm)
+    AlgorithmFactory.register("frame_filter_chain", FrameFilterChainAlgorithm)

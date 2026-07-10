@@ -35,6 +35,7 @@ BACKEND_MODEL_METRICS = ROOT / "backend" / "app" / "utils" / "model_metrics.py"
 BACKEND_ONNX_MODELS = ROOT / "backend" / "app" / "utils" / "onnx_models.py"
 BACKEND_OPENCV_RUNTIME = ROOT / "backend" / "app" / "utils" / "opencv_runtime.py"
 ALGORITHM_FACTORY = ROOT / "backend" / "app" / "algorithms" / "factory.py"
+PROCESSING_PACKAGE = ROOT / "backend" / "app" / "processing" / "__init__.py"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 PADDLEGAN_VSR_PACKAGE = PADDLEGAN_WEIGHTS.parent / "__init__.py"
 BENCHMARK_PACKAGE = ROOT / "backend" / "app" / "benchmark" / "__init__.py"
@@ -633,6 +634,8 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
         (WORKFLOW_VALIDATION, r"\bDISABLED_PADDLEGAN_VSR_MODELS\b", "PaddleGAN disabled validation branch"),
         (BENCHMARK_PACKAGE, r"^\s*from\s+app\.benchmark\b", "benchmark package re-export"),
         (PADDLEGAN_VSR_PACKAGE, r"\bPADDLEGAN_VSR_SPECS\b", "PaddleGAN package re-export"),
+        (PROCESSING_PACKAGE, r"\bregister_default_algorithms\b", "global algorithm bootstrap"),
+        (ALGORITHM_FACTORY, r"\bregister_default_algorithms\b", "global algorithm bootstrap guidance"),
     )
     for path, pattern, label in checks:
         if re.search(pattern, _read(path), re.MULTILINE):

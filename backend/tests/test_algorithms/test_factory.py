@@ -58,6 +58,8 @@ class TestAlgorithmFactory:
         with pytest.raises(ProcessError) as exc_info:
             AlgorithmFactory.create("frame_interpolation")
         assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
+        assert "register_default_algorithms" not in exc_info.value.message
+        assert "register the required algorithm" in exc_info.value.message
 
     def test_get_available_types(self):
         AlgorithmFactory.register("type_a", MockAlgorithm)
@@ -65,15 +67,6 @@ class TestAlgorithmFactory:
         types = AlgorithmFactory.get_available_types()
         assert "type_a" in types
         assert "type_b" in types
-
-    def test_register_default_algorithms(self):
-        from app.processing import register_default_algorithms
-
-        register_default_algorithms()
-        types = AlgorithmFactory.get_available_types()
-        assert "frame_interpolation" in types
-        assert "super_resolution" in types
-        assert "anime_optimization" in types
 
     def test_create_with_tensor_backend_name(self, monkeypatch):
         AlgorithmFactory.register("mock", MockAlgorithm)

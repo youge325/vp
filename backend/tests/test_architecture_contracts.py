@@ -58,6 +58,8 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     fake_validation = tmp_path / "workflow_validation.py"
     fake_benchmark_init = tmp_path / "benchmark_init.py"
     fake_paddlegan_init = tmp_path / "paddlegan_init.py"
+    fake_processing_init = tmp_path / "processing_init.py"
+    fake_algorithm_factory = tmp_path / "factory.py"
     fake_contract_check.write_text("export const _TASK_REQUEST_CONTRACT = {}\n", encoding="utf-8")
     fake_weights.write_text("DISABLED_PADDLEGAN_VSR_MODELS = {}\n", encoding="utf-8")
     fake_validation.write_text("if algorithm in DISABLED_PADDLEGAN_VSR_MODELS:\n    pass\n", encoding="utf-8")
@@ -66,16 +68,31 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
         "from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS\n",
         encoding="utf-8",
     )
+    fake_processing_init.write_text("def register_default_algorithms():\n    pass\n", encoding="utf-8")
+    fake_algorithm_factory.write_text(
+        'message = "call register_default_algorithms() first"\n',
+        encoding="utf-8",
+    )
     monkeypatch.setattr(module, "FRONTEND_PROTOCOL_CONTRACT_CHECK", fake_contract_check, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_WEIGHTS", fake_weights, raising=False)
     monkeypatch.setattr(module, "WORKFLOW_VALIDATION", fake_validation, raising=False)
     monkeypatch.setattr(module, "BENCHMARK_PACKAGE", fake_benchmark_init, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_VSR_PACKAGE", fake_paddlegan_init, raising=False)
+    monkeypatch.setattr(module, "PROCESSING_PACKAGE", fake_processing_init, raising=False)
+    monkeypatch.setattr(module, "ALGORITHM_FACTORY", fake_algorithm_factory, raising=False)
     issues: list[str] = []
 
     getattr(module, "_check_dead_surface_boundary", lambda _issues: None)(issues)
 
-    assert len(issues) == 5, issues
+    assert len(issues) == 7, issues
+
+
+def test_production_processing_has_no_global_algorithm_bootstrap() -> None:
+    processing_init = REPO_ROOT / "backend" / "app" / "processing" / "__init__.py"
+    algorithm_factory = REPO_ROOT / "backend" / "app" / "algorithms" / "factory.py"
+
+    assert "register_default_algorithms" not in processing_init.read_text(encoding="utf-8")
+    assert "register_default_algorithms" not in algorithm_factory.read_text(encoding="utf-8")
 
 
 def test_paddlegan_vsr_contract_matches_current_repo() -> None:
