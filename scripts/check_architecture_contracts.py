@@ -40,6 +40,10 @@ TENSOR_BACKEND = ROOT / "backend" / "app" / "algorithms" / "tensor_backend.py"
 PROCESSING_PACKAGE = ROOT / "backend" / "app" / "processing" / "__init__.py"
 PADDLEGAN_WEIGHTS = ROOT / "backend" / "app" / "algorithms" / "paddle" / "paddlegan_vsr" / "weights.py"
 PADDLEGAN_VSR_PACKAGE = PADDLEGAN_WEIGHTS.parent / "__init__.py"
+PADDLEGAN_VENDOR = PADDLEGAN_WEIGHTS.parent / "vendor" / "ppgan"
+PADDLEGAN_VENDOR_INIT = PADDLEGAN_VENDOR / "modules" / "init.py"
+PADDLEGAN_GENERATOR_BUILDER = PADDLEGAN_VENDOR / "models" / "generators" / "builder.py"
+PADDLEGAN_REGISTRY = PADDLEGAN_VENDOR / "utils" / "registry.py"
 PADDLE_PACKAGE = PADDLEGAN_WEIGHTS.parents[1] / "__init__.py"
 PYTORCH_PACKAGE = ROOT / "backend" / "app" / "algorithms" / "pytorch" / "__init__.py"
 BENCHMARK_PACKAGE = ROOT / "backend" / "app" / "benchmark" / "__init__.py"
@@ -702,6 +706,13 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
             r"\bdef\s+parse_stage_event_line\b|__all__\s*=\s*\[[^\]]*\b(?:parse_stage_event_line|TENSORRT_LOG_PREFIX)\b",
             "public worker event implementation helper",
         ),
+        (
+            PADDLEGAN_VENDOR_INIT,
+            r"^\s*def\s+(?:xavier_init|normal_init|uniform_init|kaiming_init|init_weights|reset_parameters)\b",
+            "unused PaddleGAN generic initializer",
+        ),
+        (PADDLEGAN_GENERATOR_BUILDER, r"^\s*def\s+build_generator\b", "unused PaddleGAN generator builder"),
+        (PADDLEGAN_REGISTRY, r"^\s*def\s+build_from_config\b", "unused PaddleGAN config builder"),
     )
     for path, pattern, label in checks:
         if re.search(pattern, _read(path), re.MULTILINE):
