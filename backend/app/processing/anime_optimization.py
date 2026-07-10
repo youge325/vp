@@ -28,16 +28,5 @@ class AnimeOptimizationAlgorithm(IAlgorithm):
         """占位实现：直接返回帧 Tensor，不做任何处理。"""
         return frame
 
-    def process_frame_batch(self, frames: list[Any], **kwargs) -> list[Any]:
-        """占位实现：直接返回所有帧 Tensor，不做任何处理。"""
-        return frames
-
     def get_name(self) -> str:
         return "动漫帧优化算法(占位)"
-
-    def validate(self) -> bool:
-        """占位算法始终有效。"""
-        return True
-
-    def get_description(self) -> str:
-        return "动漫重复帧优化占位算法。当前实现：帧→Tensor→帧往返转换，不做实际优化处理。未来将实现重复帧检测与优化。"

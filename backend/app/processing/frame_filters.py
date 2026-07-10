@@ -81,23 +81,8 @@ class FrameFilterChainAlgorithm(IAlgorithm):
             raise RuntimeError("frame_filter_chain does not support tensor processing for this filter set.")
         return self._apply_tensor_filters(tensor)
 
-    def process_frame_batch(self, frames: list[Any], **kwargs: Any) -> list[Any]:
-        return [self.process_frame(f) for f in frames]
-
     def get_name(self) -> str:
         return "帧级滤镜链"
-
-    def validate(self) -> bool:
-        try:
-            _ensure_cv2()
-            self._validate_filters()
-            return True
-        except Exception:
-            return False
-
-    def get_description(self) -> str:
-        names = [s.get("kind", "?") for s in self._filters]
-        return f"OpenCV 帧级滤镜链: {' → '.join(names) if names else '无滤镜'}"
 
     # ------------------------------------------------------------------
     # 滤镜实现

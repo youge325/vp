@@ -76,3 +76,7 @@ export function coerceOptionValue(option: CapabilityOptionSpec, event: Event): C
   }
   return target.value
 }
+
+export function toNumberValue(value: unknown): number {
+  return Number(value)
+}

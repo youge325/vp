@@ -4,7 +4,8 @@ import {
   buildRateControlViewState,
   resolveRateControlModeSelection,
 } from '@/services/preset/io-form-rules'
-import { toNumberValue, toRateControlMode } from '@/services/preset/io-options'
+import { toRateControlMode } from '@/services/preset/io-options'
+import { toNumberValue } from '@/services/preset/options'
 import type { EncoderProfileSpec } from '@/types/domain/capability'
 import type { EncodeConfig, WorkbenchPreset } from '@/types/protocol'
 

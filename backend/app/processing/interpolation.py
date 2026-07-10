@@ -125,37 +125,8 @@ class FrameInterpolationAlgorithm(IAlgorithm):
         """
         return frame
 
-    def process_frame_batch(self, frames: list[Any], **kwargs) -> list[Any]:
-        """
-        批量帧处理（补帧算法不适用，直接返回原帧列表）。
-        """
-        return frames
-
     def get_name(self) -> str:
         return f"补帧算法(RIFE v{self._model_version}, {self._multi}x)"
-
-    def validate(self) -> bool:
-        """验证 RIFE 模型是否可运行。"""
-        backend_name = self._tensor_backend.get_name() if self._tensor_backend is not None else "numpy"
-        if backend_name == "onnx":
-            return True
-
-        try:
-            import torch
-
-            if not torch.cuda.is_available() and self._device in (None, "cuda"):
-                logger.warning("CUDA 不可用，将使用 CPU 推理（速度较慢）")
-            return True
-        except ImportError:
-            logger.error("PyTorch 未安装，RIFE 算法不可用")
-            return False
-
-    def get_description(self) -> str:
-        return (
-            f"基于 RIFE v{self._model_version} 的视频补帧算法。"
-            f"支持 {self._multi}x 插值倍率，"
-            f"{'半精度' if self._fp16 else '全精度'}推理。"
-        )
 
     # ------------------------------------------------------------------
     # 帧对处理接口

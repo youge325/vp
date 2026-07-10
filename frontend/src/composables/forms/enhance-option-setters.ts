@@ -1,10 +1,10 @@
 import {
   toFpsMode,
   toInferenceEngine,
-  toNumberOption,
   toProcessOrder,
   toTensorBackend,
 } from '@/services/preset/enhance-options'
+import { toNumberValue } from '@/services/preset/options'
 import type { createEnhanceOptionBindings } from '@/composables/forms/enhance-option-bindings'
 
 type EnhanceOptionForm = Parameters<typeof createEnhanceOptionBindings>[0]
@@ -35,7 +35,7 @@ export function createEnhanceOptionSetters(form: EnhanceOptionForm) {
   }
 
   function setInterpolationMulti(value: string): void {
-    form.interpolationMulti = toNumberOption(value)
+    form.interpolationMulti = toNumberValue(value)
   }
 
   function setSuperResolutionBackend(value: string): void {
@@ -55,7 +55,7 @@ export function createEnhanceOptionSetters(form: EnhanceOptionForm) {
   }
 
   function setSuperResolutionScale(value: string): void {
-    form.superResolutionScale = toNumberOption(value)
+    form.superResolutionScale = toNumberValue(value)
   }
 
   function setProcessOrder(value: string): void {

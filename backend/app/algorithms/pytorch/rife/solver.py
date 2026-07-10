@@ -201,33 +201,3 @@ class RIFESolver:
 
         # 转回 float32 输出
         return output.float().clamp(0.0, 1.0)
-
-    @torch.inference_mode()
-    def interpolate_multi(
-        self,
-        img0: torch.Tensor,
-        img1: torch.Tensor,
-        multi: int = 2,
-    ) -> list[torch.Tensor]:
-        """
-        对两帧进行多倍插值，生成 (multi-1) 个中间帧。
-
-        参数:
-            img0: 前一帧，形状 (1, 3, H, W)
-            img1: 后一帧，形状 (1, 3, H, W)
-            multi: 插值倍率（2x 生成 1 个中间帧，4x 生成 3 个中间帧）
-
-        返回:
-            中间帧列表，长度为 (multi-1)，按时间顺序排列
-        """
-        results = []
-        for j in range(1, multi):
-            t = j / multi
-            mid = self.interpolate(img0, img1, timestep=t)
-            results.append(mid)
-        return results
-
-    def clear_cache(self):
-        """清除编码缓存。"""
-        self._encode_cache.clear()
-        self._cached_size = None

@@ -12,7 +12,6 @@ import {
   buildProfileOptions,
   toFpsMode,
   toInferenceEngine,
-  toNumberOption,
   toProcessOrder,
   toTensorBackend,
 } from './enhance-options'
@@ -92,6 +91,5 @@ describe('enhance option rules', () => {
     expect(toInferenceEngine('tensorrt')).toBe('tensorrt')
     expect(toFpsMode('multi')).toBe('multi')
     expect(toProcessOrder('frame_interpolation_then_super_resolution')).toBe('frame_interpolation_then_super_resolution')
-    expect(toNumberOption('4')).toBe(4)
   })
 })

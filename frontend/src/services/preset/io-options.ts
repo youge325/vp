@@ -19,7 +19,3 @@ export const CONTAINER_SELECT_OPTIONS: readonly SelectOption[] = buildContainerO
 export function toRateControlMode(value: string): RateControlMode {
   return value as RateControlMode
 }
-
-export function toNumberValue(value: unknown): number {
-  return Number(value)
-}

@@ -4,7 +4,6 @@ import * as ioOptions from './io-options'
 import {
   buildProfileOptions,
   CONTAINER_SELECT_OPTIONS,
-  toNumberValue,
   toRateControlMode,
 } from './io-options'
 import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/domain/capability'
@@ -57,11 +56,5 @@ describe('io-options', () => {
   it('converts select values to domain values used by encode form setters', () => {
     expect(toRateControlMode('cq')).toBe('cq')
     expect(toRateControlMode('bitrate')).toBe('bitrate')
-  })
-
-  it('preserves existing BaseNumber model-value conversion semantics', () => {
-    expect(toNumberValue(1000)).toBe(1000)
-    expect(toNumberValue('24')).toBe(24)
-    expect(Number.isNaN(toNumberValue(undefined))).toBe(true)
   })
 })
