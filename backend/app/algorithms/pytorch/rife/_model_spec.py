@@ -12,7 +12,7 @@ Adding a new model version means appending one line to ``_VERSION_GROUPS``
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any
 
 # Head type constants — also re-exported by ``model_loader`` so external
@@ -155,7 +155,7 @@ def get_spec(version: str) -> RifeModelSpec:
 
     Use this in new code instead of ``MODEL_CONFIGS[version]`` — the spec
     has the same fields but with typed access and no risk of accidental
-    mutation. ``replace`` from ``dataclasses`` lets you derive a tweaked
+    mutation. ``dataclasses.replace`` lets you derive a tweaked
     copy when needed (e.g. ``replace(spec, ensemble=False)``).
     """
     return MODEL_SPECS[version]
@@ -171,5 +171,4 @@ __all__ = [
     "RifeModelSpec",
     "SUPPORTED_MODELS",
     "get_spec",
-    "replace",
 ]

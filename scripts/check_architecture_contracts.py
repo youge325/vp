@@ -673,8 +673,13 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
             r"__all__\s*=\s*\[[^\]]*\b(?:RawVideoReader|RawVideoWriter|build_rawvideo_|open_rawvideo_)",
             "unused FFmpeg raw I/O facade",
         ),
-        (RIFE_MODEL_LOADER, r"\bMODEL_(?:CONFIGS|SPECS)\b", "RIFE model config loader facade"),
+        (
+            RIFE_MODEL_LOADER,
+            r"__all__\s*=\s*\[[^\]]*\b(?:HEAD_CUSTOM|HEAD_NONE|HEAD_SEQUENTIAL|MODEL_CONFIGS|MODEL_SPECS|RifeModelSpec|SUPPORTED_MODELS|get_spec)\b",
+            "RIFE model spec loader facade",
+        ),
         (RIFE_MODEL_SPEC, r"^\s*def\s+_to_legacy_dict\b", "single-use RIFE model config converter"),
+        (RIFE_MODEL_SPEC, r'^[\s\S]*__all__\s*=\s*\[[^\]]*["\']replace["\']', "unused RIFE replace re-export"),
     )
     for path, pattern, label in checks:
         if re.search(pattern, _read(path), re.MULTILINE):

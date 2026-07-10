@@ -56,9 +56,21 @@ def test_rife_model_config_is_owned_only_by_model_spec() -> None:
     model_spec = REPO_ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife" / "_model_spec.py"
 
     loader_text = model_loader.read_text(encoding="utf-8")
-    assert "MODEL_CONFIGS" not in loader_text
-    assert "MODEL_SPECS" not in loader_text
-    assert "def _to_legacy_dict" not in model_spec.read_text(encoding="utf-8")
+    spec_text = model_spec.read_text(encoding="utf-8")
+    owner_names = (
+        "HEAD_CUSTOM",
+        "HEAD_NONE",
+        "HEAD_SEQUENTIAL",
+        "MODEL_CONFIGS",
+        "MODEL_SPECS",
+        "RifeModelSpec",
+        "SUPPORTED_MODELS",
+        "get_spec",
+    )
+    for name in owner_names:
+        assert f'"{name}"' not in loader_text
+    assert "def _to_legacy_dict" not in spec_text
+    assert '"replace"' not in spec_text
 
 
 def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch) -> None:
@@ -128,11 +140,14 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
         encoding="utf-8",
     )
     fake_rife_model_loader.write_text(
-        "from app.algorithms.pytorch.rife._model_spec import MODEL_CONFIGS, MODEL_SPECS\n",
+        "from app.algorithms.pytorch.rife._model_spec import HEAD_NONE, MODEL_CONFIGS, MODEL_SPECS\n"
+        '__all__ = ["HEAD_NONE", "MODEL_CONFIGS", "MODEL_SPECS"]\n',
         encoding="utf-8",
     )
     fake_rife_model_spec.write_text(
-        "def _to_legacy_dict(spec):\n    return spec.to_dict()\n",
+        "from dataclasses import replace\n"
+        "def _to_legacy_dict(spec):\n    return spec.to_dict()\n"
+        '__all__ = ["replace"]\n',
         encoding="utf-8",
     )
     monkeypatch.setattr(module, "FRONTEND_PROTOCOL_CONTRACT_CHECK", fake_contract_check, raising=False)
@@ -157,7 +172,7 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
 
     getattr(module, "_check_dead_surface_boundary", lambda _issues: None)(issues)
 
-    assert len(issues) == 19, issues
+    assert len(issues) == 20, issues
 
 
 def test_production_processing_has_no_global_algorithm_bootstrap() -> None:
