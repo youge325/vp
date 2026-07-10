@@ -100,10 +100,6 @@ def resolve_weight_path(model_id: str) -> Path:
     return fixed_weight_root() / spec.subdir / spec.filename
 
 
-def resolve_auxiliary_weight_path(filename: str) -> Path:
-    return fixed_weight_root() / "_auxiliary" / filename
-
-
 def ensure_weight_file(
     model_id: str,
     *,
@@ -126,18 +122,6 @@ def ensure_weight_file(
     )
 
 
-def ensure_auxiliary_weight_file(model_id: str, filename: str) -> Path:
-    target = resolve_auxiliary_weight_path(filename)
-    if target.is_file() and target.stat().st_size > 0:
-        return target
-
-    raise_error(
-        TaskErrorCode.MISSING_MODEL,
-        f"PaddleGAN auxiliary weight is missing: {target}",
-        details={"model": model_id, "path": str(target)},
-    )
-
-
 def ensure_paddlegan_vsr_weights(
     model_id: str,
     *,
@@ -146,6 +130,14 @@ def ensure_paddlegan_vsr_weights(
     """Validate all local weights required by a PaddleGAN VSR model."""
     main_weight = ensure_weight_file(model_id, auto_download=auto_download)
     spec = get_spec(model_id)
+    auxiliary_root = fixed_weight_root() / "_auxiliary"
     for filename in spec.auxiliary_filenames:
-        ensure_auxiliary_weight_file(model_id, filename)
+        target = auxiliary_root / filename
+        if target.is_file() and target.stat().st_size > 0:
+            continue
+        raise_error(
+            TaskErrorCode.MISSING_MODEL,
+            f"PaddleGAN auxiliary weight is missing: {target}",
+            details={"model": model_id, "path": str(target)},
+        )
     return main_weight
