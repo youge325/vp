@@ -8,8 +8,8 @@ from typing import Optional
 
 import torch
 
+from ._model_spec import HEAD_NONE
 from .model_loader import (
-    HEAD_NONE,
     load_rife_model,
     create_backwarp_grid,
     create_flow_div,

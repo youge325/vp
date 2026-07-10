@@ -27,12 +27,12 @@ import os
 from typing import TYPE_CHECKING, Optional
 
 from app.algorithms.pytorch.rife._model_spec import (
-    HEAD_CUSTOM,
-    HEAD_NONE,
-    HEAD_SEQUENTIAL,
-    SUPPORTED_MODELS,
-    RifeModelSpec,
-    get_spec,
+    HEAD_CUSTOM as _HEAD_CUSTOM,
+    HEAD_NONE as _HEAD_NONE,
+    HEAD_SEQUENTIAL as _HEAD_SEQUENTIAL,
+    SUPPORTED_MODELS as _SUPPORTED_MODELS,
+    RifeModelSpec as _RifeModelSpec,
+    get_spec as _get_spec,
 )
 from app.utils.logger import get_logger
 
@@ -44,15 +44,9 @@ logger = get_logger(__name__)
 
 
 __all__ = [
-    "HEAD_CUSTOM",
-    "HEAD_NONE",
-    "HEAD_SEQUENTIAL",
-    "RifeModelSpec",
-    "SUPPORTED_MODELS",
     "create_backwarp_grid",
     "create_flow_div",
     "get_model_dir",
-    "get_spec",
     "load_rife_model",
     "pad_frame",
     "unpad_frame",
@@ -147,7 +141,7 @@ def _load_weights(weight_path: str) -> dict:
 
 
 def _build_head_for_spec(
-    spec: RifeModelSpec,
+    spec: _RifeModelSpec,
     mod,
     state_dict: dict,
     torch_device: "torch.device",
@@ -162,16 +156,16 @@ def _build_head_for_spec(
     import torch
 
     head_type = spec.head_type
-    if head_type == HEAD_NONE:
+    if head_type == _HEAD_NONE:
         return None
 
     encode_state_dict = {k.replace("encode.", ""): v for k, v in state_dict.items() if "encode." in k}
 
-    if head_type == HEAD_CUSTOM:
+    if head_type == _HEAD_CUSTOM:
         head_cls = mod.Head
         with torch.device("meta"):
             encode = head_cls()
-    elif head_type == HEAD_SEQUENTIAL:
+    elif head_type == _HEAD_SEQUENTIAL:
         head_config = spec.head_config or {}
         with torch.device("meta"):
             encode = _build_sequential_head(
@@ -266,9 +260,9 @@ def load_rife_model(
     import torch
 
     try:
-        spec = get_spec(model_version)
+        spec = _get_spec(model_version)
     except KeyError:
-        raise ValueError(f"不支持的模型版本: {model_version}。可用版本: {SUPPORTED_MODELS}")
+        raise ValueError(f"不支持的模型版本: {model_version}。可用版本: {_SUPPORTED_MODELS}")
 
     # 确定设备 / dtype / 模型目录
     if device is None:

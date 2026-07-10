@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
-from app.algorithms.pytorch.rife.model_loader import SUPPORTED_MODELS as _RIFE_MODELS
+from app.algorithms.pytorch.rife._model_spec import SUPPORTED_MODELS as _RIFE_MODELS
 from app.algorithms.pytorch.rife.onnx_solver import RIFEONNXSolver
 from app.utils.model_metrics import get_rife_model_details
 

@@ -6,7 +6,8 @@ import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.algorithms.pytorch.rife.model_loader import SUPPORTED_MODELS, get_model_dir
+from app.algorithms.pytorch.rife._model_spec import SUPPORTED_MODELS
+from app.algorithms.pytorch.rife.model_loader import get_model_dir
 from app.algorithms.pytorch.rife.onnx_export import export_rife_to_onnx
 
 
