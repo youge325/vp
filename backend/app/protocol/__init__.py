@@ -39,19 +39,12 @@ class NdjsonEventType(str, Enum):
     CHECK = "check"
 
 
-class NdjsonEmitter:
-    """Singleton emitter for NDJSON events on stdout.
+class _NdjsonEmitter:
+    """Emitter for NDJSON events on stdout.
 
     Thread-safe because Python's GIL serialises ``print()`` calls and each
     call is a single atomic write after JSON serialisation.
     """
-
-    _instance: "NdjsonEmitter | None" = None
-
-    def __new__(cls) -> "NdjsonEmitter":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
 
     def _emit(self, event_type: NdjsonEventType, data: dict[str, Any]) -> None:
         envelope = {"type": event_type.value, **data}
@@ -133,4 +126,4 @@ class NdjsonEmitter:
 
 
 # Module-level convenience alias
-ndjson = NdjsonEmitter()
+ndjson = _NdjsonEmitter()
