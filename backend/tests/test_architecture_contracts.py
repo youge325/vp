@@ -104,10 +104,57 @@ def test_paddlegan_vendor_has_no_unused_generic_builder_or_initializers() -> Non
     builder_text = (vendor / "models" / "generators" / "builder.py").read_text(encoding="utf-8")
     registry_text = (vendor / "utils" / "registry.py").read_text(encoding="utf-8")
 
-    for name in ("xavier_init", "normal_init", "uniform_init", "kaiming_init", "init_weights", "reset_parameters"):
+    for name in (
+        "xavier_init",
+        "normal_init",
+        "uniform_init",
+        "kaiming_init",
+        "init_weights",
+        "reset_parameters",
+        "normal_",
+        "uniform_",
+        "xavier_uniform_",
+        "xavier_normal_",
+        "kaiming_uniform_",
+    ):
         assert f"def {name}" not in init_text
     assert "def build_generator" not in builder_text
     assert "def build_from_config" not in registry_text
+
+
+def test_round_25_test_only_and_unreachable_apis_are_removed() -> None:
+    frontend_client = REPO_ROOT / "frontend" / "src" / "lib" / "ipc" / "client.ts"
+    factory = REPO_ROOT / "backend" / "app" / "algorithms" / "factory.py"
+    tensor_backend = REPO_ROOT / "backend" / "app" / "algorithms" / "tensor_backend.py"
+    ffmpeg_package = REPO_ROOT / "backend" / "app" / "utils" / "ffmpeg" / "__init__.py"
+    ffmpeg_encode = REPO_ROOT / "backend" / "app" / "utils" / "ffmpeg" / "encode.py"
+    segment_writer = REPO_ROOT / "backend" / "app" / "processing" / "streaming" / "encoder_segment_writer.py"
+
+    assert not re.search(
+        r"^\s*export(?:\s+class\s+InvokeError\b|\s*\{[^}\n]*\bInvokeError\b)",
+        frontend_client.read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    assert "def get_available_types" not in factory.read_text(encoding="utf-8")
+
+    tensor_text = tensor_backend.read_text(encoding="utf-8")
+    assert "def get_supported_devices" not in tensor_text
+    assert "def get_supported_engines" not in tensor_text
+    assert "def _get_ort" not in tensor_text
+
+    ffmpeg_text = ffmpeg_package.read_text(encoding="utf-8")
+    for name in (
+        "build_rawvideo_decode_command",
+        "build_rawvideo_encode_command",
+        "convert_format",
+        "build_encode_video_args",
+    ):
+        assert f"def {name}" not in ffmpeg_text
+    assert "def convert_format" not in ffmpeg_encode.read_text(encoding="utf-8")
+
+    segment_text = segment_writer.read_text(encoding="utf-8")
+    assert "def has_open_segment" not in segment_text
+    assert "def current_segment_input_frames" not in segment_text
 
 
 def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch) -> None:
@@ -138,6 +185,9 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     fake_paddlegan_vendor_init = tmp_path / "paddlegan_vendor_init.py"
     fake_paddlegan_generator_builder = tmp_path / "paddlegan_generator_builder.py"
     fake_paddlegan_registry = tmp_path / "paddlegan_registry.py"
+    fake_frontend_ipc_client = tmp_path / "client.ts"
+    fake_ffmpeg_encode = tmp_path / "ffmpeg_encode.py"
+    fake_encoder_segment_writer = tmp_path / "encoder_segment_writer.py"
     fake_contract_check.write_text("export const _TASK_REQUEST_CONTRACT = {}\n", encoding="utf-8")
     fake_weights.write_text(
         "DISABLED_PADDLEGAN_VSR_MODELS = {}\n"
@@ -153,7 +203,7 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     )
     fake_processing_init.write_text("def register_default_algorithms():\n    pass\n", encoding="utf-8")
     fake_algorithm_factory.write_text(
-        'message = "call register_default_algorithms() first"\n',
+        'message = "call register_default_algorithms() first"\ndef get_available_types():\n    return []\n',
         encoding="utf-8",
     )
     fake_stage_file_rules.write_text("def empty_resume_state():\n    pass\n", encoding="utf-8")
@@ -170,7 +220,9 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
         encoding="utf-8",
     )
     fake_tensor_backend.write_text(
-        "CLI _startup_hooks calls register_native_dll_paths\n",
+        "CLI _startup_hooks calls register_native_dll_paths\n"
+        "def get_supported_devices():\n    return []\n"
+        "def get_supported_engines():\n    return []\n",
         encoding="utf-8",
     )
     fake_planning_package.write_text(
@@ -181,7 +233,12 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     )
     fake_workflow_steps.write_text("PROCESS_LABEL_MAP = {}\n", encoding="utf-8")
     fake_ffmpeg_package.write_text(
-        '__all__ = ["FFmpegWrapper", "RawVideoReader", "open_rawvideo_decoder"]\n',
+        '__all__ = ["FFmpegWrapper", "RawVideoReader", "open_rawvideo_decoder"]\n'
+        "class FFmpegWrapper:\n"
+        "    def build_rawvideo_decode_command(self):\n        pass\n"
+        "    def build_rawvideo_encode_command(self):\n        pass\n"
+        "    def convert_format(self):\n        pass\n"
+        "    def build_encode_video_args(self):\n        pass\n",
         encoding="utf-8",
     )
     fake_rife_model_loader.write_text(
@@ -238,6 +295,17 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
         "def build_from_config(config, registry):\n    pass\n",
         encoding="utf-8",
     )
+    fake_frontend_ipc_client.write_text(
+        "class InvokeError extends Error {}\nexport { InvokeError }\n",
+        encoding="utf-8",
+    )
+    fake_ffmpeg_encode.write_text("def convert_format():\n    pass\n", encoding="utf-8")
+    fake_encoder_segment_writer.write_text(
+        "class EncoderSegmentWriter:\n"
+        "    def has_open_segment(self):\n        return False\n"
+        "    def current_segment_input_frames(self):\n        return 0\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(module, "FRONTEND_PROTOCOL_CONTRACT_CHECK", fake_contract_check, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_WEIGHTS", fake_weights, raising=False)
     monkeypatch.setattr(module, "WORKFLOW_VALIDATION", fake_validation, raising=False)
@@ -264,11 +332,14 @@ def test_dead_surface_boundary_flags_reintroduced_sources(tmp_path, monkeypatch)
     monkeypatch.setattr(module, "PADDLEGAN_VENDOR_INIT", fake_paddlegan_vendor_init, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_GENERATOR_BUILDER", fake_paddlegan_generator_builder, raising=False)
     monkeypatch.setattr(module, "PADDLEGAN_REGISTRY", fake_paddlegan_registry, raising=False)
+    monkeypatch.setattr(module, "FRONTEND_IPC_CLIENT", fake_frontend_ipc_client, raising=False)
+    monkeypatch.setattr(module, "FFMPEG_ENCODE", fake_ffmpeg_encode, raising=False)
+    monkeypatch.setattr(module, "ENCODER_SEGMENT_WRITER", fake_encoder_segment_writer, raising=False)
     issues: list[str] = []
 
     getattr(module, "_check_dead_surface_boundary", lambda _issues: None)(issues)
 
-    assert len(issues) == 28, issues
+    assert len(issues) == 34, issues
 
 
 def test_production_processing_has_no_global_algorithm_bootstrap() -> None:

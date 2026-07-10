@@ -1,13 +1,13 @@
 import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { InvokeError } from '@/lib/ipc/client'
 import { TASK_ERROR_CODES } from '@/types/protocol'
 import { useIssueStore } from '@/stores/issue'
 import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
 import { createMediaItem } from '@/services/media/factory'
 import type { WorkbenchPreset } from '@/types/protocol'
+import { codedError } from './errors'
 
 // Phase 16 — useOutputPicker spec(IO 错误路由到 issueStore('encode'))。
 //
@@ -141,7 +141,7 @@ describe('useOutputPicker', () => {
 
   it('routes IO errors to issueStore.encode so the IssueBanner picks them up', async () => {
     pickMock.mockRejectedValueOnce(
-      new InvokeError(TASK_ERROR_CODES.IoError, 'permission denied'),
+      codedError(TASK_ERROR_CODES.IoError, 'permission denied'),
     )
     const issueStore = useIssueStore()
 

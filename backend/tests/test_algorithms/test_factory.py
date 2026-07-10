@@ -61,13 +61,6 @@ class TestAlgorithmFactory:
         assert "register_default_algorithms" not in exc_info.value.message
         assert "register the required algorithm" in exc_info.value.message
 
-    def test_get_available_types(self):
-        AlgorithmFactory.register("type_a", MockAlgorithm)
-        AlgorithmFactory.register("type_b", MockAlgorithm)
-        types = AlgorithmFactory.get_available_types()
-        assert "type_a" in types
-        assert "type_b" in types
-
     def test_create_with_tensor_backend_name(self, monkeypatch):
         AlgorithmFactory.register("mock", MockAlgorithm)
         tensor_backend = object()

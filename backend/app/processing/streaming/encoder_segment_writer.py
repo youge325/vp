@@ -49,14 +49,6 @@ class EncoderSegmentWriter:
         self._current_segment_input_frames = 0
         self._tmp_path = ""
 
-    @property
-    def has_open_segment(self) -> bool:
-        return self._writer is not None
-
-    @property
-    def current_segment_input_frames(self) -> int:
-        return self._current_segment_input_frames
-
     def write_frame(self, frame: Any) -> None:
         if self._writer is None:
             self._open_segment()
