@@ -3,7 +3,6 @@
 from typing import Any
 
 from app.algorithms.base import IAlgorithm
-from app.algorithms.tensor_backend import ITensorBackend
 
 
 SUPPORTED_PROFILES: list[str] = ["clean-lines", "thin-outline", "balanced-cel"]
@@ -20,9 +19,8 @@ class AnimeOptimizationAlgorithm(IAlgorithm):
     - 支持可配置的重复阈值
     """
 
-    def __init__(self, tensor_backend: ITensorBackend = None, **kwargs):
-        self._tensor_backend = tensor_backend
-        self._duplicate_threshold = kwargs.get("duplicate_threshold", 0.996)
+    def __init__(self, tensor_backend: Any = None, **kwargs: Any):
+        pass
 
     def process_frame(self, frame: Any, **kwargs) -> Any:
         """占位实现：直接返回帧 Tensor，不做任何处理。"""

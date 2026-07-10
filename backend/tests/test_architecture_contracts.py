@@ -3814,3 +3814,60 @@ def test_round_28_error_emission_boundary_flags_reintroduced_sources(tmp_path, m
     joined = "\n".join(issues)
     assert "typed NDJSON error emitter" in joined
     assert "emitter singleton" in joined
+
+
+def test_round_29_write_only_algorithm_state_is_removed() -> None:
+    anime = (REPO_ROOT / "backend" / "app" / "processing" / "anime_optimization.py").read_text(encoding="utf-8")
+    rife_root = REPO_ROOT / "backend" / "app" / "algorithms" / "pytorch" / "rife"
+    solver = (rife_root / "solver.py").read_text(encoding="utf-8")
+    onnx_solver = (rife_root / "onnx_solver.py").read_text(encoding="utf-8")
+
+    for field in ("_tensor_backend", "_duplicate_threshold"):
+        assert f"self.{field}" not in anime
+
+    for field in (
+        "_model_version",
+        "_scale",
+        "_fp16",
+        "_config",
+        "_encode_channel",
+        "_padding",
+        "_orig_h",
+        "_orig_w",
+        "_encode_cache",
+    ):
+        assert f"self.{field}" not in solver
+    for property_name in ("device", "dtype", "modulo", "has_head"):
+        assert not re.search(rf"^\s*def\s+{property_name}\b", solver, re.MULTILINE)
+
+    assert "self._model_version" not in onnx_solver
+
+
+def test_round_29_write_only_state_boundary_flags_reintroduced_sources(tmp_path, monkeypatch) -> None:
+    module = _load_module()
+    fake_anime = tmp_path / "anime_optimization.py"
+    fake_solver = tmp_path / "solver.py"
+    fake_onnx_solver = tmp_path / "onnx_solver.py"
+
+    fake_anime.write_text(
+        "self._tensor_backend = tensor_backend\nself._duplicate_threshold = 0.996\n",
+        encoding="utf-8",
+    )
+    fake_solver.write_text(
+        "self._config = config\nself._encode_cache = {}\n@property\ndef device(self):\n    return self._device\n",
+        encoding="utf-8",
+    )
+    fake_onnx_solver.write_text("self._model_version = model_version\n", encoding="utf-8")
+
+    monkeypatch.setattr(module, "ANIME_OPTIMIZATION", fake_anime, raising=False)
+    monkeypatch.setattr(module, "RIFE_SOLVER", fake_solver, raising=False)
+    monkeypatch.setattr(module, "RIFE_ONNX_SOLVER", fake_onnx_solver, raising=False)
+    issues: list[str] = []
+
+    getattr(module, "_check_round_29_write_only_state_boundary", lambda _issues: None)(issues)
+
+    joined = "\n".join(issues)
+    assert "Anime write-only state" in joined
+    assert "RIFE write-only state" in joined
+    assert "RIFE zero-call property" in joined
+    assert "ONNX RIFE write-only state" in joined

@@ -7,8 +7,8 @@
    这条不变性要先撑住"identity baseline"。
 2. ``SUPPORTED_PROFILES`` 是后端 → 前端 capability 探测的硬契约;UI
    下拉列表读这个常量,顺序 / 数量改动等于改协议。锁住 3 个具体值。
-3. ``duplicate_threshold`` kwargs 提取(包括默认值)—— 占位实现还没用,
-   但调用方已经在传,接口契约不能 silently drift。
+3. factory 传入的 backend/profile/threshold kwargs 可以被吸纳,但占位实现不保存
+   与行为无关的私有状态。
 
 这些用例工作量小但都是 fail-loudly 红线 —— 任何一条破了都暗示有人把
 占位实现改成了"看似工作但行为偏移"的版本。
@@ -44,32 +44,22 @@ def test_supported_profiles_constant_matches_capability_contract() -> None:
     assert isinstance(SUPPORTED_PROFILES, list)
 
 
-def test_duplicate_threshold_default_value() -> None:
-    algorithm = AnimeOptimizationAlgorithm()
-
-    assert algorithm._duplicate_threshold == 0.996
-
-
-def test_duplicate_threshold_can_be_overridden_via_kwargs() -> None:
-    algorithm = AnimeOptimizationAlgorithm(duplicate_threshold=0.85)
-
-    assert algorithm._duplicate_threshold == 0.85
-
-
 def test_get_name_remains_stable_for_logging() -> None:
     """``get_name`` 进入 NDJSON ``stage`` 字段,改名等于改前端日志识别。"""
 
     assert AnimeOptimizationAlgorithm().get_name() == "动漫帧优化算法(占位)"
 
 
-def test_tensor_backend_kwarg_is_optional_and_stored() -> None:
-    """占位实现允许 backend 不存在(实测时 backend 会真的传入,这里只
-    检查参数被吸纳,不抛 TypeError)。"""
+def test_constructor_accepts_stage_kwargs_without_retaining_dead_state() -> None:
+    """占位实现吸纳 factory kwargs,但不把尚未使用的值伪装成运行时状态。"""
 
     class _DummyBackend:
         pass
 
-    backend = _DummyBackend()
-    algorithm = AnimeOptimizationAlgorithm(tensor_backend=backend)
+    algorithm = AnimeOptimizationAlgorithm(
+        tensor_backend=_DummyBackend(),
+        duplicate_threshold=0.85,
+        profile="clean-lines",
+    )
 
-    assert algorithm._tensor_backend is backend
+    assert vars(algorithm) == {}
