@@ -26,14 +26,6 @@ PROCESS_ORDER_MAP: dict[str, list[AlgorithmType]] = {
     ],
 }
 
-PROCESS_LABEL_MAP = {
-    "frame_interpolation": "Frame Interpolation",
-    "super_resolution": "Super Resolution",
-    "anime_optimization": "Anime Optimization",
-    "format_conversion": "Format Conversion",
-    "frame_filter_chain": "Frame Filter Chain",
-}
-
 
 def processing_needs_interpolation(processing_steps: list[ProcessingStepInput]) -> bool:
     return any(step.algorithm_type == "frame_interpolation" for step in normalize_processing_steps(processing_steps))

@@ -44,7 +44,10 @@ PADDLE_PACKAGE = PADDLEGAN_WEIGHTS.parents[1] / "__init__.py"
 PYTORCH_PACKAGE = ROOT / "backend" / "app" / "algorithms" / "pytorch" / "__init__.py"
 BENCHMARK_PACKAGE = ROOT / "backend" / "app" / "benchmark" / "__init__.py"
 WORKFLOW_VALIDATION = ROOT / "backend" / "app" / "planning" / "workflow_validation.py"
+WORKFLOW_STEPS = ROOT / "backend" / "app" / "planning" / "workflow_steps.py"
+PLANNING_PACKAGE = ROOT / "backend" / "app" / "planning" / "__init__.py"
 CLI_PACKAGE = ROOT / "backend" / "app" / "cli" / "__init__.py"
+FFMPEG_PACKAGE = ROOT / "backend" / "app" / "utils" / "ffmpeg" / "__init__.py"
 STAGE_WORKER = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker.py"
 STAGE_WORKER_EXECUTION = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_execution.py"
 STAGE_WORKER_FACTORY = ROOT / "backend" / "app" / "processing" / "streaming" / "stage_worker_factory.py"
@@ -657,6 +660,17 @@ def _check_dead_surface_boundary(issues: list[str]) -> None:
         ),
         (CLI_TEST, r"\bregister_native_dll_paths\b", "removed CLI DLL bootstrap monkeypatch"),
         (TENSOR_BACKEND, r"\b_startup_hooks\b", "stale tensor backend CLI bootstrap documentation"),
+        (
+            PLANNING_PACKAGE,
+            r"\b(?:PROCESS_LABEL_MAP|estimate_encoded_output_frames|ResumeKind|get_onnx_model_name|validate_onnx_models_for_workflow)\b",
+            "unused planning package facade",
+        ),
+        (WORKFLOW_STEPS, r"^\s*PROCESS_LABEL_MAP\s*=", "unused process label map"),
+        (
+            FFMPEG_PACKAGE,
+            r"__all__\s*=\s*\[[^\]]*\b(?:RawVideoReader|RawVideoWriter|build_rawvideo_|open_rawvideo_)",
+            "unused FFmpeg raw I/O facade",
+        ),
     )
     for path, pattern, label in checks:
         if re.search(pattern, _read(path), re.MULTILINE):

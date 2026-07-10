@@ -1,8 +1,7 @@
 """Resume sidecar lifecycle and chunk filename conventions.
 
 Owns ``SegmentManifest`` plus the resume-related dataclasses
-(``ResumeState``, ``ResumeDecision``, ``SegmentRecord``) and the
-``ResumeKind`` / ``ResumeMode`` literal types.
+(``ResumeState``, ``ResumeDecision``, ``SegmentRecord``) and resume mode.
 """
 
 from __future__ import annotations
@@ -42,14 +41,14 @@ class ResumeState:
     completed_segments: list[SegmentRecord]
 
 
-ResumeKind = Literal["fresh", "resume", "conflict_final_exists"]
+_ResumeKind = Literal["fresh", "resume", "conflict_final_exists"]
 
 
 @dataclass(slots=True)
 class ResumeDecision:
     """Outcome of preparing a sidecar for a run."""
 
-    kind: ResumeKind
+    kind: _ResumeKind
     state: ResumeState
     sidecar_signature_match: bool = False
 

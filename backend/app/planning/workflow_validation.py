@@ -12,7 +12,7 @@ from app.planning.workflow_steps import processing_needs_interpolation
 from app.utils.onnx_models import resolve_onnx_model_path
 
 
-def get_onnx_model_name(config: dict[str, Any]) -> str | None:
+def _get_onnx_model_name(config: dict[str, Any]) -> str | None:
     return config.get("onnxModel") or config.get("onnx_model")
 
 
@@ -21,7 +21,7 @@ def _interpolation_model_path(model_version: str | None = None) -> Path:
     return Path(settings.RIFE_MODEL_DIR) / f"flownet_v{version}.pkl"
 
 
-def validate_onnx_models_for_workflow(
+def _validate_onnx_models_for_workflow(
     workflow_config: dict[str, Any],
     processing_steps: list[ProcessingStep],
     tensor_backend_name: str,
@@ -31,11 +31,11 @@ def validate_onnx_models_for_workflow(
 
     for step in processing_steps:
         if step.algorithm_type == "frame_interpolation":
-            model_name = get_onnx_model_name(workflow_config["interpolation"])
+            model_name = _get_onnx_model_name(workflow_config["interpolation"])
             algorithm = workflow_config["interpolation"].get("algorithm", "rife")
             resolve_onnx_model_path("interpolation", algorithm, model_name, model_root=settings.RIFE_MODEL_DIR)
         elif step.algorithm_type == "super_resolution":
-            model_name = get_onnx_model_name(workflow_config["superResolution"])
+            model_name = _get_onnx_model_name(workflow_config["superResolution"])
             algorithm = workflow_config["superResolution"].get("algorithm", "placeholder")
             resolve_onnx_model_path("super_resolution", algorithm, model_name, model_root=settings.RIFE_MODEL_DIR)
 
@@ -66,7 +66,7 @@ def verify_model_availability(
     if processing_needs_interpolation(processing_steps):
         if tensor_backend_name == "onnx":
             try:
-                validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
+                _validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
             except FileNotFoundError as exc:
                 raise_error(
                     TaskErrorCode.MISSING_MODEL,
@@ -90,7 +90,7 @@ def verify_model_availability(
                 )
     elif tensor_backend_name == "onnx":
         try:
-            validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
+            _validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
         except FileNotFoundError as exc:
             raise_error(
                 TaskErrorCode.MISSING_MODEL,
@@ -166,8 +166,6 @@ def verify_super_resolution_backend(
 
 
 __all__ = [
-    "get_onnx_model_name",
-    "validate_onnx_models_for_workflow",
     "verify_model_availability",
     "verify_super_resolution_backend",
 ]
