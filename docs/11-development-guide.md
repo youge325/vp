@@ -30,6 +30,7 @@ vp/
 | 命令 | 用途 |
 |------|------|
 | `cd backend && python -m pytest tests -q` | 运行 Python 测试 |
+| `python -m ruff check backend scripts` | 检查 Python 格式、未使用符号和生产参数 |
 | `cd backend && python -m app benchmark --report-json ../test-results/benchmark-report.json --report-markdown ../test-results/benchmark-report.md` | 运行后端 benchmark 回归检查 |
 | `cd frontend && npm install` | 安装前端依赖 |
 | `cd frontend && npm run test` | 运行前端单元测试 |
@@ -105,6 +106,8 @@ python -m pytest tests -q
 - FFmpeg 封装测试
 - 流水线集成测试
 - schema drift 测试（错误码一致性）
+
+生产 Python 代码启用 Ruff `ARG` 未使用参数门禁。协议或抽象方法要求保留但实现不消费的参数使用 `_name` / `**_kwargs`；测试 doubles、RIFE 实现和 PaddleGAN vendor 通过精确路径排除，不应扩大忽略范围。
 
 ### 测试矩阵
 

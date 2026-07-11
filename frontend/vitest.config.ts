@@ -7,10 +7,8 @@ import vue from '@vitejs/plugin-vue'
 //   in every spec; rely on the ambient definitions from ``vitest/globals``.
 // - ``setupFiles`` points at a shared bootstrap so future Tauri / Pinia /
 //   ResizeObserver mocks land in one place.
-// - ``coverage`` is configured with the v8 provider but not enabled by
-//   default (the ``@vitest/coverage-v8`` peer dep is intentionally not in
-//   ``devDependencies`` to keep the install footprint small). Run with
-//   ``vitest --coverage`` once installed.
+// - ``coverage`` uses the installed v8 provider and remains opt-in through
+//   ``vitest --coverage``.
 export default defineConfig({
   plugins: [vue()],
   resolve: {

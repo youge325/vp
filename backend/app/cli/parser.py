@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import argparse
 
+from app.benchmark.runner import DEFAULT_SCENARIO
+
 from app.cli.commands.check import cmd_check
 from app.cli.commands.benchmark import cmd_benchmark
 from app.cli.commands.info import cmd_info
@@ -144,7 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.set_defaults(func=cmd_check)
 
     benchmark_parser = subcommands.add_parser("benchmark", help="Run backend benchmark regression checks")
-    benchmark_parser.add_argument("--scenario", default="interpolation-e2e-cpu-transfer")
+    benchmark_parser.add_argument("--scenario", default=DEFAULT_SCENARIO)
     benchmark_parser.add_argument("--baseline", default=None, help="Baseline JSON path")
     benchmark_parser.add_argument("--threshold", type=float, default=0.15, help="Relative regression threshold")
     benchmark_parser.add_argument("--report-json", default=None, help="Write JSON report to this path")

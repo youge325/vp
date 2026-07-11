@@ -144,7 +144,6 @@ mod tests {
                     tensor_backend: TensorBackend::Onnx,
                     engine: "cuda".to_string(),
                     num_frames: 10,
-                    auto_download_weights: false,
                 },
                 preprocess: PreprocessConfig {
                     enabled: false,

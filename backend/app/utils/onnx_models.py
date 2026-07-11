@@ -9,9 +9,9 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-OnnxModelKind = Literal["interpolation", "super_resolution"]
+_OnnxModelKind = Literal["interpolation", "super_resolution"]
 
-ONNX_MODEL_SUBDIRS: dict[OnnxModelKind, str] = {
+_ONNX_MODEL_SUBDIRS: dict[_OnnxModelKind, str] = {
     "interpolation": "interpolation",
     "super_resolution": "super_resolution",
 }
@@ -22,12 +22,12 @@ _ENGINE_PROVIDER_PRIORITY: dict[str, list[str]] = {
 }
 
 
-def _get_onnx_model_dir(kind: OnnxModelKind, model_root: str | Path | None = None) -> Path:
+def _get_onnx_model_dir(kind: _OnnxModelKind, model_root: str | Path | None = None) -> Path:
     """Return the configured ONNX model directory for a model kind."""
     if model_root is None:
         raise ValueError("model_root is required")
     root = Path(model_root).expanduser().resolve()
-    return root / ONNX_MODEL_SUBDIRS[kind]
+    return root / _ONNX_MODEL_SUBDIRS[kind]
 
 
 def scan_onnx_models(model_root: str | Path | None = None) -> dict[str, dict[str, list[str]]]:
@@ -36,24 +36,24 @@ def scan_onnx_models(model_root: str | Path | None = None) -> dict[str, dict[str
     Layout: ``<model_root>/<kind>/<algorithm>/<basename>.onnx``
     Returns ``{"interpolation": {"rife": ["rife_v4.25.onnx", ...]}, "super_resolution": {...}}``.
     """
-    return {kind: _scan_kind_dir(_get_onnx_model_dir(kind, model_root)) for kind in ONNX_MODEL_SUBDIRS}
+    return {kind: _scan_kind_dir(_get_onnx_model_dir(kind, model_root)) for kind in _ONNX_MODEL_SUBDIRS}
 
 
 def scan_onnx_model_details(model_root: str | Path | None = None) -> dict[str, dict[str, list[dict[str, Any]]]]:
     """Analyze ONNX model files grouped by kind and algorithm subdir."""
-    return {kind: _scan_kind_details(_get_onnx_model_dir(kind, model_root)) for kind in ONNX_MODEL_SUBDIRS}
+    return {kind: _scan_kind_details(_get_onnx_model_dir(kind, model_root)) for kind in _ONNX_MODEL_SUBDIRS}
 
 
 def resolve_onnx_model_path(
-    kind: OnnxModelKind,
+    kind: _OnnxModelKind,
     algorithm: str,
     filename: str | None,
     model_root: str | Path | None = None,
 ) -> Path:
     """Resolve a frontend-supplied ONNX basename inside ``<kind>/<algorithm>/``."""
-    if not filename or not is_safe_onnx_basename(filename):
+    if not filename or not _is_safe_onnx_basename(filename):
         raise FileNotFoundError(f"Invalid ONNX model filename: {filename or '<empty>'}")
-    if not is_safe_algorithm_name(algorithm):
+    if not _is_safe_algorithm_name(algorithm):
         raise FileNotFoundError(f"Invalid ONNX algorithm name: {algorithm!r}")
 
     kind_dir = _get_onnx_model_dir(kind, model_root)
@@ -87,12 +87,12 @@ def _is_basename_only(name: str) -> bool:
     return True
 
 
-def is_safe_onnx_basename(filename: str) -> bool:
+def _is_safe_onnx_basename(filename: str) -> bool:
     """True when ``filename`` is a basename-only ``.onnx`` file reference."""
     return _is_basename_only(filename) and filename.lower().endswith(".onnx")
 
 
-def is_safe_algorithm_name(name: str) -> bool:
+def _is_safe_algorithm_name(name: str) -> bool:
     """True when ``name`` is a single path segment (no separators, no traversal)."""
     return _is_basename_only(name)
 
@@ -103,7 +103,7 @@ def _scan_kind_dir(kind_dir: Path) -> dict[str, list[str]]:
         return {}
     result: dict[str, list[str]] = {}
     for alg_dir in sorted(kind_dir.iterdir(), key=lambda p: p.name.casefold()):
-        if not alg_dir.is_dir() or not is_safe_algorithm_name(alg_dir.name):
+        if not alg_dir.is_dir() or not _is_safe_algorithm_name(alg_dir.name):
             continue
         files = sorted(
             (
@@ -112,7 +112,7 @@ def _scan_kind_dir(kind_dir: Path) -> dict[str, list[str]]:
                 if item.is_file()
                 and item.suffix.lower() == ".onnx"
                 and item.stat().st_size > 0
-                and is_safe_onnx_basename(item.name)
+                and _is_safe_onnx_basename(item.name)
             ),
             key=str.casefold,
         )
@@ -130,7 +130,7 @@ def _scan_kind_details(kind_dir: Path) -> dict[str, list[dict[str, Any]]]:
 
     result: dict[str, list[dict[str, Any]]] = {}
     for alg_dir in sorted(kind_dir.iterdir(), key=lambda p: p.name.casefold()):
-        if not alg_dir.is_dir() or not is_safe_algorithm_name(alg_dir.name):
+        if not alg_dir.is_dir() or not _is_safe_algorithm_name(alg_dir.name):
             continue
         details = [
             analyze_onnx_model(item, name=item.name, label=item.name)
@@ -138,14 +138,14 @@ def _scan_kind_details(kind_dir: Path) -> dict[str, list[dict[str, Any]]]:
             if item.is_file()
             and item.suffix.lower() == ".onnx"
             and item.stat().st_size > 0
-            and is_safe_onnx_basename(item.name)
+            and _is_safe_onnx_basename(item.name)
         ]
         if details:
             result[alg_dir.name] = details
     return result
 
 
-def select_onnx_providers(engine: str, ort_module: Any) -> list[str]:
+def _select_onnx_providers(engine: str, ort_module: Any) -> list[str]:
     """Pick the provider list for the requested engine, refusing silent CPU fallback.
 
     The previous behaviour mirrored the ONNX Runtime default, which silently
@@ -211,7 +211,7 @@ def create_onnx_session(
     from app.utils.dll_paths import register_native_dll_paths
 
     register_native_dll_paths()
-    providers = select_onnx_providers(engine, ort_module)
+    providers = _select_onnx_providers(engine, ort_module)
     if sess_options is None:
         session = ort_module.InferenceSession(onnx_path, providers=providers)
     else:

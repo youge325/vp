@@ -74,6 +74,10 @@ ABSENT_PATH_RULES = (
     _absent("frontend-anime-config-type", "frontend/src/types/generated/AnimeConfig.ts"),
     _absent("frontend-anime-config-schema", "frontend/src-tauri/schemas/anime_config.schema.json"),
     _absent("frontend-legacy-anime-e2e", "frontend/tests/e2e/enhance/enhance-anime.spec.ts"),
+    _absent("frontend-preprocess-view-forwarder", "frontend/src/views/PreprocessModuleView.vue"),
+    _absent("frontend-postprocess-view-forwarder", "frontend/src/views/PostprocessModuleView.vue"),
+    _absent("frontend-container-constants", "frontend/src/config/constants.ts"),
+    _absent("backend-ffmpeg-monolithic-probe", "backend/app/utils/ffmpeg/probe.py"),
 )
 
 
@@ -219,8 +223,62 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "ffmpeg-dead-delegates",
         "backend/app/utils/ffmpeg/__init__.py",
-        r"^\s*def\s+(?:build_rawvideo_decode_command|build_rawvideo_encode_command|convert_format|build_encode_video_args)\b|__all__\s*=\s*\[[^\]]*\b(?:RawVideoReader|RawVideoWriter|build_rawvideo_|open_rawvideo_)",
+        r"^\s*def\s+(?:list_codec_names|list_hwaccels|describe_codec|parse_codec_profile|parse_avoptions|probe_rate_control_modes|probe_decoder_hardware_devices|probe_decoder_hardware_device_options|build_decode_input_args|build_encode_output_args|build_rawvideo_decode_command|build_rawvideo_encode_command|convert_format|build_encode_video_args)\b|__all__\s*=\s*\[[^\]]*\b(?:RawVideoReader|RawVideoWriter|build_rawvideo_|open_rawvideo_)",
         "unused FFmpeg facade",
+    ),
+    _forbid(
+        "python-super-resolution-auto-download-field",
+        "backend/app/models/__init__.py",
+        r"\bauto_download_weights\b",
+        "removed super-resolution auto-download field",
+    ),
+    _forbid(
+        "rust-super-resolution-auto-download-field",
+        "frontend/src-tauri/src/models/config.rs",
+        r"\bdefault_auto_download_weights\b|pub\s+auto_download_weights\s*:",
+        "removed Rust super-resolution auto-download field",
+    ),
+    _forbid(
+        "public-segment-record",
+        "backend/app/planning/manifest.py",
+        r"^class\s+SegmentRecord\b",
+        "internal segment record is public",
+    ),
+    _forbid(
+        "public-reporter-progress-constants",
+        "backend/app/protocol/reporter.py",
+        r"^(?:TERMINAL_PROGRESS_PREFIX|TERMINAL_PROGRESS_BAR_WIDTH)\s*=",
+        "internal reporter progress constant is public",
+    ),
+    _forbid(
+        "public-error-code-cache",
+        "backend/app/errors/_codes.py",
+        r"^ALL_CODES\s*=",
+        "internal error-code cache is public",
+    ),
+    _forbid(
+        "public-onnx-internals",
+        "backend/app/utils/onnx_models.py",
+        r"^(?:OnnxModelKind|ONNX_MODEL_SUBDIRS)\s*=|^def\s+(?:is_safe_onnx_basename|is_safe_algorithm_name|select_onnx_providers)\b",
+        "internal ONNX helper is public",
+    ),
+    _forbid(
+        "public-system-probe-constants",
+        "backend/app/utils/system_probe.py",
+        r"^(?:GPU_VENDOR_KEYWORDS|VIRTUAL_GPU_KEYWORDS)\s*=",
+        "internal system probe constant is public",
+    ),
+    _forbid(
+        "public-file-extension-constant",
+        "backend/app/utils/file_utils.py",
+        r"^SUPPORTED_EXTENSIONS\s*=",
+        "internal file extension constant is public",
+    ),
+    _forbid(
+        "public-paddlegan-weight-root",
+        "backend/app/algorithms/paddle/paddlegan_vsr/weights.py",
+        r"^def\s+fixed_weight_root\b",
+        "internal PaddleGAN weight root is public",
     ),
     _forbid(
         "ffmpeg-dead-converter",
@@ -719,6 +777,42 @@ REQUIRED_PATTERN_RULES = (
         r"\bclass\s+_NdjsonEmitter\b",
         "private NDJSON emitter is missing",
     ),
+    RequiredPatternRule(
+        "shared-stage-route-component",
+        "frontend/src/router/index.ts",
+        r"const\s+StageModuleView\s*=.*StageModuleView\.vue[\s\S]*path:\s*['\"]/preprocess['\"][\s\S]*component:\s*StageModuleView[\s\S]*props:\s*\{\s*stage:\s*['\"]preprocess['\"]\s*\}[\s\S]*path:\s*['\"]/postprocess['\"][\s\S]*component:\s*StageModuleView[\s\S]*props:\s*\{\s*stage:\s*['\"]postprocess['\"]\s*\}",
+        "preprocess and postprocess routes must share StageModuleView",
+    ),
+    RequiredPatternRule(
+        "ffmpeg-media-probe-boundary",
+        "backend/app/utils/ffmpeg/media_probe.py",
+        r"def\s+get_video_info\b[\s\S]*def\s+get_frame_count\b[\s\S]*def\s+is_available\b",
+        "FFmpeg media probe boundary is missing",
+    ),
+    RequiredPatternRule(
+        "ffmpeg-capability-probe-boundary",
+        "backend/app/utils/ffmpeg/capability_probe.py",
+        r"def\s+parse_codec_profile\b[\s\S]*def\s+probe_rate_control_modes\b[\s\S]*def\s+probe_decoder_hardware_devices\b",
+        "FFmpeg capability probe boundary is missing",
+    ),
+    RequiredPatternRule(
+        "ffmpeg-capability-aggregation-boundary",
+        "backend/app/utils/ffmpeg/capabilities.py",
+        r"def\s+discover_capabilities\b",
+        "FFmpeg capability aggregation boundary is missing",
+    ),
+    RequiredPatternRule(
+        "ruff-unused-argument-gate",
+        "ruff.toml",
+        r"select\s*=\s*\[[^\]]*['\"]ARG['\"]",
+        "Ruff ARG production gate is missing",
+    ),
+    RequiredPatternRule(
+        "benchmark-default-scenario-ssot",
+        "backend/app/cli/parser.py",
+        r"from\s+app\.benchmark\.runner\s+import\s+DEFAULT_SCENARIO[\s\S]*default\s*=\s*DEFAULT_SCENARIO",
+        "benchmark parser must reuse DEFAULT_SCENARIO",
+    ),
 )
 
 
@@ -764,6 +858,24 @@ REFERENCE_RULES = (
         ),
         message="obsolete frontend facade reference",
         suffixes=(".ts", ".tsx", ".vue"),
+    ),
+    ForbiddenReferenceRule(
+        "obsolete-ffmpeg-probe-imports",
+        roots=("backend/app", "backend/tests"),
+        patterns=(r"app\.utils\.ffmpeg\.probe\b", r"from\s+\.\s+import\s+probe\b"),
+        message="obsolete monolithic FFmpeg probe import",
+        suffixes=(".py",),
+        excludes=(
+            "backend/tests/test_architecture_contracts.py",
+            "backend/tests/test_architecture_contract_rule_engine.py",
+        ),
+    ),
+    ForbiddenReferenceRule(
+        "removed-super-resolution-auto-download",
+        roots=("backend/app", "frontend/src"),
+        patterns=(r"\bautoDownloadWeights\b", r"\bauto_download_weights\b", r"\bauto_download\b"),
+        message="removed super-resolution auto-download reference",
+        suffixes=(".py", ".ts", ".tsx", ".vue"),
     ),
     ForbiddenReferenceRule(
         "obsolete-anime-module-references",

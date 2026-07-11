@@ -209,17 +209,20 @@ class AlgorithmFactory:
 
 ```mermaid
 graph LR
-    A[FFmpegWrapper] --> B[probe.py 视频探测]
-    A --> C[encode.py 编码/转码/音频]
-    A --> D[io.py 原始视频管道]
-    A --> E[_progress.py 进度解析]
-    A --> F[_run.py 同步命令执行]
-    A --> G[_constants.py 编码器候选/正则]
+    A[FFmpegWrapper] --> B[media_probe.py 媒体元数据]
+    A --> C[capabilities.py 能力聚合]
+    C --> D[capability_probe.py Codec 能力探测]
+    A --> E[encode.py 编码/转码/音频]
+    A --> F[io.py 原始视频管道]
+    D --> G[_run.py 同步命令执行]
+    D --> H[_constants.py 编码器候选/正则]
 ```
 
 | 模块 | 职责 |
 |------|------|
-| `probe.py` | 视频元数据探测（fps、帧数、分辨率、编码格式），带缓存 |
+| `media_probe.py` | 视频元数据、帧数缓存和 FFmpeg 可用性探测 |
+| `capability_probe.py` | Codec 帮助解析、码率控制与硬件解码实测 |
+| `capabilities.py` | 按 GPU vendor 聚合 encoder/decoder profiles |
 | `encode.py` | 编码命令构建、音频合并、concat 拼接 |
 | `io.py` | RawVideoReader / RawVideoWriter，原始视频管道 |
 | `_progress.py` | 解析 FFmpeg stderr 的进度信息（frame、fps、time、bitrate） |

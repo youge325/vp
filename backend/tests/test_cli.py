@@ -271,6 +271,17 @@ def test_load_runtime_configs_rejects_missing_output_dir():
     assert "outputDir" in exc_info.value.message
 
 
+def test_load_runtime_configs_rejects_removed_auto_download_weights_field():
+    workflow = _make_workflow_config()
+    workflow["superResolution"]["autoDownloadWeights"] = True
+
+    with pytest.raises(ProcessError) as exc_info:
+        load_runtime_configs(_make_runtime_args(workflow_config_json=json.dumps(workflow)))
+
+    assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
+    assert "autoDownloadWeights" in exc_info.value.message
+
+
 def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
     input_path = tmp_path / "input.mp4"
     output_path = tmp_path / "out.mp4"

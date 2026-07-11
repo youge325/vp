@@ -137,7 +137,6 @@ class RawVideoWriter(_FFmpegPipeBase):
 
 def _build_rawvideo_decode_command(
     ffmpeg_path: str,
-    input_path: str,
     *,
     width: int,
     height: int,
@@ -161,7 +160,6 @@ def _build_rawvideo_decode_command(
 
 def _build_rawvideo_encode_command(
     ffmpeg_path: str,
-    output_path: str,
     *,
     width: int,
     height: int,
@@ -198,7 +196,6 @@ def _build_rawvideo_encode_command(
 def open_rawvideo_decoder(
     ffmpeg_path: str,
     *,
-    input_path: str,
     width: int,
     height: int,
     decode_input_args: list[str],
@@ -208,7 +205,6 @@ def open_rawvideo_decoder(
     """Open a rawvideo decoder pipe."""
     cmd = _build_rawvideo_decode_command(
         ffmpeg_path,
-        input_path,
         width=width,
         height=height,
         decode_input_args=decode_input_args,
@@ -228,7 +224,6 @@ def open_rawvideo_decoder(
 def open_rawvideo_encoder(
     ffmpeg_path: str,
     *,
-    output_path: str,
     width: int,
     height: int,
     fps: float,
@@ -239,7 +234,6 @@ def open_rawvideo_encoder(
     """Open a rawvideo encoder pipe."""
     cmd = _build_rawvideo_encode_command(
         ffmpeg_path,
-        output_path,
         width=width,
         height=height,
         fps=fps,

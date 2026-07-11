@@ -27,8 +27,8 @@ import time
 from app.protocol import ndjson
 from app.protocol.metrics_view import MetricsSnapshot
 
-TERMINAL_PROGRESS_PREFIX = "[VP_PROGRESS]"
-TERMINAL_PROGRESS_BAR_WIDTH = 24
+_TERMINAL_PROGRESS_PREFIX = "[VP_PROGRESS]"
+_TERMINAL_PROGRESS_BAR_WIDTH = 24
 
 
 def _emit_terminal(message: str) -> None:
@@ -49,8 +49,8 @@ def _format_progress_bar(current: int, total: int) -> str:
     if total <= 0:
         total = 1
     ratio = min(max(current / total, 0.0), 1.0)
-    filled = round(ratio * TERMINAL_PROGRESS_BAR_WIDTH)
-    return f"[{'#' * filled}{'-' * (TERMINAL_PROGRESS_BAR_WIDTH - filled)}]"
+    filled = round(ratio * _TERMINAL_PROGRESS_BAR_WIDTH)
+    return f"[{'#' * filled}{'-' * (_TERMINAL_PROGRESS_BAR_WIDTH - filled)}]"
 
 
 class CliProgressReporter:
@@ -149,7 +149,7 @@ class CliProgressReporter:
         run_text = f" | RUN {_format_eta(time.time() - self._stage_started_at)}" if heartbeat else ""
         if display_current > 0 or is_end:
             _emit_terminal(
-                f"{TERMINAL_PROGRESS_PREFIX} "
+                f"{_TERMINAL_PROGRESS_PREFIX} "
                 f"[{self._stage_index}/{self._stage_total} {self._stage_name}] "
                 f"{_format_progress_bar(display_current, display_total)} "
                 f"{percent:5.1f}% "

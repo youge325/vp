@@ -115,10 +115,6 @@ fn default_num_frames() -> u32 {
     10
 }
 
-fn default_auto_download_weights() -> bool {
-    false
-}
-
 fn default_interpolation_algorithm() -> String {
     "rife".to_string()
 }
@@ -139,8 +135,6 @@ pub struct SuperResolutionConfig {
     pub engine: String,
     #[serde(default = "default_num_frames")]
     pub num_frames: u32,
-    #[serde(default = "default_auto_download_weights")]
-    pub auto_download_weights: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
@@ -256,7 +250,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn workflow_ignores_legacy_anime_config() {
+    fn workflow_ignores_removed_fields() {
         let value = json!({
             "fpsMode": "multi",
             "processOrder": "super_resolution_then_interpolation",
@@ -296,5 +290,8 @@ mod tests {
         let serialized = serde_json::to_value(workflow).expect("serialize workflow");
 
         assert!(serialized.get("anime").is_none());
+        assert!(serialized["superResolution"]
+            .get("autoDownloadWeights")
+            .is_none());
     }
 }

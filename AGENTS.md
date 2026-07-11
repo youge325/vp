@@ -20,7 +20,7 @@ VP Workbench 是基于 Tauri v2 的桌面视频处理应用。`backend/app/` 放
 
 ## 代码风格与命名约定
 
-Python 目标版本为 3.12，使用 Ruff：行宽 120、空格缩进、双引号。测试文件放在 `backend/tests/`，命名为 `test_*.py`。TypeScript/Vue 使用 ESM，`@` 指向 `frontend/src`。前端单元测试统一放在 `frontend/tests/unit/`，使用与生产模块一致的相对领域路径和 `*.spec.ts` 文件名，不保留 `__tests__` 中间层。测试导入生产模块时统一使用 `@/` alias；仅测试 helper 之间允许相对导入。组件和组合式函数遵循现有命名，例如 `StageModuleView.vue`、`useWorkbenchEditor.ts`。Rust 使用 edition 2021，提交前运行 `cargo fmt`。
+Python 目标版本为 3.12，使用 Ruff：行宽 120、空格缩进、双引号，并对生产代码启用 `ARG` 未使用参数检查。协议或抽象方法要求保留但实现不消费的参数命名为 `_name` 或 `**_kwargs`；RIFE、vendor 和测试 doubles 仅通过 `ruff.toml` 的精确路径排除，不得扩大忽略范围。测试文件放在 `backend/tests/`，命名为 `test_*.py`。TypeScript/Vue 使用 ESM，`@` 指向 `frontend/src`。前端单元测试统一放在 `frontend/tests/unit/`，使用与生产模块一致的相对领域路径和 `*.spec.ts` 文件名，不保留 `__tests__` 中间层。测试导入生产模块时统一使用 `@/` alias；仅测试 helper 之间允许相对导入。组件和组合式函数遵循现有命名，例如 `StageModuleView.vue`、`useWorkbenchEditor.ts`。Rust 使用 edition 2021，提交前运行 `cargo fmt`。
 
 ## 测试指南
 

@@ -6,7 +6,6 @@ from app.utils.ffmpeg.io import _build_rawvideo_decode_command, _build_rawvideo_
 def test_build_rawvideo_commands_include_pipe_and_geometry() -> None:
     decode_cmd = _build_rawvideo_decode_command(
         "ffmpeg",
-        "input.mp4",
         width=1920,
         height=1080,
         decode_input_args=["-i", "input.mp4"],
@@ -15,7 +14,6 @@ def test_build_rawvideo_commands_include_pipe_and_geometry() -> None:
     )
     encode_cmd = _build_rawvideo_encode_command(
         "ffmpeg",
-        "output.mp4",
         width=1920,
         height=1080,
         fps=48.0,

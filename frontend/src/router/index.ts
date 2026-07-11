@@ -1,14 +1,12 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { WORKBENCH_MODULES } from '@/views/registry'
 
-// 8 个 module 视图全部走懒加载,首屏只下载 Home + 共享 chunk;
-// 切到具体工作流模块时按需加载对应分块。
+// 模块视图全部走懒加载，预处理/后处理共享同一个 stage 视图分块。
 const HomeModuleView = () => import('@/views/HomeModuleView.vue')
 const InputModuleView = () => import('@/views/InputModuleView.vue')
 const DecodeModuleView = () => import('@/views/DecodeModuleView.vue')
-const PreprocessModuleView = () => import('@/views/PreprocessModuleView.vue')
+const StageModuleView = () => import('@/views/StageModuleView.vue')
 const EnhanceModuleView = () => import('@/views/EnhanceModuleView.vue')
-const PostprocessModuleView = () => import('@/views/PostprocessModuleView.vue')
 const EncodeModuleView = () => import('@/views/EncodeModuleView.vue')
 const RenderModuleView = () => import('@/views/RenderModuleView.vue')
 
@@ -37,7 +35,8 @@ export const router = createRouter({
     {
       path: '/preprocess',
       name: 'preprocess',
-      component: PreprocessModuleView,
+      component: StageModuleView,
+      props: { stage: 'preprocess' },
       meta: { module: WORKBENCH_MODULES[3] },
     },
     {
@@ -49,7 +48,8 @@ export const router = createRouter({
     {
       path: '/postprocess',
       name: 'postprocess',
-      component: PostprocessModuleView,
+      component: StageModuleView,
+      props: { stage: 'postprocess' },
       meta: { module: WORKBENCH_MODULES[5] },
     },
     {

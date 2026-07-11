@@ -72,7 +72,7 @@ PADDLEGAN_VSR_SPECS: dict[str, _PaddleGanVsrSpec] = {
 }
 
 
-def fixed_weight_root() -> Path:
+def _fixed_weight_root() -> Path:
     """Return the hard-coded repository-local PaddleGAN VSR weight root."""
     return Path(settings.backend_root) / "models" / "super_resolution" / "paddlegan"
 
@@ -90,19 +90,11 @@ def get_spec(model_id: str) -> _PaddleGanVsrSpec:
 
 def _resolve_weight_path(model_id: str) -> Path:
     spec = get_spec(model_id)
-    return fixed_weight_root() / spec.subdir / spec.filename
+    return _fixed_weight_root() / spec.subdir / spec.filename
 
 
-def _ensure_weight_file(
-    model_id: str,
-    *,
-    auto_download: bool | None = None,
-) -> Path:
-    """Return a usable local weight path.
-
-    ``auto_download`` is accepted for backward-compatible configs but is ignored.
-    All PaddleGAN VSR weights must be pre-provisioned under ``fixed_weight_root``.
-    """
+def _ensure_weight_file(model_id: str) -> Path:
+    """Return a usable repository-local weight path."""
     get_spec(model_id)
     target = _resolve_weight_path(model_id)
     if target.is_file() and target.stat().st_size > 0:
@@ -115,15 +107,11 @@ def _ensure_weight_file(
     )
 
 
-def ensure_paddlegan_vsr_weights(
-    model_id: str,
-    *,
-    auto_download: bool | None = None,
-) -> Path:
+def ensure_paddlegan_vsr_weights(model_id: str) -> Path:
     """Validate all local weights required by a PaddleGAN VSR model."""
-    main_weight = _ensure_weight_file(model_id, auto_download=auto_download)
+    main_weight = _ensure_weight_file(model_id)
     spec = get_spec(model_id)
-    auxiliary_root = fixed_weight_root() / "_auxiliary"
+    auxiliary_root = _fixed_weight_root() / "_auxiliary"
     for filename in spec.auxiliary_filenames:
         target = auxiliary_root / filename
         if target.is_file() and target.stat().st_size > 0:

@@ -36,7 +36,7 @@ class TaskErrorCode(str, Enum):
     BACKEND_PROBE_FAILED = "backend_probe_failed"
 
 
-ALL_CODES = frozenset(code.value for code in TaskErrorCode)
+_ALL_CODES = frozenset(code.value for code in TaskErrorCode)
 
 
 def error_code_to_wire(code: Any) -> str:
@@ -53,7 +53,7 @@ def error_code_to_wire(code: Any) -> str:
 
     if isinstance(code, str):
         stripped = code.strip()
-        if stripped in ALL_CODES:
+        if stripped in _ALL_CODES:
             return stripped
         prefix = f"{TaskErrorCode.__name__}."
         if stripped.startswith(prefix):

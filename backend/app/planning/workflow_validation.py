@@ -53,15 +53,7 @@ def verify_model_availability(
             continue
         sr_algorithm = str(step.algorithm_kwargs.get("sr_algorithm") or "")
         if sr_algorithm in PADDLEGAN_VSR_SPECS:
-            super_resolution = workflow_config.get("superResolution", {})
-            ensure_paddlegan_vsr_weights(
-                sr_algorithm,
-                auto_download=bool(
-                    super_resolution.get("autoDownloadWeights")
-                    or super_resolution.get("auto_download_weights")
-                    or False
-                ),
-            )
+            ensure_paddlegan_vsr_weights(sr_algorithm)
 
     if processing_needs_interpolation(processing_steps):
         if tensor_backend_name == "onnx":

@@ -183,7 +183,6 @@ def concat_videos(ffmpeg_path: str, segment_paths: list[str], output_path: str) 
 def transcode_video(
     ffmpeg_path: str,
     *,
-    input_path: str,
     output_path: str,
     decode_input_args: list[str],
     encode_output_args: list[str],
