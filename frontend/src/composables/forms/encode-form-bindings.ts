@@ -1,11 +1,10 @@
-import { computed, type ComputedRef } from 'vue'
+import type { ComputedRef } from 'vue'
 
 import { createCapabilityOptionBindings } from '@/composables/forms/capability-option-bindings'
 import { createEncodeOutputSetters } from '@/composables/forms/encode-output-setters'
 import { createEncodeOutputState } from '@/composables/forms/encode-output-state'
 import { createEncodeProfileBindings } from '@/composables/forms/encode-profile-bindings'
 import { createEncodeRateControlBindings } from '@/composables/forms/encode-rate-control-bindings'
-import type { CapabilityValue } from '@/types/domain/capability'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { EncodeConfig, OutputConfig, WorkbenchPreset } from '@/types/protocol'
 
@@ -35,12 +34,8 @@ export function createEncodeFormBindings({
   const outputState = createEncodeOutputState({ editorConfig })
   const outputSetters = createEncodeOutputSetters({ patchEncode, patchOutput })
   const options = createCapabilityOptionBindings({
-    optionValues: computed(() => editorConfig.value.encodeConfig.options),
-    patchOptions: (nextOptions: Record<string, CapabilityValue>) => {
-      patchEncode((config: EncodeConfig) => {
-        config.options = nextOptions
-      })
-    },
+    getConfig: () => editorConfig.value.encodeConfig,
+    patchConfig: patchEncode,
   })
 
   return {

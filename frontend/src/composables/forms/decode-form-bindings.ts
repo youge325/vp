@@ -1,9 +1,8 @@
-import { computed, type ComputedRef } from 'vue'
+import type { ComputedRef } from 'vue'
 
 import { createCapabilityOptionBindings } from '@/composables/forms/capability-option-bindings'
 import { createDecodeHardwareBindings } from '@/composables/forms/decode-hardware-bindings'
 import { createDecodeProfileBindings } from '@/composables/forms/decode-profile-bindings'
-import type { CapabilityValue } from '@/types/domain/capability'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
 
@@ -32,12 +31,8 @@ export function createDecodeFormBindings({
     patchDecode,
   })
   const options = createCapabilityOptionBindings({
-    optionValues: computed(() => editorConfig.value.decodeConfig.options),
-    patchOptions: (nextOptions: Record<string, CapabilityValue>) => {
-      patchDecode((config: DecodeConfig) => {
-        config.options = nextOptions
-      })
-    },
+    getConfig: () => editorConfig.value.decodeConfig,
+    patchConfig: patchDecode,
   })
 
   return {

@@ -1,23 +1,27 @@
-import type { ComputedRef } from 'vue'
-
 import { getOptionValue, coerceOptionValue, updateProfileOption } from '@/services/preset/options'
 import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
 
-interface CapabilityOptionBindingParams {
-  optionValues: ComputedRef<Record<string, CapabilityValue>>
-  patchOptions: (options: Record<string, CapabilityValue>) => void
+interface ConfigWithCapabilityOptions {
+  options: Record<string, CapabilityValue>
 }
 
-export function createCapabilityOptionBindings({
-  optionValues,
-  patchOptions,
-}: CapabilityOptionBindingParams) {
+interface CapabilityOptionBindingParams<Config extends ConfigWithCapabilityOptions> {
+  getConfig: () => Config
+  patchConfig: (mutator: (config: Config) => void) => void
+}
+
+export function createCapabilityOptionBindings<Config extends ConfigWithCapabilityOptions>({
+  getConfig,
+  patchConfig,
+}: CapabilityOptionBindingParams<Config>) {
   function setOption(name: string, value: CapabilityValue): void {
-    patchOptions(updateProfileOption(optionValues.value, name, value))
+    patchConfig((config) => {
+      config.options = updateProfileOption(config.options, name, value)
+    })
   }
 
   function getOption(option: CapabilityOptionSpec): CapabilityValue {
-    return getOptionValue(option, optionValues.value)
+    return getOptionValue(option, getConfig().options)
   }
 
   return {

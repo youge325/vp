@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { createEnhanceOptionBindings } from '@/composables/forms/enhance-option-bindings'
+import { reactive } from 'vue'
+import { createEnhanceOptionSetters } from '@/composables/forms/enhance-option-setters'
+import { createEnhanceOptionState } from '@/composables/forms/enhance-option-state'
 import { useEnhanceForm } from '@/composables/forms/useEnhanceForm'
 import { useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
 import BaseNumber from '@/components/forms/BaseNumber.vue'
@@ -7,7 +9,10 @@ import BaseSelect from '@/components/forms/BaseSelect.vue'
 import BaseToggle from '@/components/forms/BaseToggle.vue'
 
 const form = useEnhanceForm()
-const options = createEnhanceOptionBindings(form)
+const options = reactive({
+  ...createEnhanceOptionState(form),
+  ...createEnhanceOptionSetters(form),
+})
 const { targetLabel } = useEditingScope()
 </script>
 

@@ -64,13 +64,18 @@ def test_stage_chunk_runtime_writes_unskipped_worker_frames(monkeypatch, tmp_pat
     stdout = BytesIO(b"".join(np.ascontiguousarray(_frame(value)).tobytes() for value in (1, 2, 3)))
     fake_process = SimpleNamespace(stdin=BytesIO(), stdout=stdout)
     waited = []
+    progress_events = []
 
     monkeypatch.setattr(
         runtime,
         "spawn_stage_workers",
         lambda plans, **_kwargs: [SimpleNamespace(process=fake_process, plan=plans[0])],
     )
-    monkeypatch.setattr(runtime, "read_worker_stderr", lambda *_args, **_kwargs: None)
+
+    def emit_worker_progress(_handle, callbacks, _error_queue, _stop_event) -> None:
+        callbacks[0](3, 999, phase="stage")
+
+    monkeypatch.setattr(runtime, "read_worker_stderr", emit_worker_progress)
     monkeypatch.setattr(runtime, "write_decoded_frames_to_worker", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(runtime, "wait_for_workers", lambda handles, _error_queue: waited.extend(handles))
 
@@ -87,13 +92,13 @@ def test_stage_chunk_runtime_writes_unskipped_worker_frames(monkeypatch, tmp_pat
         stage_index=1,
         stage_total=1,
         tensor_backend_name="paddle",
-        progress_callback=None,
+        progress_callback=lambda current, total, **kwargs: progress_events.append((current, total, kwargs)),
         chunk=chunk,
         input_width=1,
         input_height=1,
         output_width=1,
         output_height=1,
-        stage_total_frames=3,
+        stage_total_frames=10,
         output_fps=24.0,
         encode_output_fps=None,
         metrics=PipelineMetrics(),
@@ -103,6 +108,7 @@ def test_stage_chunk_runtime_writes_unskipped_worker_frames(monkeypatch, tmp_pat
     assert encoded_frames == 2
     assert output_path.read_bytes() == b"encoded"
     assert waited
+    assert progress_events == [(5, 10, {"phase": "stage"})]
     assert ffmpeg.writer is not None
     assert ffmpeg.writer.closed is True
     assert [int(frame[0, 0, 0]) for frame in ffmpeg.writer.frames] == [2, 3]

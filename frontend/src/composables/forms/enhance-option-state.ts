@@ -12,9 +12,34 @@ import {
   buildOnnxModelOptions,
   buildProfileOptions,
 } from '@/services/preset/enhance-options'
-import type { createEnhanceOptionBindings } from '@/composables/forms/enhance-option-bindings'
+import type { useEnhanceForm } from '@/composables/forms/useEnhanceForm'
 
-type EnhanceOptionForm = Parameters<typeof createEnhanceOptionBindings>[0]
+type EnhanceOptionFormField =
+  | 'interpolationBackend'
+  | 'interpolationEngine'
+  | 'interpolationAlgorithm'
+  | 'interpolationModel'
+  | 'interpolationOnnxModel'
+  | 'interpolationAlgorithms'
+  | 'interpolationModels'
+  | 'interpolationOnnxModels'
+  | 'interpolationModelDetails'
+  | 'interpolationOnnxModelDetails'
+  | 'fpsMode'
+  | 'interpolationMulti'
+  | 'superResolutionBackend'
+  | 'superResolutionEngine'
+  | 'superResolutionAlgorithm'
+  | 'superResolutionOnnxModel'
+  | 'superResolutionScale'
+  | 'superResolutionAlgorithms'
+  | 'superResolutionOnnxModels'
+  | 'superResolutionOnnxModelDetails'
+  | 'processOrder'
+  | 'animeProfile'
+  | 'animeProfiles'
+
+export type EnhanceOptionForm = Pick<ReturnType<typeof useEnhanceForm>, EnhanceOptionFormField>
 
 const INTERPOLATION_ONNX_EMPTY_HINT = '未找到 ONNX 模型，请将 .onnx 文件放入 models/interpolation 目录'
 const SUPER_RESOLUTION_ONNX_EMPTY_HINT = '未找到 ONNX 模型，请将 .onnx 文件放入 models/super_resolution 目录'

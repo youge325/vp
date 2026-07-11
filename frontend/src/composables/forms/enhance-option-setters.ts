@@ -5,9 +5,7 @@ import {
   toTensorBackend,
 } from '@/services/preset/enhance-options'
 import { toNumberValue } from '@/services/preset/options'
-import type { createEnhanceOptionBindings } from '@/composables/forms/enhance-option-bindings'
-
-type EnhanceOptionForm = Parameters<typeof createEnhanceOptionBindings>[0]
+import type { EnhanceOptionForm } from '@/composables/forms/enhance-option-state'
 
 export function createEnhanceOptionSetters(form: EnhanceOptionForm) {
   function setInterpolationBackend(value: string): void {

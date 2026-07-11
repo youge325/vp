@@ -16,17 +16,16 @@ class ContractRule(Protocol):
     def check(self, root: Path) -> list[str]: ...
 
 
-def _relative(path: Path, root: Path) -> str:
+def relative_path(path: Path, root: Path) -> str:
     try:
         return path.relative_to(root).as_posix()
     except ValueError:
         return path.as_posix()
 
 
-def _read(root: Path, relative_path: str) -> str:
-    path = root / relative_path
+def read_source(path: Path, root: Path) -> str:
     if not path.is_file():
-        raise ContractParseError(f"missing file: {relative_path}")
+        raise ContractParseError(f"missing file: {relative_path(path, root)}")
     return path.read_text(encoding="utf-8")
 
 
@@ -43,7 +42,7 @@ class ForbiddenPatternRule:
     flags: int = re.MULTILINE
 
     def check(self, root: Path) -> list[str]:
-        text = _read(root, self.path)
+        text = read_source(root / self.path, root)
         if re.search(self.pattern, text, self.flags):
             return [_issue(self.message, self.path)]
         return []
@@ -58,7 +57,7 @@ class RequiredPatternRule:
     flags: int = re.MULTILINE
 
     def check(self, root: Path) -> list[str]:
-        text = _read(root, self.path)
+        text = read_source(root / self.path, root)
         if not re.search(self.pattern, text, self.flags):
             return [_issue(self.message, self.path)]
         return []
@@ -95,12 +94,12 @@ class ForbiddenReferenceRule:
                 raise ContractParseError(f"missing reference root: {relative_root}")
             paths = [search_root] if search_root.is_file() else sorted(search_root.rglob("*"))
             for path in paths:
-                relative_path = _relative(path, root)
-                if not path.is_file() or relative_path in excluded or path.suffix not in self.suffixes:
+                source_path = relative_path(path, root)
+                if not path.is_file() or source_path in excluded or path.suffix not in self.suffixes:
                     continue
-                text = path.read_text(encoding="utf-8")
+                text = read_source(path, root)
                 if any(re.search(pattern, text, self.flags) for pattern in self.patterns):
-                    issues.append(_issue(self.message, relative_path))
+                    issues.append(_issue(self.message, source_path))
         return issues
 
 

@@ -21,6 +21,11 @@ ABSENT_PATH_RULES = (
     _absent("frontend-enhance-field-aggregator", "frontend/src/composables/forms/enhance-field-bindings.ts"),
     _absent("frontend-enhance-field-aggregator-test", "frontend/src/composables/forms/enhance-field-bindings.spec.ts"),
     _absent("frontend-encode-output-aggregator", "frontend/src/composables/forms/encode-output-bindings.ts"),
+    _absent("frontend-enhance-option-aggregator", "frontend/src/composables/forms/enhance-option-bindings.ts"),
+    _absent(
+        "frontend-enhance-option-aggregator-test",
+        "frontend/src/composables/forms/enhance-option-bindings.spec.ts",
+    ),
     _absent("backend-tensor-chain", "backend/app/processing/streaming/_tensor_chain.py"),
     _absent("backend-tensor-chain-test", "backend/tests/test_processing/test_tensor_chain.py"),
     _absent("backend-raw-runtime", "backend/app/processing/streaming/pipeline_raw_runtime.py"),
@@ -33,6 +38,14 @@ ABSENT_PATH_RULES = (
     _absent("backend-raw-stage-test", "backend/tests/test_processing/test_pipeline_raw_stage.py"),
     _absent("backend-raw-completion-test", "backend/tests/test_processing/test_pipeline_raw_completion.py"),
     _absent("backend-worker-pipeline-queue-test", "backend/tests/test_processing/test_worker_pipeline_queue.py"),
+    _absent(
+        "backend-stage-file-chunk-progress",
+        "backend/app/processing/streaming/stage_file_chunk_progress.py",
+    ),
+    _absent(
+        "backend-stage-file-chunk-progress-test",
+        "backend/tests/test_processing/test_stage_file_chunk_progress.py",
+    ),
     _absent("backend-streaming-decoder", "backend/app/processing/streaming/decoder.py"),
     _absent("backend-streaming-encoder", "backend/app/processing/streaming/encoder.py"),
     _absent("backend-streaming-processor", "backend/app/processing/streaming/processor.py"),
@@ -365,7 +378,7 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "stage-file-pipeline-chunk-implementation",
         "backend/app/processing/streaming/stage_file_pipeline.py",
-        r"^\s*def\s+(?:_?run_single_stage_file_chunks|_?run_stage_chunk_to_file|_?chunk_progress_adapter|_?stage_chunk_output_start|_?stage_signature|_?safe_stage_name)\b|from\s+app\.processing\.streaming\.stage_file_rules\s+import|\bSegmentManifest\s*\(|\bstage_signature\s*\(|\bsafe_stage_name\s*\(",
+        r"^\s*def\s+(?:_?run_single_stage_file_chunks|_?run_stage_chunk_to_file|_?stage_signature|_?safe_stage_name)\b|from\s+app\.processing\.streaming\.stage_file_rules\s+import|\bSegmentManifest\s*\(|\bstage_signature\s*\(|\bsafe_stage_name\s*\(",
         "stage-file chunk implementation",
     ),
     _forbid(
@@ -377,7 +390,7 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "stage-file-chunks-runtime",
         "backend/app/processing/streaming/stage_file_chunks.py",
-        r"^\s*def\s+(?:run_stage_chunk_to_file|chunk_progress_adapter|stage_chunk_output_start)\b|^\s*import\s+(?:queue|tempfile|threading)\b|\b(?:StageWorkerConfig|read_rgb_frame|spawn_stage_workers|write_decoded_frames_to_worker)\b|^from\s+app\.processing\.streaming\.stage_file_chunk_runtime\s+import\s+run_stage_chunk_to_file\s*$|\b_run_stage_chunk_to_file\s*\(|from\s+app\.processing\.streaming\.stage_file_chunk_progress\s+import|__all__\s*=\s*\[[\s\S]*[\"'](?:chunk_progress_adapter|run_stage_chunk_to_file|stage_chunk_output_start)[\"']",
+        r"^\s*def\s+run_stage_chunk_to_file\b|^\s*import\s+(?:queue|tempfile|threading)\b|\b(?:StageWorkerConfig|read_rgb_frame|spawn_stage_workers|write_decoded_frames_to_worker)\b|^from\s+app\.processing\.streaming\.stage_file_chunk_runtime\s+import\s+run_stage_chunk_to_file\s*$|\b_run_stage_chunk_to_file\s*\(|__all__\s*=\s*\[[\s\S]*[\"']run_stage_chunk_to_file[\"']",
         "stage-file chunk runtime implementation",
     ),
     _forbid(
@@ -393,10 +406,10 @@ FORBIDDEN_PATTERN_RULES = (
         "stage-file chunk input_fps forwarding",
     ),
     _forbid(
-        "stage-file-progress-discard",
-        "backend/app/processing/streaming/stage_file_chunk_progress.py",
-        r"\bdel\s+progress_total\b|\b_progress_total\b",
-        "stage-file chunk progress discard",
+        "manifest-sidecar-reset-duplicate",
+        "backend/app/planning/manifest.py",
+        r"^\s*def\s+_reset_sidecar\b|\bself\._reset_sidecar\s*\(",
+        "duplicate manifest sidecar reset lifecycle",
     ),
     _forbid(
         "stage-file-chunk-encoding-leak",
@@ -496,7 +509,7 @@ REFERENCE_RULES = (
         "obsolete-streaming-imports",
         roots=("backend/app", "backend/tests"),
         patterns=(
-            r"app\.processing\.streaming\.(?:decoder|processor(?:\b|_)|pipeline_raw_(?:runtime|state|stage|completion)|worker_pipeline_queue)\b",
+            r"app\.processing\.streaming\.(?:decoder|processor(?:\b|_)|pipeline_raw_(?:runtime|state|stage|completion)|worker_pipeline_queue|stage_file_chunk_progress)\b",
             r"app\.processing\.streaming\._tensor_chain\b",
         ),
         message="obsolete streaming module reference",
@@ -506,7 +519,12 @@ REFERENCE_RULES = (
     ForbiddenReferenceRule(
         "obsolete-frontend-binding-imports",
         roots=("frontend/src",),
-        patterns=(r"enhance-field-bindings", r"encode-output-bindings", r"@/lib/ipc(?:['\"]|/index)"),
+        patterns=(
+            r"enhance-field-bindings",
+            r"encode-output-bindings",
+            r"enhance-option-bindings",
+            r"@/lib/ipc(?:['\"]|/index)",
+        ),
         message="obsolete frontend facade reference",
         suffixes=(".ts", ".tsx", ".vue"),
     ),
