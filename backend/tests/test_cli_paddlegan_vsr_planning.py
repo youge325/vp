@@ -25,7 +25,6 @@ def _workflow(*, sr_backend="paddle", interpolation_backend="onnx", scale_factor
             "scaleFactor": scale_factor,
             "algorithm": algorithm,
             "tensorBackend": sr_backend,
-            "autoDownloadWeights": True,
         },
     }
 
@@ -62,14 +61,13 @@ def test_paddlegan_vsr_missing_auxiliary_weight_is_rejected_before_stage_worker(
     main_weight = tmp_path / "ppmsvsr" / "PP-MSVSR_reds_x4.pdparams"
     main_weight.parent.mkdir(parents=True)
     main_weight.write_bytes(b"main")
-    monkeypatch.setattr(weights, "fixed_weight_root", lambda: tmp_path)
+    monkeypatch.setattr(weights, "_fixed_weight_root", lambda: tmp_path)
     workflow = {
         "interpolation": {"enabled": False, "model": "4.25"},
         "superResolution": {
             "enabled": True,
             "algorithm": "ppmsvsr",
             "tensorBackend": "paddle",
-            "autoDownloadWeights": True,
         },
     }
     steps = [
@@ -112,7 +110,6 @@ def test_paddlegan_vsr_step_carries_super_resolution_runtime_fields():
             "tensorBackend": "paddle",
             "engine": "tensorrt",
             "numFrames": 8,
-            "autoDownloadWeights": True,
         },
         "preprocess": {"enabled": False, "filters": []},
         "postprocess": {"enabled": False, "filters": []},
@@ -130,8 +127,6 @@ def test_paddlegan_vsr_step_carries_super_resolution_runtime_fields():
         "tensor_backend": "paddle",
         "num_frames": 8,
     }
-    assert "auto_download_weights" not in steps[0].algorithm_kwargs
-
     stage_plan = build_stage_plan(steps, 12, source_duration=1.0, output_fps=None)
     worker_plan = build_stage_worker_plans(
         stage_plan=stage_plan,
@@ -163,7 +158,6 @@ def test_pytorch_interpolation_plus_paddlegan_super_resolution_builds_isolated_s
             "tensorBackend": "paddle",
             "engine": "cuda",
             "numFrames": 8,
-            "autoDownloadWeights": False,
         },
         "preprocess": {"enabled": False, "filters": []},
         "postprocess": {"enabled": False, "filters": []},

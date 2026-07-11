@@ -117,9 +117,10 @@ def test_process_with_invalid_json_emits_typed_envelope() -> None:
     assert envelope["type"] == "error"
     # JSON 解析失败 → 走 ProcessError.from_exception → infer 出 process_failed 或 invalid_input
     # 这里只验证它一定是一个 valid TaskErrorCode 字符串
-    from app.errors._codes import ALL_CODES
+    from app.errors._codes import TaskErrorCode
 
-    assert envelope["code"] in ALL_CODES, f"code {envelope['code']!r} 不在 TaskErrorCode 集合内"
+    valid_codes = {code.value for code in TaskErrorCode}
+    assert envelope["code"] in valid_codes, f"code {envelope['code']!r} 不在 TaskErrorCode 集合内"
 
 
 def test_help_does_not_emit_error_envelope() -> None:

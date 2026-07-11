@@ -65,7 +65,6 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
             "tensorBackend": "onnx",
             "engine": "cuda",
             "numFrames": 10,
-            "autoDownloadWeights": False,
         },
         "preprocess": {
             "enabled": False,

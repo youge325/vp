@@ -146,10 +146,6 @@
           "format": "uint32",
           "minimum": 0,
           "default": 10
-        },
-        "autoDownloadWeights": {
-          "type": "boolean",
-          "default": false
         }
       },
       "required": [

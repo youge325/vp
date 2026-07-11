@@ -70,7 +70,7 @@ class SuperResolutionAlgorithm(IAlgorithm):
         self._output_name = ""
         self._paddlegan_runner = None
 
-    def process_frame(self, frame: Any, **kwargs) -> Any:
+    def process_frame(self, frame: Any, **_kwargs) -> Any:
         """处理单帧；ONNX 后端运行 image-to-image 超分，其它后端拒绝执行。"""
         if self._is_paddlegan_vsr():
             raise NotImplementedError("PaddleGAN VSR requires frame-sequence processing.")

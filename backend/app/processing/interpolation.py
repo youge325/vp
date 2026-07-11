@@ -116,7 +116,7 @@ class FrameInterpolationAlgorithm(IAlgorithm):
     # IAlgorithm 接口实现
     # ------------------------------------------------------------------
 
-    def process_frame(self, frame: Any, **kwargs) -> Any:
+    def process_frame(self, frame: Any, **_kwargs) -> Any:
         """
         单帧处理（补帧算法不适用，直接返回原帧）。
 
@@ -136,7 +136,7 @@ class FrameInterpolationAlgorithm(IAlgorithm):
         """补帧算法需要帧对处理模式。"""
         return True
 
-    def process_frame_pair(self, frame0: Any, frame1: Any, timestep: float = 0.5, **kwargs) -> Any:
+    def process_frame_pair(self, frame0: Any, frame1: Any, timestep: float = 0.5, **_kwargs) -> Any:
         """
         使用 RIFE 模型对帧对进行插值，生成中间帧。
 

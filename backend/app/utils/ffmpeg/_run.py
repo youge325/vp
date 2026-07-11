@@ -1,7 +1,7 @@
 """Shared FFmpeg subprocess invocation helper.
 
 Phase D.2.6 — was previously duplicated verbatim in ``encode.py`` and
-``probe.py``; collapse to a single source so timeout / encoding / hidden
+the media and capability probes; collapse to a single source so timeout / encoding / hidden
 window behaviour can never drift between encode and probe paths.
 """
 

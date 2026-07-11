@@ -218,9 +218,9 @@ graph LR
     D --> E1[HomeModuleView 环境概览]
     D --> E2[InputModuleView 素材导入]
     D --> E3[DecodeModuleView 解码配置]
-    D --> E4[PreprocessModuleView 预处理滤镜]
+    D --> E4[StageModuleView 预处理滤镜]
     D --> E5[EnhanceModuleView 增强算法]
-    D --> E6[PostprocessModuleView 后处理滤镜]
+    D --> E6[StageModuleView 后处理滤镜]
     D --> E7[EncodeModuleView 编码配置]
     D --> E8[RenderModuleView 渲染队列]
 ```
@@ -230,9 +230,9 @@ graph LR
 | `HomeModuleView` | 环境探测仪表盘，GPU/FFmpeg 能力概览 |
 | `InputModuleView` | 批量导入素材，拖放支持，素材列表管理 |
 | `DecodeModuleView` | 解码器配置（硬件加速、解码模式等） |
-| `PreprocessModuleView` | 预处理滤镜链配置 |
+| `StageModuleView` (`stage=preprocess`) | 预处理滤镜链配置 |
 | `EnhanceModuleView` | 超分辨率、补帧算法配置 |
-| `PostprocessModuleView` | 后处理滤镜链配置 |
+| `StageModuleView` (`stage=postprocess`) | 后处理滤镜链配置 |
 | `EncodeModuleView` | 编码器、码率控制、输出格式配置 |
 | `RenderModuleView` | 批量渲染控制，输出目录，任务执行 |
 

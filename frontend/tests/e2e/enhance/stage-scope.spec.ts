@@ -103,6 +103,27 @@ test.describe('Stage module scope and badge', () => {
     await clearMediaItems(tauriPage)
   })
 
+  test('switching between shared stage routes keeps filter bindings independent', async ({ tauriPage }) => {
+    await tauriPage.click('.rail-link:has-text("预处理")')
+    const preprocessToggle = tauriPage
+      .locator('label.field.toggle-field')
+      .filter({ hasText: '启用预处理' })
+      .locator('input[type="checkbox"]')
+    await preprocessToggle.click()
+    await expect(tauriPage.locator('.filter-section')).toBeVisible()
+
+    await tauriPage.click('.rail-link:has-text("后处理")')
+    await expect(tauriPage.locator('h2:has-text("后处理")')).toBeVisible({ timeout: 5000 })
+    await expect(tauriPage.locator('.filter-section')).not.toBeVisible()
+
+    const postprocessToggle = tauriPage
+      .locator('label.field.toggle-field')
+      .filter({ hasText: '启用后处理' })
+      .locator('input[type="checkbox"]')
+    await postprocessToggle.click()
+    await expect(tauriPage.locator('.filter-section')).toBeVisible()
+  })
+
   test('filter section appears without pipeline caption when enabled', async ({ tauriPage }) => {
     await tauriPage.click('.rail-link:has-text("预处理")')
     await expect(tauriPage.locator('h2:has-text("预处理")')).toBeVisible({ timeout: 5000 })

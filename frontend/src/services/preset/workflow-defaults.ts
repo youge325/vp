@@ -37,7 +37,6 @@ function createDefaultWorkflowConfig(): WorkflowConfig {
       tensorBackend: 'onnx',
       engine: 'cuda',
       numFrames: 10,
-      autoDownloadWeights: false,
     },
     preprocess: {
       enabled: false,

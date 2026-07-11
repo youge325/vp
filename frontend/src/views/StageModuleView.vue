@@ -1,15 +1,7 @@
 <script setup lang="ts">
-// Phase 7b — Shared scaffold for the pre-/post-process stage views.
+// Shared view for the preprocess and postprocess routes. Route props keep
+// deep links stable while the stage value selects the corresponding chain.
 //
-// ``PreprocessModuleView`` and ``PostprocessModuleView`` used to be
-// copies of each other that differed in stage name and panel title.
-// They keep their own router entries (so deep links and breadcrumbs
-// still work) but defer to this component for the actual layout.
-//
-// If a future requirement makes the two stages diverge (different
-// filter sets, different gating logic, …), revert this collapse —
-// the right answer at that point is two distinct views, not a
-// ``stage``-flag matrix here.
 import { computed } from 'vue'
 
 import FilterChainEditor from '@/components/FilterChainEditor.vue'
@@ -21,7 +13,7 @@ type Stage = 'preprocess' | 'postprocess'
 
 const props = defineProps<{ stage: Stage }>()
 
-const { enabled, filters } = useFilterChainForm(props.stage)
+const { enabled, filters } = useFilterChainForm(() => props.stage)
 const { targetLabel } = useEditingScope()
 
 const title = computed(() => (props.stage === 'preprocess' ? '预处理' : '后处理'))

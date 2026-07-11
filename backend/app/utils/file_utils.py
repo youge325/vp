@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-SUPPORTED_EXTENSIONS = {
+_SUPPORTED_EXTENSIONS = {
     ".mp4",
     ".avi",
     ".mkv",
@@ -22,7 +22,7 @@ def validate_input_path(input_path: str) -> bool:
     if not os.path.isfile(input_path):
         return False
     _, ext = os.path.splitext(input_path)
-    return ext.lower() in SUPPORTED_EXTENSIONS
+    return ext.lower() in _SUPPORTED_EXTENSIONS
 
 
 def get_output_path(

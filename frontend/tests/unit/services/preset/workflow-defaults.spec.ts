@@ -39,7 +39,6 @@ describe('workflow defaults', () => {
       tensorBackend: 'onnx',
       engine: 'cuda',
       numFrames: 10,
-      autoDownloadWeights: false,
     })
   })
 

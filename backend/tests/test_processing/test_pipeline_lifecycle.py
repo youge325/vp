@@ -4,7 +4,6 @@ import pytest
 
 from app.errors import ResumeConflictError
 from app.planning import ResumeState, SegmentManifest
-from app.planning.manifest import SegmentRecord
 from app.processing.streaming.pipeline_lifecycle import (
     emit_resume_status_event,
     finalize_streaming_output,
@@ -46,16 +45,7 @@ def test_emit_resume_status_event_uses_existing_ndjson_payload(monkeypatch) -> N
     state = ResumeState(
         start_source_frame=12,
         completed_output_frames=20,
-        completed_segments=[
-            SegmentRecord(
-                index=1,
-                path="chunk-0001-out00000000-00000019-src00000012.mp4",
-                start_output_frame=0,
-                end_output_frame=19,
-                frame_count=20,
-                next_source_frame=12,
-            )
-        ],
+        completed_segments=[object()],
     )
     monkeypatch.setattr(
         "app.processing.streaming.pipeline_lifecycle.ndjson.resume_status",

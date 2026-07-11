@@ -30,7 +30,6 @@ const samplePreset: WorkbenchPreset = {
       tensorBackend: 'onnx',
       engine: 'cuda',
       numFrames: 10,
-      autoDownloadWeights: false,
     },
     preprocess: { enabled: false, filters: [] },
     postprocess: { enabled: false, filters: [] },

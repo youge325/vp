@@ -1,7 +1,7 @@
 """Resume sidecar lifecycle and chunk filename conventions.
 
-Owns ``SegmentManifest`` plus the resume-related dataclasses
-(``ResumeState``, internal decision state, ``SegmentRecord``) and resume mode.
+Owns ``SegmentManifest`` plus the resume-related public state and internal
+chunk/decision records.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 
 
 @dataclass(slots=True)
-class SegmentRecord:
+class _SegmentRecord:
     """One completed chunk on disk, parsed from filename."""
 
     index: int
@@ -38,7 +38,7 @@ class ResumeState:
 
     start_source_frame: int
     completed_output_frames: int
-    completed_segments: list[SegmentRecord]
+    completed_segments: list[_SegmentRecord]
 
 
 _ResumeKind = Literal["fresh", "resume", "conflict_final_exists"]
@@ -236,12 +236,12 @@ class SegmentManifest:
         return str(self.sidecar_dir / f"{self.CONCAT_BASENAME}{resolved_extension}")
 
     # ------------------------------------------------------------------ state
-    def scan_completed_chunks(self) -> list[SegmentRecord]:
+    def scan_completed_chunks(self) -> list[_SegmentRecord]:
         """Return chunks that form a contiguous prefix from output frame 0."""
         if not self.sidecar_dir.is_dir():
             return []
 
-        candidates: list[SegmentRecord] = []
+        candidates: list[_SegmentRecord] = []
         for entry in self.sidecar_dir.iterdir():
             if not entry.is_file():
                 continue
@@ -249,7 +249,7 @@ class SegmentManifest:
             if match is None:
                 continue
             candidates.append(
-                SegmentRecord(
+                _SegmentRecord(
                     index=int(match.group("index")),
                     path=entry.name,
                     start_output_frame=int(match.group("start")),
@@ -261,7 +261,7 @@ class SegmentManifest:
 
         candidates.sort(key=lambda record: record.index)
 
-        contiguous: list[SegmentRecord] = []
+        contiguous: list[_SegmentRecord] = []
         expected_index = 1
         expected_start = 0
         for record in candidates:
@@ -289,7 +289,7 @@ class SegmentManifest:
                 except OSError:
                     logger.warning("Failed to remove stale sentinel %s", entry)
 
-    def _cleanup_stale_chunks(self, keep: list[SegmentRecord]) -> None:
+    def _cleanup_stale_chunks(self, keep: list[_SegmentRecord]) -> None:
         """Delete chunk files past the contiguous prefix, plus stale auxiliaries."""
         if not self.sidecar_dir.is_dir():
             return

@@ -138,7 +138,6 @@ def _process_config(output_dir: Path) -> dict:
                 "tensorBackend": "paddle",
                 "engine": "cuda",
                 "numFrames": 8,
-                "autoDownloadWeights": False,
             },
             "preprocess": {"enabled": False, "filters": []},
             "postprocess": {"enabled": False, "filters": []},

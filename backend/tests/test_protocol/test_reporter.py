@@ -4,11 +4,13 @@ import time
 
 import pytest
 
-from app.protocol.reporter import CliProgressReporter, TERMINAL_PROGRESS_PREFIX
+from app.protocol.reporter import CliProgressReporter
+
+_PROGRESS_PREFIX = "[VP_PROGRESS]"
 
 
 def _terminal_progress_line(stderr: str) -> str:
-    lines = [line for line in stderr.splitlines() if line.startswith(TERMINAL_PROGRESS_PREFIX)]
+    lines = [line for line in stderr.splitlines() if line.startswith(_PROGRESS_PREFIX)]
     assert lines, f"No terminal progress line found in stderr:\n{stderr}"
     return lines[-1]
 
@@ -43,7 +45,7 @@ def test_update_at_zero_progress_emits_structured_progress_without_terminal_line
     reporter.update(0)
 
     captured = capsys.readouterr()
-    stderr_lines = [line for line in captured.err.splitlines() if line.startswith(TERMINAL_PROGRESS_PREFIX)]
+    stderr_lines = [line for line in captured.err.splitlines() if line.startswith(_PROGRESS_PREFIX)]
     stdout_lines = [json.loads(line) for line in captured.out.splitlines()]
 
     assert stderr_lines == []
@@ -62,7 +64,7 @@ def test_stage_switch_allows_second_stage_to_restart_at_zero_without_terminal_li
     reporter.update(0, total_frames=10)
 
     captured = capsys.readouterr()
-    stderr_lines = [line for line in captured.err.splitlines() if line.startswith(TERMINAL_PROGRESS_PREFIX)]
+    stderr_lines = [line for line in captured.err.splitlines() if line.startswith(_PROGRESS_PREFIX)]
     stdout_lines = [json.loads(line) for line in captured.out.splitlines()]
 
     assert len(stderr_lines) == 1
@@ -87,7 +89,7 @@ def test_update_at_stage_total_forces_final_progress(capsys: pytest.CaptureFixtu
     reporter.update(100, total_frames=100)
 
     captured = capsys.readouterr()
-    stderr_lines = [line for line in captured.err.splitlines() if line.startswith(TERMINAL_PROGRESS_PREFIX)]
+    stderr_lines = [line for line in captured.err.splitlines() if line.startswith(_PROGRESS_PREFIX)]
     stdout_lines = [json.loads(line) for line in captured.out.splitlines()]
 
     assert "100.0% 100/100" in stderr_lines[-1]
@@ -125,7 +127,7 @@ def test_heartbeat_forces_same_progress_with_runtime_status(capsys: pytest.Captu
     reporter.update(0, total_frames=10, heartbeat=True)
 
     captured = capsys.readouterr()
-    stderr_lines = [line for line in captured.err.splitlines() if line.startswith(TERMINAL_PROGRESS_PREFIX)]
+    stderr_lines = [line for line in captured.err.splitlines() if line.startswith(_PROGRESS_PREFIX)]
     stdout_lines = [json.loads(line) for line in captured.out.splitlines()]
 
     assert stderr_lines == []

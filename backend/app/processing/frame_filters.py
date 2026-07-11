@@ -57,7 +57,7 @@ class FrameFilterChainAlgorithm(IAlgorithm):
             if not isinstance(step.get("params"), dict):
                 raise ValueError(f"Filter step '{kind}' missing params dict.")
 
-    def process_frame(self, frame: Any, **kwargs: Any) -> Any:
+    def process_frame(self, frame: Any, **_kwargs: Any) -> Any:
         if self._tensor_backend is not None and self.can_process_tensor(self._tensor_backend):
             return self.process_tensor(frame, self._tensor_backend)
         if self._tensor_backend is None:

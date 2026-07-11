@@ -10,7 +10,7 @@ from typing import Any
 from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
 
-GPU_VENDOR_KEYWORDS = {
+_GPU_VENDOR_KEYWORDS = {
     "nvidia": "nvidia",
     "intel": "intel",
     "amd": "amd",
@@ -20,7 +20,7 @@ GPU_VENDOR_KEYWORDS = {
     "dcu": "hygon",
 }
 
-VIRTUAL_GPU_KEYWORDS = (
+_VIRTUAL_GPU_KEYWORDS = (
     "virtual",
     "remote",
     "mirror",
@@ -32,7 +32,7 @@ VIRTUAL_GPU_KEYWORDS = (
 def _classify_gpu_vendor(*values: str) -> str:
     """Return a normalized GPU vendor label."""
     haystack = " ".join(value.lower() for value in values if value)
-    for keyword, vendor in GPU_VENDOR_KEYWORDS.items():
+    for keyword, vendor in _GPU_VENDOR_KEYWORDS.items():
         if keyword in haystack:
             return vendor
     return "other"
@@ -41,7 +41,7 @@ def _classify_gpu_vendor(*values: str) -> str:
 def _classify_gpu_device_type(name: str, vendor: str) -> str:
     """Return a normalized GPU device type."""
     lowered = name.lower()
-    if any(keyword in lowered for keyword in VIRTUAL_GPU_KEYWORDS):
+    if any(keyword in lowered for keyword in _VIRTUAL_GPU_KEYWORDS):
         return "virtual"
     if vendor == "intel":
         return "integrated"

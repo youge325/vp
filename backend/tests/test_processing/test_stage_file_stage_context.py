@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.planning import ProcessingStep, SegmentManifest
-from app.planning.manifest import ResumeState, SegmentRecord
+from app.planning.manifest import ResumeState
 from app.processing.streaming import stage_file_stage_context
 from app.processing.streaming.stage_file_stage_context import build_stage_file_stage_context
 
@@ -17,16 +17,7 @@ def test_stage_file_stage_context_uses_resume_state_for_final_stage(tmp_path) ->
         stage_name="01_super_resolution",
     )
     manifest = SegmentManifest(str(tmp_path / "final.mp4"))
-    completed_segments = [
-        SegmentRecord(
-            index=1,
-            path="chunk-0001-out00000000-00000003-src00000004.mp4",
-            start_output_frame=0,
-            end_output_frame=3,
-            frame_count=4,
-            next_source_frame=4,
-        )
-    ]
+    completed_segments = [object()]
     resume_state = ResumeState(start_source_frame=99, completed_output_frames=4, completed_segments=completed_segments)
     encode_config = {"container": "mp4", "keepAudio": True}
 

@@ -56,7 +56,6 @@ def test_paddlegan_super_resolution_delegates_to_sequence_runner(monkeypatch):
         scale_factor=4,
         num_frames=6,
         engine="tensorrt",
-        auto_download_weights=True,
     )
 
     assert algorithm.needs_frame_sequence()

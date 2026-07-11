@@ -5,11 +5,8 @@ import pytest
 from app.utils import onnx_models
 from app.utils.onnx_models import (
     create_onnx_session,
-    is_safe_algorithm_name,
-    is_safe_onnx_basename,
     resolve_onnx_model_path,
     scan_onnx_models,
-    select_onnx_providers,
 )
 
 
@@ -49,8 +46,9 @@ def test_scan_onnx_models_groups_by_algorithm_subdirectory(tmp_path: Path):
         "",
     ],
 )
-def test_rejects_non_basename_onnx_filenames(filename: str):
-    assert is_safe_onnx_basename(filename) is False
+def test_rejects_non_basename_onnx_filenames(tmp_path: Path, filename: str):
+    with pytest.raises(FileNotFoundError):
+        resolve_onnx_model_path("interpolation", "rife", filename, tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -64,8 +62,9 @@ def test_rejects_non_basename_onnx_filenames(filename: str):
         "..",
     ],
 )
-def test_rejects_unsafe_algorithm_names(name: str):
-    assert is_safe_algorithm_name(name) is False
+def test_rejects_unsafe_algorithm_names(tmp_path: Path, name: str):
+    with pytest.raises(FileNotFoundError):
+        resolve_onnx_model_path("interpolation", name, "model.onnx", tmp_path)
 
 
 def test_resolve_onnx_model_path_rejects_missing_or_unsafe_files(tmp_path: Path):
@@ -103,32 +102,34 @@ class _StubOrt:
         return self._Session(path, providers, self._bound_override)
 
 
-def test_select_onnx_providers_returns_strict_priority_when_available():
+def test_create_onnx_session_uses_strict_provider_priority():
     ort = _StubOrt(["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"])
-    assert select_onnx_providers("tensorrt", ort) == [
+    session = create_onnx_session("/tmp/model.onnx", engine="tensorrt", ort_module=ort)
+    assert session.providers == [
         "TensorrtExecutionProvider",
         "CUDAExecutionProvider",
         "CPUExecutionProvider",
     ]
 
 
-def test_select_onnx_providers_drops_missing_secondary_providers_with_warning():
+def test_create_onnx_session_uses_available_cuda_provider_chain():
     ort = _StubOrt(["CUDAExecutionProvider", "CPUExecutionProvider"])
-    selected = select_onnx_providers("cuda", ort)
-    assert selected == ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    session = create_onnx_session("/tmp/model.onnx", engine="cuda", ort_module=ort)
+    assert session.providers == ["CUDAExecutionProvider", "CPUExecutionProvider"]
 
 
-def test_select_onnx_providers_raises_when_primary_missing():
+def test_create_onnx_session_raises_when_primary_provider_is_missing():
     ort = _StubOrt(["CPUExecutionProvider"])
     with pytest.raises(RuntimeError, match="CUDAExecutionProvider"):
-        select_onnx_providers("cuda", ort)
+        create_onnx_session("/tmp/model.onnx", engine="cuda", ort_module=ort)
     with pytest.raises(RuntimeError, match="TensorrtExecutionProvider"):
-        select_onnx_providers("tensorrt", ort)
+        create_onnx_session("/tmp/model.onnx", engine="tensorrt", ort_module=ort)
 
 
-def test_select_onnx_providers_auto_passes_through_available():
+def test_create_onnx_session_auto_uses_available_providers():
     ort = _StubOrt(["CPUExecutionProvider"])
-    assert select_onnx_providers("auto", ort) == ["CPUExecutionProvider"]
+    session = create_onnx_session("/tmp/model.onnx", engine="auto", ort_module=ort)
+    assert session.providers == ["CPUExecutionProvider"]
 
 
 def test_create_onnx_session_warns_when_session_falls_back_to_cpu(caplog: pytest.LogCaptureFixture):

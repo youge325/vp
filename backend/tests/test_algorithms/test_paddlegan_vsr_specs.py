@@ -30,7 +30,7 @@ def test_paddlegan_weight_paths_are_fixed_under_backend_models(monkeypatch):
     }
 
 
-def test_ensure_weight_file_reports_missing_even_when_auto_download_requested(tmp_path, monkeypatch):
+def test_ensure_weight_file_reports_missing_local_weight(tmp_path, monkeypatch):
     from app.algorithms.paddle.paddlegan_vsr import weights
 
     target = tmp_path / "PP-MSVSR_reds_x4.pdparams"
@@ -38,24 +38,11 @@ def test_ensure_weight_file_reports_missing_even_when_auto_download_requested(tm
     monkeypatch.setattr(weights, "_resolve_weight_path", lambda _model_id: target)
 
     with pytest.raises(ProcessError) as exc_info:
-        weights._ensure_weight_file("ppmsvsr", auto_download=True)
+        weights._ensure_weight_file("ppmsvsr")
 
     assert exc_info.value.code == TaskErrorCode.MISSING_MODEL
     assert str(target) in exc_info.value.message
     assert exc_info.value.details == {"model": "ppmsvsr", "path": str(target)}
-
-
-def test_ensure_weight_file_reports_missing_when_auto_download_disabled(tmp_path, monkeypatch):
-    from app.algorithms.paddle.paddlegan_vsr import weights
-
-    target = tmp_path / "missing.pdparams"
-    monkeypatch.setattr(weights, "_resolve_weight_path", lambda _model_id: target)
-
-    with pytest.raises(ProcessError) as exc_info:
-        weights._ensure_weight_file("ppmsvsr", auto_download=False)
-
-    assert exc_info.value.code == TaskErrorCode.MISSING_MODEL
-    assert str(target) in exc_info.value.message
 
 
 def test_ensure_paddlegan_vsr_weights_checks_ppmsvsr_auxiliary(tmp_path, monkeypatch):
@@ -64,7 +51,7 @@ def test_ensure_paddlegan_vsr_weights_checks_ppmsvsr_auxiliary(tmp_path, monkeyp
     main_weight = tmp_path / "ppmsvsr" / "PP-MSVSR_reds_x4.pdparams"
     main_weight.parent.mkdir(parents=True)
     main_weight.write_bytes(b"main")
-    monkeypatch.setattr(weights, "fixed_weight_root", lambda: tmp_path)
+    monkeypatch.setattr(weights, "_fixed_weight_root", lambda: tmp_path)
 
     with pytest.raises(ProcessError) as exc_info:
         weights.ensure_paddlegan_vsr_weights("ppmsvsr")
@@ -86,7 +73,7 @@ def test_ensure_paddlegan_vsr_weights_checks_only_edvr_main_weight(tmp_path, mon
     main_weight = tmp_path / "edvr" / "EDVR_L_w_tsa_SRx4.pdparams"
     main_weight.parent.mkdir(parents=True)
     main_weight.write_bytes(b"main")
-    monkeypatch.setattr(weights, "fixed_weight_root", lambda: tmp_path)
+    monkeypatch.setattr(weights, "_fixed_weight_root", lambda: tmp_path)
 
     assert weights.ensure_paddlegan_vsr_weights("edvr") == main_weight
 
@@ -112,7 +99,7 @@ def test_ensure_paddlegan_vsr_weights_checks_restored_model_auxiliaries(
     main_weight = tmp_path / model_id / filename
     main_weight.parent.mkdir(parents=True)
     main_weight.write_bytes(b"main")
-    monkeypatch.setattr(weights, "fixed_weight_root", lambda: tmp_path)
+    monkeypatch.setattr(weights, "_fixed_weight_root", lambda: tmp_path)
 
     with pytest.raises(ProcessError) as exc_info:
         weights.ensure_paddlegan_vsr_weights(model_id)
