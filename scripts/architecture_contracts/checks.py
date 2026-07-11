@@ -347,6 +347,59 @@ def _check_frontend_protocol_reexports(root: Path) -> list[str]:
     return issues
 
 
+def _find_unconsumed_rust_model_reexports(model_mod_text: str, consumer_texts: list[str]) -> set[str]:
+    reexports: set[str] = set()
+    for match in re.finditer(
+        r"pub(?:\(crate\))?\s+use\s+\w+::\{(?P<body>.*?)\};",
+        model_mod_text,
+        re.DOTALL,
+    ):
+        for entry in _split_top_level_commas(match.group("body")):
+            name = entry.split(" as ", 1)[-1].strip()
+            if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+                reexports.add(name)
+    reexports.update(
+        re.findall(
+            r"pub(?:\(crate\))?\s+use\s+\w+::([A-Za-z_][A-Za-z0-9_]*)\s*;",
+            model_mod_text,
+        )
+    )
+
+    imported: set[str] = set()
+    grouped_import = re.compile(
+        r"use\s+(?:crate|vp_workbench_lib)::models::\{(?P<body>.*?)\};",
+        re.DOTALL,
+    )
+    direct_import = re.compile(
+        r"(?:crate|vp_workbench_lib)::models::([A-Z][A-Za-z0-9_]*)\b",
+    )
+    for text in consumer_texts:
+        for match in grouped_import.finditer(text):
+            for entry in _split_top_level_commas(match.group("body")):
+                if "::" in entry:
+                    continue
+                name = entry.split(" as ", 1)[0].strip()
+                if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+                    imported.add(name)
+        imported.update(direct_import.findall(text))
+    return reexports - imported
+
+
+def _check_rust_model_reexports(root: Path) -> list[str]:
+    model_root = root / "frontend/src-tauri/src/models"
+    model_mod_path = model_root / "mod.rs"
+    rust_root = root / "frontend/src-tauri/src"
+    consumer_texts = [
+        re.split(r"^\s*#\[cfg\(test\)\]", read_source(path, root), maxsplit=1, flags=re.MULTILINE)[0]
+        for path in sorted(rust_root.rglob("*.rs"))
+        if model_root not in path.parents
+    ]
+    return [
+        f"unconsumed Rust models re-export `{name}`: frontend/src-tauri/src/models/mod.rs"
+        for name in sorted(_find_unconsumed_rust_model_reexports(read_source(model_mod_path, root), consumer_texts))
+    ]
+
+
 def _find_unreferenced_css_classes(css_text: str, consumer_texts: list[str]) -> set[str]:
     classes = set(re.findall(r"\.([A-Za-z_-][A-Za-z0-9_-]*)", css_text))
     consumer_text = "\n".join(consumer_texts)
@@ -486,6 +539,7 @@ def collect_architecture_issues(root: Path) -> list[str]:
     issues.extend(_check_frontend_test_layout(root))
     issues.extend(_check_frontend_dependency_boundaries(root))
     issues.extend(_check_frontend_protocol_reexports(root))
+    issues.extend(_check_rust_model_reexports(root))
     issues.extend(_check_frontend_global_css_classes(root))
     issues.extend(_check_frontend_test_ids(root))
     issues.extend(_check_frontend_test_support_exports(root))

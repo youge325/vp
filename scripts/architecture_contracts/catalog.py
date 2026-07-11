@@ -151,6 +151,36 @@ FORBIDDEN_PATTERN_RULES = (
         "obsolete Rust environment protocol field",
     ),
     _forbid(
+        "rust-public-internal-root-modules",
+        "frontend/src-tauri/src/lib.rs",
+        r"^pub\s+mod\s+(?:error|protocol)\s*;",
+        "crate-internal Rust root module is public",
+    ),
+    _forbid(
+        "rust-public-environment-model-module",
+        "frontend/src-tauri/src/models/mod.rs",
+        r"^pub\s+mod\s+env\s*;",
+        "crate-internal Rust environment model module is public",
+    ),
+    _forbid(
+        "rust-public-model-root-reexports",
+        "frontend/src-tauri/src/models/mod.rs",
+        r"^pub\s+use\b",
+        "crate-internal Rust model re-export is public",
+    ),
+    _forbid(
+        "rust-runtime-output-dir-state",
+        "frontend/src-tauri/src/runtime/mod.rs",
+        r"\bpub\s+output_dir\s*:|app_data_dir\.join\([\"']output[\"']\)",
+        "dead runtime output directory state",
+    ),
+    _forbid(
+        "rust-environment-fingerprint-output-dir",
+        "frontend/src-tauri/src/persistence/storage.rs",
+        r"[\"']outputDir[\"']\s*:\s*paths\.output_dir\b",
+        "output path contaminates environment capability fingerprint",
+    ),
+    _forbid(
         "python-obsolete-environment-fields",
         "backend/app/cli/commands/check.py",
         r"\bbackend_device_support\b|[\"']backendDeviceSupport[\"']|[\"']sequenceMode[\"']",

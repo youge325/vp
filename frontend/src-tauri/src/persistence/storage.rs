@@ -89,7 +89,6 @@ pub async fn build_environment_fingerprint(
         "host": resolve_host_identifier(),
         "backendDir": paths.backend_dir.to_string_lossy().to_string(),
         "runtimeRoot": paths.runtime_root.as_ref().map(|path| path.to_string_lossy().to_string()),
-        "outputDir": paths.output_dir.to_string_lossy().to_string(),
         "pythonExecutable": describe_path(Some(paths.python_executable.as_path())).await,
         "ffmpeg": describe_path(paths.ffmpeg_path.as_deref()).await,
         "ffprobe": describe_path(paths.ffprobe_path.as_deref()).await,
@@ -295,21 +294,45 @@ async fn describe_path(path: Option<&Path>) -> Value {
 #[cfg(test)]
 mod tests {
     use super::{
-        environment_cache_path, load_environment_cache, load_workbench_preset,
-        save_environment_cache, save_workbench_preset, workbench_preset_path,
-        EnvironmentCacheEntry, WorkbenchPresetEntry,
+        build_environment_fingerprint, environment_cache_path, load_environment_cache,
+        load_workbench_preset, save_environment_cache, save_workbench_preset,
+        workbench_preset_path, EnvironmentCacheEntry, WorkbenchPresetEntry,
     };
-    use crate::models::{
+    use crate::models::config::{
         DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig, OutputConfig,
         PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig, RateControlMode,
         SuperResolutionConfig, TensorBackend, WorkbenchPreset, WorkflowConfig,
     };
+    use crate::runtime::ResolvedRuntimePaths;
     use serde_json::json;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::{env, fs};
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    #[tokio::test]
+    async fn environment_fingerprint_excludes_output_path_state() {
+        let paths = ResolvedRuntimePaths {
+            backend_dir: PathBuf::from("backend"),
+            runtime_root: Some(PathBuf::from("runtime")),
+            python_executable: PathBuf::from("python"),
+            ffmpeg_path: Some(PathBuf::from("ffmpeg")),
+            ffprobe_path: Some(PathBuf::from("ffprobe")),
+            model_dir: Some(PathBuf::from("models")),
+            tensorrt_dir: None,
+            log_dir: PathBuf::from("logs"),
+        };
+
+        let encoded = build_environment_fingerprint(&paths)
+            .await
+            .expect("build fingerprint");
+        let fingerprint: serde_json::Value =
+            serde_json::from_str(&encoded).expect("parse fingerprint");
+
+        assert!(fingerprint.get("outputDir").is_none());
+        assert_eq!(fingerprint["backendDir"], "backend");
+    }
 
     fn temp_dir(label: &str) -> PathBuf {
         let dir = env::temp_dir().join(format!(

@@ -16,7 +16,15 @@ fn main() {
         }};
     }
 
-    use vp_workbench_lib::models::*;
+    use vp_workbench_lib::models::config::{
+        DecodeConfig, EncodeConfig, FilterStep, InterpolationConfig, OutputConfig,
+        PostprocessConfig, PreprocessConfig, RateControlConfig, SuperResolutionConfig,
+        WorkbenchPreset, WorkflowConfig,
+    };
+    use vp_workbench_lib::models::task::{
+        ResumeStatusPayload, TaskCompletedPayload, TaskErrorPayload, TaskLogPayload,
+        TaskProgressPayload, TaskRequest,
+    };
 
     dump!(DecodeConfig, "decode_config");
     dump!(EncodeConfig, "encode_config");

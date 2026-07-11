@@ -5,6 +5,8 @@ use ts_rs::TS;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "kebab-case")]
 #[ts(export, export_to = "../../src/types/generated/")]
+// Variants intentionally mirror the full Tauri event names exported to TypeScript.
+#[allow(clippy::enum_variant_names)]
 pub enum TaskEventName {
     TaskProgress,
     TaskCompleted,

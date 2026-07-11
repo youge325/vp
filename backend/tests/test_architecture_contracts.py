@@ -14,6 +14,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from architecture_contracts.checks import (  # noqa: E402
     _check_frontend_dependency_boundaries,
+    _find_unconsumed_rust_model_reexports,
     _find_unconsumed_protocol_reexports,
     _find_unconsumed_test_support_exports,
     _find_unconsumed_test_ids,
@@ -49,6 +50,20 @@ export type { Unused } from '@/types/generated/Unused'
     ]
 
     assert _find_unconsumed_protocol_reexports(index_text, consumers) == {"Unused"}
+
+
+def test_rust_model_reexport_check_ignores_deep_imports() -> None:
+    model_mod = """
+pub use config::{Used, Dead};
+pub use task::Qualified;
+"""
+    consumers = [
+        "use crate::models::{Used as LocalUsed};\n",
+        "let _: crate::models::Qualified;\n",
+        "use crate::models::config::Dead;\n",
+    ]
+
+    assert _find_unconsumed_rust_model_reexports(model_mod, consumers) == {"Dead"}
 
 
 def test_global_css_check_reports_only_unreferenced_classes() -> None:

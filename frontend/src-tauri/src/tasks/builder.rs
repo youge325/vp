@@ -104,7 +104,7 @@ pub fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChil
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{
+    use crate::models::config::{
         DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig, OutputConfig,
         PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig, RateControlMode,
         SuperResolutionConfig, TensorBackend, WorkflowConfig,
@@ -245,7 +245,6 @@ mod tests {
             ffprobe_path: None,
             model_dir: None,
             tensorrt_dir: None,
-            output_dir: std::path::PathBuf::from("."),
             log_dir: std::path::PathBuf::from("."),
         };
         let (_command, payload) = build_process_command(&paths, &request).expect("command");

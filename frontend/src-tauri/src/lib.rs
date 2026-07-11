@@ -1,10 +1,10 @@
 mod commands_manifest;
 mod dialogs;
-pub mod error;
+mod error;
 pub mod models;
 mod persistence;
 mod process_control;
-pub mod protocol;
+mod protocol;
 mod runtime;
 mod services;
 mod tasks;
