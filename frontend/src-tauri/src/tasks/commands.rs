@@ -10,13 +10,11 @@ use crate::tasks::{
 };
 
 #[tauri::command]
-pub async fn inspect_video<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn inspect_video(
     paths: State<'_, ResolvedRuntimePaths>,
     input_path: String,
 ) -> Result<VideoInfo, ShellError> {
     let outcome = run_single_cli_command(
-        &app,
         paths.inner(),
         &[String::from("info"), String::from("--input"), input_path],
         None,
@@ -39,13 +37,12 @@ pub async fn start_task<R: Runtime>(
 }
 
 #[tauri::command]
-pub async fn check_resume_state<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn check_resume_state(
     paths: State<'_, ResolvedRuntimePaths>,
     request: TaskRequest,
 ) -> Result<Value, ShellError> {
     let (args, stdin_payload) = build_inspect_output_args(&request)?;
-    let outcome = run_single_cli_command(&app, paths.inner(), &args, Some(&stdin_payload)).await?;
+    let outcome = run_single_cli_command(paths.inner(), &args, Some(&stdin_payload)).await?;
     outcome.into_result()
 }
 

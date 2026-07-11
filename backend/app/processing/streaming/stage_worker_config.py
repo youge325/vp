@@ -5,9 +5,34 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, cast, get_args
 
-from app.planning import ProcessingStep, normalize_processing_step
+from app.planning.processing_steps import AlgorithmType, ProcessingStep
+
+
+def _parse_processing_step(payload: Any) -> ProcessingStep:
+    if not isinstance(payload, Mapping):
+        raise TypeError(f"Processing step must be a mapping, got {type(payload).__name__}.")
+
+    algorithm_type = payload.get("algorithm_type")
+    if not isinstance(algorithm_type, str) or algorithm_type not in get_args(AlgorithmType):
+        raise ValueError(f"Unknown processing step algorithm_type: {algorithm_type!r}")
+
+    algorithm_kwargs = payload.get("algorithm_kwargs", {})
+    if algorithm_kwargs is None:
+        algorithm_kwargs = {}
+    if not isinstance(algorithm_kwargs, Mapping):
+        raise TypeError("Processing step algorithm_kwargs must be a mapping.")
+
+    stage_name = payload.get("stage_name")
+    if not isinstance(stage_name, str) or not stage_name:
+        raise ValueError("Processing step stage_name must be a non-empty string.")
+
+    return ProcessingStep(
+        algorithm_type=cast(AlgorithmType, algorithm_type),
+        algorithm_kwargs=dict(algorithm_kwargs),
+        stage_name=stage_name,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +62,7 @@ class StageWorkerConfig:
             return payload[camel] if camel in payload else payload[snake]
 
         return cls(
-            stage=normalize_processing_step(value("stage", "stage")),
+            stage=_parse_processing_step(payload["stage"]),
             stage_index=int(value("stageIndex", "stage_index")),
             stage_total=int(value("stageTotal", "stage_total")),
             stage_name=str(value("stageName", "stage_name")),

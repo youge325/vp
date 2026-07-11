@@ -9,7 +9,7 @@ import shutil
 import numpy as np
 import pytest
 
-from app.planning import SegmentManifest, build_signature
+from app.planning import ProcessingStep, SegmentManifest, build_signature
 from app.processing.streaming.queues import EncodedFrame, StreamEnd
 from app.processing.streaming import process_video_streaming
 from app.processing.streaming.worker_plans import (
@@ -296,7 +296,7 @@ def _workspace(name: str) -> Path:
     return root
 
 
-def _workflow_config(segment_frames: int = 2) -> tuple[dict, dict, list[dict], dict]:
+def _workflow_config(segment_frames: int = 2) -> tuple[dict, dict, list[ProcessingStep], dict]:
     workflow_config = {
         "fpsMode": "multi",
         "processOrder": "frame_interpolation_then_super_resolution",
@@ -324,16 +324,16 @@ def _workflow_config(segment_frames: int = 2) -> tuple[dict, dict, list[dict], d
         "options": {},
     }
     processing_steps = [
-        {
-            "algorithm_type": "frame_interpolation",
-            "algorithm_kwargs": {"multi": 2, "model_version": "4.25", "scale": 1.0, "fp16": False},
-            "stage_name": "01_frame_interpolation",
-        },
-        {
-            "algorithm_type": "super_resolution",
-            "algorithm_kwargs": {"scale_factor": 2.0, "sr_algorithm": "placeholder"},
-            "stage_name": "02_super_resolution",
-        },
+        ProcessingStep(
+            algorithm_type="frame_interpolation",
+            algorithm_kwargs={"multi": 2, "model_version": "4.25", "scale": 1.0, "fp16": False},
+            stage_name="01_frame_interpolation",
+        ),
+        ProcessingStep(
+            algorithm_type="super_resolution",
+            algorithm_kwargs={"scale_factor": 2.0, "sr_algorithm": "placeholder"},
+            stage_name="02_super_resolution",
+        ),
     ]
     output_config = {"outputDir": "", "openOnComplete": False, "segmentFrames": segment_frames}
     return workflow_config, encode_config, processing_steps, output_config
@@ -514,11 +514,11 @@ def test_streaming_pipeline_uses_scaled_encoder_dimensions_for_onnx_super_resolu
         "options": {},
     }
     processing_steps = [
-        {
-            "algorithm_type": "super_resolution",
-            "algorithm_kwargs": {"scale_factor": 2.0, "sr_algorithm": "onnx", "onnx_model": "sr.onnx"},
-            "stage_name": "01_super_resolution",
-        }
+        ProcessingStep(
+            algorithm_type="super_resolution",
+            algorithm_kwargs={"scale_factor": 2.0, "sr_algorithm": "onnx", "onnx_model": "sr.onnx"},
+            stage_name="01_super_resolution",
+        )
     ]
     output_config = {"outputDir": "", "openOnComplete": False, "segmentFrames": 2}
 
@@ -551,11 +551,11 @@ def test_streaming_pipeline_uses_stage_worker_pipeline_for_processing_steps(monk
 
     workflow_config, encode_config, _processing_steps, output_config = _workflow_config(segment_frames=2)
     processing_steps = [
-        {
-            "algorithm_type": "super_resolution",
-            "algorithm_kwargs": {"scale_factor": 1.0, "sr_algorithm": "placeholder"},
-            "stage_name": "01_super_resolution",
-        }
+        ProcessingStep(
+            algorithm_type="super_resolution",
+            algorithm_kwargs={"scale_factor": 1.0, "sr_algorithm": "placeholder"},
+            stage_name="01_super_resolution",
+        )
     ]
     calls = []
 

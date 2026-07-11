@@ -31,7 +31,7 @@ def main() -> None:
         _startup_hooks()
         args.func(args)
     except KeyboardInterrupt:
-        raise_error(TaskErrorCode.CANCELLED, "Operation cancelled by the user.", exit_code=130)
+        raise_error(TaskErrorCode.CANCELLED, "Operation cancelled by the user.")
     except SystemExit:
         raise
     except Exception as exc:  # pragma: no cover - defensive CLI boundary

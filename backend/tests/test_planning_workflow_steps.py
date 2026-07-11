@@ -2,7 +2,6 @@
 
 from app.planning import (
     PROCESS_ORDER_MAP,
-    normalize_processing_step,
     resolve_expected_output_frames,
     resolve_primary_algorithm,
     resolve_processing_steps,
@@ -58,19 +57,6 @@ def test_workflow_step_planning_is_exported_from_planning_layer():
         "frame_interpolation",
     ]
     assert resolve_primary_algorithm(_workflow()) == "frame_interpolation"
-
-
-def test_removed_anime_stage_type_is_rejected() -> None:
-    import pytest
-
-    with pytest.raises(ValueError, match="Unknown processing step algorithm_type"):
-        normalize_processing_step(
-            {
-                "algorithm_type": "anime_optimization",
-                "algorithm_kwargs": {},
-                "stage_name": "01_anime_optimization",
-            }
-        )
 
 
 def test_resolve_processing_steps_builds_ordered_stage_names_and_kwargs():

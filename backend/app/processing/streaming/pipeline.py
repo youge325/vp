@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from app.planning import (
-    ProcessingStepInput,
+    ProcessingStep,
     ResumeMode,
 )
 from app.processing.streaming.pipeline_lifecycle import (
@@ -32,7 +32,7 @@ def process_video_streaming(
     encode_config: dict[str, Any],
     workflow_config: dict[str, Any],
     output_config: dict[str, Any],
-    processing_steps: list[ProcessingStepInput],
+    processing_steps: list[ProcessingStep],
     tensor_backend_name: str,
     progress_callbacks: list[Callable[[int, int], None]],
     output_fps: float | None = None,

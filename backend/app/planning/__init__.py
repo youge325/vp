@@ -7,10 +7,6 @@ from app.planning.manifest import (
 )
 from app.planning.processing_steps import (
     ProcessingStep,
-    ProcessingStepInput,
-    normalize_processing_step,
-    normalize_processing_steps,
-    processing_steps_to_jsonable,
 )
 from app.planning.stage_plan import (
     StagePlan,
@@ -32,10 +28,6 @@ __all__ = [
     "ResumeState",
     "SegmentManifest",
     "ProcessingStep",
-    "ProcessingStepInput",
-    "normalize_processing_step",
-    "normalize_processing_steps",
-    "processing_steps_to_jsonable",
     "StagePlan",
     "build_signature",
     "build_stage_plan",

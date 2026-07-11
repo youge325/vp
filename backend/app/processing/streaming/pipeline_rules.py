@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from app.planning import ProcessingStepInput, StagePlan, processing_steps_to_jsonable
+from app.planning import ProcessingStep, StagePlan
 from app.processing.streaming.stage_rules import (
     ordered_steps,
     resolve_stage_plan_output_dimensions,
@@ -22,7 +22,7 @@ def build_config_snapshot(
     encode_config: dict[str, Any],
     workflow_config: dict[str, Any],
     output_config: dict[str, Any],
-    processing_steps: list[ProcessingStepInput],
+    processing_steps: list[ProcessingStep],
     video_info: dict[str, Any],
 ) -> dict[str, Any]:
     """Capture the parameters that determine signature + behavior for a run."""
@@ -35,7 +35,7 @@ def build_config_snapshot(
         "output_config": {
             "segmentFrames": max(1, int(output_config.get("segmentFrames") or 1000)),
         },
-        "processing_steps": processing_steps_to_jsonable(processing_steps),
+        "processing_steps": [step.to_jsonable() for step in processing_steps],
         "video_info": {
             "width": video_info["width"],
             "height": video_info["height"],

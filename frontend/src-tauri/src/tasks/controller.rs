@@ -10,7 +10,7 @@ use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::models::{TaskCancelledPayload, TaskCancelledReason, TaskErrorPayload};
+use crate::models::{TaskCancelledPayload, TaskCancelledReason, TaskErrorCode, TaskErrorPayload};
 use crate::process_control::{ProcessControlError, ProcessController};
 use crate::protocol::TaskEventName;
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
@@ -228,7 +228,7 @@ fn emit_terminal_event<R: Runtime>(
                 let _ = app.emit(
                     TaskEventName::TaskError.as_str(),
                     TaskErrorPayload {
-                        code: crate::protocol::TaskErrorCode::RuntimePanic,
+                        code: TaskErrorCode::RuntimePanic,
                         message: format!("Backend process exited with status {exit_status}."),
                         details,
                     },
@@ -243,7 +243,7 @@ fn emit_terminal_event<R: Runtime>(
                 let _ = app.emit(
                     TaskEventName::TaskError.as_str(),
                     TaskErrorPayload {
-                        code: crate::protocol::TaskErrorCode::ProcessFailed,
+                        code: TaskErrorCode::ProcessFailed,
                         message: format!("Failed while waiting for backend process: {error}"),
                         details,
                     },

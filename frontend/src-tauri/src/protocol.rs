@@ -2,9 +2,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-// Re-export so existing callers do not break.
-pub use crate::models::TaskErrorCode;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "kebab-case")]
 #[ts(export, export_to = "../../src/types/generated/")]

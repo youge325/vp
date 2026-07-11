@@ -17,8 +17,6 @@ from app.models import WorkflowConfig
 from app.planning import (
     ProcessingStep,
     build_signature,
-    normalize_processing_steps,
-    processing_steps_to_jsonable,
     resolve_expected_output_frames,
     resolve_processing_steps,
 )
@@ -152,87 +150,22 @@ def test_resolve_processing_steps_format_conversion_skips_frame_filters():
     assert steps == []
 
 
-def test_processing_step_json_shape_matches_legacy_mapping():
+def test_processing_step_json_shape_is_stable_and_defensive():
     step = ProcessingStep(
         algorithm_type="frame_interpolation",
         algorithm_kwargs={"multi": 2, "model_version": "4.25"},
         stage_name="01_frame_interpolation",
     )
 
-    assert processing_steps_to_jsonable([step]) == [
-        {
-            "algorithm_type": "frame_interpolation",
-            "algorithm_kwargs": {"multi": 2, "model_version": "4.25"},
-            "stage_name": "01_frame_interpolation",
-        }
-    ]
-
-
-def test_normalize_processing_steps_accepts_typed_and_legacy_mapping():
-    typed = ProcessingStep(
-        algorithm_type="super_resolution",
-        algorithm_kwargs={"scale_factor": 2},
-        stage_name="01_super_resolution",
-    )
-    legacy = {
-        "algorithm_type": "frame_filter_chain",
-        "algorithm_kwargs": {"filters": []},
-        "stage_name": "02_postprocess",
+    payload = step.to_jsonable()
+    assert payload == {
+        "algorithm_type": "frame_interpolation",
+        "algorithm_kwargs": {"multi": 2, "model_version": "4.25"},
+        "stage_name": "01_frame_interpolation",
     }
 
-    steps = normalize_processing_steps([typed, legacy])
-
-    assert steps[0] is typed
-    assert steps[1].algorithm_type == "frame_filter_chain"
-    assert steps[1].algorithm_kwargs == {"filters": []}
-    assert steps[1].stage_name == "02_postprocess"
-
-
-def test_typed_processing_steps_keep_signature_compatible_with_legacy_mapping(tmp_path):
-    input_path = tmp_path / "input.mp4"
-    output_path = tmp_path / "out.mp4"
-    input_path.write_bytes(b"video")
-    legacy_steps = [
-        {
-            "algorithm_type": "frame_interpolation",
-            "algorithm_kwargs": {"multi": 2, "model_version": "4.25", "scale": 1.0, "fp16": False},
-            "stage_name": "01_frame_interpolation",
-        }
-    ]
-    typed_steps = normalize_processing_steps(legacy_steps)
-    decode_config = {"mode": "software", "decoder": "software", "options": {}}
-    encode_config = {"codec": "libx264", "container": "mp4", "keepAudio": True}
-    workflow_config = _make_workflow_config()
-    output_config = {"outputDir": str(tmp_path), "openOnComplete": False, "segmentFrames": 1000}
-    video_info = {
-        "width": 1280,
-        "height": 720,
-        "source_fps": 30.0,
-        "source_frames": 60,
-    }
-
-    legacy_signature = build_signature(
-        input_path=str(input_path),
-        output_path=str(output_path),
-        decode_config=decode_config,
-        encode_config=encode_config,
-        workflow_config=workflow_config,
-        output_config=output_config,
-        processing_steps=legacy_steps,
-        video_info=video_info,
-    )
-    typed_signature = build_signature(
-        input_path=str(input_path),
-        output_path=str(output_path),
-        decode_config=decode_config,
-        encode_config=encode_config,
-        workflow_config=workflow_config,
-        output_config=output_config,
-        processing_steps=typed_steps,
-        video_info=video_info,
-    )
-
-    assert typed_signature == legacy_signature
+    payload["algorithm_kwargs"]["multi"] = 3
+    assert step.algorithm_kwargs["multi"] == 2
 
 
 def test_load_runtime_configs_returns_typed_models_and_wire_shape():

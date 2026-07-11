@@ -1,7 +1,7 @@
 //! Structured shell-side error type for Tauri commands.
 //!
 //! Replaces the legacy `Result<T, String>` convention with a typed enum that
-//! maps to `protocol::TaskErrorCode`. The custom `Serialize` impl emits
+//! maps to `models::TaskErrorCode`. The custom `Serialize` impl emits
 //! `{ code, message }` so the frontend can route on `code` rather than parse
 //! free-form strings.
 //!
@@ -15,8 +15,8 @@ use std::fmt;
 
 use serde::{Serialize, Serializer};
 
+use crate::models::TaskErrorCode;
 use crate::process_control::ProcessControlError;
-use crate::protocol::TaskErrorCode;
 
 #[derive(Debug)]
 pub enum ShellError {

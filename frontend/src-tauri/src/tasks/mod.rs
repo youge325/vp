@@ -46,6 +46,6 @@ pub struct TaskControlMessage {
     /// [`TaskErrorCode`]) honest.
     ///
     /// [`ShellError`]: crate::error::ShellError
-    /// [`TaskErrorCode`]: crate::protocol::TaskErrorCode
+    /// [`TaskErrorCode`]: crate::models::TaskErrorCode
     pub response: TokioOneshot::Sender<Result<(), ProcessControlError>>,
 }

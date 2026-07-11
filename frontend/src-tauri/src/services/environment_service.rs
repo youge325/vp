@@ -56,8 +56,7 @@ async fn check_environment_impl<R: Runtime>(
     // exhaustive match below replaces the previous ``?`` that silently
     // turned a backend error envelope into ``Ok(value)`` that then
     // failed downstream as a schema-mismatch.
-    let outcome =
-        tasks::run_single_cli_command(&app, &paths, &[String::from("check")], None).await?;
+    let outcome = tasks::run_single_cli_command(&paths, &[String::from("check")], None).await?;
     let raw = outcome.into_result()?;
     let result = serde_json::from_value::<EnvironmentCheckResult>(raw).map_err(|error| {
         ShellError::SchemaValidation(format!(
