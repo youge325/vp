@@ -1,8 +1,7 @@
-use serde_json::Value;
 use tauri::{AppHandle, Runtime, State};
 
 use crate::error::ShellError;
-use crate::models::{TaskRequest, VideoInfo};
+use crate::models::{ResumeInspectionResult, TaskRequest, VideoInfo};
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks::{
     build_inspect_output_args, cancel_running_task, run_single_cli_command, send_task_control,
@@ -40,10 +39,13 @@ pub async fn start_task<R: Runtime>(
 pub async fn check_resume_state(
     paths: State<'_, ResolvedRuntimePaths>,
     request: TaskRequest,
-) -> Result<Value, ShellError> {
+) -> Result<ResumeInspectionResult, ShellError> {
     let (args, stdin_payload) = build_inspect_output_args(&request)?;
     let outcome = run_single_cli_command(paths.inner(), &args, Some(&stdin_payload)).await?;
-    outcome.into_result()
+    let value = outcome.into_result()?;
+    serde_json::from_value::<ResumeInspectionResult>(value).map_err(|error| {
+        ShellError::SchemaValidation(format!("Unable to deserialize resume inspection: {error}"))
+    })
 }
 
 #[tauri::command]

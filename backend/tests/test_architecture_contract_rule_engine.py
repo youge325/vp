@@ -113,6 +113,16 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
         ("rust-public-internal-root-modules", "pub mod protocol;\n"),
         ("rust-public-environment-model-module", "pub mod env;\n"),
         ("rust-public-model-root-reexports", "pub use task::TaskRequest;\n"),
+        (
+            "frontend-resume-inspection-protocol-mirror",
+            "export interface ResumeInspectionResult {}\n",
+        ),
+        (
+            "rust-untyped-resume-inspection-command",
+            "async fn check_resume_state() -> Result<Value, ShellError> { todo!() }\n",
+        ),
+        ("generated-resume-inspection-contract", "export type ResumeInspectionResult = {}\n"),
+        ("resume-inspection-json-schema", "{}\n"),
         ("rust-runtime-output-dir-state", "pub output_dir: PathBuf,\n"),
         (
             "rust-environment-fingerprint-output-dir",
@@ -142,6 +152,8 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
         ("obsolete-frontend-video-info-fields", "const info = { type: 'info' }\n"),
         ("preset-sync-test-only-return", "return {\n    persistDraft,\n}\n"),
         ("enhance-onnx-alias-return", "return {\n    isOnnxBackend,\n}\n"),
+        ("positional-workbench-module-access", "const module = WORKBENCH_MODULES[0]\n"),
+        ("hardcoded-workbench-module-route", "const route = { path: '/home' }\n"),
         ("stage-file-chunk-encoding-leak", "frame = read_rgb_frame(stream)\n"),
         ("obsolete-decode-queue-symbols", "class DecodedFrame:\n    pass\n"),
         ("form-binding-param-export-0", "export type DecodeFormBindingParams = {}\n"),

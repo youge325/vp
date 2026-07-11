@@ -5,10 +5,13 @@
 // so command names, argument objects and return types are checked by vue-tsc.
 
 import { safeInvoke } from './client'
-import type { ResumeInspectionResult } from '@/types/domain/batch'
-import type { EnvironmentCheckPayload } from '@/types/protocol'
 import type { VideoInfoResult } from '@/types/domain/media'
-import type { TaskRequest, WorkbenchPreset } from '@/types/protocol'
+import type {
+  EnvironmentCheckPayload,
+  ResumeInspectionResult,
+  TaskRequest,
+  WorkbenchPreset,
+} from '@/types/protocol'
 
 async function checkTypedInvokeContract(
   request: TaskRequest,

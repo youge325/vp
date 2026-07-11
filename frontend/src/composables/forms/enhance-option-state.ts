@@ -1,6 +1,10 @@
-import { computed, toRef } from 'vue'
+import { computed } from 'vue'
 
-import { useGpuCapabilities } from '@/composables/selectors/useGpuCapabilities'
+import {
+  getAvailableEngines,
+  getVisibleBackends,
+  shouldShowEngineSelector,
+} from '@/services/env/gpu-capabilities'
 import {
   FPS_MODE_OPTIONS,
   MULTI_OPTIONS,
@@ -12,6 +16,7 @@ import {
   buildOnnxModelOptions,
 } from '@/services/preset/enhance-options'
 import type { useEnhanceForm } from '@/composables/forms/useEnhanceForm'
+import { useEnvStore } from '@/stores/env'
 
 type EnhanceOptionFormField =
   | 'interpolationBackend'
@@ -42,17 +47,23 @@ const INTERPOLATION_ONNX_EMPTY_HINT = '未找到 ONNX 模型，请将 .onnx 文�
 const SUPER_RESOLUTION_ONNX_EMPTY_HINT = '未找到 ONNX 模型，请将 .onnx 文件放入 models/super_resolution 目录'
 
 export function createEnhanceOptionState(form: EnhanceOptionForm) {
-  const interpolationCapabilities = useGpuCapabilities(toRef(form, 'interpolationBackend'))
-  const superResolutionCapabilities = useGpuCapabilities(toRef(form, 'superResolutionBackend'))
+  const envStore = useEnvStore()
+  const visibleBackends = computed(() => getVisibleBackends(envStore.env.checkResult))
+  const interpolationEngines = computed(() =>
+    getAvailableEngines(envStore.env.checkResult, form.interpolationBackend),
+  )
+  const superResolutionEngines = computed(() =>
+    getAvailableEngines(envStore.env.checkResult, form.superResolutionBackend),
+  )
 
   const backendOptions = computed(() =>
-    buildBackendOptions(interpolationCapabilities.visibleBackends.value),
+    buildBackendOptions(visibleBackends.value),
   )
   const interpolationEngineOptions = computed(() =>
-    buildEngineOptions(interpolationCapabilities.availableEngines.value),
+    buildEngineOptions(interpolationEngines.value),
   )
   const superResolutionEngineOptions = computed(() =>
-    buildEngineOptions(superResolutionCapabilities.availableEngines.value),
+    buildEngineOptions(superResolutionEngines.value),
   )
   const interpolationAlgorithmOptions = computed(() =>
     buildAlgorithmOptions(form.interpolationAlgorithms, 'name'),
@@ -91,8 +102,12 @@ export function createEnhanceOptionState(form: EnhanceOptionForm) {
     superResolutionOnnxOptions,
     superResolutionOnnxDisabled,
     superResolutionOnnxHint,
-    interpolationShowEngineSelector: interpolationCapabilities.showEngineSelector,
-    superResolutionShowEngineSelector: superResolutionCapabilities.showEngineSelector,
+    interpolationShowEngineSelector: computed(() =>
+      shouldShowEngineSelector(envStore.env.checkResult, form.interpolationBackend),
+    ),
+    superResolutionShowEngineSelector: computed(() =>
+      shouldShowEngineSelector(envStore.env.checkResult, form.superResolutionBackend),
+    ),
     fpsModeOptions: FPS_MODE_OPTIONS,
     multiOptions: MULTI_OPTIONS,
     processOrderOptions: PROCESS_ORDER_OPTIONS,

@@ -5,6 +5,7 @@ pub mod task;
 pub(crate) use config::WorkbenchPreset;
 pub(crate) use env::{EnvironmentCheckPayload, EnvironmentCheckResult, EnvironmentCheckSource};
 pub(crate) use task::{
-    ResumeStatusPayload, TaskCancelledPayload, TaskCancelledReason, TaskCompletedPayload,
-    TaskErrorCode, TaskErrorPayload, TaskLogPayload, TaskProgressPayload, TaskRequest, VideoInfo,
+    ResumeInspectionResult, ResumeStatusPayload, TaskCancelledPayload, TaskCancelledReason,
+    TaskCompletedPayload, TaskErrorCode, TaskErrorPayload, TaskLogPayload, TaskProgressPayload,
+    TaskRequest, VideoInfo,
 };

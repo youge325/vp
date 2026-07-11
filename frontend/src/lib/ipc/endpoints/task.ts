@@ -1,7 +1,6 @@
 // IPC endpoints — 任务启动、控制与续跑探测。
 
-import type { TaskRequest } from '@/types/protocol'
-import type { ResumeInspectionResult } from '@/types/domain/batch'
+import type { ResumeInspectionResult, TaskRequest } from '@/types/protocol'
 import { safeInvoke } from '../client'
 
 export const taskIpc = {

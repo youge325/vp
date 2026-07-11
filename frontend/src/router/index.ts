@@ -1,5 +1,6 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
-import { WORKBENCH_MODULES } from '@/views/registry'
+import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
+import type { ModuleKey } from '@/config/workbench-modules'
+import { WORKBENCH_MODULE_BY_KEY, WORKBENCH_MODULES } from '@/views/registry'
 
 // 模块视图全部走懒加载，预处理/后处理共享同一个 stage 视图分块。
 const HomeModuleView = () => import('@/views/HomeModuleView.vue')
@@ -10,59 +11,32 @@ const EnhanceModuleView = () => import('@/views/EnhanceModuleView.vue')
 const EncodeModuleView = () => import('@/views/EncodeModuleView.vue')
 const RenderModuleView = () => import('@/views/RenderModuleView.vue')
 
+const MODULE_VIEW_CONFIG = {
+  home: { component: HomeModuleView },
+  input: { component: InputModuleView },
+  decode: { component: DecodeModuleView },
+  preprocess: { component: StageModuleView, props: { stage: 'preprocess' } },
+  enhance: { component: EnhanceModuleView },
+  postprocess: { component: StageModuleView, props: { stage: 'postprocess' } },
+  encode: { component: EncodeModuleView },
+  render: { component: RenderModuleView },
+} as const satisfies Record<ModuleKey, { component: () => Promise<unknown>; props?: Record<string, string> }>
+
+const moduleRoutes: RouteRecordRaw[] = WORKBENCH_MODULES.map((module) => {
+  const view = MODULE_VIEW_CONFIG[module.key]
+  return {
+    path: module.path,
+    name: module.key,
+    component: view.component,
+    ...('props' in view ? { props: view.props } : {}),
+    meta: { module },
+  }
+})
+
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    { path: '/', redirect: '/home' },
-    {
-      path: '/home',
-      name: 'home',
-      component: HomeModuleView,
-      meta: { module: WORKBENCH_MODULES[0] },
-    },
-    {
-      path: '/input',
-      name: 'input',
-      component: InputModuleView,
-      meta: { module: WORKBENCH_MODULES[1] },
-    },
-    {
-      path: '/decode',
-      name: 'decode',
-      component: DecodeModuleView,
-      meta: { module: WORKBENCH_MODULES[2] },
-    },
-    {
-      path: '/preprocess',
-      name: 'preprocess',
-      component: StageModuleView,
-      props: { stage: 'preprocess' },
-      meta: { module: WORKBENCH_MODULES[3] },
-    },
-    {
-      path: '/enhance',
-      name: 'enhance',
-      component: EnhanceModuleView,
-      meta: { module: WORKBENCH_MODULES[4] },
-    },
-    {
-      path: '/postprocess',
-      name: 'postprocess',
-      component: StageModuleView,
-      props: { stage: 'postprocess' },
-      meta: { module: WORKBENCH_MODULES[5] },
-    },
-    {
-      path: '/encode',
-      name: 'encode',
-      component: EncodeModuleView,
-      meta: { module: WORKBENCH_MODULES[6] },
-    },
-    {
-      path: '/render',
-      name: 'render',
-      component: RenderModuleView,
-      meta: { module: WORKBENCH_MODULES[7] },
-    },
+    { path: '/', redirect: WORKBENCH_MODULE_BY_KEY.home.path },
+    ...moduleRoutes,
   ],
 })

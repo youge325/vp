@@ -78,6 +78,10 @@ ABSENT_PATH_RULES = (
     _absent("frontend-postprocess-view-forwarder", "frontend/src/views/PostprocessModuleView.vue"),
     _absent("frontend-container-constants", "frontend/src/config/constants.ts"),
     _absent("frontend-gpu-label-constants", "frontend/src/config/gpu-labels.ts"),
+    _absent(
+        "frontend-gpu-capability-selector-forwarder",
+        "frontend/src/composables/selectors/useGpuCapabilities.ts",
+    ),
     _absent("frontend-encode-output-state", "frontend/src/composables/forms/encode-output-state.ts"),
     _absent(
         "frontend-encode-output-state-test",
@@ -167,6 +171,36 @@ FORBIDDEN_PATTERN_RULES = (
         "frontend/src-tauri/src/models/mod.rs",
         r"^pub\s+use\b",
         "crate-internal Rust model re-export is public",
+    ),
+    _forbid(
+        "frontend-resume-inspection-protocol-mirror",
+        "frontend/src/types/domain/batch.ts",
+        r"^export\s+interface\s+ResumeInspectionResult\b",
+        "manual frontend resume inspection protocol mirror",
+    ),
+    _forbid(
+        "rust-untyped-resume-inspection-command",
+        "frontend/src-tauri/src/tasks/commands.rs",
+        r"check_resume_state[\s\S]{0,300}->\s*Result<\s*Value\b",
+        "resume inspection command returns untyped JSON",
+    ),
+    RequiredPatternRule(
+        "rust-typed-resume-inspection-command",
+        "frontend/src-tauri/src/tasks/commands.rs",
+        r"check_resume_state[\s\S]{0,500}serde_json::from_value::<ResumeInspectionResult>",
+        "resume inspection command must validate the backend payload",
+    ),
+    RequiredPatternRule(
+        "generated-resume-inspection-contract",
+        "frontend/src/types/generated/ResumeInspectionResult.ts",
+        r"type:\s*ResumeInspectionEventType[\s\S]*pipeline_kind:\s*ResumePipelineKind[\s\S]*input_path:\s*string",
+        "generated resume inspection TypeScript contract is missing",
+    ),
+    RequiredPatternRule(
+        "resume-inspection-json-schema",
+        "frontend/src-tauri/schemas/resume_inspection_result.schema.json",
+        r"[\"']pipeline_kind[\"'][\s\S]*[\"']input_path[\"']",
+        "resume inspection JSON Schema is missing",
     ),
     _forbid(
         "rust-runtime-output-dir-state",
@@ -1005,7 +1039,7 @@ REQUIRED_PATTERN_RULES = (
     RequiredPatternRule(
         "shared-stage-route-component",
         "frontend/src/router/index.ts",
-        r"const\s+StageModuleView\s*=.*StageModuleView\.vue[\s\S]*path:\s*['\"]/preprocess['\"][\s\S]*component:\s*StageModuleView[\s\S]*props:\s*\{\s*stage:\s*['\"]preprocess['\"]\s*\}[\s\S]*path:\s*['\"]/postprocess['\"][\s\S]*component:\s*StageModuleView[\s\S]*props:\s*\{\s*stage:\s*['\"]postprocess['\"]\s*\}",
+        r"const\s+StageModuleView\s*=.*StageModuleView\.vue[\s\S]*preprocess:\s*\{\s*component:\s*StageModuleView,\s*props:\s*\{\s*stage:\s*['\"]preprocess['\"]\s*\}\s*\}[\s\S]*postprocess:\s*\{\s*component:\s*StageModuleView,\s*props:\s*\{\s*stage:\s*['\"]postprocess['\"]\s*\}\s*\}",
         "preprocess and postprocess routes must share StageModuleView",
     ),
     RequiredPatternRule(
@@ -1083,6 +1117,19 @@ REFERENCE_RULES = (
         ),
         message="obsolete frontend facade reference",
         suffixes=(".ts", ".tsx", ".vue"),
+    ),
+    ForbiddenReferenceRule(
+        "positional-workbench-module-access",
+        roots=("frontend/src",),
+        patterns=(r"\bWORKBENCH_MODULES\s*\[\s*\d+\s*\]", r"\bWORKBENCH_MODULE_KEYS\b"),
+        message="positional or duplicate workbench module registry",
+        suffixes=(".ts", ".tsx", ".vue"),
+    ),
+    _forbid(
+        "hardcoded-workbench-module-route",
+        "frontend/src/router/index.ts",
+        r"\b(?:path|redirect)\s*:\s*[\"']/(?:home|input|decode|preprocess|enhance|postprocess|encode|render)[\"']",
+        "workbench module path duplicated in router",
     ),
     ForbiddenReferenceRule(
         "obsolete-ffmpeg-probe-imports",

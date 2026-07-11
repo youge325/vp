@@ -12,12 +12,12 @@ import {
   SendOutline,
 } from '@vicons/ionicons5'
 import {
-  WORKBENCH_MODULE_KEYS,
   WORKBENCH_MODULE_META,
+  type ModuleKey,
 } from '@/config/workbench-modules'
 import type { WorkbenchModuleDefinition } from '@/types/view/modules'
 
-const ICON_MAP: Record<string, typeof BookOutline> = {
+const ICON_MAP: Record<ModuleKey, typeof BookOutline> = {
   home:        BookOutline,
   input:       AddCircleOutline,
   decode:      HardwareChipOutline,
@@ -28,12 +28,11 @@ const ICON_MAP: Record<string, typeof BookOutline> = {
   render:      SendOutline,
 }
 
-export const WORKBENCH_MODULES: WorkbenchModuleDefinition[] = WORKBENCH_MODULE_KEYS.map((key) => {
-  const meta = WORKBENCH_MODULE_META[key]
-  return {
-    key,
-    title: meta.title,
-    path: meta.path,
-    icon: ICON_MAP[key],
-  }
-})
+export const WORKBENCH_MODULES: WorkbenchModuleDefinition[] = WORKBENCH_MODULE_META.map((meta) => ({
+  ...meta,
+  icon: ICON_MAP[meta.key],
+}))
+
+export const WORKBENCH_MODULE_BY_KEY = Object.fromEntries(
+  WORKBENCH_MODULES.map((module) => [module.key, module]),
+) as Record<ModuleKey, WorkbenchModuleDefinition>

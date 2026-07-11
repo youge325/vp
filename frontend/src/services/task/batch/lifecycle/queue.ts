@@ -10,9 +10,9 @@
 // finalize 层处理。
 
 import type { MediaItem } from '@/types/domain/media'
-import type { ResumeInspectionResult, ResumeMode } from '@/types/domain/batch'
+import type { ResumeMode } from '@/types/domain/batch'
 import { normalizeError } from '@/services/error/normalize'
-import { TASK_ERROR_CODES } from '@/types/protocol'
+import { TASK_ERROR_CODES, type ResumeInspectionResult } from '@/types/protocol'
 
 import { createIdleTaskState } from '../../events'
 import { classifyResumeConflict } from '../../resume-classifier'
