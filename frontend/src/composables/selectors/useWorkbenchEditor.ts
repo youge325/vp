@@ -23,10 +23,6 @@
 // 少数明确需要作为全局偏好保存的 workflow 字段,使用
 // ``patchWorkflowAndPreset`` 显式双写当前可编辑素材和预设草稿。
 //
-// 如果用户希望把预设草稿手动套用到当前选中的所有素材,使用
-// ``useMediaImport.applyDraftToSelectedItems()``。Phase D 暂未在 UI 上
-// 暴露按钮,作为后续 D.4.6 第二步(显式"应用到选中")的钩子保留。
-
 import { computed } from 'vue'
 import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'

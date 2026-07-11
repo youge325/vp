@@ -105,18 +105,14 @@ def raise_error(
     message: str,
     *,
     details: dict[str, Any] | None = None,
-    exit_code: int | None = None,
 ) -> None:
-    """Raise a ``ProcessError`` with the given code, optionally setting ``exit_code``.
+    """Raise a ``ProcessError`` with the given code and optional details.
 
     Convenience wrapper used by CLI command handlers to fail-fast. The
     function never returns; the ``None`` return type is for type-checker
     flow analysis at the call site.
     """
-    exc = ProcessError(code, message, details=details or {})
-    if exit_code is not None:
-        exc.exit_code = exit_code  # type: ignore[attr-defined]
-    raise exc
+    raise ProcessError(code, message, details=details or {})
 
 
 __all__ = [

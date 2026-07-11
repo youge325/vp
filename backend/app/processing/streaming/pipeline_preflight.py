@@ -6,11 +6,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.planning import (
-    ProcessingStepInput,
+    ProcessingStep,
     StagePlan,
     build_signature,
     build_stage_plan,
-    normalize_processing_steps,
     resolve_video_info,
 )
 from app.processing.streaming.pipeline_rules import (
@@ -44,13 +43,12 @@ def build_streaming_pipeline_preflight(
     encode_config: dict[str, Any],
     workflow_config: dict[str, Any],
     output_config: dict[str, Any],
-    processing_steps: list[ProcessingStepInput],
+    processing_steps: list[ProcessingStep],
     output_fps: float | None,
 ) -> _StreamingPipelinePreflight:
-    resolved_steps = normalize_processing_steps(processing_steps)
     video_info = resolve_video_info(ffmpeg, input_path)
     stage_plan = build_stage_plan(
-        resolved_steps,
+        processing_steps,
         video_info["source_frames"],
         source_duration=video_info["duration"],
         output_fps=output_fps,
@@ -62,7 +60,7 @@ def build_streaming_pipeline_preflight(
         encode_config=encode_config,
         workflow_config=workflow_config,
         output_config=output_config,
-        processing_steps=resolved_steps,
+        processing_steps=processing_steps,
         video_info=video_info,
     )
     config_snapshot = build_config_snapshot(
@@ -72,7 +70,7 @@ def build_streaming_pipeline_preflight(
         encode_config=encode_config,
         workflow_config=workflow_config,
         output_config=output_config,
-        processing_steps=resolved_steps,
+        processing_steps=processing_steps,
         video_info=video_info,
     )
     use_stage_file_pipeline = should_use_stage_file_pipeline(stage_plan)

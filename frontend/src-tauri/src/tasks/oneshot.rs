@@ -16,12 +16,10 @@ use std::process::Stdio;
 
 use serde::Deserialize;
 use serde_json::Value;
-use tauri::{AppHandle, Runtime};
 use tokio::io::AsyncWriteExt;
 
 use crate::error::ShellError;
-use crate::models::TaskErrorPayload;
-use crate::protocol::TaskErrorCode;
+use crate::models::{TaskErrorCode, TaskErrorPayload};
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks::builder::{apply_no_window, backend_command};
 use crate::tasks::envelope::parse_last_json_line;
@@ -96,14 +94,11 @@ fn try_parse_error_envelope(value: &Value) -> Option<TaskErrorPayload> {
 /// command is spawned manually (instead of ``Command::output``), the
 /// payload is written to stdin, the handle is dropped to signal EOF,
 /// and stdout/stderr are then drained synchronously.
-pub async fn run_single_cli_command<R: Runtime>(
-    app: &AppHandle<R>,
+pub async fn run_single_cli_command(
     paths: &ResolvedRuntimePaths,
     args: &[String],
     stdin_payload: Option<&str>,
 ) -> Result<CliOutcome, ShellError> {
-    let _ = app; // Reserved for future per-app log routing.
-
     let (subcommand, extra_args) = args.split_first().ok_or_else(|| {
         ShellError::InvalidInput("run_single_cli_command requires a subcommand".to_string())
     })?;

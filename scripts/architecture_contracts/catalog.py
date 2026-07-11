@@ -364,8 +364,8 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "legacy-preflight-resolved-steps-field",
         "backend/app/processing/streaming/pipeline_preflight.py",
-        r"^\s+resolved_steps\s*:",
-        "dead preflight resolved-steps field",
+        r"\bresolved_steps\b",
+        "redundant preflight resolved-steps alias",
     ),
     _forbid(
         "metrics-dead-timing-api",
@@ -495,6 +495,54 @@ FORBIDDEN_PATTERN_RULES = (
         "frontend/src/services/task/batch/lifecycle/queue.ts",
         r"\b_helpers\s*:\s*CommonHelpers\b",
         "unused batch queue helpers dependency",
+    ),
+    _forbid(
+        "media-import-dead-draft-apply",
+        "frontend/src/composables/app/useMediaImport.ts",
+        r"\bapplyDraftToSelectedItems\b",
+        "unwired draft-to-selection media import hook",
+    ),
+    _forbid(
+        "oneshot-unused-app-context",
+        "frontend/src-tauri/src/tasks/oneshot.rs",
+        r"\b(?:AppHandle|Runtime)\b|\blet\s+_\s*=\s*app\b",
+        "unused one-shot app context",
+    ),
+    _forbid(
+        "protocol-error-code-reexport",
+        "frontend/src-tauri/src/protocol.rs",
+        r"\bTaskErrorCode\b",
+        "TaskErrorCode compatibility re-export",
+    ),
+    ForbiddenReferenceRule(
+        "typed-processing-step-contract",
+        roots=("backend/app",),
+        patterns=(
+            r"\bProcessingStepInput\b",
+            r"\bnormalize_processing_step(?:s)?\b",
+            r"\bprocessing_steps_to_jsonable\b",
+        ),
+        message="legacy processing-step mapping interface",
+        suffixes=(".py",),
+    ),
+    _forbid(
+        "processing-step-required-fields",
+        "backend/app/planning/processing_steps.py",
+        r"algorithm_kwargs\s*:[^\n=]+\s*=|stage_name\s*:[^\n=]+\s*=",
+        "optional processing-step field",
+    ),
+    _forbid(
+        "process-error-dead-exit-code",
+        "backend/app/errors/__init__.py",
+        r"\bexit_code\b",
+        "write-only process error exit code",
+    ),
+    ForbiddenReferenceRule(
+        "process-error-dead-exit-code-call",
+        roots=("backend/app",),
+        patterns=(r"\braise_error\s*\([\s\S]{0,500}?\bexit_code\s*=",),
+        message="write-only process error exit code argument",
+        suffixes=(".py",),
     ),
     _forbid(
         "stage-worker-config-implementation",

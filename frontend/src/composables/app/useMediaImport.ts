@@ -7,10 +7,6 @@ import { usePresetStore } from '@/stores/preset'
 import { mediaIpc } from '@/lib/ipc/endpoints/media'
 import { createMediaItem } from '@/services/media/factory'
 import {
-  cloneOutputConfig,
-  cloneWorkflowConfig,
-} from '@/services/preset/clone'
-import {
   normalizeDecodeConfig,
   normalizeEncodeConfig,
 } from '@/services/preset/normalize'
@@ -86,27 +82,9 @@ export function useMediaImport() {
     return inspectItems(ids)
   }
 
-  function applyDraftToSelectedItems(): void {
-    const targetIds = mediaStore.getEditableTargetIds()
-    for (const item of mediaStore.mediaItems) {
-      if (!targetIds.has(item.id)) {
-        continue
-      }
-      const decodeConfig = normalizeDecodeConfig(presetStore.draftPreset.decodeConfig, envStore.env.checkResult, item.info?.videoCodec ?? '', true)
-      const encodeConfig = normalizeEncodeConfig(presetStore.draftPreset.encodeConfig, envStore.env.checkResult, true)
-      mediaStore.replaceItemConfig(item.id, {
-        decodeConfig,
-        encodeConfig,
-        workflowConfig: cloneWorkflowConfig(presetStore.draftPreset.workflowConfig),
-        outputConfig: cloneOutputConfig(presetStore.draftPreset.outputConfig),
-      })
-    }
-  }
-
   return {
     importPaths,
     pickAndImport,
     reinspectIds,
-    applyDraftToSelectedItems,
   }
 }

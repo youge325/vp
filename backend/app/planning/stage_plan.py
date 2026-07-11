@@ -15,9 +15,6 @@ from typing import Any
 
 from app.planning.processing_steps import (
     ProcessingStep,
-    ProcessingStepInput,
-    normalize_processing_steps,
-    processing_steps_to_jsonable,
 )
 from app.utils.ffmpeg import FFmpegWrapper
 
@@ -76,14 +73,14 @@ def _estimate_encoded_output_frames(
 
 
 def build_stage_plan(
-    processing_steps: list[ProcessingStepInput],
+    processing_steps: list[ProcessingStep],
     source_frames: int,
     *,
     source_duration: float,
     output_fps: float | None,
 ) -> StagePlan:
     """Derive a ``StagePlan`` from the requested pipeline steps and source metadata."""
-    steps = normalize_processing_steps(processing_steps)
+    steps = list(processing_steps)
     interpolation_index = None
     for index, step in enumerate(steps):
         if step.algorithm_type == "frame_interpolation":
@@ -131,7 +128,7 @@ def build_signature(
     encode_config: dict[str, Any],
     workflow_config: dict[str, Any],
     output_config: dict[str, Any],
-    processing_steps: list[ProcessingStepInput],
+    processing_steps: list[ProcessingStep],
     video_info: dict[str, Any],
 ) -> str:
     """Return a deterministic SHA-256 signature for the processing configuration."""
@@ -147,7 +144,7 @@ def build_signature(
         "output_config": {
             "segmentFrames": max(1, int(output_config.get("segmentFrames") or 1000)),
         },
-        "processing_steps": processing_steps_to_jsonable(processing_steps),
+        "processing_steps": [step.to_jsonable() for step in processing_steps],
         "video_info": {
             "width": video_info["width"],
             "height": video_info["height"],

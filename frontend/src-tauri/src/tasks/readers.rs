@@ -14,8 +14,8 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter, Runtime};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use crate::models::{TaskErrorPayload, TaskLogPayload};
-use crate::protocol::{TaskErrorCode, TaskEventName};
+use crate::models::{TaskErrorCode, TaskErrorPayload, TaskLogPayload};
+use crate::protocol::TaskEventName;
 use crate::tasks::envelope::NdjsonEnvelope;
 use crate::tasks::stderr::StderrCapture;
 

@@ -12,7 +12,7 @@ import math
 from typing import Any
 
 from app.config import settings
-from app.planning.processing_steps import AlgorithmType, ProcessingStep, ProcessingStepInput, normalize_processing_steps
+from app.planning.processing_steps import AlgorithmType, ProcessingStep
 from app.utils.ffmpeg import FFmpegWrapper
 
 PROCESS_ORDER_MAP: dict[str, list[AlgorithmType]] = {
@@ -27,8 +27,8 @@ PROCESS_ORDER_MAP: dict[str, list[AlgorithmType]] = {
 }
 
 
-def processing_needs_interpolation(processing_steps: list[ProcessingStepInput]) -> bool:
-    return any(step.algorithm_type == "frame_interpolation" for step in normalize_processing_steps(processing_steps))
+def processing_needs_interpolation(processing_steps: list[ProcessingStep]) -> bool:
+    return any(step.algorithm_type == "frame_interpolation" for step in processing_steps)
 
 
 def resolve_primary_algorithm(workflow_config: dict[str, Any]) -> AlgorithmType:
@@ -166,7 +166,7 @@ def resolve_expected_output_frames(
     ffmpeg: FFmpegWrapper,
     input_path: str,
     workflow_config: dict[str, Any],
-    processing_steps: list[ProcessingStepInput],
+    processing_steps: list[ProcessingStep],
     final_output_fps: float | None,
 ) -> int:
     source_frames = ffmpeg.get_frame_count(input_path)

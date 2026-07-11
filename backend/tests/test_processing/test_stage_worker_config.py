@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from app.planning import ProcessingStep
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 
@@ -94,3 +96,31 @@ def test_stage_worker_config_serializes_existing_processing_step_shape() -> None
         "tensorBackendName": "pytorch",
         "outputFrameCount": None,
     }
+
+
+def test_stage_worker_config_rejects_removed_algorithm_type(tmp_path: Path) -> None:
+    config_path = tmp_path / "stage-worker.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "stage": {
+                    "algorithm_type": "anime_optimization",
+                    "algorithm_kwargs": {},
+                    "stage_name": "01_anime_optimization",
+                },
+                "stageIndex": 1,
+                "stageTotal": 1,
+                "stageName": "01_anime_optimization",
+                "inputWidth": 320,
+                "inputHeight": 180,
+                "outputWidth": 320,
+                "outputHeight": 180,
+                "inputFrameCount": 12,
+                "tensorBackendName": "pytorch",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Unknown processing step algorithm_type"):
+        StageWorkerConfig.from_json_file(config_path)
