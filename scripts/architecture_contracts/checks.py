@@ -265,7 +265,18 @@ def _check_paddlegan_metadata(root: Path) -> list[str]:
 
 
 def _is_frontend_test(path: Path) -> bool:
-    return path.name.endswith(".spec.ts") or "__tests__" in path.parts or "e2e" in path.parts
+    return path.name.endswith(".spec.ts") or "__tests__" in path.parts or "tests" in path.parts
+
+
+def _check_frontend_test_layout(root: Path) -> list[str]:
+    frontend_src = root / "frontend/src"
+    issues: list[str] = []
+    for path in sorted(frontend_src.rglob("*")):
+        if path.is_file() and path.name.endswith(".spec.ts"):
+            issues.append(f"frontend unit test outside tests/unit: {relative_path(path, root)}")
+        elif path.is_dir() and path.name == "__tests__":
+            issues.append(f"frontend __tests__ directory outside tests/unit: {relative_path(path, root)}")
+    return issues
 
 
 def _check_frontend_dependency_boundaries(root: Path) -> list[str]:
@@ -336,6 +347,7 @@ def collect_architecture_issues(root: Path) -> list[str]:
     issues = run_rules(root, RULES)
     issues.extend(_check_command_surface(root))
     issues.extend(_check_paddlegan_metadata(root))
+    issues.extend(_check_frontend_test_layout(root))
     issues.extend(_check_frontend_dependency_boundaries(root))
     issues.extend(_check_typed_ndjson_error_emission(root))
     issues.extend(_check_stage_sequence_metrics(root))

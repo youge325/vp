@@ -20,9 +20,9 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.spec.ts'],
+    include: ['tests/unit/**/*.spec.ts'],
     globals: true,
-    setupFiles: ['./vitest.setup.ts'],
+    setupFiles: ['./tests/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
@@ -32,11 +32,7 @@ export default defineConfig({
         'src/stores/**/*.ts',
         'src/lib/**/*.ts',
       ],
-      exclude: [
-        'src/**/*.spec.ts',
-        'src/**/__tests__/**',
-        'src/types/generated/**',
-      ],
+      exclude: ['tests/**', 'src/types/generated/**'],
     },
   },
 })

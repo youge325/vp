@@ -13,6 +13,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from architecture_contracts.checks import (  # noqa: E402
+    _check_frontend_test_layout,
     collect_architecture_issues,
     diff_command_surface,
     diff_paddlegan_vsr_contract,
@@ -30,6 +31,18 @@ def _load_checker_module():
 
 def test_current_repository_satisfies_architecture_contracts() -> None:
     assert collect_architecture_issues(REPO_ROOT) == []
+
+
+def test_frontend_test_layout_rejects_specs_and_test_directories_in_source(tmp_path: Path) -> None:
+    frontend_src = tmp_path / "frontend/src"
+    (frontend_src / "components").mkdir(parents=True)
+    (frontend_src / "services/__tests__").mkdir(parents=True)
+    (frontend_src / "components/Example.spec.ts").write_text("", encoding="utf-8")
+
+    issues = _check_frontend_test_layout(tmp_path)
+
+    assert "frontend unit test outside tests/unit: frontend/src/components/Example.spec.ts" in issues
+    assert "frontend __tests__ directory outside tests/unit: frontend/src/services/__tests__" in issues
 
 
 def test_command_surface_diff_reports_membership_and_argument_drift() -> None:
