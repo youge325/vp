@@ -135,7 +135,7 @@ class RawVideoWriter(_FFmpegPipeBase):
         return int(self._latest_progress.get("frame") or 0)
 
 
-def build_rawvideo_decode_command(
+def _build_rawvideo_decode_command(
     ffmpeg_path: str,
     input_path: str,
     *,
@@ -159,7 +159,7 @@ def build_rawvideo_decode_command(
     return cmd
 
 
-def build_rawvideo_encode_command(
+def _build_rawvideo_encode_command(
     ffmpeg_path: str,
     output_path: str,
     *,
@@ -206,7 +206,7 @@ def open_rawvideo_decoder(
     frame_count: int | None = None,
 ) -> RawVideoReader:
     """Open a rawvideo decoder pipe."""
-    cmd = build_rawvideo_decode_command(
+    cmd = _build_rawvideo_decode_command(
         ffmpeg_path,
         input_path,
         width=width,
@@ -237,7 +237,7 @@ def open_rawvideo_encoder(
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> RawVideoWriter:
     """Open a rawvideo encoder pipe."""
-    cmd = build_rawvideo_encode_command(
+    cmd = _build_rawvideo_encode_command(
         ffmpeg_path,
         output_path,
         width=width,

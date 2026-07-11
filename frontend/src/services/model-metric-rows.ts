@@ -1,4 +1,4 @@
-import type { ModelVariantInfo } from '@/types/domain/env'
+import type { ModelVariantInfo } from '@/types/protocol'
 import type { MetricRow, RuntimeMetricEstimate } from '@/types/view/model-metrics'
 import { formatBytes, formatGflops, formatParameterCount } from './model-metric-format'
 

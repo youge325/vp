@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import { resolveDecoderHwaccel } from '@/services/preset/decode-hardware'
 import { normalizeDecodeConfig } from '@/services/preset/normalize'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { DecodeConfig } from '@/types/protocol'
-import type { HardwareDeviceOptionSpec } from '@/types/domain/capability'
+import type { HardwareDeviceOptionSpec } from '@/types/protocol'
+import { createEnvironmentResult } from '../../fixtures/environment'
 
 const decoderProfile = (
   name: string,
@@ -34,19 +35,13 @@ const decoderProfile = (
   ],
 })
 
-const makeEnv = (decoderProfiles: EnvironmentCheckResult['ffmpeg']['decoderProfiles']): EnvironmentCheckResult => ({
+const makeEnv = (decoderProfiles: EnvironmentCheckResult['ffmpeg']['decoderProfiles']): EnvironmentCheckResult => createEnvironmentResult({
   ffmpeg: {
     available: true,
     hwaccels: ['cuda', 'qsv', 'd3d11va'],
     encoderProfiles: [],
     decoderProfiles,
   },
-  gpu: { adapters: [] },
-  tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
-  interpolationAlgorithms: [],
-  superResolutionAlgorithms: [],
-  runtimeMode: 'external',
 })
 
 const baseDecodeConfig = (overrides: Partial<DecodeConfig> = {}): DecodeConfig => ({

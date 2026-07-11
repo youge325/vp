@@ -4,7 +4,7 @@ import { createEnhanceEffectBindings } from '@/composables/forms/enhance-effect-
 import { createEnhanceScalarFieldBindings } from '@/composables/forms/enhance-scalar-field-bindings'
 import { createEnhanceViewBindings } from '@/composables/forms/enhance-view-bindings'
 import type { VideoDimensions } from '@/types/view/model-metrics'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 
 interface EnhanceFormBindingParams {

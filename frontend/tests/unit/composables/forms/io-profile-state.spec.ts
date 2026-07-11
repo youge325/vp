@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { describe, expect, it } from 'vitest'
 
 import { createIoProfileState } from '@/composables/forms/io-profile-state'
-import type { CodecProfileSpec } from '@/types/domain/capability'
+import type { CodecProfileSpec } from '@/types/protocol'
 
 function profile(name: string, label: string, optionName: string): CodecProfileSpec {
   return {

@@ -44,9 +44,34 @@ export type { VideoInfo } from '@/types/generated/VideoInfo'
 
 // --- Environment check payloads ---
 export type { AlgorithmInfo } from '@/types/generated/AlgorithmInfo'
-export type { BackendDeviceSupport } from '@/types/generated/BackendDeviceSupport'
+export type { AlgorithmFamily } from '@/types/generated/AlgorithmFamily'
+export type { CapabilityChoice } from '@/types/generated/CapabilityChoice'
+export type { CapabilityOptionKind } from '@/types/generated/CapabilityOptionKind'
+export type { CapabilityOptionSpec } from '@/types/generated/CapabilityOptionSpec'
+export type { CodecProfileFamily } from '@/types/generated/CodecProfileFamily'
+export type { CodecProfileSpec } from '@/types/generated/CodecProfileSpec'
 export type { EnvironmentCheckPayload } from '@/types/generated/EnvironmentCheckPayload'
 export type { EnvironmentCheckResult } from '@/types/generated/EnvironmentCheckResult'
+export type { EnvironmentCheckSource } from '@/types/generated/EnvironmentCheckSource'
 export type { FfmpegInfo } from '@/types/generated/FfmpegInfo'
+export type { GpuAdapter } from '@/types/generated/GpuAdapter'
 export type { GpuInfo } from '@/types/generated/GpuInfo'
+export type { GpuVendor } from '@/types/generated/GpuVendor'
+export type { HardwareDeviceOptionSpec } from '@/types/generated/HardwareDeviceOptionSpec'
+export type { InferenceEngine } from '@/types/generated/InferenceEngine'
+export type { InputFrameMode } from '@/types/generated/InputFrameMode'
+export type { ModelEngineMetricInfo } from '@/types/generated/ModelEngineMetricInfo'
+export type { ModelMetricInfo } from '@/types/generated/ModelMetricInfo'
+export type { ModelVariantInfo } from '@/types/generated/ModelVariantInfo'
+export type { RateControlModeSpec } from '@/types/generated/RateControlModeSpec'
+export type { RuntimeMode } from '@/types/generated/RuntimeMode'
 export type { TensorEngines } from '@/types/generated/TensorEngines'
+
+import type { CapabilityChoice } from '@/types/generated/CapabilityChoice'
+import type { CodecProfileFamily } from '@/types/generated/CodecProfileFamily'
+import type { CodecProfileSpec } from '@/types/generated/CodecProfileSpec'
+
+export type CapabilityValue = CapabilityChoice['value']
+export type CodecFamily = CodecProfileFamily
+export type DecoderProfileSpec = CodecProfileSpec
+export type EncoderProfileSpec = CodecProfileSpec

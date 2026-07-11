@@ -80,7 +80,7 @@ def test_compare_reports_passes_when_current_is_within_threshold() -> None:
 
 
 def test_parse_process_stdout_uses_last_progress_metrics_and_completed_payload() -> None:
-    from app.benchmark.runner import parse_process_stdout
+    from app.benchmark.runner import _parse_process_stdout
 
     stdout = "\n".join(
         [
@@ -106,7 +106,7 @@ def test_parse_process_stdout_uses_last_progress_metrics_and_completed_payload()
         ]
     )
 
-    result = parse_process_stdout(stdout)
+    result = _parse_process_stdout(stdout)
 
     assert result["processedFrames"] == 191
     assert result["completedTimeSeconds"] == 15.25
@@ -115,10 +115,10 @@ def test_parse_process_stdout_uses_last_progress_metrics_and_completed_payload()
 
 
 def test_build_report_keeps_warmups_out_of_median_summary() -> None:
-    from app.benchmark.runner import BenchmarkRun, Workload, build_report
+    from app.benchmark.runner import Workload, _BenchmarkRun, _build_report
 
     workload = Workload()
-    warmup = BenchmarkRun(
+    warmup = _BenchmarkRun(
         name="warmup-1",
         warmup=True,
         wall_time_seconds=100.0,
@@ -127,7 +127,7 @@ def test_build_report_keeps_warmups_out_of_median_summary() -> None:
         metrics={"transferCounts": {"h2d": 96, "d2h": 95}, "transferDurationsSeconds": {"h2d": 10.0, "d2h": 10.0}},
     )
     measured = [
-        BenchmarkRun(
+        _BenchmarkRun(
             name=f"run-{index}",
             warmup=False,
             wall_time_seconds=float(value),
@@ -142,7 +142,7 @@ def test_build_report_keeps_warmups_out_of_median_summary() -> None:
         for index, value in enumerate([12, 10, 11], start=1)
     ]
 
-    report = build_report(workload=workload, runs=[warmup, *measured])
+    report = _build_report(workload=workload, runs=[warmup, *measured])
 
     assert len(report["warmupRuns"]) == 1
     assert len(report["runs"]) == 3
@@ -163,9 +163,15 @@ def test_benchmark_parser_defaults_to_interpolation_cpu_transfer_scenario() -> N
     assert args.runs == 3
 
 
-def test_cmd_benchmark_writes_reports_and_fails_on_missing_baseline(tmp_path: Path) -> None:
-    from app.cli.commands.benchmark import cmd_benchmark
+def test_cmd_benchmark_writes_reports_and_fails_on_missing_baseline(tmp_path: Path, monkeypatch) -> None:
+    from app.cli.commands import benchmark as benchmark_command
     from app.errors import ProcessError, TaskErrorCode
+
+    monkeypatch.setattr(
+        benchmark_command,
+        "run_benchmark",
+        lambda _options: _report(throughput=1.0, wall=1.0, completed=1.0),
+    )
 
     args = argparse.Namespace(
         scenario="interpolation-e2e-cpu-transfer",
@@ -184,11 +190,10 @@ def test_cmd_benchmark_writes_reports_and_fails_on_missing_baseline(tmp_path: Pa
         multi=2,
         backend="pytorch",
         model="4.25",
-        runner=lambda *_args, **_kwargs: _report(throughput=1.0, wall=1.0, completed=1.0),
     )
 
     with pytest.raises(ProcessError) as exc_info:
-        cmd_benchmark(args)
+        benchmark_command.cmd_benchmark(args)
 
     assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
     assert "Baseline file does not exist" in exc_info.value.message

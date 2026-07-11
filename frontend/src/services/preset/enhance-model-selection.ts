@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // Model detail and engine-specific runtime detail selection for enhance read models.
 
-import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
+import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 import { resolveMetricsForEngine } from '@/services/model-engine-metrics'
 

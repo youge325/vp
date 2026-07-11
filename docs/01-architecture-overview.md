@@ -91,7 +91,7 @@ Rust 与 Python 之间的通信不通过 HTTP 或 gRPC，而是通过子进程 s
 
 ### 2. ts-rs 类型同步
 
-Rust 模型使用 `#[derive(TS)]` 宏，编译时自动生成 TypeScript 类型定义到 `frontend/src/types/generated/`（约 40 个文件）。前端代码禁止直接深路径引用这些生成文件，而是通过 `types/protocol/index.ts` 统一 re-export。这确保了 Rust 与前端之间的类型一致性。
+Rust 模型使用 `#[derive(TS)]` 宏，编译时自动生成 TypeScript 类型定义到 `frontend/src/types/generated/`。前端代码禁止直接深路径引用这些生成文件，而是通过 `types/protocol/index.ts` 统一 re-export。环境探测的 GPU、codec profile、算法能力、推理引擎、probe source 与 runtime mode 同样由 Rust `models/env.rs` 定义；前端不维护手写镜像或兼容 normalize，缓存 schema 12 以前的数据会强制重新探测。
 
 ### 3. stage-worker 流式处理
 

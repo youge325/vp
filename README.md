@@ -106,6 +106,7 @@ npm run tauri:dev
 ```powershell
 cd frontend\src-tauri
 cargo test --quiet
+cargo clippy --all-targets -- -D warnings
 ```
 
 ## 生成物与忽略规则

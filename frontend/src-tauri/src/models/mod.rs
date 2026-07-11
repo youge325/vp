@@ -8,8 +8,11 @@ pub use config::{
     RateControlMode, SuperResolutionConfig, TensorBackend, WorkbenchPreset, WorkflowConfig,
 };
 pub use env::{
-    AlgorithmInfo, BackendDeviceSupport, EnvironmentCheckPayload, EnvironmentCheckResult,
-    FfmpegInfo, GpuInfo, ModelEngineMetricInfo, ModelMetricInfo, ModelVariantInfo, TensorEngines,
+    AlgorithmFamily, AlgorithmInfo, CapabilityChoice, CapabilityOptionKind, CapabilityOptionSpec,
+    CodecProfileFamily, CodecProfileSpec, EnvironmentCheckPayload, EnvironmentCheckResult,
+    EnvironmentCheckSource, FfmpegInfo, GpuAdapter, GpuInfo, GpuVendor, HardwareDeviceOptionSpec,
+    InferenceEngine, InputFrameMode, ModelEngineMetricInfo, ModelMetricInfo, ModelVariantInfo,
+    RateControlModeSpec, RuntimeMode, TensorEngines,
 };
 pub use task::{
     ResumeStatusPayload, TaskCancelledPayload, TaskCancelledReason, TaskCompletedPayload,

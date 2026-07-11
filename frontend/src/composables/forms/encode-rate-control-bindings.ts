@@ -6,7 +6,7 @@ import {
 } from '@/services/preset/io-form-rules'
 import { toRateControlMode } from '@/services/preset/io-options'
 import { toNumberValue } from '@/services/preset/options'
-import type { EncoderProfileSpec } from '@/types/domain/capability'
+import type { EncoderProfileSpec } from '@/types/protocol'
 import type { EncodeConfig, WorkbenchPreset } from '@/types/protocol'
 
 interface EncodeRateControlBindingParams {

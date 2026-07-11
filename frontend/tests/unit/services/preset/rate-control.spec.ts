@@ -6,7 +6,7 @@ import {
   resolveRateControlForMode,
   resolveRateControlForProfile,
 } from '@/services/preset/rate-control'
-import type { EncoderProfileSpec } from '@/types/domain/capability'
+import type { EncoderProfileSpec } from '@/types/protocol'
 
 function makeProfile(overrides: Partial<EncoderProfileSpec> = {}): EncoderProfileSpec {
   return {

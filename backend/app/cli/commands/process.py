@@ -31,15 +31,12 @@ def cmd_process(args: argparse.Namespace) -> None:
         ffmpeg=ffmpeg,
         configs=configs,
     )
-    configs = plan.runtime_configs
-
     resume_mode = getattr(args, "resume_mode", "auto")
     try:
         result, elapsed = execute_plan(
             ffmpeg=ffmpeg,
             input_path=input_path,
             plan=plan,
-            configs=configs,
             resume_mode=resume_mode,
         )
         finalize_and_emit(ffmpeg=ffmpeg, plan=plan, result=result, elapsed=elapsed)
@@ -62,7 +59,7 @@ def cmd_process(args: argparse.Namespace) -> None:
             {
                 "input_path": input_path,
                 "output_path": plan.output_path,
-                "algorithm": resolve_primary_algorithm(configs.workflow_json),
+                "algorithm": resolve_primary_algorithm(plan.runtime_configs.json_section("workflow")),
                 "processing_steps": [step.algorithm_type for step in plan.processing_steps],
             }
         )

@@ -2,24 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import * as workflowDefaults from '@/services/preset/workflow-defaults'
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import { createEnvironmentResult } from '../../fixtures/environment'
 
 function makeEnv(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCheckResult {
-  return {
-    ffmpeg: {
-      available: true,
-      hwaccels: [],
-      encoderProfiles: [],
-      decoderProfiles: [],
-    },
-    gpu: { adapters: [] },
-    tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
-    interpolationAlgorithms: [],
-    superResolutionAlgorithms: [],
-    runtimeMode: 'external',
-    ...overrides,
-  } as EnvironmentCheckResult
+  return createEnvironmentResult(overrides)
 }
 
 describe('workflow defaults', () => {
@@ -78,13 +65,13 @@ describe('workflow defaults', () => {
   it('applies existing initial engine preference for NVIDIA and Hygon environments', () => {
     const nvidiaWorkflow = createDefaultWorkflowConfigForEnvironment(makeEnv({
       gpu: {
-        adapters: [{ name: 'RTX', vendor: 'nvidia', deviceType: 'discrete' }],
+        adapters: [{ name: 'RTX', vendor: 'nvidia' }],
       },
       tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: [], onnx: ['cuda', 'tensorrt'] },
     }))
     const hygonWorkflow = createDefaultWorkflowConfigForEnvironment(makeEnv({
       gpu: {
-        adapters: [{ name: 'DCU', vendor: 'hygon', deviceType: 'discrete' }],
+        adapters: [{ name: 'DCU', vendor: 'hygon' }],
       },
       tensorEngines: { pytorch: ['cuda', 'dcu'], paddle: [], onnx: ['cuda'] },
     }))

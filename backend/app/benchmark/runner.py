@@ -10,7 +10,7 @@ import statistics
 import subprocess
 import sys
 import time
-from typing import Any, Callable
+from typing import Any
 
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
@@ -49,7 +49,7 @@ class BenchmarkOptions:
 
 
 @dataclass(frozen=True, slots=True)
-class BenchmarkRun:
+class _BenchmarkRun:
     """One warmup or measured process invocation."""
 
     name: str
@@ -69,7 +69,7 @@ class BenchmarkRun:
         }
 
 
-def parse_process_stdout(stdout: str) -> dict[str, Any]:
+def _parse_process_stdout(stdout: str) -> dict[str, Any]:
     """Extract the last progress metrics and completed payload from process stdout."""
     last_metrics: dict[str, Any] = {}
     completed: dict[str, Any] | None = None
@@ -107,7 +107,7 @@ def _median(values: list[float]) -> float:
     return float(statistics.median(values))
 
 
-def _median_map(runs: list[BenchmarkRun], metrics_key: str) -> dict[str, float]:
+def _median_map(runs: list[_BenchmarkRun], metrics_key: str) -> dict[str, float]:
     keys: set[str] = set()
     for run in runs:
         group = run.metrics.get(metrics_key)
@@ -124,7 +124,7 @@ def _median_map(runs: list[BenchmarkRun], metrics_key: str) -> dict[str, float]:
     return result
 
 
-def build_report(*, workload: Workload, runs: list[BenchmarkRun]) -> dict[str, Any]:
+def _build_report(*, workload: Workload, runs: list[_BenchmarkRun]) -> dict[str, Any]:
     """Build a JSON-serialisable benchmark report.
 
     Warmups are reported separately and intentionally excluded from median
@@ -190,7 +190,7 @@ def _run_checked(
     return completed
 
 
-def generate_synthetic_input(workload: Workload, input_path: Path) -> None:
+def _generate_synthetic_input(workload: Workload, input_path: Path) -> None:
     """Generate a deterministic synthetic input video with FFmpeg testsrc2."""
     input_path.parent.mkdir(parents=True, exist_ok=True)
     command = [
@@ -245,16 +245,16 @@ def _process_command(workload: Workload, input_path: Path, output_dir: Path) -> 
     ]
 
 
-def run_process_once(
+def _run_process_once(
     workload: Workload, *, input_path: Path, output_dir: Path, name: str, warmup: bool
-) -> BenchmarkRun:
+) -> _BenchmarkRun:
     """Run one real ``python -m app process`` invocation and parse its metrics."""
     output_dir.mkdir(parents=True, exist_ok=True)
     command = _process_command(workload, input_path, output_dir)
     started_at = time.perf_counter()
     completed = _run_checked(command, cwd=settings.backend_root, timeout=1800)
     wall_time_seconds = time.perf_counter() - started_at
-    parsed = parse_process_stdout(completed.stdout)
+    parsed = _parse_process_stdout(completed.stdout)
     processed_frames = int(parsed["processedFrames"])
     if processed_frames != workload.expected_processed_frames:
         raise ProcessError(
@@ -270,7 +270,7 @@ def run_process_once(
             },
         )
 
-    return BenchmarkRun(
+    return _BenchmarkRun(
         name=name,
         warmup=warmup,
         wall_time_seconds=wall_time_seconds,
@@ -282,56 +282,34 @@ def run_process_once(
 
 def run_benchmark(
     options: BenchmarkOptions,
-    *,
-    process_runner: Callable[[Workload, Path, Path, str, bool], BenchmarkRun] | None = None,
 ) -> dict[str, Any]:
     """Run warmup and measured benchmark iterations and return a report."""
-    uses_default_runner = process_runner is None
-    if process_runner is None:
-
-        def _default_process_runner(
-            workload: Workload,
-            input_path: Path,
-            output_dir: Path,
-            name: str,
-            warmup: bool,
-        ) -> BenchmarkRun:
-            return run_process_once(
-                workload,
-                input_path=input_path,
-                output_dir=output_dir,
-                name=name,
-                warmup=warmup,
-            )
-
-        process_runner = _default_process_runner
     options.work_dir.mkdir(parents=True, exist_ok=True)
     input_path = options.work_dir / "input" / f"{options.workload.scenario}.mp4"
-    if uses_default_runner:
-        generate_synthetic_input(options.workload, input_path)
+    _generate_synthetic_input(options.workload, input_path)
 
-    all_runs: list[BenchmarkRun] = []
+    all_runs: list[_BenchmarkRun] = []
     for index in range(options.warmup_runs):
         all_runs.append(
-            process_runner(
+            _run_process_once(
                 options.workload,
-                input_path,
-                options.work_dir / f"warmup-{index + 1}",
-                f"warmup-{index + 1}",
-                True,
+                input_path=input_path,
+                output_dir=options.work_dir / f"warmup-{index + 1}",
+                name=f"warmup-{index + 1}",
+                warmup=True,
             )
         )
     for index in range(options.runs):
         all_runs.append(
-            process_runner(
+            _run_process_once(
                 options.workload,
-                input_path,
-                options.work_dir / f"run-{index + 1}",
-                f"run-{index + 1}",
-                False,
+                input_path=input_path,
+                output_dir=options.work_dir / f"run-{index + 1}",
+                name=f"run-{index + 1}",
+                warmup=False,
             )
         )
-    return build_report(workload=options.workload, runs=all_runs)
+    return _build_report(workload=options.workload, runs=all_runs)
 
 
 def default_baseline_path() -> Path:

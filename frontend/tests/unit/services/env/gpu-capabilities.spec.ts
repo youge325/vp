@@ -2,20 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import * as gpuCapabilities from '@/services/env/gpu-capabilities'
 import { getAvailableEngines, getVisibleBackends, shouldShowEngineSelector } from '@/services/env/gpu-capabilities'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
-
-function env(overrides: Partial<EnvironmentCheckResult>): EnvironmentCheckResult {
-  return {
-    ffmpeg: { available: true, hwaccels: [], encoderProfiles: [], decoderProfiles: [] },
-    gpu: { adapters: [] },
-    tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
-    interpolationAlgorithms: [],
-    superResolutionAlgorithms: [],
-    runtimeMode: 'external',
-    ...overrides,
-  }
-}
+import { createEnvironmentResult as env } from '../../fixtures/environment'
 
 describe('GPU capabilities', () => {
   it('keeps legacy vendor and support helpers out of the public surface', () => {
@@ -28,23 +15,18 @@ describe('GPU capabilities', () => {
     expect(getVisibleBackends(env({}))).toEqual([])
   })
 
-  it('filters visible backends by adapter vendor support metadata', () => {
+  it('uses detected engines even when adapter vendor metadata disagrees', () => {
     const result = env({
-      gpu: { adapters: [{ name: 'DCU', vendor: 'hygon', deviceType: 'discrete' }] },
+      gpu: { adapters: [{ name: 'DCU', vendor: 'hygon' }] },
       tensorEngines: { pytorch: ['cuda'], paddle: ['dcu'], onnx: ['cuda'] },
-      backendDeviceSupport: {
-        pytorch: ['nvidia'],
-        paddle: ['hygon'],
-        onnx: ['nvidia'],
-      },
     })
 
-    expect(getVisibleBackends(result)).toEqual(['paddle'])
+    expect(getVisibleBackends(result)).toEqual(['pytorch', 'paddle', 'onnx'])
   })
 
   it('uses only explicit tensor engine metadata', () => {
     const result = env({
-      gpu: { adapters: [{ name: 'NVIDIA GPU', vendor: 'nvidia', deviceType: 'discrete' }] },
+      gpu: { adapters: [{ name: 'NVIDIA GPU', vendor: 'nvidia' }] },
       tensorEngines: { pytorch: ['cuda'], paddle: [], onnx: [] },
     })
 

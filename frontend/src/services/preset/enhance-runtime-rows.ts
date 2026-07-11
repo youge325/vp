@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // Runtime row and fixed-window state rules for enhance read models.
 
-import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
+import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 import type { MetricRow, RuntimeMetricEstimate } from '@/types/view/model-metrics'
 import { combinedVramMetricRows, metricRows } from '@/services/model-metric-rows'

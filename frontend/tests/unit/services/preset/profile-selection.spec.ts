@@ -12,7 +12,7 @@ import type {
   DecoderProfileSpec,
   EncoderProfileSpec,
   HardwareDeviceOptionSpec,
-} from '@/types/domain/capability'
+} from '@/types/protocol'
 import type { EncodeConfig } from '@/types/protocol'
 
 const stringOption = (name: string, defaultValue: string): CapabilityOptionSpec => ({

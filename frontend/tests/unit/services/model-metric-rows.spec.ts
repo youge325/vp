@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { combinedVramMetricRows, metricRows } from '@/services/model-metric-rows'
-import type { ModelVariantInfo } from '@/types/domain/env'
+import type { ModelVariantInfo } from '@/types/protocol'
 import type { RuntimeMetricEstimate } from '@/types/view/model-metrics'
 
 const detail: ModelVariantInfo = {

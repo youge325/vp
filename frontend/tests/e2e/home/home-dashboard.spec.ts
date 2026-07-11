@@ -102,16 +102,15 @@ test.describe('Home dashboard dynamic stats', () => {
       pinia.state.value.env.env = {
         checkResult: {
           ffmpeg: { available: true, hwaccels: [], encoderProfiles: [], decoderProfiles: [] },
-          gpu: { adapters: [{ name: 'RTX 4090', vendor: 'nvidia', deviceType: 'discrete' }] },
+          gpu: { adapters: [{ name: 'RTX 4090', vendor: 'nvidia' }] },
           tensorEngines: { pytorch: ['cuda'], paddle: [], onnx: ['cuda'] },
-          backendDeviceSupport: { pytorch: ['nvidia'], paddle: ['nvidia'], onnx: ['nvidia'] },
           interpolationAlgorithms: [
             { name: 'rife', label: 'RIFE', tensorBackends: ['pytorch', 'onnx'] },
           ],
           superResolutionAlgorithms: [
             { name: 'realesrgan', label: 'Real-ESRGAN', tensorBackends: ['pytorch'] },
           ],
-          runtimeMode: 'e2e',
+          runtimeMode: 'external',
         },
         probeSource: 'realtime',
         probeTimestamp: Date.now(),

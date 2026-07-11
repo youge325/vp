@@ -70,7 +70,7 @@ def build_decode_input_args(input_path: str, decode_config: dict[str, Any] | Non
     return args
 
 
-def build_encode_video_args(encode_config: dict[str, Any] | None = None) -> list[str]:
+def _build_encode_video_args(encode_config: dict[str, Any] | None = None) -> list[str]:
     encode_config = encode_config or {}
     codec = str(encode_config.get("codec") or "libx264")
     options = dict(encode_config.get("options", {}))
@@ -98,7 +98,7 @@ def build_encode_video_args(encode_config: dict[str, Any] | None = None) -> list
 
 
 def build_encode_output_args(output_path: str, encode_config: dict[str, Any] | None = None) -> list[str]:
-    args = build_encode_video_args(encode_config)
+    args = _build_encode_video_args(encode_config)
     args.extend([output_path, "-y"])
     return args
 

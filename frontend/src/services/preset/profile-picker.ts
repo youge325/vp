@@ -1,8 +1,8 @@
 // pure: no Vue / no Pinia / no Tauri
 // 编码器/解码器 profile 选优。
 
-import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/domain/capability'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/protocol'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 
 const FAMILY_PRIORITY = ['nvidia', 'intel', 'cpu'] as const
 const CODEC_PRIORITY = ['hevc', 'h264', 'av1'] as const

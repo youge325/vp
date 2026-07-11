@@ -1,8 +1,8 @@
 // pure: no Vue / no Pinia / no Tauri
 // Environment-backed engine default helpers for enhance workflow rules.
 
-import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { InferenceEngine, TensorBackend } from '@/types/domain/workflow'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import type { InferenceEngine, TensorBackend } from '@/types/protocol'
 
 export function pickDefaultEngine(
   checkResult: EnvironmentCheckResult | null,

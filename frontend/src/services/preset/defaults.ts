@@ -2,7 +2,7 @@
 // 默认值工厂 — 根据环境探测结果生成默认的解码/编码/工作流/输出/预设配置。
 
 import type { DecodeConfig, EncodeConfig, OutputConfig, WorkbenchPreset } from '@/types/protocol'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import { pickPreferredDecoderProfile, pickPreferredEncoderProfile } from './profile-picker'
 import { resolveRateControlForProfile } from './rate-control'
 import {

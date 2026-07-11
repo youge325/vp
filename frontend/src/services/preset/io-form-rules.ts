@@ -5,8 +5,8 @@ import type {
   DecoderProfileSpec,
   EncoderProfileSpec,
   HardwareDeviceOptionSpec,
-} from '@/types/domain/capability'
-import type { RateControlMode } from '@/types/domain/workflow'
+} from '@/types/protocol'
+import type { RateControlMode } from '@/types/protocol'
 import type { DecodeConfig, EncodeConfig } from '@/types/protocol'
 import {
   getDecoderHwaccelDeviceOptions,

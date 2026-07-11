@@ -150,7 +150,7 @@ pub async fn run_single_cli_command<R: Runtime>(
 
     last_json
         .map(CliOutcome::Ok)
-        .ok_or_else(|| ShellError::BackendNoJson)
+        .ok_or(ShellError::BackendNoJson)
 }
 
 #[cfg(test)]

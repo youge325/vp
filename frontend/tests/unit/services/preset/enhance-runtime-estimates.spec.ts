@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceRuntimeEstimates } from '@/services/preset/enhance-runtime-estimates'
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
-import type { ModelVariantInfo } from '@/types/domain/env'
+import type { ModelVariantInfo } from '@/types/protocol'
 
 const interpolationDetail: ModelVariantInfo = {
   name: '4.25',

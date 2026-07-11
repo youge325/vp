@@ -12,7 +12,7 @@ from app.processing.streaming.stage_file_rules import safe_stage_name, stage_sig
 
 
 @dataclass(slots=True)
-class StageFileStageContext:
+class _StageFileStageContext:
     manifest: SegmentManifest
     output_path: str
     resume_state: ResumeState
@@ -36,9 +36,9 @@ def build_stage_file_stage_context(
     encode_config: dict[str, Any],
     segment_frames: int,
     output_fps: float | None,
-) -> StageFileStageContext:
+) -> _StageFileStageContext:
     if is_final_stage:
-        return StageFileStageContext(
+        return _StageFileStageContext(
             manifest=manifest,
             output_path=output_path,
             resume_state=resume_state,
@@ -60,7 +60,7 @@ def build_stage_file_stage_context(
         },
         mode="force-fresh",
     )
-    return StageFileStageContext(
+    return _StageFileStageContext(
         manifest=stage_manifest,
         output_path=stage_output_path,
         resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),

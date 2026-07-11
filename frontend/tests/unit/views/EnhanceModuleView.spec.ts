@@ -5,10 +5,11 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import EnhanceModuleView from '@/views/EnhanceModuleView.vue'
 import { useEnvStore } from '@/stores/env'
 import { usePresetStore } from '@/stores/preset'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import { createEnvironmentPayload, createEnvironmentResult } from '../fixtures/environment'
 
 function makeEnv(): EnvironmentCheckResult {
-  return {
+  return createEnvironmentResult({
     ffmpeg: {
       available: true,
       hwaccels: [],
@@ -17,22 +18,25 @@ function makeEnv(): EnvironmentCheckResult {
     },
     gpu: { adapters: [] },
     tensorEngines: { pytorch: ['cuda'], paddle: ['cuda'], onnx: ['cuda'] },
-    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [
       {
         name: 'rife',
+        family: 'rife',
         tensorBackends: ['pytorch'],
         models: ['4.25'],
+        inputFrameMode: 'none',
       },
     ],
     superResolutionAlgorithms: [
       {
         name: 'ppmsvsr',
+        family: 'paddlegan_vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
         scaleFactors: [4],
+        fixedScaleFactor: 4,
         defaultNumFrames: 10,
-        sequenceMode: 'recurrent',
+        inputFrameMode: 'editable_chunk',
         modelDetails: [
           {
             name: 'x4',
@@ -51,11 +55,13 @@ function makeEnv(): EnvironmentCheckResult {
       },
       {
         name: 'edvr',
+        family: 'paddlegan_vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
         scaleFactors: [4],
+        fixedScaleFactor: 4,
         defaultNumFrames: 5,
-        sequenceMode: 'window',
+        inputFrameMode: 'fixed_window',
         modelDetails: [
           {
             name: 'x4',
@@ -75,16 +81,13 @@ function makeEnv(): EnvironmentCheckResult {
       },
     ],
     runtimeMode: 'bundled',
-  }
+  })
 }
 
 describe('EnhanceModuleView super-resolution frame wording', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    useEnvStore().setCheckPayload(
-      { result: makeEnv(), source: 'probe', checkedAt: null },
-      '2026-07-07T00:00:00Z',
-    )
+    useEnvStore().setCheckPayload(createEnvironmentPayload(makeEnv()))
   })
 
   it('explains recurrent input frame chunks as distinct from neighbor windows', () => {

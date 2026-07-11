@@ -51,14 +51,11 @@ def _validate_config_section(
     raw_value: str | None,
     default: dict[str, Any],
     model_cls: type[ConfigModel],
-) -> tuple[ConfigModel, dict[str, Any]]:
+) -> ConfigModel:
     """Parse + deep-merge + Pydantic-validate one config section.
 
-    ``legacy`` intentionally mirrors the old CLI section dict shape:
-    defaults without an override keep their original dict shape, while an
-    explicit JSON payload round-trips through Pydantic and gains model
-    defaults. Output config is the exception: even the default path must
-    validate so missing outputDir fails loudly.
+    RuntimeConfigs later projects default sections sparsely and explicit
+    sections as complete camelCase dictionaries.
     """
     has_override = bool(raw_value)
     if has_override:
@@ -80,8 +77,7 @@ def _validate_config_section(
     if isinstance(validated, OutputConfig) and not validated.output_dir:
         raise ValueError("Config validation failed for OutputConfig: outputDir is required.")
 
-    legacy = validated.model_dump(by_alias=True) if has_override else merged
-    return validated, legacy
+    return validated
 
 
 def ensure_input_and_ffmpeg(input_path: str) -> FFmpegWrapper:
@@ -173,26 +169,26 @@ def _collect_config_sections(args: argparse.Namespace) -> dict[str, str | None]:
 def load_runtime_configs(args: argparse.Namespace) -> RuntimeConfigs:
     """Materialise typed runtime configs from CLI JSON args or stdin.
 
-    The returned bundle carries Pydantic models for internal code and the
-    legacy camelCase dict snapshots for existing wire/FFmpeg/signature
-    boundaries. ``ValueError`` from any sub-call is caught and re-emitted
+    The returned bundle carries Pydantic models for internal code and records
+    which sections were explicit so wire projections preserve their shape.
+    ``ValueError`` from any sub-call is caught and re-emitted
     as ``INVALID_CONFIG`` so the frontend sees a typed error rather than a
     stack trace.
     """
     sections = _collect_config_sections(args)
     try:
-        decode, decode_json = _validate_config_section(sections["decode"], _default_decode_config(), DecodeConfig)
-        encode, encode_json = _validate_config_section(
+        decode = _validate_config_section(sections["decode"], _default_decode_config(), DecodeConfig)
+        encode = _validate_config_section(
             sections["encode"],
             _default_encode_config(args),
             EncodeConfig,
         )
-        workflow, workflow_json = _validate_config_section(
+        workflow = _validate_config_section(
             sections["workflow"],
             _default_workflow_config(args),
             WorkflowConfig,
         )
-        output, output_json = _validate_config_section(
+        output = _validate_config_section(
             sections["output"],
             _default_output_config(args),
             OutputConfig,
@@ -206,8 +202,7 @@ def load_runtime_configs(args: argparse.Namespace) -> RuntimeConfigs:
         encode=encode,
         workflow=workflow,
         output=output,
-        decode_json=decode_json,
-        encode_json=encode_json,
-        workflow_json=workflow_json,
-        output_json=output_json,
+        _expanded_sections=frozenset(
+            section for section in ("decode", "encode", "workflow", "output") if sections[section]
+        ),
     )

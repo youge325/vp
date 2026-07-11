@@ -20,6 +20,7 @@ from app.cli.commands._process_validation import (
     ensure_input_and_ffmpeg,
     load_runtime_configs,
 )
+from app.models import WorkflowConfig
 from app.planning import (
     SegmentManifest,
     build_signature,
@@ -37,7 +38,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     ffmpeg = ensure_input_and_ffmpeg(input_path)
 
     configs = load_runtime_configs(args)
-    workflow_config = configs.workflow_json
+    workflow_config = configs.json_section("workflow")
 
     processing_steps = resolve_processing_steps(workflow_config)
 
@@ -55,7 +56,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
         ffmpeg,
         input_path,
     )
-    configs = configs.with_workflow_json(workflow_config)
+    configs = configs.with_workflow(WorkflowConfig.model_validate(workflow_config))
 
     video_info = resolve_video_info(ffmpeg, input_path)
     stage_plan = build_stage_plan(
@@ -66,7 +67,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     )
 
     if processing_steps:
-        sections = configs.legacy_sections()
+        sections = configs.json_sections()
         signature = build_signature(
             input_path=input_path,
             output_path=output_path,

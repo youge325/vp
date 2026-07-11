@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // 表单选项纯函数 — seed/get/update/coerce option values。
 
-import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
+import type { CapabilityOptionSpec, CapabilityValue } from '@/types/protocol'
 
 type ProfileWithOptions = {
   options: Array<{

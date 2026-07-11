@@ -16,7 +16,7 @@ import BaseField from './BaseField.vue'
 import BaseNumber from './BaseNumber.vue'
 import BaseSelect from './BaseSelect.vue'
 import BaseToggle from './BaseToggle.vue'
-import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
+import type { CapabilityOptionSpec, CapabilityValue } from '@/types/protocol'
 
 const props = defineProps<{
   option: CapabilityOptionSpec

@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import DecodeModuleView from '@/views/DecodeModuleView.vue'
 import { useEnvStore } from '@/stores/env'
-import type { DecoderProfileSpec } from '@/types/domain/capability'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { DecoderProfileSpec } from '@/types/protocol'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import { createEnvironmentPayload, createEnvironmentResult } from '../fixtures/environment'
 
 const decoderProfile = (name: string, label: string): DecoderProfileSpec => ({
   name,
@@ -18,7 +19,7 @@ const decoderProfile = (name: string, label: string): DecoderProfileSpec => ({
   options: [],
 })
 
-const makeEnv = (): EnvironmentCheckResult => ({
+const makeEnv = (): EnvironmentCheckResult => createEnvironmentResult({
   ffmpeg: {
     available: true,
     hwaccels: ['cuda'],
@@ -30,7 +31,6 @@ const makeEnv = (): EnvironmentCheckResult => ({
   },
   gpu: { adapters: [] },
   tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
   interpolationAlgorithms: [],
   superResolutionAlgorithms: [],
   runtimeMode: 'external',
@@ -39,10 +39,7 @@ const makeEnv = (): EnvironmentCheckResult => ({
 describe('DecodeModuleView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    useEnvStore().setCheckPayload(
-      { result: makeEnv(), source: 'probe', checkedAt: null },
-      '2026-07-08T00:00:00Z',
-    )
+    useEnvStore().setCheckPayload(createEnvironmentPayload(makeEnv()))
   })
 
   it('renders decoder profile options from pure option rules', () => {

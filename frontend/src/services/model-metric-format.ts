@@ -1,4 +1,4 @@
-import type { ModelVariantInfo } from '@/types/domain/env'
+import type { ModelVariantInfo } from '@/types/protocol'
 import { finiteNumberOrNull } from '@/services/finite-number'
 
 const UNKNOWN = '--'

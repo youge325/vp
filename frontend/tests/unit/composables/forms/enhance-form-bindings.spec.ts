@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest'
 
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
 import { createEnhanceFormBindings } from '@/composables/forms/enhance-form-bindings'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
+import { createEnvironmentResult } from '../../fixtures/environment'
 
 function makeEnv(): EnvironmentCheckResult {
-  return {
+  return createEnvironmentResult({
     ffmpeg: {
       available: true,
       hwaccels: [],
@@ -16,7 +17,6 @@ function makeEnv(): EnvironmentCheckResult {
     },
     gpu: { adapters: [] },
     tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda', 'tensorrt'], onnx: ['cuda', 'tensorrt'] },
-    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [
       {
         name: 'rife',
@@ -83,7 +83,7 @@ function makeEnv(): EnvironmentCheckResult {
       },
     ],
     runtimeMode: 'bundled',
-  }
+  })
 }
 
 function makeBindings() {

@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // ONNX model fallback helpers for enhance workflow rules.
 
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 
 import { findInterpolationAlgorithm, findSuperResolutionAlgorithm } from './enhance-workflow-lookup'
 

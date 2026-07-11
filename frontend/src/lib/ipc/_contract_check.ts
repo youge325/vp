@@ -6,7 +6,7 @@
 
 import { safeInvoke } from './client'
 import type { ResumeInspectionResult } from '@/types/domain/batch'
-import type { EnvironmentCheckPayload } from '@/types/domain/env'
+import type { EnvironmentCheckPayload } from '@/types/protocol'
 import type { VideoInfoResult } from '@/types/domain/media'
 import type { TaskRequest, WorkbenchPreset } from '@/types/protocol'
 

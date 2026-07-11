@@ -6,7 +6,7 @@ import {
   CONTAINER_SELECT_OPTIONS,
   toRateControlMode,
 } from '@/services/preset/io-options'
-import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/domain/capability'
+import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/protocol'
 
 const decoderProfile = (name: string, label: string): DecoderProfileSpec => ({
   name,

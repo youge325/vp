@@ -82,10 +82,9 @@ async function installEncodeProfiles(
       },
       gpu: { adapters: [] },
       tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-      backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
       interpolationAlgorithms: [],
       superResolutionAlgorithms: [],
-      runtimeMode: 'e2e',
+      runtimeMode: 'external',
     }
 
     state.preset.draftPreset.encodeConfig = {

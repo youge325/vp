@@ -39,17 +39,11 @@ export async function stubNextEnvironmentRecheckClick(
             paddle: [],
             onnx: [],
           },
-          backendDeviceSupport: {
-            pytorch: ['nvidia', 'intel', 'amd'],
-            paddle: ['nvidia', 'intel', 'amd', 'hygon'],
-            onnx: ['nvidia', 'intel', 'amd'],
-          },
           interpolationAlgorithms: [],
           superResolutionAlgorithms: [],
-          runtimeMode: 'e2e',
+          runtimeMode: 'external',
         }
         env.checkSource = 'probe'
-        env.lastCheckedAt = new Date().toISOString()
         env.lastProbeAt = '2026-06-30T00:00:00Z'
 
         window.setTimeout(() => {

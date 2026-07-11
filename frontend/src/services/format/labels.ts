@@ -3,7 +3,7 @@
 
 import type { MediaItem } from '@/types/domain/media'
 import type { BatchState } from '@/types/domain/batch'
-import type { EncoderProfileSpec } from '@/types/domain/capability'
+import type { EncoderProfileSpec } from '@/types/protocol'
 
 const FORMAT_CONVERSION_LABEL = '转码'
 

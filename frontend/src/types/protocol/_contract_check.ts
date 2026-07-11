@@ -82,7 +82,7 @@ const _RESUME_STATUS_CONTRACT = {
 // EnvironmentCheckResult 单独锁定(`@/types/generated/`),这里只断言外壳。
 const _ENVIRONMENT_CHECK_CONTRACT = {
   result: {} as EnvironmentCheckPayload['result'],
-  source: '',
+  source: 'probe',
   checkedAt: '',
 } satisfies EnvironmentCheckPayload
 

@@ -46,6 +46,10 @@ jobs:
           cargo test --lib --quiet
         working-directory: frontend/src-tauri
 
+      - name: Lint Rust targets
+        run: cargo clippy --all-targets -- -D warnings
+        working-directory: frontend/src-tauri
+
       - name: Run frontend tests with coverage
         run: npm run test -- --coverage
         working-directory: frontend

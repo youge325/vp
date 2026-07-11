@@ -6,7 +6,7 @@
 // argument object and return type from the command name.
 
 import type { ResumeInspectionResult } from '@/types/domain/batch'
-import type { EnvironmentCheckPayload } from '@/types/domain/env'
+import type { EnvironmentCheckPayload } from '@/types/protocol'
 import type { VideoInfoResult } from '@/types/domain/media'
 import type { TaskRequest, WorkbenchPreset } from '@/types/protocol'
 

@@ -4,9 +4,10 @@ import {
   fallbackInterpolationOnnxModel,
   fallbackSuperResolutionOnnxModel,
 } from '@/services/preset/enhance-onnx-defaults'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import { createEnvironmentResult } from '../../fixtures/environment'
 
-const env: EnvironmentCheckResult = {
+const env: EnvironmentCheckResult = createEnvironmentResult({
   ffmpeg: {
     available: true,
     hwaccels: [],
@@ -15,7 +16,6 @@ const env: EnvironmentCheckResult = {
   },
   gpu: { adapters: [] },
   tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
   interpolationAlgorithms: [
     { name: 'rife', tensorBackends: ['onnx'], models: ['4.25'], onnxModels: ['rife.onnx'] },
   ],
@@ -23,7 +23,7 @@ const env: EnvironmentCheckResult = {
     { name: 'sr', tensorBackends: ['onnx'], models: [], onnxModels: ['sr.onnx'] },
   ],
   runtimeMode: 'external',
-}
+})
 
 describe('enhance ONNX defaults', () => {
   it('seeds fallback ONNX models only when the current value is empty', () => {

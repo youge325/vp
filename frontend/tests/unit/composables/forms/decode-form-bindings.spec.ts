@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest'
 
 import { createDefaultDecodeConfig } from '@/services/preset/defaults'
 import { createDecodeFormBindings } from '@/composables/forms/decode-form-bindings'
-import type { HardwareDeviceOptionSpec } from '@/types/domain/capability'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { HardwareDeviceOptionSpec } from '@/types/protocol'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
+import { createEnvironmentResult } from '../../fixtures/environment'
 
 const stringOption = (name: string, defaultValue: string) => ({
   name,
@@ -37,7 +38,7 @@ const decoderProfile = (
 })
 
 function makeEnv(): EnvironmentCheckResult {
-  return {
+  return createEnvironmentResult({
     ffmpeg: {
       available: true,
       hwaccels: ['cuda', 'qsv', 'd3d11va'],
@@ -59,11 +60,10 @@ function makeEnv(): EnvironmentCheckResult {
     },
     gpu: { adapters: [] },
     tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [],
     superResolutionAlgorithms: [],
     runtimeMode: 'external',
-  }
+  })
 }
 
 function makeBindings() {

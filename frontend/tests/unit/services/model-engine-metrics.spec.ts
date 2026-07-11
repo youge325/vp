@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { resolveMetricsForEngine } from '@/services/model-engine-metrics'
-import type { ModelVariantInfo } from '@/types/domain/env'
+import type { ModelVariantInfo } from '@/types/protocol'
 
 function detail(overrides: Partial<ModelVariantInfo['metrics']> = {}): ModelVariantInfo {
   return {

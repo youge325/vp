@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
 import { createEnhanceViewBindings } from '@/composables/forms/enhance-view-bindings'
-import type { AlgorithmInfo } from '@/types/domain/env'
+import type { AlgorithmInfo } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 
 const rife: AlgorithmInfo = {

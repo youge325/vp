@@ -1,8 +1,8 @@
 // pure: no Vue / no Pinia / no Tauri
 // Select option and value conversion rules for decode/encode views.
 
-import type { CodecProfileSpec } from '@/types/domain/capability'
-import type { RateControlMode } from '@/types/domain/workflow'
+import type { CodecProfileSpec } from '@/types/protocol'
+import type { RateControlMode } from '@/types/protocol'
 import { CONTAINER_OPTIONS } from '@/config/constants'
 import type { SelectOption } from '@/types/view/select-option'
 

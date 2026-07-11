@@ -1,8 +1,8 @@
 // pure: no Vue / no Pinia / no Tauri
 // Decode/encode profile selection rules shared by defaults, normalize, and forms.
 
-import type { CodecFamily } from '@/types/domain/workflow'
-import type { DecoderProfileSpec, EncoderProfileSpec, CapabilityValue } from '@/types/domain/capability'
+import type { CodecFamily } from '@/types/protocol'
+import type { DecoderProfileSpec, EncoderProfileSpec, CapabilityValue } from '@/types/protocol'
 import type { DecodeConfig, EncodeConfig } from '@/types/protocol'
 import { resolveDecoderHwaccel, resolveDecoderHwaccelDevice } from './decode-hardware'
 import { seedProfileOptions } from './options'

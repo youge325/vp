@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { useEncodeForm } from '@/composables/forms/useEncodeForm'
 import { useEnvStore } from '@/stores/env'
 import { usePresetStore } from '@/stores/preset'
-import type { CapabilityOptionSpec } from '@/types/domain/capability'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { CapabilityOptionSpec } from '@/types/protocol'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import { createEnvironmentPayload, createEnvironmentResult } from '../../fixtures/environment'
 
 const option = (
   name: string,
@@ -21,7 +22,7 @@ const option = (
   max: null,
 })
 
-const makeEnv = (): EnvironmentCheckResult => ({
+const makeEnv = (): EnvironmentCheckResult => createEnvironmentResult({
   ffmpeg: {
     available: true,
     hwaccels: [],
@@ -51,7 +52,6 @@ const makeEnv = (): EnvironmentCheckResult => ({
   },
   gpu: { adapters: [] },
   tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
   interpolationAlgorithms: [],
   superResolutionAlgorithms: [],
   runtimeMode: 'external',
@@ -60,10 +60,7 @@ const makeEnv = (): EnvironmentCheckResult => ({
 describe('useEncodeForm profile binding', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    useEnvStore().setCheckPayload(
-      { result: makeEnv(), source: 'probe', checkedAt: null },
-      '2026-06-21T00:00:00Z',
-    )
+    useEnvStore().setCheckPayload(createEnvironmentPayload(makeEnv()))
   })
 
   it('selects encoder profile through pure profile rules', () => {

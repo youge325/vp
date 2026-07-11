@@ -2,7 +2,7 @@
 // 解码 / 编码配置归一化 — 根据环境探测结果裁剪并补全缺失字段。
 
 import type { DecodeConfig, EncodeConfig } from '@/types/protocol'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import { createDefaultDecodeConfig, createDefaultEncodeConfig } from './defaults'
 import { getVisibleDecoderProfiles, getVisibleEncoderProfiles } from './profile-picker'
 import { seedProfileOptions } from './options'

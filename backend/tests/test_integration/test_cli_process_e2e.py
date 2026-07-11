@@ -125,15 +125,12 @@ class TestCheckCommand:
         assert "runtimeMode" in envelope, "check 输出应含扁平 runtimeMode 字段"
         assert "resources" not in envelope
 
-    def test_check_includes_tensor_backends(self) -> None:
+    def test_check_includes_tensor_engines(self) -> None:
         proc = _run_app("check")
         envelope = _last_json_line(proc.stdout)
-        dev_support = envelope.get("backendDeviceSupport", {})
-        # 至少应返回 pytorch / paddle / onnx 三个 key,
-        # 值可以为 false(未安装),但结构必须存在。
-        assert "pytorch" in dev_support
-        assert "paddle" in dev_support
-        assert "onnx" in dev_support
+        tensor_engines = envelope.get("tensorEngines", {})
+        assert set(tensor_engines) == {"pytorch", "paddle", "onnx"}
+        assert all(isinstance(engines, list) for engines in tensor_engines.values())
 
 
 class TestInfoCommand:

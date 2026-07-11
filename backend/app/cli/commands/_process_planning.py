@@ -16,6 +16,7 @@ from typing import Any, Callable
 from app.cli.runtime_configs import RuntimeConfigs
 from app.config import settings
 from app.errors import TaskErrorCode, raise_error
+from app.models import WorkflowConfig
 from app.planning import (
     ProcessingStep,
     resolve_expected_output_frames,
@@ -104,7 +105,7 @@ def build_plan(
     configs: RuntimeConfigs,
 ) -> ProcessingPlan:
     """Compose the full ``ProcessingPlan`` for execution."""
-    workflow_config = configs.workflow_json
+    workflow_config = configs.json_section("workflow")
     processing_steps = resolve_processing_steps(workflow_config)
     tensor_backend_name = configs.workflow.interpolation.tensor_backend or args.backend
 
@@ -120,7 +121,7 @@ def build_plan(
         ffmpeg,
         input_path,
     )
-    configs = configs.with_workflow_json(workflow_config)
+    configs = configs.with_workflow(WorkflowConfig.model_validate(workflow_config))
 
     expected_output_frames = resolve_expected_output_frames(
         ffmpeg=ffmpeg,

@@ -29,7 +29,7 @@ VIRTUAL_GPU_KEYWORDS = (
 )
 
 
-def classify_gpu_vendor(*values: str) -> str:
+def _classify_gpu_vendor(*values: str) -> str:
     """Return a normalized GPU vendor label."""
     haystack = " ".join(value.lower() for value in values if value)
     for keyword, vendor in GPU_VENDOR_KEYWORDS.items():
@@ -38,7 +38,7 @@ def classify_gpu_vendor(*values: str) -> str:
     return "other"
 
 
-def classify_gpu_device_type(name: str, vendor: str) -> str:
+def _classify_gpu_device_type(name: str, vendor: str) -> str:
     """Return a normalized GPU device type."""
     lowered = name.lower()
     if any(keyword in lowered for keyword in VIRTUAL_GPU_KEYWORDS):
@@ -59,9 +59,7 @@ def list_gpu_adapters() -> list[dict[str, Any]]:
 
 def _list_windows_gpu_adapters() -> list[dict[str, Any]]:
     script = (
-        "Get-CimInstance Win32_VideoController | "
-        "Select-Object Name,AdapterCompatibility,DriverVersion | "
-        "ConvertTo-Json -Compress"
+        "Get-CimInstance Win32_VideoController | Select-Object Name,AdapterCompatibility | ConvertTo-Json -Compress"
     )
     try:
         result = subprocess.run(
@@ -90,16 +88,13 @@ def _list_windows_gpu_adapters() -> list[dict[str, Any]]:
     for row in rows:
         name = str(row.get("Name") or "").strip()
         compatibility = str(row.get("AdapterCompatibility") or "").strip()
-        driver_version = str(row.get("DriverVersion") or "").strip()
-        vendor = classify_gpu_vendor(name, compatibility)
-        device_type = classify_gpu_device_type(name, vendor)
+        vendor = _classify_gpu_vendor(name, compatibility)
+        device_type = _classify_gpu_device_type(name, vendor)
         adapters.append(
             {
                 "name": name,
                 "vendor": vendor,
                 "device_type": device_type,
-                "adapter_compatibility": compatibility,
-                "driver_version": driver_version,
             }
         )
     return adapters

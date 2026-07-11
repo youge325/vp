@@ -13,54 +13,9 @@ use crate::error::ShellError;
 use crate::models::WorkbenchPreset;
 use crate::runtime::ResolvedRuntimePaths;
 
-// Phase 33 — bumped from 10 to 11 because the environment payload now only
-// carries capabilities consumed by the UI. Skipping v10 prevents removed
-// diagnostics and nested runtime fields from surviving in persisted caches.
-//
-// Phase 28 — bumped from 9 to 10 because ``ModelMetricInfo`` now carries
-// engine-specific metric overrides. Skipping v9 prevents CUDA-only VRAM
-// estimates from being reused when TensorRT is selected.
-//
-// Phase 27 — bumped from 8 to 9 because ``AlgorithmInfo`` now carries
-// PaddleGAN sequence semantics and ``ModelMetricInfo`` carries
-// ``runtimeFrameCount``. Skipping v8 prevents EDVR from being shown as an
-// editable recurrent chunk model and refreshes PaddleGAN VRAM calibration.
-//
-// Phase 26 — bumped from 7 to 8 because ``ModelMetricInfo`` now carries
-// calibrated reserved-peak VRAM metadata (``runtimeOverheadBytes`` plus
-// refreshed activation bytes). Skipping v7 prevents stale underestimates
-// from lingering in the UI.
-//
-// Phase 25 — bumped from 6 to 7 because ``AlgorithmInfo`` now carries
-// model metric metadata (built-in modelDetails plus ONNX modelDetails).
-// Older caches deserialize but leave the UI without parameter/FLOPs/VRAM
-// data, so force a fresh ``python -m app check`` after upgrading.
-//
-// Phase 24 — bumped from 5 to 6 because all PaddleGAN VSR auxiliary
-// weights are now pre-provisioned and the full six-model VSR set is
-// exposed again. Skipping v5 caches prevents the two-model subset from
-// lingering in the UI.
-//
-// Phase 23 — bumped from 4 to 5 because PaddleGAN VSR exposure was
-// tightened to models whose required auxiliary weights are available.
-// Skipping older caches prevents removed PaddleGAN algorithms from
-// lingering in the UI after an application update.
-//
-// Phase 22 — bumped from 3 to 4 because ``AlgorithmInfo`` now carries
-// PaddleGAN VSR weight metadata and six new Paddle super-resolution
-// algorithms. Skipping older caches forces a fresh ``python -m app check``
-// so the UI can show the new algorithms and weight status immediately.
-//
-// Phase 8 — bumped from 2 to 3. ``AlgorithmInfo`` gained the
-// ``tensorBackends`` field, and ``#[serde(default)]`` makes old
-// cache entries (which lack the field) silently deserialize with
-// an empty vec. The frontend then filters every algorithm out of
-// the dropdown because ``[].includes(backend)`` is always false,
-// which is the bug users saw: "切换后端后,三个后端都找不到模型".
-// Bumping the version forces ``load_environment_cache`` to skip
-// the stale file and re-run ``python -m app check``, whose fresh
-// output now carries ``tensorBackends`` end-to-end.
-const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 11;
+// Schema 12 replaces compatibility-derived environment data with the strict,
+// generated capability protocol. Older cache entries must be re-probed.
+const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 12;
 const WORKBENCH_PRESET_SCHEMA_VERSION: u32 = 1;
 const ENVIRONMENT_CACHE_FILE: &str = "environment-cache.json";
 const WORKBENCH_PRESET_FILE: &str = "workbench-preset.json";
@@ -68,7 +23,7 @@ const DEFAULT_RIFE_MODEL_VERSION: &str = "4.25";
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct EnvironmentCacheEntry {
+struct EnvironmentCacheEntry {
     pub schema_version: u32,
     pub checked_at: String,
     pub fingerprint: String,
@@ -104,11 +59,11 @@ pub async fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, She
     Ok(dir)
 }
 
-pub fn environment_cache_path(base_dir: &Path) -> PathBuf {
+fn environment_cache_path(base_dir: &Path) -> PathBuf {
     base_dir.join(ENVIRONMENT_CACHE_FILE)
 }
 
-pub fn workbench_preset_path(base_dir: &Path) -> PathBuf {
+fn workbench_preset_path(base_dir: &Path) -> PathBuf {
     base_dir.join(WORKBENCH_PRESET_FILE)
 }
 
@@ -145,11 +100,11 @@ pub async fn build_environment_fingerprint(
     .map_err(ShellError::from)
 }
 
-pub async fn load_environment_cache(
+pub(crate) async fn load_environment_cache(
     base_dir: &Path,
     fingerprint: &str,
     force_refresh: bool,
-) -> Option<EnvironmentCacheEntry> {
+) -> Option<(String, Value)> {
     if force_refresh {
         return None;
     }
@@ -164,7 +119,7 @@ pub async fn load_environment_cache(
     if entry.fingerprint != fingerprint {
         return None;
     }
-    Some(entry)
+    Some((entry.checked_at, entry.result))
 }
 
 /// 原子地把序列化结果写入文件。
@@ -443,11 +398,11 @@ mod tests {
         .await
         .expect("write env cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-a", false)
+        let (checked_at, result) = load_environment_cache(&dir, "fingerprint-a", false)
             .await
             .expect("cache hit");
-        assert_eq!(entry.checked_at, "2026-04-23T11:00:00Z");
-        assert_eq!(entry.result["type"], "check");
+        assert_eq!(checked_at, "2026-04-23T11:00:00Z");
+        assert_eq!(result["type"], "check");
     }
 
     #[tokio::test]
@@ -467,91 +422,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn invalidates_environment_cache_with_schema_version_five() {
-        let dir = temp_dir("env-schema-v5");
+    async fn invalidates_environment_cache_with_schema_version_eleven() {
+        let dir = temp_dir("env-schema-v11");
         let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
-            schema_version: 5,
-            checked_at: "2026-04-23T11:00:00Z".to_string(),
-            fingerprint: "fingerprint-a".to_string(),
-            result: json!({"type":"check", "superResolutionAlgorithms":[{"name":"basicvsr"}]}),
-        })
-        .expect("serialize env cache");
-        fs::write(environment_cache_path(&dir), payload).expect("write env cache");
-
-        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
-        assert!(entry.is_none());
-    }
-
-    #[tokio::test]
-    async fn invalidates_environment_cache_with_schema_version_six() {
-        let dir = temp_dir("env-schema-v6");
-        let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
-            schema_version: 6,
-            checked_at: "2026-07-02T11:00:00Z".to_string(),
-            fingerprint: "fingerprint-a".to_string(),
-            result: json!({"type":"check", "interpolationAlgorithms":[{"name":"rife"}]}),
-        })
-        .expect("serialize env cache");
-        fs::write(environment_cache_path(&dir), payload).expect("write env cache");
-
-        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
-        assert!(entry.is_none());
-    }
-
-    #[tokio::test]
-    async fn invalidates_environment_cache_with_schema_version_seven() {
-        let dir = temp_dir("env-schema-v7");
-        let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
-            schema_version: 7,
-            checked_at: "2026-07-06T11:00:00Z".to_string(),
-            fingerprint: "fingerprint-a".to_string(),
-            result: json!({"type":"check", "interpolationAlgorithms":[{"name":"rife"}]}),
-        })
-        .expect("serialize env cache");
-        fs::write(environment_cache_path(&dir), payload).expect("write env cache");
-
-        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
-        assert!(entry.is_none());
-    }
-
-    #[tokio::test]
-    async fn invalidates_environment_cache_with_schema_version_eight() {
-        let dir = temp_dir("env-schema-v8");
-        let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
-            schema_version: 8,
-            checked_at: "2026-07-07T11:00:00Z".to_string(),
-            fingerprint: "fingerprint-a".to_string(),
-            result: json!({"type":"check", "superResolutionAlgorithms":[{"name":"edvr"}]}),
-        })
-        .expect("serialize env cache");
-        fs::write(environment_cache_path(&dir), payload).expect("write env cache");
-
-        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
-        assert!(entry.is_none());
-    }
-
-    #[tokio::test]
-    async fn invalidates_environment_cache_with_schema_version_nine() {
-        let dir = temp_dir("env-schema-v9");
-        let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
-            schema_version: 9,
-            checked_at: "2026-07-07T19:00:00Z".to_string(),
-            fingerprint: "fingerprint-a".to_string(),
-            result: json!({"type":"check", "superResolutionAlgorithms":[{"name":"ppmsvsr"}]}),
-        })
-        .expect("serialize env cache");
-        fs::write(environment_cache_path(&dir), payload).expect("write env cache");
-
-        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
-        assert!(entry.is_none());
-    }
-
-    #[tokio::test]
-    async fn invalidates_environment_cache_with_schema_version_ten() {
-        let dir = temp_dir("env-schema-v10");
-        let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
-            schema_version: 10,
-            checked_at: "2026-07-11T10:00:00Z".to_string(),
+            schema_version: 11,
+            checked_at: "2026-07-11T12:00:00Z".to_string(),
             fingerprint: "fingerprint-a".to_string(),
             result: json!({"type":"check", "runtimeMode":"bundled"}),
         })

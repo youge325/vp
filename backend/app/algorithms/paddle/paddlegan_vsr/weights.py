@@ -10,7 +10,7 @@ from app.errors import TaskErrorCode, raise_error
 
 
 @dataclass(frozen=True, slots=True)
-class PaddleGanVsrSpec:
+class _PaddleGanVsrSpec:
     """Metadata for one bundled PaddleGAN video super-resolution model."""
 
     model_id: str
@@ -21,8 +21,8 @@ class PaddleGanVsrSpec:
     auxiliary_filenames: tuple[str, ...] = ()
 
 
-PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
-    "ppmsvsr": PaddleGanVsrSpec(
+PADDLEGAN_VSR_SPECS: dict[str, _PaddleGanVsrSpec] = {
+    "ppmsvsr": _PaddleGanVsrSpec(
         model_id="ppmsvsr",
         subdir="ppmsvsr",
         filename="PP-MSVSR_reds_x4.pdparams",
@@ -30,7 +30,7 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
         default_num_frames=10,
         auxiliary_filenames=("modified_spynet_tiny.pdparams",),
     ),
-    "ppmsvsr-large": PaddleGanVsrSpec(
+    "ppmsvsr-large": _PaddleGanVsrSpec(
         model_id="ppmsvsr-large",
         subdir="ppmsvsr-large",
         filename="PP-MSVSR-L_reds_x4.pdparams",
@@ -38,14 +38,14 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
         default_num_frames=10,
         auxiliary_filenames=("modified_spynet.pdparams",),
     ),
-    "edvr": PaddleGanVsrSpec(
+    "edvr": _PaddleGanVsrSpec(
         model_id="edvr",
         subdir="edvr",
         filename="EDVR_L_w_tsa_SRx4.pdparams",
         sequence_mode="window",
         default_num_frames=5,
     ),
-    "basicvsr": PaddleGanVsrSpec(
+    "basicvsr": _PaddleGanVsrSpec(
         model_id="basicvsr",
         subdir="basicvsr",
         filename="BasicVSR_reds_x4.pdparams",
@@ -53,7 +53,7 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
         default_num_frames=10,
         auxiliary_filenames=("spynet.pdparams",),
     ),
-    "iconvsr": PaddleGanVsrSpec(
+    "iconvsr": _PaddleGanVsrSpec(
         model_id="iconvsr",
         subdir="iconvsr",
         filename="IconVSR_reds_x4.pdparams",
@@ -61,7 +61,7 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
         default_num_frames=10,
         auxiliary_filenames=("spynet.pdparams", "edvrm.pdparams"),
     ),
-    "basicvsr-plus-plus": PaddleGanVsrSpec(
+    "basicvsr-plus-plus": _PaddleGanVsrSpec(
         model_id="basicvsr-plus-plus",
         subdir="basicvsr-plus-plus",
         filename="BasicVSR++_reds_x4.pdparams",
@@ -77,7 +77,7 @@ def fixed_weight_root() -> Path:
     return Path(settings.backend_root) / "models" / "super_resolution" / "paddlegan"
 
 
-def get_spec(model_id: str) -> PaddleGanVsrSpec:
+def get_spec(model_id: str) -> _PaddleGanVsrSpec:
     try:
         return PADDLEGAN_VSR_SPECS[model_id]
     except KeyError:
@@ -88,12 +88,12 @@ def get_spec(model_id: str) -> PaddleGanVsrSpec:
         )
 
 
-def resolve_weight_path(model_id: str) -> Path:
+def _resolve_weight_path(model_id: str) -> Path:
     spec = get_spec(model_id)
     return fixed_weight_root() / spec.subdir / spec.filename
 
 
-def ensure_weight_file(
+def _ensure_weight_file(
     model_id: str,
     *,
     auto_download: bool | None = None,
@@ -104,7 +104,7 @@ def ensure_weight_file(
     All PaddleGAN VSR weights must be pre-provisioned under ``fixed_weight_root``.
     """
     get_spec(model_id)
-    target = resolve_weight_path(model_id)
+    target = _resolve_weight_path(model_id)
     if target.is_file() and target.stat().st_size > 0:
         return target
 
@@ -121,7 +121,7 @@ def ensure_paddlegan_vsr_weights(
     auto_download: bool | None = None,
 ) -> Path:
     """Validate all local weights required by a PaddleGAN VSR model."""
-    main_weight = ensure_weight_file(model_id, auto_download=auto_download)
+    main_weight = _ensure_weight_file(model_id, auto_download=auto_download)
     spec = get_spec(model_id)
     auxiliary_root = fixed_weight_root() / "_auxiliary"
     for filename in spec.auxiliary_filenames:

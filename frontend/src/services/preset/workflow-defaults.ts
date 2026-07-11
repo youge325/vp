@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // Default workflow config and environment hydration rules.
 
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 import {
   pickDefaultSuperResolutionAlgorithm,
