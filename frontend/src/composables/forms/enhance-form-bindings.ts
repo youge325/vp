@@ -1,6 +1,7 @@
 import { reactive, type ComputedRef } from 'vue'
 import { createEnhanceAlgorithmBindings } from '@/composables/forms/enhance-algorithm-bindings'
-import { createEnhanceFieldBindings } from '@/composables/forms/enhance-field-bindings'
+import { createEnhanceEffectBindings } from '@/composables/forms/enhance-effect-bindings'
+import { createEnhanceScalarFieldBindings } from '@/composables/forms/enhance-scalar-field-bindings'
 import { createEnhanceViewBindings } from '@/composables/forms/enhance-view-bindings'
 import type { VideoDimensions } from '@/types/view/model-metrics'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
@@ -26,16 +27,18 @@ export function createEnhanceFormBindings({
     currentInterpolationAlgorithm: algorithmBindings.currentInterpolationAlgorithm,
     currentSuperResolutionAlgorithm: algorithmBindings.currentSuperResolutionAlgorithm,
   })
-  const fieldBindings = createEnhanceFieldBindings({
+  const effectBindings = createEnhanceEffectBindings({
     workflow,
     checkResult,
     effectiveSuperResolutionNumFrames: viewBindings.effectiveSuperResolutionNumFrames,
     patchWorkflow,
   })
+  const scalarBindings = createEnhanceScalarFieldBindings({ workflow, patchWorkflow })
 
   return reactive({
     ...algorithmBindings,
     ...viewBindings,
-    ...fieldBindings,
+    ...effectBindings,
+    ...scalarBindings,
   })
 }

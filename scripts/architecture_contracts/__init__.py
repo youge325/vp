@@ -1,0 +1,1 @@
+"""Internal architecture contract engine."""

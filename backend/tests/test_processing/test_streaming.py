@@ -254,7 +254,7 @@ def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None
                 encode_queue.put(SegmentBoundary(next_source_frame=next_source_frame))
         encode_queue.put(StreamEnd(next_source_frame=video_info["source_frames"]))
 
-    monkeypatch.setattr("app.processing.streaming.pipeline_raw_stage.run_stage_worker_pipeline", fake_worker_pipeline)
+    monkeypatch.setattr("app.processing.streaming.pipeline_raw.run_stage_worker_pipeline", fake_worker_pipeline)
     monkeypatch.setattr(
         "app.processing.streaming.pipeline_preflight.should_use_stage_file_pipeline",
         lambda _stage_plan: False,
@@ -579,7 +579,7 @@ def test_streaming_pipeline_uses_stage_worker_pipeline_for_processing_steps(monk
         kwargs["encode_queue"].put(StreamEnd(next_source_frame=1))
 
     _install_video_frames_rename_hook(monkeypatch, wrapper)
-    monkeypatch.setattr("app.processing.streaming.pipeline_raw_stage.run_stage_worker_pipeline", fake_worker_pipeline)
+    monkeypatch.setattr("app.processing.streaming.pipeline_raw.run_stage_worker_pipeline", fake_worker_pipeline)
 
     process_video_streaming(
         ffmpeg=wrapper,
