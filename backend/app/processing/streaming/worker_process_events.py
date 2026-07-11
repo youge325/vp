@@ -8,9 +8,8 @@ import sys
 from typing import Any
 
 from app.errors import ProcessError, TaskErrorCode, error_code_to_wire
+from app.protocol.process_markers import TENSORRT_LOG_PREFIX as _TENSORRT_LOG_PREFIX
 from app.processing.streaming.stage_worker_progress import STAGE_EVENT_PREFIX
-
-_TENSORRT_LOG_PREFIX = "[VP_TRT]"
 
 
 def _parse_stage_event_line(line: str) -> dict[str, Any] | None:

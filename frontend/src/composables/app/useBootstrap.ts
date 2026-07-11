@@ -21,8 +21,9 @@ export function useBootstrap() {
       // Step 1 — listener binding (hard-fail if this breaks)
       await attachTaskListeners()
 
-      // Step 2 — preset loading (soft-fail, falls back to defaults)
-      const presetOk = await loadPersistedPreset().then(() => true).catch((error: unknown) => {
+      // Step 2 — expected load failures fall back internally; only an
+      // unexpected exception prevents the autosync watcher from starting.
+      const presetSyncReady = await loadPersistedPreset().then(() => true).catch((error: unknown) => {
         console.warn('Preset load failed, using defaults:', error)
         return false
       })
@@ -32,8 +33,8 @@ export function useBootstrap() {
         console.warn('Environment check failed:', error)
       })
 
-      // Step 4 — start auto-sync only if preset loaded successfully
-      if (presetOk) {
+      // Step 4 — start auto-sync once preset loading has settled.
+      if (presetSyncReady) {
         startAutoSync()
       }
     } finally {

@@ -5,16 +5,18 @@ import subprocess
 from app.utils.ffmpeg import capability_probe
 
 
-def test_parse_avoptions_extracts_choice_number_and_boolean_options() -> None:
-    options = capability_probe.parse_avoptions(
+def test_parse_codec_profile_extracts_choice_number_and_boolean_options() -> None:
+    profile = capability_probe.parse_codec_profile(
+        {"name": "h264_nvenc", "label": "NVENC H.264", "family": "nvidia", "codec": "h264"},
         """
   -preset            <int>        E..V....... (from 0 to 18) (default p4)
      p1              1            fastest
      p4              4            medium
   -cq                <float>      E..V....... (from 0 to 51) (default 23)
   -forced-idr        <boolean>    E..V....... (default false)
-"""
+""",
     )
+    options = profile["options"]
 
     assert [option["name"] for option in options] == ["preset", "cq", "forced-idr"]
     assert options[0]["type"] == "choice"

@@ -12,19 +12,10 @@ import {
 } from '@/services/preset/normalize'
 import { normalizeError } from '@/services/error/normalize'
 import { TASK_ERROR_CODES } from '@/types/protocol/errors'
-import type { TaskError } from '@/types/domain/media'
 
 export function useMediaImport() {
   const envStore = useEnvStore()
   const mediaStore = useMediaStore()
-  // Phase 14 — 把"导入失败"路由到 issueStore('input') scope,InputModuleView
-  // 的 ``useOperationIssue('input')`` 才能拿到、IssueBanner 才会显示。
-  //
-  // Phase 13.1 改 ``useMediaImport`` 写入 ``mediaRunState.setIssue(itemId, …)``
-  // 时,实际上没有任何视图侧消费方读 ``mediaRunState.getByItemId(id)?.issue``,
-  // 导入失败时 banner 永远不出现 —— 是真 dead write。改到 issueStore 后
-  // 同一个 import 工作流的失败会覆盖前一次的 banner 文案(per-scope 单
-  // banner 是设计),展示最后一次错误足够提示用户。
   const issueStore = useIssueStore()
   const presetStore = usePresetStore()
 
@@ -48,7 +39,7 @@ export function useMediaImport() {
     }
   }
 
-  async function inspectItems(ids: string[]): Promise<void> {
+  async function reinspectIds(ids: string[]): Promise<void> {
     await Promise.allSettled(ids.map((id) => inspectAndNormalize(id)))
   }
 
@@ -65,21 +56,16 @@ export function useMediaImport() {
 
     mediaStore.appendItems(fresh)
     mediaStore.setActive(fresh[0]?.id ?? null)
-    await inspectItems(fresh.map((item) => item.id))
+    await reinspectIds(fresh.map((item) => item.id))
   }
 
-  async function pickAndImport(): Promise<{ paths: string[]; error: TaskError | null }> {
+  async function pickAndImport(): Promise<void> {
     try {
       const paths = await mediaIpc.pickInputs()
       await importPaths(paths)
-      return { paths, error: null }
     } catch (error) {
-      return { paths: [], error: normalizeError(error, TASK_ERROR_CODES.IoError) }
+      issueStore.setIssue('input', normalizeError(error, TASK_ERROR_CODES.IoError))
     }
-  }
-
-  function reinspectIds(ids: string[]): Promise<void> {
-    return inspectItems(ids)
   }
 
   return {

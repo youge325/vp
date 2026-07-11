@@ -60,23 +60,10 @@ _ONNX_SCRIPT = (
     "print(json.dumps(result), flush=True)\n"
 )
 
-_PYTORCH_FALLBACK: dict[str, Any] = {
-    "pytorch_available": False,
-    "supports_cuda": False,
-    "supports_tensorrt": False,
-}
-
-_PADDLE_FALLBACK: dict[str, Any] = {
-    "paddle_available": False,
-    "supports_cuda": False,
-    "supports_tensorrt": False,
-    "supports_dcu": False,
-}
-
-_ONNX_FALLBACK: dict[str, Any] = {
-    "onnx_available": False,
-    "supports_cuda": False,
-    "supports_tensorrt": False,
+_PROBE_SPECS: dict[str, tuple[str, str, tuple[str, ...]]] = {
+    "pytorch": (_PYTORCH_SCRIPT, "pytorch_available", ("cuda", "tensorrt")),
+    "paddle": (_PADDLE_SCRIPT, "paddle_available", ("cuda", "tensorrt", "dcu")),
+    "onnx": (_ONNX_SCRIPT, "onnx_available", ("tensorrt", "cuda")),
 }
 
 
@@ -105,13 +92,18 @@ def _run_python_capability_probe(script: str, fallback: dict[str, Any]) -> dict[
     return dict(fallback)
 
 
-def _check_pytorch_in_subprocess() -> dict[str, Any]:
-    return _run_python_capability_probe(_PYTORCH_SCRIPT, _PYTORCH_FALLBACK)
-
-
-def _check_paddle_in_subprocess() -> dict[str, Any]:
-    return _run_python_capability_probe(_PADDLE_SCRIPT, _PADDLE_FALLBACK)
-
-
-def _check_onnxruntime_in_subprocess() -> dict[str, Any]:
-    return _run_python_capability_probe(_ONNX_SCRIPT, _ONNX_FALLBACK)
+def probe_tensor_engines() -> dict[str, list[str]]:
+    """Probe each tensor runtime and return its usable engine names."""
+    engines_by_backend: dict[str, list[str]] = {}
+    for backend, (script, availability_key, engine_order) in _PROBE_SPECS.items():
+        fallback = {
+            availability_key: False,
+            **{f"supports_{engine}": False for engine in engine_order},
+        }
+        capabilities = _run_python_capability_probe(script, fallback)
+        engines_by_backend[backend] = (
+            [engine for engine in engine_order if capabilities.get(f"supports_{engine}")]
+            if capabilities.get(availability_key)
+            else []
+        )
+    return engines_by_backend

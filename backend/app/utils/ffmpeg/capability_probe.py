@@ -91,7 +91,7 @@ def _parse_supported_values(text: str, prefix: str) -> list[str]:
     return []
 
 
-def parse_avoptions(help_text: str) -> list[dict[str, Any]]:
+def _parse_avoptions(help_text: str) -> list[dict[str, Any]]:
     options: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
     for line in help_text.splitlines():
@@ -136,7 +136,7 @@ def parse_codec_profile(
 ) -> dict[str, Any]:
     pixel_formats = _parse_supported_values(help_text, "Supported pixel formats:")
     hardware_devices = _parse_supported_values(help_text, "Supported hardware devices:")
-    options = parse_avoptions(help_text)
+    options = _parse_avoptions(help_text)
     if pixel_formats:
         options.insert(
             0,

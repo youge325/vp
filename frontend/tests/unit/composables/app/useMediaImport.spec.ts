@@ -129,33 +129,27 @@ describe('useMediaImport', () => {
     expect(inspectMock).not.toHaveBeenCalled()
   })
 
-  it('pickAndImport delegates to pickInputs + importPaths and returns its result', async () => {
+  it('pickAndImport delegates to pickInputs and imports the selected paths', async () => {
     pickInputsMock.mockResolvedValueOnce(['/video/picked.mp4'])
     inspectMock.mockResolvedValueOnce(sampleInfo())
 
     const mediaStore = useMediaStore()
     const importer = useMediaImport()
-    const result = await importer.pickAndImport()
+    await importer.pickAndImport()
 
-    expect(result.paths).toEqual(['/video/picked.mp4'])
-    expect(result.error).toBeNull()
     expect(mediaStore.mediaItems).toHaveLength(1)
     expect(mediaStore.mediaItems[0].inputPath).toBe('/video/picked.mp4')
   })
 
-  it('pickAndImport surfaces IO errors as the returned error without writing input banner', async () => {
-    // Dialog 取消 / 文件选择对话框 IO 失败走 catch 分支,这里没经过
-    // inspectAndNormalize,所以不应该污染 'input' banner —— banner 是
-    // 给 inspect 失败用的。返回值结构是给 view 自己决定怎么报错。
+  it('pickAndImport routes picker IO errors to the input issue', async () => {
     pickInputsMock.mockRejectedValueOnce(new Error('dialog canceled'))
 
     const issueStore = useIssueStore()
     const importer = useMediaImport()
-    const result = await importer.pickAndImport()
+    await importer.pickAndImport()
 
-    expect(result.paths).toEqual([])
-    expect(result.error?.code).toBe(TASK_ERROR_CODES.IoError)
-    // 'input' scope banner 仍为 null —— pick 失败不写 issueStore。
-    expect(issueStore.operationIssue).toBeNull()
+    expect(issueStore.operationIssue?.scope).toBe('input')
+    expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.IoError)
+    expect(issueStore.operationIssue?.error.message).toContain('dialog canceled')
   })
 })

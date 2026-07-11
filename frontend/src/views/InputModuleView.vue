@@ -14,18 +14,8 @@ const inputIssue = useOperationIssue('input')
 const runStateStore = useMediaRunState()
 const dragActive = ref(false)
 
-// Phase 13.1 — ``taskState`` 拆到独立 store 后,row 状态展示用 helper
-// 替换 ``item.taskState.status`` 的直接访问。未跑过任务的 item 返回
-// ``idle``(占位)。
 function statusOf(id: string): string {
   return runStateStore.getByItemId(id)?.taskState.status ?? 'idle'
-}
-
-async function handlePickInputs(): Promise<void> {
-  const { error } = await pickAndImport()
-  if (error) {
-    // error 已通过 useMediaImport 内部处理
-  }
 }
 
 async function handleDrop(event: DragEvent): Promise<void> {
@@ -73,7 +63,7 @@ async function reinspectSelection(): Promise<void> {
           <button class="ghost-button" :disabled="mediaStore.mediaItems.length === 0" @click="reinspectSelection()">
             重新读取
           </button>
-          <button class="primary-button" @click="handlePickInputs">批量导入</button>
+          <button class="primary-button" @click="pickAndImport">批量导入</button>
         </div>
       </div>
 
