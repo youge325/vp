@@ -103,6 +103,7 @@ FORBIDDEN_PATTERN_RULES = (
             r"\bAlgorithmFactoryFn\b",
             r"\bBackendFactoryFn\b",
             r"\bread_declared_frames\b",
+            r"\b_check_(?:pytorch|paddle|onnxruntime)_in_subprocess\b",
         ),
         message="obsolete backend internal symbol",
         suffixes=(".py",),
@@ -152,8 +153,34 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "runtime-config-snapshots",
         "backend/app/cli/runtime_configs.py",
-        r"\b(?:decode_json|encode_json|workflow_json|output_json|legacy_sections|with_workflow_json)\b",
+        r"\b(?:decode_json|encode_json|workflow_json|output_json|legacy_sections|with_workflow_json)\b|^ConfigSection\s*=",
         "duplicate RuntimeConfigs JSON snapshot surface",
+    ),
+    _forbid(
+        "public-config-model-typevar",
+        "backend/app/cli/commands/_process_validation.py",
+        r"^ConfigModel\s*=",
+        "module-internal config model TypeVar is public",
+    ),
+    _forbid(
+        "public-ffmpeg-avoption-parser",
+        "backend/app/utils/ffmpeg/capability_probe.py",
+        r"^def\s+parse_avoptions\b",
+        "module-internal FFmpeg AVOption parser is public",
+    ),
+    _forbid(
+        "public-paddlegan-runner-constants",
+        "backend/app/algorithms/paddle/paddlegan_vsr/runner.py",
+        r"^(?:TRACE_ENV_VAR|TENSORRT_LOG_PREFIX)\s*=",
+        "module-internal PaddleGAN runner constant is public",
+    ),
+    ForbiddenReferenceRule(
+        "duplicate-tensorrt-log-marker",
+        roots=("backend/app",),
+        patterns=(r"[\"']\[VP_TRT\][\"']",),
+        message="duplicate TensorRT subprocess log marker",
+        suffixes=(".py",),
+        excludes=("backend/app/protocol/process_markers.py",),
     ),
     _forbid(
         "benchmark-test-runner-parameter",
@@ -752,8 +779,20 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "preset-sync-test-only-return",
         "frontend/src/composables/app/usePresetSync.ts",
-        r"^[ \t]{4}(?:persistDraft|scheduleSave),\s*$",
+        r"^[ \t]{4}(?:persistDraft|scheduleSave),\s*$|loadPersistedPreset\(\):\s*Promise<boolean>",
         "test-only preset sync return field",
+    ),
+    _forbid(
+        "media-import-test-only-result",
+        "frontend/src/composables/app/useMediaImport.ts",
+        r"pickAndImport\(\):\s*Promise<\{",
+        "test-only media import result",
+    ),
+    _forbid(
+        "output-picker-test-only-result",
+        "frontend/src/composables/app/useOutputPicker.ts",
+        r"pickOutputDirectory\(\):\s*Promise<\{",
+        "test-only output picker result",
     ),
     _forbid(
         "decode-profile-test-only-return",

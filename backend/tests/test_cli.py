@@ -386,13 +386,8 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
 
     monkeypatch.setattr("app.cli.commands.check.FFmpegWrapper", _FakeCheckFFmpeg)
     monkeypatch.setattr(
-        "app.cli.commands.check._check_pytorch_in_subprocess",
-        lambda: {"pytorch_available": False, "supports_cuda": False, "supports_tensorrt": False},
-    )
-    monkeypatch.setattr("app.cli.commands.check._check_paddle_in_subprocess", lambda: {"paddle_available": False})
-    monkeypatch.setattr(
-        "app.cli.commands.check._check_onnxruntime_in_subprocess",
-        lambda: {"onnx_available": True, "supports_cuda": False, "supports_tensorrt": False},
+        "app.cli.commands.check.probe_tensor_engines",
+        lambda: {"pytorch": [], "paddle": [], "onnx": []},
     )
     monkeypatch.setattr("app.cli.commands.check.list_gpu_adapters", lambda: [])
     monkeypatch.setattr(settings, "RIFE_MODEL_DIR", str(model_dir))

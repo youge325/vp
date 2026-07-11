@@ -140,15 +140,12 @@ export function useWorkbenchEditor() {
 
 export function useEditingScope() {
   const mediaStore = useMediaStore()
-  const isPresetMode = computed(() => !mediaStore.activeItem)
-  const editableCount = computed(() => mediaStore.getEditableTargetIds().size)
-
-  const label = computed(() =>
-    getEditingScopeLabel(isPresetMode.value, editableCount.value || 1),
+  const targetLabel = computed(() =>
+    getEditingScopeLabel(
+      !mediaStore.activeItem,
+      mediaStore.getEditableTargetIds().size || 1,
+    ),
   )
 
-  return {
-    isPresetMode,
-    targetLabel: computed(() => label.value.targetLabel),
-  }
+  return { targetLabel }
 }

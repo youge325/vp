@@ -149,9 +149,8 @@ describe('usePresetSync', () => {
     const replaceSpy = vi.spyOn(presetStore, 'replaceDraftPreset')
 
     const sync = usePresetSync()
-    const loaded = await sync.loadPersistedPreset()
+    await sync.loadPersistedPreset()
 
-    expect(loaded).toBe(false)
     expect(replaceSpy).toHaveBeenCalledOnce()
     expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.SchemaMismatch)
   })
@@ -165,9 +164,8 @@ describe('usePresetSync', () => {
     const replaceSpy = vi.spyOn(presetStore, 'replaceDraftPreset')
 
     const sync = usePresetSync()
-    const loaded = await sync.loadPersistedPreset()
+    await sync.loadPersistedPreset()
 
-    expect(loaded).toBe(false)
     expect(replaceSpy).toHaveBeenCalledOnce()
     expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.PersistenceFailed)
   })

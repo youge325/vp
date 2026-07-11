@@ -56,15 +56,11 @@ export function getTaskStatusLabel(batch: BatchState, currentItemStatus: string 
 export function getEditingScopeLabel(
   isPresetMode: boolean,
   selectionCount: number,
-): { targetLabel: string } {
+): string {
   if (isPresetMode) {
-    return {
-      targetLabel: '默认预设',
-    }
+    return '默认预设'
   }
-  return {
-    targetLabel: `作用于 ${selectionCount} 个文件`,
-  }
+  return `作用于 ${selectionCount} 个文件`
 }
 
 export function getProbeSourceLabel(source: string | null): string {

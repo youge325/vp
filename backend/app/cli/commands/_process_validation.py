@@ -34,7 +34,7 @@ from app.models import DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig
 from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.file_utils import validate_input_path
 
-ConfigModel = TypeVar("ConfigModel", DecodeConfig, EncodeConfig, WorkflowConfig, OutputConfig)
+_ConfigModel = TypeVar("_ConfigModel", DecodeConfig, EncodeConfig, WorkflowConfig, OutputConfig)
 
 
 def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
@@ -50,8 +50,8 @@ def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, An
 def _validate_config_section(
     raw_value: str | None,
     default: dict[str, Any],
-    model_cls: type[ConfigModel],
-) -> ConfigModel:
+    model_cls: type[_ConfigModel],
+) -> _ConfigModel:
     """Parse + deep-merge + Pydantic-validate one config section.
 
     RuntimeConfigs later projects default sections sparsely and explicit

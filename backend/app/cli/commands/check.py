@@ -4,11 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from app.cli.probes import (
-    _check_onnxruntime_in_subprocess,
-    _check_paddle_in_subprocess,
-    _check_pytorch_in_subprocess,
-)
+from app.cli.probes import probe_tensor_engines
 from app.config import settings
 from app.processing.interpolation import SUPPORTED_ALGORITHMS as INTERPOLATION_ALGORITHMS
 from app.processing.super_resolution import SUPPORTED_ALGORITHMS as SR_ALGORITHMS
@@ -22,9 +18,7 @@ def cmd_check(_args: argparse.Namespace) -> None:
     ffmpeg = FFmpegWrapper()
     ffmpeg_available = ffmpeg.is_available()
 
-    pytorch_result = _check_pytorch_in_subprocess()
-    paddle_result = _check_paddle_in_subprocess()
-    onnx_result = _check_onnxruntime_in_subprocess()
+    tensor_engines = probe_tensor_engines()
     gpu_adapters = list_gpu_adapters()
     public_gpu_adapters = [{"name": adapter["name"], "vendor": adapter["vendor"]} for adapter in gpu_adapters]
     onnx_models = scan_onnx_models(settings.RIFE_MODEL_DIR)
@@ -38,36 +32,6 @@ def cmd_check(_args: argparse.Namespace) -> None:
             "decoderProfiles": [],
         }
     )
-
-    # 构建推理引擎支持信息
-    tensor_engines: dict[str, list[str]] = {
-        "pytorch": [],
-        "paddle": [],
-        "onnx": [],
-    }
-    if pytorch_result.get("pytorch_available"):
-        engines = []
-        if pytorch_result.get("supports_cuda"):
-            engines.append("cuda")
-        if pytorch_result.get("supports_tensorrt"):
-            engines.append("tensorrt")
-        tensor_engines["pytorch"] = engines
-    if paddle_result.get("paddle_available"):
-        engines = []
-        if paddle_result.get("supports_cuda"):
-            engines.append("cuda")
-        if paddle_result.get("supports_tensorrt"):
-            engines.append("tensorrt")
-        if paddle_result.get("supports_dcu"):
-            engines.append("dcu")
-        tensor_engines["paddle"] = engines
-    if onnx_result.get("onnx_available"):
-        engines = []
-        if onnx_result.get("supports_tensorrt"):
-            engines.append("tensorrt")
-        if onnx_result.get("supports_cuda"):
-            engines.append("cuda")
-        tensor_engines["onnx"] = engines
 
     interpolation_algorithms_payload = [
         {

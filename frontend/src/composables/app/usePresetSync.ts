@@ -36,7 +36,6 @@ function coercePreset(raw: WorkbenchPreset | null, env: EnvironmentCheckResult |
 export function usePresetSync() {
   const envStore = useEnvStore()
   const presetStore = usePresetStore()
-  // Phase 6d — banner state lives in ``useIssueStore`` now.
   const issueStore = useIssueStore()
   let saveTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -85,25 +84,23 @@ export function usePresetSync() {
     }, PRESET_SAVE_DEBOUNCE_MS)
   }
 
-  async function loadPersistedPreset(): Promise<boolean> {
+  async function loadPersistedPreset(): Promise<void> {
     try {
       const preset = await presetIpc.load()
       if (!preset) {
         presetStore.replaceDraftPreset(createDefaultWorkbenchPreset(envStore.env.checkResult))
-        return false
+        return
       }
       presetStore.replaceDraftPreset(coercePreset(preset, envStore.env.checkResult))
       issueStore.clearIssue('preset')
-      return true
     } catch (error) {
       const normalized = normalizeError(error, TASK_ERROR_CODES.PersistenceFailed)
       if (normalized.code === TASK_ERROR_CODES.SchemaMismatch) {
         recoverFromSchemaMismatch()
-        return false
+        return
       }
       presetStore.replaceDraftPreset(createDefaultWorkbenchPreset(envStore.env.checkResult))
       reportPresetIssue(error, 'Unable to load the saved workbench preset.')
-      return false
     }
   }
 

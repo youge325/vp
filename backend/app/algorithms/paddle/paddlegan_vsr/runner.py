@@ -21,10 +21,10 @@ from app.algorithms.paddle.paddlegan_vsr.weights import (
     ensure_paddlegan_vsr_weights,
     get_spec,
 )
+from app.protocol.process_markers import TENSORRT_LOG_PREFIX as _TENSORRT_LOG_PREFIX
 from app.utils.logger import get_logger
 
-TRACE_ENV_VAR = "VP_PADDLEGAN_VSR_TRACE_PATH"
-TENSORRT_LOG_PREFIX = "[VP_TRT]"
+_TRACE_ENV_VAR = "VP_PADDLEGAN_VSR_TRACE_PATH"
 logger = get_logger(__name__)
 
 
@@ -454,7 +454,7 @@ def _create_tensorrt_predictor(
 
 
 def _emit_tensorrt_log(message: str) -> None:
-    logger.info("%s TensorRT %s", TENSORRT_LOG_PREFIX, message)
+    logger.info("%s TensorRT %s", _TENSORRT_LOG_PREFIX, message)
 
 
 def _format_shape(shape: Sequence[int]) -> str:
@@ -462,7 +462,7 @@ def _format_shape(shape: Sequence[int]) -> str:
 
 
 def _trace_path() -> Path | None:
-    value = os.environ.get(TRACE_ENV_VAR)
+    value = os.environ.get(_TRACE_ENV_VAR)
     if not value:
         return None
     return Path(value)

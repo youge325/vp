@@ -36,15 +36,6 @@ const { pickOutputDirectory } = useOutputPicker()
 const { editorConfig } = useWorkbenchEditor()
 const { targetLabel } = useEditingScope()
 const encodeIssue = useOperationIssue('encode')
-
-async function handlePickOutputDirectory(): Promise<void> {
-  // Phase 16 — IO 失败由 useOutputPicker 内部路由到 issueStore('encode'),
-  // 模板里的 ``IssueBanner :issue="encodeIssue"`` 自动接收。
-  // Phase 17 — 成功路径走 useWorkbenchEditor.patchOutput 双轨:有 active
-  // item 写 item.outputConfig.outputDir,无 active item 写 preset.draftPreset。
-  // view 不需要再处理返回值,editorConfig 会自动反映新路径。
-  await pickOutputDirectory()
-}
 </script>
 
 <template>
@@ -57,7 +48,7 @@ async function handlePickOutputDirectory(): Promise<void> {
 
         <div class="panel-actions">
           <span class="panel-badge">{{ targetLabel }}</span>
-          <button class="ghost-button" @click="handlePickOutputDirectory">选择输出目录</button>
+          <button class="ghost-button" @click="pickOutputDirectory">选择输出目录</button>
         </div>
       </div>
 

@@ -67,10 +67,8 @@ describe('useOutputPicker', () => {
     const presetStore = usePresetStore()
 
     const picker = useOutputPicker()
-    const result = await picker.pickOutputDirectory()
+    await picker.pickOutputDirectory()
 
-    expect(result.outputDir).toBe('D:/out/picked')
-    expect(result.error).toBeNull()
     expect(presetStore.draftPreset.outputConfig.outputDir).toBe('D:/out/picked')
     // 成功路径必须同时清掉上次的 banner
     expect(issueStore.operationIssue).toBeNull()
@@ -89,10 +87,8 @@ describe('useOutputPicker', () => {
     const presetDirBefore = presetStore.draftPreset.outputConfig.outputDir
 
     const picker = useOutputPicker()
-    const result = await picker.pickOutputDirectory()
+    await picker.pickOutputDirectory()
 
-    expect(result.outputDir).toBe('D:/out/picked-item')
-    expect(result.error).toBeNull()
     // 关键:写到 item,不动 preset
     const itemAfter = mediaStore.findItem(item.id)
     expect(itemAfter?.outputConfig.outputDir).toBe('D:/out/picked-item')
@@ -111,10 +107,8 @@ describe('useOutputPicker', () => {
     const originalDir = presetStore.draftPreset.outputConfig.outputDir
 
     const picker = useOutputPicker()
-    const result = await picker.pickOutputDirectory()
+    await picker.pickOutputDirectory()
 
-    expect(result.outputDir).toBeNull()
-    expect(result.error).toBeNull()
     // preset 没动:取消不该改 outputDir
     expect(presetStore.draftPreset.outputConfig.outputDir).toBe(originalDir)
     // banner 仍要清,否则取消按钮后旧错误挂着误导
@@ -130,9 +124,8 @@ describe('useOutputPicker', () => {
     const itemDirBefore = item.outputConfig.outputDir
 
     const picker = useOutputPicker()
-    const result = await picker.pickOutputDirectory()
+    await picker.pickOutputDirectory()
 
-    expect(result.outputDir).toBeNull()
     const itemAfter = mediaStore.findItem(item.id)
     expect(itemAfter?.outputConfig.outputDir).toBe(itemDirBefore)
   })
@@ -144,10 +137,8 @@ describe('useOutputPicker', () => {
     const issueStore = useIssueStore()
 
     const picker = useOutputPicker()
-    const result = await picker.pickOutputDirectory()
+    await picker.pickOutputDirectory()
 
-    expect(result.outputDir).toBeNull()
-    expect(result.error?.code).toBe(TASK_ERROR_CODES.IoError)
     // 关键回归:必须写入 'encode' scope,EncodeModuleView 才能拿到
     expect(issueStore.operationIssue?.scope).toBe('encode')
     expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.IoError)
