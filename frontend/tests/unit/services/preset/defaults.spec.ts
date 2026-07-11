@@ -6,21 +6,18 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 import type { HardwareDeviceOptionSpec } from '@/types/domain/capability'
 
 const makeEnv = (decoderProfiles: EnvironmentCheckResult['ffmpeg']['decoderProfiles']): EnvironmentCheckResult => ({
-  type: 'check',
   ffmpeg: {
     available: true,
     hwaccels: ['cuda', 'qsv', 'd3d11va'],
     encoderProfiles: [],
     decoderProfiles,
   },
-  gpu: { available: true, devices: ['GPU'], adapters: [] },
-  tensorBackends: { pytorch: false, paddle: false, onnx: false },
-  tensorEngines: {},
-  onnxRuntime: { available: false, providers: [] },
-  rifeModel: { available: false },
+  gpu: { adapters: [] },
+  tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
   interpolationAlgorithms: [],
   superResolutionAlgorithms: [],
-  animeProfiles: [],
+  runtimeMode: 'external',
 })
 
 const decoderProfile = (
@@ -36,7 +33,6 @@ const decoderProfile = (
   family,
   codec,
   available: true,
-  pixelFormats: [],
   hardwareDevices,
   hardwareDeviceOptions,
   options: [],

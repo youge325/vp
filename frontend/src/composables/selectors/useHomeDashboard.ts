@@ -17,8 +17,11 @@ export function useHomeDashboard() {
   const visibleEncoderProfiles = computed(() => getVisibleEncoderProfiles(checkResult.value))
   const probeSourceLabel = computed(() => getProbeSourceLabel(envStore.env.checkSource))
   const familyCards = computed(() => groupEncoderProfilesByFamily(visibleEncoderProfiles.value))
+  const gpuLabel = computed(() =>
+    checkResult.value?.gpu.adapters.map((adapter) => adapter.name).filter(Boolean).join(' / ') || 'CPU only',
+  )
   const overviewStats = computed(() => [
-    { label: '运行时', value: checkResult.value?.runtime?.mode ?? '--' },
+    { label: '运行时', value: checkResult.value?.runtimeMode ?? '--' },
     { label: 'FFmpeg', value: checkResult.value?.ffmpeg?.available ? 'Ready' : 'Missing' },
     { label: '已探测编码器', value: `${visibleEncoderProfiles.value.length}` },
     { label: '已导入素材', value: `${mediaStore.mediaItems.length}` },
@@ -32,6 +35,7 @@ export function useHomeDashboard() {
     lastProbeAt,
     probeSourceLabel,
     familyCards,
+    gpuLabel,
     overviewStats,
   }
 }

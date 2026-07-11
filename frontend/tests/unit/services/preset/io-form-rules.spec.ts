@@ -18,7 +18,6 @@ const decoderProfile = (): DecoderProfileSpec => ({
   family: 'nvidia',
   codec: 'h264',
   available: true,
-  pixelFormats: [],
   hardwareDevices: ['cuda', 'd3d11va'],
   hardwareDeviceOptions: {
     cuda: [
@@ -36,7 +35,6 @@ const encoderProfile = (): EncoderProfileSpec => ({
   family: 'nvidia',
   codec: 'hevc',
   available: true,
-  pixelFormats: [],
   hardwareDevices: [],
   options: [],
   rateControlModes: [

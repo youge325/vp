@@ -27,27 +27,13 @@ export async function stubNextEnvironmentRecheckClick(
         env.isChecking = true
         env.issue = null
         env.checkResult = {
-          type: 'check',
           ffmpeg: {
             available: true,
-            version: 'e2e-stub',
-            path: 'ffmpeg',
-            ffprobePath: 'ffprobe',
             hwaccels: [],
             encoderProfiles: [],
             decoderProfiles: [],
           },
-          gpu: {
-            available: false,
-            devices: [],
-            adapters: [],
-            cudaAvailable: false,
-          },
-          tensorBackends: {
-            pytorch: false,
-            paddle: false,
-            onnx: true,
-          },
+          gpu: { adapters: [] },
           tensorEngines: {
             pytorch: [],
             paddle: [],
@@ -58,25 +44,9 @@ export async function stubNextEnvironmentRecheckClick(
             paddle: ['nvidia', 'intel', 'amd', 'hygon'],
             onnx: ['nvidia', 'intel', 'amd'],
           },
-          onnxRuntime: {
-            available: true,
-            providers: [],
-          },
-          rifeModel: {
-            available: true,
-            version: '4.25',
-            path: 'rife_v4.25.onnx',
-          },
           interpolationAlgorithms: [],
           superResolutionAlgorithms: [],
-          animeProfiles: [],
-          runtime: {
-            mode: 'e2e',
-            bundled: true,
-            pythonExecutable: 'python',
-            defaultModelAvailable: true,
-          },
-          resources: {},
+          runtimeMode: 'e2e',
         }
         env.checkSource = 'probe'
         env.lastCheckedAt = new Date().toISOString()

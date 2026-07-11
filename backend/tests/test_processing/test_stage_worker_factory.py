@@ -70,17 +70,17 @@ def test_stage_worker_factory_passes_filtered_kwargs_to_algorithm_factory(monkey
 
     monkeypatch.setattr(AlgorithmFactory, "create", staticmethod(fake_create))
     stage = ProcessingStep(
-        algorithm_type="anime_optimization",
-        algorithm_kwargs={"profile": "clean-lines", "tensor_backend": "pytorch", "duplicate_threshold": 0.99},
-        stage_name="01_anime_optimization",
+        algorithm_type="super_resolution",
+        algorithm_kwargs={"sr_algorithm": "placeholder", "tensor_backend": "pytorch", "scale_factor": 2.0},
+        stage_name="01_super_resolution",
     )
 
     assert stage_worker_factory.create_algorithm(stage, _Backend()) == "algorithm"
     assert captured == {
-        "algorithm_type": "anime_optimization",
+        "algorithm_type": "super_resolution",
         "tensor_backend": captured["tensor_backend"],
         "tensor_backend_name": "identity",
-        "kwargs": {"profile": "clean-lines", "duplicate_threshold": 0.99},
+        "kwargs": {"sr_algorithm": "placeholder", "scale_factor": 2.0},
     }
     assert captured["tensor_backend"].get_name() == "identity"
 

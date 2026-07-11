@@ -15,7 +15,6 @@ function makeProfile(overrides: Partial<EncoderProfileSpec> = {}): EncoderProfil
     family: 'nvidia',
     codec: 'h264',
     available: true,
-    pixelFormats: [],
     hardwareDevices: [],
     options: [
       { name: 'crf', label: 'crf', type: 'number', defaultValue: 18, choices: [], min: 0, max: 51 },

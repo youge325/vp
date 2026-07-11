@@ -1,25 +1,22 @@
 import { describe, expect, it } from 'vitest'
 
-import { pickDefaultAnimeProfile, pickDefaultInterpolationModel } from '@/services/preset/enhance-metadata-defaults'
+import { pickDefaultInterpolationModel } from '@/services/preset/enhance-metadata-defaults'
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function env(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
       available: true,
       hwaccels: [],
       encoderProfiles: [],
       decoderProfiles: [],
     },
-    gpu: { available: false, devices: [], adapters: [] },
-    tensorBackends: {},
-    tensorEngines: {},
-    onnxRuntime: { available: false, providers: [] },
-    rifeModel: { available: false },
+    gpu: { adapters: [] },
+    tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [],
     superResolutionAlgorithms: [],
-    animeProfiles: [],
+    runtimeMode: 'external',
     ...overrides,
   } as EnvironmentCheckResult
 }
@@ -36,10 +33,5 @@ describe('enhance metadata defaults', () => {
 
   it('keeps legacy metadata fallbacks when environment metadata is missing', () => {
     expect(pickDefaultInterpolationModel(null, 'missing')).toBe('4.25')
-    expect(pickDefaultAnimeProfile(null)).toBe('clean-lines')
-  })
-
-  it('selects the first anime profile from environment metadata', () => {
-    expect(pickDefaultAnimeProfile(env({ animeProfiles: ['line-art', 'clean-lines'] }))).toBe('line-art')
   })
 })

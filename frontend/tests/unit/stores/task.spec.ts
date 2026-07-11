@@ -41,26 +41,4 @@ describe('useTaskStore', () => {
     store.setPendingConflict(null)
     expect(store.pendingConflict).toBeNull()
   })
-
-  it('resetBatch returns to initial state', () => {
-    const store = useTaskStore()
-    store.setBatch({ isRunning: true, currentId: 'task-1', completedCount: 5 })
-    store.setRuntimeIds(['rt-1'])
-    store.setPendingConflict({
-      mediaId: 'm',
-      outputPath: '/p',
-      kind: 'final_exists_only',
-      completedChunks: 0,
-      completedOutputFrames: 0,
-      sidecarSignatureMatch: false,
-    })
-
-    store.resetBatch()
-
-    expect(store.batch.isRunning).toBe(false)
-    expect(store.batch.currentId).toBeNull()
-    expect(store.batch.completedCount).toBe(0)
-    expect(store.batchRuntimeIds).toEqual([])
-    expect(store.pendingConflict).toBeNull()
-  })
 })

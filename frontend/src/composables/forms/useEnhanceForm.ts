@@ -1,4 +1,4 @@
-// 视图 form-binding — 增强模块(补帧 / 超分 / 动漫优化)。
+// 视图 form-binding — 增强模块（补帧 / 超分）。
 // 这里只保留 store/env/editor 入口;字段绑定与返回对象组装下沉到
 // ``createEnhanceFormBindings``。
 

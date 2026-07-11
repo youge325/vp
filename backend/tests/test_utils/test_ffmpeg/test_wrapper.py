@@ -13,8 +13,8 @@ from app.utils.ffmpeg._progress import _parse_progress_snapshot
 class TestFFmpegWrapper:
     def test_init_default_paths(self):
         wrapper = FFmpegWrapper()
-        assert wrapper.ffmpeg_path == settings.FFMPEG_PATH or wrapper.ffmpeg_path
-        assert wrapper.ffprobe_path == settings.FFPROBE_PATH or wrapper.ffprobe_path
+        assert wrapper.ffmpeg_path == settings.FFMPEG_PATH
+        assert wrapper.ffprobe_path == settings.FFPROBE_PATH
 
     def test_is_available_with_nonexistent_path(self):
         wrapper = FFmpegWrapper(ffmpeg_path="/nonexistent/ffmpeg")
@@ -64,7 +64,9 @@ Encoder hevc_nvenc [NVIDIA NVENC hevc encoder]:
         )
 
         assert profile["name"] == "hevc_nvenc"
-        assert profile["pixelFormats"] == ["yuv420p", "nv12", "p010le"]
+        assert "pixelFormats" not in profile
+        pix_fmt = next(option for option in profile["options"] if option["name"] == "pix_fmt")
+        assert [choice["value"] for choice in pix_fmt["choices"]] == ["yuv420p", "nv12", "p010le"]
         assert profile["hardwareDevices"] == ["cuda"]
         assert profile["options"][0]["name"] == "pix_fmt"
 

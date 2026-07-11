@@ -71,9 +71,9 @@ def test_raw_pipeline_runs_stage_worker_chain_into_segmented_encoder(tmp_path: P
 
     def fake_stage_worker_runner(**kwargs: Any) -> None:
         encode_queue = kwargs["encode_queue"]
-        encode_queue.put(EncodedFrame(output_index=0, frame=_frame(10)))
+        encode_queue.put(EncodedFrame(frame=_frame(10)))
         encode_queue.put(SegmentBoundary(next_source_frame=1))
-        encode_queue.put(EncodedFrame(output_index=1, frame=_frame(20)))
+        encode_queue.put(EncodedFrame(frame=_frame(20)))
         encode_queue.put(StreamEnd(next_source_frame=2))
 
     monkeypatch.setattr(

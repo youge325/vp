@@ -4,20 +4,19 @@ import { useEnvStore } from '@/stores/env'
 import type { EnvironmentCheckPayload, EnvironmentCheckResult } from '@/types/domain/env'
 
 const sampleResult: EnvironmentCheckResult = {
-  type: 'check',
   ffmpeg: {
     available: true,
-    version: '6.0',
-    path: '/usr/bin/ffmpeg',
-    ffprobePath: '/usr/bin/ffprobe',
     hwaccels: [],
     encoderProfiles: [],
     decoderProfiles: [],
   },
-  gpu: { available: false, devices: [], adapters: [], cudaAvailable: false },
-  tensorBackends: { pytorch: false, paddle: false, onnx: false },
-  rifeModel: { available: false, version: '4.25', path: '' },
-} as unknown as EnvironmentCheckResult
+  gpu: { adapters: [] },
+  tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
+  interpolationAlgorithms: [],
+  superResolutionAlgorithms: [],
+  runtimeMode: 'external',
+}
 
 describe('useEnvStore', () => {
   beforeEach(() => {

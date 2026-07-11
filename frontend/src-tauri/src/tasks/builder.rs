@@ -105,9 +105,9 @@ pub fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChil
 mod tests {
     use super::*;
     use crate::models::{
-        AnimeConfig, DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig,
-        OutputConfig, PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig,
-        RateControlMode, SuperResolutionConfig, TensorBackend, WorkflowConfig,
+        DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig, OutputConfig,
+        PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig, RateControlMode,
+        SuperResolutionConfig, TensorBackend, WorkflowConfig,
     };
     use serde_json::json;
 
@@ -145,12 +145,6 @@ mod tests {
                     engine: "cuda".to_string(),
                     num_frames: 10,
                     auto_download_weights: false,
-                },
-                anime: AnimeConfig {
-                    enabled: false,
-                    profile: "clean-lines".to_string(),
-                    denoise: 10,
-                    edge_boost: 15,
                 },
                 preprocess: PreprocessConfig {
                     enabled: false,

@@ -8,7 +8,7 @@ import {
   pickDefaultInterpolationAlgorithm,
 } from './enhance-algorithm-defaults'
 import { pickDefaultEngine, pickDefaultInterpolationEngine } from './enhance-engine-defaults'
-import { pickDefaultAnimeProfile, pickDefaultInterpolationModel } from './enhance-metadata-defaults'
+import { pickDefaultInterpolationModel } from './enhance-metadata-defaults'
 import { fallbackInterpolationOnnxModel, fallbackSuperResolutionOnnxModel } from './enhance-onnx-defaults'
 import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolution-defaults'
 import { findSuperResolutionAlgorithm } from './enhance-workflow-lookup'
@@ -38,12 +38,6 @@ function createDefaultWorkflowConfig(): WorkflowConfig {
       engine: 'cuda',
       numFrames: 10,
       autoDownloadWeights: false,
-    },
-    anime: {
-      enabled: false,
-      profile: 'clean-lines',
-      denoise: 10,
-      edgeBoost: 15,
     },
     preprocess: {
       enabled: false,
@@ -75,8 +69,6 @@ function applyEnvironmentWorkflowDefaults(
     findSuperResolutionAlgorithm(env, workflowConfig.superResolution.algorithm),
     env,
   )
-  workflowConfig.anime.profile = pickDefaultAnimeProfile(env)
-
   workflowConfig.interpolation.onnxModel = fallbackInterpolationOnnxModel(
     env,
     workflowConfig.interpolation.algorithm,

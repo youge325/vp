@@ -14,7 +14,6 @@ const decoderProfile = (name: string, label: string): DecoderProfileSpec => ({
   family: 'software',
   codec: 'any',
   available: true,
-  pixelFormats: [],
   hardwareDevices: [],
   options: [],
 })
@@ -25,7 +24,6 @@ const encoderProfile = (name: string, label: string): EncoderProfileSpec => ({
   family: 'software',
   codec: 'h264',
   available: true,
-  pixelFormats: [],
   hardwareDevices: [],
   options: [],
 })

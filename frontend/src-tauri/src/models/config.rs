@@ -54,6 +54,19 @@ pub enum RateControlMode {
     Bitrate,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub enum FilterStepKind {
+    Scale,
+    Crop,
+    Pad,
+    Sharpen,
+    Denoise,
+    Color,
+    AnimeCleanup,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
@@ -133,18 +146,8 @@ pub struct SuperResolutionConfig {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct AnimeConfig {
-    pub enabled: bool,
-    pub profile: String,
-    pub denoise: u32,
-    pub edge_boost: u32,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../src/types/generated/")]
 pub struct FilterStep {
-    pub kind: String,
+    pub kind: FilterStepKind,
     pub enabled: bool,
     #[serde(default)]
     #[ts(type = "Record<string, string | number | boolean>")]
@@ -177,7 +180,6 @@ pub struct WorkflowConfig {
     pub process_order: ProcessOrder,
     pub interpolation: InterpolationConfig,
     pub super_resolution: SuperResolutionConfig,
-    pub anime: AnimeConfig,
     #[serde(default = "default_preprocess")]
     pub preprocess: PreprocessConfig,
     #[serde(default = "default_postprocess")]
@@ -246,4 +248,53 @@ pub struct WorkbenchPreset {
     pub workflow_config: WorkflowConfig,
     pub encode_config: EncodeConfig,
     pub output_config: OutputConfig,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn workflow_ignores_legacy_anime_config() {
+        let value = json!({
+            "fpsMode": "multi",
+            "processOrder": "super_resolution_then_interpolation",
+            "interpolation": {
+                "enabled": false,
+                "targetFps": 60.0,
+                "multi": 2,
+                "algorithm": "rife",
+                "model": "4.25",
+                "onnxModel": null,
+                "scale": 1.0,
+                "fp16": false,
+                "tensorBackend": "pytorch",
+                "engine": "cuda"
+            },
+            "superResolution": {
+                "enabled": false,
+                "scaleFactor": 2.0,
+                "algorithm": "placeholder",
+                "onnxModel": null,
+                "tensorBackend": "onnx",
+                "engine": "cuda",
+                "numFrames": 10,
+                "autoDownloadWeights": false
+            },
+            "anime": {
+                "enabled": true,
+                "profile": "clean-lines",
+                "denoise": 15,
+                "edgeBoost": 30
+            },
+            "preprocess": { "enabled": false, "filters": [] },
+            "postprocess": { "enabled": false, "filters": [] }
+        });
+
+        let workflow: WorkflowConfig = serde_json::from_value(value).expect("legacy workflow");
+        let serialized = serde_json::to_value(workflow).expect("serialize workflow");
+
+        assert!(serialized.get("anime").is_none());
+    }
 }

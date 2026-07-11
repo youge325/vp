@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.models import OutputConfig
+from app.models import FilterStep, OutputConfig
 
 
 def _kwargs(output_dir: str) -> dict[str, object]:
@@ -48,3 +48,20 @@ def test_output_dir_accepts_relative_path() -> None:
     # ``Path(...).mkdir`` 时决定相对路径如何处理。
     cfg = OutputConfig.model_validate(_kwargs("./out"))
     assert cfg.output_dir == "./out"
+
+
+def test_filter_step_accepts_anime_cleanup_kind() -> None:
+    step = FilterStep.model_validate(
+        {
+            "kind": "anime_cleanup",
+            "enabled": True,
+            "params": {"profile": "clean-lines", "denoise": 15, "edgeBoost": 30},
+        }
+    )
+
+    assert step.kind == "anime_cleanup"
+
+
+def test_filter_step_rejects_unknown_kind() -> None:
+    with pytest.raises(ValidationError):
+        FilterStep.model_validate({"kind": "anime_optimization", "enabled": True, "params": {}})

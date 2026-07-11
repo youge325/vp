@@ -15,7 +15,6 @@ import pytest
 
 from app.errors import TaskErrorCode
 from app.models import (
-    AnimeConfig,
     DecodeConfig,
     EncodeConfig,
     FilterStep,
@@ -37,7 +36,6 @@ from app.protocol.payloads import (
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "frontend" / "src-tauri" / "schemas"
 
 _MODEL_MAP: dict[str, type] = {
-    "anime_config": AnimeConfig,
     "decode_config": DecodeConfig,
     "encode_config": EncodeConfig,
     "filter_step": FilterStep,

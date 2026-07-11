@@ -24,7 +24,6 @@ const makeProfile = (
   family,
   codec,
   available: true,
-  pixelFormats: [],
   hardwareDevices,
   hardwareDeviceOptions,
   options,
@@ -75,25 +74,18 @@ async function installDecodeProfiles(
     if (!state?.env?.env || !state?.preset?.draftPreset) return false
 
     state.env.env.checkResult = {
-      type: 'check',
       ffmpeg: {
         available: true,
-        version: 'e2e',
-        path: 'ffmpeg',
-        ffprobePath: 'ffprobe',
         hwaccels: ['cuda', 'qsv', 'd3d11va'],
         encoderProfiles: [],
         decoderProfiles,
       },
-      gpu: { available: true, devices: ['GPU'], adapters: [] },
-      tensorBackends: { pytorch: false, paddle: false, onnx: false },
-      tensorEngines: {},
-      backendDeviceSupport: {},
-      onnxRuntime: { available: false, providers: [] },
-      rifeModel: { available: false },
+      gpu: { adapters: [] },
+      tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+      backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
       interpolationAlgorithms: [],
       superResolutionAlgorithms: [],
-      animeProfiles: [],
+      runtimeMode: 'e2e',
     }
 
     state.preset.draftPreset.decodeConfig = decodeConfig

@@ -7,10 +7,10 @@ function createMediaItem(id: string, displayName: string, overrides?: Partial<Re
     inputPath: `C:/tmp/${displayName}`,
     selected: true,
     inspecting: false,
-    info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264', audioCodec: 'aac', duration: 60, bitrate: 5000 },
+    info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264' },
     decodeConfig: { mode: 'software', hwaccel: '', decoder: 'software', options: {} },
     encodeConfig: { codec: 'h264', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 23 }, options: {} },
-    workflowConfig: { fpsMode: 'multi', processOrder: 'super_resolution_then_interpolation', interpolation: { enabled: false }, superResolution: { enabled: false }, anime: { enabled: false }, preprocess: { enabled: false }, postprocess: { enabled: false } },
+    workflowConfig: { fpsMode: 'multi', processOrder: 'super_resolution_then_interpolation', interpolation: { enabled: false }, superResolution: { enabled: false }, preprocess: { enabled: false, filters: [] }, postprocess: { enabled: false, filters: [] } },
     outputConfig: { outputDir: 'C:/tmp/output', openOnComplete: false, segmentFrames: 1000 },
     ...overrides,
   }
@@ -61,8 +61,10 @@ test.describe('Workflow configuration integration', () => {
           processOrder: 'super_resolution_then_interpolation',
           interpolation: { enabled: true, targetFps: 60, multi: 2, algorithm: 'rife', model: '4.25', scale: 1.0, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
           superResolution: { enabled: true, scaleFactor: 2.0, algorithm: 'realesrgan' },
-          anime: { enabled: true, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
-          preprocess: { enabled: true, filters: [{ kind: 'scale', enabled: true, params: { mode: 'factor', factor: 1.5 } }] },
+          preprocess: { enabled: true, filters: [
+            { kind: 'scale', enabled: true, params: { mode: 'factor', factor: 1.5 } },
+            { kind: 'anime_cleanup', enabled: true, params: { profile: 'clean-lines', denoise: 15, edgeBoost: 30 } },
+          ] },
           postprocess: { enabled: true, filters: [{ kind: 'sharpen', enabled: true, params: { amount: 0.5 } }] },
         },
         encodeConfig: { codec: 'hevc', family: 'cpu', container: 'mkv', keepAudio: true, rateControl: { mode: 'crf', value: 18 }, options: { preset: 'slow' } },
@@ -90,8 +92,7 @@ test.describe('Workflow configuration integration', () => {
         interpolationBackend: item.workflowConfig.interpolation.tensorBackend,
         superResolutionEnabled: item.workflowConfig.superResolution.enabled,
         superResolutionScale: item.workflowConfig.superResolution.scaleFactor,
-        animeEnabled: item.workflowConfig.anime.enabled,
-        animeProfile: item.workflowConfig.anime.profile,
+        animeCleanup: item.workflowConfig.preprocess.filters.find((step: any) => step.kind === 'anime_cleanup'),
         preprocessEnabled: item.workflowConfig.preprocess.enabled,
         postprocessEnabled: item.workflowConfig.postprocess.enabled,
         encodeCodec: item.encodeConfig.codec,
@@ -112,8 +113,11 @@ test.describe('Workflow configuration integration', () => {
     expect(config.interpolationBackend).toBe('pytorch')
     expect(config.superResolutionEnabled).toBe(true)
     expect(config.superResolutionScale).toBe(2.0)
-    expect(config.animeEnabled).toBe(true)
-    expect(config.animeProfile).toBe('clean-lines')
+    expect(config.animeCleanup).toEqual({
+      kind: 'anime_cleanup',
+      enabled: true,
+      params: { profile: 'clean-lines', denoise: 15, edgeBoost: 30 },
+    })
     expect(config.preprocessEnabled).toBe(true)
     expect(config.postprocessEnabled).toBe(true)
     expect(config.encodeCodec).toBe('hevc')
@@ -137,7 +141,6 @@ test.describe('Workflow configuration integration', () => {
           processOrder: 'frame_interpolation_then_super_resolution',
           interpolation: { enabled: true, targetFps: 60, multi: 2, algorithm: 'rife', model: '4.25', scale: 1.0, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
           superResolution: { enabled: false, scaleFactor: 2.0, algorithm: 'realesrgan' },
-          anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
           preprocess: { enabled: false, filters: [] },
           postprocess: { enabled: false, filters: [] },
         },

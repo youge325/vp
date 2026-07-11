@@ -14,7 +14,6 @@ from typing import Any, Literal, TypeAlias, cast
 AlgorithmType = Literal[
     "frame_interpolation",
     "super_resolution",
-    "anime_optimization",
     "frame_filter_chain",
     "format_conversion",
 ]
@@ -22,7 +21,6 @@ AlgorithmType = Literal[
 _KNOWN_ALGORITHM_TYPES: set[str] = {
     "frame_interpolation",
     "super_resolution",
-    "anime_optimization",
     "frame_filter_chain",
     "format_conversion",
 }

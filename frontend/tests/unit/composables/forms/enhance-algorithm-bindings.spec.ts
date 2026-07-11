@@ -8,18 +8,15 @@ import type { WorkflowConfig } from '@/types/protocol'
 
 function makeEnv(): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
       available: true,
       hwaccels: [],
       encoderProfiles: [],
       decoderProfiles: [],
     },
-    gpu: { available: true, devices: ['GPU'], adapters: [], cudaAvailable: true },
-    tensorBackends: { pytorch: true, paddle: true, onnx: true },
+    gpu: { adapters: [] },
     tensorEngines: { pytorch: ['cuda'], paddle: ['cuda'], onnx: ['cuda'] },
-    onnxRuntime: { available: true, providers: ['CUDAExecutionProvider'] },
-    rifeModel: { available: true, version: '4.25' },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [
       { name: 'rife', tensorBackends: ['pytorch', 'onnx'], models: ['4.25'], onnxModels: ['rife.onnx'] },
       { name: 'rife-lite', tensorBackends: ['pytorch'], models: ['lite'], onnxModels: [] },
@@ -37,7 +34,7 @@ function makeEnv(): EnvironmentCheckResult {
         defaultNumFrames: 5,
       },
     ],
-    animeProfiles: ['clean-lines', 'line-art'],
+    runtimeMode: 'bundled',
   }
 }
 
@@ -60,7 +57,6 @@ describe('enhance algorithm bindings', () => {
     expect(bindings.interpolationOnnxModels.value).toEqual(['rife.onnx'])
     expect(bindings.superResolutionAlgorithms.value.map((algorithm) => algorithm.name)).toEqual(['placeholder'])
     expect(bindings.superResolutionOnnxModels.value).toEqual(['sr.onnx'])
-    expect(bindings.animeProfiles.value).toEqual(['clean-lines', 'line-art'])
     expect(bindings.currentInterpolationAlgorithm.value?.name).toBe('rife')
   })
 

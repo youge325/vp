@@ -25,7 +25,6 @@ function decoderProfile(
     family: 'nvidia',
     codec: 'h264',
     available: true,
-    pixelFormats: [],
     hardwareDevices,
     hardwareDeviceOptions,
     options: [stringOption('resize', '1920x1080')],

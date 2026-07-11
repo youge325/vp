@@ -7,24 +7,22 @@ import {
 import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 const env: EnvironmentCheckResult = {
-  type: 'check',
   ffmpeg: {
     available: true,
     hwaccels: [],
     encoderProfiles: [],
     decoderProfiles: [],
   },
-  gpu: { available: false, devices: [], adapters: [] },
-  tensorBackends: {},
-  tensorEngines: {},
-  onnxRuntime: { available: false, providers: [] },
-  rifeModel: { available: false },
+  gpu: { adapters: [] },
+  tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
   interpolationAlgorithms: [
     { name: 'rife', tensorBackends: ['onnx'], models: ['4.25'], onnxModels: ['rife.onnx'] },
   ],
   superResolutionAlgorithms: [
     { name: 'sr', tensorBackends: ['onnx'], models: [], onnxModels: ['sr.onnx'] },
   ],
+  runtimeMode: 'external',
 }
 
 describe('enhance ONNX defaults', () => {

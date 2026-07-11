@@ -135,15 +135,7 @@ function normalizeCheckResult(raw: EnvironmentCheckResult): EnvironmentCheckResu
       decoderProfiles: raw.ffmpeg?.decoderProfiles ?? [],
     },
     gpu: {
-      ...raw.gpu,
-      devices: raw.gpu?.devices ?? [],
       adapters,
-    },
-    tensorBackends: {
-      ...raw.tensorBackends,
-      pytorch: raw.tensorBackends?.pytorch,
-      paddle: raw.tensorBackends?.paddle,
-      onnx: raw.tensorBackends?.onnx,
     },
     tensorEngines: {
       pytorch: raw.tensorEngines?.pytorch ?? [],
@@ -155,12 +147,9 @@ function normalizeCheckResult(raw: EnvironmentCheckResult): EnvironmentCheckResu
       paddle: raw.backendDeviceSupport?.paddle ?? [],
       onnx: raw.backendDeviceSupport?.onnx ?? [],
     },
-    onnxRuntime: {
-      ...(raw.onnxRuntime ?? {}),
-      providers: raw.onnxRuntime?.providers ?? [],
-    },
     interpolationAlgorithms: (raw.interpolationAlgorithms ?? []).map(normalizeAlgorithmInfo),
     superResolutionAlgorithms: (raw.superResolutionAlgorithms ?? []).map(normalizeAlgorithmInfo),
+    runtimeMode: raw.runtimeMode ?? 'external',
   }
 }
 

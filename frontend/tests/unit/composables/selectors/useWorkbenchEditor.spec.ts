@@ -34,14 +34,14 @@ describe('useWorkbenchEditor', () => {
   it('patches only the draft preset when no media item is active', () => {
     const presetStore = usePresetStore()
     presetStore.patchWorkflow((workflow) => {
-      workflow.anime.enabled = false
+      workflow.preprocess.enabled = false
     })
 
     const editor = useWorkbenchEditor()
     editor.patchWorkflowAndPreset((workflow) => {
-      workflow.anime.enabled = true
+      workflow.preprocess.enabled = true
     })
 
-    expect(presetStore.draftPreset.workflowConfig.anime.enabled).toBe(true)
+    expect(presetStore.draftPreset.workflowConfig.preprocess.enabled).toBe(true)
   })
 })

@@ -15,7 +15,7 @@ async function injectMediaItems(tauriPage: any, count: number): Promise<boolean>
       inputPath: `C:/tmp/test-${i}.mp4`,
       selected: i === 0,
       inspecting: false,
-      info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264', audioCodec: 'aac', duration: 60, bitrate: 5000 },
+      info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264' },
       decodeConfig: { mode: 'software', hwaccel: '', decoder: 'software', options: {} },
       encodeConfig: { codec: 'h264', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 23 }, options: {} },
       workflowConfig: {
@@ -23,7 +23,6 @@ async function injectMediaItems(tauriPage: any, count: number): Promise<boolean>
         processOrder: 'super_resolution_then_interpolation',
         interpolation: { enabled: false, targetFps: 60, multi: 2, algorithm: 'rife', model: '4.25', scale: 1.0, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
         superResolution: { enabled: false, scaleFactor: 2.0, algorithm: 'realesrgan' },
-        anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
         preprocess: { enabled: false, filters: [] },
         postprocess: { enabled: false, filters: [] },
       },

@@ -30,7 +30,6 @@ export function createEnhanceAlgorithmBindings({
     superResolutionBackendValue,
   )
 
-  const animeProfiles = computed(() => checkResult.value?.animeProfiles ?? [])
   const isInterpolationOnnxBackend = computed(() => interpolationBackendValue.value === 'onnx')
   const isSuperResolutionOnnxBackend = computed(() => superResolutionBackendValue.value === 'onnx')
   const currentSuperResolutionAlgorithm = computed(() =>
@@ -42,7 +41,6 @@ export function createEnhanceAlgorithmBindings({
     superResolutionOnnxModels: superResolution.onnxModels,
     interpolationAlgorithms: interpolation.algorithms,
     superResolutionAlgorithms: superResolution.algorithms,
-    animeProfiles,
     interpolationModels: interpolation.models,
     isInterpolationOnnxBackend,
     isSuperResolutionOnnxBackend,

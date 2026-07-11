@@ -40,7 +40,6 @@ def _default_encode_config(args: argparse.Namespace) -> dict[str, Any]:
 def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
     enable_interpolation = args.enable_interpolation or args.algorithm == "frame_interpolation"
     enable_super_resolution = args.enable_super_resolution or args.algorithm == "super_resolution"
-    enable_anime = args.algorithm == "anime_optimization"
     multi = args.multi if args.multi is not None else settings.RIFE_DEFAULT_MULTI
     model = args.model if args.model is not None else settings.RIFE_MODEL_VERSION
     scale = args.scale if args.scale is not None else settings.RIFE_SCALE
@@ -67,12 +66,6 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
             "engine": "cuda",
             "numFrames": 10,
             "autoDownloadWeights": False,
-        },
-        "anime": {
-            "enabled": enable_anime,
-            "profile": "clean-lines",
-            "denoise": 10,
-            "edgeBoost": 15,
         },
         "preprocess": {
             "enabled": False,

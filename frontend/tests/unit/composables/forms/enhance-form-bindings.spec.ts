@@ -8,18 +8,15 @@ import type { WorkflowConfig } from '@/types/protocol'
 
 function makeEnv(): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
       available: true,
       hwaccels: [],
       encoderProfiles: [],
       decoderProfiles: [],
     },
-    gpu: { available: true, devices: ['GPU'], adapters: [], cudaAvailable: true },
-    tensorBackends: { pytorch: true, paddle: true, onnx: true },
+    gpu: { adapters: [] },
     tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda', 'tensorrt'], onnx: ['cuda', 'tensorrt'] },
-    onnxRuntime: { available: true, providers: ['CUDAExecutionProvider'] },
-    rifeModel: { available: true, version: '4.25' },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [
       {
         name: 'rife',
@@ -85,7 +82,7 @@ function makeEnv(): EnvironmentCheckResult {
         ],
       },
     ],
-    animeProfiles: ['clean-lines', 'line-art'],
+    runtimeMode: 'bundled',
   }
 }
 
@@ -108,7 +105,6 @@ describe('enhance form bindings', () => {
 
     expect(form.interpolationAlgorithms.map((algorithm) => algorithm.name)).toEqual(['rife', 'rife-lite'])
     expect(form.superResolutionAlgorithms.map((algorithm) => algorithm.name)).toEqual(['placeholder'])
-    expect(form.animeProfiles).toEqual(['clean-lines', 'line-art'])
     expect(form.superResolutionInputFramesLabel).toBe('每块输入帧数')
     expect(form.superResolutionInputFramesHint).toContain('连续输入帧数')
     expect(form.currentInterpolationModelDetail?.name).toBe('4.25')

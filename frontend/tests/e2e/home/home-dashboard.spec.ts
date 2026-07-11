@@ -7,10 +7,10 @@ function createMediaItem(id: string, displayName: string, overrides?: Partial<Re
     inputPath: `C:/tmp/${displayName}`,
     selected: false,
     inspecting: false,
-    info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264', audioCodec: 'aac', duration: 60, bitrate: 5000 },
+    info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264' },
     decodeConfig: { mode: 'software', hwaccel: '', decoder: 'software', options: {} },
     encodeConfig: { codec: 'h264', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 23 }, options: {} },
-    workflowConfig: { fpsMode: 'multi', processOrder: 'super_resolution_then_interpolation', interpolation: { enabled: false }, superResolution: { enabled: false }, anime: { enabled: false }, preprocess: { enabled: false }, postprocess: { enabled: false } },
+    workflowConfig: { fpsMode: 'multi', processOrder: 'super_resolution_then_interpolation', interpolation: { enabled: false }, superResolution: { enabled: false }, preprocess: { enabled: false }, postprocess: { enabled: false } },
     outputConfig: { outputDir: 'C:/tmp/output', openOnComplete: false, segmentFrames: 1000 },
     ...overrides,
   }
@@ -101,18 +101,17 @@ test.describe('Home dashboard dynamic stats', () => {
 
       pinia.state.value.env.env = {
         checkResult: {
-          type: 'info',
-          ffmpeg: { available: true, version: '6.0', path: 'D:/ffmpeg/ffmpeg.exe' },
-          gpu: { available: true, vendor: 'NVIDIA', model: 'RTX 4090' },
-          tensorBackends: ['pytorch', 'onnx'],
-          rifeModel: { available: true, version: '4.25' },
+          ffmpeg: { available: true, hwaccels: [], encoderProfiles: [], decoderProfiles: [] },
+          gpu: { adapters: [{ name: 'RTX 4090', vendor: 'nvidia', deviceType: 'discrete' }] },
+          tensorEngines: { pytorch: ['cuda'], paddle: [], onnx: ['cuda'] },
+          backendDeviceSupport: { pytorch: ['nvidia'], paddle: ['nvidia'], onnx: ['nvidia'] },
           interpolationAlgorithms: [
             { name: 'rife', label: 'RIFE', tensorBackends: ['pytorch', 'onnx'] },
           ],
           superResolutionAlgorithms: [
             { name: 'realesrgan', label: 'Real-ESRGAN', tensorBackends: ['pytorch'] },
           ],
-          animeProfiles: ['clean-lines', 'detail-enhance'],
+          runtimeMode: 'e2e',
         },
         probeSource: 'realtime',
         probeTimestamp: Date.now(),

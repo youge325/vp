@@ -11,7 +11,6 @@ function profile(name: string, label: string, optionName: string): CodecProfileS
     family: 'software',
     codec: 'h264',
     available: true,
-    pixelFormats: [],
     hardwareDevices: [],
     options: [
       {

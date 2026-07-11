@@ -23,7 +23,6 @@ fn main() {
     dump!(OutputConfig, "output_config");
     dump!(InterpolationConfig, "interpolation_config");
     dump!(SuperResolutionConfig, "super_resolution_config");
-    dump!(AnimeConfig, "anime_config");
     dump!(PreprocessConfig, "preprocess_config");
     dump!(PostprocessConfig, "postprocess_config");
     dump!(FilterStep, "filter_step");

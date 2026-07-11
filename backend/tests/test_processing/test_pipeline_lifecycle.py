@@ -3,7 +3,8 @@ from __future__ import annotations
 import pytest
 
 from app.errors import ResumeConflictError
-from app.planning import ResumeState, SegmentManifest, SegmentRecord
+from app.planning import ResumeState, SegmentManifest
+from app.planning.manifest import SegmentRecord
 from app.processing.streaming.pipeline_lifecycle import (
     emit_resume_status_event,
     finalize_streaming_output,

@@ -76,4 +76,3 @@ def test_build_streaming_pipeline_preflight_resolves_planning_context(tmp_path) 
     assert preflight.segment_frames == 1000
     assert len(preflight.signature) == 64
     assert preflight.config_snapshot["output_config"] == {"segmentFrames": 1000}
-    assert preflight.resolved_steps == steps

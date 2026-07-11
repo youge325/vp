@@ -12,6 +12,7 @@ import numpy as np
 
 from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
+from app.processing.anime_cleanup import apply_anime_cleanup
 from app.utils.logger import get_logger
 from app.utils.opencv_runtime import import_cv2
 
@@ -51,7 +52,7 @@ class FrameFilterChainAlgorithm(IAlgorithm):
     def _validate_filters(self) -> None:
         for step in self._filters:
             kind = step.get("kind")
-            if kind not in {"scale", "crop", "pad", "sharpen", "denoise", "color"}:
+            if kind not in {"scale", "crop", "pad", "sharpen", "denoise", "color", "anime_cleanup"}:
                 raise ValueError(f"Unknown filter kind: {kind}")
             if not isinstance(step.get("params"), dict):
                 raise ValueError(f"Filter step '{kind}' missing params dict.")
@@ -88,8 +89,6 @@ class FrameFilterChainAlgorithm(IAlgorithm):
     # 滤镜实现
     # ------------------------------------------------------------------
     def _apply_filters(self, frame: np.ndarray) -> np.ndarray:
-        _ensure_cv2()
-
         for step in self._filters:
             if not step.get("enabled", True):
                 continue
@@ -102,6 +101,7 @@ class FrameFilterChainAlgorithm(IAlgorithm):
         return frame
 
     def _apply_scale(self, frame: np.ndarray, params: dict[str, Any]) -> np.ndarray:
+        _ensure_cv2()
         cv2 = import_cv2()
 
         mode = params.get("mode", "factor")
@@ -200,6 +200,14 @@ class FrameFilterChainAlgorithm(IAlgorithm):
             frame = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2RGB)
 
         return frame
+
+    def _apply_anime_cleanup(self, frame: np.ndarray, params: dict[str, Any]) -> np.ndarray:
+        return apply_anime_cleanup(
+            frame,
+            profile=str(params.get("profile", "clean-lines")),
+            denoise=params.get("denoise"),
+            edge_boost=params.get("edgeBoost"),
+        )
 
     # ------------------------------------------------------------------
     # Tensor filter implementation (PyTorch NCHW float [0,1])

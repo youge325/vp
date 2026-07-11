@@ -22,7 +22,6 @@ const makeProfile = (
   family,
   codec: 'h264',
   available: true,
-  pixelFormats: [],
   hardwareDevices: [],
   options,
   rateControlModes,
@@ -75,25 +74,18 @@ async function installEncodeProfiles(
     if (!state?.env?.env || !state?.preset?.draftPreset) return false
 
     state.env.env.checkResult = {
-      type: 'check',
       ffmpeg: {
         available: true,
-        version: 'e2e',
-        path: 'ffmpeg',
-        ffprobePath: 'ffprobe',
         hwaccels: [],
         encoderProfiles,
         decoderProfiles: [],
       },
-      gpu: { available: false, devices: [], adapters: [] },
-      tensorBackends: { pytorch: false, paddle: false, onnx: false },
-      tensorEngines: {},
-      backendDeviceSupport: {},
-      onnxRuntime: { available: false, providers: [] },
-      rifeModel: { available: false },
+      gpu: { adapters: [] },
+      tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+      backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
       interpolationAlgorithms: [],
       superResolutionAlgorithms: [],
-      animeProfiles: [],
+      runtimeMode: 'e2e',
     }
 
     state.preset.draftPreset.encodeConfig = {

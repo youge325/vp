@@ -66,10 +66,6 @@ export function buildAlgorithmOptions(
   }))
 }
 
-export function buildProfileOptions(profiles: readonly string[]): SelectOption[] {
-  return profiles.map((profile) => ({ value: profile, label: profile }))
-}
-
 export function toTensorBackend(value: string): TensorBackend {
   return value as TensorBackend
 }

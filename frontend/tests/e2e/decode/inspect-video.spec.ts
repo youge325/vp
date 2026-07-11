@@ -3,7 +3,7 @@ import { test, expect } from '../fixtures'
 test.describe('Video inspection', () => {
   const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
 
-  test('inspect_video returns complete metadata for synthetic test video', async ({ tauriPage }) => {
+  test('inspect_video returns the minimal media metadata contract', async ({ tauriPage }) => {
     const info = await tauriPage.evaluate(async (path: string) => {
       try {
         // @ts-expect-error __TAURI_INTERNALS__ is injected by Tauri runtime
@@ -13,27 +13,18 @@ test.describe('Video inspection', () => {
       }
     }, inputPath)
 
-    // Scalar fields
-    expect(info.frames).toBeGreaterThan(0)
     expect(info.fps).toBeGreaterThan(0)
-    expect(info.duration).toBeGreaterThan(0)
     expect(info.width).toBeGreaterThan(0)
     expect(info.height).toBeGreaterThan(0)
 
     // Type assertions for known synthetic video shape
     expect(info.width).toBe(1280)
     expect(info.height).toBe(720)
-    expect(info.frames).toBe(30)     // 1s @ 30fps
     expect(info.fps).toBe(30)
-    expect(info.duration).toBeCloseTo(1, 0)
 
-    // String / boolean fields
     expect(info.videoCodec).toBeTruthy()
     expect(typeof info.videoCodec).toBe('string')
-    expect(info.hasAudio).toBe(true)
-    expect(typeof info.hasAudio).toBe('boolean')
-    expect(info.type).toBeTruthy()
-    expect(typeof info.type).toBe('string')
+    expect(Object.keys(info).sort()).toEqual(['fps', 'height', 'videoCodec', 'width'])
   })
 
   test('inspect_video on nonexistent file returns structured error with code', async ({ tauriPage }) => {

@@ -10,9 +10,3 @@ export function pickDefaultInterpolationModel(
 ): string {
   return findInterpolationAlgorithm(checkResult, algorithm)?.models?.[0] ?? '4.25'
 }
-
-export function pickDefaultAnimeProfile(
-  checkResult: EnvironmentCheckResult | null,
-): string {
-  return checkResult?.animeProfiles?.[0] ?? 'clean-lines'
-}

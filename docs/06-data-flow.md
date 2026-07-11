@@ -118,7 +118,7 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 
 `_resolve_processing_steps()` 解析工作流配置，生成处理步骤列表：
 
-- 预处理步骤（`pre_steps`）：滤镜链（裁剪、缩放、降噪、锐化、色彩调整、填充）
+- 预处理步骤（`pre_steps`）：滤镜链（裁剪、缩放、降噪、锐化、色彩调整、填充、Anime 清理）
 - 插帧步骤（`interpolation_step`）：可选，RIFE 补帧
 - 后处理步骤（`post_steps`）：滤镜链
 

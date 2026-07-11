@@ -16,14 +16,11 @@ from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
 _PYTORCH_SCRIPT = (
     "import json\n"
-    "result = {'pytorch_available': False, 'gpu_available': False, 'gpu_devices': [], "
-    "          'supports_cuda': False, 'supports_tensorrt': False}\n"
+    "result = {'pytorch_available': False, 'supports_cuda': False, 'supports_tensorrt': False}\n"
     "try:\n"
     "    import torch\n"
     "    result['pytorch_available'] = True\n"
     "    if torch.cuda.is_available():\n"
-    "        result['gpu_available'] = True\n"
-    "        result['gpu_devices'] = [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]\n"
     "        result['supports_cuda'] = True\n"
     "        result['supports_tensorrt'] = True\n"
     "except (ImportError, OSError):\n"
@@ -50,13 +47,11 @@ _PADDLE_SCRIPT = (
 
 _ONNX_SCRIPT = (
     "import json\n"
-    "result = {'onnx_available': False, 'providers': [], "
-    "          'supports_cuda': False, 'supports_tensorrt': False}\n"
+    "result = {'onnx_available': False, 'supports_cuda': False, 'supports_tensorrt': False}\n"
     "try:\n"
     "    import onnxruntime as ort\n"
     "    result['onnx_available'] = True\n"
     "    providers = ort.get_available_providers()\n"
-    "    result['providers'] = providers\n"
     "    result['supports_cuda'] = 'CUDAExecutionProvider' in providers\n"
     "    # 有 CUDA provider 说明是 NVIDIA GPU，默认同时支持 TensorRT\n"
     "    result['supports_tensorrt'] = 'TensorrtExecutionProvider' in providers or 'CUDAExecutionProvider' in providers\n"
@@ -67,8 +62,6 @@ _ONNX_SCRIPT = (
 
 _PYTORCH_FALLBACK: dict[str, Any] = {
     "pytorch_available": False,
-    "gpu_available": False,
-    "gpu_devices": [],
     "supports_cuda": False,
     "supports_tensorrt": False,
 }
@@ -82,7 +75,6 @@ _PADDLE_FALLBACK: dict[str, Any] = {
 
 _ONNX_FALLBACK: dict[str, Any] = {
     "onnx_available": False,
-    "providers": [],
     "supports_cuda": False,
     "supports_tensorrt": False,
 }

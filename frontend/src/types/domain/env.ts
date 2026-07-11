@@ -12,17 +12,6 @@ export interface GpuAdapter {
   driverVersion?: string
 }
 
-interface ResourceSummary {
-  backendRoot?: string
-  runtimeRoot?: string
-  runtimeMode?: string
-  pythonExecutable?: string
-  ffmpegPath?: string
-  ffprobePath?: string
-  defaultModelPath?: string
-  [key: string]: string | boolean | number | null | undefined
-}
-
 type ModelAnalysisStatus = 'ok' | 'partial' | 'unknown' | string
 
 export interface ModelEngineMetricInfo {
@@ -67,66 +56,36 @@ export interface AlgorithmInfo {
   defaultNumFrames?: number | null
   sequenceMode?: 'recurrent' | 'window' | string | null
   inputFrameMode?: 'none' | 'editable_chunk' | 'fixed_window' | string | null
-  weightPath?: string | null
-  weightAvailable?: boolean | null
 }
 
 export interface EnvironmentCheckResult {
-  type: 'check'
   ffmpeg: {
-    available?: boolean
-    version?: string
-    path?: string
-    ffprobePath?: string
+    available: boolean
     hwaccels: string[]
     encoderProfiles: EncoderProfileSpec[]
     decoderProfiles: DecoderProfileSpec[]
   }
   gpu: {
-    available?: boolean
-    devices: string[]
     adapters: GpuAdapter[]
-    cudaAvailable?: boolean
   }
-  tensorBackends: {
-    pytorch?: boolean
-    paddle?: boolean
-    onnx?: boolean
+  tensorEngines: {
+    pytorch: string[]
+    paddle: string[]
+    onnx: string[]
   }
-  tensorEngines?: {
-    pytorch?: string[]
-    paddle?: string[]
-    onnx?: string[]
-  }
-  backendDeviceSupport?: {
-    pytorch?: string[]
-    paddle?: string[]
-    onnx?: string[]
-  }
-  onnxRuntime?: {
-    available?: boolean
-    providers: string[]
-  }
-  rifeModel: {
-    available?: boolean
-    version?: string
-    path?: string
+  backendDeviceSupport: {
+    pytorch: string[]
+    paddle: string[]
+    onnx: string[]
   }
   // Phase 8 — ``tensorBackends`` 由 Rust ``AlgorithmInfo`` 字段透出,
   // 前端按 ``workflow.interpolation.tensorBackend`` 过滤算法下拉。
   // 旧缓存反序列化时 ``tensorBackends`` 不存在 → 退化为 ``[]``,
   // 在 ``useEnhanceForm`` 的 ``.includes(backend)`` 上返回 false
   // (不显示),比错显示安全。
-  interpolationAlgorithms?: AlgorithmInfo[]
-  superResolutionAlgorithms?: AlgorithmInfo[]
-  animeProfiles?: string[]
-  runtime?: {
-    mode?: string
-    bundled?: boolean
-    pythonExecutable?: string
-    defaultModelAvailable?: boolean
-  }
-  resources?: ResourceSummary
+  interpolationAlgorithms: AlgorithmInfo[]
+  superResolutionAlgorithms: AlgorithmInfo[]
+  runtimeMode: string
 }
 
 export interface EnvironmentCheckPayload {

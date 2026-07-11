@@ -40,14 +40,8 @@ def test_processing_plan_does_not_store_unused_output_directory() -> None:
 
 
 class _FakeCheckFFmpeg:
-    ffmpeg_path = "ffmpeg"
-    ffprobe_path = "ffprobe"
-
     def is_available(self) -> bool:
         return True
-
-    def get_version(self) -> str:
-        return "ffmpeg test"
 
     def discover_capabilities(self, _gpu_adapters):
         return {"hwaccels": [], "encoderProfiles": [], "decoderProfiles": []}
@@ -104,12 +98,6 @@ def _make_workflow_config(**overrides):
             "enabled": False,
             "scaleFactor": 2.0,
             "algorithm": "placeholder",
-        },
-        "anime": {
-            "enabled": False,
-            "profile": "clean-lines",
-            "denoise": 10,
-            "edgeBoost": 15,
         },
     }
     workflow.update(overrides)
@@ -402,6 +390,13 @@ def test_process_parser_rejects_removed_temp_override_flag():
         parser.parse_args(["process", "--input", "demo.mp4", removed_flag, "D:/temp"])
 
 
+def test_process_parser_rejects_removed_anime_algorithm() -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["process", "--input", "demo.mp4", "--algorithm", "anime_optimization"])
+
+
 def test_stage_worker_parser_requires_config_json():
     parser = build_parser()
     args = parser.parse_args(["stage-worker", "--config-json", "stage.json"])
@@ -428,12 +423,7 @@ def test_stage_worker_main_runs_logging_and_handler_only(monkeypatch):
     assert calls == ["logging", "func"]
 
 
-def test_resource_summary_omits_legacy_temp_override_key():
-    removed_key = "_".join(["temp", "dir"])
-    assert removed_key not in settings.resource_summary()
-
-
-def test_check_reports_onnx_runtime_and_model_lists(tmp_path, monkeypatch, capsys):
+def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypatch, capsys):
     model_dir = tmp_path / "models"
     (model_dir / "interpolation" / "rife").mkdir(parents=True)
     (model_dir / "super_resolution" / "placeholder").mkdir(parents=True)
@@ -444,28 +434,32 @@ def test_check_reports_onnx_runtime_and_model_lists(tmp_path, monkeypatch, capsy
     monkeypatch.setattr("app.cli.commands.check.FFmpegWrapper", _FakeCheckFFmpeg)
     monkeypatch.setattr(
         "app.cli.commands.check._check_pytorch_in_subprocess",
-        lambda: {"pytorch_available": False, "gpu_available": False, "gpu_devices": []},
+        lambda: {"pytorch_available": False, "supports_cuda": False, "supports_tensorrt": False},
     )
     monkeypatch.setattr("app.cli.commands.check._check_paddle_in_subprocess", lambda: {"paddle_available": False})
     monkeypatch.setattr(
         "app.cli.commands.check._check_onnxruntime_in_subprocess",
-        lambda: {"onnx_available": True, "providers": ["CPUExecutionProvider"]},
+        lambda: {"onnx_available": True, "supports_cuda": False, "supports_tensorrt": False},
     )
     monkeypatch.setattr("app.cli.commands.check.list_gpu_adapters", lambda: [])
     monkeypatch.setattr(settings, "RIFE_MODEL_DIR", str(model_dir))
-    paddlegan_weight = tmp_path / "paddlegan" / "ppmsvsr" / "PP-MSVSR_reds_x4.pdparams"
-    monkeypatch.setattr(
-        "app.cli.commands.check.resolve_weight_path",
-        lambda model_id: paddlegan_weight
-        if model_id == "ppmsvsr"
-        else tmp_path / "paddlegan" / model_id / f"{model_id}.pdparams",
-    )
-
     cmd_check(argparse.Namespace())
 
     payload = json.loads(capsys.readouterr().out.strip())
-    assert payload["tensorBackends"]["onnx"] is True
-    assert payload["onnxRuntime"]["providers"] == ["CPUExecutionProvider"]
+    assert set(payload) == {
+        "type",
+        "ffmpeg",
+        "gpu",
+        "tensorEngines",
+        "backendDeviceSupport",
+        "interpolationAlgorithms",
+        "superResolutionAlgorithms",
+        "runtimeMode",
+    }
+    assert set(payload["ffmpeg"]) == {"available", "hwaccels", "encoderProfiles", "decoderProfiles"}
+    assert payload["gpu"] == {"adapters": []}
+    assert payload["tensorEngines"]["onnx"] == []
+    assert payload["runtimeMode"] == settings.runtime_mode
     assert "onnxModels" not in payload
 
     rife_alg = next(a for a in payload["interpolationAlgorithms"] if a["name"] == "rife")
@@ -496,8 +490,8 @@ def test_check_reports_onnx_runtime_and_model_lists(tmp_path, monkeypatch, capsy
     assert ppmsvsr_alg["modelDetails"][0]["metrics"]["parameterCount"] is not None
     assert ppmsvsr_alg["modelDetails"][0]["metrics"]["runtimeFrameCount"] is None
     assert "weightUrl" not in ppmsvsr_alg
-    assert ppmsvsr_alg["weightPath"] == str(paddlegan_weight)
-    assert ppmsvsr_alg["weightAvailable"] is False
+    assert "weightPath" not in ppmsvsr_alg
+    assert "weightAvailable" not in ppmsvsr_alg
 
     edvr_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "edvr")
     assert edvr_alg["sequenceMode"] == "window"

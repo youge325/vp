@@ -9,18 +9,15 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function makeEnv(): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
       available: true,
       hwaccels: [],
       encoderProfiles: [],
       decoderProfiles: [],
     },
-    gpu: { available: true, devices: ['GPU'], adapters: [], cudaAvailable: true },
-    tensorBackends: { pytorch: true, paddle: true, onnx: true },
+    gpu: { adapters: [] },
     tensorEngines: { pytorch: ['cuda'], paddle: ['cuda'], onnx: ['cuda'] },
-    onnxRuntime: { available: true, providers: ['CUDAExecutionProvider'] },
-    rifeModel: { available: true, version: '4.25', path: 'models/rife.pkl' },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [
       {
         name: 'rife',
@@ -77,7 +74,7 @@ function makeEnv(): EnvironmentCheckResult {
         ],
       },
     ],
-    animeProfiles: ['clean-lines'],
+    runtimeMode: 'bundled',
   }
 }
 
@@ -118,5 +115,11 @@ describe('EnhanceModuleView super-resolution frame wording', () => {
     expect(wrapper.text()).not.toContain('每块输入帧数')
     expect(wrapper.text()).toContain('邻帧窗口')
     expect(wrapper.text()).toContain('5 帧（固定）')
+  })
+
+  it('does not render the removed standalone Anime optimization section', () => {
+    const wrapper = mount(EnhanceModuleView)
+
+    expect(wrapper.text()).not.toContain('动漫优化')
   })
 })

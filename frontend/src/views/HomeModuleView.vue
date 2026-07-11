@@ -33,7 +33,7 @@ const { recheckEnvironment } = useEnvironmentChecker()
       <div class="chip-row">
         <span class="tag">来源: {{ dashboard.probeSourceLabel.value }}</span>
         <span class="tag">硬件加速: {{ dashboard.checkResult.value?.ffmpeg?.hwaccels?.join(', ') || '--' }}</span>
-        <span class="tag">GPU: {{ dashboard.checkResult.value?.gpu?.devices?.join(' / ') || 'CPU only' }}</span>
+        <span class="tag">GPU: {{ dashboard.gpuLabel.value }}</span>
         <span class="tag">最近真实探测: {{ dashboard.lastProbeAt.value ? new Date(dashboard.lastProbeAt.value).toLocaleString() : '--' }}</span>
       </div>
     </section>

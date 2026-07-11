@@ -6,15 +6,18 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function baseResult(): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
+      available: true,
       hwaccels: [],
       encoderProfiles: [],
       decoderProfiles: [],
     },
-    gpu: { devices: [], adapters: [] },
-    tensorBackends: {},
-    rifeModel: {},
+    gpu: { adapters: [] },
+    tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
+    interpolationAlgorithms: [],
+    superResolutionAlgorithms: [],
+    runtimeMode: 'external',
   }
 }
 

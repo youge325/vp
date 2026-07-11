@@ -30,7 +30,6 @@ function buildTaskRequest(inputPath: string, outputDir: string) {
         engine: 'cuda',
       },
       superResolution: { enabled: false, scaleFactor: 2.0, algorithm: 'realesrgan' },
-      anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
       preprocess: { enabled: false, filters: [] },
       postprocess: { enabled: false, filters: [] },
     },

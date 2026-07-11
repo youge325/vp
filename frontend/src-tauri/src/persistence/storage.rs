@@ -13,6 +13,10 @@ use crate::error::ShellError;
 use crate::models::WorkbenchPreset;
 use crate::runtime::ResolvedRuntimePaths;
 
+// Phase 33 — bumped from 10 to 11 because the environment payload now only
+// carries capabilities consumed by the UI. Skipping v10 prevents removed
+// diagnostics and nested runtime fields from surviving in persisted caches.
+//
 // Phase 28 — bumped from 9 to 10 because ``ModelMetricInfo`` now carries
 // engine-specific metric overrides. Skipping v9 prevents CUDA-only VRAM
 // estimates from being reused when TensorRT is selected.
@@ -56,7 +60,7 @@ use crate::runtime::ResolvedRuntimePaths;
 // Bumping the version forces ``load_environment_cache`` to skip
 // the stale file and re-run ``python -m app check``, whose fresh
 // output now carries ``tensorBackends`` end-to-end.
-const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 10;
+const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 11;
 const WORKBENCH_PRESET_SCHEMA_VERSION: u32 = 1;
 const ENVIRONMENT_CACHE_FILE: &str = "environment-cache.json";
 const WORKBENCH_PRESET_FILE: &str = "workbench-preset.json";
@@ -341,9 +345,9 @@ mod tests {
         EnvironmentCacheEntry, WorkbenchPresetEntry,
     };
     use crate::models::{
-        AnimeConfig, DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig,
-        OutputConfig, PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig,
-        RateControlMode, SuperResolutionConfig, TensorBackend, WorkbenchPreset, WorkflowConfig,
+        DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig, OutputConfig,
+        PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig, RateControlMode,
+        SuperResolutionConfig, TensorBackend, WorkbenchPreset, WorkflowConfig,
     };
     use serde_json::json;
     use std::path::PathBuf;
@@ -398,12 +402,6 @@ mod tests {
                     engine: "cuda".to_string(),
                     num_frames: 10,
                     auto_download_weights: false,
-                },
-                anime: AnimeConfig {
-                    enabled: false,
-                    profile: "clean-lines".to_string(),
-                    denoise: 10,
-                    edge_boost: 15,
                 },
                 preprocess: PreprocessConfig {
                     enabled: false,
@@ -540,6 +538,22 @@ mod tests {
             checked_at: "2026-07-07T19:00:00Z".to_string(),
             fingerprint: "fingerprint-a".to_string(),
             result: json!({"type":"check", "superResolutionAlgorithms":[{"name":"ppmsvsr"}]}),
+        })
+        .expect("serialize env cache");
+        fs::write(environment_cache_path(&dir), payload).expect("write env cache");
+
+        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
+        assert!(entry.is_none());
+    }
+
+    #[tokio::test]
+    async fn invalidates_environment_cache_with_schema_version_ten() {
+        let dir = temp_dir("env-schema-v10");
+        let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
+            schema_version: 10,
+            checked_at: "2026-07-11T10:00:00Z".to_string(),
+            fingerprint: "fingerprint-a".to_string(),
+            result: json!({"type":"check", "runtimeMode":"bundled"}),
         })
         .expect("serialize env cache");
         fs::write(environment_cache_path(&dir), payload).expect("write env cache");

@@ -63,6 +63,11 @@ ABSENT_PATH_RULES = (
         "paddlegan-vendor-logger",
         "backend/app/algorithms/paddle/paddlegan_vsr/vendor/ppgan/utils/logger.py",
     ),
+    _absent("backend-anime-optimization", "backend/app/processing/anime_optimization.py"),
+    _absent("backend-anime-optimization-test", "backend/tests/test_processing/test_anime_optimization.py"),
+    _absent("frontend-anime-config-type", "frontend/src/types/generated/AnimeConfig.ts"),
+    _absent("frontend-anime-config-schema", "frontend/src-tauri/schemas/anime_config.schema.json"),
+    _absent("frontend-legacy-anime-e2e", "frontend/tests/e2e/enhance/enhance-anime.spec.ts"),
 )
 
 
@@ -118,7 +123,7 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "planning-package-facade",
         "backend/app/planning/__init__.py",
-        r"\b(?:AlgorithmType|PROCESS_LABEL_MAP|ResumeDecision|estimate_encoded_output_frames|ResumeKind|get_onnx_model_name|processing_needs_interpolation|validate_onnx_models_for_workflow)\b",
+        r"\b(?:AlgorithmType|PROCESS_LABEL_MAP|ResumeDecision|SegmentRecord|estimate_encoded_output_frames|ResumeKind|get_onnx_model_name|processing_needs_interpolation|validate_onnx_models_for_workflow)\b",
         "unused planning package facade",
     ),
     _forbid(
@@ -148,50 +153,71 @@ FORBIDDEN_PATTERN_RULES = (
         )
         for index, path in enumerate(
             (
-                "backend/app/processing/anime_optimization.py",
                 "backend/app/processing/frame_filters.py",
                 "backend/app/processing/interpolation.py",
                 "backend/app/processing/super_resolution.py",
             )
         )
     ),
-    *(
-        _forbid(
-            f"rife-solver-dead-api-{index}",
-            path,
-            r"^\s*def\s+(?:interpolate_multi|clear_cache)\b",
-            "unused RIFE solver API",
-        )
-        for index, path in enumerate(
-            (
-                "backend/app/algorithms/pytorch/rife/solver.py",
-                "backend/app/algorithms/pytorch/rife/onnx_solver.py",
-            )
-        )
+    _forbid(
+        "legacy-anime-workflow-model",
+        "backend/app/models/__init__.py",
+        r"\bclass\s+AnimeConfig\b|^\s*anime\s*:\s*AnimeConfig\b|[\"']anime_optimization[\"']",
+        "legacy anime workflow model",
     ),
     _forbid(
-        "rife-legacy-config",
-        "backend/app/algorithms/pytorch/rife/_model_spec.py",
-        r"\bMODEL_CONFIGS\b|^\s*def\s+_to_legacy_dict\b|__all__\s*=\s*\[[^\]]*[\"']replace[\"']",
-        "legacy RIFE model config surface",
+        "legacy-anime-cli",
+        "backend/app/cli/parser.py",
+        r"[\"']anime_optimization[\"']|--anime-",
+        "legacy anime CLI surface",
     ),
     _forbid(
-        "rife-write-only-state",
-        "backend/app/algorithms/pytorch/rife/solver.py",
-        r"self\._(?:model_version|scale|fp16|config|encode_channel|padding|orig_h|orig_w|encode_cache)\b|^\s*def\s+(?:device|dtype|modulo|has_head)\b",
-        "RIFE write-only state or zero-call property",
+        "legacy-anime-enhance-view",
+        "frontend/src/views/EnhanceModuleView.vue",
+        r"\banime(?:Enabled|Profile|Denoise|EdgeBoost|Profiles)\b|动漫优化",
+        "legacy standalone anime enhance controls",
     ),
     _forbid(
-        "onnx-rife-write-only-state",
-        "backend/app/algorithms/pytorch/rife/onnx_solver.py",
-        r"self\._model_version\b|\bMODEL_CONFIGS\b",
-        "ONNX RIFE dead state",
+        "legacy-anime-enhance-bindings",
+        "frontend/src/composables/forms/enhance-form-bindings.ts",
+        r"\banime(?:Enabled|Profile|Denoise|EdgeBoost|Profiles)\b",
+        "legacy standalone anime form binding",
     ),
     _forbid(
-        "anime-write-only-state",
-        "backend/app/processing/anime_optimization.py",
-        r"self\._(?:tensor_backend|duplicate_threshold)\b",
-        "anime write-only state",
+        "legacy-environment-result-fields",
+        "frontend/src-tauri/src/models/env.rs",
+        r"pub\s+struct\s+(?:TensorBackends|OnnxRuntimeInfo|RifeModel|RuntimeInfo|ResourceInfo)\b|pub\s+struct\s+EnvironmentCheckResult\s*\{[\s\S]*?pub\s+(?:r#type|tensor_backends|onnx_runtime|rife_model|resources|runtime|anime_profiles)\s*:",
+        "obsolete environment result field",
+    ),
+    _forbid(
+        "legacy-environment-diagnostics",
+        "backend/app/cli/commands/check.py",
+        r"[\"'](?:onnxRuntime|rifeModel|animeProfiles|weightPath|weightAvailable|pixelFormats|ffmpegPath|ffprobePath)[\"']|\bget_version\s*\(",
+        "obsolete environment diagnostic payload",
+    ),
+    _forbid(
+        "legacy-video-info-fields",
+        "frontend/src-tauri/src/models/task.rs",
+        r"pub\s+struct\s+VideoInfo\s*\{[\s\S]*?pub\s+(?:r#type|frames|duration|has_audio)\s*:",
+        "obsolete inspect-video result field",
+    ),
+    _forbid(
+        "legacy-task-store-reset",
+        "frontend/src/stores/task.ts",
+        r"\bresetBatch\b",
+        "dead task store reset interface",
+    ),
+    _forbid(
+        "legacy-encoded-frame-index",
+        "backend/app/processing/streaming/queues.py",
+        r"\boutput_index\b",
+        "dead encoded-frame output index",
+    ),
+    _forbid(
+        "legacy-preflight-resolved-steps-field",
+        "backend/app/processing/streaming/pipeline_preflight.py",
+        r"^\s+resolved_steps\s*:",
+        "dead preflight resolved-steps field",
     ),
     _forbid(
         "metrics-dead-timing-api",
@@ -520,6 +546,30 @@ FORBIDDEN_PATTERN_RULES = (
 
 REQUIRED_PATTERN_RULES = (
     RequiredPatternRule(
+        "rust-anime-cleanup-filter-kind",
+        "frontend/src-tauri/src/models/config.rs",
+        r"\bAnimeCleanup\b",
+        "Rust anime_cleanup filter kind is missing",
+    ),
+    RequiredPatternRule(
+        "python-anime-cleanup-filter-kind",
+        "backend/app/models/__init__.py",
+        r"Literal\[[^\]]*[\"']anime_cleanup[\"']",
+        "Python anime_cleanup filter kind is missing",
+    ),
+    RequiredPatternRule(
+        "frontend-anime-cleanup-catalog",
+        "frontend/src/services/filters/filter-catalog.ts",
+        r"kind:\s*[\"']anime_cleanup[\"']",
+        "frontend anime_cleanup filter catalog entry is missing",
+    ),
+    RequiredPatternRule(
+        "backend-anime-cleanup-runtime",
+        "backend/app/processing/frame_filters.py",
+        r"def\s+_apply_anime_cleanup\b[\s\S]*?\bapply_anime_cleanup\s*\(",
+        "backend anime_cleanup frame filter dispatch is missing",
+    ),
+    RequiredPatternRule(
         "ipc-command-keyof",
         "frontend/src/lib/ipc/contract.ts",
         r"\bexport\s+type\s+IpcCommand\s*=\s*keyof\s+IpcCommandArgs\b",
@@ -582,6 +632,48 @@ REFERENCE_RULES = (
         ),
         message="obsolete frontend facade reference",
         suffixes=(".ts", ".tsx", ".vue"),
+    ),
+    ForbiddenReferenceRule(
+        "obsolete-anime-module-references",
+        roots=(
+            "backend/app",
+            "frontend/src",
+            "frontend/src-tauri/src",
+            "frontend/tests/e2e",
+            "README.md",
+            "docs/01-architecture-overview.md",
+        ),
+        patterns=(
+            r"\banime_optimization\b",
+            r"\bAnimeConfig\b",
+            r"\bworkflow\.anime\b",
+            r"动漫优化",
+        ),
+        message="obsolete standalone anime module reference",
+        suffixes=(".py", ".ts", ".tsx", ".vue", ".rs", ".md"),
+        excludes=("backend/tests/test_architecture_contracts.py",),
+    ),
+    ForbiddenReferenceRule(
+        "obsolete-e2e-environment-fields",
+        roots=("frontend/tests/e2e",),
+        patterns=(
+            r"result\.result\.(?:type|tensorBackends|onnxRuntime|rifeModel|resources|runtime|animeProfiles)\b",
+            r"\bffmpeg\.toHaveProperty\([\"'](?:version|path|ffprobePath)[\"']",
+            r"\bgpu\.toHaveProperty\([\"'](?:available|devices)[\"']",
+        ),
+        message="obsolete E2E environment field reference",
+        suffixes=(".ts",),
+    ),
+    ForbiddenReferenceRule(
+        "obsolete-frontend-video-info-fields",
+        roots=("frontend/tests",),
+        patterns=(
+            r"\btype\s*:\s*[\"']info[\"']",
+            r"\bhasAudio\s*:",
+            r"\b(?:frames|duration)\s*:\s*\d",
+        ),
+        message="obsolete frontend VideoInfo field reference",
+        suffixes=(".ts", ".tsx"),
     ),
     ForbiddenReferenceRule(
         "planning-test-private-aliases",
