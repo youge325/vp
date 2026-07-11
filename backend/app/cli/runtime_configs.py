@@ -41,11 +41,6 @@ class RuntimeConfigs:
             "output": _copy_json_dict(self.output_json),
         }
 
-    def legacy_tuple(self) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
-        """Return ``(decode, encode, workflow, output)`` for legacy callers."""
-        sections = self.legacy_sections()
-        return sections["decode"], sections["encode"], sections["workflow"], sections["output"]
-
     def with_workflow_json(self, workflow_json: dict[str, Any]) -> "RuntimeConfigs":
         """Return a bundle with workflow model and legacy snapshot kept in sync."""
         workflow = WorkflowConfig.model_validate(workflow_json)

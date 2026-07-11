@@ -27,23 +27,28 @@ def test_stage_worker_config_parses_camel_and_snake_payloads(tmp_path: Path) -> 
     }
     config_path = tmp_path / "stage-worker.json"
     config_path.write_text(json.dumps(camel_payload), encoding="utf-8")
+    snake_config_path = tmp_path / "stage-worker-snake.json"
+    snake_config_path.write_text(
+        json.dumps(
+            {
+                "stage": camel_payload["stage"],
+                "stage_index": 1,
+                "stage_total": 2,
+                "stage_name": "01_super_resolution",
+                "input_width": 320,
+                "input_height": 180,
+                "output_width": 640,
+                "output_height": 360,
+                "input_frame_count": 12,
+                "tensor_backend_name": "onnx",
+                "output_frame_count": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
 
     camel_config = StageWorkerConfig.from_json_file(config_path)
-    snake_config = StageWorkerConfig.from_mapping(
-        {
-            "stage": camel_payload["stage"],
-            "stage_index": 1,
-            "stage_total": 2,
-            "stage_name": "01_super_resolution",
-            "input_width": 320,
-            "input_height": 180,
-            "output_width": 640,
-            "output_height": 360,
-            "input_frame_count": 12,
-            "tensor_backend_name": "onnx",
-            "output_frame_count": 0,
-        }
-    )
+    snake_config = StageWorkerConfig.from_json_file(snake_config_path)
 
     assert camel_config.stage == snake_config.stage
     assert camel_config.stage.algorithm_type == "super_resolution"

@@ -107,7 +107,7 @@ class SegmentManifest:
 
         # Always purge a leftover in-flight sentinel before doing anything
         # else; whatever was being written last time is unrecoverable.
-        self.cleanup_partial()
+        self._cleanup_partial()
 
         manifest_data = load_manifest(self.manifest_path)
         signature_match = bool(manifest_data and manifest_data.get("signature") == signature)
@@ -189,7 +189,7 @@ class SegmentManifest:
         suffix = f"-{index:04d}" if index is not None else ""
         return str(self.sidecar_dir / f"{self.TMP_PREFIX}{suffix}{resolved_extension}")
 
-    def chunk_final_path(
+    def _chunk_final_path(
         self,
         *,
         index: int,
@@ -219,7 +219,7 @@ class SegmentManifest:
     ) -> str:
         """Atomically rename the sentinel file to its canonical chunk name."""
         extension = Path(tmp_path).suffix
-        final_path = self.chunk_final_path(
+        final_path = self._chunk_final_path(
             index=index,
             start_output_frame=start_output_frame,
             end_output_frame=end_output_frame,
@@ -277,7 +277,7 @@ class SegmentManifest:
 
         return contiguous
 
-    def cleanup_partial(self) -> None:
+    def _cleanup_partial(self) -> None:
         """Remove in-flight sentinel files and stranded non-contiguous chunks."""
         if not self.sidecar_dir.is_dir():
             return
@@ -289,7 +289,7 @@ class SegmentManifest:
                 except OSError:
                     logger.warning("Failed to remove stale sentinel %s", entry)
 
-    def cleanup_stale_chunks(self, keep: list[SegmentRecord]) -> None:
+    def _cleanup_stale_chunks(self, keep: list[SegmentRecord]) -> None:
         """Delete chunk files past the contiguous prefix, plus stale auxiliaries."""
         if not self.sidecar_dir.is_dir():
             return
@@ -322,7 +322,7 @@ class SegmentManifest:
     # ------------------------------------------------------------- internals
     def _scan_resume_state(self) -> ResumeState:
         chunks = self.scan_completed_chunks()
-        self.cleanup_stale_chunks(chunks)
+        self._cleanup_stale_chunks(chunks)
         if not chunks:
             return self._empty_state()
         last = chunks[-1]

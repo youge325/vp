@@ -324,7 +324,7 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "stage-worker-config-implementation",
         "backend/app/processing/streaming/stage_worker.py",
-        r"^\s*class\s+StageWorkerConfig\b|^\s+def\s+(?:from_mapping|from_json_file|to_jsonable)\b|\bnormalize_processing_step\b|\bjson\.load\b",
+        r"^\s*class\s+StageWorkerConfig\b|^\s+def\s+(?:from_json_file|to_jsonable)\b|\bnormalize_processing_step\b|\bjson\.load\b",
         "stage worker config implementation",
     ),
     _forbid(
@@ -410,6 +410,60 @@ FORBIDDEN_PATTERN_RULES = (
         "backend/app/planning/manifest.py",
         r"^\s*def\s+_reset_sidecar\b|\bself\._reset_sidecar\s*\(",
         "duplicate manifest sidecar reset lifecycle",
+    ),
+    _forbid(
+        "runtime-config-positional-interface",
+        "backend/app/cli/runtime_configs.py",
+        r"^\s*def\s+legacy_tuple\b",
+        "positional runtime config interface",
+    ),
+    _forbid(
+        "manifest-test-only-public-helpers",
+        "backend/app/planning/manifest.py",
+        r"^[ \t]{4}def\s+(?:chunk_final_path|cleanup_partial|cleanup_stale_chunks)\b",
+        "test-only public manifest helper",
+    ),
+    _forbid(
+        "stage-worker-config-mapping-interface",
+        "backend/app/processing/streaming/stage_worker_config.py",
+        r"^[ \t]{4}def\s+from_mapping\b",
+        "test-only stage-worker mapping interface",
+    ),
+    _forbid(
+        "preset-sync-test-only-return",
+        "frontend/src/composables/app/usePresetSync.ts",
+        r"^[ \t]{4}(?:persistDraft|scheduleSave),\s*$",
+        "test-only preset sync return field",
+    ),
+    _forbid(
+        "decode-profile-test-only-return",
+        "frontend/src/composables/forms/decode-profile-bindings.ts",
+        r"^[ \t]{4}visibleDecoderProfiles,\s*$",
+        "test-only decode profile return field",
+    ),
+    _forbid(
+        "encode-profile-test-only-return",
+        "frontend/src/composables/forms/encode-profile-bindings.ts",
+        r"^[ \t]{4}visibleEncoderProfiles,\s*$",
+        "test-only encode profile return field",
+    ),
+    _forbid(
+        "encode-rate-control-test-only-return",
+        "frontend/src/composables/forms/encode-rate-control-bindings.ts",
+        r"^[ \t]{4}setRateControlMode,\s*$",
+        "test-only rate-control return field",
+    ),
+    _forbid(
+        "enhance-onnx-alias-return",
+        "frontend/src/composables/forms/enhance-algorithm-bindings.ts",
+        r"^[ \t]{4}isOnnxBackend(?:\s*:|,)\s*",
+        "ambiguous interpolation ONNX alias",
+    ),
+    _forbid(
+        "home-dashboard-internal-profile-return",
+        "frontend/src/composables/selectors/useHomeDashboard.ts",
+        r"^[ \t]{4}visibleEncoderProfiles,\s*$",
+        "internal home dashboard profile return field",
     ),
     _forbid(
         "stage-file-chunk-encoding-leak",

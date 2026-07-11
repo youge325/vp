@@ -83,7 +83,6 @@ describe('encode form bindings', () => {
   it('derives encoder profiles, profile options, and rate-control view state', () => {
     const { bindings } = makeBindings()
 
-    expect(bindings.visibleEncoderProfiles.value.map((profile) => profile.name)).toEqual(['libx265', 'hevc_nvenc'])
     expect(bindings.encoderProfileOptions.value).toEqual([
       { value: 'libx265', label: 'x265' },
       { value: 'hevc_nvenc', label: 'NVENC H.265' },

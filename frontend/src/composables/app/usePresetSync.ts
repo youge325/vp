@@ -116,8 +116,6 @@ export function usePresetSync() {
   }
 
   return {
-    persistDraft,
-    scheduleSave,
     loadPersistedPreset,
     startAutoSync,
   }

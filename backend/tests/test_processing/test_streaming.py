@@ -378,15 +378,15 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
     manifest = SegmentManifest(str(output_path))
     decision = manifest.prepare(signature, {}, mode="auto")
     assert decision.kind == "fresh"
-    first_segment = manifest.chunk_final_path(
+    first_segment_tmp = manifest.chunk_tmp_path(".mp4", index=1)
+    Path(first_segment_tmp).write_bytes(b"segment-1")
+    first_segment = manifest.finalize_chunk(
+        first_segment_tmp,
         index=1,
         start_output_frame=0,
         end_output_frame=1,
         next_source_frame=1,
-        extension=".mp4",
     )
-    Path(first_segment).parent.mkdir(parents=True, exist_ok=True)
-    Path(first_segment).write_bytes(b"segment-1")
     wrapper.video_frames[str(Path(first_segment))] = [_frame(0), _frame(50)]
 
     _install_video_frames_rename_hook(monkeypatch, wrapper)
