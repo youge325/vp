@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import os
+
 from app.planning import ProcessingStep, SegmentManifest
 from app.planning.manifest import ResumeState
 from app.processing.streaming import stage_file_stage_context
@@ -74,6 +77,13 @@ def test_stage_file_stage_context_prepares_intermediate_stage_manifest(tmp_path)
     assert context.manifest is not final_manifest
     assert context.manifest.output_path.name == "stage-01-01_frame_interpolation.mp4"
     assert context.manifest.manifest_path.is_file()
+    manifest_payload = json.loads(context.manifest.manifest_path.read_text(encoding="utf-8"))
+    assert json.loads(manifest_payload["signature"]) == {
+        "stage": 1,
+        "step": step.to_jsonable(),
+        "input": os.path.abspath(str(tmp_path / "input.mp4")),
+        "output": os.path.abspath(context.output_path),
+    }
     assert context.resume_state.start_source_frame == 0
     assert context.resume_state.completed_output_frames == 0
     assert context.resume_state.completed_segments == []

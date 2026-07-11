@@ -16,9 +16,8 @@
 // 不需要 payload。caller(``onCancelled``)拿到 payload 后自己构造 banner。
 
 import { TERMINAL_PROGRESS_PREFIX } from '@/types/protocol'
-import type { TaskLogPayload } from '@/types/protocol'
+import type { ResumeStatusPayload, TaskLogPayload } from '@/types/protocol'
 import type { MediaTaskState } from '@/types/domain/media'
-import type { ResumeStatus } from '@/types/domain/batch'
 
 const STAGE_PROGRESS_KEY_RE = /^\[VP_PROGRESS\]\s+\[(\d+\/\d+\s+[^\]]+)\]/
 const TENSORRT_LOG_PREFIX = '[VP_TRT]'
@@ -138,7 +137,10 @@ export function applyTaskCancelled(state: MediaTaskState): MediaTaskState {
   return { ...state, status: 'cancelled' }
 }
 
-export function applyTaskResumeStatus(state: MediaTaskState, payload: ResumeStatus): MediaTaskState {
+export function applyTaskResumeStatus(
+  state: MediaTaskState,
+  payload: ResumeStatusPayload,
+): MediaTaskState {
   return {
     ...state,
     resumeStatus: { ...payload },

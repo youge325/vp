@@ -4,6 +4,15 @@ use ts_rs::TS;
 
 use crate::models::config::{DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub enum ResumeMode {
+    Auto,
+    ForceFresh,
+    ForceResume,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
@@ -15,7 +24,7 @@ pub struct TaskRequest {
     pub output_config: OutputConfig,
     #[serde(default)]
     #[ts(optional)]
-    pub resume_mode: Option<String>,
+    pub resume_mode: Option<ResumeMode>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
@@ -195,9 +204,23 @@ pub struct VideoInfo {
 }
 
 #[cfg(test)]
-mod video_info_tests {
+mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn resume_mode_uses_the_cli_wire_values() {
+        assert_eq!(
+            serde_json::to_value(ResumeMode::ForceFresh).expect("serialize resume mode"),
+            json!("force-fresh")
+        );
+        assert_eq!(
+            serde_json::from_value::<ResumeMode>(json!("force-resume"))
+                .expect("deserialize resume mode"),
+            ResumeMode::ForceResume
+        );
+        assert!(serde_json::from_value::<ResumeMode>(json!("invalid")).is_err());
+    }
 
     #[test]
     fn video_info_ignores_backend_envelope_and_removed_diagnostics() {

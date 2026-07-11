@@ -56,10 +56,12 @@ pub fn build_process_command(
     command.args(["--input", &request.input_path]);
     command.arg("--config-stdin");
 
-    if let Some(mode) = request.resume_mode.as_deref() {
-        if !mode.is_empty() {
-            command.args(["--resume-mode", mode]);
-        }
+    if let Some(mode) = request.resume_mode.as_ref() {
+        let serialized_mode = serde_json::to_value(mode)?;
+        let mode = serialized_mode
+            .as_str()
+            .expect("ResumeMode must serialize as a string");
+        command.args(["--resume-mode", mode]);
     }
 
     // stdin is intentionally piped — the caller writes the JSON payload
@@ -170,7 +172,7 @@ mod tests {
                 open_on_complete: true,
                 segment_frames: 1000,
             },
-            resume_mode: Some("auto".to_string()),
+            resume_mode: Some(crate::models::task::ResumeMode::Auto),
         }
     }
 
@@ -231,11 +233,8 @@ mod tests {
 
     #[test]
     fn build_process_command_returns_stdin_payload_with_all_sections() {
-        // Smoke-check the sibling helper used by ``spawn_task`` —
-        // exercises the same packing logic without spawning a process.
-        // We can't easily inspect the Command's argv post-construction
-        // without running it, so this only validates the stdin payload
-        // shape; the command flags are covered by integration tests.
+        // Smoke-check the sibling helper used by ``spawn_task`` without
+        // spawning a process.
         let request = sample_request();
         let paths = ResolvedRuntimePaths {
             backend_dir: std::path::PathBuf::from("."),
@@ -247,7 +246,15 @@ mod tests {
             tensorrt_dir: None,
             log_dir: std::path::PathBuf::from("."),
         };
-        let (_command, payload) = build_process_command(&paths, &request).expect("command");
+        let (command, payload) = build_process_command(&paths, &request).expect("command");
+        let args = command
+            .as_std()
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--resume-mode", "auto"]));
         let parsed = serde_json::from_str::<serde_json::Value>(&payload)
             .expect("stdin payload must be valid JSON");
         let obj = parsed.as_object().expect("payload root must be object");

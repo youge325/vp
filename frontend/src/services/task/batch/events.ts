@@ -15,12 +15,12 @@
 import { TASK_ERROR_CODES } from '@/types/protocol'
 import type { TaskError } from '@/types/domain/media'
 import type {
+  ResumeStatusPayload,
   TaskCancelledPayload,
   TaskCompletedPayload,
   TaskLogPayload,
   TaskProgressPayload,
 } from '@/types/protocol'
-import type { ResumeStatus } from '@/types/domain/batch'
 import {
   appendTaskLog,
   applyTaskCancelled,
@@ -44,7 +44,7 @@ interface EventHandlers {
   onCompleted(payload: TaskCompletedPayload): Promise<void>
   onError(error: TaskError): Promise<void>
   onCancelled(payload?: TaskCancelledPayload | null): Promise<void>
-  onResumeStatus(payload: ResumeStatus): void
+  onResumeStatus(payload: ResumeStatusPayload): void
 }
 
 export function createEventHandlers(
@@ -112,7 +112,7 @@ export function createEventHandlers(
     await lifecycle.finalizeCurrent('cancelled')
   }
 
-  function onResumeStatus(payload: ResumeStatus): void {
+  function onResumeStatus(payload: ResumeStatusPayload): void {
     const item = lifecycle.getConsoleItem()
     const runState = lifecycle.getConsoleRunState()
     if (item && runState) {

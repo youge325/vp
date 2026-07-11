@@ -2,16 +2,6 @@
 
 import type { ResumeInspectionResult } from '@/types/protocol'
 
-export interface ResumeStatus {
-  resumed: boolean
-  completedChunks: number
-  completedOutputFrames: number
-  startSourceFrame: number
-  totalOutputFrames: number
-}
-
-export type ResumeMode = 'auto' | 'force-fresh' | 'force-resume'
-
 export type ResumeConflictKind =
   | 'resume_available'
   | 'final_exists_with_resume'

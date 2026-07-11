@@ -117,12 +117,20 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "frontend-resume-inspection-protocol-mirror",
             "export interface ResumeInspectionResult {}\n",
         ),
+        ("frontend-resume-status-protocol-mirror", "export interface ResumeStatus {}\n"),
+        (
+            "frontend-resume-mode-protocol-mirror",
+            "export type ResumeMode = 'auto' | 'force-fresh'\n",
+        ),
         (
             "rust-untyped-resume-inspection-command",
             "async fn check_resume_state() -> Result<Value, ShellError> { todo!() }\n",
         ),
         ("generated-resume-inspection-contract", "export type ResumeInspectionResult = {}\n"),
         ("resume-inspection-json-schema", "{}\n"),
+        ("rust-resume-mode-contract", "pub enum ResumeMode { Auto }\n"),
+        ("frontend-resume-mode-protocol-export", "export type { TaskRequest } from './TaskRequest'\n"),
+        ("task-request-resume-mode-schema", "{}\n"),
         ("rust-runtime-output-dir-state", "pub output_dir: PathBuf,\n"),
         (
             "rust-environment-fingerprint-output-dir",
@@ -146,6 +154,10 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
         ("public-file-extension-constant", "SUPPORTED_EXTENSIONS = set()\n"),
         ("public-paddlegan-weight-root", "def fixed_weight_root():\n    return None\n"),
         ("obsolete-ffmpeg-probe-imports", "from app.utils.ffmpeg.probe import get_video_info\n"),
+        (
+            "obsolete-stage-file-rules-reference",
+            "from app.processing.streaming.stage_file_rules import stage_signature\n",
+        ),
         ("removed-super-resolution-auto-download", "config = {'autoDownloadWeights': False}\n"),
         ("obsolete-e2e-environment-fields", "const value = result.result.rifeModel\n"),
         ("obsolete-frontend-environment-protocol", "import type { AppEnv } from '@/types/domain/env'\n"),
