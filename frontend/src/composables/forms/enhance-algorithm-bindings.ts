@@ -44,7 +44,6 @@ export function createEnhanceAlgorithmBindings({
     superResolutionAlgorithms: superResolution.algorithms,
     animeProfiles,
     interpolationModels: interpolation.models,
-    isOnnxBackend: isInterpolationOnnxBackend,
     isInterpolationOnnxBackend,
     isSuperResolutionOnnxBackend,
     currentInterpolationAlgorithm: interpolation.current,

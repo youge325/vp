@@ -92,7 +92,6 @@ describe('decode form bindings', () => {
 
     bindings.setDecodeProfile('h264_cuvid')
 
-    expect(bindings.visibleDecoderProfiles.value.map((profile) => profile.name)).toEqual(['software', 'h264_cuvid'])
     expect(bindings.decoderProfileOptions.value).toEqual([
       { value: 'software', label: 'Software Decode' },
       { value: 'h264_cuvid', label: 'NVDEC H.264' },

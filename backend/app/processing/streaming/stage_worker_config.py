@@ -27,7 +27,12 @@ class StageWorkerConfig:
     output_frame_count: int | None = None
 
     @classmethod
-    def from_mapping(cls, payload: Mapping[str, Any]) -> "StageWorkerConfig":
+    def from_json_file(cls, path: str | Path) -> "StageWorkerConfig":
+        with Path(path).open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if not isinstance(payload, Mapping):
+            raise ValueError("Stage worker config must be a JSON object.")
+
         def value(camel: str, snake: str) -> Any:
             return payload[camel] if camel in payload else payload[snake]
 
@@ -44,14 +49,6 @@ class StageWorkerConfig:
             tensor_backend_name=str(value("tensorBackendName", "tensor_backend_name")),
             output_frame_count=int(payload.get("outputFrameCount") or payload.get("output_frame_count") or 0) or None,
         )
-
-    @classmethod
-    def from_json_file(cls, path: str | Path) -> "StageWorkerConfig":
-        with Path(path).open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-        if not isinstance(payload, Mapping):
-            raise ValueError("Stage worker config must be a JSON object.")
-        return cls.from_mapping(payload)
 
     def to_jsonable(self) -> dict[str, Any]:
         return {

@@ -38,7 +38,6 @@ export function createEncodeProfileBindings({
   }
 
   return {
-    visibleEncoderProfiles,
     encoderProfileOptions,
     currentEncoderProfile,
     encoderOptions,

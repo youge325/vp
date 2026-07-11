@@ -29,7 +29,6 @@ export function createDecodeProfileBindings({
     resolveVisibleProfiles: () => getVisibleDecoderProfiles(checkResult.value, editorVideoCodec.value),
     selectedProfileName: () => editorConfig.value.decodeConfig.decoder ?? '',
   })
-  const visibleDecoderProfiles = profileState.visibleProfiles
   const decoderProfileOptions = profileState.profileOptions
   const currentDecoderProfile = profileState.currentProfile
   const decoderOptions = profileState.capabilityOptions
@@ -62,7 +61,6 @@ export function createDecodeProfileBindings({
   }
 
   return {
-    visibleDecoderProfiles,
     decoderProfileOptions,
     currentDecoderProfile,
     decoderOptions,

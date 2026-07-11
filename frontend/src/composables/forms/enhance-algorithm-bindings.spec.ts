@@ -71,7 +71,6 @@ describe('enhance algorithm bindings', () => {
     workflow.superResolution.tensorBackend = 'paddle'
     workflow.superResolution.algorithm = 'edvr'
 
-    expect(bindings.isOnnxBackend.value).toBe(true)
     expect(bindings.isInterpolationOnnxBackend.value).toBe(true)
     expect(bindings.isSuperResolutionOnnxBackend.value).toBe(false)
     expect(bindings.interpolationAlgorithms.value.map((algorithm) => algorithm.name)).toEqual(['rife'])

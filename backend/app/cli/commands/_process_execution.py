@@ -55,15 +55,15 @@ def _run_streaming(
     configs: RuntimeConfigs,
     resume_mode: str,
 ) -> dict[str, Any]:
-    decode_config, encode_config, workflow_config, output_config = configs.legacy_tuple()
+    sections = configs.legacy_sections()
     return process_video_streaming(
         ffmpeg=ffmpeg,
         input_path=input_path,
         output_path=plan.output_path,
-        decode_config=decode_config,
-        encode_config=encode_config,
-        workflow_config=workflow_config,
-        output_config=output_config,
+        decode_config=sections["decode"],
+        encode_config=sections["encode"],
+        workflow_config=sections["workflow"],
+        output_config=sections["output"],
         processing_steps=plan.processing_steps,
         tensor_backend_name=plan.tensor_backend_name,
         progress_callbacks=plan.progress_callbacks,

@@ -66,14 +66,14 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     )
 
     if processing_steps:
-        decode_config, encode_config, workflow_config, output_config = configs.legacy_tuple()
+        sections = configs.legacy_sections()
         signature = build_signature(
             input_path=input_path,
             output_path=output_path,
-            decode_config=decode_config,
-            encode_config=encode_config,
-            workflow_config=workflow_config,
-            output_config=output_config,
+            decode_config=sections["decode"],
+            encode_config=sections["encode"],
+            workflow_config=sections["workflow"],
+            output_config=sections["output"],
             processing_steps=processing_steps,
             video_info=video_info,
         )

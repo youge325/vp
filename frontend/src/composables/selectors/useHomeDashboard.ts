@@ -30,7 +30,6 @@ export function useHomeDashboard() {
     isBootstrapping,
     checkResult,
     lastProbeAt,
-    visibleEncoderProfiles,
     probeSourceLabel,
     familyCards,
     overviewStats,

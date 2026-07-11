@@ -253,23 +253,21 @@ def test_load_runtime_configs_returns_typed_models_and_legacy_shape():
     assert configs.workflow.interpolation.tensor_backend == "pytorch"
     assert configs.output.output_dir == "D:/typed-output"
 
-    decode_config, encode_config, workflow_config, output_config = configs.legacy_tuple()
-    assert decode_config["mode"] == "software"
-    assert "hwaccelDevice" not in decode_config
-    assert encode_config["keepAudio"] is True
-    assert workflow_config["interpolation"]["tensorBackend"] == "pytorch"
-    assert output_config["outputDir"] == "D:/typed-output"
+    sections = configs.legacy_sections()
+    assert sections["decode"]["mode"] == "software"
+    assert "hwaccelDevice" not in sections["decode"]
+    assert sections["encode"]["keepAudio"] is True
+    assert sections["workflow"]["interpolation"]["tensorBackend"] == "pytorch"
+    assert sections["output"]["outputDir"] == "D:/typed-output"
 
 
-def test_load_runtime_configs_keeps_legacy_tuple_interface():
-    decode_config, encode_config, workflow_config, output_config = load_runtime_configs(
-        _make_runtime_args(output_dir="D:/legacy-output")
-    ).legacy_tuple()
+def test_load_runtime_configs_keeps_legacy_sections_interface():
+    sections = load_runtime_configs(_make_runtime_args(output_dir="D:/legacy-output")).legacy_sections()
 
-    assert decode_config["decoder"] == "software"
-    assert encode_config["rateControl"] == {"mode": "crf", "value": 18}
-    assert workflow_config["processOrder"] == "super_resolution_then_interpolation"
-    assert output_config["outputDir"] == "D:/legacy-output"
+    assert sections["decode"]["decoder"] == "software"
+    assert sections["encode"]["rateControl"] == {"mode": "crf", "value": 18}
+    assert sections["workflow"]["processOrder"] == "super_resolution_then_interpolation"
+    assert sections["output"]["outputDir"] == "D:/legacy-output"
 
 
 def test_load_runtime_configs_rejects_missing_output_dir():
@@ -303,25 +301,25 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
         "source_fps": 30.0,
         "source_frames": 60,
     }
-    decode_config, encode_config, typed_workflow_config, output_config = updated.legacy_tuple()
+    sections = updated.legacy_sections()
 
     typed_signature = build_signature(
         input_path=str(input_path),
         output_path=str(output_path),
-        decode_config=decode_config,
-        encode_config=encode_config,
-        workflow_config=typed_workflow_config,
-        output_config=output_config,
+        decode_config=sections["decode"],
+        encode_config=sections["encode"],
+        workflow_config=sections["workflow"],
+        output_config=sections["output"],
         processing_steps=processing_steps,
         video_info=video_info,
     )
     legacy_signature = build_signature(
         input_path=str(input_path),
         output_path=str(output_path),
-        decode_config=decode_config,
-        encode_config=encode_config,
+        decode_config=sections["decode"],
+        encode_config=sections["encode"],
         workflow_config=workflow_config,
-        output_config=output_config,
+        output_config=sections["output"],
         processing_steps=processing_steps,
         video_info=video_info,
     )

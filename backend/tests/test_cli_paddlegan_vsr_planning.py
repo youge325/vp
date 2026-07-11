@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from app.errors import ProcessError, TaskErrorCode
@@ -139,9 +141,7 @@ def test_paddlegan_vsr_step_carries_super_resolution_runtime_fields():
         source_height=64,
         source_frame_count=12,
     )[0]
-    parsed = StageWorkerConfig.from_mapping(worker_plan.config.to_jsonable())
-
-    assert parsed.stage.algorithm_kwargs["engine"] == "tensorrt"
+    assert worker_plan.config.stage.algorithm_kwargs["engine"] == "tensorrt"
 
 
 def test_pytorch_interpolation_plus_paddlegan_super_resolution_builds_isolated_stage_backends():
@@ -190,7 +190,7 @@ def test_pytorch_interpolation_plus_paddlegan_super_resolution_builds_isolated_s
     assert worker_plans[-1].config.stage.algorithm_kwargs["num_frames"] == 8
 
 
-def test_paddlegan_num_frames_survives_stage_worker_config_roundtrip():
+def test_paddlegan_num_frames_survives_stage_worker_config_roundtrip(tmp_path):
     step = ProcessingStep(
         algorithm_type="super_resolution",
         algorithm_kwargs={
@@ -210,6 +210,8 @@ def test_paddlegan_num_frames_survives_stage_worker_config_roundtrip():
         source_frame_count=12,
     )[0]
 
-    parsed = StageWorkerConfig.from_mapping(worker_plan.config.to_jsonable())
+    config_path = tmp_path / "stage-worker.json"
+    config_path.write_text(json.dumps(worker_plan.config.to_jsonable()), encoding="utf-8")
+    parsed = StageWorkerConfig.from_json_file(config_path)
 
     assert parsed.stage.algorithm_kwargs["num_frames"] == 5

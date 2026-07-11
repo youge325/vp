@@ -60,7 +60,6 @@ export function createEncodeRateControlBindings({
     rateControlModeHint,
     rateControlValueHint,
     rateControlValue,
-    setRateControlMode,
     setRateControlModeValue,
     setRateControlValue,
   }

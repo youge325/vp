@@ -1,5 +1,6 @@
 import { setActivePinia, createPinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TASK_ERROR_CODES } from '@/types/protocol'
 import { useIssueStore } from '@/stores/issue'
@@ -27,10 +28,33 @@ import { usePresetSync } from '@/composables/app/usePresetSync'
 
 describe('usePresetSync', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     setActivePinia(createPinia())
     loadMock.mockReset()
     saveMock.mockReset()
   })
+
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  function startAutoSync() {
+    const presetStore = usePresetStore()
+    presetStore.setPersistenceReady(true)
+    usePresetSync().startAutoSync()
+    return presetStore
+  }
+
+  async function triggerSave(
+    mutator: Parameters<ReturnType<typeof usePresetStore>['patchWorkflow']>[0],
+  ) {
+    const presetStore = startAutoSync()
+    presetStore.patchWorkflow(mutator)
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(300)
+    return presetStore
+  }
 
   it('clears any prior preset operation issue after a successful save', async () => {
     saveMock.mockResolvedValueOnce(undefined)
@@ -41,16 +65,16 @@ describe('usePresetSync', () => {
       details: null,
     })
 
-    const sync = usePresetSync()
-    await sync.persistDraft()
+    await triggerSave((workflow) => {
+      workflow.anime.denoise += 1
+    })
 
     expect(issueStore.operationIssue).toBeNull()
   })
 
   it('saves persisted enhance preferences in the workflow preset payload', async () => {
     saveMock.mockResolvedValueOnce(undefined)
-    const presetStore = usePresetStore()
-    presetStore.patchWorkflow((workflow) => {
+    await triggerSave((workflow) => {
       workflow.processOrder = 'frame_interpolation_then_super_resolution'
       workflow.interpolation.engine = 'tensorrt'
       workflow.superResolution.engine = 'tensorrt'
@@ -59,9 +83,6 @@ describe('usePresetSync', () => {
       workflow.anime.denoise = 24
       workflow.anime.edgeBoost = 36
     })
-
-    const sync = usePresetSync()
-    await sync.persistDraft()
 
     expect(saveMock).toHaveBeenCalledOnce()
     expect(saveMock.mock.calls[0]?.[0]).toMatchObject({
@@ -89,8 +110,9 @@ describe('usePresetSync', () => {
     )
     const issueStore = useIssueStore()
 
-    const sync = usePresetSync()
-    await sync.persistDraft()
+    await triggerSave((workflow) => {
+      workflow.anime.denoise += 1
+    })
 
     expect(issueStore.operationIssue?.scope).toBe('preset')
     expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.PersistenceFailed)
@@ -105,8 +127,9 @@ describe('usePresetSync', () => {
     const presetStore = usePresetStore()
     const replaceSpy = vi.spyOn(presetStore, 'replaceDraftPreset')
 
-    const sync = usePresetSync()
-    await sync.persistDraft()
+    await triggerSave((workflow) => {
+      workflow.anime.denoise += 1
+    })
 
     expect(replaceSpy).toHaveBeenCalledOnce()
     expect(issueStore.operationIssue?.scope).toBe('preset')
