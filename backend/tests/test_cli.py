@@ -6,7 +6,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.cli.commands import _process_validation
 from app.cli.commands.check import cmd_check
 from app.cli.commands._process_planning import ProcessingPlan
 from app.cli.commands._process_validation import load_runtime_configs
@@ -16,7 +15,7 @@ from app.errors import ProcessError, TaskErrorCode
 from app.models import WorkflowConfig
 from app.planning import (
     ProcessingStep,
-    build_signature,
+    build_run_identity,
     resolve_expected_output_frames,
     resolve_processing_steps,
 )
@@ -74,10 +73,6 @@ def _make_runtime_args(**overrides):
     }
     values.update(overrides)
     return argparse.Namespace(**values)
-
-
-def test_process_validation_config_section_collector_is_private():
-    assert not hasattr(_process_validation, "collect_config_sections")
 
 
 def _make_workflow_config(**overrides):
@@ -241,7 +236,7 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
     }
     sections = updated.json_sections()
 
-    typed_signature = build_signature(
+    section_signature = build_run_identity(
         input_path=str(input_path),
         output_path=str(output_path),
         decode_config=sections["decode"],
@@ -250,8 +245,8 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
         output_config=sections["output"],
         processing_steps=processing_steps,
         video_info=video_info,
-    )
-    legacy_signature = build_signature(
+    ).signature
+    mapping_signature = build_run_identity(
         input_path=str(input_path),
         output_path=str(output_path),
         decode_config=sections["decode"],
@@ -260,10 +255,10 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
         output_config=sections["output"],
         processing_steps=processing_steps,
         video_info=video_info,
-    )
+    ).signature
 
     assert updated.workflow.interpolation.multi == 3
-    assert typed_signature == legacy_signature
+    assert section_signature == mapping_signature
 
 
 def test_runtime_output_config_includes_segment_frames_and_json_override():

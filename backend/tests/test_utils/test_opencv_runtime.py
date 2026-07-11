@@ -9,11 +9,6 @@ import pytest
 from app.utils import opencv_runtime
 
 
-def test_opencv_runtime_only_exposes_cv2_import_helper():
-    assert not hasattr(opencv_runtime, "get_cuda_device_count")
-    assert opencv_runtime.__all__ == ["import_cv2"]
-
-
 def test_import_cv2_error_mentions_opencv_env_paths(monkeypatch):
     monkeypatch.setattr(opencv_runtime, "register_native_dll_paths", lambda: [])
     real_import = builtins.__import__

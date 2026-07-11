@@ -78,17 +78,16 @@ class DecodeConfig(_CamelBase):
 ```python
 @dataclass(slots=True)
 class StagePlan:
-    pre_steps: list[dict]           # 预处理滤镜步骤
-    interpolation_step: dict | None # 插帧步骤（可选）
-    post_steps: list[dict]          # 后处理滤镜步骤
-    total_output_frames: int        # 总输出帧数
-    total_encoded_frames: int       # 总编码帧数
-    total_pairs: int                # 插帧对数
+    pre_steps: list[ProcessingStep]
+    interpolation_step: ProcessingStep | None
+    post_steps: list[ProcessingStep]
+    total_encoded_frames: int
 ```
 
 ### 配置签名
 
-`build_signature()` 对输入路径、所有配置、视频信息计算 SHA-256 哈希。签名用于：
+[`backend/app/planning/run_identity.py`](../backend/app/planning/run_identity.py) 的
+`build_run_identity()` 一次性构造 sidecar 配置快照，并基于同一份快照和输入文件元数据计算 SHA-256：
 - 续传时判断配置是否变更
 - sidecar 文件匹配
 

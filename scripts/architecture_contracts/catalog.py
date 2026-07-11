@@ -78,10 +78,65 @@ ABSENT_PATH_RULES = (
     _absent("frontend-postprocess-view-forwarder", "frontend/src/views/PostprocessModuleView.vue"),
     _absent("frontend-container-constants", "frontend/src/config/constants.ts"),
     _absent("backend-ffmpeg-monolithic-probe", "backend/app/utils/ffmpeg/probe.py"),
+    _absent("backend-legacy-processing-pipeline", "backend/app/processing/pipeline.py"),
+    _absent("backend-legacy-processing-decoder", "backend/app/processing/decoder.py"),
+    _absent("backend-legacy-processing-encoder", "backend/app/processing/encoder.py"),
+    _absent("backend-legacy-frame-processor", "backend/app/processing/frame_processor.py"),
 )
 
 
 FORBIDDEN_PATTERN_RULES = (
+    ForbiddenReferenceRule(
+        "obsolete-backend-internal-symbols",
+        roots=("backend/app",),
+        patterns=(
+            r"\bget_cuda_device_count\b",
+            r"\bget_onnx_model_dir\b",
+            r"\bemit_error\b",
+            r"\bcollect_config_sections\b",
+            r"\bread_completed_segments\b",
+            r"\bsuper_resolution_changes_dimensions\b",
+            r"\bis_paddlegan_vsr_step\b",
+            r"\bentry_needs_sequence\b",
+            r"\bget_cached_backend\b",
+            r"\bshould_prefer_tensor_stage\b",
+            r"\bAlgorithmFactoryFn\b",
+            r"\bBackendFactoryFn\b",
+            r"\bread_declared_frames\b",
+        ),
+        message="obsolete backend internal symbol",
+        suffixes=(".py",),
+    ),
+    _forbid(
+        "stage-runtime-rule-reexport",
+        "backend/app/processing/streaming/stage_runtime.py",
+        r"\balgorithm_kwargs_for_create\b",
+        "stage rule re-export from runtime",
+    ),
+    _forbid(
+        "stage-worker-factory-public-details",
+        "backend/app/processing/streaming/stage_worker_factory.py",
+        r"^\s*(?:def\s+(?:register_single_algorithm|backend_name)\b|AlgorithmFactory(?:Fn)?\s*=|BackendFactoryFn\s*=|from\s+[^\n]+\s+import\s+AlgorithmFactory(?!\s+as\s+_AlgorithmFactory\b))",
+        "public stage-worker factory implementation detail",
+    ),
+    RequiredPatternRule(
+        "stage-worker-factory-public-api",
+        "backend/app/processing/streaming/stage_worker_factory.py",
+        r"__all__\s*=\s*\[\s*[\"']create_algorithm[\"']\s*,\s*[\"']create_backend[\"']\s*,?\s*\]",
+        "stage-worker factory must expose only create_algorithm/create_backend",
+    ),
+    _forbid(
+        "worker-processes-public-backend-dir",
+        "backend/app/processing/streaming/worker_processes.py",
+        r"^\s*def\s+backend_dir\b",
+        "public worker-process backend directory helper",
+    ),
+    _forbid(
+        "stage-plan-dead-fields",
+        "backend/app/planning/stage_plan.py",
+        r"^\s+(?:total_output_frames|total_pairs)\s*:",
+        "dead StagePlan field",
+    ),
     _forbid(
         "rust-obsolete-environment-fields",
         "frontend/src-tauri/src/models/env.rs",
@@ -559,8 +614,50 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "pipeline-owned-preflight",
         "backend/app/processing/streaming/pipeline.py",
-        r"\b(?:normalize_processing_steps|resolve_video_info|build_stage_plan|build_signature|build_config_snapshot|should_use_stage_file_pipeline|stage_file_resume_source_frames|resolved_output_dimensions)\b|from\s+app\.processing\.streaming\.pipeline_rules\s+import",
+        r"\b(?:resolve_video_info|build_stage_plan|build_run_identity|should_use_stage_file_pipeline|stage_file_resume_source_frames|resolved_output_dimensions)\b|from\s+app\.processing\.streaming\.pipeline_rules\s+import",
         "streaming preflight implementation",
+    ),
+    ForbiddenReferenceRule(
+        "obsolete-run-identity-builders",
+        roots=(
+            "backend/app",
+            "backend/tests",
+            "docs/04-backend-architecture.md",
+            "docs/09-resume-checkpointing.md",
+        ),
+        patterns=(r"\bbuild_signature\b", r"\bbuild_config_snapshot\b"),
+        message="split run-identity builder",
+        suffixes=(".py", ".md"),
+    ),
+    _forbid(
+        "stage-plan-run-identity-coupling",
+        "backend/app/planning/stage_plan.py",
+        r"\b(?:hashlib|signature|config_snapshot|decode_config|encode_config|workflow_config|output_config)\b",
+        "run identity implementation in stage-plan rules",
+    ),
+    _forbid(
+        "pipeline-rules-run-identity-coupling",
+        "backend/app/processing/streaming/pipeline_rules.py",
+        r"\b(?:config_snapshot|input_path|output_path|decode_config|encode_config|workflow_config|output_config|processing_steps)\b",
+        "run identity implementation in pipeline rules",
+    ),
+    _forbid(
+        "run-identity-streaming-dependency",
+        "backend/app/planning/run_identity.py",
+        r"\bapp\.processing\b",
+        "planning run identity dependency on streaming",
+    ),
+    RequiredPatternRule(
+        "preflight-run-identity",
+        "backend/app/processing/streaming/pipeline_preflight.py",
+        r"\bidentity\s*=\s*build_run_identity\s*\(",
+        "streaming preflight must build one shared run identity",
+    ),
+    _forbid(
+        "backend-architecture-stale-stage-plan-fields",
+        "docs/04-backend-architecture.md",
+        r"\b(?:total_output_frames|total_pairs)\b|list\[dict\]",
+        "stale StagePlan field documentation",
     ),
     _forbid(
         "pipeline-dispatch-worker-coupling",

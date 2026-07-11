@@ -1,15 +1,11 @@
-"""Stage plan + signature derivation for the streaming pipeline.
+"""Stage-plan derivation for the streaming pipeline.
 
-Pure functions: probe a video, build a deterministic SHA-256 signature
-from the request, derive the ``StagePlan`` (pre/interp/post split +
-frame counts) that the streaming workers consume.
+Pure functions: probe a video and derive the ``StagePlan`` (pre/interp/post
+split + frame counts) that the streaming workers consume.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
-import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -118,39 +114,3 @@ def build_stage_plan(
         post_steps=steps[interpolation_index + 1 :],
         total_encoded_frames=total_encoded_frames,
     )
-
-
-def build_signature(
-    *,
-    input_path: str,
-    output_path: str,
-    decode_config: dict[str, Any],
-    encode_config: dict[str, Any],
-    workflow_config: dict[str, Any],
-    output_config: dict[str, Any],
-    processing_steps: list[ProcessingStep],
-    video_info: dict[str, Any],
-) -> str:
-    """Return a deterministic SHA-256 signature for the processing configuration."""
-    stat = os.stat(input_path)
-    payload = {
-        "input_path": os.path.abspath(input_path),
-        "output_path": os.path.abspath(output_path),
-        "input_size": stat.st_size,
-        "input_mtime_ns": stat.st_mtime_ns,
-        "decode_config": decode_config,
-        "encode_config": encode_config,
-        "workflow_config": workflow_config,
-        "output_config": {
-            "segmentFrames": max(1, int(output_config.get("segmentFrames") or 1000)),
-        },
-        "processing_steps": [step.to_jsonable() for step in processing_steps],
-        "video_info": {
-            "width": video_info["width"],
-            "height": video_info["height"],
-            "source_fps": video_info["source_fps"],
-            "source_frames": video_info["source_frames"],
-        },
-    }
-    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()

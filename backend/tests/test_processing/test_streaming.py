@@ -9,7 +9,7 @@ import shutil
 import numpy as np
 import pytest
 
-from app.planning import ProcessingStep, SegmentManifest, build_signature
+from app.planning import ProcessingStep, SegmentManifest, build_run_identity
 from app.processing.streaming.queues import EncodedFrame, StreamEnd
 from app.processing.streaming import process_video_streaming
 from app.processing.streaming.worker_plans import (
@@ -357,7 +357,7 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
         "duration": len(source_frames) / 24.0,
         "has_audio": True,
     }
-    signature = build_signature(
+    identity = build_run_identity(
         input_path=str(input_path),
         output_path=str(output_path),
         decode_config=decode_config,
@@ -368,7 +368,7 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
         video_info=video_info,
     )
     manifest = SegmentManifest(str(output_path))
-    decision = manifest.prepare(signature, {}, mode="auto")
+    decision = manifest.prepare(identity.signature, identity.config_snapshot, mode="auto")
     assert decision.kind == "fresh"
     first_segment_tmp = manifest.chunk_tmp_path(".mp4", index=1)
     Path(first_segment_tmp).write_bytes(b"segment-1")
@@ -582,12 +582,3 @@ def test_streaming_pipeline_uses_stage_worker_pipeline_for_processing_steps(monk
 
     assert len(calls) == 1
     assert [int(frame[0, 0, 0]) for frame in wrapper.video_frames[str(output_path)]] == [9]
-
-
-def test_legacy_processing_modules_are_removed():
-    processing_dir = Path(__file__).resolve().parents[2] / "app" / "processing"
-
-    assert not (processing_dir / "pipeline.py").exists()
-    assert not (processing_dir / "decoder.py").exists()
-    assert not (processing_dir / "encoder.py").exists()
-    assert not (processing_dir / "frame_processor.py").exists()

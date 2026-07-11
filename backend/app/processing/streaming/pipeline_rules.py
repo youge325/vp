@@ -2,47 +2,15 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
-from app.planning import ProcessingStep, StagePlan
+from app.planning import StagePlan
 from app.processing.streaming.stage_rules import (
     ordered_steps,
     resolve_stage_plan_output_dimensions,
     stage_output_frame_count,
     stage_requires_file_pipeline,
 )
-
-
-def build_config_snapshot(
-    *,
-    input_path: str,
-    output_path: str,
-    decode_config: dict[str, Any],
-    encode_config: dict[str, Any],
-    workflow_config: dict[str, Any],
-    output_config: dict[str, Any],
-    processing_steps: list[ProcessingStep],
-    video_info: dict[str, Any],
-) -> dict[str, Any]:
-    """Capture the parameters that determine signature + behavior for a run."""
-    return {
-        "input_path": os.path.abspath(input_path),
-        "output_path": os.path.abspath(output_path),
-        "decode_config": decode_config,
-        "encode_config": encode_config,
-        "workflow_config": workflow_config,
-        "output_config": {
-            "segmentFrames": max(1, int(output_config.get("segmentFrames") or 1000)),
-        },
-        "processing_steps": [step.to_jsonable() for step in processing_steps],
-        "video_info": {
-            "width": video_info["width"],
-            "height": video_info["height"],
-            "source_fps": video_info["source_fps"],
-            "source_frames": video_info["source_frames"],
-        },
-    }
 
 
 def should_use_stage_file_pipeline(stage_plan: StagePlan) -> bool:
@@ -81,7 +49,6 @@ def resolved_output_dimensions(
 
 
 __all__ = [
-    "build_config_snapshot",
     "resolved_output_dimensions",
     "resolved_stream_fps",
     "should_use_stage_file_pipeline",

@@ -51,9 +51,11 @@ chunk-{序号}-out{起始输出帧}-{结束输出帧}-src{下一源帧}.{扩展�
 
 ## 配置签名
 
-[`backend/app/planning/stage_plan.py`](../backend/app/planning/stage_plan.py) 的 `build_signature()` 对以下参数计算 SHA-256 哈希：
+[`backend/app/planning/run_identity.py`](../backend/app/planning/run_identity.py) 的 `build_run_identity()`
+先构造将写入 sidecar 的配置快照，再以该快照和以下输入文件元数据计算 SHA-256：
 
 - 输入文件绝对路径
+- 输入文件大小和修改时间
 - 输出文件绝对路径
 - 解码配置（decode_config）
 - 编码配置（encode_config）

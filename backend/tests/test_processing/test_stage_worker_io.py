@@ -5,17 +5,11 @@ import io
 import numpy as np
 import pytest
 
-from app.processing.streaming import stage_worker_io
 from app.processing.streaming.stage_worker_io import (
     RawVideoFrameError,
     read_rgb_frame,
     write_rgb_frame,
 )
-
-
-def test_stage_worker_io_keeps_declared_frame_reads_out_of_raw_io_surface() -> None:
-    assert not hasattr(stage_worker_io, "read_declared_frames")
-    assert "read_declared_frames" not in stage_worker_io.__all__
 
 
 def test_read_rgb_frame_returns_none_on_clean_eof() -> None:
