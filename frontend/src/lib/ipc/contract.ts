@@ -5,10 +5,13 @@
 // surface on the TypeScript side so ``safeInvoke`` can infer the required
 // argument object and return type from the command name.
 
-import type { ResumeInspectionResult } from '@/types/domain/batch'
-import type { EnvironmentCheckPayload } from '@/types/protocol'
 import type { VideoInfoResult } from '@/types/domain/media'
-import type { TaskRequest, WorkbenchPreset } from '@/types/protocol'
+import type {
+  EnvironmentCheckPayload,
+  ResumeInspectionResult,
+  TaskRequest,
+  WorkbenchPreset,
+} from '@/types/protocol'
 
 type TaskControlKind = 'pause' | 'resume'
 

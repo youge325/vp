@@ -1,5 +1,7 @@
 // 领域层 — 批处理与续跑领域模型。
 
+import type { ResumeInspectionResult } from '@/types/protocol'
+
 export interface ResumeStatus {
   resumed: boolean
   completedChunks: number
@@ -9,20 +11,6 @@ export interface ResumeStatus {
 }
 
 export type ResumeMode = 'auto' | 'force-fresh' | 'force-resume'
-
-export interface ResumeInspectionResult {
-  type: 'resume_inspection'
-  pipeline_kind: 'streaming' | 'format_conversion'
-  outputPath: string
-  inputPath: string
-  finalExists: boolean
-  sidecarExists: boolean
-  signatureMatch: boolean
-  completedChunks: number
-  completedOutputFrames: number
-  nextSourceFrame: number
-  totalOutputFrames: number
-}
 
 export type ResumeConflictKind =
   | 'resume_available'

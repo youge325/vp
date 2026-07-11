@@ -2,7 +2,8 @@
 // Resume 冲突分类与从错误 details 重建 inspection 结构。
 
 import type { TaskError } from '@/types/domain/media'
-import type { ResumeConflictKind, ResumeInspectionResult } from '@/types/domain/batch'
+import type { ResumeConflictKind } from '@/types/domain/batch'
+import type { ResumeInspectionResult } from '@/types/protocol'
 
 export function classifyResumeConflict(inspection: ResumeInspectionResult): ResumeConflictKind | null {
   if (!inspection.finalExists) {
@@ -23,7 +24,7 @@ export function buildInspectionFromError(
     type: 'resume_inspection',
     pipeline_kind: 'streaming',
     outputPath: typeof details.outputPath === 'string' ? details.outputPath : '',
-    inputPath: typeof details.inputPath === 'string' ? details.inputPath : fallbackInputPath,
+    input_path: typeof details.inputPath === 'string' ? details.inputPath : fallbackInputPath,
     finalExists: true,
     sidecarExists: Boolean(details.sidecarSignatureMatch),
     signatureMatch: Boolean(details.sidecarSignatureMatch),

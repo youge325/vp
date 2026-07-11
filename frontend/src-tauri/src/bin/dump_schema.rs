@@ -22,8 +22,8 @@ fn main() {
         WorkbenchPreset, WorkflowConfig,
     };
     use vp_workbench_lib::models::task::{
-        ResumeStatusPayload, TaskCompletedPayload, TaskErrorPayload, TaskLogPayload,
-        TaskProgressPayload, TaskRequest,
+        ResumeInspectionResult, ResumeStatusPayload, TaskCompletedPayload, TaskErrorPayload,
+        TaskLogPayload, TaskProgressPayload, TaskRequest,
     };
 
     dump!(DecodeConfig, "decode_config");
@@ -43,4 +43,5 @@ fn main() {
     dump!(TaskErrorPayload, "task_error_payload");
     dump!(TaskLogPayload, "task_log_payload");
     dump!(ResumeStatusPayload, "resume_status_payload");
+    dump!(ResumeInspectionResult, "resume_inspection_result");
 }

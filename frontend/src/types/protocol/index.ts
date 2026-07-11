@@ -24,6 +24,7 @@ export type { WorkflowConfig } from '@/types/generated/WorkflowConfig'
 
 // --- Task event payloads ---
 export type { ResumeStatusPayload } from '@/types/generated/ResumeStatusPayload'
+export type { ResumeInspectionResult } from '@/types/generated/ResumeInspectionResult'
 export type { TaskCancelledPayload } from '@/types/generated/TaskCancelledPayload'
 export type { TaskCompletedPayload } from '@/types/generated/TaskCompletedPayload'
 export type { TaskErrorPayload } from '@/types/generated/TaskErrorPayload'

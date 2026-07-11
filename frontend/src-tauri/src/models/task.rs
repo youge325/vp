@@ -107,6 +107,48 @@ pub struct ResumeStatusPayload {
     pub total_output_frames: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub enum ResumeInspectionEventType {
+    ResumeInspection,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub enum ResumePipelineKind {
+    Streaming,
+    FormatConversion,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub struct ResumeInspectionResult {
+    #[serde(rename = "type")]
+    #[ts(rename = "type")]
+    pub event_type: ResumeInspectionEventType,
+    #[serde(rename = "pipeline_kind")]
+    #[ts(rename = "pipeline_kind")]
+    pub pipeline_kind: ResumePipelineKind,
+    pub output_path: String,
+    #[serde(rename = "input_path")]
+    #[ts(rename = "input_path")]
+    pub input_path: String,
+    pub final_exists: bool,
+    pub sidecar_exists: bool,
+    pub signature_match: bool,
+    #[ts(type = "number")]
+    pub completed_chunks: u64,
+    #[ts(type = "number")]
+    pub completed_output_frames: u64,
+    #[ts(type = "number")]
+    pub next_source_frame: u64,
+    #[ts(type = "number")]
+    pub total_output_frames: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct TaskErrorPayload {
@@ -174,6 +216,35 @@ mod video_info_tests {
         assert_eq!(
             serde_json::to_value(info).expect("serialize video info"),
             json!({ "fps": 24.0, "width": 1920, "height": 1080, "videoCodec": "h264" })
+        );
+    }
+
+    #[test]
+    fn resume_inspection_validates_the_mixed_case_backend_contract() {
+        let raw = json!({
+            "type": "resume_inspection",
+            "pipeline_kind": "streaming",
+            "outputPath": "D:/out.mp4",
+            "input_path": "D:/in.mp4",
+            "finalExists": true,
+            "sidecarExists": true,
+            "signatureMatch": true,
+            "completedChunks": 2,
+            "completedOutputFrames": 120,
+            "nextSourceFrame": 60,
+            "totalOutputFrames": 240
+        });
+
+        let inspection: ResumeInspectionResult =
+            serde_json::from_value(raw.clone()).expect("resume inspection");
+        assert_eq!(
+            inspection.event_type,
+            ResumeInspectionEventType::ResumeInspection
+        );
+        assert_eq!(inspection.pipeline_kind, ResumePipelineKind::Streaming);
+        assert_eq!(
+            serde_json::to_value(inspection).expect("serialize resume inspection"),
+            raw
         );
     }
 }

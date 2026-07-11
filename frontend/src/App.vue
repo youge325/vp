@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import StepRail from '@/components/StepRail.vue'
-import { WORKBENCH_MODULES } from '@/views/registry'
+import { WORKBENCH_MODULE_BY_KEY } from '@/views/registry'
 import { useBootstrap } from '@/composables/app/useBootstrap'
 import { useEnvironmentChecker } from '@/composables/app/useEnvironmentChecker'
 import { useAppShellStatus } from '@/composables/selectors/useAppShellStatus'
@@ -15,7 +15,7 @@ const shell = useAppShellStatus()
 useBootstrap()
 
 const activeModule = computed<WorkbenchModuleDefinition>(
-  () => route.meta.module ?? WORKBENCH_MODULES[0],
+  () => route.meta.module ?? WORKBENCH_MODULE_BY_KEY.home,
 )
 
 const isBusy = computed(() => shell.isBootstrapping.value || shell.isChecking.value)
