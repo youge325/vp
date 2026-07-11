@@ -7,9 +7,21 @@ import net from 'node:net'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const rootDir = resolve(scriptDir, '..')
-const launcherSource = resolve(rootDir, 'e2e', 'utils', 'run-hidden-desktop.rs')
+const launcherSource = resolve(rootDir, 'tests', 'e2e', 'utils', 'run-hidden-desktop.rs')
 const launcherPath = resolve(rootDir, 'node_modules', '.cache', 'vp-e2e', 'run-hidden-desktop.exe')
 const wdioCli = resolve(rootDir, 'node_modules', '@wdio', 'cli', 'bin', 'wdio.js')
+const networkProxyVariables = new Set([
+  'all_proxy',
+  'global_agent_http_proxy',
+  'global_agent_https_proxy',
+  'http_proxy',
+  'https_proxy',
+  'no_proxy',
+  'node_use_env_proxy',
+  'npm_config_https_proxy',
+  'npm_config_noproxy',
+  'npm_config_proxy',
+])
 
 const args = process.argv.slice(2)
 const showIndex = args.indexOf('--show')
@@ -46,6 +58,10 @@ const findAvailablePort = async (usedPorts) => {
   throw new Error('unable to resolve available WebDriver port')
 }
 
+const withoutNetworkProxy = (environment) => Object.fromEntries(
+  Object.entries(environment).filter(([name]) => !networkProxyVariables.has(name.toLowerCase())),
+)
+
 const reservedPorts = new Set()
 if (!process.env.VP_TAURI_DRIVER_PORT || Number(process.env.VP_TAURI_DRIVER_PORT) <= 0) {
   process.env.VP_TAURI_DRIVER_PORT = String(await findAvailablePort(reservedPorts))
@@ -57,7 +73,7 @@ if (!process.env.VP_TAURI_NATIVE_DRIVER_PORT || Number(process.env.VP_TAURI_NATI
 const run = (command, commandArgs) => {
   const result = spawnSync(command, commandArgs, {
     cwd: rootDir,
-    env: process.env,
+    env: withoutNetworkProxy(process.env),
     stdio: 'inherit',
     windowsHide: true,
   })

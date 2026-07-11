@@ -17,7 +17,7 @@ const cargoTargetDir = process.env.CARGO_TARGET_DIR
 const defaultTargetDir = cargoTargetDir ? resolve(cargoTargetDir) : resolve(process.cwd(), 'src-tauri', 'target')
 const applicationPath = process.env.VP_TAURI_EXE_PATH ?? resolve(defaultTargetDir, 'release', executableName)
 const useOffscreenWindow = process.env.VP_E2E_OFFSCREEN_WINDOW === '1'
-const hiddenEdgeDriverSource = resolve(process.cwd(), 'e2e', 'utils', 'hidden-msedgedriver.rs')
+const hiddenEdgeDriverSource = resolve(process.cwd(), 'tests', 'e2e', 'utils', 'hidden-msedgedriver.rs')
 const hiddenEdgeDriverPath = resolve(process.cwd(), 'node_modules', '.cache', 'vp-e2e', 'hidden-msedgedriver.exe')
 const delay = (ms: number) => new Promise<void>((resolveDelay) => setTimeout(resolveDelay, ms))
 const versionPattern = /^\d+\.\d+\.\d+\.\d+$/
@@ -142,8 +142,12 @@ const canConnect = (port: number, host: string) => new Promise<boolean>((resolve
 
 export const config = {
   runner: 'local',
-  specs: splitSpecPatterns(process.env.VP_E2E_SPECS) ?? ['./e2e/**/*.spec.ts'],
-  exclude: ['./e2e/utils/**', './e2e/fixtures.ts', ...(splitSpecPatterns(process.env.VP_E2E_EXCLUDE) ?? [])],
+  specs: splitSpecPatterns(process.env.VP_E2E_SPECS) ?? ['./tests/e2e/**/*.spec.ts'],
+  exclude: [
+    './tests/e2e/utils/**',
+    './tests/e2e/fixtures.ts',
+    ...(splitSpecPatterns(process.env.VP_E2E_EXCLUDE) ?? []),
+  ],
   maxInstances: 1,
   specFileRetries: isWindows ? 1 : 0,
   specFileRetriesDeferred: true,

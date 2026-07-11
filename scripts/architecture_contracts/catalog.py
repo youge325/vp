@@ -14,6 +14,7 @@ def _forbid(rule_id: str, path: str, pattern: str, message: str) -> ForbiddenPat
 
 
 ABSENT_PATH_RULES = (
+    _absent("frontend-legacy-e2e-root", "frontend/e2e"),
     _absent("frontend-ipc-barrel", "frontend/src/lib/ipc/index.ts"),
     _absent("frontend-model-metrics-barrel", "frontend/src/services/model-metrics.ts"),
     _absent("frontend-preset-select-option-type", "frontend/src/services/preset/select-options.ts"),

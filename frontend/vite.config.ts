@@ -10,7 +10,7 @@ export default defineConfig({
     ...(process.env.E2E_COVERAGE === '1'
       ? [istanbul({
           include: 'src/*',
-          exclude: ['node_modules', 'test/', '**/*.spec.ts', '**/__tests__/**', 'src/types/generated/**'],
+          exclude: ['node_modules', 'tests/**', 'src/types/generated/**'],
           extension: ['.js', '.ts', '.vue'],
           forceBuildInstrument: true,
         })]

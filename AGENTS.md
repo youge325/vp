@@ -2,7 +2,7 @@
 
 ## 项目结构与模块组织
 
-VP Workbench 是基于 Tauri v2 的桌面视频处理应用。`backend/app/` 放置 Python CLI、流式处理链路、算法、协议和工具模块；`backend/tests/` 是 pytest 测试。`frontend/src/` 放置 Vue 3 + TypeScript 前端、Pinia 状态、路由、组合式函数和 IPC 封装。`frontend/src-tauri/src/` 是 Rust 桌面外壳，负责 Tauri 命令、任务控制、权限和进程管理。`frontend/e2e/` 存放 WebdriverIO 桌面端测试。`docs/` 是架构与开发文档，`scripts/` 是契约检查脚本，`infra/` 是运行器和部署配置。
+VP Workbench 是基于 Tauri v2 的桌面视频处理应用。`backend/app/` 放置 Python CLI、流式处理链路、算法、协议和工具模块；`backend/tests/` 是 pytest 测试。`frontend/src/` 只放置 Vue 3 + TypeScript 生产代码，包括 Pinia 状态、路由、组合式函数和 IPC 封装。`frontend/tests/unit/` 存放 Vitest 单元测试，按 `frontend/src/` 的领域路径镜像；`frontend/tests/e2e/` 存放 WebdriverIO 桌面端测试、fixtures、helpers 和 Rust launcher。`frontend/src-tauri/src/` 是 Rust 桌面外壳，负责 Tauri 命令、任务控制、权限和进程管理。`docs/` 是架构与开发文档，`scripts/` 是契约检查脚本，`infra/` 是运行器和部署配置。
 
 ## 构建、测试与开发命令
 
@@ -19,11 +19,11 @@ VP Workbench 是基于 Tauri v2 的桌面视频处理应用。`backend/app/` 放
 
 ## 代码风格与命名约定
 
-Python 目标版本为 3.12，使用 Ruff：行宽 120、空格缩进、双引号。测试文件放在 `backend/tests/`，命名为 `test_*.py`。TypeScript/Vue 使用 ESM，`@` 指向 `frontend/src`，单元测试使用同目录或相近目录的 `*.spec.ts`。组件和组合式函数遵循现有命名，例如 `StageModuleView.vue`、`useWorkbenchEditor.ts`。Rust 使用 edition 2021，提交前运行 `cargo fmt`。
+Python 目标版本为 3.12，使用 Ruff：行宽 120、空格缩进、双引号。测试文件放在 `backend/tests/`，命名为 `test_*.py`。TypeScript/Vue 使用 ESM，`@` 指向 `frontend/src`。前端单元测试统一放在 `frontend/tests/unit/`，使用与生产模块一致的相对领域路径和 `*.spec.ts` 文件名，不保留 `__tests__` 中间层。测试导入生产模块时统一使用 `@/` alias；仅测试 helper 之间允许相对导入。组件和组合式函数遵循现有命名，例如 `StageModuleView.vue`、`useWorkbenchEditor.ts`。Rust 使用 edition 2021，提交前运行 `cargo fmt`。
 
 ## 测试指南
 
-后端测试使用 pytest，涉及重型框架加载时使用 `paddle`、`pytorch` 等 marker；避免在同一测试进程混用不兼容的 GPU 框架。前端单元测试运行在 Vitest + `jsdom`，匹配 `src/**/*.spec.ts`。桌面端 E2E 通过 `cd frontend; npm run e2e` 运行，需要已构建的 Tauri 可执行文件。修改 Rust 模型、Tauri 命令或跨语言协议时，运行 `cargo build`、`npm run build` 和 pre-commit，确保生成类型与契约一致。
+后端测试使用 pytest，涉及重型框架加载时使用 `paddle`、`pytorch` 等 marker；避免在同一测试进程混用不兼容的 GPU 框架。前端单元测试运行在 Vitest + `jsdom`，只匹配 `tests/unit/**/*.spec.ts`；定向运行示例为 `cd frontend; npm run test -- tests/unit/services/preset/defaults.spec.ts`。桌面端 E2E 通过 `cd frontend; npm run e2e` 运行，需要已构建的 Tauri 可执行文件；`VP_E2E_SPECS` 和 `VP_E2E_EXCLUDE` 使用 `tests/e2e/...` 路径。启动 WebDriver session 前，E2E launcher 必须只在子进程环境中临时移除网络代理环境变量并强制直连，不得清除 Python、FFmpeg 等 `VP_*` runtime 配置或永久修改父 shell 环境。修改 Rust 模型、Tauri 命令或跨语言协议时，运行 `cargo build`、`npm run build` 和 pre-commit，确保生成类型与契约一致。
 
 ## Commit 与 Pull Request 规范
 
