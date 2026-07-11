@@ -13,11 +13,73 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from architecture_contracts.checks import (  # noqa: E402
+    _check_frontend_dependency_boundaries,
+    _find_unconsumed_protocol_reexports,
+    _find_unconsumed_test_support_exports,
+    _find_unconsumed_test_ids,
+    _find_unreferenced_css_classes,
+    _find_unused_css_custom_properties,
     _check_frontend_test_layout,
     collect_architecture_issues,
     diff_command_surface,
     diff_paddlegan_vsr_contract,
 )
+
+
+def test_frontend_dependency_boundaries_reject_protocol_submodule_import(tmp_path: Path) -> None:
+    source_path = tmp_path / "frontend/src/services/example.ts"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text("import { TASK_ERROR_CODES } from '@/types/protocol/errors'\n", encoding="utf-8")
+
+    assert _check_frontend_dependency_boundaries(tmp_path) == [
+        "protocol submodule import outside protocol layer: frontend/src/services/example.ts",
+    ]
+
+
+def test_protocol_reexport_check_reports_only_unconsumed_types() -> None:
+    index_text = """
+export type { Used } from '@/types/generated/Used'
+export type { Aliased } from '@/types/generated/Aliased'
+export type { Relative } from '@/types/generated/Relative'
+export type { Unused } from '@/types/generated/Unused'
+"""
+    consumers = [
+        "import type { Used, Aliased as LocalAlias } from '@/types/protocol'\n",
+        "import type { Relative } from '../protocol'\n",
+    ]
+
+    assert _find_unconsumed_protocol_reexports(index_text, consumers) == {"Unused"}
+
+
+def test_global_css_check_reports_only_unreferenced_classes() -> None:
+    css = ".used { color: red; }\n.dead, .also-used:hover { color: blue; }\n"
+    consumers = ['<div class="used also-used"></div>']
+
+    assert _find_unreferenced_css_classes(css, consumers) == {"dead"}
+
+
+def test_global_css_check_reports_only_unused_custom_properties() -> None:
+    css = ":root { --used: red; --dead: blue; }\n.example { color: var(--used); }\n"
+
+    assert _find_unused_css_custom_properties(css, [css]) == {"--dead"}
+
+
+def test_test_id_check_reports_only_unconsumed_hooks() -> None:
+    sources = ['<div data-testid="used"></div>', '<div data-testid="dead"></div>']
+    tests = ["await $('[data-testid=\"used\"]')"]
+
+    assert _find_unconsumed_test_ids(sources, tests) == {"dead"}
+
+
+def test_test_support_export_check_ignores_specs_and_reports_unused_helpers() -> None:
+    sources = {
+        "frontend/tests/e2e/helpers.ts": "export const used = 1\nexport interface Dead {}\n",
+        "frontend/tests/e2e/example.spec.ts": "export const specLocal = used\n",
+    }
+
+    assert _find_unconsumed_test_support_exports(sources) == [
+        ("frontend/tests/e2e/helpers.ts", "Dead"),
+    ]
 
 
 def _load_checker_module():

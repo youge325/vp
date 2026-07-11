@@ -5,7 +5,7 @@ import { useIssueStore } from '@/stores/issue'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import { presetIpc } from '@/lib/ipc/endpoints/preset'
 import { normalizeError } from '@/services/error/normalize'
-import { TASK_ERROR_CODES } from '@/types/protocol/errors'
+import { TASK_ERROR_CODES } from '@/types/protocol'
 
 export function useOutputPicker() {
   const issueStore = useIssueStore()

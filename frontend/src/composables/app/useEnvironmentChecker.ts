@@ -3,7 +3,7 @@
 import { useEnvStore } from '@/stores/env'
 import { envIpc } from '@/lib/ipc/endpoints/env'
 import { normalizeError } from '@/services/error/normalize'
-import { TASK_ERROR_CODES } from '@/types/protocol/errors'
+import { TASK_ERROR_CODES } from '@/types/protocol'
 
 export function useEnvironmentChecker() {
   const envStore = useEnvStore()

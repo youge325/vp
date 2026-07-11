@@ -12,7 +12,7 @@
 import type { MediaItem } from '@/types/domain/media'
 import type { ResumeInspectionResult, ResumeMode } from '@/types/domain/batch'
 import { normalizeError } from '@/services/error/normalize'
-import { TASK_ERROR_CODES } from '@/types/protocol/errors'
+import { TASK_ERROR_CODES } from '@/types/protocol'
 
 import { createIdleTaskState } from '../../events'
 import { classifyResumeConflict } from '../../resume-classifier'

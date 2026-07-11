@@ -1,11 +1,25 @@
 // pure: no Vue / no Pinia / no Tauri
 // Select option and value conversion rules for the enhance view.
 
-import { BACKEND_LABELS, ENGINE_LABELS } from '@/config/gpu-labels'
 import { modelOptionLabel } from '@/services/model-metric-format'
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
 import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/protocol'
 import type { SelectOption } from '@/types/view/select-option'
+
+const BACKEND_LABELS: Record<string, string> = {
+  pytorch: 'PyTorch',
+  paddle: 'PaddlePaddle',
+  onnx: 'ONNX Runtime',
+}
+
+const ENGINE_LABELS: Record<string, string> = {
+  cuda: 'CUDA',
+  tensorrt: 'TensorRT',
+  dcu: 'DCU',
+  directml: 'DirectML',
+  rocm: 'ROCm',
+  cpu: 'CPU',
+}
 
 export const FPS_MODE_OPTIONS: readonly SelectOption[] = [
   { value: 'target', label: '目标 FPS' },

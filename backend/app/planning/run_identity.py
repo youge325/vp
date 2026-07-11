@@ -13,7 +13,7 @@ from app.planning.processing_steps import ProcessingStep
 
 
 @dataclass(frozen=True, slots=True)
-class RunIdentity:
+class _RunIdentity:
     """The persisted configuration snapshot and the signature derived from it."""
 
     signature: str
@@ -30,7 +30,7 @@ def build_run_identity(
     output_config: dict[str, Any],
     processing_steps: list[ProcessingStep],
     video_info: dict[str, Any],
-) -> RunIdentity:
+) -> _RunIdentity:
     """Build the exact sidecar snapshot and its deterministic SHA-256 signature."""
     config_snapshot = deepcopy(
         {
@@ -58,10 +58,10 @@ def build_run_identity(
         "input_mtime_ns": stat.st_mtime_ns,
     }
     encoded = json.dumps(signature_payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
-    return RunIdentity(
+    return _RunIdentity(
         signature=hashlib.sha256(encoded).hexdigest(),
         config_snapshot=config_snapshot,
     )
 
 
-__all__ = ["RunIdentity", "build_run_identity"]
+__all__ = ["build_run_identity"]

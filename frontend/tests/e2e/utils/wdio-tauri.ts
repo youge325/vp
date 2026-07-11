@@ -12,7 +12,7 @@ interface LocatorSegment {
   index?: number
 }
 
-export interface WaitForOptions {
+interface WaitForOptions {
   state?: 'attached' | 'detached' | 'visible' | 'hidden'
   timeout?: number
 }
