@@ -45,7 +45,7 @@ repos:
         entry: python scripts/check_architecture_contracts.py
         language: system
         pass_filenames: false
-        files: '^(README\.md|docs/.*\.md|backend/app/algorithms/paddle/paddlegan_vsr/weights\.py|frontend/src/.+\.(ts|vue)|frontend/src-tauri/src/.+\.rs|frontend/src-tauri/permissions/default\.toml|scripts/check_architecture_contracts\.py)$'
+        files: '^(README\.md|docs/.*\.md|backend/(?:app|tests)/.*\.py|frontend/src/.+\.(ts|vue)|frontend/src-tauri/src/.+\.rs|frontend/src-tauri/permissions/default\.toml|scripts/check_architecture_contracts\.py|scripts/architecture_contracts/.+\.py)$'
 
 # 跳过 Tauri 生成的 schema 文件，避免 pre-commit 反复检查自动生成产物
 exclude: ^frontend/src-tauri/(gen/schemas|schemas)/.*\.json$

@@ -1,7 +1,8 @@
 import { computed, type ComputedRef } from 'vue'
 
 import { createCapabilityOptionBindings } from '@/composables/forms/capability-option-bindings'
-import { createEncodeOutputBindings } from '@/composables/forms/encode-output-bindings'
+import { createEncodeOutputSetters } from '@/composables/forms/encode-output-setters'
+import { createEncodeOutputState } from '@/composables/forms/encode-output-state'
 import { createEncodeProfileBindings } from '@/composables/forms/encode-profile-bindings'
 import { createEncodeRateControlBindings } from '@/composables/forms/encode-rate-control-bindings'
 import type { CapabilityValue } from '@/types/domain/capability'
@@ -31,11 +32,8 @@ export function createEncodeFormBindings({
     editorConfig,
     patchEncode,
   })
-  const output = createEncodeOutputBindings({
-    editorConfig,
-    patchEncode,
-    patchOutput,
-  })
+  const outputState = createEncodeOutputState({ editorConfig })
+  const outputSetters = createEncodeOutputSetters({ patchEncode, patchOutput })
   const options = createCapabilityOptionBindings({
     optionValues: computed(() => editorConfig.value.encodeConfig.options),
     patchOptions: (nextOptions: Record<string, CapabilityValue>) => {
@@ -48,7 +46,8 @@ export function createEncodeFormBindings({
   return {
     ...profile,
     ...rateControl,
-    ...output,
+    ...outputState,
+    ...outputSetters,
     setEncodeOption: options.setOption,
     getEncodeOption: options.getOption,
     coerceOptionValue: options.coerceOptionValue,
