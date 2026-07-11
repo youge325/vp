@@ -15,12 +15,6 @@ pub fn build_env_map(paths: &ResolvedRuntimePaths) -> Vec<(String, String)> {
             paths.python_executable.to_string_lossy().to_string(),
         ),
     ];
-    // Phase 18 — ``VP_OUTPUT_DIR`` env 注入已下线。Phase 18 之后 backend
-    // Pydantic ``OutputConfig`` 强制 ``output_dir`` 必填非空,前端必传
-    // 用户选择的目录;``settings.OUTPUT_DIR`` 不再作为缺省回退,注入
-    // 此 env 是 dead injection。``ResolvedRuntimePaths.output_dir`` 仍用
-    // 于 Rust 自身的 ``log_dir`` 推断,不影响。
-
     if let Some(ffmpeg_path) = &paths.ffmpeg_path {
         envs.push((
             "VP_FFMPEG_PATH".to_string(),
@@ -86,7 +80,6 @@ mod tests {
             ffprobe_path: Some(PathBuf::from("ffprobe")),
             model_dir: Some(PathBuf::from("models")),
             tensorrt_dir: None,
-            output_dir: PathBuf::from("output"),
             log_dir: PathBuf::from("logs"),
         });
         let legacy_temp_key = ["VP", "TEMP", "DIR"].join("_");
@@ -111,7 +104,6 @@ mod tests {
             ffprobe_path: None,
             model_dir: None,
             tensorrt_dir: Some(PathBuf::from("D:\\TensorRT-10.14.1.48")),
-            output_dir: PathBuf::from("output"),
             log_dir: PathBuf::from("logs"),
         });
         assert!(envs
@@ -148,7 +140,6 @@ mod tests {
             ffprobe_path: None,
             model_dir: None,
             tensorrt_dir: None,
-            output_dir: PathBuf::from("output"),
             log_dir: PathBuf::from("logs"),
         });
         match original {
