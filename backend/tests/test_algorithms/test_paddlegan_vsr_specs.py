@@ -11,10 +11,10 @@ def test_paddlegan_weight_paths_are_fixed_under_backend_models(monkeypatch):
 
     from app.algorithms.paddle.paddlegan_vsr.weights import (
         PADDLEGAN_VSR_SPECS,
-        resolve_weight_path,
+        _resolve_weight_path,
     )
 
-    path = resolve_weight_path("ppmsvsr")
+    path = _resolve_weight_path("ppmsvsr")
 
     assert path == Path(settings.backend_root) / "models" / "super_resolution" / "paddlegan" / "ppmsvsr" / (
         "PP-MSVSR_reds_x4.pdparams"
@@ -35,10 +35,10 @@ def test_ensure_weight_file_reports_missing_even_when_auto_download_requested(tm
 
     target = tmp_path / "PP-MSVSR_reds_x4.pdparams"
 
-    monkeypatch.setattr(weights, "resolve_weight_path", lambda _model_id: target)
+    monkeypatch.setattr(weights, "_resolve_weight_path", lambda _model_id: target)
 
     with pytest.raises(ProcessError) as exc_info:
-        weights.ensure_weight_file("ppmsvsr", auto_download=True)
+        weights._ensure_weight_file("ppmsvsr", auto_download=True)
 
     assert exc_info.value.code == TaskErrorCode.MISSING_MODEL
     assert str(target) in exc_info.value.message
@@ -49,10 +49,10 @@ def test_ensure_weight_file_reports_missing_when_auto_download_disabled(tmp_path
     from app.algorithms.paddle.paddlegan_vsr import weights
 
     target = tmp_path / "missing.pdparams"
-    monkeypatch.setattr(weights, "resolve_weight_path", lambda _model_id: target)
+    monkeypatch.setattr(weights, "_resolve_weight_path", lambda _model_id: target)
 
     with pytest.raises(ProcessError) as exc_info:
-        weights.ensure_weight_file("ppmsvsr", auto_download=False)
+        weights._ensure_weight_file("ppmsvsr", auto_download=False)
 
     assert exc_info.value.code == TaskErrorCode.MISSING_MODEL
     assert str(target) in exc_info.value.message

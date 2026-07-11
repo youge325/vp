@@ -8,7 +8,7 @@ import {
   getVisibleBackends,
   shouldShowEngineSelector,
 } from '@/services/env/gpu-capabilities'
-import type { InferenceEngine, TensorBackend } from '@/types/domain/workflow'
+import type { InferenceEngine, TensorBackend } from '@/types/protocol'
 
 interface GpuCapabilitiesView {
   visibleBackends: Ref<TensorBackend[]>

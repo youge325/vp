@@ -5,7 +5,7 @@ import { createEncodeOutputSetters } from '@/composables/forms/encode-output-set
 import { createEncodeOutputState } from '@/composables/forms/encode-output-state'
 import { createEncodeProfileBindings } from '@/composables/forms/encode-profile-bindings'
 import { createEncodeRateControlBindings } from '@/composables/forms/encode-rate-control-bindings'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { EncodeConfig, OutputConfig, WorkbenchPreset } from '@/types/protocol'
 
 interface EncodeFormBindingParams {

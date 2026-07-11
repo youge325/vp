@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createEnhanceOptionState } from '@/composables/forms/enhance-option-state'
 import { useEnvStore } from '@/stores/env'
-import type { EnvironmentCheckResult, ModelVariantInfo } from '@/types/domain/env'
+import type { EnvironmentCheckResult, ModelVariantInfo } from '@/types/protocol'
+import { createEnvironmentPayload, createEnvironmentResult } from '../../fixtures/environment'
 
 type EnhanceOptionForm = Parameters<typeof createEnhanceOptionState>[0]
 
@@ -18,7 +19,7 @@ const detail = (name: string): ModelVariantInfo => ({
 })
 
 function makeEnv(): EnvironmentCheckResult {
-  return {
+  return createEnvironmentResult({
     ffmpeg: {
       available: true,
       hwaccels: [],
@@ -27,11 +28,10 @@ function makeEnv(): EnvironmentCheckResult {
     },
     gpu: { adapters: [] },
     tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda'], onnx: ['tensorrt', 'cuda'] },
-    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [],
     superResolutionAlgorithms: [],
     runtimeMode: 'bundled',
-  }
+  })
 }
 
 function makeForm(): EnhanceOptionForm {
@@ -70,10 +70,7 @@ function makeForm(): EnhanceOptionForm {
 describe('enhance option state', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    useEnvStore().setCheckPayload(
-      { result: makeEnv(), source: 'probe', checkedAt: null },
-      '2026-07-08T00:00:00Z',
-    )
+    useEnvStore().setCheckPayload(createEnvironmentPayload(makeEnv()))
   })
 
   it('builds enhance select view state from form and GPU capabilities', () => {

@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // Runtime estimate rules for enhance read models.
 
-import type { ModelVariantInfo } from '@/types/domain/env'
+import type { ModelVariantInfo } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 import type { RuntimeMetricEstimate, VideoDimensions } from '@/types/view/model-metrics'
 import {

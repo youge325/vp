@@ -1,5 +1,5 @@
 import { getOptionValue, coerceOptionValue, updateProfileOption } from '@/services/preset/options'
-import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
+import type { CapabilityOptionSpec, CapabilityValue } from '@/types/protocol'
 
 interface ConfigWithCapabilityOptions {
   options: Record<string, CapabilityValue>

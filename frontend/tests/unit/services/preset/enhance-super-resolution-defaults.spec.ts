@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
 import { applySuperResolutionAlgorithmDefaults } from '@/services/preset/enhance-super-resolution-defaults'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 
 describe('super-resolution algorithm defaults', () => {
   it('applies PaddleGAN VSR fixed backend, scale, ONNX, and frame defaults', () => {

@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // Environment-backed model/profile default helpers for enhance workflow rules.
 
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import { findInterpolationAlgorithm } from './enhance-workflow-lookup'
 
 export function pickDefaultInterpolationModel(

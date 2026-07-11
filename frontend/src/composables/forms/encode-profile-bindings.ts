@@ -3,8 +3,8 @@ import type { ComputedRef } from 'vue'
 import { createIoProfileState } from '@/composables/forms/io-profile-state'
 import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
 import { selectEncodeProfile } from '@/services/preset/profile-selection'
-import type { EncoderProfileSpec } from '@/types/domain/capability'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EncoderProfileSpec } from '@/types/protocol'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { EncodeConfig, WorkbenchPreset } from '@/types/protocol'
 
 interface EncodeProfileBindingParams {

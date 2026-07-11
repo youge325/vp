@@ -1,14 +1,23 @@
 import { reactive } from 'vue'
 import { defineStore } from 'pinia'
 import type {
-  AppEnv,
+  EnvironmentCheckResult,
   EnvironmentCheckPayload,
-} from '@/types/domain/env'
+  EnvironmentCheckSource,
+} from '@/types/protocol'
 import type { TaskError } from '@/types/domain/media'
+
+interface AppEnv {
+  lastProbeAt: string | null
+  checkSource: EnvironmentCheckSource | null
+  isChecking: boolean
+  isBootstrapping: boolean
+  checkResult: EnvironmentCheckResult | null
+  issue: TaskError | null
+}
 
 function createInitialEnv(): AppEnv {
   return {
-    lastCheckedAt: null,
     lastProbeAt: null,
     checkSource: null,
     isChecking: false,
@@ -21,11 +30,10 @@ function createInitialEnv(): AppEnv {
 export const useEnvStore = defineStore('env', () => {
   const env = reactive<AppEnv>(createInitialEnv())
 
-  function setCheckPayload(payload: EnvironmentCheckPayload, checkedAt: string): void {
+  function setCheckPayload(payload: EnvironmentCheckPayload): void {
     env.checkResult = payload.result
     env.checkSource = payload.source
-    env.lastCheckedAt = checkedAt
-    env.lastProbeAt = payload.checkedAt ?? checkedAt
+    env.lastProbeAt = payload.checkedAt
   }
 
   function setIssue(issue: TaskError | null): void {

@@ -9,8 +9,8 @@ resume signatures, and streaming tests.
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass, replace
-from typing import Any
+from dataclasses import dataclass, field, replace
+from typing import Any, Literal
 
 from app.models import DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig
 
@@ -19,33 +19,32 @@ def _copy_json_dict(value: dict[str, Any]) -> dict[str, Any]:
     return copy.deepcopy(value)
 
 
+ConfigSection = Literal["decode", "encode", "workflow", "output"]
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeConfigs:
-    """Validated configs plus their legacy camelCase dict snapshots."""
+    """Validated config models with on-demand camelCase wire projections."""
 
     decode: DecodeConfig
     encode: EncodeConfig
     workflow: WorkflowConfig
     output: OutputConfig
-    decode_json: dict[str, Any]
-    encode_json: dict[str, Any]
-    workflow_json: dict[str, Any]
-    output_json: dict[str, Any]
+    _expanded_sections: frozenset[ConfigSection] = field(default_factory=frozenset, repr=False)
 
-    def legacy_sections(self) -> dict[str, dict[str, Any]]:
-        """Return the four wire sections as defensive copies."""
-        return {
-            "decode": _copy_json_dict(self.decode_json),
-            "encode": _copy_json_dict(self.encode_json),
-            "workflow": _copy_json_dict(self.workflow_json),
-            "output": _copy_json_dict(self.output_json),
-        }
-
-    def with_workflow_json(self, workflow_json: dict[str, Any]) -> "RuntimeConfigs":
-        """Return a bundle with workflow model and legacy snapshot kept in sync."""
-        workflow = WorkflowConfig.model_validate(workflow_json)
-        return replace(
-            self,
-            workflow=workflow,
-            workflow_json=_copy_json_dict(workflow_json),
+    def json_section(self, section: ConfigSection) -> dict[str, Any]:
+        """Project one model to its legacy camelCase wire shape."""
+        model = getattr(self, section)
+        value = model.model_dump(
+            by_alias=True,
+            exclude_unset=section not in self._expanded_sections,
         )
+        return _copy_json_dict(value)
+
+    def json_sections(self) -> dict[ConfigSection, dict[str, Any]]:
+        """Project all config models as independent defensive copies."""
+        return {section: self.json_section(section) for section in ("decode", "encode", "workflow", "output")}
+
+    def with_workflow(self, workflow: WorkflowConfig) -> "RuntimeConfigs":
+        """Return a bundle with an updated validated workflow model."""
+        return replace(self, workflow=workflow)

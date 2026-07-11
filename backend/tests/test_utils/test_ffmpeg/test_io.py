@@ -1,10 +1,10 @@
 """Rawvideo command rules owned by the FFmpeg I/O module."""
 
-from app.utils.ffmpeg.io import build_rawvideo_decode_command, build_rawvideo_encode_command
+from app.utils.ffmpeg.io import _build_rawvideo_decode_command, _build_rawvideo_encode_command
 
 
 def test_build_rawvideo_commands_include_pipe_and_geometry() -> None:
-    decode_cmd = build_rawvideo_decode_command(
+    decode_cmd = _build_rawvideo_decode_command(
         "ffmpeg",
         "input.mp4",
         width=1920,
@@ -13,7 +13,7 @@ def test_build_rawvideo_commands_include_pipe_and_geometry() -> None:
         start_frame=25,
         frame_count=1000,
     )
-    encode_cmd = build_rawvideo_encode_command(
+    encode_cmd = _build_rawvideo_encode_command(
         "ffmpeg",
         "output.mp4",
         width=1920,

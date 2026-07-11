@@ -6,7 +6,7 @@ import {
   formatParameterCount,
   modelOptionLabel,
 } from '@/services/model-metric-format'
-import type { ModelVariantInfo } from '@/types/domain/env'
+import type { ModelVariantInfo } from '@/types/protocol'
 
 function detail(parameterCount: number | null = 5670892): ModelVariantInfo {
   return {

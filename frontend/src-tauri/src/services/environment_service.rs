@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Runtime, State};
 
 use crate::error::ShellError;
-use crate::models::{EnvironmentCheckPayload, EnvironmentCheckResult};
+use crate::models::{EnvironmentCheckPayload, EnvironmentCheckResult, EnvironmentCheckSource};
 use crate::persistence;
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks;
@@ -34,10 +34,10 @@ async fn check_environment_impl<R: Runtime>(
     let app_data_dir = persistence::app_data_dir(&app).await.ok();
 
     if let (Some(data_dir), Some(fingerprint)) = (app_data_dir.as_deref(), fingerprint.as_deref()) {
-        if let Some(cached) =
+        if let Some((checked_at, cached_result)) =
             persistence::load_environment_cache(data_dir, fingerprint, force_refresh).await
         {
-            let result = serde_json::from_value::<EnvironmentCheckResult>(cached.result).map_err(
+            let result = serde_json::from_value::<EnvironmentCheckResult>(cached_result).map_err(
                 |error| {
                     ShellError::SchemaValidation(format!(
                         "Unable to deserialize cached environment check: {error}"
@@ -46,8 +46,8 @@ async fn check_environment_impl<R: Runtime>(
             )?;
             return Ok(EnvironmentCheckPayload {
                 result,
-                source: String::from("cache"),
-                checked_at: cached.checked_at,
+                source: EnvironmentCheckSource::Cache,
+                checked_at,
             });
         }
     }
@@ -79,7 +79,7 @@ async fn check_environment_impl<R: Runtime>(
 
     Ok(EnvironmentCheckPayload {
         result,
-        source: String::from("probe"),
+        source: EnvironmentCheckSource::Probe,
         checked_at,
     })
 }

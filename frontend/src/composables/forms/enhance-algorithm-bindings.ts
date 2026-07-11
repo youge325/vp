@@ -1,8 +1,8 @@
 import { computed, type ComputedRef } from 'vue'
 
 import { createAlgorithmLens } from '@/composables/forms/enhance-lens'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { TensorBackend } from '@/types/domain/workflow'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import type { TensorBackend } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 
 interface EnhanceAlgorithmBindingParams {

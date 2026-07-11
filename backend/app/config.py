@@ -59,7 +59,7 @@ def _candidate_python_paths(runtime_root: Path) -> list[Path]:
     ]
 
 
-class Settings(BaseSettings):
+class _Settings(BaseSettings):
     """Settings loaded from environment variables with sensible defaults."""
 
     DEBUG: bool = True
@@ -144,4 +144,4 @@ class Settings(BaseSettings):
         return "expected-bundled"
 
 
-settings = Settings()
+settings = _Settings()

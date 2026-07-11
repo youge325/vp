@@ -2,7 +2,7 @@ import { reactive } from 'vue'
 import { describe, expect, it } from 'vitest'
 
 import { createCapabilityOptionBindings } from '@/composables/forms/capability-option-bindings'
-import type { CapabilityOptionSpec, CapabilityValue } from '@/types/domain/capability'
+import type { CapabilityOptionSpec, CapabilityValue } from '@/types/protocol'
 
 const option: CapabilityOptionSpec = {
   name: 'preset',

@@ -1,6 +1,6 @@
 import type { ComputedRef } from 'vue'
 import { createDraftEditor } from '@/composables/forms/lens'
-import type { FpsMode, InferenceEngine, ProcessOrder } from '@/types/domain/workflow'
+import type { FpsMode, InferenceEngine, ProcessOrder } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 
 interface EnhanceScalarFieldBindingParams {

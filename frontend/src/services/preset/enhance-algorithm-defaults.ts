@@ -1,8 +1,8 @@
 // pure: no Vue / no Pinia / no Tauri
 // Environment-backed algorithm default helpers for enhance workflow rules.
 
-import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { TensorBackend } from '@/types/domain/workflow'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import type { TensorBackend } from '@/types/protocol'
 import { pickBackendSupportedAlgorithmName } from './enhance-workflow-lookup'
 
 export function pickDefaultInterpolationAlgorithm(

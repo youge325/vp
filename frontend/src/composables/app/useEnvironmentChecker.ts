@@ -1,8 +1,7 @@
-// 应用层 — 环境探测协调:调用 IPC、归一化结果、写入 store。
+// 应用层 — 环境探测协调:调用 IPC 并写入 store。
 
 import { useEnvStore } from '@/stores/env'
 import { envIpc } from '@/lib/ipc/endpoints/env'
-import { normalizeCheckPayload } from '@/services/env/normalize'
 import { normalizeError } from '@/services/error/normalize'
 import { TASK_ERROR_CODES } from '@/types/protocol/errors'
 
@@ -13,8 +12,7 @@ export function useEnvironmentChecker() {
     envStore.setChecking(true)
     envStore.setIssue(null)
     try {
-      const payload = normalizeCheckPayload(await envIpc.check(forceRefresh))
-      envStore.setCheckPayload(payload, new Date().toISOString())
+      envStore.setCheckPayload(await envIpc.check(forceRefresh))
     } catch (error) {
       // Phase 6c — fallback narrowed from the legacy magic string
       // ``'check_failed'`` to the enum value. Real failure codes

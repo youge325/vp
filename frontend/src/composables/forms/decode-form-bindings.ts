@@ -3,7 +3,7 @@ import type { ComputedRef } from 'vue'
 import { createCapabilityOptionBindings } from '@/composables/forms/capability-option-bindings'
 import { createDecodeHardwareBindings } from '@/composables/forms/decode-hardware-bindings'
 import { createDecodeProfileBindings } from '@/composables/forms/decode-profile-bindings'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
 
 interface DecodeFormBindingParams {

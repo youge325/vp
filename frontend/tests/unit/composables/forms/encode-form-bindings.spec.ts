@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest'
 
 import { createDefaultEncodeConfig, createDefaultWorkbenchPreset } from '@/services/preset/defaults'
 import { createEncodeFormBindings } from '@/composables/forms/encode-form-bindings'
-import type { CapabilityOptionSpec } from '@/types/domain/capability'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { CapabilityOptionSpec } from '@/types/protocol'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { EncodeConfig, OutputConfig, WorkbenchPreset } from '@/types/protocol'
+import { createEnvironmentResult } from '../../fixtures/environment'
 
 const option = (
   name: string,
@@ -22,7 +23,7 @@ const option = (
 })
 
 function makeEnv(): EnvironmentCheckResult {
-  return {
+  return createEnvironmentResult({
     ffmpeg: {
       available: true,
       hwaccels: [],
@@ -52,11 +53,10 @@ function makeEnv(): EnvironmentCheckResult {
     },
     gpu: { adapters: [] },
     tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [],
     superResolutionAlgorithms: [],
     runtimeMode: 'external',
-  }
+  })
 }
 
 function makeBindings() {

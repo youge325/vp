@@ -29,7 +29,6 @@ test.describe('VP Workbench e2e smoke', () => {
     expect(result.result).toHaveProperty('ffmpeg')
     expect(result.result).toHaveProperty('gpu')
     expect(result.result).toHaveProperty('tensorEngines')
-    expect(result.result).toHaveProperty('backendDeviceSupport')
     expect(result.result).toHaveProperty('runtimeMode')
     expect(Array.isArray(result.result.interpolationAlgorithms)).toBe(true)
     expect(Array.isArray(result.result.superResolutionAlgorithms)).toBe(true)

@@ -6,8 +6,8 @@
 
 import { computed, type ComputedRef } from 'vue'
 import { algorithmSupportsBackend } from '@/services/preset/enhance-workflow-lookup'
-import type { AlgorithmInfo } from '@/types/domain/env'
-import type { TensorBackend } from '@/types/domain/workflow'
+import type { AlgorithmInfo } from '@/types/protocol'
+import type { TensorBackend } from '@/types/protocol'
 
 type AlgorithmSpec = AlgorithmInfo
 

@@ -14,7 +14,7 @@ import {
   toProcessOrder,
   toTensorBackend,
 } from '@/services/preset/enhance-options'
-import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
+import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
 
 function detail(name: string, parameterCount: number | null = 5670892): ModelVariantInfo {
   return {

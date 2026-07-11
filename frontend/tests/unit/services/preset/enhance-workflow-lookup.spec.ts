@@ -7,24 +7,30 @@ import {
   pickBackendSupportedAlgorithmName,
   pickSupportedBackend,
 } from '@/services/preset/enhance-workflow-lookup'
-import type { AlgorithmInfo, EnvironmentCheckResult } from '@/types/domain/env'
+import type { AlgorithmInfo, EnvironmentCheckResult } from '@/types/protocol'
+import { createAlgorithmInfo, createEnvironmentResult } from '../../fixtures/environment'
 
-const interpolation: AlgorithmInfo = {
+const interpolation: AlgorithmInfo = createAlgorithmInfo({
   name: 'rife',
+  family: 'rife',
   tensorBackends: ['pytorch', 'onnx'],
   models: ['4.25'],
   onnxModels: ['rife.onnx'],
-}
+  inputFrameMode: 'none',
+})
 
-const superResolution: AlgorithmInfo = {
+const superResolution: AlgorithmInfo = createAlgorithmInfo({
   name: 'ppmsvsr',
+  family: 'paddlegan_vsr',
   tensorBackends: ['paddle'],
   models: ['x4'],
   scaleFactors: [4],
-}
+  fixedScaleFactor: 4,
+  inputFrameMode: 'editable_chunk',
+})
 
 function env(): EnvironmentCheckResult {
-  return {
+  return createEnvironmentResult({
     ffmpeg: {
       available: true,
       hwaccels: [],
@@ -33,11 +39,10 @@ function env(): EnvironmentCheckResult {
     },
     gpu: { adapters: [] },
     tensorEngines: { pytorch: ['cuda'], paddle: ['cuda'], onnx: ['cuda'] },
-    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [interpolation],
     superResolutionAlgorithms: [superResolution],
     runtimeMode: 'bundled',
-  }
+  })
 }
 
 describe('enhance workflow lookup rules', () => {

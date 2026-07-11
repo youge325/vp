@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { seedProfileOptions, toNumberValue, updateProfileOption } from '@/services/preset/options'
-import type { CapabilityOptionSpec } from '@/types/domain/capability'
+import type { CapabilityOptionSpec } from '@/types/protocol'
 
 const option = (
   name: string,

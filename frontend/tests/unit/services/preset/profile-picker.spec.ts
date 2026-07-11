@@ -6,24 +6,11 @@ import {
   pickPreferredEncoderProfile,
   pickPreferredDecoderProfile,
 } from '@/services/preset/profile-picker'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import { createEnvironmentResult } from '../../fixtures/environment'
 
 function makeEnv(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCheckResult {
-  return {
-    ffmpeg: {
-      available: true,
-      hwaccels: [],
-      encoderProfiles: [],
-      decoderProfiles: [],
-    },
-    gpu: { adapters: [] },
-    tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
-    interpolationAlgorithms: [],
-    superResolutionAlgorithms: [],
-    runtimeMode: 'external',
-    ...overrides,
-  } as EnvironmentCheckResult
+  return createEnvironmentResult(overrides)
 }
 
 describe('profile-picker public surface', () => {

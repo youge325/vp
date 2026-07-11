@@ -2,22 +2,17 @@ import { describe, expect, it } from 'vitest'
 
 import * as presetDefaults from '@/services/preset/defaults'
 import { createDefaultDecodeConfig, createDefaultWorkbenchPreset } from '@/services/preset/defaults'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { HardwareDeviceOptionSpec } from '@/types/domain/capability'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import type { HardwareDeviceOptionSpec } from '@/types/protocol'
+import { createEnvironmentResult } from '../../fixtures/environment'
 
-const makeEnv = (decoderProfiles: EnvironmentCheckResult['ffmpeg']['decoderProfiles']): EnvironmentCheckResult => ({
+const makeEnv = (decoderProfiles: EnvironmentCheckResult['ffmpeg']['decoderProfiles']): EnvironmentCheckResult => createEnvironmentResult({
   ffmpeg: {
     available: true,
     hwaccels: ['cuda', 'qsv', 'd3d11va'],
     encoderProfiles: [],
     decoderProfiles,
   },
-  gpu: { adapters: [] },
-  tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
-  interpolationAlgorithms: [],
-  superResolutionAlgorithms: [],
-  runtimeMode: 'external',
 })
 
 const decoderProfile = (

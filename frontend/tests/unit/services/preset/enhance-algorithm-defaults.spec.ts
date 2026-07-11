@@ -4,24 +4,11 @@ import {
   pickDefaultInterpolationAlgorithm,
   pickDefaultSuperResolutionAlgorithm,
 } from '@/services/preset/enhance-algorithm-defaults'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import { createEnvironmentResult } from '../../fixtures/environment'
 
 function env(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCheckResult {
-  return {
-    ffmpeg: {
-      available: true,
-      hwaccels: [],
-      encoderProfiles: [],
-      decoderProfiles: [],
-    },
-    gpu: { adapters: [] },
-    tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
-    interpolationAlgorithms: [],
-    superResolutionAlgorithms: [],
-    runtimeMode: 'external',
-    ...overrides,
-  } as EnvironmentCheckResult
+  return createEnvironmentResult(overrides)
 }
 
 describe('enhance algorithm defaults', () => {

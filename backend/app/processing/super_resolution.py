@@ -37,7 +37,6 @@ SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
             "scaleFactors": [4],
             "fixedScaleFactor": 4,
             "defaultNumFrames": spec.default_num_frames,
-            "sequenceMode": spec.sequence_mode,
             "inputFrameMode": "fixed_window" if spec.sequence_mode == "window" else "editable_chunk",
             "modelDetails": [get_paddlegan_model_detail(spec.model_id)],
         }

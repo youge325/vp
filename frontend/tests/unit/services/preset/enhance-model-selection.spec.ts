@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceModelSelection } from '@/services/preset/enhance-model-selection'
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
-import type { AlgorithmInfo } from '@/types/domain/env'
+import type { AlgorithmInfo } from '@/types/protocol'
 
 const interpolationAlgorithm: AlgorithmInfo = {
   name: 'rife',

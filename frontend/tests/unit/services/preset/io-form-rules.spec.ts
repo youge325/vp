@@ -9,7 +9,7 @@ import {
   normalizeSegmentFrames,
   resolveRateControlModeSelection,
 } from '@/services/preset/io-form-rules'
-import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/domain/capability'
+import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/protocol'
 import type { DecodeConfig } from '@/types/protocol'
 
 const decoderProfile = (): DecoderProfileSpec => ({

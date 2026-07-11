@@ -26,6 +26,7 @@ def cmd_check(_args: argparse.Namespace) -> None:
     paddle_result = _check_paddle_in_subprocess()
     onnx_result = _check_onnxruntime_in_subprocess()
     gpu_adapters = list_gpu_adapters()
+    public_gpu_adapters = [{"name": adapter["name"], "vendor": adapter["vendor"]} for adapter in gpu_adapters]
     onnx_models = scan_onnx_models(settings.RIFE_MODEL_DIR)
     onnx_model_details = scan_onnx_model_details(settings.RIFE_MODEL_DIR)
     ffmpeg_capabilities = (
@@ -39,7 +40,11 @@ def cmd_check(_args: argparse.Namespace) -> None:
     )
 
     # 构建推理引擎支持信息
-    tensor_engines: dict[str, list[str]] = {}
+    tensor_engines: dict[str, list[str]] = {
+        "pytorch": [],
+        "paddle": [],
+        "onnx": [],
+    }
     if pytorch_result.get("pytorch_available"):
         engines = []
         if pytorch_result.get("supports_cuda"):
@@ -63,13 +68,6 @@ def cmd_check(_args: argparse.Namespace) -> None:
         if onnx_result.get("supports_cuda"):
             engines.append("cuda")
         tensor_engines["onnx"] = engines
-
-    # 构建后端设备兼容性矩阵
-    backend_device_support: dict[str, list[str]] = {
-        "pytorch": ["nvidia", "intel", "amd"],
-        "paddle": ["nvidia", "intel", "amd", "hygon"],
-        "onnx": ["nvidia", "intel", "amd"],
-    }
 
     interpolation_algorithms_payload = [
         {
@@ -95,9 +93,8 @@ def cmd_check(_args: argparse.Namespace) -> None:
             "encoderProfiles": ffmpeg_capabilities["encoderProfiles"],
             "decoderProfiles": ffmpeg_capabilities["decoderProfiles"],
         },
-        gpu={"adapters": gpu_adapters},
+        gpu={"adapters": public_gpu_adapters},
         tensorEngines=tensor_engines,
-        backendDeviceSupport=backend_device_support,
         interpolationAlgorithms=interpolation_algorithms_payload,
         superResolutionAlgorithms=super_resolution_algorithms_payload,
         runtimeMode=settings.runtime_mode,

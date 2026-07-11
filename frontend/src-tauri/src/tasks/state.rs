@@ -40,8 +40,10 @@ use crate::error::ShellError;
 use crate::tasks::handle::TaskHandle;
 
 /// Lifecycle phase of the single in-flight task.
-pub enum TaskStatePhase {
+#[derive(Default)]
+enum TaskStatePhase {
     /// No task is running. ``try_start`` is the only legal transition.
+    #[default]
     Idle,
     /// A task is running normally. ``begin_cancel`` or ``finish`` are
     /// the legal transitions.
@@ -55,12 +57,6 @@ pub enum TaskStatePhase {
         handle: TaskHandle,
         started_at: Instant,
     },
-}
-
-impl Default for TaskStatePhase {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 #[derive(Default)]

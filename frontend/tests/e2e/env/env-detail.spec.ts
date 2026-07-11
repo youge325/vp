@@ -12,7 +12,6 @@ test.describe('Environment detail', () => {
     })
 
     expect(Object.keys(result.result).sort()).toEqual([
-      'backendDeviceSupport',
       'ffmpeg',
       'gpu',
       'interpolationAlgorithms',
@@ -34,12 +33,11 @@ test.describe('Environment detail', () => {
     expect(Object.keys(gpu)).toEqual(['adapters'])
     expect(Array.isArray(gpu.adapters)).toBe(true)
 
-    for (const matrix of [result.result.tensorEngines, result.result.backendDeviceSupport]) {
-      expect(Object.keys(matrix).sort()).toEqual(['onnx', 'paddle', 'pytorch'])
-      expect(Array.isArray(matrix.pytorch)).toBe(true)
-      expect(Array.isArray(matrix.paddle)).toBe(true)
-      expect(Array.isArray(matrix.onnx)).toBe(true)
-    }
+    const tensorEngines = result.result.tensorEngines
+    expect(Object.keys(tensorEngines).sort()).toEqual(['onnx', 'paddle', 'pytorch'])
+    expect(Array.isArray(tensorEngines.pytorch)).toBe(true)
+    expect(Array.isArray(tensorEngines.paddle)).toBe(true)
+    expect(Array.isArray(tensorEngines.onnx)).toBe(true)
 
     expect(Array.isArray(result.result.interpolationAlgorithms)).toBe(true)
     expect(Array.isArray(result.result.superResolutionAlgorithms)).toBe(true)

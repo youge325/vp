@@ -2,7 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import { describe, expect, it } from 'vitest'
 
 import { createDecodeHardwareBindings } from '@/composables/forms/decode-hardware-bindings'
-import type { DecoderProfileSpec, HardwareDeviceOptionSpec } from '@/types/domain/capability'
+import type { DecoderProfileSpec, HardwareDeviceOptionSpec } from '@/types/protocol'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
 
 const stringOption = (name: string, defaultValue: string) => ({

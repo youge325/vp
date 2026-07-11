@@ -1,8 +1,8 @@
 // pure: no Vue / no Pinia / no Tauri
 // 码率控制模式来源于后端 FFmpeg 二次探测后的 rateControlModes。
 
-import type { EncoderProfileSpec, RateControlModeSpec } from '@/types/domain/capability'
-import type { RateControlMode } from '@/types/domain/workflow'
+import type { EncoderProfileSpec, RateControlModeSpec } from '@/types/protocol'
+import type { RateControlMode } from '@/types/protocol'
 import type { EncodeConfig } from '@/types/protocol'
 import type { SelectOption } from '@/types/view/select-option'
 

@@ -1,6 +1,6 @@
 // IPC endpoints — 环境探测。
 
-import type { EnvironmentCheckPayload } from '@/types/domain/env'
+import type { EnvironmentCheckPayload } from '@/types/protocol'
 import { safeInvoke } from '../client'
 
 export const envIpc = {

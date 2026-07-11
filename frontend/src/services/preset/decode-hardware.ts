@@ -1,8 +1,8 @@
-import type { HardwareDeviceOptionSpec } from '@/types/domain/capability'
+import type { HardwareDeviceOptionSpec } from '@/types/protocol'
 
 type DecoderHardwareProfile = {
   hardwareDevices?: readonly string[]
-  hardwareDeviceOptions?: Record<string, readonly HardwareDeviceOptionSpec[]>
+  hardwareDeviceOptions?: Readonly<Record<string, readonly HardwareDeviceOptionSpec[] | undefined>>
 } | null
 
 export function resolveDecoderHwaccel(

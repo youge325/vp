@@ -1,5 +1,5 @@
-import type { ModelVariantInfo } from '@/types/domain/env'
-import type { InferenceEngine } from '@/types/domain/workflow'
+import type { ModelVariantInfo } from '@/types/protocol'
+import type { InferenceEngine } from '@/types/protocol'
 
 export function resolveMetricsForEngine(
   detail: ModelVariantInfo | null | undefined,

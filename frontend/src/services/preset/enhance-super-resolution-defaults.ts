@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // Super-resolution workflow mutation defaults for selected algorithms.
 
-import type { AlgorithmInfo, EnvironmentCheckResult } from '@/types/domain/env'
+import type { AlgorithmInfo, EnvironmentCheckResult } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 import {
   fixedRuntimeFrameCount,

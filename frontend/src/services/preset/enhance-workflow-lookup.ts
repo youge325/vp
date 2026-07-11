@@ -1,8 +1,8 @@
 // pure: no Vue / no Pinia / no Tauri
 // Algorithm lookup and backend compatibility helpers for enhance workflow rules.
 
-import type { AlgorithmInfo, EnvironmentCheckResult } from '@/types/domain/env'
-import type { TensorBackend } from '@/types/domain/workflow'
+import type { AlgorithmInfo, EnvironmentCheckResult } from '@/types/protocol'
+import type { TensorBackend } from '@/types/protocol'
 
 const TENSOR_BACKENDS: TensorBackend[] = ['pytorch', 'paddle', 'onnx']
 

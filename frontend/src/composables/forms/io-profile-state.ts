@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 
 import { buildProfileOptions } from '@/services/preset/io-options'
-import type { CodecProfileSpec } from '@/types/domain/capability'
+import type { CodecProfileSpec } from '@/types/protocol'
 
 interface IoProfileStateParams<Profile extends CodecProfileSpec> {
   resolveVisibleProfiles: () => readonly Profile[]

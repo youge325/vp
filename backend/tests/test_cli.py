@@ -13,6 +13,7 @@ from app.cli.commands._process_validation import load_runtime_configs
 from app.cli.parser import build_parser
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
+from app.models import WorkflowConfig
 from app.planning import (
     ProcessingStep,
     build_signature,
@@ -234,14 +235,14 @@ def test_typed_processing_steps_keep_signature_compatible_with_legacy_mapping(tm
     assert typed_signature == legacy_signature
 
 
-def test_load_runtime_configs_returns_typed_models_and_legacy_shape():
+def test_load_runtime_configs_returns_typed_models_and_wire_shape():
     configs = load_runtime_configs(_make_runtime_args(output_dir="D:/typed-output"))
 
     assert configs.decode.mode == "software"
     assert configs.workflow.interpolation.tensor_backend == "pytorch"
     assert configs.output.output_dir == "D:/typed-output"
 
-    sections = configs.legacy_sections()
+    sections = configs.json_sections()
     assert sections["decode"]["mode"] == "software"
     assert "hwaccelDevice" not in sections["decode"]
     assert sections["encode"]["keepAudio"] is True
@@ -249,13 +250,17 @@ def test_load_runtime_configs_returns_typed_models_and_legacy_shape():
     assert sections["output"]["outputDir"] == "D:/typed-output"
 
 
-def test_load_runtime_configs_keeps_legacy_sections_interface():
-    sections = load_runtime_configs(_make_runtime_args(output_dir="D:/legacy-output")).legacy_sections()
+def test_runtime_config_json_sections_are_defensive_copies():
+    configs = load_runtime_configs(_make_runtime_args(output_dir="D:/wire-output"))
+    sections = configs.json_sections()
 
     assert sections["decode"]["decoder"] == "software"
     assert sections["encode"]["rateControl"] == {"mode": "crf", "value": 18}
     assert sections["workflow"]["processOrder"] == "super_resolution_then_interpolation"
-    assert sections["output"]["outputDir"] == "D:/legacy-output"
+    assert sections["output"]["outputDir"] == "D:/wire-output"
+
+    sections["workflow"]["interpolation"]["multi"] = 99
+    assert configs.json_section("workflow")["interpolation"]["multi"] == 2
 
 
 def test_load_runtime_configs_rejects_missing_output_dir():
@@ -271,11 +276,12 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
     output_path = tmp_path / "out.mp4"
     input_path.write_bytes(b"video")
     configs = load_runtime_configs(_make_runtime_args(output_dir=str(tmp_path)))
+    workflow_section = configs.json_section("workflow")
     workflow_config = {
-        **configs.workflow_json,
-        "interpolation": {**configs.workflow_json["interpolation"], "multi": 3},
+        **workflow_section,
+        "interpolation": {**workflow_section["interpolation"], "multi": 3},
     }
-    updated = configs.with_workflow_json(workflow_config)
+    updated = configs.with_workflow(WorkflowConfig.model_validate(workflow_config))
     processing_steps = [
         ProcessingStep(
             algorithm_type="frame_interpolation",
@@ -289,7 +295,7 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
         "source_fps": 30.0,
         "source_frames": 60,
     }
-    sections = updated.legacy_sections()
+    sections = updated.json_sections()
 
     typed_signature = build_signature(
         input_path=str(input_path),
@@ -322,8 +328,16 @@ def test_runtime_output_config_includes_segment_frames_and_json_override():
         _make_runtime_args(output_dir="D:/output", output_config_json='{"segmentFrames": 240}')
     )
 
-    assert default_configs.output_json["segmentFrames"] == 1000
-    assert override_configs.output_json["segmentFrames"] == 240
+    assert default_configs.json_section("output")["segmentFrames"] == 1000
+    assert override_configs.json_section("output")["segmentFrames"] == 240
+
+
+def test_runtime_config_uses_sparse_defaults_and_expands_explicit_sections():
+    default_configs = load_runtime_configs(_make_runtime_args(output_dir="D:/output"))
+    override_configs = load_runtime_configs(_make_runtime_args(output_dir="D:/output", decode_config_json="{}"))
+
+    assert "hwaccelDevice" not in default_configs.json_section("decode")
+    assert override_configs.json_section("decode")["hwaccelDevice"] is None
 
 
 def test_resolve_expected_output_frames_uses_input_frames_for_format_conversion():
@@ -451,7 +465,6 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
         "ffmpeg",
         "gpu",
         "tensorEngines",
-        "backendDeviceSupport",
         "interpolationAlgorithms",
         "superResolutionAlgorithms",
         "runtimeMode",
@@ -485,7 +498,8 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
     assert ppmsvsr_alg["models"] == ["x4"]
     assert ppmsvsr_alg["scaleFactors"] == [4]
     assert ppmsvsr_alg["defaultNumFrames"] == 10
-    assert ppmsvsr_alg["sequenceMode"] == "recurrent"
+    assert "sequenceMode" not in ppmsvsr_alg
+    assert ppmsvsr_alg["inputFrameMode"] == "editable_chunk"
     assert ppmsvsr_alg["modelDetails"][0]["name"] == "x4"
     assert ppmsvsr_alg["modelDetails"][0]["metrics"]["parameterCount"] is not None
     assert ppmsvsr_alg["modelDetails"][0]["metrics"]["runtimeFrameCount"] is None
@@ -494,6 +508,7 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
     assert "weightAvailable" not in ppmsvsr_alg
 
     edvr_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "edvr")
-    assert edvr_alg["sequenceMode"] == "window"
+    assert "sequenceMode" not in edvr_alg
+    assert edvr_alg["inputFrameMode"] == "fixed_window"
     assert edvr_alg["defaultNumFrames"] == 5
     assert edvr_alg["modelDetails"][0]["metrics"]["runtimeFrameCount"] == 5

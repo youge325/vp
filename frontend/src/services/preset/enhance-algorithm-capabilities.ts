@@ -1,25 +1,16 @@
 // pure: no Vue / no Pinia / no Tauri
 // Algorithm capability metadata helpers for enhance rules.
 
-import type { AlgorithmInfo } from '@/types/domain/env'
+import type { AlgorithmInfo } from '@/types/protocol'
 
 export function isPaddleGanVsrAlgorithm(algorithm: AlgorithmInfo | null | undefined): boolean {
-  if (!algorithm) return false
-  if (algorithm.family === 'paddlegan_vsr') return true
-  return (
-    algorithm.tensorBackends?.includes('paddle') &&
-    (algorithm.sequenceMode === 'recurrent' || algorithm.sequenceMode === 'window') &&
-    algorithm.scaleFactors?.length === 1 &&
-    algorithm.scaleFactors[0] === 4
-  )
+  return algorithm?.family === 'paddlegan_vsr'
 }
 
 export function superResolutionInputFrameMode(
   algorithm: AlgorithmInfo | null | undefined,
-): NonNullable<AlgorithmInfo['inputFrameMode']> {
-  if (algorithm?.inputFrameMode) return algorithm.inputFrameMode
-  if (!isPaddleGanVsrAlgorithm(algorithm)) return 'none'
-  return algorithm?.sequenceMode === 'window' ? 'fixed_window' : 'editable_chunk'
+): AlgorithmInfo['inputFrameMode'] {
+  return algorithm?.inputFrameMode ?? 'none'
 }
 
 export function fixedRuntimeFrameCount(algorithm: AlgorithmInfo | null | undefined): number | null {

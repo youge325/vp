@@ -15,6 +15,12 @@ def _forbid(rule_id: str, path: str, pattern: str, message: str) -> ForbiddenPat
 
 ABSENT_PATH_RULES = (
     _absent("frontend-legacy-e2e-root", "frontend/e2e"),
+    _absent("frontend-environment-domain-mirror", "frontend/src/types/domain/env.ts"),
+    _absent("frontend-capability-domain-mirror", "frontend/src/types/domain/capability.ts"),
+    _absent("frontend-workflow-domain-mirror", "frontend/src/types/domain/workflow.ts"),
+    _absent("frontend-environment-normalize", "frontend/src/services/env/normalize.ts"),
+    _absent("frontend-environment-normalize-test", "frontend/tests/unit/services/env/normalize.spec.ts"),
+    _absent("frontend-backend-support-generated", "frontend/src/types/generated/BackendDeviceSupport.ts"),
     _absent("frontend-ipc-barrel", "frontend/src/lib/ipc/index.ts"),
     _absent("frontend-model-metrics-barrel", "frontend/src/services/model-metrics.ts"),
     _absent("frontend-preset-select-option-type", "frontend/src/services/preset/select-options.ts"),
@@ -72,6 +78,90 @@ ABSENT_PATH_RULES = (
 
 
 FORBIDDEN_PATTERN_RULES = (
+    _forbid(
+        "rust-obsolete-environment-fields",
+        "frontend/src-tauri/src/models/env.rs",
+        r"\bBackendDeviceSupport\b|\b(?:sequence_mode|device_type|driver_version|adapter_compatibility)\s*:",
+        "obsolete Rust environment protocol field",
+    ),
+    _forbid(
+        "python-obsolete-environment-fields",
+        "backend/app/cli/commands/check.py",
+        r"\bbackend_device_support\b|[\"']backendDeviceSupport[\"']|[\"']sequenceMode[\"']",
+        "obsolete Python environment payload field",
+    ),
+    _forbid(
+        "runtime-config-snapshots",
+        "backend/app/cli/runtime_configs.py",
+        r"\b(?:decode_json|encode_json|workflow_json|output_json|legacy_sections|with_workflow_json)\b",
+        "duplicate RuntimeConfigs JSON snapshot surface",
+    ),
+    _forbid(
+        "benchmark-test-runner-parameter",
+        "backend/app/benchmark/runner.py",
+        r"\bprocess_runner\b",
+        "benchmark test-only process runner parameter",
+    ),
+    _forbid(
+        "benchmark-command-test-runner",
+        "backend/app/cli/commands/benchmark.py",
+        r"\bargs\.runner\b|getattr\s*\(\s*args\s*,\s*[\"']runner[\"']",
+        "benchmark command test-only runner entry",
+    ),
+    _forbid(
+        "public-settings-model",
+        "backend/app/config.py",
+        r"^\s*class\s+Settings\b",
+        "module-internal Settings model is public",
+    ),
+    _forbid(
+        "public-benchmark-helpers",
+        "backend/app/benchmark/runner.py",
+        r"^\s*(?:class\s+BenchmarkRun\b|def\s+(?:parse_process_stdout|build_report|generate_synthetic_input|run_process_once)\b)",
+        "module-internal benchmark helper is public",
+    ),
+    _forbid(
+        "public-benchmark-reporting-helper",
+        "backend/app/benchmark/reporting.py",
+        r"^\s*def\s+render_markdown_report\b",
+        "module-internal benchmark reporting helper is public",
+    ),
+    _forbid(
+        "public-reporter-formatters",
+        "backend/app/protocol/reporter.py",
+        r"^\s*def\s+(?:emit_terminal|format_eta|format_progress_bar)\b",
+        "module-internal reporter formatter is public",
+    ),
+    _forbid(
+        "public-resume-decision",
+        "backend/app/planning/manifest.py",
+        r"^\s*class\s+ResumeDecision\b",
+        "module-internal resume decision is public",
+    ),
+    _forbid(
+        "public-stage-file-context",
+        "backend/app/processing/streaming/stage_file_stage_context.py",
+        r"^\s*class\s+StageFileStageContext\b",
+        "module-internal stage-file context is public",
+    ),
+    _forbid(
+        "public-paddlegan-weight-helpers",
+        "backend/app/algorithms/paddle/paddlegan_vsr/weights.py",
+        r"^\s*(?:class\s+PaddleGanVsrSpec\b|def\s+(?:resolve_weight_path|ensure_weight_file)\b)",
+        "module-internal PaddleGAN weight helper is public",
+    ),
+    _forbid(
+        "public-ffmpeg-command-builders",
+        "backend/app/utils/ffmpeg/io.py",
+        r"^\s*def\s+(?:build_rawvideo_decode_command|build_rawvideo_encode_command)\b",
+        "module-internal FFmpeg command builder is public",
+    ),
+    _forbid(
+        "public-ffmpeg-encode-builder",
+        "backend/app/utils/ffmpeg/encode.py",
+        r"^\s*def\s+build_encode_video_args\b",
+        "module-internal FFmpeg encode builder is public",
+    ),
     _forbid(
         "ipc-error-export",
         "frontend/src/lib/ipc/client.ts",
@@ -546,6 +636,36 @@ FORBIDDEN_PATTERN_RULES = (
 
 REQUIRED_PATTERN_RULES = (
     RequiredPatternRule(
+        "typed-environment-protocol",
+        "frontend/src-tauri/src/models/env.rs",
+        r"string_enum!\(AlgorithmFamily\b[\s\S]*string_enum!\(EnvironmentCheckSource\b[\s\S]*string_enum!\(InferenceEngine\b[\s\S]*string_enum!\(InputFrameMode\b[\s\S]*pub\s+enum\s+RuntimeMode\b",
+        "strongly typed Rust environment protocol is missing",
+    ),
+    RequiredPatternRule(
+        "environment-cache-schema-12",
+        "frontend/src-tauri/src/persistence/storage.rs",
+        r"ENVIRONMENT_CACHE_SCHEMA_VERSION:\s*u32\s*=\s*12\s*;",
+        "environment cache schema 12 is missing",
+    ),
+    RequiredPatternRule(
+        "runtime-config-model-projection",
+        "backend/app/cli/runtime_configs.py",
+        r"def\s+json_section\b[\s\S]*def\s+json_sections\b[\s\S]*def\s+with_workflow\b",
+        "RuntimeConfigs model projection API is missing",
+    ),
+    RequiredPatternRule(
+        "windows-rust-clippy-gate",
+        ".github/workflows/test.yml",
+        r"cargo\s+clippy\s+--all-targets\s+--\s+-D\s+warnings",
+        "Windows Rust Clippy CI gate is missing",
+    ),
+    RequiredPatternRule(
+        "linux-rust-clippy-gate",
+        ".github/workflows/test-arc.yml",
+        r"cargo\s+clippy\s+--all-targets\s+--\s+-D\s+warnings",
+        "Linux Rust Clippy CI gate is missing",
+    ),
+    RequiredPatternRule(
         "rust-anime-cleanup-filter-kind",
         "frontend/src-tauri/src/models/config.rs",
         r"\bAnimeCleanup\b",
@@ -603,6 +723,18 @@ REQUIRED_PATTERN_RULES = (
 
 
 REFERENCE_RULES = (
+    ForbiddenReferenceRule(
+        "obsolete-frontend-environment-protocol",
+        roots=("frontend/src", "frontend/tests"),
+        patterns=(
+            r"types/domain/(?:env|capability|workflow)",
+            r"services/env/normalize",
+            r"\bnormalizeCheckPayload\b",
+            r"\b(?:backendDeviceSupport|sequenceMode|lastCheckedAt|deviceType|driverVersion|adapterCompatibility)\b",
+        ),
+        message="obsolete frontend environment protocol reference",
+        suffixes=(".ts", ".tsx", ".vue"),
+    ),
     ForbiddenReferenceRule(
         "legacy-task-commands",
         roots=("README.md", "docs"),

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceRuntimeFrameState, buildEnhanceRuntimeRows } from '@/services/preset/enhance-runtime-rows'
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
-import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
+import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
 import type { RuntimeMetricEstimate } from '@/types/view/model-metrics'
 
 const interpolationDetail: ModelVariantInfo = {

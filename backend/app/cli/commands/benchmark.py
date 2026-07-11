@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from app.benchmark.comparison import compare_reports
 from app.benchmark.reporting import write_json_report, write_markdown_report
@@ -66,8 +66,7 @@ def cmd_benchmark(args: argparse.Namespace) -> None:
         warmup_runs=args.warmup_runs,
         runs=args.runs,
     )
-    runner: Callable[..., dict[str, Any]] = getattr(args, "runner", run_benchmark)
-    report = runner(options)
+    report = run_benchmark(options)
 
     baseline_path = Path(args.baseline) if args.baseline else default_baseline_path()
     json_path = Path(args.report_json) if args.report_json else None

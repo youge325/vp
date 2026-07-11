@@ -78,7 +78,7 @@ def test_builtin_models_expose_metric_details():
         assert entry["modelDetails"][0]["name"] == "x4"
         assert entry["modelDetails"][0]["metrics"]["parameterCount"]
         assert entry["modelDetails"][0]["metrics"]["engineMetrics"]["tensorrt"]
-        assert entry["sequenceMode"] in {"recurrent", "window"}
+        assert entry["inputFrameMode"] in {"editable_chunk", "fixed_window"}
 
 
 def test_algorithms_expose_ui_capability_metadata():
@@ -101,7 +101,7 @@ def test_algorithms_expose_ui_capability_metadata():
         assert entry["family"] == "paddlegan_vsr"
         assert entry["fixedScaleFactor"] == 4
         assert entry["inputFrameMode"] in _VALID_INPUT_FRAME_MODES
-        if entry["sequenceMode"] == "window":
+        if entry["name"] == "edvr":
             assert entry["inputFrameMode"] == "fixed_window"
         else:
             assert entry["inputFrameMode"] == "editable_chunk"
@@ -110,12 +110,12 @@ def test_algorithms_expose_ui_capability_metadata():
 def test_paddlegan_window_models_expose_fixed_runtime_frame_count():
     """EDVR 固定使用 5 邻帧窗口,前端不应把它当可编辑帧块数。"""
     edvr = next(entry for entry in SR_ALGORITHMS if entry["name"] == "edvr")
-    assert edvr["sequenceMode"] == "window"
+    assert edvr["inputFrameMode"] == "fixed_window"
     assert edvr["defaultNumFrames"] == 5
     assert edvr["modelDetails"][0]["metrics"]["runtimeFrameCount"] == 5
 
     recurrent = [entry for entry in SR_ALGORITHMS if entry["tensorBackends"] == ["paddle"] and entry["name"] != "edvr"]
     assert recurrent
     for entry in recurrent:
-        assert entry["sequenceMode"] == "recurrent"
+        assert entry["inputFrameMode"] == "editable_chunk"
         assert entry["modelDetails"][0]["metrics"]["runtimeFrameCount"] is None

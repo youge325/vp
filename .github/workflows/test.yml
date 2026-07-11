@@ -10,14 +10,14 @@ on:
     paths:
       - 'backend/app/**'
       - 'frontend/**'
-      - '!frontend/e2e/**'
+      - '!frontend/tests/e2e/**'
       - '.github/workflows/test.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
       - 'backend/app/**'
       - 'frontend/**'
-      - '!frontend/e2e/**'
+      - '!frontend/tests/e2e/**'
       - '.github/workflows/test.yml'
 
 permissions:
@@ -70,6 +70,10 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "../dist" | Out-Null
           cargo test --lib --quiet
+        working-directory: frontend/src-tauri
+
+      - name: Lint Rust targets
+        run: cargo clippy --all-targets -- -D warnings
         working-directory: frontend/src-tauri
 
       - name: Run frontend tests with coverage

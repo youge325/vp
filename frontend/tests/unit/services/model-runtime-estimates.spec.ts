@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { estimateCombinedPeakVram, estimateModelRuntimeMetrics } from '@/services/model-runtime-estimates'
 import { formatBytes } from '@/services/model-metric-format'
-import type { ModelVariantInfo } from '@/types/domain/env'
+import type { ModelVariantInfo } from '@/types/protocol'
 
 function detail(overrides: Partial<ModelVariantInfo['metrics']> = {}): ModelVariantInfo {
   return {

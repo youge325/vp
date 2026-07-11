@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import EncodeModuleView from '@/views/EncodeModuleView.vue'
 import { useEnvStore } from '@/stores/env'
-import type { EncoderProfileSpec } from '@/types/domain/capability'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EncoderProfileSpec } from '@/types/protocol'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import { createEnvironmentPayload, createEnvironmentResult } from '../fixtures/environment'
 
 const encoderProfile = (name: string, label: string): EncoderProfileSpec => ({
   name,
@@ -18,7 +19,7 @@ const encoderProfile = (name: string, label: string): EncoderProfileSpec => ({
   rateControlModes: [{ mode: 'crf', label: 'CRF', defaultValue: 18, unit: 'CRF' }],
 })
 
-const makeEnv = (): EnvironmentCheckResult => ({
+const makeEnv = (): EnvironmentCheckResult => createEnvironmentResult({
   ffmpeg: {
     available: true,
     hwaccels: [],
@@ -30,7 +31,6 @@ const makeEnv = (): EnvironmentCheckResult => ({
   },
   gpu: { adapters: [] },
   tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
   interpolationAlgorithms: [],
   superResolutionAlgorithms: [],
   runtimeMode: 'external',
@@ -39,10 +39,7 @@ const makeEnv = (): EnvironmentCheckResult => ({
 describe('EncodeModuleView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    useEnvStore().setCheckPayload(
-      { result: makeEnv(), source: 'probe', checkedAt: null },
-      '2026-07-08T00:00:00Z',
-    )
+    useEnvStore().setCheckPayload(createEnvironmentPayload(makeEnv()))
   })
 
   it('renders container and encoder profile options from pure option rules', () => {

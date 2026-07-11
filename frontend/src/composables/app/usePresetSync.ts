@@ -1,7 +1,7 @@
 // 应用层 — 预设持久化协调:加载、保存、debounce、自动同步草稿变更。
 
 import { watch } from 'vue'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { WorkbenchPreset } from '@/types/protocol'
 import { TASK_ERROR_CODES } from '@/types/protocol'
 import { useEnvStore } from '@/stores/env'

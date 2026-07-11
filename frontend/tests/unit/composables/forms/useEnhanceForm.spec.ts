@@ -7,10 +7,11 @@ import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
 import { createMediaItem } from '@/services/media/factory'
 import { buildTaskRequest } from '@/services/task/request-builder'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import { createEnvironmentPayload, createEnvironmentResult } from '../../fixtures/environment'
 
 function makeEnv(): EnvironmentCheckResult {
-  return {
+  return createEnvironmentResult({
     ffmpeg: {
       available: true,
       hwaccels: [],
@@ -19,12 +20,13 @@ function makeEnv(): EnvironmentCheckResult {
     },
     gpu: { adapters: [] },
     tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda', 'tensorrt'], onnx: ['cuda', 'tensorrt'] },
-    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [
       {
         name: 'rife',
+        family: 'rife',
         tensorBackends: ['pytorch', 'onnx'],
         models: ['4.25'],
+        inputFrameMode: 'none',
         onnxModels: ['rife_v4.25.onnx'],
         modelDetails: [
           {
@@ -61,20 +63,24 @@ function makeEnv(): EnvironmentCheckResult {
       },
       {
         name: 'rife-lite',
+        family: 'rife',
         tensorBackends: ['pytorch'],
         models: ['lite'],
         onnxModels: [],
+        inputFrameMode: 'none',
       },
     ],
     superResolutionAlgorithms: [
       { name: 'placeholder', tensorBackends: ['onnx'], models: [], onnxModels: ['sr_x2.onnx'] },
       {
         name: 'ppmsvsr',
+        family: 'paddlegan_vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
         scaleFactors: [4],
+        fixedScaleFactor: 4,
         defaultNumFrames: 10,
-        sequenceMode: 'recurrent',
+        inputFrameMode: 'editable_chunk',
         modelDetails: [
           {
             name: 'x4',
@@ -105,11 +111,13 @@ function makeEnv(): EnvironmentCheckResult {
       },
       {
         name: 'edvr',
+        family: 'paddlegan_vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
         scaleFactors: [4],
+        fixedScaleFactor: 4,
         defaultNumFrames: 5,
-        sequenceMode: 'window',
+        inputFrameMode: 'fixed_window',
         modelDetails: [
           {
             name: 'x4',
@@ -137,52 +145,56 @@ function makeEnv(): EnvironmentCheckResult {
         fixedScaleFactor: 4,
         inputFrameMode: 'editable_chunk',
         defaultNumFrames: 8,
-        sequenceMode: 'recurrent',
       },
       {
         name: 'ppmsvsr-large',
+        family: 'paddlegan_vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
         scaleFactors: [4],
+        fixedScaleFactor: 4,
         defaultNumFrames: 10,
-        sequenceMode: 'recurrent',
+        inputFrameMode: 'editable_chunk',
       },
       {
         name: 'basicvsr',
+        family: 'paddlegan_vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
         scaleFactors: [4],
+        fixedScaleFactor: 4,
         defaultNumFrames: 10,
-        sequenceMode: 'recurrent',
+        inputFrameMode: 'editable_chunk',
       },
       {
         name: 'iconvsr',
+        family: 'paddlegan_vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
         scaleFactors: [4],
+        fixedScaleFactor: 4,
         defaultNumFrames: 10,
-        sequenceMode: 'recurrent',
+        inputFrameMode: 'editable_chunk',
       },
       {
         name: 'basicvsr-plus-plus',
+        family: 'paddlegan_vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
         scaleFactors: [4],
+        fixedScaleFactor: 4,
         defaultNumFrames: 10,
-        sequenceMode: 'recurrent',
+        inputFrameMode: 'editable_chunk',
       },
     ],
     runtimeMode: 'bundled',
-  }
+  })
 }
 
 describe('useEnhanceForm PaddleGAN super-resolution', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    useEnvStore().setCheckPayload(
-      { result: makeEnv(), source: 'probe', checkedAt: null },
-      '2026-06-21T00:00:00Z',
-    )
+    useEnvStore().setCheckPayload(createEnvironmentPayload(makeEnv()))
   })
 
   it('keeps super-resolution backend independent and applies PaddleGAN defaults', () => {

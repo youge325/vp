@@ -6,33 +6,34 @@ import {
   isPaddleGanVsrAlgorithm,
   superResolutionInputFrameMode,
 } from '@/services/preset/enhance-algorithm-capabilities'
+import { createAlgorithmInfo } from '../../fixtures/environment'
 
 describe('enhance algorithm capability rules', () => {
   it('classifies PaddleGAN VSR from explicit family metadata', () => {
     expect(
-      isPaddleGanVsrAlgorithm({
+      isPaddleGanVsrAlgorithm(createAlgorithmInfo({
         name: 'custom-vsr',
         family: 'paddlegan_vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
-      }),
+        inputFrameMode: 'editable_chunk',
+      })),
     ).toBe(true)
   })
 
-  it('keeps legacy metadata fallback for old cached environment payloads', () => {
+  it('does not infer a family when the protocol reports another family', () => {
     expect(
-      isPaddleGanVsrAlgorithm({
-        name: 'legacy-vsr',
+      isPaddleGanVsrAlgorithm(createAlgorithmInfo({
+        name: 'onnx-vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
-        sequenceMode: 'recurrent',
         scaleFactors: [4],
-      }),
-    ).toBe(true)
+      })),
+    ).toBe(false)
   })
 
   it('resolves input frame mode and fixed values from metadata', () => {
-    const algorithm = {
+    const algorithm = createAlgorithmInfo({
       name: 'fixed-window-vsr',
       family: 'paddlegan_vsr',
       tensorBackends: ['paddle'],
@@ -51,7 +52,7 @@ describe('enhance algorithm capability rules', () => {
           },
         },
       ],
-    } as const
+    })
 
     expect(superResolutionInputFrameMode(algorithm)).toBe('fixed_window')
     expect(fixedRuntimeFrameCount(algorithm)).toBe(5)

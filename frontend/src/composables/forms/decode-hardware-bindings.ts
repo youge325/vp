@@ -6,7 +6,7 @@ import {
   buildDecoderHardwareDeviceNumberOptions,
   buildDecoderHardwareDeviceOptions,
 } from '@/services/preset/io-form-rules'
-import type { DecoderProfileSpec } from '@/types/domain/capability'
+import type { DecoderProfileSpec } from '@/types/protocol'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
 
 interface DecodeHardwareBindingParams {

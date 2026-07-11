@@ -12,8 +12,8 @@ import {
   applySuperResolutionAlgorithmSelectionDefaults,
   applySuperResolutionBackendSelectionDefaults,
 } from '@/services/preset/enhance-workflow-selection'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { TensorBackend } from '@/types/domain/workflow'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import type { TensorBackend } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 
 interface EnhanceEffectBindingParams {

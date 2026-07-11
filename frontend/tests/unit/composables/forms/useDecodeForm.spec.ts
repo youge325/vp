@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { useDecodeForm } from '@/composables/forms/useDecodeForm'
 import { useEnvStore } from '@/stores/env'
 import { usePresetStore } from '@/stores/preset'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
-import type { HardwareDeviceOptionSpec } from '@/types/domain/capability'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import type { HardwareDeviceOptionSpec } from '@/types/protocol'
+import { createEnvironmentPayload, createEnvironmentResult } from '../../fixtures/environment'
 
 const stringOption = (name: string, defaultValue: string) => ({
   name,
@@ -37,7 +38,7 @@ const decoderProfile = (
   options,
 })
 
-const makeEnv = (): EnvironmentCheckResult => ({
+const makeEnv = (): EnvironmentCheckResult => createEnvironmentResult({
   ffmpeg: {
     available: true,
     hwaccels: ['cuda', 'qsv', 'd3d11va'],
@@ -59,7 +60,6 @@ const makeEnv = (): EnvironmentCheckResult => ({
   },
   gpu: { adapters: [] },
   tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
   interpolationAlgorithms: [],
   superResolutionAlgorithms: [],
   runtimeMode: 'external',
@@ -68,10 +68,7 @@ const makeEnv = (): EnvironmentCheckResult => ({
 describe('useDecodeForm decoder hardware devices', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    useEnvStore().setCheckPayload(
-      { result: makeEnv(), source: 'probe', checkedAt: null },
-      '2026-06-21T00:00:00Z',
-    )
+    useEnvStore().setCheckPayload(createEnvironmentPayload(makeEnv()))
   })
 
   it('switches decoder profile to the first verified hardware device and probed device number', () => {

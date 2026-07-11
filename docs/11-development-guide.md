@@ -36,6 +36,7 @@ vp/
 | `cd frontend && npm run build` | 前端生产构建 |
 | `cd frontend && npm run tauri:dev` | Tauri 桌面开发模式 |
 | `cd frontend/src-tauri && cargo test --quiet` | 运行 Rust 测试 |
+| `cd frontend/src-tauri && cargo clippy --all-targets -- -D warnings` | 以零 warning 门槛检查全部 Rust targets |
 | `cd frontend/src-tauri && cargo build` | 触发 ts-rs 类型生成 |
 | `pre-commit run --all-files` | 运行所有 pre-commit 检查 |
 
@@ -58,6 +59,7 @@ graph LR
 ### 注意事项
 
 - 修改 `frontend/src-tauri/src/models/*.rs` 后必须运行 `cargo build`，否则前端类型不同步
+- 环境协议类型只在 Rust `models/env.rs` 定义，前端统一从 `types/protocol` 导入，不新增手写镜像或 normalize 层
 - 新增字段到 Rust 模型时，检查是否需要更新前端的 `TASK_EVENT_NAMES` 或 `TASK_ERROR_CODES`
 - `ts-rs` 生成的文件不要手工修改，会在下次 `cargo build` 时被覆盖
 
@@ -82,6 +84,7 @@ npm run test
 ```powershell
 cd frontend/src-tauri
 cargo test --quiet
+cargo clippy --all-targets -- -D warnings
 ```
 
 覆盖范围：

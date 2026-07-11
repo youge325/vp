@@ -1,24 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import { pickDefaultEngine, pickDefaultInterpolationEngine } from '@/services/preset/enhance-engine-defaults'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { EnvironmentCheckResult } from '@/types/protocol'
+import { createEnvironmentResult } from '../../fixtures/environment'
 
 function env(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCheckResult {
-  return {
-    ffmpeg: {
-      available: true,
-      hwaccels: [],
-      encoderProfiles: [],
-      decoderProfiles: [],
-    },
-    gpu: { adapters: [] },
-    tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
-    interpolationAlgorithms: [],
-    superResolutionAlgorithms: [],
-    runtimeMode: 'external',
-    ...overrides,
-  } as EnvironmentCheckResult
+  return createEnvironmentResult(overrides)
 }
 
 describe('enhance engine defaults', () => {
@@ -29,15 +16,15 @@ describe('enhance engine defaults', () => {
 
   it('applies vendor-specific interpolation engine preferences', () => {
     const nvidia = env({
-      gpu: { adapters: [{ name: 'RTX', vendor: 'nvidia', deviceType: 'discrete' }] },
+      gpu: { adapters: [{ name: 'RTX', vendor: 'nvidia' }] },
       tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: [], onnx: [] },
     })
     const hygon = env({
-      gpu: { adapters: [{ name: 'DCU', vendor: 'hygon', deviceType: 'discrete' }] },
+      gpu: { adapters: [{ name: 'DCU', vendor: 'hygon' }] },
       tensorEngines: { pytorch: ['cuda', 'dcu'], paddle: [], onnx: [] },
     })
     const generic = env({
-      gpu: { adapters: [{ name: 'GPU', vendor: 'other', deviceType: 'discrete' }] },
+      gpu: { adapters: [{ name: 'GPU', vendor: 'other' }] },
       tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: [], onnx: [] },
     })
 

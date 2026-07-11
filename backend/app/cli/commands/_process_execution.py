@@ -1,6 +1,6 @@
 """Stage 3 — pipeline execution & terminal NDJSON for ``cmd_process``.
 
-收 ``ProcessingPlan`` + 4 个 config dict 后,选择 streaming pipeline 或
+收 ``ProcessingPlan`` 后,选择 streaming pipeline 或
 fast-path FFmpeg transcode 跑流水线,然后把结果格式化成 ``ndjson.completed``。
 """
 
@@ -10,7 +10,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-from app.cli.runtime_configs import RuntimeConfigs
 from app.errors import ResumeConflictError
 from app.processing.streaming import process_video_streaming
 from app.protocol import ndjson
@@ -52,10 +51,9 @@ def _run_streaming(
     ffmpeg: FFmpegWrapper,
     input_path: str,
     plan: ProcessingPlan,
-    configs: RuntimeConfigs,
     resume_mode: str,
 ) -> dict[str, Any]:
-    sections = configs.legacy_sections()
+    sections = plan.runtime_configs.json_sections()
     return process_video_streaming(
         ffmpeg=ffmpeg,
         input_path=input_path,
@@ -79,10 +77,9 @@ def _run_format_conversion(
     ffmpeg: FFmpegWrapper,
     input_path: str,
     plan: ProcessingPlan,
-    configs: RuntimeConfigs,
     resume_mode: str,
 ) -> dict[str, Any]:
-    sections = configs.legacy_sections()
+    sections = plan.runtime_configs.json_sections()
     decode_config = sections["decode"]
     encode_config = sections["encode"]
     _enforce_format_conversion_resume_mode(output_path=plan.output_path, resume_mode=resume_mode)
@@ -102,7 +99,7 @@ def _run_format_conversion(
     return {
         "output_path": plan.output_path,
         "processed_frames": _resolve_processed_frame_count(ffmpeg, plan.output_path, plan.expected_output_frames),
-        "audio_merged": configs.encode.keep_audio,
+        "audio_merged": plan.runtime_configs.encode.keep_audio,
     }
 
 
@@ -111,7 +108,6 @@ def execute_plan(
     ffmpeg: FFmpegWrapper,
     input_path: str,
     plan: ProcessingPlan,
-    configs: RuntimeConfigs,
     resume_mode: str,
 ) -> tuple[dict[str, Any], float]:
     """Run the plan and return ``(result_dict, elapsed_seconds)``.
@@ -125,7 +121,6 @@ def execute_plan(
             ffmpeg=ffmpeg,
             input_path=input_path,
             plan=plan,
-            configs=configs,
             resume_mode=resume_mode,
         )
     else:
@@ -133,7 +128,6 @@ def execute_plan(
             ffmpeg=ffmpeg,
             input_path=input_path,
             plan=plan,
-            configs=configs,
             resume_mode=resume_mode,
         )
     elapsed = round(time.time() - start_time, 2)

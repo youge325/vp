@@ -8,8 +8,8 @@ import {
   fallbackUnavailableDecodeProfile,
   selectDecodeProfile,
 } from '@/services/preset/profile-selection'
-import type { DecoderProfileSpec } from '@/types/domain/capability'
-import type { EnvironmentCheckResult } from '@/types/domain/env'
+import type { DecoderProfileSpec } from '@/types/protocol'
+import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
 
 interface DecodeProfileBindingParams {

@@ -31,12 +31,12 @@ TERMINAL_PROGRESS_PREFIX = "[VP_PROGRESS]"
 TERMINAL_PROGRESS_BAR_WIDTH = 24
 
 
-def emit_terminal(message: str) -> None:
+def _emit_terminal(message: str) -> None:
     """Write a single terminal-visible line to stderr."""
     print(message, file=sys.stderr, flush=True)
 
 
-def format_eta(seconds: float | None) -> str:
+def _format_eta(seconds: float | None) -> str:
     if seconds is None or seconds < 0:
         return "--:--:--"
     rounded = int(round(seconds))
@@ -45,7 +45,7 @@ def format_eta(seconds: float | None) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
-def format_progress_bar(current: int, total: int) -> str:
+def _format_progress_bar(current: int, total: int) -> str:
     if total <= 0:
         total = 1
     ratio = min(max(current / total, 0.0), 1.0)
@@ -146,17 +146,17 @@ class CliProgressReporter:
         eta_seconds = 0.0 if is_end else self._estimate_eta(display_current, effective_fps)
         fps_text = f"{effective_fps:5.1f} fps" if effective_fps and effective_fps > 0 else "--.- fps"
         speed_text = f"{speed:.2f}x" if speed and speed > 0 else "--.--x"
-        run_text = f" | RUN {format_eta(time.time() - self._stage_started_at)}" if heartbeat else ""
+        run_text = f" | RUN {_format_eta(time.time() - self._stage_started_at)}" if heartbeat else ""
         if display_current > 0 or is_end:
-            emit_terminal(
+            _emit_terminal(
                 f"{TERMINAL_PROGRESS_PREFIX} "
                 f"[{self._stage_index}/{self._stage_total} {self._stage_name}] "
-                f"{format_progress_bar(display_current, display_total)} "
+                f"{_format_progress_bar(display_current, display_total)} "
                 f"{percent:5.1f}% "
                 f"{display_current}/{display_total} "
                 f"| {fps_text} "
                 f"| {speed_text} "
-                f"| ETA {format_eta(eta_seconds)}"
+                f"| ETA {_format_eta(eta_seconds)}"
                 f"{run_text}"
             )
         ndjson.progress(

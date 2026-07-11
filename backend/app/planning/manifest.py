@@ -1,7 +1,7 @@
 """Resume sidecar lifecycle and chunk filename conventions.
 
 Owns ``SegmentManifest`` plus the resume-related dataclasses
-(``ResumeState``, ``ResumeDecision``, ``SegmentRecord``) and resume mode.
+(``ResumeState``, internal decision state, ``SegmentRecord``) and resume mode.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ _ResumeKind = Literal["fresh", "resume", "conflict_final_exists"]
 
 
 @dataclass(slots=True)
-class ResumeDecision:
+class _ResumeDecision:
     """Outcome of preparing a sidecar for a run."""
 
     kind: _ResumeKind
@@ -92,8 +92,8 @@ class SegmentManifest:
         config_snapshot: dict[str, Any] | None = None,
         *,
         mode: ResumeMode = "auto",
-    ) -> ResumeDecision:
-        """Resolve the sidecar state and return a ResumeDecision.
+    ) -> _ResumeDecision:
+        """Resolve the sidecar state and return an internal decision.
 
         ``mode`` controls how conflicts with an already-existing final output
         are handled. The default ``"auto"`` returns ``conflict_final_exists``
@@ -115,7 +115,7 @@ class SegmentManifest:
         if self.output_path.exists():
             if mode == "auto":
                 state = self._scan_resume_state() if signature_match else self._empty_state()
-                return ResumeDecision(
+                return _ResumeDecision(
                     kind="conflict_final_exists",
                     state=state,
                     sidecar_signature_match=signature_match,
@@ -128,7 +128,7 @@ class SegmentManifest:
                     logger.info("Configuration changed; previous progress invalidated.")
                     return decision
                 state = self._scan_resume_state()
-                return ResumeDecision(
+                return _ResumeDecision(
                     kind="resume" if state.completed_output_frames > 0 else "fresh",
                     state=state,
                     sidecar_signature_match=True,
@@ -143,7 +143,7 @@ class SegmentManifest:
             return decision
 
         state = self._scan_resume_state()
-        return ResumeDecision(
+        return _ResumeDecision(
             kind="resume" if state.completed_output_frames > 0 else "fresh",
             state=state,
             sidecar_signature_match=True,
@@ -346,7 +346,7 @@ class SegmentManifest:
         config_snapshot: dict[str, Any],
         *,
         delete_final: bool = False,
-    ) -> ResumeDecision:
+    ) -> _ResumeDecision:
         self.cleanup()
         if delete_final:
             self._delete_final_output()
@@ -356,7 +356,7 @@ class SegmentManifest:
             output_path=self.output_path,
             config_snapshot=config_snapshot,
         )
-        return ResumeDecision(kind="fresh", state=self._empty_state())
+        return _ResumeDecision(kind="fresh", state=self._empty_state())
 
     def _delete_final_output(self) -> None:
         if self.output_path.is_file():

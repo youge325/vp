@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceViewModel } from '@/services/preset/enhance-view-model'
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
-import type { AlgorithmInfo } from '@/types/domain/env'
+import type { AlgorithmInfo } from '@/types/protocol'
 
 const rife: AlgorithmInfo = {
   name: 'rife',

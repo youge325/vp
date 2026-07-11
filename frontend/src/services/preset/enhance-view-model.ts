@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // Derived read-model rules for the enhance form.
 
-import type { AlgorithmInfo, ModelVariantInfo } from '@/types/domain/env'
+import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 import type { MetricRow, RuntimeMetricEstimate, VideoDimensions } from '@/types/view/model-metrics'
 import { buildEnhanceModelSelection } from './enhance-model-selection'
