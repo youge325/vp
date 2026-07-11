@@ -6,9 +6,8 @@
 
 历史上 ``app.protocol.reporter`` 曾经直接 ``from
 app.processing.streaming.metrics import PipelineMetrics``,造成了
-``protocol → processing`` 的反向 import。Phase 10 把它替换成了
-``app.protocol.metrics_view.MetricsSnapshot`` Protocol;本测试把这一
-约束变成机器可强制的断言,防止以后再次出现回归。
+``protocol → processing`` 的反向 import。现在 reporter 用私有结构化
+Protocol 表达最小 read contract;本测试把分层约束变成机器断言。
 """
 
 from __future__ import annotations
@@ -47,9 +46,9 @@ def _collect_imports(tree: ast.AST) -> list[str]:
 
 def test_protocol_package_present_and_non_empty() -> None:
     modules = _iter_python_modules()
-    # Sanity: 至少有 __init__.py、reporter.py、metrics_view.py
+    # Sanity:协议 emitter 与 reporter 必须存在。
     names = {m.name for m in modules}
-    assert {"__init__.py", "reporter.py", "metrics_view.py"} <= names, f"protocol 包结构异常,实际文件: {names}"
+    assert {"__init__.py", "reporter.py"} <= names, f"protocol 包结构异常,实际文件: {names}"
 
 
 def test_protocol_does_not_reverse_import_upper_layers() -> None:
@@ -64,5 +63,5 @@ def test_protocol_does_not_reverse_import_upper_layers() -> None:
     assert not offenders, (
         "protocol 层出现了反向 import,违反 layering 约束:\n"
         + "\n".join(f"  - {file}: {mod}" for file, mod in offenders)
-        + "\n如需共享类型,在 app/protocol/ 内定义 Protocol 接口(参考 metrics_view.py)。"
+        + "\n如需抽象上层对象,在叶层消费者内定义最小 Protocol 接口。"
     )

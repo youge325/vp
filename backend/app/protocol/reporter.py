@@ -11,24 +11,26 @@ Lives in :mod:`app.protocol` (not :mod:`app.cli`) because the streaming
 pipeline drives it through ``encode_progress_callback`` — keeping it
 outside ``cli/`` avoids a ``processing -> cli`` reverse dependency.
 
-Phase 10 — the metrics type annotation now uses
-:class:`app.protocol.metrics_view.MetricsSnapshot` (a structural
-``Protocol``) instead of importing
-``app.processing.streaming.metrics.PipelineMetrics`` directly. This
-restores "protocol is a leaf layer" — any object with a ``snapshot()``
-method qualifies, and ``protocol`` no longer reaches into ``processing``.
+The metrics type annotation uses a private structural ``Protocol`` instead
+of importing ``app.processing.streaming.metrics.PipelineMetrics`` directly.
+This keeps ``protocol`` as a leaf layer while avoiding a public interface
+module that no caller needs to import.
 """
 
 from __future__ import annotations
 
 import sys
 import time
+from typing import Any, Protocol
 
 from app.protocol import ndjson
-from app.protocol.metrics_view import MetricsSnapshot
 
 _TERMINAL_PROGRESS_PREFIX = "[VP_PROGRESS]"
 _TERMINAL_PROGRESS_BAR_WIDTH = 24
+
+
+class _MetricsSnapshot(Protocol):
+    def snapshot(self) -> dict[str, Any]: ...
 
 
 def _emit_terminal(message: str) -> None:
@@ -65,12 +67,12 @@ class CliProgressReporter:
     把当前 snapshot 一并塞进 NDJSON ``progress`` 帧的 ``metrics`` 字段。
     metrics 由 pipeline 在构造 reporter 时注入,reporter 不主动创建。
 
-    Phase 10:``metrics`` 的类型注解从具体类 ``PipelineMetrics`` 抽象为
-    ``MetricsSnapshot`` Protocol —— 任何实现 ``snapshot() -> dict`` 的对象
-    都可注入,protocol 层不再反向 import ``processing.streaming``。
+    ``metrics`` uses a structural protocol, so any object providing
+    ``snapshot() -> dict`` can be injected without a reverse dependency on
+    ``processing.streaming``.
     """
 
-    def __init__(self, total_frames: int, metrics: MetricsSnapshot | None = None) -> None:
+    def __init__(self, total_frames: int, metrics: _MetricsSnapshot | None = None) -> None:
         self.total_frames = max(int(total_frames), 1)
         self.current_frame = 0
         self.started_at = time.time()

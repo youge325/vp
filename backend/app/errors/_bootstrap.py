@@ -5,10 +5,8 @@ sibling ``_codes`` module, which itself has no further dependencies) so that
 ``__main__`` can import it before resolving the rest of the package.
 Both ``errors.from_exception`` and ``__main__`` share these rules.
 
-Phase 4.1 — ``infer_error_code`` accepts either a raw lowercased message
-(legacy API used by callers that no longer have the exception object) or
-the exception itself. When the exception is provided, the resolver runs in
-two passes:
+``infer_error_code`` accepts the exception itself and resolves it in two
+passes:
 
 1. **Message-pattern pass.** Existing keyword rules (ffmpeg / flownet /
    torch / paddle / no module named / cancel) win first so that long-lived
@@ -19,10 +17,6 @@ two passes:
    ``ImportError`` / ``ModuleNotFoundError`` → ``MISSING_PYTHON_DEPENDENCY``,
    ``FileNotFoundError`` / ``PermissionError`` → ``IO_ERROR``,
    ``ValueError`` / ``TypeError`` → ``INVALID_INPUT``.
-
-The legacy string-only path keeps producing the same answers as before,
-which is what the three-way round-trip test in ``test_codes_roundtrip``
-relies on.
 
 Phase 11 — ``MISSING_MODEL`` 的关键字从单字符串 ``"model"`` 缩窄到
 ``"flownet_v" / "model file" / "model weight" / "missing model"``。原来
@@ -75,21 +69,16 @@ def _dispatch_by_type(exc: BaseException) -> str | None:
     return None
 
 
-def infer_error_code(exc_or_message: BaseException | str) -> str:
-    """Resolve the canonical task error code for *exc_or_message*.
+def infer_error_code(exc: BaseException) -> str:
+    """Resolve the canonical task error code for *exc*.
 
-    Accepts either an exception instance or a pre-lowercased message string.
-    With an exception, runs the message-pattern pass first (so keyword
-    matches like ``"ffmpeg"`` keep their specific code) before falling back
-    to ``isinstance`` dispatch over the common stdlib hierarchy.
+    Message matches like ``"ffmpeg"`` keep their specific code before the
+    resolver falls back to coarse ``isinstance`` buckets.
     """
-    if isinstance(exc_or_message, BaseException):
-        message_hit = _match_by_message(str(exc_or_message).lower())
-        if message_hit != TaskErrorCode.PROCESS_FAILED.value:
-            return message_hit
-        bucket = _dispatch_by_type(exc_or_message)
-        if bucket is not None:
-            return bucket
-        return TaskErrorCode.PROCESS_FAILED.value
-
-    return _match_by_message(exc_or_message)
+    message_hit = _match_by_message(str(exc).lower())
+    if message_hit != TaskErrorCode.PROCESS_FAILED.value:
+        return message_hit
+    bucket = _dispatch_by_type(exc)
+    if bucket is not None:
+        return bucket
+    return TaskErrorCode.PROCESS_FAILED.value

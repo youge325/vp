@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import type { DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig } from '@/types/protocol'
-import type { MediaItem, VideoInfoResult } from '@/types/domain/media'
+import type { DecodeConfig, EncodeConfig, OutputConfig, VideoInfo, WorkflowConfig } from '@/types/protocol'
+import type { MediaItem } from '@/types/domain/media'
 
 // Phase 6d — ``operationIssue`` / ``setOperationIssue`` /
 // ``clearOperationIssue`` moved to the dedicated ``useIssueStore``
@@ -97,7 +97,7 @@ export const useMediaStore = defineStore('media', () => {
     }
   }
 
-  function setItemInfo(id: string, info: VideoInfoResult | null): void {
+  function setItemInfo(id: string, info: VideoInfo | null): void {
     const item = findItem(id)
     if (item) {
       item.info = info

@@ -40,11 +40,11 @@ def test_every_code_round_trips_through_json(code: TaskErrorCode) -> None:
 
 
 def test_infer_error_code_routes_torch_to_missing_tensor_backend() -> None:
-    assert infer_error_code("no module named 'torch'") == TaskErrorCode.MISSING_TENSOR_BACKEND.value
+    assert infer_error_code(ImportError("no module named 'torch'")) == TaskErrorCode.MISSING_TENSOR_BACKEND.value
 
 
 def test_infer_error_code_routes_paddle_to_missing_tensor_backend() -> None:
-    assert infer_error_code("no module named 'paddle'") == TaskErrorCode.MISSING_TENSOR_BACKEND.value
+    assert infer_error_code(ImportError("no module named 'paddle'")) == TaskErrorCode.MISSING_TENSOR_BACKEND.value
 
 
 def test_infer_error_code_routes_pyav_to_missing_python_dependency() -> None:
@@ -53,25 +53,25 @@ def test_infer_error_code_routes_pyav_to_missing_python_dependency() -> None:
     Before Phase A this returned the bare string ``"missing_python_dependency"`` even
     though the enum had no such value (SSOT drift). This test pins the fix.
     """
-    assert infer_error_code("no module named 'pyav'") == TaskErrorCode.MISSING_PYTHON_DEPENDENCY.value
+    assert infer_error_code(ImportError("no module named 'pyav'")) == TaskErrorCode.MISSING_PYTHON_DEPENDENCY.value
 
 
 def test_infer_error_code_routes_ffmpeg_to_missing_ffmpeg() -> None:
-    assert infer_error_code("ffmpeg binary not found") == TaskErrorCode.MISSING_FFMPEG.value
-    assert infer_error_code("ffprobe call failed") == TaskErrorCode.MISSING_FFMPEG.value
+    assert infer_error_code(FileNotFoundError("ffmpeg binary not found")) == TaskErrorCode.MISSING_FFMPEG.value
+    assert infer_error_code(RuntimeError("ffprobe call failed")) == TaskErrorCode.MISSING_FFMPEG.value
 
 
 def test_infer_error_code_routes_model_to_missing_model() -> None:
-    assert infer_error_code("model weight flownet_v4.25.pkl missing") == TaskErrorCode.MISSING_MODEL.value
+    assert infer_error_code(RuntimeError("model weight flownet_v4.25.pkl missing")) == TaskErrorCode.MISSING_MODEL.value
 
 
 def test_infer_error_code_routes_cancel_to_cancelled() -> None:
-    assert infer_error_code("operation was cancelled") == TaskErrorCode.CANCELLED.value
-    assert infer_error_code("operation was canceled") == TaskErrorCode.CANCELLED.value
+    assert infer_error_code(RuntimeError("operation was cancelled")) == TaskErrorCode.CANCELLED.value
+    assert infer_error_code(RuntimeError("operation was canceled")) == TaskErrorCode.CANCELLED.value
 
 
 def test_infer_error_code_defaults_to_process_failed() -> None:
-    assert infer_error_code("some random failure") == TaskErrorCode.PROCESS_FAILED.value
+    assert infer_error_code(RuntimeError("some random failure")) == TaskErrorCode.PROCESS_FAILED.value
 
 
 @pytest.mark.parametrize(
@@ -122,7 +122,7 @@ def test_all_inferred_codes_are_in_enum() -> None:
         "some random failure",
     ]
     for message in candidate_messages:
-        code = infer_error_code(message)
+        code = infer_error_code(RuntimeError(message))
         assert code in TASK_ERROR_CODES, f"infer_error_code({message!r}) -> {code!r} is not a real TaskErrorCode value"
 
 
@@ -194,7 +194,7 @@ def test_three_entry_points_agree(exc: BaseException, expected_code: str) -> Non
     exception. This is the test that catches drift between the entry
     points after the Phase B consolidation."""
     from_exception_code = ProcessError.from_exception(exc).code
-    bootstrap_code = infer_error_code(str(exc).lower())
+    bootstrap_code = infer_error_code(exc)
     main_code = app_main._bootstrap_error_code(exc)
     assert from_exception_code == expected_code
     assert bootstrap_code == expected_code
@@ -216,8 +216,7 @@ def test_main_bootstrap_uses_shared_inference_when_available() -> None:
 # When the exception message has no recognised keyword, the resolver should
 # fall through to coarse ``isinstance`` buckets so common stdlib errors get a
 # more useful code than the generic ``PROCESS_FAILED``. The ``infer_error_code``
-# string-only legacy path keeps producing ``PROCESS_FAILED`` for the same
-# messages — only the exception-aware path provides type-level routing.
+# Message matching runs before the exception-aware type dispatch.
 
 _TYPE_DISPATCH_FIXTURES: list[tuple[BaseException, str]] = [
     (
@@ -255,8 +254,8 @@ _TYPE_DISPATCH_FIXTURES: list[tuple[BaseException, str]] = [
 def test_type_dispatch_fallback(exc: BaseException, expected_code: str) -> None:
     """No keyword in the message → fall back to ``isinstance`` buckets.
 
-    Asserts that both ``infer_error_code(exc)`` (the new
-    exception-aware overload) and ``ProcessError.from_exception(exc)`` agree
+    Asserts that both ``infer_error_code(exc)`` and
+    ``ProcessError.from_exception(exc)`` agree
     on the coarse bucket the type dispatch picked.
     """
     assert infer_error_code(exc) == expected_code
@@ -274,17 +273,6 @@ def test_message_match_wins_over_type_dispatch() -> None:
     assert infer_error_code(exc) == TaskErrorCode.MISSING_FFMPEG.value
     exc2 = ImportError("No module named 'torch'")
     assert infer_error_code(exc2) == TaskErrorCode.MISSING_TENSOR_BACKEND.value
-
-
-def test_legacy_string_api_unchanged() -> None:
-    """The string-only ``infer_error_code(message)`` overload is untouched.
-
-    Callers that only have a lowercased message (eg. the bootstrap inline
-    fallback in ``__main__``) still get the same ``PROCESS_FAILED`` result
-    they did before — type dispatch is exception-aware only.
-    """
-    assert infer_error_code("truly opaque failure") == TaskErrorCode.PROCESS_FAILED.value
-    assert infer_error_code("crf must be between 0 and 51") == TaskErrorCode.PROCESS_FAILED.value
 
 
 # ---------------------------------------------------------------------------
@@ -309,18 +297,21 @@ def test_pydantic_validation_error_with_model_word_is_invalid_input() -> None:
 
 
 def test_unrelated_model_mention_falls_through_to_process_failed() -> None:
-    """白名单外的 'model' 字提及在 legacy string API 下落到 PROCESS_FAILED。
+    """白名单外的 'model' 字提及落到 PROCESS_FAILED。
 
     例如 ``"yolov8 model not loaded"`` 含 'model' 但不在白名单
     (``model file`` / ``model weight`` / ``missing model``),
-    legacy string-only path 没有 type dispatch 兜底,直接 PROCESS_FAILED。
+    RuntimeError 也没有更具体的 type-dispatch bucket。
     """
-    assert infer_error_code("yolov8 model not loaded") == TaskErrorCode.PROCESS_FAILED.value
+    assert infer_error_code(RuntimeError("yolov8 model not loaded")) == TaskErrorCode.PROCESS_FAILED.value
 
 
 def test_whitelisted_model_keywords_still_route_to_missing_model() -> None:
     """白名单内的 4 个变体都必须保留 MISSING_MODEL 归类(回归护栏)。"""
-    assert infer_error_code("flownet_v4.25.pkl not found") == TaskErrorCode.MISSING_MODEL.value
-    assert infer_error_code("model file weights/rife.pkl missing") == TaskErrorCode.MISSING_MODEL.value
-    assert infer_error_code("model weight tensor not initialized") == TaskErrorCode.MISSING_MODEL.value
-    assert infer_error_code("missing model weights for super-resolution") == TaskErrorCode.MISSING_MODEL.value
+    assert infer_error_code(RuntimeError("flownet_v4.25.pkl not found")) == TaskErrorCode.MISSING_MODEL.value
+    assert infer_error_code(RuntimeError("model file weights/rife.pkl missing")) == TaskErrorCode.MISSING_MODEL.value
+    assert infer_error_code(RuntimeError("model weight tensor not initialized")) == TaskErrorCode.MISSING_MODEL.value
+    assert (
+        infer_error_code(RuntimeError("missing model weights for super-resolution"))
+        == TaskErrorCode.MISSING_MODEL.value
+    )

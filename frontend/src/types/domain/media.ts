@@ -26,8 +26,6 @@ export interface OperationIssue {
   error: TaskError
 }
 
-export type VideoInfoResult = VideoInfo
-
 // Phase 16 — ``error: TaskError | null`` 字段移除。Phase 13.1 拆分后这个
 // 字段在视图 / batch 任何地方都没有 reader,reducer 链路写入是纯 dead
 // write;真正展示任务错误的链路是 ``useIssueStore.setIssue('task', …)``
@@ -53,7 +51,7 @@ export interface MediaItem {
   displayName: string
   selected: boolean
   inspecting: boolean
-  info: VideoInfoResult | null
+  info: VideoInfo | null
   decodeConfig: DecodeConfig
   workflowConfig: WorkflowConfig
   encodeConfig: EncodeConfig

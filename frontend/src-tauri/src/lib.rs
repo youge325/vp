@@ -1,4 +1,3 @@
-mod commands_manifest;
 mod dialogs;
 mod error;
 pub mod models;
@@ -92,7 +91,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use crate::commands_manifest::APP_COMMAND_NAMES;
+    include!("commands_manifest.rs");
 
     const DEFAULT_PERMISSIONS: &str = include_str!("../permissions/default.toml");
     const ACL_MANIFESTS: &str = include_str!("../gen/schemas/acl-manifests.json");
