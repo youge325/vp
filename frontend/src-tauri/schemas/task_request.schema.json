@@ -19,9 +19,13 @@
       "$ref": "#/$defs/OutputConfig"
     },
     "resumeMode": {
-      "type": [
-        "string",
-        "null"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ResumeMode"
+        },
+        {
+          "type": "null"
+        }
       ],
       "default": null
     }
@@ -372,6 +376,14 @@
       "required": [
         "openOnComplete",
         "segmentFrames"
+      ]
+    },
+    "ResumeMode": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "force-fresh",
+        "force-resume"
       ]
     }
   }

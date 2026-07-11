@@ -3,12 +3,12 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { TASK_EVENT_NAMES } from '@/types/protocol'
 import type {
+  ResumeStatusPayload,
   TaskCancelledPayload,
   TaskCompletedPayload,
   TaskLogPayload,
   TaskProgressPayload,
 } from '@/types/protocol'
-import type { ResumeStatus } from '@/types/domain/batch'
 import type { TaskError } from '@/types/domain/media'
 import { isTauriRuntime } from './client'
 
@@ -18,7 +18,7 @@ interface TaskEventHandlers {
   onCompleted: (payload: TaskCompletedPayload) => void
   onError: (payload: TaskError) => void
   onCancelled: (payload: TaskCancelledPayload | null) => void
-  onResumeStatus?: (payload: ResumeStatus) => void
+  onResumeStatus?: (payload: ResumeStatusPayload) => void
 }
 
 export async function listenTaskEvents(handlers: TaskEventHandlers): Promise<UnlistenFn> {
@@ -36,7 +36,9 @@ export async function listenTaskEvents(handlers: TaskEventHandlers): Promise<Unl
     listen<TaskCancelledPayload | null>(TASK_EVENT_NAMES.TaskCancelled, (event) =>
       handlers.onCancelled(event.payload ?? null),
     ),
-    listen<ResumeStatus>(TASK_EVENT_NAMES.TaskResumeStatus, (event) => handlers.onResumeStatus?.(event.payload)),
+    listen<ResumeStatusPayload>(TASK_EVENT_NAMES.TaskResumeStatus, (event) =>
+      handlers.onResumeStatus?.(event.payload),
+    ),
   ])
 
   return () => {

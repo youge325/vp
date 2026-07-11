@@ -53,6 +53,14 @@ ABSENT_PATH_RULES = (
         "backend-stage-file-chunk-progress-test",
         "backend/tests/test_processing/test_stage_file_chunk_progress.py",
     ),
+    _absent(
+        "backend-stage-file-rules-forwarder",
+        "backend/app/processing/streaming/stage_file_rules.py",
+    ),
+    _absent(
+        "backend-stage-file-rules-forwarder-test",
+        "backend/tests/test_processing/test_stage_file_rules.py",
+    ),
     _absent("backend-streaming-decoder", "backend/app/processing/streaming/decoder.py"),
     _absent("backend-streaming-encoder", "backend/app/processing/streaming/encoder.py"),
     _absent("backend-streaming-processor", "backend/app/processing/streaming/processor.py"),
@@ -179,6 +187,18 @@ FORBIDDEN_PATTERN_RULES = (
         "manual frontend resume inspection protocol mirror",
     ),
     _forbid(
+        "frontend-resume-status-protocol-mirror",
+        "frontend/src/types/domain/batch.ts",
+        r"^export\s+interface\s+ResumeStatus\b",
+        "manual frontend resume status protocol mirror",
+    ),
+    _forbid(
+        "frontend-resume-mode-protocol-mirror",
+        "frontend/src/types/domain/batch.ts",
+        r"^export\s+type\s+ResumeMode\b",
+        "manual frontend resume mode protocol mirror",
+    ),
+    _forbid(
         "rust-untyped-resume-inspection-command",
         "frontend/src-tauri/src/tasks/commands.rs",
         r"check_resume_state[\s\S]{0,300}->\s*Result<\s*Value\b",
@@ -201,6 +221,24 @@ FORBIDDEN_PATTERN_RULES = (
         "frontend/src-tauri/schemas/resume_inspection_result.schema.json",
         r"[\"']pipeline_kind[\"'][\s\S]*[\"']input_path[\"']",
         "resume inspection JSON Schema is missing",
+    ),
+    RequiredPatternRule(
+        "rust-resume-mode-contract",
+        "frontend/src-tauri/src/models/task.rs",
+        r"enum\s+ResumeMode\s*\{\s*Auto,\s*ForceFresh,\s*ForceResume,?\s*\}[\s\S]*?pub\s+struct\s+TaskRequest[\s\S]*?pub\s+resume_mode:\s*Option<ResumeMode>",
+        "Rust TaskRequest resume mode contract is missing",
+    ),
+    RequiredPatternRule(
+        "frontend-resume-mode-protocol-export",
+        "frontend/src/types/protocol/index.ts",
+        r"export\s+type\s+\{\s*ResumeMode\s*\}\s+from\s+[\"']@/types/generated/ResumeMode[\"']",
+        "frontend protocol must export the generated resume mode",
+    ),
+    RequiredPatternRule(
+        "task-request-resume-mode-schema",
+        "frontend/src-tauri/schemas/task_request.schema.json",
+        r"[\"']resumeMode[\"'][\s\S]*[\"']\$ref[\"']\s*:\s*[\"']#\/\$defs\/ResumeMode[\"'][\s\S]*[\"']force-fresh[\"'][\s\S]*[\"']force-resume[\"']",
+        "TaskRequest JSON Schema must constrain resume mode",
     ),
     _forbid(
         "rust-runtime-output-dir-state",
@@ -1076,6 +1114,14 @@ REQUIRED_PATTERN_RULES = (
 
 
 REFERENCE_RULES = (
+    ForbiddenReferenceRule(
+        "obsolete-stage-file-rules-reference",
+        roots=("backend/app", "backend/tests"),
+        patterns=(r"app\.processing\.streaming\.stage_file_rules\b",),
+        message="obsolete stage-file rules module reference",
+        suffixes=(".py",),
+        excludes=("backend/tests/test_architecture_contract_rule_engine.py",),
+    ),
     ForbiddenReferenceRule(
         "obsolete-frontend-environment-protocol",
         roots=("frontend/src", "frontend/tests"),

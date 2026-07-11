@@ -6,16 +6,14 @@
 // (``@/services/task/batch-runner``) 保持不变,以便测试与编排层无感知。
 
 import type {
+  ResumeStatusPayload,
   TaskCancelledPayload,
   TaskCompletedPayload,
   TaskLogPayload,
   TaskProgressPayload,
 } from '@/types/protocol'
 import type { TaskError } from '@/types/domain/media'
-import type {
-  ResumeConflictAction,
-  ResumeStatus,
-} from '@/types/domain/batch'
+import type { ResumeConflictAction } from '@/types/domain/batch'
 import { createBatchLifecycle } from './batch/lifecycle'
 import type { BatchLifecycleDeps } from './batch/lifecycle/types'
 import { createConflictResolver } from './batch/conflict'
@@ -32,7 +30,7 @@ export interface BatchRunner {
   onCompleted(payload: TaskCompletedPayload): Promise<void>
   onError(error: TaskError): Promise<void>
   onCancelled(payload?: TaskCancelledPayload | null): Promise<void>
-  onResumeStatus(payload: ResumeStatus): void
+  onResumeStatus(payload: ResumeStatusPayload): void
 }
 
 export function createBatchRunner(deps: BatchLifecycleDeps): BatchRunner {

@@ -2,10 +2,10 @@
 // 不直接迁移状态机,而是调用 lifecycle 的 hook 来推进队列。
 
 import type { MediaItem, TaskError } from '@/types/domain/media'
-import type { ResumeConflictAction, ResumeMode } from '@/types/domain/batch'
+import type { ResumeConflictAction } from '@/types/domain/batch'
 import type { BatchLifecycle, BatchLifecycleDeps } from './lifecycle/types'
 import { buildInspectionFromError } from '../resume-classifier'
-import { TASK_ERROR_CODES } from '@/types/protocol'
+import { TASK_ERROR_CODES, type ResumeMode } from '@/types/protocol'
 
 type ConflictResolverDeps = Pick<
   BatchLifecycleDeps,

@@ -10,12 +10,11 @@
 // 改读 helpers.getCurrentRunState / getConsoleRunState,facade 把后者
 // 一并暴露给 events.ts 调用。
 
-import type { ResumeInspectionResult, TaskRequest } from '@/types/protocol'
+import type { ResumeInspectionResult, ResumeMode, TaskRequest } from '@/types/protocol'
 import type { MediaItem, MediaRunState, MediaTaskState, TaskError } from '@/types/domain/media'
 import type {
   BatchState,
   ResumeConflictDescriptor,
-  ResumeMode,
 } from '@/types/domain/batch'
 
 export interface BatchLifecycleDeps {

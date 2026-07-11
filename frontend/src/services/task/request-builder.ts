@@ -1,9 +1,8 @@
 // pure: no Vue / no Pinia / no Tauri
 // 任务请求构建 — 把 MediaItem 投影成 IPC TaskRequest。
 
-import type { TaskRequest } from '@/types/protocol'
+import type { ResumeMode, TaskRequest } from '@/types/protocol'
 import type { MediaItem } from '@/types/domain/media'
-import type { ResumeMode } from '@/types/domain/batch'
 
 export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): TaskRequest {
   return {

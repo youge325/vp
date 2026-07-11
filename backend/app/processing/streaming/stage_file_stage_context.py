@@ -3,12 +3,31 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import os
 from pathlib import Path
 from typing import Any
 
 from app.planning import ProcessingStep
 from app.planning.manifest import ResumeState, SegmentManifest
-from app.processing.streaming.stage_file_rules import safe_stage_name, stage_signature
+
+
+def _stage_signature(stage_position: int, step: ProcessingStep, input_path: str, output_path: str) -> str:
+    return json.dumps(
+        {
+            "stage": stage_position,
+            "step": step.to_jsonable(),
+            "input": os.path.abspath(input_path),
+            "output": os.path.abspath(output_path),
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+
+
+def _safe_stage_name(step: ProcessingStep) -> str:
+    name = step.stage_name or step.algorithm_type or "stage"
+    return "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in name)
 
 
 @dataclass(slots=True)
@@ -48,10 +67,10 @@ def build_stage_file_stage_context(
             encode_config=encode_config,
         )
 
-    stage_output_path = str(stage_root / f"stage-{stage_position:02d}-{safe_stage_name(step)}.mp4")
+    stage_output_path = str(stage_root / f"stage-{stage_position:02d}-{_safe_stage_name(step)}.mp4")
     stage_manifest = SegmentManifest(stage_output_path)
     stage_manifest.prepare(
-        stage_signature(stage_position, step, current_path, stage_output_path),
+        _stage_signature(stage_position, step, current_path, stage_output_path),
         {
             "input_path": current_path,
             "output_path": stage_output_path,

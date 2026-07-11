@@ -18,6 +18,7 @@
 
 import type {
   EnvironmentCheckPayload,
+  ResumeMode,
   ResumeStatusPayload,
   TaskErrorCode,
   TaskErrorPayload,
@@ -35,6 +36,7 @@ const _TASK_REQUEST_CONTRACT = {
   workflowConfig: {} as TaskRequest['workflowConfig'],
   encodeConfig: {} as TaskRequest['encodeConfig'],
   outputConfig: {} as TaskRequest['outputConfig'],
+  resumeMode: 'auto' as ResumeMode,
 } satisfies TaskRequest
 
 // --- WorkbenchPreset ---------------------------------------------------
