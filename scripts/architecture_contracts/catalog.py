@@ -77,6 +77,12 @@ ABSENT_PATH_RULES = (
     _absent("frontend-preprocess-view-forwarder", "frontend/src/views/PreprocessModuleView.vue"),
     _absent("frontend-postprocess-view-forwarder", "frontend/src/views/PostprocessModuleView.vue"),
     _absent("frontend-container-constants", "frontend/src/config/constants.ts"),
+    _absent("frontend-gpu-label-constants", "frontend/src/config/gpu-labels.ts"),
+    _absent("frontend-encode-output-state", "frontend/src/composables/forms/encode-output-state.ts"),
+    _absent(
+        "frontend-encode-output-state-test",
+        "frontend/tests/unit/composables/forms/encode-output-state.spec.ts",
+    ),
     _absent("backend-ffmpeg-monolithic-probe", "backend/app/utils/ffmpeg/probe.py"),
     _absent("backend-legacy-processing-pipeline", "backend/app/processing/pipeline.py"),
     _absent("backend-legacy-processing-decoder", "backend/app/processing/decoder.py"),
@@ -299,8 +305,14 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "planning-package-facade",
         "backend/app/planning/__init__.py",
-        r"\b(?:AlgorithmType|PROCESS_LABEL_MAP|ResumeDecision|SegmentRecord|estimate_encoded_output_frames|ResumeKind|get_onnx_model_name|processing_needs_interpolation|validate_onnx_models_for_workflow)\b",
+        r"\b(?:AlgorithmType|PROCESS_LABEL_MAP|ResumeDecision|RunIdentity|SegmentRecord|estimate_encoded_output_frames|ResumeKind|get_onnx_model_name|processing_needs_interpolation|validate_onnx_models_for_workflow)\b",
         "unused planning package facade",
+    ),
+    _forbid(
+        "public-run-identity-result",
+        "backend/app/planning/run_identity.py",
+        r"^class\s+RunIdentity\b|__all__\s*=\s*\[[^\]]*[\"']RunIdentity[\"']",
+        "module-internal run identity result is public",
     ),
     _forbid(
         "ffmpeg-dead-delegates",
@@ -863,7 +875,6 @@ FORBIDDEN_PATTERN_RULES = (
                 "frontend/src/composables/forms/encode-form-bindings.ts",
                 "frontend/src/composables/forms/encode-profile-bindings.ts",
                 "frontend/src/composables/forms/encode-rate-control-bindings.ts",
-                "frontend/src/composables/forms/encode-output-state.ts",
                 "frontend/src/composables/forms/encode-output-setters.ts",
                 "frontend/src/composables/forms/enhance-form-bindings.ts",
                 "frontend/src/composables/forms/enhance-algorithm-bindings.ts",

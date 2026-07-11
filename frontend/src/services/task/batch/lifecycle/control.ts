@@ -15,7 +15,7 @@
 // 在正常路径上不会为 null;为了 control flow 简明仍然显式 short-circuit。
 
 import { normalizeError } from '@/services/error/normalize'
-import { TASK_ERROR_CODES } from '@/types/protocol/errors'
+import { TASK_ERROR_CODES } from '@/types/protocol'
 
 import { applyTaskCancelling, applyTaskPaused, applyTaskResumed } from '../../events'
 

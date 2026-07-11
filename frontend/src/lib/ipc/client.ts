@@ -10,7 +10,7 @@
 import { invoke } from '@tauri-apps/api/core'
 
 import { normalizeError } from '@/services/error/normalize'
-import { TASK_ERROR_CODES } from '@/types/protocol/errors'
+import { TASK_ERROR_CODES } from '@/types/protocol'
 import type { IpcCommand, IpcInvokeArgs, IpcInvokeResult } from './contract'
 
 const BROWSER_RUNTIME_MESSAGE =

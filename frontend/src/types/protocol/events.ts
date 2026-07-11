@@ -27,5 +27,3 @@ const _COVERAGE_CHECK: _VariantsCovered = true
 void _COVERAGE_CHECK
 
 export const TERMINAL_PROGRESS_PREFIX = '[VP_PROGRESS]'
-
-export type { TaskEventName }

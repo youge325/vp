@@ -17,7 +17,7 @@
 // outside the union.
 
 import type { TaskError } from '@/types/domain/media'
-import { TASK_ERROR_CODES, type TaskErrorCode } from '@/types/protocol/errors'
+import { TASK_ERROR_CODES, type TaskErrorCode } from '@/types/protocol'
 
 export function normalizeError(
   error: unknown,

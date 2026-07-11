@@ -14,13 +14,9 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  --bg: #08111a;
-  --shell: rgba(10, 18, 30, 0.96);
-  --shell-soft: rgba(12, 22, 35, 0.98);
   --panel: rgba(15, 25, 40, 0.95);
   --panel-soft: rgba(18, 29, 45, 0.92);
   --panel-muted: rgba(12, 20, 33, 0.94);
-  --panel-strong: rgba(20, 33, 52, 0.94);
   --border: rgba(111, 136, 170, 0.16);
   --border-strong: rgba(136, 166, 210, 0.22);
   --text-main: #edf4ff;
@@ -207,14 +203,12 @@ a:focus-visible {
   flex-direction: column;
 }
 
-.surface-panel,
 .surface-subpanel,
 .panel-surface {
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-panel);
 }
 
-.surface-panel,
 .panel-surface {
   border-radius: var(--radius-md);
   background: var(--panel);
@@ -225,8 +219,7 @@ a:focus-visible {
   background: var(--panel-soft);
 }
 
-.module-stack,
-.stage-stack {
+.module-stack {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -294,13 +287,6 @@ a:focus-visible {
   letter-spacing: -0.02em;
 }
 
-.topbar-divider {
-  width: 1px;
-  height: 18px;
-  background: var(--border);
-}
-
-.topbar-tab,
 .rail-brand-copy {
   margin: 0;
   color: var(--text-muted);
@@ -329,14 +315,6 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
-.stage-tabs {
-  display: inline-grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 128px;
-  gap: 10px;
-}
-
-.stage-tab,
 .ghost-button,
 .primary-button,
 .danger-button,
@@ -354,18 +332,6 @@ a:focus-visible {
     background 120ms ease,
     border-color 120ms ease,
     opacity 120ms ease;
-}
-
-.stage-tab {
-  background: rgba(24, 36, 55, 0.96);
-  color: var(--text-muted);
-  border: 1px solid transparent;
-}
-
-.stage-tab.active {
-  background: rgba(46, 72, 108, 0.92);
-  color: #fff;
-  border-color: rgba(136, 181, 241, 0.25);
 }
 
 .ghost-button {
@@ -388,7 +354,6 @@ a:focus-visible {
   min-width: 122px;
 }
 
-.stage-tab:hover,
 .ghost-button:hover,
 .primary-button:hover,
 .danger-button:hover,
@@ -396,7 +361,6 @@ a:focus-visible {
   transform: translateY(-1px);
 }
 
-.stage-tab:disabled,
 .ghost-button:disabled,
 .primary-button:disabled,
 .danger-button:disabled {
@@ -452,23 +416,6 @@ a:focus-visible {
   gap: 16px;
 }
 
-.summary-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.summary-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.field-grid-1 {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .field-grid-2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -496,7 +443,6 @@ a:focus-visible {
 
 .field span,
 .stat-card span,
-.summary-card span,
 .summary-block span {
   color: var(--text-muted);
   font-size: 12px;
@@ -520,7 +466,6 @@ a:focus-visible {
 }
 
 .stat-card,
-.summary-card,
 .summary-block {
   min-height: 108px;
   padding: 16px;
@@ -538,7 +483,6 @@ a:focus-visible {
 }
 
 .stat-card strong,
-.summary-card strong,
 .summary-block strong {
   font-size: 19px;
   line-height: 1.3;
@@ -563,8 +507,7 @@ a:focus-visible {
 
 .info-banner,
 .empty-state,
-.dropzone,
-.queue-card {
+.dropzone {
   padding: 18px;
   border-radius: 18px;
   border: 1px solid var(--border);
@@ -731,37 +674,6 @@ a:focus-visible {
   color: var(--warning);
 }
 
-.queue-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.queue-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.queue-card.active {
-  border-color: rgba(46, 164, 249, 0.36);
-  background: rgba(24, 44, 72, 0.6);
-}
-
-.queue-card-head,
-.metric-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.metric-row {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
 .model-metric-grid {
   margin-top: 16px;
   padding-top: 14px;
@@ -823,10 +735,6 @@ a:focus-visible {
   font-size: 12px;
   line-height: 1.6;
   word-break: break-word;
-}
-
-.muted-line {
-  color: var(--text-soft);
 }
 
 .render-stack {
@@ -1089,13 +997,6 @@ a:focus-visible {
     padding: 18px;
   }
 
-  .stage-tabs {
-    width: 100%;
-    grid-auto-flow: row;
-    grid-auto-columns: 1fr;
-  }
-
-  .stage-tab,
   .ghost-button,
   .primary-button,
   .danger-button,

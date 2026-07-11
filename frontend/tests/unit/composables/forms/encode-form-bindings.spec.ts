@@ -88,7 +88,7 @@ describe('encode form bindings', () => {
     expect(bindings.rateControlDisabled.value).toBe(false)
     expect(bindings.rateControlModeHint.value).toBeUndefined()
     expect(bindings.rateControlValue.value).toBe(24)
-    expect(bindings.containerOptions.value).toEqual([
+    expect(bindings.containerOptions).toEqual([
       { value: 'mp4', label: 'MP4' },
       { value: 'mkv', label: 'MKV' },
       { value: 'mov', label: 'MOV' },
