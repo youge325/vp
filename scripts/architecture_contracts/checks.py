@@ -10,31 +10,14 @@ import sys
 from pathlib import Path
 
 from .catalog import RULES
-from .rules import ContractParseError, run_rules
-
-
-def _read(path: Path, root: Path) -> str:
-    if not path.is_file():
-        try:
-            relative = path.relative_to(root).as_posix()
-        except ValueError:
-            relative = path.as_posix()
-        raise ContractParseError(f"missing file: {relative}")
-    return path.read_text(encoding="utf-8")
-
-
-def _relative(path: Path, root: Path) -> str:
-    try:
-        return path.relative_to(root).as_posix()
-    except ValueError:
-        return path.as_posix()
+from .rules import ContractParseError, read_source, relative_path, run_rules
 
 
 def _parse_python(path: Path, root: Path) -> ast.Module:
     try:
-        return ast.parse(_read(path, root), filename=_relative(path, root))
+        return ast.parse(read_source(path, root), filename=relative_path(path, root))
     except SyntaxError as exc:
-        raise ContractParseError(f"could not parse Python source {_relative(path, root)}: {exc.msg}") from exc
+        raise ContractParseError(f"could not parse Python source {relative_path(path, root)}: {exc.msg}") from exc
 
 
 def _find_matching(text: str, start: int, open_char: str, close_char: str) -> int:
@@ -77,7 +60,7 @@ def _snake_to_camel(name: str) -> str:
 
 def _collect_manifest_commands(root: Path) -> set[str]:
     path = root / "frontend/src-tauri/src/commands_manifest.rs"
-    text = _read(path, root)
+    text = read_source(path, root)
     match = re.search(r"APP_COMMAND_NAMES:\s*&\[&str\]\s*=\s*&\[(?P<body>.*?)\];", text, re.DOTALL)
     if not match:
         raise ContractParseError("could not parse APP_COMMAND_NAMES in commands_manifest.rs")
@@ -86,7 +69,7 @@ def _collect_manifest_commands(root: Path) -> set[str]:
 
 def _collect_permission_commands(root: Path) -> set[str]:
     path = root / "frontend/src-tauri/permissions/default.toml"
-    tokens = set(re.findall(r'"(allow-[a-z-]+)"', _read(path, root)))
+    tokens = set(re.findall(r'"(allow-[a-z-]+)"', read_source(path, root)))
     return {token.removeprefix("allow-").replace("-", "_") for token in tokens}
 
 
@@ -97,7 +80,7 @@ def _collect_frontend_invoke_commands(root: Path) -> set[str]:
     pattern = re.compile(r"safeInvoke(?:<[^>]+>)?\(\s*['\"]([a-z_]+)['\"]")
     commands: set[str] = set()
     for path in sorted(endpoint_dir.rglob("*.ts")):
-        commands.update(pattern.findall(_read(path, root)))
+        commands.update(pattern.findall(read_source(path, root)))
     return commands
 
 
@@ -108,11 +91,13 @@ def _collect_rust_command_args(root: Path) -> dict[str, set[str]]:
     function_decl = re.compile(r"(?:#\[[^\]]+\]\s*)*pub\s+(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)")
 
     for path in sorted(tauri_src.rglob("*.rs")):
-        text = _read(path, root)
+        text = read_source(path, root)
         for attr_match in command_attr.finditer(text):
             fn_match = function_decl.search(text, attr_match.end())
             if not fn_match:
-                raise ContractParseError(f"could not parse tauri command after attribute in {_relative(path, root)}")
+                raise ContractParseError(
+                    f"could not parse tauri command after attribute in {relative_path(path, root)}"
+                )
             command = fn_match.group(1)
             args_start = text.find("(", fn_match.end())
             if args_start < 0:
@@ -134,7 +119,7 @@ def _collect_rust_command_args(root: Path) -> dict[str, set[str]]:
 
 def _collect_typed_ipc_contract_args(root: Path) -> dict[str, set[str]]:
     path = root / "frontend/src/lib/ipc/contract.ts"
-    text = _read(path, root)
+    text = read_source(path, root)
     match = re.search(r"(?:export\s+)?interface\s+IpcCommandArgs\s*\{", text)
     if not match:
         raise ContractParseError("could not parse IpcCommandArgs in frontend IPC contract")
@@ -207,7 +192,7 @@ def _check_command_surface(root: Path) -> list[str]:
     )
 
     permission_path = root / "frontend/src-tauri/permissions/default.toml"
-    raw_tokens = set(re.findall(r'"(allow-[a-z-]+)"', _read(permission_path, root)))
+    raw_tokens = set(re.findall(r'"(allow-[a-z-]+)"', read_source(permission_path, root)))
     expected_tokens = {f"allow-{command.replace('_', '-')}" for command in manifest}
     if raw_tokens != expected_tokens:
         issues.append(
@@ -275,7 +260,7 @@ def diff_paddlegan_vsr_contract(backend_specs: set[str], algorithm_metadata: dic
 
 def _check_paddlegan_metadata(root: Path) -> list[str]:
     weights = root / "backend/app/algorithms/paddle/paddlegan_vsr/weights.py"
-    specs = _collect_python_dict_keys(_read(weights, root), "PADDLEGAN_VSR_SPECS")
+    specs = _collect_python_dict_keys(read_source(weights, root), "PADDLEGAN_VSR_SPECS")
     return diff_paddlegan_vsr_contract(specs, _collect_backend_algorithm_metadata(root))
 
 
@@ -290,26 +275,28 @@ def _check_frontend_dependency_boundaries(root: Path) -> list[str]:
     for path in sorted(frontend_src.rglob("*")):
         if not path.is_file() or path.suffix not in {".ts", ".tsx", ".vue"} or _is_frontend_test(path):
             continue
-        text = _read(path, root)
+        text = read_source(path, root)
         if not any(allowed == path.parent or allowed in path.parents for allowed in generated_allowed):
             if "@/types/generated/" in text:
-                issues.append(f"generated type deep import outside protocol layer: {_relative(path, root)}")
+                issues.append(f"generated type deep import outside protocol layer: {relative_path(path, root)}")
 
     for relative_root in ("frontend/src/views", "frontend/src/components", "frontend/src/stores"):
         for path in sorted((root / relative_root).rglob("*")):
             if not path.is_file() or path.suffix not in {".ts", ".tsx", ".vue"} or _is_frontend_test(path):
                 continue
-            text = _read(path, root)
+            text = read_source(path, root)
             if any(marker in text for marker in ("@/lib/ipc", "@tauri-apps/api", "safeInvoke(")):
-                issues.append(f"direct IPC access in UI/store layer: {_relative(path, root)}")
+                issues.append(f"direct IPC access in UI/store layer: {relative_path(path, root)}")
     return issues
 
 
 def _check_typed_ndjson_error_emission(root: Path) -> list[str]:
     path = root / "backend/app/__main__.py"
-    manual_error_envelopes = re.findall(r"[\"']type[\"']\s*:\s*[\"']error[\"']", _read(path, root))
+    manual_error_envelopes = re.findall(r"[\"']type[\"']\s*:\s*[\"']error[\"']", read_source(path, root))
     if len(manual_error_envelopes) != 1:
-        return [f"normal CLI failures must keep only the bootstrap manual error envelope in {_relative(path, root)}"]
+        return [
+            f"normal CLI failures must keep only the bootstrap manual error envelope in {relative_path(path, root)}"
+        ]
     return []
 
 
@@ -322,13 +309,13 @@ def _check_stage_sequence_metrics(root: Path) -> list[str]:
             continue
         parameters = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
         if any(parameter.arg == "metrics" for parameter in parameters):
-            issues.append(f"stage worker sequence metrics parameter remains in {_relative(execution_path, root)}")
+            issues.append(f"stage worker sequence metrics parameter remains in {relative_path(execution_path, root)}")
         if any(
             isinstance(child, ast.Delete)
             and any(isinstance(target, ast.Name) and target.id == "metrics" for target in child.targets)
             for child in ast.walk(node)
         ):
-            issues.append(f"stage worker sequence metrics discard remains in {_relative(execution_path, root)}")
+            issues.append(f"stage worker sequence metrics discard remains in {relative_path(execution_path, root)}")
 
     worker_path = root / "backend/app/processing/streaming/stage_worker.py"
     worker_tree = _parse_python(worker_path, root)
@@ -341,7 +328,7 @@ def _check_stage_sequence_metrics(root: Path) -> list[str]:
             continue
         values = [*node.args, *(keyword.value for keyword in node.keywords)]
         if any(isinstance(value, ast.Name) and value.id == "metrics" for value in values):
-            issues.append(f"stage worker sequence metrics forwarding remains in {_relative(worker_path, root)}")
+            issues.append(f"stage worker sequence metrics forwarding remains in {relative_path(worker_path, root)}")
     return issues
 
 

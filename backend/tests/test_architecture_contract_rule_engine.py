@@ -105,7 +105,7 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
         ),
         ("encoder-worker-segment-implementation", "resolve_segment_output_frame_count(writer)\n"),
         ("stage-file-chunk-input-fps", "def run_single_stage_file_chunks(input_fps):\n    pass\n"),
-        ("stage-file-progress-discard", "def adapt(progress_total):\n    del progress_total\n"),
+        ("manifest-sidecar-reset-duplicate", "def _reset_sidecar(self):\n    pass\n"),
         ("stage-file-chunk-encoding-leak", "frame = read_rgb_frame(stream)\n"),
         ("obsolete-decode-queue-symbols", "class DecodedFrame:\n    pass\n"),
         ("form-binding-param-export-0", "export type DecodeFormBindingParams = {}\n"),

@@ -11,7 +11,6 @@ from typing import Any
 from app.planning import ProcessingStep
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_file_chunk_encoding import encode_stage_worker_output
-from app.processing.streaming.stage_file_chunk_progress import chunk_progress_adapter
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import StageChunkPlan, StageWorkerPlan
 from app.processing.streaming.worker_process_events import read_worker_stderr
@@ -66,13 +65,13 @@ def run_stage_chunk_to_file(
         handle = spawn_stage_workers([plan], config_dir=Path(config_dir), python_executable=python_executable)[0]
         callbacks: list[Any | None] = []
         if progress_callback is not None:
+
+            def adapt_progress(current: int, *_worker_progress: Any, **kwargs: Any) -> None:
+                current_value = min(chunk.input_start_frame + max(int(current), 0), stage_total_frames)
+                progress_callback(current_value, stage_total_frames, **kwargs)
+
             callbacks = [None] * stage_total
-            callbacks[stage_index - 1] = chunk_progress_adapter(
-                step,
-                chunk=chunk,
-                total=stage_total_frames,
-                callback=progress_callback,
-            )
+            callbacks[stage_index - 1] = adapt_progress
         stderr_thread = threading.Thread(
             target=read_worker_stderr,
             name=f"vp-stage-file-stderr-{stage_index}",

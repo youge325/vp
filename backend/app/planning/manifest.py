@@ -340,10 +340,6 @@ class SegmentManifest:
             completed_segments=[],
         )
 
-    def _reset_sidecar(self) -> None:
-        if self.sidecar_dir.is_dir():
-            shutil.rmtree(self.sidecar_dir, ignore_errors=True)
-
     def _prepare_fresh(
         self,
         signature: str,
@@ -351,7 +347,7 @@ class SegmentManifest:
         *,
         delete_final: bool = False,
     ) -> ResumeDecision:
-        self._reset_sidecar()
+        self.cleanup()
         if delete_final:
             self._delete_final_output()
         write_manifest(
