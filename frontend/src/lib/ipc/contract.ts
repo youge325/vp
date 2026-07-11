@@ -5,11 +5,11 @@
 // surface on the TypeScript side so ``safeInvoke`` can infer the required
 // argument object and return type from the command name.
 
-import type { VideoInfoResult } from '@/types/domain/media'
 import type {
   EnvironmentCheckPayload,
   ResumeInspectionResult,
   TaskRequest,
+  VideoInfo,
   WorkbenchPreset,
 } from '@/types/protocol'
 
@@ -37,7 +37,7 @@ interface IpcCommandResult {
   check_environment: EnvironmentCheckPayload
   load_workbench_preset: WorkbenchPreset | null
   save_workbench_preset: void
-  inspect_video: VideoInfoResult
+  inspect_video: VideoInfo
   check_resume_state: ResumeInspectionResult
   start_task: void
   cancel_task: void

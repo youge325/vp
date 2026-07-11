@@ -13,10 +13,7 @@ import numpy as np
 from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
 from app.processing.anime_cleanup import apply_anime_cleanup
-from app.utils.logger import get_logger
 from app.utils.opencv_runtime import import_cv2
-
-logger = get_logger(__name__)
 
 _INTERP_MAP: dict[str, int] = {}
 

@@ -122,6 +122,26 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "frontend-resume-mode-protocol-mirror",
             "export type ResumeMode = 'auto' | 'force-fresh'\n",
         ),
+        ("frontend-video-info-result-alias", "export type VideoInfoResult = VideoInfo\n"),
+        (
+            "python-error-inference-string-interface",
+            "def infer_error_code(exc_or_message: BaseException | str):\n    pass\n",
+        ),
+        (
+            "rust-command-manifest-test-interface",
+            "#[allow(dead_code)]\npub const APP_COMMAND_NAMES: &[&str] = &[];\n",
+        ),
+        ("rust-command-manifest-module", "mod commands_manifest;\n"),
+        ("rust-command-manifest-test-include", "#[cfg(test)]\nmod tests {}\n"),
+        (
+            "protocol-reporter-metrics-view-import",
+            "from app.protocol.metrics_view import MetricsSnapshot\n",
+        ),
+        ("protocol-reporter-private-metrics-contract", "class Reporter:\n    pass\n"),
+        (
+            "frame-filter-write-only-logger",
+            "from app.utils.logger import get_logger\nlogger = get_logger(__name__)\n",
+        ),
         (
             "rust-untyped-resume-inspection-command",
             "async fn check_resume_state() -> Result<Value, ShellError> { todo!() }\n",
