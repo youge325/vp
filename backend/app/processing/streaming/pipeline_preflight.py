@@ -8,12 +8,11 @@ from typing import Any
 from app.planning import (
     ProcessingStep,
     StagePlan,
-    build_signature,
+    build_run_identity,
     build_stage_plan,
     resolve_video_info,
 )
 from app.processing.streaming.pipeline_rules import (
-    build_config_snapshot,
     resolved_output_dimensions,
     should_use_stage_file_pipeline,
     stage_file_resume_source_frames,
@@ -53,17 +52,7 @@ def build_streaming_pipeline_preflight(
         source_duration=video_info["duration"],
         output_fps=output_fps,
     )
-    signature = build_signature(
-        input_path=input_path,
-        output_path=output_path,
-        decode_config=decode_config,
-        encode_config=encode_config,
-        workflow_config=workflow_config,
-        output_config=output_config,
-        processing_steps=processing_steps,
-        video_info=video_info,
-    )
-    config_snapshot = build_config_snapshot(
+    identity = build_run_identity(
         input_path=input_path,
         output_path=output_path,
         decode_config=decode_config,
@@ -87,8 +76,8 @@ def build_streaming_pipeline_preflight(
     return _StreamingPipelinePreflight(
         video_info=video_info,
         stage_plan=stage_plan,
-        signature=signature,
-        config_snapshot=config_snapshot,
+        signature=identity.signature,
+        config_snapshot=identity.config_snapshot,
         use_stage_file_pipeline=use_stage_file_pipeline,
         resume_source_frames=resume_source_frames,
         output_width=output_width,

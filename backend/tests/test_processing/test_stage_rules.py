@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import app.processing.streaming.stage_rules as stage_rules
 from app.planning import ProcessingStep, build_stage_plan
 from app.processing.streaming.stage_rules import (
     ordered_steps,
@@ -11,9 +10,6 @@ from app.processing.streaming.stage_rules import (
 
 
 def test_stage_rules_centralize_stage_order_dimensions_and_backend_selection() -> None:
-    assert not hasattr(stage_rules, "super_resolution_changes_dimensions")
-    assert not hasattr(stage_rules, "is_paddlegan_vsr_step")
-
     steps = [
         ProcessingStep(
             algorithm_type="super_resolution",

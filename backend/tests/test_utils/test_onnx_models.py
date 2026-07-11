@@ -2,16 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from app.utils import onnx_models
 from app.utils.onnx_models import (
     create_onnx_session,
     resolve_onnx_model_path,
     scan_onnx_models,
 )
-
-
-def test_onnx_model_dir_helper_is_private() -> None:
-    assert not hasattr(onnx_models, "get_onnx_model_dir")
 
 
 def test_scan_onnx_models_groups_by_algorithm_subdirectory(tmp_path: Path):

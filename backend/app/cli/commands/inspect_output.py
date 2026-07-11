@@ -23,7 +23,7 @@ from app.cli.commands._process_validation import (
 from app.models import WorkflowConfig
 from app.planning import (
     SegmentManifest,
-    build_signature,
+    build_run_identity,
     build_stage_plan,
     resolve_processing_steps,
     resolve_video_info,
@@ -68,7 +68,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
 
     if processing_steps:
         sections = configs.json_sections()
-        signature = build_signature(
+        identity = build_run_identity(
             input_path=input_path,
             output_path=output_path,
             decode_config=sections["decode"],
@@ -80,7 +80,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
         )
         manifest = SegmentManifest(output_path)
         info = manifest.inspect(
-            signature,
+            identity.signature,
             total_output_frames=stage_plan.total_encoded_frames,
         )
     else:

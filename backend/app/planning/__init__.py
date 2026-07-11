@@ -8,9 +8,9 @@ from app.planning.manifest import (
 from app.planning.processing_steps import (
     ProcessingStep,
 )
+from app.planning.run_identity import RunIdentity, build_run_identity
 from app.planning.stage_plan import (
     StagePlan,
-    build_signature,
     build_stage_plan,
     resolve_video_info,
 )
@@ -28,8 +28,9 @@ __all__ = [
     "ResumeState",
     "SegmentManifest",
     "ProcessingStep",
+    "RunIdentity",
+    "build_run_identity",
     "StagePlan",
-    "build_signature",
     "build_stage_plan",
     "resolve_video_info",
     "PROCESS_ORDER_MAP",

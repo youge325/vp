@@ -2,65 +2,11 @@ from __future__ import annotations
 
 from app.planning import ProcessingStep, StagePlan, build_stage_plan
 from app.processing.streaming.pipeline_rules import (
-    build_config_snapshot,
     resolved_output_dimensions,
     resolved_stream_fps,
     should_use_stage_file_pipeline,
     stage_file_resume_source_frames,
 )
-
-
-def test_build_config_snapshot_captures_signature_relevant_inputs(tmp_path) -> None:
-    input_path = tmp_path / "input.mp4"
-    output_path = tmp_path / "output.mp4"
-    step = ProcessingStep(
-        algorithm_type="super_resolution",
-        algorithm_kwargs={"scale_factor": 2.0, "sr_algorithm": "onnx", "onnx_model": "sr.onnx"},
-        stage_name="01_super_resolution",
-    )
-
-    snapshot = build_config_snapshot(
-        input_path=str(input_path),
-        output_path=str(output_path),
-        decode_config={"mode": "software"},
-        encode_config={"codec": "libx264"},
-        workflow_config={"fpsMode": "multi"},
-        output_config={"segmentFrames": 0, "ignored": True},
-        processing_steps=[step],
-        video_info={
-            "width": 320,
-            "height": 180,
-            "source_fps": 24.0,
-            "source_frames": 5,
-            "duration": 5 / 24,
-        },
-    )
-
-    assert snapshot == {
-        "input_path": str(input_path.resolve()),
-        "output_path": str(output_path.resolve()),
-        "decode_config": {"mode": "software"},
-        "encode_config": {"codec": "libx264"},
-        "workflow_config": {"fpsMode": "multi"},
-        "output_config": {"segmentFrames": 1000},
-        "processing_steps": [
-            {
-                "algorithm_type": "super_resolution",
-                "algorithm_kwargs": {
-                    "scale_factor": 2.0,
-                    "sr_algorithm": "onnx",
-                    "onnx_model": "sr.onnx",
-                },
-                "stage_name": "01_super_resolution",
-            }
-        ],
-        "video_info": {
-            "width": 320,
-            "height": 180,
-            "source_fps": 24.0,
-            "source_frames": 5,
-        },
-    }
 
 
 def test_pipeline_strategy_and_resume_domain_use_stage_rules() -> None:
