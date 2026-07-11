@@ -28,8 +28,6 @@ function makeForm(): EnhanceOptionForm {
     superResolutionOnnxModels: [],
     superResolutionOnnxModelDetails: [],
     processOrder: 'super_resolution_then_interpolation',
-    animeProfile: 'clean-lines',
-    animeProfiles: [],
   })
 }
 
@@ -51,7 +49,6 @@ describe('enhance option setters', () => {
     setters.setSuperResolutionOnnxModel('sr.onnx')
     setters.setSuperResolutionScale('4')
     setters.setProcessOrder('frame_interpolation_then_super_resolution')
-    setters.setAnimeProfile('line-art')
 
     expect(form.interpolationBackend).toBe('onnx')
     expect(form.interpolationEngine).toBe('tensorrt')
@@ -66,6 +63,5 @@ describe('enhance option setters', () => {
     expect(form.superResolutionOnnxModel).toBe('sr.onnx')
     expect(form.superResolutionScale).toBe(4)
     expect(form.processOrder).toBe('frame_interpolation_then_super_resolution')
-    expect(form.animeProfile).toBe('line-art')
   })
 })

@@ -31,13 +31,9 @@ import { useMediaImport } from '@/composables/app/useMediaImport'
 
 function sampleInfo(overrides: Record<string, unknown> = {}) {
   return {
-    type: 'info',
     fps: 24,
-    frames: 100,
-    duration: 4.16,
     width: 1920,
     height: 1080,
-    hasAudio: true,
     videoCodec: 'h264',
     ...overrides,
   }

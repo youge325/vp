@@ -62,8 +62,6 @@ def _candidate_python_paths(runtime_root: Path) -> list[Path]:
 class Settings(BaseSettings):
     """Settings loaded from environment variables with sensible defaults."""
 
-    APP_NAME: str = "Video Processing Workbench"
-    APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
 
     APP_ROOT: str = ""
@@ -72,10 +70,6 @@ class Settings(BaseSettings):
 
     FFMPEG_PATH: str = ""
     FFPROBE_PATH: str = ""
-
-    MAX_CONCURRENT_TASKS: int = 1
-
-    DEFAULT_TENSOR_BACKEND: str = "pytorch"
 
     LOG_DIR: str = ""
     LOG_FILE_MAX_BYTES: int = 10 * 1024 * 1024
@@ -87,11 +81,6 @@ class Settings(BaseSettings):
     RIFE_SCALE: float = 1.0
     RIFE_FP16: bool = False
     RIFE_DEFAULT_MULTI: int = 2
-
-    # TensorRT 安装根目录（包含 bin/、lib/、include/ 子目录）。设置后启动时
-    # 会把 <dir>/bin 加进 Windows DLL 搜索路径，让 onnxruntime-gpu 能找到
-    # nvinfer_10.dll 等运行时库。空字符串视作未配置（fallback 到系统 PATH）。
-    TENSORRT_DIR: str = ""
 
     model_config = SettingsConfigDict(env_prefix="VP_", env_file=".env", extra="ignore")
 
@@ -129,9 +118,6 @@ class Settings(BaseSettings):
         ffprobe_value = str(ffprobe_path) if ffprobe_path is not None else _system_executable("ffprobe")
         python_value = str(python_executable) if python_executable is not None else sys.executable
 
-        tensorrt_dir = _resolve_path(self.TENSORRT_DIR)
-        tensorrt_value = str(tensorrt_dir) if tensorrt_dir is not None else ""
-
         object.__setattr__(self, "APP_ROOT", str(app_root))
         object.__setattr__(self, "RUNTIME_ROOT", str(runtime_root) if runtime_root is not None else "")
         object.__setattr__(self, "PYTHON_EXECUTABLE", python_value)
@@ -139,15 +125,10 @@ class Settings(BaseSettings):
         object.__setattr__(self, "FFPROBE_PATH", ffprobe_value)
         object.__setattr__(self, "LOG_DIR", str(log_dir))
         object.__setattr__(self, "RIFE_MODEL_DIR", str(model_dir))
-        object.__setattr__(self, "TENSORRT_DIR", tensorrt_value)
 
     @property
     def backend_root(self) -> Path:
         return Path(__file__).resolve().parents[1]
-
-    @property
-    def repo_root(self) -> Path:
-        return self.backend_root.parent
 
     @property
     def runtime_root_path(self) -> Path | None:
@@ -161,34 +142,6 @@ class Settings(BaseSettings):
         if runtime_root.exists():
             return "bundled"
         return "expected-bundled"
-
-    @property
-    def bundled_runtime_available(self) -> bool:
-        runtime_root = self.runtime_root_path
-        return runtime_root is not None and runtime_root.exists()
-
-    def resource_summary(self) -> dict[str, object]:
-        default_model_path = (
-            Path(self.RIFE_MODEL_DIR) / "interpolation" / "rife" / f"rife_v{self.RIFE_MODEL_VERSION}.onnx"
-        )
-        onnx_interpolation_dir = Path(self.RIFE_MODEL_DIR) / "interpolation"
-        onnx_super_resolution_dir = Path(self.RIFE_MODEL_DIR) / "super_resolution"
-        return {
-            "app_root": self.APP_ROOT,
-            "backend_root": str(self.backend_root),
-            "repo_root": str(self.repo_root),
-            "runtime_root": self.RUNTIME_ROOT,
-            "runtime_mode": self.runtime_mode,
-            "python_executable": self.PYTHON_EXECUTABLE,
-            "ffmpeg_path": self.FFMPEG_PATH,
-            "ffprobe_path": self.FFPROBE_PATH,
-            "log_dir": self.LOG_DIR,
-            "model_dir": self.RIFE_MODEL_DIR,
-            "onnx_interpolation_model_dir": str(onnx_interpolation_dir),
-            "onnx_super_resolution_model_dir": str(onnx_super_resolution_dir),
-            "default_model_path": str(default_model_path),
-            "default_model_available": default_model_path.is_file() and default_model_path.stat().st_size > 0,
-        }
 
 
 settings = Settings()

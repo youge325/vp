@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-VP Workbench 是一款基于 Tauri v2 的桌面视频处理工作台，面向需要补帧、超分辨率、动漫优化等视频增强算法的用户。应用采用经典的三层架构，前端负责交互与配置，Rust 桌面外壳负责 IPC 桥接与进程调度，Python 后端负责算法推理与 FFmpeg 流式处理。
+VP Workbench 是一款基于 Tauri v2 的桌面视频处理工作台，面向需要补帧、超分辨率和可组合帧滤镜的用户。应用采用经典的三层架构，前端负责交互与配置，Rust 桌面外壳负责 IPC 桥接与进程调度，Python 后端负责算法推理与 FFmpeg 流式处理。
 
 ## 技术栈
 
@@ -47,7 +47,7 @@ graph TB
         P2["配置体系 (config.py + models/)"]
         P3["处理规划 (planning/)"]
         P4["流式执行器 (processing/streaming/)"]
-        P5["算法层 (algorithms/: RIFE / SR / Anime)"]
+        P5["算法与滤镜层 (RIFE / SR / frame filters)"]
         P6["FFmpeg 封装 (utils/ffmpeg/)"]
         P7["NDJSON 协议 (protocol/)"]
     end
@@ -122,9 +122,9 @@ Python `TaskErrorCode`、Rust `TaskErrorCode`、TypeScript `TASK_ERROR_CODES` �
 | 1 | home | `/home` | 启动探测、能力缓存与运行时概览 |
 | 2 | input | `/input` | 批量导入素材 |
 | 3 | decode | `/decode` | 解码方案与硬件设备 |
-| 4 | preprocess | `/preprocess` | 解码后帧级滤镜链 |
-| 5 | enhance | `/enhance` | 补帧 / 超分 / 动漫优化 |
-| 6 | postprocess | `/postprocess` | 增强后帧级滤镜链 |
+| 4 | preprocess | `/preprocess` | 解码后帧级滤镜链（含 Anime 清理） |
+| 5 | enhance | `/enhance` | 补帧 / 超分 |
+| 6 | postprocess | `/postprocess` | 增强后帧级滤镜链（含 Anime 清理） |
 | 7 | encode | `/encode` | 编码器与输出配置 |
 | 8 | render | `/render` | 批处理队列与任务日志 |
 
@@ -196,7 +196,7 @@ graph LR
 
     B --> B1[check + info + process + inspect_output]
     D --> D1[base + factory + tensor_backend + rife/]
-    E --> E1[interpolation + super_resolution + anime_optimization + frame_filters + streaming/]
+    E --> E1[interpolation + super_resolution + anime_cleanup + frame_filters + streaming/]
     F --> F1[stage_plan + manifest]
     G --> G1[emitter + reporter]
     H --> H1[codes + bootstrap + ProcessError]

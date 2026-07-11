@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.planning import (
-    ProcessingStep,
     ProcessingStepInput,
     StagePlan,
     build_signature,
@@ -25,7 +24,6 @@ from app.utils.ffmpeg import FFmpegWrapper
 
 @dataclass(slots=True)
 class _StreamingPipelinePreflight:
-    resolved_steps: list[ProcessingStep]
     video_info: dict[str, Any]
     stage_plan: StagePlan
     signature: str
@@ -89,7 +87,6 @@ def build_streaming_pipeline_preflight(
     )
 
     return _StreamingPipelinePreflight(
-        resolved_steps=resolved_steps,
         video_info=video_info,
         stage_plan=stage_plan,
         signature=signature,

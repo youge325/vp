@@ -15,7 +15,7 @@ function makeBindings() {
 }
 
 describe('enhance scalar field bindings', () => {
-  it('writes interpolation, super-resolution, process order, and anime scalar fields', () => {
+  it('writes interpolation, super-resolution, and process-order scalar fields', () => {
     const { scalarBindings, workflow } = makeBindings()
 
     scalarBindings.interpolationEngine.value = 'tensorrt'
@@ -29,10 +29,6 @@ describe('enhance scalar field bindings', () => {
     scalarBindings.superResolutionEngine.value = 'tensorrt'
     scalarBindings.superResolutionOnnxModel.value = 'sr.onnx'
     scalarBindings.processOrder.value = 'super_resolution_first'
-    scalarBindings.animeEnabled.value = true
-    scalarBindings.animeProfile.value = 'line-art'
-    scalarBindings.animeDenoise.value = 0.25
-    scalarBindings.animeEdgeBoost.value = 1.5
 
     expect(workflow.interpolation).toMatchObject({
       engine: 'tensorrt',
@@ -49,11 +45,5 @@ describe('enhance scalar field bindings', () => {
     })
     expect(workflow.fpsMode).toBe('multi')
     expect(workflow.processOrder).toBe('super_resolution_first')
-    expect(workflow.anime).toMatchObject({
-      enabled: true,
-      profile: 'line-art',
-      denoise: 0.25,
-      edgeBoost: 1.5,
-    })
   })
 })

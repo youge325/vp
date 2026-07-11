@@ -6,21 +6,18 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function makeEnv(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
       available: true,
       hwaccels: [],
       encoderProfiles: [],
       decoderProfiles: [],
     },
-    gpu: { available: true, devices: ['GPU'], adapters: [] },
-    tensorBackends: { pytorch: true, paddle: true, onnx: true },
-    tensorEngines: {},
-    onnxRuntime: { available: false, providers: [] },
-    rifeModel: { available: false },
+    gpu: { adapters: [] },
+    tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [],
     superResolutionAlgorithms: [],
-    animeProfiles: [],
+    runtimeMode: 'external',
     ...overrides,
   } as EnvironmentCheckResult
 }
@@ -57,10 +54,9 @@ describe('workflow defaults', () => {
       numFrames: 10,
       autoDownloadWeights: false,
     })
-    expect(workflow.anime.profile).toBe('clean-lines')
   })
 
-  it('hydrates default algorithms, models, ONNX models, and anime profile from environment', () => {
+  it('hydrates default algorithms, models, and ONNX models from environment', () => {
     const workflow = createDefaultWorkflowConfigForEnvironment(makeEnv({
       interpolationAlgorithms: [
         { name: 'slow-rife', tensorBackends: ['onnx'], models: ['onnx-only'], onnxModels: ['slow.onnx'] },
@@ -69,7 +65,6 @@ describe('workflow defaults', () => {
       superResolutionAlgorithms: [
         { name: 'realesrgan-x4', tensorBackends: ['onnx'], models: [], onnxModels: ['sr-x4.onnx'], scaleFactors: [4] },
       ],
-      animeProfiles: ['line-art'],
     }))
 
     expect(workflow.interpolation.algorithm).toBe('rife-fast')
@@ -78,25 +73,20 @@ describe('workflow defaults', () => {
     expect(workflow.superResolution.algorithm).toBe('realesrgan-x4')
     expect(workflow.superResolution.onnxModel).toBe('sr-x4.onnx')
     expect(workflow.superResolution.scaleFactor).toBe(4)
-    expect(workflow.anime.profile).toBe('line-art')
   })
 
   it('applies existing initial engine preference for NVIDIA and Hygon environments', () => {
     const nvidiaWorkflow = createDefaultWorkflowConfigForEnvironment(makeEnv({
       gpu: {
-        available: true,
-        devices: ['NVIDIA GPU'],
         adapters: [{ name: 'RTX', vendor: 'nvidia', deviceType: 'discrete' }],
       },
-      tensorEngines: { pytorch: ['cuda', 'tensorrt'], onnx: ['cuda', 'tensorrt'] },
+      tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: [], onnx: ['cuda', 'tensorrt'] },
     }))
     const hygonWorkflow = createDefaultWorkflowConfigForEnvironment(makeEnv({
       gpu: {
-        available: true,
-        devices: ['Hygon GPU'],
         adapters: [{ name: 'DCU', vendor: 'hygon', deviceType: 'discrete' }],
       },
-      tensorEngines: { pytorch: ['cuda', 'dcu'], onnx: ['cuda'] },
+      tensorEngines: { pytorch: ['cuda', 'dcu'], paddle: [], onnx: ['cuda'] },
     }))
 
     expect(nvidiaWorkflow.interpolation.engine).toBe('tensorrt')

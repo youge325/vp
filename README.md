@@ -5,9 +5,9 @@
 1. `home`：启动探测、能力缓存与运行时概览
 2. `input`：批量导入素材
 3. `decode`：解码方案与硬件设备
-4. `preprocess`：解码后帧级滤镜链
-5. `enhance`：补帧 / 超分 / 动漫优化
-6. `postprocess`：增强后帧级滤镜链
+4. `preprocess`：解码后帧级滤镜链（含 Anime 清理）
+5. `enhance`：补帧 / 超分
+6. `postprocess`：增强后帧级滤镜链（含 Anime 清理）
 7. `encode`：编码器与输出配置
 8. `render`：批处理队列与任务日志
 

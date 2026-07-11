@@ -122,7 +122,8 @@ class TestCheckCommand:
         envelope = lines[0]
         assert envelope.get("type") == "check"
         assert "ffmpeg" in envelope, "check 输出应含 ffmpeg 字段"
-        assert "resources" in envelope, "check 输出应含 resources 字段"
+        assert "runtimeMode" in envelope, "check 输出应含扁平 runtimeMode 字段"
+        assert "resources" not in envelope
 
     def test_check_includes_tensor_backends(self) -> None:
         proc = _run_app("check")
@@ -144,12 +145,11 @@ class TestInfoCommand:
 
         envelope = _last_json_line(proc.stdout)
         assert envelope.get("type") == "info"
-        assert envelope.get("frames", 0) > 0, "frame count 应 > 0"
         assert envelope.get("fps", 0) > 0, "fps 应 > 0"
-        assert envelope.get("duration", 0) >= 0, "duration 应 >= 0"
         assert envelope.get("width", 0) > 0, "width 应 > 0"
         assert envelope.get("height", 0) > 0, "height 应 > 0"
         assert envelope.get("videoCodec"), "videoCodec 不应为空"
+        assert set(envelope) == {"type", "fps", "width", "height", "videoCodec"}
 
 
 class TestProcessFormatConversion:

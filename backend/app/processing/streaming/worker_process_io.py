@@ -75,7 +75,6 @@ def drain_final_worker_output(
         error_queue.put(RuntimeError("Final stage worker stdout is unavailable."))
         return
 
-    output_index = int(resume_state.completed_output_frames)
     emitted_count = 0
     boundary_schedule = boundary_schedule_for_stage_plan(
         stage_plan=stage_plan,
@@ -92,9 +91,8 @@ def drain_final_worker_output(
             if frame is None:
                 break
             emitted_count += 1
-            _queue_put(encode_queue, EncodedFrame(output_index=output_index, frame=frame), stop_event)
+            _queue_put(encode_queue, EncodedFrame(frame=frame), stop_event)
             metrics.set_queue_depth("encode", encode_queue.qsize())
-            output_index += 1
             next_source_frame = boundary_schedule.get(emitted_count)
             if next_source_frame is not None:
                 _queue_put(encode_queue, SegmentBoundary(next_source_frame=next_source_frame), stop_event)

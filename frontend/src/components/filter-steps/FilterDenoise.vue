@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FilterStep } from '@/types/protocol'
+import { createFilterParamsPatch } from '@/services/filters/filter-params'
 
 const props = defineProps<{
   modelValue: FilterStep
@@ -9,11 +10,10 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: FilterStep): void
 }>()
 
-function patch(mutator: (params: Record<string, unknown>) => void) {
-  const next: FilterStep = { ...props.modelValue, params: { ...props.modelValue.params } }
-  mutator(next.params)
-  emit('update:modelValue', next)
-}
+const patch = createFilterParamsPatch(
+  () => props.modelValue,
+  (value) => emit('update:modelValue', value),
+)
 </script>
 
 <template>

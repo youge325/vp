@@ -4,7 +4,6 @@ from app.planning.manifest import (
     ResumeMode,
     ResumeState,
     SegmentManifest,
-    SegmentRecord,
 )
 from app.planning.processing_steps import (
     ProcessingStep,
@@ -32,7 +31,6 @@ __all__ = [
     "ResumeMode",
     "ResumeState",
     "SegmentManifest",
-    "SegmentRecord",
     "ProcessingStep",
     "ProcessingStepInput",
     "normalize_processing_step",

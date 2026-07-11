@@ -15,9 +15,6 @@
     "superResolution": {
       "$ref": "#/$defs/SuperResolutionConfig"
     },
-    "anime": {
-      "$ref": "#/$defs/AnimeConfig"
-    },
     "preprocess": {
       "$ref": "#/$defs/PreprocessConfig",
       "default": {
@@ -37,8 +34,7 @@
     "fpsMode",
     "processOrder",
     "interpolation",
-    "superResolution",
-    "anime"
+    "superResolution"
   ],
   "$defs": {
     "FpsMode": {
@@ -162,33 +158,6 @@
         "algorithm"
       ]
     },
-    "AnimeConfig": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "profile": {
-          "type": "string"
-        },
-        "denoise": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "edgeBoost": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        }
-      },
-      "required": [
-        "enabled",
-        "profile",
-        "denoise",
-        "edgeBoost"
-      ]
-    },
     "PreprocessConfig": {
       "type": "object",
       "properties": {
@@ -211,7 +180,7 @@
       "type": "object",
       "properties": {
         "kind": {
-          "type": "string"
+          "$ref": "#/$defs/FilterStepKind"
         },
         "enabled": {
           "type": "boolean"
@@ -225,6 +194,18 @@
       "required": [
         "kind",
         "enabled"
+      ]
+    },
+    "FilterStepKind": {
+      "type": "string",
+      "enum": [
+        "scale",
+        "crop",
+        "pad",
+        "sharpen",
+        "denoise",
+        "color",
+        "anime_cleanup"
       ]
     },
     "PostprocessConfig": {

@@ -49,7 +49,6 @@ def _add_shared_planning_args(parser: argparse.ArgumentParser) -> None:
         choices=[
             "frame_interpolation",
             "super_resolution",
-            "anime_optimization",
             "format_conversion",
         ],
         help="Primary algorithm to run",

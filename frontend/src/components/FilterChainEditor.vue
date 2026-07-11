@@ -6,8 +6,9 @@ import FilterPad from '@/components/filter-steps/FilterPad.vue'
 import FilterSharpen from '@/components/filter-steps/FilterSharpen.vue'
 import FilterDenoise from '@/components/filter-steps/FilterDenoise.vue'
 import FilterColor from '@/components/filter-steps/FilterColor.vue'
-import type { FilterStep } from '@/types/protocol'
-import type { FilterStepKind } from '@/types/domain/workflow'
+import FilterAnimeCleanup from '@/components/filter-steps/FilterAnimeCleanup.vue'
+import { FILTER_CATALOG, createDefaultFilterStep, filterLabel } from '@/services/filters/filter-catalog'
+import type { FilterStep, FilterStepKind } from '@/types/protocol'
 
 const props = defineProps<{
   modelValue: FilterStep[]
@@ -22,15 +23,6 @@ const filters = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
-const KIND_OPTIONS: { value: FilterStepKind; label: string }[] = [
-  { value: 'scale', label: '缩放' },
-  { value: 'crop', label: '裁剪' },
-  { value: 'pad', label: '填充' },
-  { value: 'sharpen', label: '锐化' },
-  { value: 'denoise', label: '降噪' },
-  { value: 'color', label: '色彩调整' },
-]
-
 const KIND_COMPONENT: Record<FilterStepKind, Component> = {
   scale: FilterScale,
   crop: FilterCrop,
@@ -38,22 +30,14 @@ const KIND_COMPONENT: Record<FilterStepKind, Component> = {
   sharpen: FilterSharpen,
   denoise: FilterDenoise,
   color: FilterColor,
-}
-
-const KIND_DEFAULTS: Record<FilterStepKind, Record<string, string | number | boolean>> = {
-  scale: { mode: 'factor', factor: 0.5, width: 1920, height: 1080, interpolation: 'lanczos4' },
-  crop: { x: 0, y: 0, width: 1920, height: 1080 },
-  pad: { top: 0, bottom: 0, left: 0, right: 0, color: '#000000' },
-  sharpen: { amount: 0.5 },
-  denoise: { strength: 10, colorStrength: 10 },
-  color: { brightness: 0, contrast: 1, saturation: 1 },
+  anime_cleanup: FilterAnimeCleanup,
 }
 
 function addFilter(kind: FilterStepKind) {
   if (!kind) return
   filters.value = [
     ...filters.value,
-    { kind, enabled: true, params: { ...KIND_DEFAULTS[kind] } },
+    createDefaultFilterStep(kind),
   ]
 }
 
@@ -82,9 +66,6 @@ function setEnabled(index: number, enabled: boolean) {
   updateStep(index, { ...filters.value[index], enabled })
 }
 
-function filterLabel(kind: string) {
-  return KIND_OPTIONS.find((k) => k.value === kind)?.label ?? kind
-}
 </script>
 
 <template>
@@ -92,8 +73,8 @@ function filterLabel(kind: string) {
     <div class="filter-toolbar">
       <select @change="addFilter(($event.target as HTMLSelectElement).value as FilterStepKind)">
         <option value="" disabled selected>+ 添加滤镜</option>
-        <option v-for="opt in KIND_OPTIONS" :key="opt.value" :value="opt.value">
-          {{ opt.label }}
+        <option v-for="entry in FILTER_CATALOG" :key="entry.kind" :value="entry.kind">
+          {{ entry.label }}
         </option>
       </select>
     </div>
@@ -122,7 +103,7 @@ function filterLabel(kind: string) {
 
       <div class="filter-card-body">
         <component
-          :is="KIND_COMPONENT[step.kind as FilterStepKind]"
+          :is="KIND_COMPONENT[step.kind]"
           :model-value="step"
           @update:model-value="updateStep(index, $event)"
         />

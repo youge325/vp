@@ -30,6 +30,7 @@ ProcessOrderValue = Literal[
 ]
 TensorBackendValue = Literal["pytorch", "paddle", "onnx"]
 RateControlModeValue = Literal["crf", "cq", "qp", "bitrate"]
+FilterStepKindValue = Literal["scale", "crop", "pad", "sharpen", "denoise", "color", "anime_cleanup"]
 
 
 class DecodeConfig(_CamelBase):
@@ -64,15 +65,8 @@ class SuperResolutionConfig(_CamelBase):
     auto_download_weights: bool = False
 
 
-class AnimeConfig(_CamelBase):
-    enabled: bool
-    profile: str
-    denoise: int
-    edge_boost: int
-
-
 class FilterStep(_CamelBase):
-    kind: str
+    kind: FilterStepKindValue
     enabled: bool
     params: dict[str, Any] = Field(default_factory=dict)
 
@@ -92,7 +86,6 @@ class WorkflowConfig(_CamelBase):
     process_order: ProcessOrderValue
     interpolation: InterpolationConfig
     super_resolution: SuperResolutionConfig
-    anime: AnimeConfig
     preprocess: PreprocessConfig = Field(default_factory=lambda: PreprocessConfig(enabled=False, filters=[]))
     postprocess: PostprocessConfig = Field(default_factory=lambda: PostprocessConfig(enabled=False, filters=[]))
 

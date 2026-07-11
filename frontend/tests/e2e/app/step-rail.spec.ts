@@ -17,10 +17,10 @@ async function injectMediaItem(tauriPage: any): Promise<boolean> {
         inputPath: 'C:/tmp/rail-test.mp4',
         selected: false,
         inspecting: false,
-        info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264', audioCodec: 'aac', duration: 60, bitrate: 5000 },
+        info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264' },
         decodeConfig: { mode: 'software', hwaccel: '', decoder: 'software', options: {} },
         encodeConfig: { codec: 'h264', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 23 }, options: {} },
-        workflowConfig: { fpsMode: 'multi', processOrder: 'super_resolution_then_interpolation', interpolation: { enabled: false }, superResolution: { enabled: false }, anime: { enabled: false }, preprocess: { enabled: false }, postprocess: { enabled: false } },
+        workflowConfig: { fpsMode: 'multi', processOrder: 'super_resolution_then_interpolation', interpolation: { enabled: false }, superResolution: { enabled: false }, preprocess: { enabled: false }, postprocess: { enabled: false } },
         outputConfig: { outputDir: 'C:/tmp/output', openOnComplete: false, segmentFrames: 1000 },
       },
     ]
@@ -43,7 +43,7 @@ async function clearMediaItems(tauriPage: any): Promise<void> {
   })
 }
 
-async function setWorkflowEnabled(tauriPage: any, config: { interpolation?: boolean; superResolution?: boolean; anime?: boolean }): Promise<boolean> {
+async function setWorkflowEnabled(tauriPage: any, config: { interpolation?: boolean; superResolution?: boolean }): Promise<boolean> {
   return await tauriPage.evaluate((cfg) => {
     const root = document.querySelector('#app')
     if (!root) return false
@@ -55,7 +55,6 @@ async function setWorkflowEnabled(tauriPage: any, config: { interpolation?: bool
     const apply = (wf: any) => {
       if (cfg.interpolation !== undefined) wf.interpolation.enabled = cfg.interpolation
       if (cfg.superResolution !== undefined) wf.superResolution.enabled = cfg.superResolution
-      if (cfg.anime !== undefined) wf.anime.enabled = cfg.anime
     }
 
     const mediaStore = pinia._s?.get('media')
@@ -129,7 +128,7 @@ test.describe('Step rail state', () => {
     await expect(workflowChip).toContainText('补帧 / 超分')
 
     // Reset to the default preset shape for later tests in this session.
-    await setWorkflowEnabled(tauriPage, { interpolation: true, superResolution: false, anime: false })
+    await setWorkflowEnabled(tauriPage, { interpolation: true, superResolution: false })
   })
 
   test('task status label reflects batch running state', async ({ tauriPage }) => {

@@ -134,7 +134,6 @@ describe('useTaskOrchestrator outputDir gating', () => {
           numFrames: 10,
           autoDownloadWeights: false,
         },
-        anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
         preprocess: { enabled: false, filters: [] },
         postprocess: { enabled: false, filters: [] },
       },

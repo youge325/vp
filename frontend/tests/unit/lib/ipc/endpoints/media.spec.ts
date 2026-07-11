@@ -19,13 +19,9 @@ function installTauriRuntime(): void {
 
 function sampleVideoInfo() {
   return {
-    type: 'info',
     fps: 24,
-    frames: 120,
-    duration: 5,
     width: 1920,
     height: 1080,
-    hasAudio: true,
     videoCodec: 'h264',
   }
 }

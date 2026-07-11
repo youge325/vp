@@ -140,7 +140,6 @@ def _process_config(output_dir: Path) -> dict:
                 "numFrames": 8,
                 "autoDownloadWeights": False,
             },
-            "anime": {"enabled": False, "profile": "clean-lines", "denoise": 10, "edgeBoost": 15},
             "preprocess": {"enabled": False, "filters": []},
             "postprocess": {"enabled": False, "filters": []},
         },

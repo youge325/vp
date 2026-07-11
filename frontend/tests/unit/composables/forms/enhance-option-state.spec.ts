@@ -19,21 +19,18 @@ const detail = (name: string): ModelVariantInfo => ({
 
 function makeEnv(): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
       available: true,
       hwaccels: [],
       encoderProfiles: [],
       decoderProfiles: [],
     },
-    gpu: { available: true, devices: ['NVIDIA GPU'], adapters: [], cudaAvailable: true },
-    tensorBackends: { pytorch: true, paddle: true, onnx: true },
+    gpu: { adapters: [] },
     tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda'], onnx: ['tensorrt', 'cuda'] },
-    onnxRuntime: { available: true, providers: ['CUDAExecutionProvider'] },
-    rifeModel: { available: true },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [],
     superResolutionAlgorithms: [],
-    animeProfiles: [],
+    runtimeMode: 'bundled',
   }
 }
 
@@ -67,8 +64,6 @@ function makeForm(): EnhanceOptionForm {
     superResolutionOnnxModels: ['sr.onnx'],
     superResolutionOnnxModelDetails: [detail('sr.onnx')],
     processOrder: 'super_resolution_then_interpolation',
-    animeProfile: 'clean-lines',
-    animeProfiles: ['clean-lines', 'line-art'],
   })
 }
 
@@ -100,10 +95,6 @@ describe('enhance option state', () => {
     expect(state.superResolutionOnnxOptions.value).toEqual([
       { value: '', label: '未选择' },
       { value: 'sr.onnx', label: 'sr.onnx' },
-    ])
-    expect(state.animeProfileOptions.value).toEqual([
-      { value: 'clean-lines', label: 'clean-lines' },
-      { value: 'line-art', label: 'line-art' },
     ])
   })
 })

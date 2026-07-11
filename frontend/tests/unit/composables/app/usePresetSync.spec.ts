@@ -66,7 +66,7 @@ describe('usePresetSync', () => {
     })
 
     await triggerSave((workflow) => {
-      workflow.anime.denoise += 1
+      workflow.interpolation.scale = 0.5
     })
 
     expect(issueStore.operationIssue).toBeNull()
@@ -78,10 +78,12 @@ describe('usePresetSync', () => {
       workflow.processOrder = 'frame_interpolation_then_super_resolution'
       workflow.interpolation.engine = 'tensorrt'
       workflow.superResolution.engine = 'tensorrt'
-      workflow.anime.enabled = true
-      workflow.anime.profile = 'line-art'
-      workflow.anime.denoise = 24
-      workflow.anime.edgeBoost = 36
+      workflow.preprocess.enabled = true
+      workflow.preprocess.filters = [{
+        kind: 'anime_cleanup',
+        enabled: true,
+        params: { profile: 'thin-outline', denoise: 8, edgeBoost: 45 },
+      }]
     })
 
     expect(saveMock).toHaveBeenCalledOnce()
@@ -94,11 +96,13 @@ describe('usePresetSync', () => {
         superResolution: {
           engine: 'tensorrt',
         },
-        anime: {
+        preprocess: {
           enabled: true,
-          profile: 'line-art',
-          denoise: 24,
-          edgeBoost: 36,
+          filters: [{
+            kind: 'anime_cleanup',
+            enabled: true,
+            params: { profile: 'thin-outline', denoise: 8, edgeBoost: 45 },
+          }],
         },
       },
     })
@@ -111,7 +115,7 @@ describe('usePresetSync', () => {
     const issueStore = useIssueStore()
 
     await triggerSave((workflow) => {
-      workflow.anime.denoise += 1
+      workflow.interpolation.scale = 0.5
     })
 
     expect(issueStore.operationIssue?.scope).toBe('preset')
@@ -128,7 +132,7 @@ describe('usePresetSync', () => {
     const replaceSpy = vi.spyOn(presetStore, 'replaceDraftPreset')
 
     await triggerSave((workflow) => {
-      workflow.anime.denoise += 1
+      workflow.interpolation.scale = 0.5
     })
 
     expect(replaceSpy).toHaveBeenCalledOnce()

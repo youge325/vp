@@ -23,7 +23,6 @@ function buildTaskRequest(inputPath: string, outputDir: string) {
         scale: 1.0, fp16: false, tensorBackend: 'pytorch' as const, engine: 'cuda',
       },
       superResolution: { enabled: false, scaleFactor: 2.0, algorithm: 'realesrgan' },
-      anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
       preprocess: { enabled: false, filters: [] },
       postprocess: { enabled: false, filters: [] },
     },
@@ -91,7 +90,6 @@ test.describe('HEVC output inspection', () => {
       }
     }, outFile)
 
-    expect(info.frames).toBeGreaterThan(0)
     expect(info.fps).toBeGreaterThan(0)
     expect(info.width).toBeGreaterThan(0)
     expect(info.height).toBeGreaterThan(0)
@@ -99,6 +97,5 @@ test.describe('HEVC output inspection', () => {
     // HEVC output should have codec info containing hevc or h265
     const codecLower = String(info.videoCodec).toLowerCase()
     expect(codecLower.includes('hevc') || codecLower.includes('h265') || codecLower.includes('h.265')).toBe(true)
-    expect(info.duration).toBeGreaterThan(0)
   })
 })

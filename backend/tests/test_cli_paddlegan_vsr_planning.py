@@ -114,7 +114,6 @@ def test_paddlegan_vsr_step_carries_super_resolution_runtime_fields():
             "numFrames": 8,
             "autoDownloadWeights": True,
         },
-        "anime": {"enabled": False, "profile": "clean-lines", "denoise": 10, "edgeBoost": 15},
         "preprocess": {"enabled": False, "filters": []},
         "postprocess": {"enabled": False, "filters": []},
     }
@@ -166,7 +165,6 @@ def test_pytorch_interpolation_plus_paddlegan_super_resolution_builds_isolated_s
             "numFrames": 8,
             "autoDownloadWeights": False,
         },
-        "anime": {"enabled": False, "profile": "clean-lines", "denoise": 10, "edgeBoost": 15},
         "preprocess": {"enabled": False, "filters": []},
         "postprocess": {"enabled": False, "filters": []},
     }

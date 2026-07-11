@@ -7,7 +7,7 @@ function createMediaItem(id: string, displayName: string, overrides?: Partial<Re
     inputPath: `C:/tmp/${displayName}`,
     selected: false,
     inspecting: false,
-    info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264', audioCodec: 'aac', duration: 60, bitrate: 5000 },
+    info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264' },
     decodeConfig: { mode: 'software', hwaccel: '', decoder: 'software', options: {} },
     encodeConfig: { codec: 'h264', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf' as const, value: 23 }, options: {} },
     workflowConfig: {
@@ -15,7 +15,6 @@ function createMediaItem(id: string, displayName: string, overrides?: Partial<Re
       processOrder: 'super_resolution_then_interpolation',
       interpolation: { enabled: false, targetFps: 60, multi: 2, algorithm: 'rife', model: '4.25', scale: 1.0, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
       superResolution: { enabled: false, scaleFactor: 2.0, algorithm: 'realesrgan' },
-      anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
       preprocess: { enabled: false, filters: [] },
       postprocess: { enabled: false, filters: [] },
     },
@@ -65,7 +64,6 @@ test.describe('Media list workflow labels', () => {
         workflowConfig: {
           interpolation: { enabled: true, targetFps: 60, multi: 2, algorithm: 'rife', model: '4.25', scale: 1.0, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
           superResolution: { enabled: false, scaleFactor: 2.0, algorithm: 'realesrgan' },
-          anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
         },
       }),
     ])
@@ -84,7 +82,6 @@ test.describe('Media list workflow labels', () => {
       const labels = [
         item.workflowConfig.interpolation?.enabled ? '补帧' : null,
         item.workflowConfig.superResolution?.enabled ? '超分' : null,
-        item.workflowConfig.anime?.enabled ? '动漫' : null,
       ].filter(Boolean)
       return labels.length > 0 ? labels.join(' / ') : '格式转换'
     })
@@ -102,7 +99,6 @@ test.describe('Media list workflow labels', () => {
         workflowConfig: {
           interpolation: { enabled: true, targetFps: 60, multi: 2, algorithm: 'rife', model: '4.25', scale: 1.0, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
           superResolution: { enabled: true, scaleFactor: 2.0, algorithm: 'realesrgan' },
-          anime: { enabled: true, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
         },
       }),
     ])
@@ -120,11 +116,10 @@ test.describe('Media list workflow labels', () => {
       const labels = [
         item.workflowConfig.interpolation?.enabled ? '补帧' : null,
         item.workflowConfig.superResolution?.enabled ? '超分' : null,
-        item.workflowConfig.anime?.enabled ? '动漫' : null,
       ].filter(Boolean)
       return labels.length > 0 ? labels.join(' / ') : '格式转换'
     })
-    expect(label).toBe('补帧 / 超分 / 动漫')
+    expect(label).toBe('补帧 / 超分')
 
     await clearMediaItems(tauriPage)
   })
@@ -138,7 +133,6 @@ test.describe('Media list workflow labels', () => {
         workflowConfig: {
           interpolation: { enabled: false, targetFps: 60, multi: 2, algorithm: 'rife', model: '4.25', scale: 1.0, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
           superResolution: { enabled: false, scaleFactor: 2.0, algorithm: 'realesrgan' },
-          anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
         },
       }),
     ])
@@ -156,7 +150,6 @@ test.describe('Media list workflow labels', () => {
       const labels = [
         item.workflowConfig.interpolation?.enabled ? '补帧' : null,
         item.workflowConfig.superResolution?.enabled ? '超分' : null,
-        item.workflowConfig.anime?.enabled ? '动漫' : null,
       ].filter(Boolean)
       return labels.length > 0 ? labels.join(' / ') : '格式转换'
     })
@@ -174,7 +167,6 @@ test.describe('Media list workflow labels', () => {
         workflowConfig: {
           interpolation: { enabled: false, targetFps: 60, multi: 2, algorithm: 'rife', model: '4.25', scale: 1.0, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
           superResolution: { enabled: true, scaleFactor: 2.0, algorithm: 'realesrgan' },
-          anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
         },
       }),
     ])
@@ -192,7 +184,6 @@ test.describe('Media list workflow labels', () => {
       const labels = [
         item.workflowConfig.interpolation?.enabled ? '补帧' : null,
         item.workflowConfig.superResolution?.enabled ? '超分' : null,
-        item.workflowConfig.anime?.enabled ? '动漫' : null,
       ].filter(Boolean)
       return labels.length > 0 ? labels.join(' / ') : '格式转换'
     })

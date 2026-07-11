@@ -82,9 +82,9 @@ def test_single_frame_execution_reads_processes_and_writes_frames() -> None:
     events = []
     config = _config(
         ProcessingStep(
-            algorithm_type="anime_optimization",
-            algorithm_kwargs={},
-            stage_name="01_anime_optimization",
+            algorithm_type="super_resolution",
+            algorithm_kwargs={"sr_algorithm": "placeholder", "scale_factor": 1.0},
+            stage_name="01_super_resolution",
         ),
         input_frame_count=2,
     )

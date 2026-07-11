@@ -109,6 +109,13 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
         ("runtime-config-positional-interface", "    def legacy_tuple(self):\n        pass\n"),
         ("manifest-test-only-public-helpers", "    def cleanup_partial(self):\n        pass\n"),
         ("stage-worker-config-mapping-interface", "    def from_mapping(cls, payload):\n        pass\n"),
+        ("legacy-anime-workflow-model", "class AnimeConfig:\n    pass\n"),
+        ("legacy-anime-enhance-view", "<section>动漫优化</section>\n"),
+        ("legacy-task-store-reset", "function resetBatch() {}\n"),
+        ("legacy-encoded-frame-index", "output_index: int\n"),
+        ("obsolete-anime-module-references", "const config = workflow.anime\n"),
+        ("obsolete-e2e-environment-fields", "const value = result.result.rifeModel\n"),
+        ("obsolete-frontend-video-info-fields", "const info = { type: 'info' }\n"),
         ("preset-sync-test-only-return", "return {\n    persistDraft,\n}\n"),
         ("enhance-onnx-alias-return", "return {\n    isOnnxBackend,\n}\n"),
         ("stage-file-chunk-encoding-leak", "frame = read_rgb_frame(stream)\n"),
@@ -123,7 +130,15 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
 def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule_id: str, source: str) -> None:
     rule = next(rule for rule in RULES if rule.rule_id == rule_id)
     if isinstance(rule, ForbiddenReferenceRule):
-        target = tmp_path / rule.roots[0] / "test_contract_violation.py"
+        for relative_root in rule.roots:
+            search_root = tmp_path / relative_root
+            if search_root.suffix:
+                search_root.parent.mkdir(parents=True, exist_ok=True)
+                search_root.write_text("", encoding="utf-8")
+            else:
+                search_root.mkdir(parents=True, exist_ok=True)
+        first_root = tmp_path / rule.roots[0]
+        target = first_root if first_root.is_file() else first_root / f"contract_violation{rule.suffixes[0]}"
     else:
         target = tmp_path / rule.path
     target.parent.mkdir(parents=True, exist_ok=True)

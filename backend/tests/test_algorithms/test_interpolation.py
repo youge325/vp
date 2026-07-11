@@ -66,15 +66,3 @@ class TestSuperResolutionAlgorithm:
             assert algo.needs_frame_pairs() is False
         except RuntimeError:
             pytest.skip("Tensor 后端不可用")
-
-
-class TestAnimeOptimizationAlgorithm:
-    """测试动漫帧优化占位算法。"""
-
-    def test_needs_frame_pairs_default(self):
-        """非补帧算法默认不需要帧对处理。"""
-        try:
-            algo = AlgorithmFactory.create("anime_optimization", tensor_backend_name="pytorch")
-            assert algo.needs_frame_pairs() is False
-        except RuntimeError:
-            pytest.skip("Tensor 后端不可用")

@@ -10,18 +10,18 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function makeEnv(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
       available: true,
       hwaccels: [],
       encoderProfiles: [],
       decoderProfiles: [],
     },
-    gpu: { available: false, devices: [], adapters: [] },
-    tensorBackends: {},
-    tensorEngines: {},
-    onnxRuntime: { available: false, providers: [] },
-    rifeModel: { available: false },
+    gpu: { adapters: [] },
+    tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
+    interpolationAlgorithms: [],
+    superResolutionAlgorithms: [],
+    runtimeMode: 'external',
     ...overrides,
   } as EnvironmentCheckResult
 }

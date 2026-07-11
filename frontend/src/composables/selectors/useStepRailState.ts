@@ -44,7 +44,6 @@ export function useStepRailState() {
     const enabled = [
       wf.interpolation.enabled ? '补帧' : null,
       wf.superResolution.enabled ? '超分' : null,
-      wf.anime.enabled ? '动漫' : null,
     ].filter(Boolean)
     return enabled.length > 0 ? enabled.join(' / ') : '转码'
   })

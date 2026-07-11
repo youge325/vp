@@ -11,18 +11,15 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function makeEnv(): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
       available: true,
       hwaccels: [],
       encoderProfiles: [],
       decoderProfiles: [],
     },
-    gpu: { available: true, devices: ['GPU'], adapters: [], cudaAvailable: true },
-    tensorBackends: { pytorch: true, paddle: true, onnx: true },
+    gpu: { adapters: [] },
     tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda', 'tensorrt'], onnx: ['cuda', 'tensorrt'] },
-    onnxRuntime: { available: true, providers: ['CUDAExecutionProvider'] },
-    rifeModel: { available: true, version: '4.25', path: 'models/interpolation/rife/rife_v4.25.onnx' },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [
       {
         name: 'rife',
@@ -105,8 +102,6 @@ function makeEnv(): EnvironmentCheckResult {
             },
           },
         ],
-        weightPath: 'backend/models/super_resolution/paddlegan/ppmsvsr/PP-MSVSR_reds_x4.pdparams',
-        weightAvailable: false,
       },
       {
         name: 'edvr',
@@ -132,8 +127,6 @@ function makeEnv(): EnvironmentCheckResult {
             },
           },
         ],
-        weightPath: 'backend/models/super_resolution/paddlegan/edvr/EDVR_L_w_tsa_SRx4.pdparams',
-        weightAvailable: true,
       },
       {
         name: 'custom-vsr',
@@ -179,7 +172,7 @@ function makeEnv(): EnvironmentCheckResult {
         sequenceMode: 'recurrent',
       },
     ],
-    animeProfiles: ['clean-lines'],
+    runtimeMode: 'bundled',
   }
 }
 
@@ -306,13 +299,9 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     const item = createMediaItem('/video/tai-chi.mp4', presetStore.draftPreset)
     mediaStore.appendItems([item])
     mediaStore.setItemInfo(item.id, {
-      type: 'info',
       fps: 27,
-      frames: 120,
-      duration: 4.4,
       width: 640,
       height: 288,
-      hasAudio: true,
       videoCodec: 'h264',
     })
 
@@ -369,10 +358,6 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       workflow.superResolution.onnxModel = ''
       workflow.superResolution.numFrames = 10
       workflow.processOrder = 'super_resolution_then_interpolation'
-      workflow.anime.enabled = false
-      workflow.anime.profile = 'clean-lines'
-      workflow.anime.denoise = 10
-      workflow.anime.edgeBoost = 15
     })
     const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
     const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
@@ -417,10 +402,6 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     form.superResolutionEngine = 'tensorrt'
     form.superResolutionNumFrames = 5
     form.processOrder = 'frame_interpolation_then_super_resolution'
-    form.animeEnabled = true
-    form.animeProfile = 'clean-lines'
-    form.animeDenoise = 24
-    form.animeEdgeBoost = 36
 
     for (const workflow of [
       first.workflowConfig,
@@ -447,10 +428,6 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       expect(workflow.superResolution.onnxModel).toBe('')
       expect(workflow.superResolution.numFrames).toBe(5)
       expect(workflow.processOrder).toBe('frame_interpolation_then_super_resolution')
-      expect(workflow.anime.enabled).toBe(true)
-      expect(workflow.anime.profile).toBe('clean-lines')
-      expect(workflow.anime.denoise).toBe(24)
-      expect(workflow.anime.edgeBoost).toBe(36)
     }
   })
 
@@ -470,47 +447,6 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     expect(first.workflowConfig.processOrder).toBe('frame_interpolation_then_super_resolution')
     expect(second.workflowConfig.processOrder).toBe('frame_interpolation_then_super_resolution')
     expect(presetStore.draftPreset.workflowConfig.processOrder).toBe('frame_interpolation_then_super_resolution')
-  })
-
-  it('persists anime enabled while applying it to every selected media item', () => {
-    const mediaStore = useMediaStore()
-    const presetStore = usePresetStore()
-    presetStore.patchWorkflow((workflow) => {
-      workflow.anime.enabled = false
-    })
-    const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
-    const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
-    mediaStore.appendItems([first, second])
-
-    const form = useEnhanceForm()
-    form.animeEnabled = true
-
-    expect(first.workflowConfig.anime.enabled).toBe(true)
-    expect(second.workflowConfig.anime.enabled).toBe(true)
-    expect(presetStore.draftPreset.workflowConfig.anime.enabled).toBe(true)
-  })
-
-  it('persists anime detail edits while applying them to selected media items', () => {
-    const mediaStore = useMediaStore()
-    const presetStore = usePresetStore()
-    presetStore.patchWorkflow((workflow) => {
-      workflow.anime.profile = 'clean-lines'
-      workflow.anime.denoise = 10
-    })
-    const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
-    const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
-    mediaStore.appendItems([first, second])
-
-    const form = useEnhanceForm()
-    form.animeProfile = 'line-art'
-    form.animeDenoise = 24
-
-    expect(first.workflowConfig.anime.profile).toBe('line-art')
-    expect(second.workflowConfig.anime.profile).toBe('line-art')
-    expect(first.workflowConfig.anime.denoise).toBe(24)
-    expect(second.workflowConfig.anime.denoise).toBe(24)
-    expect(presetStore.draftPreset.workflowConfig.anime.profile).toBe('line-art')
-    expect(presetStore.draftPreset.workflowConfig.anime.denoise).toBe(24)
   })
 
   it('applies EDVR fixed window defaults to every selected media item', () => {
@@ -545,13 +481,9 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     const item = createMediaItem('/video/clip.mp4', presetStore.draftPreset)
     mediaStore.appendItems([item])
     mediaStore.setItemInfo(item.id, {
-      type: 'info',
       fps: 30,
-      frames: 120,
-      duration: 4,
       width: 1920,
       height: 1080,
-      hasAudio: true,
       videoCodec: 'h264',
     })
 
@@ -580,13 +512,9 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     const item = createMediaItem('/video/tai-chi.mp4', presetStore.draftPreset)
     mediaStore.appendItems([item])
     mediaStore.setItemInfo(item.id, {
-      type: 'info',
       fps: 27,
-      frames: 120,
-      duration: 4.4,
       width: 640,
       height: 288,
-      hasAudio: true,
       videoCodec: 'h264',
     })
 
@@ -613,13 +541,9 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     const item = createMediaItem('/video/tai-chi.mp4', presetStore.draftPreset)
     mediaStore.appendItems([item])
     mediaStore.setItemInfo(item.id, {
-      type: 'info',
       fps: 27,
-      frames: 120,
-      duration: 4.4,
       width: 640,
       height: 288,
-      hasAudio: true,
       videoCodec: 'h264',
     })
 

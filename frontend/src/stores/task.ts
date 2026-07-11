@@ -31,12 +31,6 @@ export const useTaskStore = defineStore('task', () => {
     pendingConflict.value = descriptor
   }
 
-  function resetBatch(): void {
-    Object.assign(batch, createInitialBatch())
-    batchRuntimeIds.value = []
-    pendingConflict.value = null
-  }
-
   return {
     batch,
     batchRuntimeIds,
@@ -44,6 +38,5 @@ export const useTaskStore = defineStore('task', () => {
     setBatch,
     setRuntimeIds,
     setPendingConflict,
-    resetBatch,
   }
 })

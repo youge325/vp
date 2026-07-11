@@ -41,11 +41,6 @@ def _register_single_algorithm(algorithm_type: str) -> None:
 
         _AlgorithmFactory.register("super_resolution", SuperResolutionAlgorithm)
         return
-    if algorithm_type == "anime_optimization":
-        from app.processing.anime_optimization import AnimeOptimizationAlgorithm
-
-        _AlgorithmFactory.register("anime_optimization", AnimeOptimizationAlgorithm)
-        return
     raise ValueError(f"Unsupported stage-worker algorithm type: {algorithm_type!r}")
 
 

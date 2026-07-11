@@ -44,6 +44,40 @@ def test_validate_missing_params_raises():
         _make_algorithm([{"kind": "scale", "enabled": True}])
 
 
+def test_anime_cleanup_filter_runs_without_loading_opencv(monkeypatch: pytest.MonkeyPatch):
+    import app.processing.frame_filters as frame_filters
+
+    monkeypatch.setattr(frame_filters, "_ensure_cv2", lambda: (_ for _ in ()).throw(AssertionError("cv2 loaded")))
+    frame = np.arange(8 * 8 * 3, dtype=np.uint8).reshape(8, 8, 3)
+    algo = _make_algorithm(
+        [
+            {
+                "kind": "anime_cleanup",
+                "enabled": True,
+                "params": {"profile": "clean-lines", "denoise": 0, "edgeBoost": 0},
+            }
+        ]
+    )
+
+    out = algo.process_frame(frame)
+
+    assert out is frame
+
+
+def test_anime_cleanup_filter_forces_pytorch_cpu_fallback():
+    algo = _make_pytorch_algorithm(
+        [
+            {
+                "kind": "anime_cleanup",
+                "enabled": True,
+                "params": {"profile": "clean-lines", "denoise": 15, "edgeBoost": 30},
+            }
+        ]
+    )
+
+    assert algo.can_process_tensor(_FakePyTorchBackend()) is False
+
+
 def test_scale_factor_changes_resolution():
     frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
     algo = _make_algorithm(

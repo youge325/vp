@@ -36,8 +36,6 @@ def resolve_primary_algorithm(workflow_config: dict[str, Any]) -> AlgorithmType:
         return "frame_interpolation"
     if workflow_config["superResolution"]["enabled"]:
         return "super_resolution"
-    if workflow_config["anime"]["enabled"]:
-        return "anime_optimization"
     return "format_conversion"
 
 

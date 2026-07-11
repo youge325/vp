@@ -31,7 +31,6 @@ const decoderProfile = (
   family,
   codec,
   available: true,
-  pixelFormats: [],
   hardwareDevices,
   hardwareDeviceOptions,
   options,
@@ -39,7 +38,6 @@ const decoderProfile = (
 
 function makeEnv(): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
       available: true,
       hwaccels: ['cuda', 'qsv', 'd3d11va'],
@@ -59,14 +57,12 @@ function makeEnv(): EnvironmentCheckResult {
         decoderProfile('av1_cuvid', 'NVDEC AV1', 'nvidia', 'av1', []),
       ],
     },
-    gpu: { available: true, devices: ['GPU'], adapters: [] },
-    tensorBackends: { pytorch: false, paddle: false, onnx: false },
-    tensorEngines: {},
-    onnxRuntime: { available: false, providers: [] },
-    rifeModel: { available: false },
+    gpu: { adapters: [] },
+    tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [],
     superResolutionAlgorithms: [],
-    animeProfiles: [],
+    runtimeMode: 'external',
   }
 }
 

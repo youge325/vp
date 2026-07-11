@@ -9,7 +9,6 @@ import {
   buildEngineOptions,
   buildModelOptions,
   buildOnnxModelOptions,
-  buildProfileOptions,
   toFpsMode,
   toInferenceEngine,
   toProcessOrder,
@@ -53,7 +52,7 @@ describe('enhance option rules', () => {
     ])
   })
 
-  it('builds algorithm and profile options without view-local mapping rules', () => {
+  it('builds algorithm options without view-local mapping rules', () => {
     const algorithms: AlgorithmInfo[] = [
       { name: 'rife', tensorBackends: ['pytorch'], models: ['4.25'] },
       { name: 'ppmsvsr', tensorBackends: ['paddle'], models: ['x4'], modelDetails: [detail('x4')] },
@@ -66,10 +65,6 @@ describe('enhance option rules', () => {
     expect(buildAlgorithmOptions(algorithms, 'modelMetrics')).toEqual([
       { value: 'rife', label: 'rife' },
       { value: 'ppmsvsr', label: 'ppmsvsr · 5.67M' },
-    ])
-    expect(buildProfileOptions(['clean-lines', 'anime-strong'])).toEqual([
-      { value: 'clean-lines', label: 'clean-lines' },
-      { value: 'anime-strong', label: 'anime-strong' },
     ])
   })
 

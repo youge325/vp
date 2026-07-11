@@ -11,7 +11,6 @@ export function getWorkflowSummaryLabel(item: MediaItem): string {
   const labels = [
     item.workflowConfig.interpolation.enabled ? '补帧' : null,
     item.workflowConfig.superResolution.enabled ? '超分' : null,
-    item.workflowConfig.anime.enabled ? '动漫' : null,
   ].filter(Boolean)
 
   return labels.length > 0

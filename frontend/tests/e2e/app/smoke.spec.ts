@@ -15,7 +15,7 @@ test.describe('VP Workbench e2e smoke', () => {
     })
     expect(result).toHaveProperty('result')
     expect(result.result).toHaveProperty('ffmpeg')
-    expect(result.result).toHaveProperty('resources')
+    expect(result.result).toHaveProperty('runtimeMode')
     expect(result.result.ffmpeg.available).toBe(true)
   })
 
@@ -26,21 +26,16 @@ test.describe('VP Workbench e2e smoke', () => {
     })
 
     expect(result).toHaveProperty('result')
-    expect(result.result).toHaveProperty('type')
     expect(result.result).toHaveProperty('ffmpeg')
     expect(result.result).toHaveProperty('gpu')
-    expect(result.result).toHaveProperty('tensorBackends')
-    expect(result.result).toHaveProperty('rifeModel')
-    // Optional fields are best-effort; verify them only if present
-    if (result.result.interpolationAlgorithms !== undefined) {
-      expect(Array.isArray(result.result.interpolationAlgorithms)).toBe(true)
-    }
-    if (result.result.superResolutionAlgorithms !== undefined) {
-      expect(Array.isArray(result.result.superResolutionAlgorithms)).toBe(true)
-    }
-    if (result.result.animeProfiles !== undefined) {
-      expect(Array.isArray(result.result.animeProfiles)).toBe(true)
-    }
+    expect(result.result).toHaveProperty('tensorEngines')
+    expect(result.result).toHaveProperty('backendDeviceSupport')
+    expect(result.result).toHaveProperty('runtimeMode')
+    expect(Array.isArray(result.result.interpolationAlgorithms)).toBe(true)
+    expect(Array.isArray(result.result.superResolutionAlgorithms)).toBe(true)
+    expect(result.result).not.toHaveProperty('type')
+    expect(result.result).not.toHaveProperty('tensorBackends')
+    expect(result.result).not.toHaveProperty('rifeModel')
   })
 
   test('inspect_video parses synthetic test video', async ({ tauriPage }) => {
@@ -54,16 +49,14 @@ test.describe('VP Workbench e2e smoke', () => {
       }
     }, inputPath)
 
-    expect(info.frames).toBeGreaterThan(0)
     expect(info.fps).toBeGreaterThan(0)
     expect(info.width).toBeGreaterThan(0)
     expect(info.height).toBeGreaterThan(0)
     expect(info.videoCodec).toBeTruthy()
-    expect(typeof info.hasAudio).toBe('boolean')
-    expect(info.duration).toBeGreaterThan(0)
+    expect(Object.keys(info).sort()).toEqual(['fps', 'height', 'videoCodec', 'width'])
   })
 
-  test('start_task format_conversion produces output file', async ({ tauriPage }) => {
+  test('start_task with Anime cleanup produces output file', async ({ tauriPage }) => {
     const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
     const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
 
@@ -84,11 +77,16 @@ test.describe('VP Workbench e2e smoke', () => {
         processOrder: 'super_resolution_then_interpolation',
         interpolation: { enabled: false, targetFps: 60, multi: 2, algorithm: 'rife', model: '4.25', scale: 1.0, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
         superResolution: { enabled: false, scaleFactor: 2.0, algorithm: 'realesrgan' },
-        anime: { enabled: false, profile: 'clean-lines', denoise: 10, edgeBoost: 15 },
-        preprocess: { enabled: false, filters: [] },
+        preprocess: {
+          enabled: true,
+          filters: [{
+            kind: 'anime_cleanup',
+            enabled: true,
+            params: { profile: 'clean-lines', denoise: 15, edgeBoost: 30 },
+          }],
+        },
         postprocess: { enabled: false, filters: [] },
       },
-      algorithm: 'format_conversion',
       resumeMode: 'force-fresh',
     }
 

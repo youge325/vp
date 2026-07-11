@@ -12,6 +12,7 @@ import shutil
 import tempfile
 from typing import Any, Callable
 
+from app.config import settings
 from app.utils.logger import get_logger
 
 from . import _constants
@@ -34,8 +35,8 @@ class FFmpegWrapper:
     def __init__(self, ffmpeg_path: str | None = None, ffprobe_path: str | None = None):
         self._ffmpeg_path_explicit = ffmpeg_path is not None
         self._ffprobe_path_explicit = ffprobe_path is not None
-        self.ffmpeg_path = ffmpeg_path or "ffmpeg"
-        self.ffprobe_path = ffprobe_path or "ffprobe"
+        self.ffmpeg_path = ffmpeg_path or settings.FFMPEG_PATH
+        self.ffprobe_path = ffprobe_path or settings.FFPROBE_PATH
         self._auto_detect_paths()
         # Probe caches keyed by (abspath, mtime_ns, size); invalidates on
         # file mutation. Phase C.1.4 added ``size`` because some build tools
@@ -272,7 +273,6 @@ class FFmpegWrapper:
                 "family": "software",
                 "codec": "any",
                 "available": True,
-                "pixelFormats": [],
                 "hardwareDevices": [],
                 "hardwareDeviceOptions": {},
                 "options": [],
@@ -330,11 +330,8 @@ class FFmpegWrapper:
         return _encode.build_encode_output_args(output_path, encode_config)
 
     # ------------------------------------------------------------------ #
-    #  Availability / version (delegate to probe.py)
+    #  Availability (delegate to probe.py)
     # ------------------------------------------------------------------ #
 
     def is_available(self) -> bool:
         return _probe.is_available(self.ffmpeg_path)
-
-    def get_version(self) -> str | None:
-        return _probe.get_version(self.ffmpeg_path)

@@ -13,14 +13,12 @@ const encoderProfile = (name: string, label: string): EncoderProfileSpec => ({
   family: name.includes('nvenc') ? 'nvidia' : 'software',
   codec: 'h264',
   available: true,
-  pixelFormats: [],
   hardwareDevices: [],
   options: [],
   rateControlModes: [{ mode: 'crf', label: 'CRF', defaultValue: 18, unit: 'CRF' }],
 })
 
 const makeEnv = (): EnvironmentCheckResult => ({
-  type: 'check',
   ffmpeg: {
     available: true,
     hwaccels: [],
@@ -30,14 +28,12 @@ const makeEnv = (): EnvironmentCheckResult => ({
     ],
     decoderProfiles: [],
   },
-  gpu: { available: true, devices: ['GPU'], adapters: [] },
-  tensorBackends: { pytorch: false, paddle: false, onnx: false },
-  tensorEngines: {},
-  onnxRuntime: { available: false, providers: [] },
-  rifeModel: { available: false },
+  gpu: { adapters: [] },
+  tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
   interpolationAlgorithms: [],
   superResolutionAlgorithms: [],
-  animeProfiles: [],
+  runtimeMode: 'external',
 })
 
 describe('EncodeModuleView', () => {

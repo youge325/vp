@@ -243,10 +243,8 @@ def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None
             start_source_frame=start,
             source_frames=video_info["source_frames"],
         )
-        output_index = resume_state.completed_output_frames
         for emitted_count, frame in enumerate(frames, start=1):
-            encode_queue.put(EncodedFrame(output_index=output_index, frame=frame))
-            output_index += 1
+            encode_queue.put(EncodedFrame(frame=frame))
             next_source_frame = schedule.get(emitted_count)
             if next_source_frame is not None:
                 from app.processing.streaming.queues import SegmentBoundary
@@ -315,12 +313,6 @@ def _workflow_config(segment_frames: int = 2) -> tuple[dict, dict, list[dict], d
             "enabled": True,
             "scaleFactor": 2.0,
             "algorithm": "placeholder",
-        },
-        "anime": {
-            "enabled": False,
-            "profile": "clean-lines",
-            "denoise": 10,
-            "edgeBoost": 15,
         },
     }
     encode_config = {
@@ -512,12 +504,6 @@ def test_streaming_pipeline_uses_scaled_encoder_dimensions_for_onnx_super_resolu
             "algorithm": "onnx",
             "onnxModel": "sr.onnx",
         },
-        "anime": {
-            "enabled": False,
-            "profile": "clean-lines",
-            "denoise": 10,
-            "edgeBoost": 15,
-        },
     }
     encode_config = {
         "codec": "libx264",
@@ -575,7 +561,7 @@ def test_streaming_pipeline_uses_stage_worker_pipeline_for_processing_steps(monk
 
     def fake_worker_pipeline(**kwargs):
         calls.append(kwargs["stage_plan"])
-        kwargs["encode_queue"].put(EncodedFrame(output_index=0, frame=_frame(9)))
+        kwargs["encode_queue"].put(EncodedFrame(frame=_frame(9)))
         kwargs["encode_queue"].put(StreamEnd(next_source_frame=1))
 
     _install_video_frames_rename_hook(monkeypatch, wrapper)

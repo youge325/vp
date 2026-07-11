@@ -22,7 +22,6 @@ const option = (
 })
 
 const makeEnv = (): EnvironmentCheckResult => ({
-  type: 'check',
   ffmpeg: {
     available: true,
     hwaccels: [],
@@ -34,7 +33,6 @@ const makeEnv = (): EnvironmentCheckResult => ({
         family: 'software',
         codec: 'hevc',
         available: true,
-        pixelFormats: [],
         hardwareDevices: [],
         options: [option('preset', 'medium')],
         rateControlModes: [{ mode: 'crf', label: 'CRF', defaultValue: 18, unit: 'CRF' }],
@@ -45,21 +43,18 @@ const makeEnv = (): EnvironmentCheckResult => ({
         family: 'nvidia',
         codec: 'hevc',
         available: true,
-        pixelFormats: [],
         hardwareDevices: [],
         options: [option('preset', 'p5'), option('tune', 'hq')],
         rateControlModes: [{ mode: 'cq', label: 'CQ', defaultValue: 24, unit: 'CQ' }],
       },
     ],
   },
-  gpu: { available: true, devices: ['GPU'], adapters: [] },
-  tensorBackends: { pytorch: false, paddle: false, onnx: false },
-  tensorEngines: {},
-  onnxRuntime: { available: false, providers: [] },
-  rifeModel: { available: false },
+  gpu: { adapters: [] },
+  tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
   interpolationAlgorithms: [],
   superResolutionAlgorithms: [],
-  animeProfiles: [],
+  runtimeMode: 'external',
 })
 
 describe('useEncodeForm profile binding', () => {

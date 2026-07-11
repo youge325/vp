@@ -33,9 +33,6 @@ def cmd_info(args: argparse.Namespace) -> None:
     try:
         info = ffmpeg.get_video_info(input_path)
         fps = ffmpeg.get_fps(input_path)
-        frames = ffmpeg.get_frame_count(input_path)
-        duration = ffmpeg.get_duration(input_path)
-        has_audio = ffmpeg.has_audio(input_path)
         video_codec = ffmpeg.get_primary_video_codec(input_path)
 
         width = 0
@@ -48,9 +45,6 @@ def cmd_info(args: argparse.Namespace) -> None:
 
         ndjson.info(
             fps=fps,
-            frames=frames,
-            duration=duration,
-            hasAudio=has_audio,
             width=width,
             height=height,
             videoCodec=video_codec,

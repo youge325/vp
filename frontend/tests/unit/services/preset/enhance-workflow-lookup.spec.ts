@@ -25,21 +25,18 @@ const superResolution: AlgorithmInfo = {
 
 function env(): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
       available: true,
       hwaccels: [],
       encoderProfiles: [],
       decoderProfiles: [],
     },
-    gpu: { available: true, devices: [], adapters: [] },
-    tensorBackends: { pytorch: true, paddle: true, onnx: true },
+    gpu: { adapters: [] },
     tensorEngines: { pytorch: ['cuda'], paddle: ['cuda'], onnx: ['cuda'] },
-    onnxRuntime: { available: true, providers: ['CUDAExecutionProvider'] },
-    rifeModel: { available: true, version: '4.25' },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [interpolation],
     superResolutionAlgorithms: [superResolution],
-    animeProfiles: [],
+    runtimeMode: 'bundled',
   }
 }
 

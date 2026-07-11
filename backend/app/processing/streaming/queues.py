@@ -36,7 +36,6 @@ _QUEUE_POLL_INTERVAL_SECONDS = 1.0
 class EncodedFrame:
     """Processed frame ready to feed the encoder."""
 
-    output_index: int
     frame: np.ndarray
 
 

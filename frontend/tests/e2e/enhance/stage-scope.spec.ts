@@ -12,9 +12,6 @@ interface InjectedMediaItem {
     height: number
     fps: number
     videoCodec: string
-    audioCodec: string
-    duration: number
-    bitrate: number
   }
   decodeConfig: Record<string, unknown>
   encodeConfig: Record<string, unknown>
@@ -65,7 +62,7 @@ function makeItem(id: string, displayName: string, selected: boolean): InjectedM
     inputPath: `C:/tmp/${displayName}`,
     selected,
     inspecting: false,
-    info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264', audioCodec: 'aac', duration: 60, bitrate: 5000 },
+    info: { width: 1920, height: 1080, fps: 30, videoCodec: 'h264' },
     decodeConfig: { mode: 'software', hwaccel: '', decoder: 'software', options: {} },
     encodeConfig: { codec: 'h264', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 23 }, options: {} },
     workflowConfig: {
@@ -73,7 +70,6 @@ function makeItem(id: string, displayName: string, selected: boolean): InjectedM
       processOrder: 'super_resolution_then_interpolation',
       interpolation: { enabled: false },
       superResolution: { enabled: false },
-      anime: { enabled: false },
       preprocess: { enabled: false, filters: [] },
       postprocess: { enabled: false, filters: [] },
     },

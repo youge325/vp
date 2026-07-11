@@ -28,7 +28,6 @@ export interface CodecProfileSpec {
   family: CodecFamily
   codec: string
   available: boolean
-  pixelFormats: string[]
   hardwareDevices: string[]
   options: CapabilityOptionSpec[]
 }

@@ -5,40 +5,40 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function env(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
       available: true,
       hwaccels: [],
       encoderProfiles: [],
       decoderProfiles: [],
     },
-    gpu: { available: false, devices: [], adapters: [] },
-    tensorBackends: {},
-    tensorEngines: {},
-    onnxRuntime: { available: false, providers: [] },
-    rifeModel: { available: false },
+    gpu: { adapters: [] },
+    tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
+    interpolationAlgorithms: [],
+    superResolutionAlgorithms: [],
+    runtimeMode: 'external',
     ...overrides,
   } as EnvironmentCheckResult
 }
 
 describe('enhance engine defaults', () => {
   it('selects the first backend engine for general enhance workflows', () => {
-    expect(pickDefaultEngine(env({ tensorEngines: { onnx: ['tensorrt', 'cuda'] } }), 'onnx')).toBe('tensorrt')
+    expect(pickDefaultEngine(env({ tensorEngines: { pytorch: [], paddle: [], onnx: ['tensorrt', 'cuda'] } }), 'onnx')).toBe('tensorrt')
     expect(pickDefaultEngine(null, 'onnx')).toBeUndefined()
   })
 
   it('applies vendor-specific interpolation engine preferences', () => {
     const nvidia = env({
-      gpu: { available: true, devices: ['RTX'], adapters: [{ name: 'RTX', vendor: 'nvidia', deviceType: 'discrete' }] },
-      tensorEngines: { pytorch: ['cuda', 'tensorrt'] },
+      gpu: { adapters: [{ name: 'RTX', vendor: 'nvidia', deviceType: 'discrete' }] },
+      tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: [], onnx: [] },
     })
     const hygon = env({
-      gpu: { available: true, devices: ['DCU'], adapters: [{ name: 'DCU', vendor: 'hygon', deviceType: 'discrete' }] },
-      tensorEngines: { pytorch: ['cuda', 'dcu'] },
+      gpu: { adapters: [{ name: 'DCU', vendor: 'hygon', deviceType: 'discrete' }] },
+      tensorEngines: { pytorch: ['cuda', 'dcu'], paddle: [], onnx: [] },
     })
     const generic = env({
-      gpu: { available: true, devices: ['GPU'], adapters: [{ name: 'GPU', vendor: 'unknown', deviceType: 'discrete' }] },
-      tensorEngines: { pytorch: ['cuda', 'tensorrt'] },
+      gpu: { adapters: [{ name: 'GPU', vendor: 'other', deviceType: 'discrete' }] },
+      tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: [], onnx: [] },
     })
 
     expect(pickDefaultInterpolationEngine(nvidia, 'pytorch')).toBe('tensorrt')

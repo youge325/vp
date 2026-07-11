@@ -14,7 +14,6 @@ class PaddleGanVsrSpec:
     """Metadata for one bundled PaddleGAN video super-resolution model."""
 
     model_id: str
-    display_name: str
     subdir: str
     filename: str
     sequence_mode: str
@@ -25,7 +24,6 @@ class PaddleGanVsrSpec:
 PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
     "ppmsvsr": PaddleGanVsrSpec(
         model_id="ppmsvsr",
-        display_name="PP-MSVSR",
         subdir="ppmsvsr",
         filename="PP-MSVSR_reds_x4.pdparams",
         sequence_mode="recurrent",
@@ -34,7 +32,6 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
     ),
     "ppmsvsr-large": PaddleGanVsrSpec(
         model_id="ppmsvsr-large",
-        display_name="PP-MSVSR-L",
         subdir="ppmsvsr-large",
         filename="PP-MSVSR-L_reds_x4.pdparams",
         sequence_mode="recurrent",
@@ -43,7 +40,6 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
     ),
     "edvr": PaddleGanVsrSpec(
         model_id="edvr",
-        display_name="EDVR",
         subdir="edvr",
         filename="EDVR_L_w_tsa_SRx4.pdparams",
         sequence_mode="window",
@@ -51,7 +47,6 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
     ),
     "basicvsr": PaddleGanVsrSpec(
         model_id="basicvsr",
-        display_name="BasicVSR",
         subdir="basicvsr",
         filename="BasicVSR_reds_x4.pdparams",
         sequence_mode="recurrent",
@@ -60,7 +55,6 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
     ),
     "iconvsr": PaddleGanVsrSpec(
         model_id="iconvsr",
-        display_name="IconVSR",
         subdir="iconvsr",
         filename="IconVSR_reds_x4.pdparams",
         sequence_mode="recurrent",
@@ -69,7 +63,6 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
     ),
     "basicvsr-plus-plus": PaddleGanVsrSpec(
         model_id="basicvsr-plus-plus",
-        display_name="BasicVSR++",
         subdir="basicvsr-plus-plus",
         filename="BasicVSR++_reds_x4.pdparams",
         sequence_mode="recurrent",

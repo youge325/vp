@@ -11,18 +11,15 @@ import type { EnvironmentCheckResult } from '@/types/domain/env'
 
 function makeEnv(): EnvironmentCheckResult {
   return {
-    type: 'check',
     ffmpeg: {
       available: true,
       hwaccels: [],
       encoderProfiles: [],
       decoderProfiles: [],
     },
-    gpu: { available: true, devices: ['GPU'], adapters: [] },
-    tensorBackends: { pytorch: true, paddle: true, onnx: true },
+    gpu: { adapters: [] },
     tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda', 'tensorrt'], onnx: ['cuda', 'tensorrt'] },
-    onnxRuntime: { available: true, providers: ['CUDAExecutionProvider'] },
-    rifeModel: { available: true, version: '4.25' },
+    backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
     interpolationAlgorithms: [
       { name: 'rife', tensorBackends: ['pytorch', 'onnx'], models: ['4.25'], onnxModels: ['rife.onnx'] },
       { name: 'rife-lite', tensorBackends: ['pytorch'], models: ['lite'], onnxModels: [] },
@@ -51,7 +48,7 @@ function makeEnv(): EnvironmentCheckResult {
         defaultNumFrames: 5,
       },
     ],
-    animeProfiles: ['clean-lines'],
+    runtimeMode: 'bundled',
   }
 }
 

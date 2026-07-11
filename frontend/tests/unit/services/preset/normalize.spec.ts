@@ -19,7 +19,6 @@ const decoderProfile = (
   family,
   codec,
   available: true,
-  pixelFormats: [],
   hardwareDevices,
   hardwareDeviceOptions,
   options: [
@@ -36,21 +35,18 @@ const decoderProfile = (
 })
 
 const makeEnv = (decoderProfiles: EnvironmentCheckResult['ffmpeg']['decoderProfiles']): EnvironmentCheckResult => ({
-  type: 'check',
   ffmpeg: {
     available: true,
     hwaccels: ['cuda', 'qsv', 'd3d11va'],
     encoderProfiles: [],
     decoderProfiles,
   },
-  gpu: { available: true, devices: ['GPU'], adapters: [] },
-  tensorBackends: { pytorch: false, paddle: false, onnx: false },
-  tensorEngines: {},
-  onnxRuntime: { available: false, providers: [] },
-  rifeModel: { available: false },
+  gpu: { adapters: [] },
+  tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
   interpolationAlgorithms: [],
   superResolutionAlgorithms: [],
-  animeProfiles: [],
+  runtimeMode: 'external',
 })
 
 const baseDecodeConfig = (overrides: Partial<DecodeConfig> = {}): DecodeConfig => ({

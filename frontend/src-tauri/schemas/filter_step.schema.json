@@ -4,7 +4,7 @@
   "type": "object",
   "properties": {
     "kind": {
-      "type": "string"
+      "$ref": "#/$defs/FilterStepKind"
     },
     "enabled": {
       "type": "boolean"
@@ -18,5 +18,19 @@
   "required": [
     "kind",
     "enabled"
-  ]
+  ],
+  "$defs": {
+    "FilterStepKind": {
+      "type": "string",
+      "enum": [
+        "scale",
+        "crop",
+        "pad",
+        "sharpen",
+        "denoise",
+        "color",
+        "anime_cleanup"
+      ]
+    }
+  }
 }

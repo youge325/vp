@@ -60,10 +60,6 @@ export function createEnhanceOptionSetters(form: EnhanceOptionForm) {
     form.processOrder = toProcessOrder(value)
   }
 
-  function setAnimeProfile(value: string): void {
-    form.animeProfile = value
-  }
-
   return {
     setInterpolationBackend,
     setInterpolationEngine,
@@ -78,6 +74,5 @@ export function createEnhanceOptionSetters(form: EnhanceOptionForm) {
     setSuperResolutionOnnxModel,
     setSuperResolutionScale,
     setProcessOrder,
-    setAnimeProfile,
   }
 }

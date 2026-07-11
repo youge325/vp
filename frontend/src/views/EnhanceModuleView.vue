@@ -225,39 +225,5 @@ const { targetLabel } = useEditingScope()
       </div>
     </section>
 
-    <section class="panel-surface">
-      <div class="panel-head">
-        <h2>动漫优化</h2>
-        <label class="toggle-chip">
-          <input v-model="form.animeEnabled" type="checkbox" />
-          <span>启用</span>
-        </label>
-      </div>
-
-      <div class="field-grid field-grid-3">
-        <BaseSelect
-          label="预设"
-          :model-value="form.animeProfile"
-          :options="options.animeProfileOptions"
-          @update:model-value="options.setAnimeProfile"
-        />
-
-        <BaseNumber
-          label="降噪"
-          :model-value="form.animeDenoise"
-          :min="0"
-          :max="100"
-          @update:model-value="(v) => (form.animeDenoise = v)"
-        />
-
-        <BaseNumber
-          label="边缘增强"
-          :model-value="form.animeEdgeBoost"
-          :min="0"
-          :max="100"
-          @update:model-value="(v) => (form.animeEdgeBoost = v)"
-        />
-      </div>
-    </section>
   </div>
 </template>

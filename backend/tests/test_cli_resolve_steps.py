@@ -21,12 +21,6 @@ def _make_workflow_config(**overrides):
             "scaleFactor": 2.0,
             "algorithm": "placeholder",
         },
-        "anime": {
-            "enabled": False,
-            "profile": "clean-lines",
-            "denoise": 10,
-            "edgeBoost": 15,
-        },
         "preprocess": {"enabled": False, "filters": []},
         "postprocess": {"enabled": False, "filters": []},
     }

@@ -5,6 +5,7 @@ import type {
   EncodeConfig,
   OutputConfig,
   TaskErrorPayload,
+  VideoInfo,
   WorkflowConfig,
 } from '../protocol'
 import type { ResumeStatus } from './batch'
@@ -24,16 +25,7 @@ export interface OperationIssue {
   error: TaskError
 }
 
-export interface VideoInfoResult {
-  type: 'info'
-  fps: number
-  frames: number
-  duration: number
-  width: number
-  height: number
-  hasAudio: boolean
-  videoCodec: string
-}
+export type VideoInfoResult = VideoInfo
 
 // Phase 16 — ``error: TaskError | null`` 字段移除。Phase 13.1 拆分后这个
 // 字段在视图 / batch 任何地方都没有 reader,reducer 链路写入是纯 dead

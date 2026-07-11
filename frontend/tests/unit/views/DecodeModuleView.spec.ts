@@ -13,14 +13,12 @@ const decoderProfile = (name: string, label: string): DecoderProfileSpec => ({
   family: name === 'software' ? 'software' : 'nvidia',
   codec: 'h264',
   available: true,
-  pixelFormats: [],
   hardwareDevices: name === 'software' ? [] : ['cuda'],
   hardwareDeviceOptions: {},
   options: [],
 })
 
 const makeEnv = (): EnvironmentCheckResult => ({
-  type: 'check',
   ffmpeg: {
     available: true,
     hwaccels: ['cuda'],
@@ -30,14 +28,12 @@ const makeEnv = (): EnvironmentCheckResult => ({
       decoderProfile('h264_cuvid', 'NVDEC H.264'),
     ],
   },
-  gpu: { available: true, devices: ['GPU'], adapters: [] },
-  tensorBackends: { pytorch: false, paddle: false, onnx: false },
-  tensorEngines: {},
-  onnxRuntime: { available: false, providers: [] },
-  rifeModel: { available: false },
+  gpu: { adapters: [] },
+  tensorEngines: { pytorch: [], paddle: [], onnx: [] },
+  backendDeviceSupport: { pytorch: [], paddle: [], onnx: [] },
   interpolationAlgorithms: [],
   superResolutionAlgorithms: [],
-  animeProfiles: [],
+  runtimeMode: 'external',
 })
 
 describe('DecodeModuleView', () => {

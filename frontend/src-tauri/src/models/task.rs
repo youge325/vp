@@ -146,14 +146,34 @@ pub struct TaskCancelledPayload {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct VideoInfo {
-    #[serde(rename = "type")]
-    pub kind: String,
     pub fps: f64,
-    #[ts(type = "number")]
-    pub frames: u64,
-    pub duration: f64,
     pub width: u32,
     pub height: u32,
-    pub has_audio: bool,
     pub video_codec: String,
+}
+
+#[cfg(test)]
+mod video_info_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn video_info_ignores_backend_envelope_and_removed_diagnostics() {
+        let raw = json!({
+            "type": "info",
+            "fps": 24.0,
+            "frames": 240,
+            "duration": 10.0,
+            "width": 1920,
+            "height": 1080,
+            "hasAudio": true,
+            "videoCodec": "h264"
+        });
+
+        let info: VideoInfo = serde_json::from_value(raw).expect("video info");
+        assert_eq!(
+            serde_json::to_value(info).expect("serialize video info"),
+            json!({ "fps": 24.0, "width": 1920, "height": 1080, "videoCodec": "h264" })
+        );
+    }
 }

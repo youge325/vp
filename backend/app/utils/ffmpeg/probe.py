@@ -305,7 +305,6 @@ def parse_codec_profile(
         "family": metadata["family"],
         "codec": metadata["codec"],
         "available": True,
-        "pixelFormats": pixel_formats,
         "hardwareDevices": hardware_devices,
         "options": options,
     }
@@ -678,22 +677,3 @@ def is_available(ffmpeg_path: str) -> bool:
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         return False
     return result.returncode == 0
-
-
-def get_version(ffmpeg_path: str) -> str | None:
-    try:
-        result = subprocess.run(
-            [ffmpeg_path, "-version"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=10,
-            check=False,
-            **hidden_subprocess_kwargs(),
-        )
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-        return None
-    if result.returncode != 0:
-        return None
-    return result.stdout.strip().splitlines()[0] if result.stdout.strip() else None

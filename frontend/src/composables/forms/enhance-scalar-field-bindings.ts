@@ -61,22 +61,6 @@ export function createEnhanceScalarFieldBindings({
     (c) => c.processOrder as ProcessOrder,
     (c, v: ProcessOrder) => { c.processOrder = v },
   )
-  const animeEnabled = field(
-    (c) => c.anime.enabled,
-    (c, v: boolean) => { c.anime.enabled = v },
-  )
-  const animeProfile = field(
-    (c) => c.anime.profile,
-    (c, v: string) => { c.anime.profile = v },
-  )
-  const animeDenoise = field(
-    (c) => c.anime.denoise,
-    (c, v: number) => { c.anime.denoise = v },
-  )
-  const animeEdgeBoost = field(
-    (c) => c.anime.edgeBoost,
-    (c, v: number) => { c.anime.edgeBoost = v },
-  )
 
   return {
     interpolationEngine,
@@ -90,9 +74,5 @@ export function createEnhanceScalarFieldBindings({
     superResolutionEngine,
     superResolutionOnnxModel,
     processOrder,
-    animeEnabled,
-    animeProfile,
-    animeDenoise,
-    animeEdgeBoost,
   }
 }

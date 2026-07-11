@@ -10,7 +10,6 @@ import {
   buildEngineOptions,
   buildModelOptions,
   buildOnnxModelOptions,
-  buildProfileOptions,
 } from '@/services/preset/enhance-options'
 import type { useEnhanceForm } from '@/composables/forms/useEnhanceForm'
 
@@ -36,8 +35,6 @@ type EnhanceOptionFormField =
   | 'superResolutionOnnxModels'
   | 'superResolutionOnnxModelDetails'
   | 'processOrder'
-  | 'animeProfile'
-  | 'animeProfiles'
 
 export type EnhanceOptionForm = Pick<ReturnType<typeof useEnhanceForm>, EnhanceOptionFormField>
 
@@ -80,7 +77,6 @@ export function createEnhanceOptionState(form: EnhanceOptionForm) {
   const superResolutionOnnxHint = computed(() =>
     superResolutionOnnxDisabled.value ? SUPER_RESOLUTION_ONNX_EMPTY_HINT : undefined,
   )
-  const animeProfileOptions = computed(() => buildProfileOptions(form.animeProfiles))
 
   return {
     backendOptions,
@@ -95,7 +91,6 @@ export function createEnhanceOptionState(form: EnhanceOptionForm) {
     superResolutionOnnxOptions,
     superResolutionOnnxDisabled,
     superResolutionOnnxHint,
-    animeProfileOptions,
     interpolationShowEngineSelector: interpolationCapabilities.showEngineSelector,
     superResolutionShowEngineSelector: superResolutionCapabilities.showEngineSelector,
     fpsModeOptions: FPS_MODE_OPTIONS,

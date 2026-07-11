@@ -16,7 +16,7 @@ test.describe('Environment check', () => {
     expect(['probe', 'cache']).toContain(result.source)
     expect(result.result).toHaveProperty('ffmpeg')
     expect(result.result.ffmpeg.available).toBe(true)
-    expect(result.result).toHaveProperty('resources')
+    expect(result.result).toHaveProperty('runtimeMode')
     expect(result.checkedAt).toBeTruthy()
   })
 
