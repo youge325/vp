@@ -144,6 +144,10 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "from app.utils.logger import get_logger\nlogger = get_logger(__name__)\n",
         ),
         (
+            "frame-filter-imperative-dispatch",
+            "if kind == 'scale':\n    return self._apply_scale(frame, params)\n",
+        ),
+        (
             "rust-untyped-resume-inspection-command",
             "async fn check_resume_state() -> Result<Value, ShellError> { todo!() }\n",
         ),
@@ -185,6 +189,14 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
         ("obsolete-frontend-video-info-fields", "const info = { type: 'info' }\n"),
         ("preset-sync-test-only-return", "return {\n    persistDraft,\n}\n"),
         ("enhance-onnx-alias-return", "return {\n    isOnnxBackend,\n}\n"),
+        (
+            "enhance-model-selection-dead-output",
+            "interface EnhanceModelSelection {\n  currentSuperResolutionModelDetail: ModelVariantInfo\n}\n",
+        ),
+        (
+            "enhance-runtime-view-dead-output",
+            "interface EnhanceRuntimeView {\n  superResolutionRuntimeEstimate: RuntimeMetricEstimate\n}\n",
+        ),
         ("positional-workbench-module-access", "const module = WORKBENCH_MODULES[0]\n"),
         ("hardcoded-workbench-module-route", "const route = { path: '/home' }\n"),
         ("stage-file-chunk-encoding-leak", "frame = read_rgb_frame(stream)\n"),
@@ -198,6 +210,7 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
         ("batch-event-interface-mirror", "interface EventHandlers {}\n"),
         ("worker-runtime-lifecycle-0", "spawn_stage_workers(plans)\n"),
         ("worker-runtime-lifecycle-1", "threading.Thread(target=run)\n"),
+        ("worker-processes-public-lifecycle-helpers", "def spawn_stage_workers(plans):\n    pass\n"),
         ("video-dimension-stream-loop-0", "for stream in info.get('streams', []):\n    pass\n"),
         ("video-dimension-stream-loop-1", "for stream in info.get('streams', []):\n    pass\n"),
         ("benchmark-direction-comparator-duplicates", "def _compare_lower_is_worse():\n    pass\n"),

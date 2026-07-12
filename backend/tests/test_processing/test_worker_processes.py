@@ -26,10 +26,10 @@ def test_stage_worker_session_owns_spawn_stderr_and_cleanup(monkeypatch) -> None
         calls.append(("stderr", handle_arg.plan.config.stage_index))
         callbacks[1](3, 4)
 
-    monkeypatch.setattr(processes, "spawn_stage_workers", fake_spawn)
+    monkeypatch.setattr(processes, "_spawn_stage_workers", fake_spawn)
     monkeypatch.setattr(processes, "read_worker_stderr", fake_stderr)
     monkeypatch.setattr(processes, "close_pipe", lambda pipe: calls.append(("close", pipe.name)))
-    monkeypatch.setattr(processes, "wait_for_workers", lambda handles, _queue: calls.append(("wait", len(handles))))
+    monkeypatch.setattr(processes, "_wait_for_workers", lambda handles, _queue: calls.append(("wait", len(handles))))
 
     progress: list[tuple[int, int]] = []
     plans = [object()]

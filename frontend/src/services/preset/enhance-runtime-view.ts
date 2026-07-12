@@ -23,7 +23,6 @@ interface EnhanceRuntimeView {
   superResolutionFixedWindowRows: MetricRow[]
   interpolationInputDimensions: VideoDimensions | null
   interpolationRuntimeEstimate: RuntimeMetricEstimate | null
-  superResolutionRuntimeEstimate: RuntimeMetricEstimate | null
   interpolationMetricRows: MetricRow[]
   superResolutionMetricRows: MetricRow[]
   combinedPeakVramBytes: number | null
@@ -59,6 +58,8 @@ export function buildEnhanceRuntimeView({
 
   return {
     ...rows,
-    ...estimates,
+    interpolationInputDimensions: estimates.interpolationInputDimensions,
+    interpolationRuntimeEstimate: estimates.interpolationRuntimeEstimate,
+    combinedPeakVramBytes: estimates.combinedPeakVramBytes,
   }
 }

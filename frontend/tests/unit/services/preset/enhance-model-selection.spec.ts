@@ -81,7 +81,6 @@ describe('enhance model selection', () => {
     expect(selection.interpolationOnnxModelDetails).toHaveLength(1)
     expect(selection.currentInterpolationModelDetail?.name).toBe('rife.onnx')
     expect(selection.currentInterpolationRuntimeDetail?.label).toBe('RIFE ONNX')
-    expect(selection.currentSuperResolutionModelDetail?.name).toBe('x4')
     expect(selection.currentSuperResolutionRuntimeDetail?.metrics.analysisNotes).toEqual(['TensorRT override'])
     expect(selection.superResolutionRuntimeFrameCount).toBe(7)
   })

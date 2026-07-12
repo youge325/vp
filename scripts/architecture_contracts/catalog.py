@@ -157,6 +157,18 @@ FORBIDDEN_PATTERN_RULES = (
         r"^  (?:superResolutionModelDetails|currentSuperResolutionModelDetail|currentSuperResolutionRuntimeDetail|superResolutionRuntimeFrameCount|superResolutionRuntimeEstimate)\s*:|\.\.\.(?:modelSelection|runtimeView)\b",
         "enhance view-model exposes an internal super-resolution calculation",
     ),
+    _forbid(
+        "enhance-model-selection-dead-output",
+        "frontend/src/services/preset/enhance-model-selection.ts",
+        r"interface\s+EnhanceModelSelection\s*\{[\s\S]{0,1000}\b(?:superResolutionModelDetails|currentSuperResolutionModelDetail)\s*:|return\s*\{[\s\S]{0,800}\b(?:superResolutionModelDetails|currentSuperResolutionModelDetail)\s*,",
+        "enhance model selection exposes a test-only super-resolution intermediate",
+    ),
+    _forbid(
+        "enhance-runtime-view-dead-output",
+        "frontend/src/services/preset/enhance-runtime-view.ts",
+        r"interface\s+EnhanceRuntimeView\s*\{[\s\S]{0,1000}\bsuperResolutionRuntimeEstimate\s*:|\.\.\.estimates\b",
+        "enhance runtime view exposes an internal super-resolution estimate",
+    ),
     ForbiddenReferenceRule(
         "obsolete-backend-internal-symbols",
         roots=("backend/app",),
@@ -223,6 +235,12 @@ FORBIDDEN_PATTERN_RULES = (
         "backend/app/processing/streaming/worker_processes.py",
         r"^\s*def\s+backend_dir\b",
         "public worker-process backend directory helper",
+    ),
+    _forbid(
+        "worker-processes-public-lifecycle-helpers",
+        "backend/app/processing/streaming/worker_processes.py",
+        r"^def\s+(?:spawn_stage_workers|wait_for_workers)\b|__all__\s*=\s*\[[\s\S]{0,300}[\"'](?:spawn_stage_workers|wait_for_workers)[\"']",
+        "worker lifecycle helper exposed outside stage_worker_session",
     ),
     _forbid(
         "stage-plan-dead-fields",
@@ -319,6 +337,12 @@ FORBIDDEN_PATTERN_RULES = (
         "backend/app/processing/frame_filters.py",
         r"from\s+app\.utils\.logger\s+import\s+get_logger|^\s*logger\s*=\s*get_logger\s*\(\s*__name__\s*\)",
         "write-only frame filter logger",
+    ),
+    _forbid(
+        "frame-filter-imperative-dispatch",
+        "backend/app/processing/frame_filters.py",
+        r"kind\s+not\s+in\s+\{|getattr\s*\(\s*self\s*,\s*f?[\"']_apply_|^\s+def\s+_apply_(?:tensor_)?(?:scale|crop|pad|sharpen|denoise|color|anime_cleanup)\b|^\s*(?:if|elif)\s+kind\s*==",
+        "frame-filter orchestration contains concrete handler or imperative dispatch logic",
     ),
     _forbid(
         "rust-untyped-resume-inspection-command",
@@ -1196,8 +1220,14 @@ REQUIRED_PATTERN_RULES = (
     RequiredPatternRule(
         "shared-stage-worker-session",
         "backend/app/processing/streaming/worker_processes.py",
-        r"def\s+stage_worker_session\b[\s\S]*spawn_stage_workers\s*\([\s\S]*read_worker_stderr[\s\S]*wait_for_workers\s*\(",
+        r"def\s+stage_worker_session\b[\s\S]*_spawn_stage_workers\s*\([\s\S]*read_worker_stderr[\s\S]*_wait_for_workers\s*\(",
         "shared stage-worker session lifecycle is missing",
+    ),
+    RequiredPatternRule(
+        "declarative-frame-filter-handlers",
+        "backend/app/processing/frame_filter_handlers.py",
+        r"_NUMPY_FILTER_HANDLERS\s*:[\s\S]*[\"']anime_cleanup[\"'][\s\S]*_TENSOR_FILTER_HANDLERS\s*:[\s\S]*FILTER_KINDS\s*=\s*frozenset",
+        "declarative frame-filter handler maps are missing",
     ),
     RequiredPatternRule(
         "shared-decoded-frame-writer-thread",
@@ -1273,8 +1303,8 @@ REQUIRED_PATTERN_RULES = (
     ),
     RequiredPatternRule(
         "backend-anime-cleanup-runtime",
-        "backend/app/processing/frame_filters.py",
-        r"def\s+_apply_anime_cleanup\b[\s\S]*?\bapply_anime_cleanup\s*\(",
+        "backend/app/processing/frame_filter_handlers.py",
+        r"def\s+_apply_numpy_anime_cleanup\b[\s\S]*?\bapply_anime_cleanup\s*\(",
         "backend anime_cleanup frame filter dispatch is missing",
     ),
     RequiredPatternRule(

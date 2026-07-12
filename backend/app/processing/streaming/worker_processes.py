@@ -28,7 +28,7 @@ class _WorkerHandle:
     stderr_tail: deque[str]
 
 
-def spawn_stage_workers(
+def _spawn_stage_workers(
     plans: list[StageWorkerPlan],
     *,
     config_dir: Path,
@@ -71,7 +71,7 @@ def _backend_dir() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def wait_for_workers(handles: list[_WorkerHandle], error_queue: queue.Queue[BaseException]) -> None:
+def _wait_for_workers(handles: list[_WorkerHandle], error_queue: queue.Queue[BaseException]) -> None:
     for handle in handles:
         return_code = handle.process.wait()
         if return_code == 0:
@@ -99,7 +99,7 @@ def stage_worker_session(
     python_executable: str | None = None,
 ) -> Iterator[list[_WorkerHandle]]:
     with tempfile.TemporaryDirectory(prefix="vp-stage-workers-") as config_dir:
-        handles = spawn_stage_workers(
+        handles = _spawn_stage_workers(
             plans,
             config_dir=Path(config_dir),
             python_executable=python_executable or sys.executable,
@@ -122,13 +122,11 @@ def stage_worker_session(
             for handle in handles:
                 close_pipe(handle.process.stdin)
                 close_pipe(handle.process.stdout)
-            wait_for_workers(handles, error_queue)
+            _wait_for_workers(handles, error_queue)
             for thread in stderr_threads:
                 thread.join(timeout=1)
 
 
 __all__ = [
-    "spawn_stage_workers",
     "stage_worker_session",
-    "wait_for_workers",
 ]
