@@ -1,5 +1,5 @@
 // 批生命周期 facade — 把 queue / finalize / control / common 装配成
-// 与拆分前完全一致的 ``BatchLifecycle`` 公共接口。
+// 保持与拆分前一致的 lifecycle 返回形状。
 //
 // Phase 7a — 此前 ``lifecycle.ts`` 一个文件就是 321 LOC,把队列推进、
 // 终态回收、控制信号、辅助查找都揉在一起。拆分后:
@@ -7,7 +7,7 @@
 //   - ``queue.ts``     start / runNextQueuedItem / launchCurrentItem
 //   - ``finalize.ts``  finalizeCurrent / handleErrored
 //   - ``control.ts``   pause / resume / cancel
-//   - ``types.ts``     BatchLifecycleDeps / BatchLifecycle 接口
+//   - ``types.ts``     BatchLifecycleDeps 接口
 //   - ``index.ts``     这个文件,组装 + forward reference
 //
 // queue 与 finalize 互相调用(queue.runNextQueuedItem → finalize.handleErrored;
@@ -18,9 +18,9 @@ import { createCommonHelpers } from './common'
 import { createControlOps } from './control'
 import { createFinalizeOps } from './finalize'
 import { createQueueOps } from './queue'
-import type { BatchLifecycle, BatchLifecycleDeps } from './types'
+import type { BatchLifecycleDeps } from './types'
 
-export function createBatchLifecycle(deps: BatchLifecycleDeps): BatchLifecycle {
+export function createBatchLifecycle(deps: BatchLifecycleDeps) {
   const helpers = createCommonHelpers(deps)
 
   // Forward reference: queue uses finalize, finalize uses queue.
@@ -55,3 +55,5 @@ export function createBatchLifecycle(deps: BatchLifecycleDeps): BatchLifecycle {
     cancel: controlOps.cancel,
   }
 }
+
+export type BatchLifecycle = ReturnType<typeof createBatchLifecycle>

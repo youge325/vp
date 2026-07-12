@@ -124,6 +124,23 @@ describe('useDecodeForm decoder hardware devices', () => {
     expect(presetStore.draftPreset.decodeConfig.hwaccelDevice).toBe('1')
   })
 
+  it('combines profile and capability option bindings in the public form', () => {
+    const presetStore = usePresetStore()
+    const form = useDecodeForm()
+
+    form.setDecodeProfile('h264_cuvid')
+    form.setDecodeOption('resize', '1280x720')
+
+    expect(form.decoderProfileOptions.value).toContainEqual({
+      value: 'h264_cuvid',
+      label: 'NVDEC H.264',
+    })
+    expect(form.currentDecoderProfile.value?.name).toBe('h264_cuvid')
+    expect(form.decoderOptions.value.map((entry) => entry.name)).toEqual(['resize'])
+    expect(form.getDecodeOption(form.decoderOptions.value[0])).toBe('1280x720')
+    expect(presetStore.draftPreset.decodeConfig.options).toEqual({ resize: '1280x720' })
+  })
+
   it('falls back to software when selecting a profile without verified devices', () => {
     const form = useDecodeForm()
 

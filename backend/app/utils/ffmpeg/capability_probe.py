@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from app.utils.logger import get_logger
 
@@ -402,6 +403,19 @@ def _verify_decoder_hardware(
     return True
 
 
+@contextmanager
+def _decoder_probe_workspace(
+    probe_dir: str | None,
+    sample_cache: dict[str, str | None] | None,
+) -> Iterator[tuple[str, dict[str, str | None]]]:
+    if probe_dir is not None:
+        yield probe_dir, sample_cache if sample_cache is not None else {}
+        return
+
+    with tempfile.TemporaryDirectory(prefix="vp-decoder-probe-") as temp_dir:
+        yield temp_dir, {}
+
+
 def probe_decoder_hardware_devices(
     ffmpeg_path: str,
     decoder: str,
@@ -416,29 +430,18 @@ def probe_decoder_hardware_devices(
     if not candidates:
         return []
 
-    if probe_dir is None:
-        with tempfile.TemporaryDirectory(prefix="vp-decoder-probe-") as temp_dir:
-            return probe_decoder_hardware_devices(
-                ffmpeg_path,
-                decoder,
-                codec,
-                hardware_devices,
-                hwaccels,
-                encoder_names,
-                probe_dir=temp_dir,
-                sample_cache={},
-            )
+    with _decoder_probe_workspace(probe_dir, sample_cache) as (resolved_probe_dir, cache):
+        sample_path = _ensure_decoder_probe_sample(ffmpeg_path, codec, encoder_names, resolved_probe_dir, cache)
+        if sample_path is None:
+            logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
+            return []
 
-    cache = sample_cache if sample_cache is not None else {}
-    sample_path = _ensure_decoder_probe_sample(ffmpeg_path, codec, encoder_names, probe_dir, cache)
-    if sample_path is None:
-        logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
-        return []
-
-    devices = [device for device in candidates if _verify_decoder_hardware(ffmpeg_path, decoder, device, sample_path)]
-    if not devices:
-        logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
-    return devices
+        devices = [
+            device for device in candidates if _verify_decoder_hardware(ffmpeg_path, decoder, device, sample_path)
+        ]
+        if not devices:
+            logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
+        return devices
 
 
 def probe_decoder_hardware_device_options(
@@ -453,42 +456,30 @@ def probe_decoder_hardware_device_options(
     if not devices:
         return {}
 
-    if probe_dir is None:
-        with tempfile.TemporaryDirectory(prefix="vp-decoder-probe-") as temp_dir:
-            return probe_decoder_hardware_device_options(
-                ffmpeg_path,
-                decoder,
-                codec,
-                devices,
-                encoder_names,
-                probe_dir=temp_dir,
-                sample_cache={},
-            )
+    with _decoder_probe_workspace(probe_dir, sample_cache) as (resolved_probe_dir, cache):
+        sample_path = _ensure_decoder_probe_sample(ffmpeg_path, codec, encoder_names, resolved_probe_dir, cache)
+        if sample_path is None:
+            logger.debug("No decoder hardware device options passed FFmpeg verification for decoder %s", decoder)
+            return {device: [] for device in devices}
 
-    cache = sample_cache if sample_cache is not None else {}
-    sample_path = _ensure_decoder_probe_sample(ffmpeg_path, codec, encoder_names, probe_dir, cache)
-    if sample_path is None:
-        logger.debug("No decoder hardware device options passed FFmpeg verification for decoder %s", decoder)
-        return {device: [] for device in devices}
-
-    options_by_device: dict[str, list[dict[str, str]]] = {}
-    for device in devices:
-        options = [
-            {"value": value, "label": value}
-            for value in _DECODER_HARDWARE_DEVICE_PROBE_VALUES
-            if _verify_decoder_hardware(
-                ffmpeg_path,
-                decoder,
-                device,
-                sample_path,
-                device_value=value,
-            )
-        ]
-        if not options:
-            logger.debug(
-                "No decoder hardware device options passed FFmpeg verification for decoder %s device %s",
-                decoder,
-                device,
-            )
-        options_by_device[device] = options
-    return options_by_device
+        options_by_device: dict[str, list[dict[str, str]]] = {}
+        for device in devices:
+            options = [
+                {"value": value, "label": value}
+                for value in _DECODER_HARDWARE_DEVICE_PROBE_VALUES
+                if _verify_decoder_hardware(
+                    ffmpeg_path,
+                    decoder,
+                    device,
+                    sample_path,
+                    device_value=value,
+                )
+            ]
+            if not options:
+                logger.debug(
+                    "No decoder hardware device options passed FFmpeg verification for decoder %s device %s",
+                    decoder,
+                    device,
+                )
+            options_by_device[device] = options
+        return options_by_device

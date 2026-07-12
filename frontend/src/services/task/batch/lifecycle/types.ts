@@ -1,8 +1,8 @@
-// 批生命周期 — 类型定义(deps + facade 接口)。
+// 批生命周期依赖定义。
 //
 // Phase 7a — 单独成文件让 queue / finalize / control / common 都能
-// 引用同一个 BatchLifecycleDeps,而 index.ts(facade)只承担组装职责。
-// 与拆分前的 ``lifecycle.ts`` 公共 API 完全一致,callsite 不需要改动。
+// 引用同一个 BatchLifecycleDeps,而 index.ts(facade)负责组装并从返回值
+// 推导 BatchLifecycle 类型。
 //
 // Phase 13.1 — 新增 ``getItemRunState`` deps 与 ``getCurrentRunState`` /
 // ``getConsoleRunState`` facade 入口。``MediaItem`` 已不再持有 ``taskState``
@@ -42,19 +42,4 @@ export interface BatchLifecycleDeps {
   setPendingConflict: (descriptor: ResumeConflictDescriptor | null) => void
 
   buildRequest: (item: MediaItem, resumeMode?: ResumeMode) => TaskRequest
-}
-
-export interface BatchLifecycle {
-  getCurrentItem(): MediaItem | null
-  getConsoleItem(): MediaItem | null
-  getCurrentRunState(): MediaRunState | null
-  getConsoleRunState(): MediaRunState | null
-  runNextQueuedItem(): Promise<void>
-  launchCurrentItem(item: MediaItem, resumeMode?: ResumeMode): Promise<void>
-  finalizeCurrent(state: 'completed' | 'error' | 'cancelled'): Promise<void>
-  handleErrored(error: TaskError): Promise<void>
-  start(ids: string[]): Promise<void>
-  pause(): Promise<void>
-  resume(): Promise<void>
-  cancel(): Promise<void>
 }

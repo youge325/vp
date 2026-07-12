@@ -52,3 +52,24 @@ def test_unexpected_error_uses_typed_ndjson_emitter(monkeypatch: pytest.MonkeyPa
     assert captured[0]["code"] == "missing_ffmpeg"
     assert captured[0]["message"] == "ffmpeg executable missing"
     assert "traceback" in captured[0]["details"]
+
+
+def test_import_safe_fallback_builds_bootstrap_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[tuple[object, str, dict[str, Any]]] = []
+    monkeypatch.setattr(
+        app_main,
+        "_emit_error_payload",
+        lambda code, message, details: captured.append((code, message, details)),
+    )
+
+    try:
+        raise RuntimeError("ffmpeg bootstrap failure")
+    except RuntimeError as exc:
+        app_main._emit_unhandled_exception(exc)
+
+    assert len(captured) == 1
+    code, message, details = captured[0]
+    assert code == "missing_ffmpeg"
+    assert message == "ffmpeg bootstrap failure"
+    assert details["exception"] == "RuntimeError"
+    assert "RuntimeError: ffmpeg bootstrap failure" in details["traceback"]
