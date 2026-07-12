@@ -22,23 +22,23 @@ use crate::error::ShellError;
 
 // 对外只导出 3 个 API,与 Phase C.2.1 之前完全兼容(builder/runner/lib/
 // persistence/services/environment_service 仍可直接 ``use crate::runtime::*``)。
-pub use env_map::build_env_map;
+pub(crate) use env_map::build_env_map;
 use helpers::{directory_if_contains, first_existing_dir};
 use model::{has_default_rife_model, DEFAULT_RIFE_MODEL_FILENAME};
 
 #[derive(Debug, Clone)]
-pub struct ResolvedRuntimePaths {
-    pub backend_dir: PathBuf,
-    pub runtime_root: Option<PathBuf>,
-    pub python_executable: PathBuf,
-    pub ffmpeg_path: Option<PathBuf>,
-    pub ffprobe_path: Option<PathBuf>,
-    pub model_dir: Option<PathBuf>,
-    pub tensorrt_dir: Option<PathBuf>,
-    pub log_dir: PathBuf,
+pub(crate) struct ResolvedRuntimePaths {
+    pub(crate) backend_dir: PathBuf,
+    pub(crate) runtime_root: Option<PathBuf>,
+    pub(crate) python_executable: PathBuf,
+    pub(crate) ffmpeg_path: Option<PathBuf>,
+    pub(crate) ffprobe_path: Option<PathBuf>,
+    pub(crate) model_dir: Option<PathBuf>,
+    pub(crate) tensorrt_dir: Option<PathBuf>,
+    pub(crate) log_dir: PathBuf,
 }
 
-pub fn resolve_runtime_paths<R: Runtime>(
+pub(crate) fn resolve_runtime_paths<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<ResolvedRuntimePaths, ShellError> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -207,5 +207,5 @@ fn require_release_bundle_artifacts(
 #[cfg(test)]
 pub(crate) mod test_support {
     use std::sync::Mutex;
-    pub static VP_TENSORRT_DIR_LOCK: Mutex<()> = Mutex::new(());
+    pub(crate) static VP_TENSORRT_DIR_LOCK: Mutex<()> = Mutex::new(());
 }

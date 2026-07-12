@@ -6,7 +6,7 @@
 
 use super::ResolvedRuntimePaths;
 
-pub fn build_env_map(paths: &ResolvedRuntimePaths) -> Vec<(String, String)> {
+pub(crate) fn build_env_map(paths: &ResolvedRuntimePaths) -> Vec<(String, String)> {
     let mut envs = vec![
         ("PYTHONIOENCODING".to_string(), "utf-8".to_string()),
         ("PYTHONUTF8".to_string(), "1".to_string()),

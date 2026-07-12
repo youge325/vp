@@ -26,7 +26,7 @@ use crate::tasks::envelope::parse_last_json_line;
 
 /// Result classification for [`run_single_cli_command`].
 #[derive(Debug)]
-pub enum CliOutcome {
+pub(crate) enum CliOutcome {
     /// The process exited 0 and the last JSON line on stdout decoded
     /// successfully. The caller is responsible for further validation
     /// (typed deserialization, etc.).
@@ -45,7 +45,7 @@ impl CliOutcome {
     /// Phase 2.2 — 将三种 outcome 变体折叠为 ``Result<Value, ShellError>``。
     /// 消除 ``tasks/commands.rs`` 与 ``services/environment_service.rs`` 的重复
     /// match 逻辑,使信封折叠语义单点维护。
-    pub fn into_result(self) -> Result<Value, ShellError> {
+    pub(crate) fn into_result(self) -> Result<Value, ShellError> {
         match self {
             Self::Ok(value) => Ok(value),
             Self::FailedWithEnvelope(envelope) => Err(ShellError::BackendEnvelope {
@@ -94,7 +94,7 @@ fn try_parse_error_envelope(value: &Value) -> Option<TaskErrorPayload> {
 /// command is spawned manually (instead of ``Command::output``), the
 /// payload is written to stdin, the handle is dropped to signal EOF,
 /// and stdout/stderr are then drained synchronously.
-pub async fn run_single_cli_command(
+pub(crate) async fn run_single_cli_command(
     paths: &ResolvedRuntimePaths,
     args: &[String],
     stdin_payload: Option<&str>,

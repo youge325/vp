@@ -42,13 +42,14 @@ export function createEncodeFormBindings({
   })
 
   return {
-    ...profile,
+    encoderProfileOptions: profile.encoderProfileOptions,
+    encoderOptions: profile.encoderOptions,
+    setEncodeProfile: profile.setEncodeProfile,
     ...rateControl,
     ...outputSetters,
     containerOptions: CONTAINER_SELECT_OPTIONS,
     segmentFramesValue,
     setEncodeOption: options.setOption,
     getEncodeOption: options.getOption,
-    coerceOptionValue: options.coerceOptionValue,
   }
 }

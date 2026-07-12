@@ -17,20 +17,15 @@ interface EnhanceViewModelInput {
 interface EnhanceViewModel {
   interpolationModelDetails: ModelVariantInfo[]
   interpolationOnnxModelDetails: ModelVariantInfo[]
-  superResolutionModelDetails: ModelVariantInfo[]
   superResolutionOnnxModelDetails: ModelVariantInfo[]
   currentInterpolationModelDetail: ModelVariantInfo | undefined
-  currentSuperResolutionModelDetail: ModelVariantInfo | undefined
   currentInterpolationRuntimeDetail: ModelVariantInfo | null
-  currentSuperResolutionRuntimeDetail: ModelVariantInfo | null
-  superResolutionRuntimeFrameCount: number | null
   isPaddleGanSuperResolution: boolean
   isSuperResolutionInputFramesEditable: boolean
   effectiveSuperResolutionNumFrames: number
   superResolutionFixedWindowRows: MetricRow[]
   interpolationInputDimensions: VideoDimensions | null
   interpolationRuntimeEstimate: RuntimeMetricEstimate | null
-  superResolutionRuntimeEstimate: RuntimeMetricEstimate | null
   interpolationMetricRows: MetricRow[]
   superResolutionMetricRows: MetricRow[]
   combinedPeakVramBytes: number | null
@@ -58,7 +53,20 @@ export function buildEnhanceViewModel({
   })
 
   return {
-    ...modelSelection,
-    ...runtimeView,
+    interpolationModelDetails: modelSelection.interpolationModelDetails,
+    interpolationOnnxModelDetails: modelSelection.interpolationOnnxModelDetails,
+    superResolutionOnnxModelDetails: modelSelection.superResolutionOnnxModelDetails,
+    currentInterpolationModelDetail: modelSelection.currentInterpolationModelDetail,
+    currentInterpolationRuntimeDetail: modelSelection.currentInterpolationRuntimeDetail,
+    isPaddleGanSuperResolution: runtimeView.isPaddleGanSuperResolution,
+    isSuperResolutionInputFramesEditable: runtimeView.isSuperResolutionInputFramesEditable,
+    effectiveSuperResolutionNumFrames: runtimeView.effectiveSuperResolutionNumFrames,
+    superResolutionFixedWindowRows: runtimeView.superResolutionFixedWindowRows,
+    interpolationInputDimensions: runtimeView.interpolationInputDimensions,
+    interpolationRuntimeEstimate: runtimeView.interpolationRuntimeEstimate,
+    interpolationMetricRows: runtimeView.interpolationMetricRows,
+    superResolutionMetricRows: runtimeView.superResolutionMetricRows,
+    combinedPeakVramBytes: runtimeView.combinedPeakVramBytes,
+    combinedVramMetricRows: runtimeView.combinedVramMetricRows,
   }
 }

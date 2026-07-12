@@ -15,6 +15,7 @@ def _forbid(rule_id: str, path: str, pattern: str, message: str) -> ForbiddenPat
 
 ABSENT_PATH_RULES = (
     _absent("frontend-legacy-e2e-root", "frontend/e2e"),
+    _absent("frontend-misclassified-event-order-e2e", "frontend/tests/e2e/env/event-order.spec.ts"),
     _absent("frontend-environment-domain-mirror", "frontend/src/types/domain/env.ts"),
     _absent("frontend-capability-domain-mirror", "frontend/src/types/domain/capability.ts"),
     _absent("frontend-workflow-domain-mirror", "frontend/src/types/domain/workflow.ts"),
@@ -105,6 +106,50 @@ ABSENT_PATH_RULES = (
 
 
 FORBIDDEN_PATTERN_RULES = (
+    ForbiddenReferenceRule(
+        "frontend-obsolete-option-event-coercion",
+        roots=("frontend/src",),
+        patterns=(r"\bcoerceOptionValue\b",),
+        message="obsolete capability option event coercion",
+        suffixes=(".ts", ".tsx", ".vue"),
+    ),
+    ForbiddenReferenceRule(
+        "obsolete-e2e-task-glob",
+        roots=(".github/workflows",),
+        patterns=(r"[\"']\./e2e/task/\*\*/\*\.spec\.ts[\"']",),
+        message="obsolete E2E task glob",
+        suffixes=(".yml", ".yaml"),
+    ),
+    _forbid(
+        "e2e-coverage-wrong-root",
+        "frontend/tests/e2e/fixtures.ts",
+        r"\bfrontendRoot\b|fileURLToPath\s*\(",
+        "E2E coverage output is not rooted at the frontend working directory",
+    ),
+    RequiredPatternRule(
+        "e2e-coverage-working-directory",
+        "frontend/tests/e2e/fixtures.ts",
+        r"resolve\s*\(\s*process\.cwd\(\)\s*,\s*[\"']\.nyc_output[\"']\s*\)",
+        "E2E coverage must be written under frontend/.nyc_output",
+    ),
+    _forbid(
+        "encode-form-profile-forwarding",
+        "frontend/src/composables/forms/encode-form-bindings.ts",
+        r"\.\.\.profile\b|\bcoerceOptionValue\b",
+        "encode form exposes an internal profile or option conversion detail",
+    ),
+    _forbid(
+        "enhance-form-internal-forwarding",
+        "frontend/src/composables/forms/enhance-form-bindings.ts",
+        r"\.\.\.(?:algorithmBindings|viewBindings)\b|return\s+reactive\s*\(\s*\{[\s\S]{0,3000}\b(?:currentSuperResolutionAlgorithm|effectiveSuperResolutionNumFrames|superResolutionModelDetails|currentSuperResolutionModelDetail|currentSuperResolutionRuntimeDetail|superResolutionRuntimeEstimate)\s*[:,]",
+        "enhance form exposes an internal super-resolution projection",
+    ),
+    _forbid(
+        "enhance-view-model-internal-output",
+        "frontend/src/services/preset/enhance-view-model.ts",
+        r"^  (?:superResolutionModelDetails|currentSuperResolutionModelDetail|currentSuperResolutionRuntimeDetail|superResolutionRuntimeFrameCount|superResolutionRuntimeEstimate)\s*:|\.\.\.(?:modelSelection|runtimeView)\b",
+        "enhance view-model exposes an internal super-resolution calculation",
+    ),
     ForbiddenReferenceRule(
         "obsolete-backend-internal-symbols",
         roots=("backend/app",),
@@ -1042,7 +1087,7 @@ REQUIRED_PATTERN_RULES = (
     RequiredPatternRule(
         "typed-environment-protocol",
         "frontend/src-tauri/src/models/env.rs",
-        r"string_enum!\(AlgorithmFamily\b[\s\S]*string_enum!\(EnvironmentCheckSource\b[\s\S]*string_enum!\(InferenceEngine\b[\s\S]*string_enum!\(InputFrameMode\b[\s\S]*pub\s+enum\s+RuntimeMode\b",
+        r"string_enum!\(AlgorithmFamily\b[\s\S]*string_enum!\(EnvironmentCheckSource\b[\s\S]*string_enum!\(InferenceEngine\b[\s\S]*string_enum!\(InputFrameMode\b[\s\S]*pub(?:\s*\([^)]*\))?\s+enum\s+RuntimeMode\b",
         "strongly typed Rust environment protocol is missing",
     ),
     RequiredPatternRule(

@@ -12,7 +12,7 @@ macro_rules! string_enum {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
         #[serde(rename_all = "snake_case")]
         #[ts(export, export_to = "../../src/types/generated/")]
-        pub enum $name {
+        pub(crate) enum $name {
             $($variant),+
         }
     };
@@ -57,7 +57,7 @@ string_enum!(InputFrameMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
 #[serde(rename_all = "kebab-case")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub enum RuntimeMode {
+pub(crate) enum RuntimeMode {
     External,
     Bundled,
     ExpectedBundled,
@@ -66,212 +66,212 @@ pub enum RuntimeMode {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct CapabilityChoice {
-    pub label: String,
+pub(crate) struct CapabilityChoice {
+    pub(crate) label: String,
     #[ts(type = "string | number | boolean")]
-    pub value: Value,
+    pub(crate) value: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct CapabilityOptionSpec {
-    pub name: String,
-    pub label: String,
-    pub r#type: CapabilityOptionKind,
+pub(crate) struct CapabilityOptionSpec {
+    pub(crate) name: String,
+    pub(crate) label: String,
+    pub(crate) r#type: CapabilityOptionKind,
     #[ts(type = "string | number | boolean | null")]
-    pub default_value: Value,
+    pub(crate) default_value: Value,
     #[serde(default)]
-    pub choices: Vec<CapabilityChoice>,
+    pub(crate) choices: Vec<CapabilityChoice>,
     #[serde(default)]
-    pub min: Option<f64>,
+    pub(crate) min: Option<f64>,
     #[serde(default)]
-    pub max: Option<f64>,
+    pub(crate) max: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct RateControlModeSpec {
-    pub mode: RateControlMode,
-    pub label: String,
+pub(crate) struct RateControlModeSpec {
+    pub(crate) mode: RateControlMode,
+    pub(crate) label: String,
     #[ts(type = "string | number")]
-    pub default_value: Value,
-    pub unit: String,
+    pub(crate) default_value: Value,
+    pub(crate) unit: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct HardwareDeviceOptionSpec {
-    pub value: String,
-    pub label: String,
+pub(crate) struct HardwareDeviceOptionSpec {
+    pub(crate) value: String,
+    pub(crate) label: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct CodecProfileSpec {
-    pub name: String,
-    pub label: String,
-    pub family: CodecProfileFamily,
-    pub codec: String,
-    pub available: bool,
+pub(crate) struct CodecProfileSpec {
+    pub(crate) name: String,
+    pub(crate) label: String,
+    pub(crate) family: CodecProfileFamily,
+    pub(crate) codec: String,
+    pub(crate) available: bool,
     #[serde(default)]
-    pub hardware_devices: Vec<String>,
+    pub(crate) hardware_devices: Vec<String>,
     #[serde(default)]
-    pub options: Vec<CapabilityOptionSpec>,
+    pub(crate) options: Vec<CapabilityOptionSpec>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub rate_control_modes: Option<Vec<RateControlModeSpec>>,
+    pub(crate) rate_control_modes: Option<Vec<RateControlModeSpec>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub hardware_device_options: Option<HashMap<String, Vec<HardwareDeviceOptionSpec>>>,
+    pub(crate) hardware_device_options: Option<HashMap<String, Vec<HardwareDeviceOptionSpec>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct GpuAdapter {
-    pub name: String,
-    pub vendor: GpuVendor,
+pub(crate) struct GpuAdapter {
+    pub(crate) name: String,
+    pub(crate) vendor: GpuVendor,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct FfmpegInfo {
-    pub available: bool,
+pub(crate) struct FfmpegInfo {
+    pub(crate) available: bool,
     #[serde(default)]
-    pub hwaccels: Vec<String>,
+    pub(crate) hwaccels: Vec<String>,
     #[serde(default)]
-    pub encoder_profiles: Vec<CodecProfileSpec>,
+    pub(crate) encoder_profiles: Vec<CodecProfileSpec>,
     #[serde(default)]
-    pub decoder_profiles: Vec<CodecProfileSpec>,
+    pub(crate) decoder_profiles: Vec<CodecProfileSpec>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct GpuInfo {
+pub(crate) struct GpuInfo {
     #[serde(default)]
-    pub adapters: Vec<GpuAdapter>,
+    pub(crate) adapters: Vec<GpuAdapter>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct TensorEngines {
+pub(crate) struct TensorEngines {
     #[serde(default)]
-    pub pytorch: Vec<InferenceEngine>,
+    pub(crate) pytorch: Vec<InferenceEngine>,
     #[serde(default)]
-    pub paddle: Vec<InferenceEngine>,
+    pub(crate) paddle: Vec<InferenceEngine>,
     #[serde(default)]
-    pub onnx: Vec<InferenceEngine>,
+    pub(crate) onnx: Vec<InferenceEngine>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct ModelEngineMetricInfo {
+pub(crate) struct ModelEngineMetricInfo {
     #[serde(default)]
-    pub gflops_per_megapixel: Option<f64>,
+    pub(crate) gflops_per_megapixel: Option<f64>,
     #[serde(default)]
-    pub activation_bytes_per_megapixel: Option<f64>,
+    pub(crate) activation_bytes_per_megapixel: Option<f64>,
     #[serde(default)]
     #[ts(type = "number | null")]
-    pub runtime_overhead_bytes: Option<u64>,
+    pub(crate) runtime_overhead_bytes: Option<u64>,
     #[serde(default)]
-    pub runtime_frame_count: Option<u32>,
+    pub(crate) runtime_frame_count: Option<u32>,
     #[serde(default)]
-    pub input_modulo: Option<u32>,
+    pub(crate) input_modulo: Option<u32>,
     #[serde(default)]
-    pub analysis_status: String,
+    pub(crate) analysis_status: String,
     #[serde(default)]
-    pub analysis_notes: Vec<String>,
+    pub(crate) analysis_notes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct ModelMetricInfo {
+pub(crate) struct ModelMetricInfo {
     #[serde(default)]
     #[ts(type = "number | null")]
-    pub parameter_count: Option<u64>,
+    pub(crate) parameter_count: Option<u64>,
     #[serde(default)]
     #[ts(type = "number | null")]
-    pub parameter_bytes: Option<u64>,
+    pub(crate) parameter_bytes: Option<u64>,
     #[serde(default)]
-    pub gflops_per_megapixel: Option<f64>,
+    pub(crate) gflops_per_megapixel: Option<f64>,
     #[serde(default)]
-    pub activation_bytes_per_megapixel: Option<f64>,
+    pub(crate) activation_bytes_per_megapixel: Option<f64>,
     #[serde(default)]
     #[ts(type = "number | null")]
-    pub runtime_overhead_bytes: Option<u64>,
+    pub(crate) runtime_overhead_bytes: Option<u64>,
     #[serde(default)]
-    pub runtime_frame_count: Option<u32>,
+    pub(crate) runtime_frame_count: Option<u32>,
     #[serde(default)]
-    pub input_modulo: Option<u32>,
+    pub(crate) input_modulo: Option<u32>,
     #[serde(default)]
-    pub analysis_status: String,
+    pub(crate) analysis_status: String,
     #[serde(default)]
-    pub analysis_notes: Vec<String>,
+    pub(crate) analysis_notes: Vec<String>,
     #[serde(default)]
-    pub engine_metrics: HashMap<String, ModelEngineMetricInfo>,
+    pub(crate) engine_metrics: HashMap<String, ModelEngineMetricInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct ModelVariantInfo {
-    pub name: String,
-    pub label: String,
-    pub metrics: ModelMetricInfo,
+pub(crate) struct ModelVariantInfo {
+    pub(crate) name: String,
+    pub(crate) label: String,
+    pub(crate) metrics: ModelMetricInfo,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct AlgorithmInfo {
-    pub name: String,
-    pub family: AlgorithmFamily,
+pub(crate) struct AlgorithmInfo {
+    pub(crate) name: String,
+    pub(crate) family: AlgorithmFamily,
     #[serde(default)]
-    pub tensor_backends: Vec<TensorBackend>,
-    pub models: Vec<String>,
+    pub(crate) tensor_backends: Vec<TensorBackend>,
+    pub(crate) models: Vec<String>,
     #[serde(default)]
-    pub onnx_models: Vec<String>,
+    pub(crate) onnx_models: Vec<String>,
     #[serde(default)]
-    pub model_details: Vec<ModelVariantInfo>,
+    pub(crate) model_details: Vec<ModelVariantInfo>,
     #[serde(default)]
-    pub onnx_model_details: Vec<ModelVariantInfo>,
+    pub(crate) onnx_model_details: Vec<ModelVariantInfo>,
     #[serde(default)]
-    pub scale_factors: Vec<u32>,
+    pub(crate) scale_factors: Vec<u32>,
     #[serde(default)]
-    pub fixed_scale_factor: Option<u32>,
+    pub(crate) fixed_scale_factor: Option<u32>,
     #[serde(default)]
-    pub default_num_frames: Option<u32>,
-    pub input_frame_mode: InputFrameMode,
+    pub(crate) default_num_frames: Option<u32>,
+    pub(crate) input_frame_mode: InputFrameMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct EnvironmentCheckResult {
-    pub ffmpeg: FfmpegInfo,
-    pub gpu: GpuInfo,
-    pub tensor_engines: TensorEngines,
-    pub interpolation_algorithms: Vec<AlgorithmInfo>,
-    pub super_resolution_algorithms: Vec<AlgorithmInfo>,
-    pub runtime_mode: RuntimeMode,
+pub(crate) struct EnvironmentCheckResult {
+    pub(crate) ffmpeg: FfmpegInfo,
+    pub(crate) gpu: GpuInfo,
+    pub(crate) tensor_engines: TensorEngines,
+    pub(crate) interpolation_algorithms: Vec<AlgorithmInfo>,
+    pub(crate) super_resolution_algorithms: Vec<AlgorithmInfo>,
+    pub(crate) runtime_mode: RuntimeMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/generated/")]
-pub struct EnvironmentCheckPayload {
-    pub result: EnvironmentCheckResult,
-    pub source: EnvironmentCheckSource,
-    pub checked_at: String,
+pub(crate) struct EnvironmentCheckPayload {
+    pub(crate) result: EnvironmentCheckResult,
+    pub(crate) source: EnvironmentCheckSource,
+    pub(crate) checked_at: String,
 }
 
 #[cfg(test)]

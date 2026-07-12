@@ -19,7 +19,7 @@ use crate::models::TaskErrorCode;
 use crate::process_control::ProcessControlError;
 
 #[derive(Debug)]
-pub enum ShellError {
+pub(crate) enum ShellError {
     RuntimeResolution(String),
     Spawn(std::io::Error),
     /// Phase 2.1 — CLI 成功退出(状态码 0)但未在 stdout 上输出有效 JSON。
@@ -62,7 +62,7 @@ pub enum ShellError {
 }
 
 impl ShellError {
-    pub fn code(&self) -> TaskErrorCode {
+    pub(crate) fn code(&self) -> TaskErrorCode {
         match self {
             Self::RuntimeResolution(_) => TaskErrorCode::ProcessFailed,
             Self::Spawn(_) => TaskErrorCode::SpawnFailed,

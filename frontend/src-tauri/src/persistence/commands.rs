@@ -7,7 +7,7 @@ use crate::persistence::{
 };
 
 #[tauri::command]
-pub async fn load_workbench_preset<R: Runtime>(
+pub(crate) async fn load_workbench_preset<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<Option<WorkbenchPreset>, ShellError> {
     let data_dir = app_data_dir(&app).await?;
@@ -15,7 +15,7 @@ pub async fn load_workbench_preset<R: Runtime>(
 }
 
 #[tauri::command]
-pub async fn save_workbench_preset<R: Runtime>(
+pub(crate) async fn save_workbench_preset<R: Runtime>(
     app: AppHandle<R>,
     preset: WorkbenchPreset,
 ) -> Result<(), ShellError> {

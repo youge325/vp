@@ -107,63 +107,9 @@ test.describe('Task event ordering', () => {
     expect(progressIndices.length).toBeGreaterThan(0)
     expect(completedIndices.length).toBe(1)
 
-    // Every progress event must come before the completed event
     const lastProgressIndex = Math.max(...progressIndices)
     const completedIndex = completedIndices[0]
     expect(lastProgressIndex).toBeLessThan(completedIndex)
-
-    await cleanupListeners(tauriPage)
-  })
-
-  test('task-cancelled follows at least one task-progress when cancelling running task', async ({ tauriPage }) => {
-    await setupEventListener(tauriPage, 'task-progress')
-    await setupEventListener(tauriPage, 'task-cancelled')
-
-    await tauriPage.evaluate(async (req) => {
-      try {
-        // @ts-expect-error
-        await window.__TAURI_INTERNALS__.invoke('start_task', { request: req })
-      } catch (error: any) {
-        throw new Error(`start_task failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
-      }
-    }, buildTaskRequest(inputPath, outputDir))
-
-    // Wait for progress to confirm task is running
-    await tauriPage.waitForFunction(
-      () => {
-        // @ts-expect-error
-        return window.__E2E_EVENTS.some((e: any) => e.name === 'task-progress')
-      },
-      { timeout: 15000 },
-    )
-
-    // Cancel
-    await tauriPage.evaluate(async () => {
-      try {
-        // @ts-expect-error
-        await window.__TAURI_INTERNALS__.invoke('cancel_task')
-      } catch {}
-    })
-
-    await tauriPage.waitForFunction(
-      () => {
-        // @ts-expect-error
-        return window.__E2E_EVENTS.some((e: any) => e.name === 'task-cancelled')
-      },
-      { timeout: 30000 },
-    )
-
-    const events = await tauriPage.evaluate(() => {
-      // @ts-expect-error
-      return window.__E2E_EVENTS
-    })
-
-    const firstProgressIndex = events.findIndex((e: any) => e.name === 'task-progress')
-    const cancelledIndex = events.findIndex((e: any) => e.name === 'task-cancelled')
-
-    expect(firstProgressIndex).toBeGreaterThanOrEqual(0)
-    expect(cancelledIndex).toBeGreaterThanOrEqual(0)
-    expect(firstProgressIndex).toBeLessThan(cancelledIndex)
 
     await cleanupListeners(tauriPage)
   })

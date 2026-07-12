@@ -1,4 +1,4 @@
-import { getOptionValue, coerceOptionValue, updateProfileOption } from '@/services/preset/options'
+import { getOptionValue, updateProfileOption } from '@/services/preset/options'
 import type { CapabilityOptionSpec, CapabilityValue } from '@/types/protocol'
 
 interface ConfigWithCapabilityOptions {
@@ -27,6 +27,5 @@ export function createCapabilityOptionBindings<Config extends ConfigWithCapabili
   return {
     setOption,
     getOption,
-    coerceOptionValue,
   }
 }

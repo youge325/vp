@@ -136,7 +136,8 @@ jobs:
         run: xvfb-run -a npm run e2e
         working-directory: frontend
         env:
-          VP_E2E_EXCLUDE: './e2e/task/**/*.spec.ts'
+          E2E_COVERAGE: 1
+          VP_E2E_EXCLUDE: './tests/e2e/task/**/*.spec.ts'
           VP_TAURI_EXE_PATH: ${{ runner.temp }}/vp-e2e-app/vp-workbench
           VP_E2E_INPUT: ${{ runner.temp }}/vp-e2e-test.mp4
           VP_E2E_OUTPUT_DIR: ${{ runner.temp }}/vp-e2e-output
@@ -144,5 +145,8 @@ jobs:
           VP_RUNTIME_ROOT: ${{ github.workspace }}/frontend/src-tauri/resources/runtime
 
       - name: Generate E2E coverage report (nyc)
-        run: npx nyc report --reporter=text --reporter=html
+        run: |
+          coverage_file="$(find .nyc_output -maxdepth 1 -type f -name '*.json' -print -quit 2>/dev/null || true)"
+          test -n "$coverage_file" || { echo "E2E coverage data was not written to frontend/.nyc_output" >&2; exit 1; }
+          npx nyc report --reporter=text --reporter=html
         working-directory: frontend

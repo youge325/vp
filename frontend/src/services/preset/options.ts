@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
-// 表单选项纯函数 — seed/get/update/coerce option values。
+// 表单选项纯函数 — seed/get/update option values。
 
-import type { CapabilityOptionSpec, CapabilityValue } from '@/types/protocol'
+import type { CapabilityValue } from '@/types/protocol'
 
 type ProfileWithOptions = {
   options: Array<{
@@ -64,17 +64,6 @@ export function getOptionValue(
     return option.choices[0]?.value ?? ''
   }
   return ''
-}
-
-export function coerceOptionValue(option: CapabilityOptionSpec, event: Event): CapabilityValue {
-  const target = event.target as HTMLInputElement | HTMLSelectElement
-  if (option.type === 'boolean') {
-    return (target as HTMLInputElement).checked
-  }
-  if (option.type === 'number') {
-    return Number(target.value)
-  }
-  return target.value
 }
 
 export function toNumberValue(value: unknown): number {

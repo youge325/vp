@@ -1,6 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { createTauriPage, isLocatorAdapter, navigateHome, resetAppState, waitForAppShell, type LocatorAdapter, type TauriPage } from './utils/wdio-tauri'
 
@@ -13,7 +12,6 @@ class SkipTest extends Error {
   }
 }
 
-const frontendRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 let activePage: TauriPage | undefined
 
 const mocha = () => globalThis as typeof globalThis & {
@@ -47,7 +45,7 @@ mocha().afterEach(async function () {
   try {
     const coverage = await page.evaluate(() => (window as any).__coverage__ ?? null)
     if (coverage) {
-      const outputDir = resolve(frontendRoot, '.nyc_output')
+      const outputDir = resolve(process.cwd(), '.nyc_output')
       mkdirSync(outputDir, { recursive: true })
       const testTitle = this.currentTest?.fullTitle().replace(/[^a-z0-9_-]+/gi, '-') ?? 'wdio-e2e'
       writeFileSync(resolve(outputDir, `${Date.now()}-${testTitle}.json`), JSON.stringify(coverage))

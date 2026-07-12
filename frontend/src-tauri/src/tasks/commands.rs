@@ -9,7 +9,7 @@ use crate::tasks::{
 };
 
 #[tauri::command]
-pub async fn inspect_video(
+pub(crate) async fn inspect_video(
     paths: State<'_, ResolvedRuntimePaths>,
     input_path: String,
 ) -> Result<VideoInfo, ShellError> {
@@ -26,7 +26,7 @@ pub async fn inspect_video(
 }
 
 #[tauri::command]
-pub async fn start_task<R: Runtime>(
+pub(crate) async fn start_task<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, TaskState>,
     paths: State<'_, ResolvedRuntimePaths>,
@@ -36,7 +36,7 @@ pub async fn start_task<R: Runtime>(
 }
 
 #[tauri::command]
-pub async fn check_resume_state(
+pub(crate) async fn check_resume_state(
     paths: State<'_, ResolvedRuntimePaths>,
     request: TaskRequest,
 ) -> Result<ResumeInspectionResult, ShellError> {
@@ -49,7 +49,7 @@ pub async fn check_resume_state(
 }
 
 #[tauri::command]
-pub async fn cancel_task(state: State<'_, TaskState>) -> Result<(), ShellError> {
+pub(crate) async fn cancel_task(state: State<'_, TaskState>) -> Result<(), ShellError> {
     cancel_running_task(state.inner()).await
 }
 
@@ -57,7 +57,7 @@ pub async fn cancel_task(state: State<'_, TaskState>) -> Result<(), ShellError> 
 /// 区分意图,Rust 端拿 ``TaskControlKind`` 枚举去 dispatch,避免两条几乎
 /// 一样的 ``#[tauri::command]`` 走重复 ACL/permission 链路。
 #[tauri::command]
-pub async fn control_task(
+pub(crate) async fn control_task(
     state: State<'_, TaskState>,
     kind: TaskControlKind,
 ) -> Result<(), ShellError> {

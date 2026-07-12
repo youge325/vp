@@ -11,7 +11,7 @@ use rfd::AsyncFileDialog;
 use crate::error::ShellError;
 
 #[tauri::command]
-pub async fn pick_inputs() -> Result<Vec<String>, ShellError> {
+pub(crate) async fn pick_inputs() -> Result<Vec<String>, ShellError> {
     let files = AsyncFileDialog::new()
         .set_title("Import Videos")
         .add_filter(
@@ -29,7 +29,7 @@ pub async fn pick_inputs() -> Result<Vec<String>, ShellError> {
 }
 
 #[tauri::command]
-pub async fn pick_output_directory() -> Result<Option<String>, ShellError> {
+pub(crate) async fn pick_output_directory() -> Result<Option<String>, ShellError> {
     Ok(AsyncFileDialog::new()
         .set_title("Select Output Directory")
         .pick_folder()
@@ -38,7 +38,7 @@ pub async fn pick_output_directory() -> Result<Option<String>, ShellError> {
 }
 
 #[tauri::command]
-pub async fn open_output_location(path: String) -> Result<(), ShellError> {
+pub(crate) async fn open_output_location(path: String) -> Result<(), ShellError> {
     let path_buf = PathBuf::from(path);
     let target = if path_buf.is_dir() {
         path_buf

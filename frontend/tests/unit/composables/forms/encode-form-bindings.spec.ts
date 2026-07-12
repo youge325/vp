@@ -82,7 +82,6 @@ describe('encode form bindings', () => {
       { value: 'libx265', label: 'x265' },
       { value: 'hevc_nvenc', label: 'NVENC H.265' },
     ])
-    expect(bindings.currentEncoderProfile.value?.name).toBe('hevc_nvenc')
     expect(bindings.encoderOptions.value.map((option) => option.name)).toEqual(['preset', 'tune'])
     expect(bindings.rateControlOptions.value).toEqual([{ value: 'cq', label: 'CQ' }])
     expect(bindings.rateControlDisabled.value).toBe(false)

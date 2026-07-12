@@ -33,7 +33,7 @@ use crate::tasks::readers::{spawn_stderr_reader, spawn_stdout_reader, ProgressBe
 use crate::tasks::state::TaskState;
 use crate::tasks::stderr::StderrCapture;
 
-pub async fn spawn_task<R: Runtime>(
+pub(crate) async fn spawn_task<R: Runtime>(
     app: AppHandle<R>,
     state: &TaskState,
     paths: &ResolvedRuntimePaths,

@@ -134,7 +134,6 @@ describe('enhance view-model rules', () => {
     })
 
     expect(model.currentInterpolationModelDetail?.name).toBe('4.25')
-    expect(model.currentSuperResolutionModelDetail?.name).toBe('x4')
     expect(model.interpolationInputDimensions).toEqual({ width: 2560, height: 1152 })
     expect(model.interpolationRuntimeEstimate?.effectiveHeight).toBe(1152)
     expect(model.interpolationMetricRows[2].value).toBe('1.96 GiB')
@@ -164,17 +163,15 @@ describe('enhance view-model rules', () => {
     expect(model.superResolutionFixedWindowRows).toEqual([
       { label: '邻帧窗口', value: '5 帧（固定）' },
     ])
-    expect(model.superResolutionRuntimeEstimate?.vramBytes).toBe(
-      buildEnhanceViewModel({
-        workflow: {
-          ...workflow,
-          superResolution: { ...workflow.superResolution, numFrames: 2 },
-        },
-        activeVideoDimensions: { width: 640, height: 288 },
-        currentInterpolationAlgorithm: rife,
-        currentSuperResolutionAlgorithm: edvr,
-      }).superResolutionRuntimeEstimate?.vramBytes,
-    )
+    expect(model.superResolutionMetricRows).toEqual(buildEnhanceViewModel({
+      workflow: {
+        ...workflow,
+        superResolution: { ...workflow.superResolution, numFrames: 2 },
+      },
+      activeVideoDimensions: { width: 640, height: 288 },
+      currentInterpolationAlgorithm: rife,
+      currentSuperResolutionAlgorithm: edvr,
+    }).superResolutionMetricRows)
     expect(model.effectiveSuperResolutionNumFrames).toBe(5)
   })
 
@@ -194,7 +191,6 @@ describe('enhance view-model rules', () => {
       currentSuperResolutionAlgorithm: ppmsvsr,
     })
 
-    expect(model.currentSuperResolutionRuntimeDetail?.metrics.analysisNotes).toEqual(['TensorRT calibrated'])
     expect(model.superResolutionMetricRows[1].value).toBe('22.1 GFLOPs')
     expect(model.superResolutionMetricRows[2].value).toBe('3.17 GiB')
   })

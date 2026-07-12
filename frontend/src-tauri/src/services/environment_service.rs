@@ -14,7 +14,7 @@ use crate::tasks;
 /// rewrite tauri command parameter names, so we ``#[allow(non_snake_case)]``.
 #[tauri::command]
 #[allow(non_snake_case)]
-pub async fn check_environment<R: Runtime>(
+pub(crate) async fn check_environment<R: Runtime>(
     app: AppHandle<R>,
     paths: State<'_, ResolvedRuntimePaths>,
     forceRefresh: bool,

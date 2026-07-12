@@ -40,6 +40,5 @@ export function createDecodeFormBindings({
     ...hardware,
     setDecodeOption: options.setOption,
     getDecodeOption: options.getOption,
-    coerceOptionValue: options.coerceOptionValue,
   }
 }

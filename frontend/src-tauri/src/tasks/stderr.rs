@@ -7,7 +7,7 @@ const STDERR_CAPTURE_BYTE_LIMIT: usize = 8 * 1024;
 const TRACEBACK_MARKER: &str = "Traceback (most recent call last):";
 
 #[derive(Debug, Default, Clone)]
-pub struct StderrCapture {
+pub(crate) struct StderrCapture {
     inner: Arc<Mutex<StderrCaptureInner>>,
 }
 
@@ -17,11 +17,11 @@ struct StderrCaptureInner {
 }
 
 impl StderrCapture {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
-    pub fn record(&self, line: &str) {
+    pub(crate) fn record(&self, line: &str) {
         if line.is_empty() {
             return;
         }
@@ -36,7 +36,7 @@ impl StderrCapture {
     /// Returns a compact summary that prefers the most recent Python
     /// traceback. Falls back to the trailing slice of stderr lines if no
     /// traceback marker is present.
-    pub fn summary(&self) -> Option<String> {
+    pub(crate) fn summary(&self) -> Option<String> {
         let lines = self.inner.lock().ok()?.recent_lines.clone();
         if lines.is_empty() {
             return None;

@@ -19,6 +19,7 @@ from architecture_contracts.rules import (  # noqa: E402
 )
 from architecture_contracts.catalog import RULES  # noqa: E402
 from architecture_contracts.checks import (  # noqa: E402
+    _check_rust_public_surface,
     _check_stage_sequence_metrics,
     _check_typed_ndjson_error_emission,
 )
@@ -237,6 +238,27 @@ def test_stage_sequence_metrics_semantic_check_normalizes_python_syntax_errors(t
 
     with pytest.raises(ContractParseError, match="could not parse Python source"):
         _check_stage_sequence_metrics(tmp_path)
+
+
+def test_rust_public_surface_rejects_public_items_outside_allowlist(tmp_path: Path) -> None:
+    internal = tmp_path / "frontend/src-tauri/src/tasks/worker.rs"
+    internal.parent.mkdir(parents=True)
+    internal.write_text("pub fn leaked() {}\npub(crate) fn internal() {}\n", encoding="utf-8")
+
+    assert _check_rust_public_surface(tmp_path) == [
+        "Rust crate-internal source exposes a public item: frontend/src-tauri/src/tasks/worker.rs"
+    ]
+
+
+def test_rust_public_surface_allows_schema_and_crate_entrypoints(tmp_path: Path) -> None:
+    model = tmp_path / "frontend/src-tauri/src/models/task.rs"
+    model.parent.mkdir(parents=True)
+    model.write_text("pub struct TaskRequest { pub input_path: String }\n", encoding="utf-8")
+    lib = tmp_path / "frontend/src-tauri/src/lib.rs"
+    lib.parent.mkdir(parents=True, exist_ok=True)
+    lib.write_text("pub mod models;\npub fn run() {}\n", encoding="utf-8")
+
+    assert _check_rust_public_surface(tmp_path) == []
 
 
 def test_typed_ndjson_semantic_check_rejects_extra_manual_error_envelopes(tmp_path: Path) -> None:

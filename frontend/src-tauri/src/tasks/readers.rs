@@ -21,9 +21,9 @@ use crate::tasks::stderr::StderrCapture;
 
 /// Shared timestamp of the last stdout progress line, refreshed by the
 /// stdout reader and polled by the stall watchdog inside the controller.
-pub type ProgressBeat = Arc<Mutex<Instant>>;
+pub(crate) type ProgressBeat = Arc<Mutex<Instant>>;
 
-pub fn spawn_stdout_reader<R: Runtime + 'static>(
+pub(crate) fn spawn_stdout_reader<R: Runtime + 'static>(
     app: AppHandle<R>,
     stdout: tokio::process::ChildStdout,
     terminal_sent: Arc<AtomicBool>,
@@ -100,7 +100,7 @@ pub fn spawn_stdout_reader<R: Runtime + 'static>(
     });
 }
 
-pub fn spawn_stderr_reader<R: Runtime + 'static>(
+pub(crate) fn spawn_stderr_reader<R: Runtime + 'static>(
     app: AppHandle<R>,
     stderr: tokio::process::ChildStderr,
     capture: StderrCapture,
