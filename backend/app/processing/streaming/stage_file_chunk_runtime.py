@@ -11,7 +11,7 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_file_chunk_encoding import encode_stage_worker_output
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import StageChunkPlan, StageWorkerPlan
-from app.processing.streaming.worker_process_io import start_decoded_frame_writer
+from app.processing.streaming.worker_process_io import DecodedFrameWriterConfig, start_decoded_frame_writer
 from app.processing.streaming.worker_processes import stage_worker_session
 
 
@@ -75,16 +75,18 @@ def run_stage_chunk_to_file(
         ) as handles:
             handle = handles[0]
             decode_thread = start_decoded_frame_writer(
+                DecodedFrameWriterConfig(
+                    ffmpeg=ffmpeg,
+                    input_path=input_path,
+                    decode_config=decode_config,
+                    video_info={"width": input_width, "height": input_height},
+                    start_source_frame=chunk.input_start_frame,
+                    frame_count=chunk.input_frame_count,
+                    worker_stdin=handle.process.stdin,
+                    error_queue=error_queue,
+                    stop_event=stop_event,
+                ),
                 thread_name=f"vp-stage-file-decode-{stage_index}",
-                ffmpeg=ffmpeg,
-                input_path=input_path,
-                decode_config=decode_config,
-                video_info={"width": input_width, "height": input_height},
-                start_source_frame=chunk.input_start_frame,
-                frame_count=chunk.input_frame_count,
-                worker_stdin=handle.process.stdin,
-                error_queue=error_queue,
-                stop_event=stop_event,
             )
 
             try:

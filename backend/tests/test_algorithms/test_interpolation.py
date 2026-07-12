@@ -4,7 +4,13 @@ import pytest
 
 pytestmark = pytest.mark.pytorch
 
-from app.algorithms.factory import AlgorithmFactory
+from app.algorithms.tensor_backend import get_tensor_backend
+from app.processing.interpolation import FrameInterpolationAlgorithm
+from app.processing.super_resolution import SuperResolutionAlgorithm
+
+
+def _create_interpolation(**kwargs):
+    return FrameInterpolationAlgorithm(tensor_backend=get_tensor_backend("pytorch"), **kwargs)
 
 
 class TestFrameInterpolationAlgorithm:
@@ -12,12 +18,7 @@ class TestFrameInterpolationAlgorithm:
 
     def test_create_instance(self):
         try:
-            algo = AlgorithmFactory.create(
-                "frame_interpolation",
-                tensor_backend_name="pytorch",
-                multi=2,
-                model_version="4.25",
-            )
+            algo = _create_interpolation(multi=2, model_version="4.25")
             assert "RIFE" in algo.get_name()
             assert "2x" in algo.get_name()
         except RuntimeError:
@@ -26,7 +27,7 @@ class TestFrameInterpolationAlgorithm:
     def test_needs_frame_pairs(self):
         """补帧算法应返回 needs_frame_pairs()=True。"""
         try:
-            algo = AlgorithmFactory.create("frame_interpolation", tensor_backend_name="pytorch")
+            algo = _create_interpolation()
             assert algo.needs_frame_pairs() is True
         except RuntimeError:
             pytest.skip("Tensor 后端不可用")
@@ -34,11 +35,7 @@ class TestFrameInterpolationAlgorithm:
     def test_get_interpolation_multi(self):
         """补帧倍率应正确返回。"""
         try:
-            algo = AlgorithmFactory.create(
-                "frame_interpolation",
-                tensor_backend_name="pytorch",
-                multi=4,
-            )
+            algo = _create_interpolation(multi=4)
             assert algo.get_interpolation_multi() == 4
         except RuntimeError:
             pytest.skip("Tensor 后端不可用")
@@ -48,7 +45,7 @@ class TestFrameInterpolationAlgorithm:
         try:
             import torch
 
-            algo = AlgorithmFactory.create("frame_interpolation", tensor_backend_name="pytorch")
+            algo = _create_interpolation()
             frame = torch.rand(1, 3, 64, 64)
             result = algo.process_frame(frame)
             assert result is frame
@@ -62,7 +59,7 @@ class TestSuperResolutionAlgorithm:
     def test_needs_frame_pairs_default(self):
         """非补帧算法默认不需要帧对处理。"""
         try:
-            algo = AlgorithmFactory.create("super_resolution", tensor_backend_name="pytorch")
+            algo = SuperResolutionAlgorithm(tensor_backend=get_tensor_backend("pytorch"))
             assert algo.needs_frame_pairs() is False
         except RuntimeError:
             pytest.skip("Tensor 后端不可用")

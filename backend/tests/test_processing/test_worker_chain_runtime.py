@@ -61,14 +61,14 @@ def test_worker_chain_runtime_runs_decode_and_drain_inside_worker_session(monkey
         def join(self):
             calls.append(("decode_join", None))
 
-    def fake_start_decoded_frame_writer(**kwargs):
+    def fake_start_decoded_frame_writer(config, **_kwargs):
         calls.append(
             (
                 "decode",
                 (
-                    kwargs["start_source_frame"],
-                    kwargs["worker_stdin"] is stdin,
-                    kwargs["video_info"]["source_frames"],
+                    config.start_source_frame,
+                    config.worker_stdin is stdin,
+                    config.video_info["source_frames"],
                 ),
             )
         )

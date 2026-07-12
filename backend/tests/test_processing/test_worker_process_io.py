@@ -13,9 +13,9 @@ from app.processing.streaming.queues import EncodedFrame
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import StageWorkerPlan
 from app.processing.streaming.worker_process_io import (
+    DecodedFrameWriterConfig,
     drain_final_worker_output,
     start_decoded_frame_writer,
-    write_decoded_frames_to_worker,
 )
 
 
@@ -52,24 +52,28 @@ class _FakeStdin(io.BytesIO):
         self.was_closed = True
 
 
-def test_write_decoded_frames_to_worker_streams_frames_and_closes_reader() -> None:
+def test_start_decoded_frame_writer_streams_frames_and_closes_reader() -> None:
     frames = [np.array([[[1, 2, 3]]], dtype=np.uint8), np.array([[[4, 5, 6]]], dtype=np.uint8)]
     reader = _FakeReader(frames)
     ffmpeg = _FakeFFmpeg(reader)
     stdin = _FakeStdin()
     error_queue: queue.Queue[BaseException] = queue.Queue()
 
-    write_decoded_frames_to_worker(
-        ffmpeg=ffmpeg,
-        input_path="input.mp4",
-        decode_config={"mode": "software"},
-        video_info={"width": 1, "height": 1},
-        start_source_frame=3,
-        worker_stdin=stdin,
-        error_queue=error_queue,
-        stop_event=threading.Event(),
-        frame_count=2,
+    thread = start_decoded_frame_writer(
+        DecodedFrameWriterConfig(
+            ffmpeg=ffmpeg,
+            input_path="input.mp4",
+            decode_config={"mode": "software"},
+            video_info={"width": 1, "height": 1},
+            start_source_frame=3,
+            worker_stdin=stdin,
+            error_queue=error_queue,
+            stop_event=threading.Event(),
+            frame_count=2,
+        ),
+        thread_name="vp-test-decoder",
     )
+    thread.join()
 
     assert error_queue.empty()
     assert reader.closed is True
@@ -83,32 +87,8 @@ def test_write_decoded_frames_to_worker_streams_frames_and_closes_reader() -> No
         "start_frame": 3,
         "frame_count": 2,
     }
-
-
-def test_start_decoded_frame_writer_starts_named_daemon_thread(monkeypatch) -> None:
-    import app.processing.streaming.worker_process_io as worker_io
-
-    calls: list[dict] = []
-    monkeypatch.setattr(worker_io, "write_decoded_frames_to_worker", lambda **kwargs: calls.append(kwargs))
-
-    thread = start_decoded_frame_writer(
-        thread_name="vp-test-decoder",
-        ffmpeg=object(),
-        input_path="input.mp4",
-        decode_config={"mode": "software"},
-        video_info={"width": 1, "height": 1},
-        start_source_frame=4,
-        frame_count=2,
-        worker_stdin=object(),
-        error_queue=queue.Queue(),
-        stop_event=threading.Event(),
-    )
-    thread.join()
-
     assert thread.name == "vp-test-decoder"
     assert thread.daemon is True
-    assert calls[0]["start_source_frame"] == 4
-    assert calls[0]["frame_count"] == 2
 
 
 def test_drain_final_worker_output_stops_after_expected_frame_count() -> None:

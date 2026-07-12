@@ -76,7 +76,7 @@ def test_stage_chunk_runtime_writes_unskipped_worker_frames(monkeypatch, tmp_pat
             return None
 
     monkeypatch.setattr(runtime, "stage_worker_session", fake_session)
-    monkeypatch.setattr(runtime, "start_decoded_frame_writer", lambda **_kwargs: _DecodeThread())
+    monkeypatch.setattr(runtime, "start_decoded_frame_writer", lambda _config, **_kwargs: _DecodeThread())
 
     ffmpeg = _FakeFFmpeg()
     output_path = tmp_path / "chunk.mp4"

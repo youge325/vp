@@ -637,8 +637,8 @@ a:focus-visible {
 }
 
 .tag,
-.inline-status {
-  min-height: 32px;
+.inline-status,
+.rail-footer-chip {
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
@@ -648,6 +648,11 @@ a:focus-visible {
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.2;
+}
+
+.tag,
+.inline-status {
+  min-height: 32px;
 }
 
 .inline-status[data-state='running'] {
@@ -865,15 +870,6 @@ a:focus-visible {
 
 .rail-footer-chip {
   min-height: 36px;
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(16, 27, 42, 0.96);
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.2;
 }
 
 .rail-footer-chip[data-state='running'] {

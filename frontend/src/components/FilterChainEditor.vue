@@ -1,13 +1,9 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
 import FilterScale from '@/components/filter-steps/FilterScale.vue'
-import FilterCrop from '@/components/filter-steps/FilterCrop.vue'
-import FilterPad from '@/components/filter-steps/FilterPad.vue'
-import FilterSharpen from '@/components/filter-steps/FilterSharpen.vue'
-import FilterDenoise from '@/components/filter-steps/FilterDenoise.vue'
-import FilterColor from '@/components/filter-steps/FilterColor.vue'
 import FilterAnimeCleanup from '@/components/filter-steps/FilterAnimeCleanup.vue'
-import { FILTER_CATALOG, createDefaultFilterStep, filterLabel } from '@/services/filters/filter-catalog'
+import FilterFields from '@/components/filter-steps/FilterFields.vue'
+import { FILTER_CATALOG, createDefaultFilterStep, getFilterCatalogEntry } from '@/services/filters/filter-catalog'
 import type { FilterStep, FilterStepKind } from '@/types/protocol'
 
 const props = defineProps<{
@@ -23,14 +19,15 @@ const filters = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
-const KIND_COMPONENT: Record<FilterStepKind, Component> = {
+const SPECIALIZED_COMPONENTS: Partial<Record<FilterStepKind, Component>> = {
   scale: FilterScale,
-  crop: FilterCrop,
-  pad: FilterPad,
-  sharpen: FilterSharpen,
-  denoise: FilterDenoise,
-  color: FilterColor,
   anime_cleanup: FilterAnimeCleanup,
+}
+
+function specializedComponent(kind: FilterStepKind): Component {
+  const component = SPECIALIZED_COMPONENTS[kind]
+  if (!component) throw new Error(`Filter ${kind} has no specialized editor`)
+  return component
 }
 
 function addFilter(kind: FilterStepKind) {
@@ -85,7 +82,7 @@ function setEnabled(index: number, enabled: boolean) {
 
     <div v-for="(step, index) in filters" :key="index" class="filter-card" :data-enabled="step.enabled">
       <div class="filter-card-head">
-        <span class="filter-kind">{{ filterLabel(step.kind) }}</span>
+        <span class="filter-kind">{{ getFilterCatalogEntry(step.kind).label }}</span>
         <div class="filter-actions">
           <label class="toggle-chip">
             <input
@@ -102,8 +99,15 @@ function setEnabled(index: number, enabled: boolean) {
       </div>
 
       <div class="filter-card-body">
+        <FilterFields
+          v-if="getFilterCatalogEntry(step.kind).editor"
+          :entry="getFilterCatalogEntry(step.kind)"
+          :model-value="step"
+          @update:model-value="updateStep(index, $event)"
+        />
         <component
-          :is="KIND_COMPONENT[step.kind]"
+          v-else
+          :is="specializedComponent(step.kind)"
           :model-value="step"
           @update:model-value="updateStep(index, $event)"
         />

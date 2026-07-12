@@ -12,8 +12,6 @@ paddle / pytorch 不共用 cudnn DLL,在同一进程加载会触发 cudnn 冲突
 import os
 import sys
 
-import pytest
-
 # 确保 backend app 可被导入
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -37,16 +35,3 @@ elif _BACKEND == "paddle":
     collect_ignore = list(_PYTORCH_ONLY_FILES)
 else:
     collect_ignore = list(_PYTORCH_ONLY_FILES) + list(_PADDLE_ONLY_FILES)
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _register_test_algorithms() -> None:
-    """Register concrete algorithms for tests that bypass stage-worker setup."""
-    from app.algorithms.factory import AlgorithmFactory
-    from app.processing.frame_filters import FrameFilterChainAlgorithm
-    from app.processing.interpolation import FrameInterpolationAlgorithm
-    from app.processing.super_resolution import SuperResolutionAlgorithm
-
-    AlgorithmFactory.register("frame_interpolation", FrameInterpolationAlgorithm)
-    AlgorithmFactory.register("super_resolution", SuperResolutionAlgorithm)
-    AlgorithmFactory.register("frame_filter_chain", FrameFilterChainAlgorithm)

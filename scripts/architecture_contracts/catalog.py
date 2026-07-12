@@ -97,6 +97,13 @@ ABSENT_PATH_RULES = (
         "frontend-encode-output-state-test",
         "frontend/tests/unit/composables/forms/encode-output-state.spec.ts",
     ),
+    _absent("frontend-filter-crop-component", "frontend/src/components/filter-steps/FilterCrop.vue"),
+    _absent("frontend-filter-pad-component", "frontend/src/components/filter-steps/FilterPad.vue"),
+    _absent("frontend-filter-sharpen-component", "frontend/src/components/filter-steps/FilterSharpen.vue"),
+    _absent("frontend-filter-denoise-component", "frontend/src/components/filter-steps/FilterDenoise.vue"),
+    _absent("frontend-filter-color-component", "frontend/src/components/filter-steps/FilterColor.vue"),
+    _absent("backend-algorithm-factory", "backend/app/algorithms/factory.py"),
+    _absent("backend-algorithm-factory-test", "backend/tests/test_algorithms/test_factory.py"),
     _absent("backend-ffmpeg-monolithic-probe", "backend/app/utils/ffmpeg/probe.py"),
     _absent("backend-legacy-processing-pipeline", "backend/app/processing/pipeline.py"),
     _absent("backend-legacy-processing-decoder", "backend/app/processing/decoder.py"),
@@ -172,6 +179,27 @@ FORBIDDEN_PATTERN_RULES = (
         message="obsolete backend internal symbol",
         suffixes=(".py",),
     ),
+    ForbiddenReferenceRule(
+        "obsolete-algorithm-registry",
+        roots=("backend/app", "backend/tests"),
+        patterns=(r"\bAlgorithmFactory\b", r"app\.algorithms\.factory"),
+        message="obsolete global algorithm registry",
+        suffixes=(".py",),
+    ),
+    ForbiddenReferenceRule(
+        "obsolete-direct-decoded-writer",
+        roots=("backend/app", "backend/tests"),
+        patterns=(r"\bwrite_decoded_frames_to_worker\b",),
+        message="test-only decoded writer target",
+        suffixes=(".py",),
+    ),
+    ForbiddenReferenceRule(
+        "obsolete-filter-helpers",
+        roots=("frontend/src",),
+        patterns=(r"\bcreateFilterParamsPatch\b", r"\bfilterLabel\b"),
+        message="obsolete filter helper export",
+        suffixes=(".ts", ".vue"),
+    ),
     _forbid(
         "stage-runtime-rule-reexport",
         "backend/app/processing/streaming/stage_runtime.py",
@@ -181,7 +209,7 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "stage-worker-factory-public-details",
         "backend/app/processing/streaming/stage_worker_factory.py",
-        r"^\s*(?:def\s+(?:register_single_algorithm|backend_name)\b|AlgorithmFactory(?:Fn)?\s*=|BackendFactoryFn\s*=|from\s+[^\n]+\s+import\s+AlgorithmFactory(?!\s+as\s+_AlgorithmFactory\b))",
+        r"^\s*(?:def\s+(?:register_single_algorithm|backend_name)\b|AlgorithmFactory(?:Fn)?\s*=|BackendFactoryFn\s*=)|\bAlgorithmFactory\b|\.register\s*\(",
         "public stage-worker factory implementation detail",
     ),
     RequiredPatternRule(
@@ -479,12 +507,6 @@ FORBIDDEN_PATTERN_RULES = (
         "backend/app/planning/workflow_validation.py",
         r"\bDISABLED_PADDLEGAN_VSR_MODELS\b|^\s*def\s+(?:get_onnx_model_name|validate_onnx_models_for_workflow)\b",
         "dead workflow validation surface",
-    ),
-    _forbid(
-        "global-algorithm-bootstrap",
-        "backend/app/algorithms/factory.py",
-        r"\bregister_default_algorithms\b|^\s*def\s+get_available_types\b",
-        "dead algorithm factory surface",
     ),
     _forbid(
         "processing-bootstrap",
@@ -1148,6 +1170,18 @@ FORBIDDEN_PATTERN_RULES = (
 
 REQUIRED_PATTERN_RULES = (
     RequiredPatternRule(
+        "declarative-simple-filter-editor",
+        "frontend/src/components/FilterChainEditor.vue",
+        r"<FilterFields\b[\s\S]*getFilterCatalogEntry\(step\.kind\)\.editor",
+        "simple filters must use the declarative catalog editor",
+    ),
+    RequiredPatternRule(
+        "simple-filter-catalog-schema",
+        "frontend/src/services/filters/filter-catalog.ts",
+        r"kind:\s*[\"']crop[\"'][\s\S]*editor:\s*\{[\s\S]*kind:\s*[\"']pad[\"'][\s\S]*kind:\s*[\"']sharpen[\"'][\s\S]*kind:\s*[\"']denoise[\"'][\s\S]*kind:\s*[\"']color[\"']",
+        "simple filter field schemas are missing from the catalog",
+    ),
+    RequiredPatternRule(
         "shared-filter-number-field",
         "frontend/src/components/filter-steps/FilterNumberField.vue",
         r"\bfunction\s+handleInput\b[\s\S]*emit\([\"']update:modelValue[\"']",
@@ -1168,7 +1202,7 @@ REQUIRED_PATTERN_RULES = (
     RequiredPatternRule(
         "shared-decoded-frame-writer-thread",
         "backend/app/processing/streaming/worker_process_io.py",
-        r"def\s+start_decoded_frame_writer\b[\s\S]*target=write_decoded_frames_to_worker",
+        r"class\s+DecodedFrameWriterConfig\b[\s\S]*def\s+start_decoded_frame_writer\b[\s\S]*target=_write_decoded_frames_to_worker",
         "shared decoded-frame writer thread helper is missing",
     ),
     RequiredPatternRule(
