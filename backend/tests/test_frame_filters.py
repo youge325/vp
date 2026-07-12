@@ -45,9 +45,9 @@ def test_validate_missing_params_raises():
 
 
 def test_anime_cleanup_filter_runs_without_loading_opencv(monkeypatch: pytest.MonkeyPatch):
-    import app.processing.frame_filters as frame_filters
+    import app.processing.frame_filter_handlers as handlers
 
-    monkeypatch.setattr(frame_filters, "_ensure_cv2", lambda: (_ for _ in ()).throw(AssertionError("cv2 loaded")))
+    monkeypatch.setattr(handlers, "import_cv2", lambda: (_ for _ in ()).throw(AssertionError("cv2 loaded")))
     frame = np.arange(8 * 8 * 3, dtype=np.uint8).reshape(8, 8, 3)
     algo = _make_algorithm(
         [

@@ -179,6 +179,10 @@ class IAlgorithm(ABC):
 - interpolation 与 super-resolution 复用规划层过滤后的 kwargs 和已创建 backend
 - 未支持的 stage 类型在装配边界立即失败
 
+帧滤镜链由 `FrameFilterChainAlgorithm` 负责验证、顺序执行和 CPU/Tensor fallback；
+具体滤镜实现与支持能力集中在 `frame_filter_handlers.py` 的静态 handler 映射中。
+新增滤镜必须同时声明 CPU handler，并按实际能力选择性声明 Tensor handler，不使用运行时全局注册表。
+
 ### RIFE 补帧家族
 
 [`backend/app/algorithms/rife/`](../backend/app/algorithms/rife/) 实现 RIFE（Real-Time Intermediate Flow Estimation）补帧算法：

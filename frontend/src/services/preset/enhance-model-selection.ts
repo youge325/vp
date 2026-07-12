@@ -14,10 +14,8 @@ interface EnhanceModelSelectionInput {
 interface EnhanceModelSelection {
   interpolationModelDetails: ModelVariantInfo[]
   interpolationOnnxModelDetails: ModelVariantInfo[]
-  superResolutionModelDetails: ModelVariantInfo[]
   superResolutionOnnxModelDetails: ModelVariantInfo[]
   currentInterpolationModelDetail: ModelVariantInfo | undefined
-  currentSuperResolutionModelDetail: ModelVariantInfo | undefined
   currentInterpolationRuntimeDetail: ModelVariantInfo | null
   currentSuperResolutionRuntimeDetail: ModelVariantInfo | null
   superResolutionRuntimeFrameCount: number | null
@@ -61,10 +59,8 @@ export function buildEnhanceModelSelection({
   return {
     interpolationModelDetails,
     interpolationOnnxModelDetails,
-    superResolutionModelDetails,
     superResolutionOnnxModelDetails,
     currentInterpolationModelDetail,
-    currentSuperResolutionModelDetail,
     currentInterpolationRuntimeDetail,
     currentSuperResolutionRuntimeDetail,
     superResolutionRuntimeFrameCount,
