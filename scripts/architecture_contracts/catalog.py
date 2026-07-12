@@ -30,6 +30,11 @@ ABSENT_PATH_RULES = (
     _absent("frontend-enhance-field-aggregator-test", "frontend/src/composables/forms/enhance-field-bindings.spec.ts"),
     _absent("frontend-encode-output-aggregator", "frontend/src/composables/forms/encode-output-bindings.ts"),
     _absent("frontend-enhance-option-aggregator", "frontend/src/composables/forms/enhance-option-bindings.ts"),
+    _absent("frontend-decode-form-aggregator", "frontend/src/composables/forms/decode-form-bindings.ts"),
+    _absent(
+        "frontend-decode-form-aggregator-test",
+        "frontend/tests/unit/composables/forms/decode-form-bindings.spec.ts",
+    ),
     _absent(
         "frontend-enhance-option-aggregator-test",
         "frontend/src/composables/forms/enhance-option-bindings.spec.ts",
@@ -821,6 +826,12 @@ FORBIDDEN_PATTERN_RULES = (
         "batch lifecycle facade type re-export",
     ),
     _forbid(
+        "batch-lifecycle-interface-mirror",
+        "frontend/src/services/task/batch/lifecycle/types.ts",
+        r"\binterface\s+BatchLifecycle\b",
+        "handwritten BatchLifecycle return interface mirror",
+    ),
+    _forbid(
         "batch-runner-duplicate-deps",
         "frontend/src/services/task/batch-runner.ts",
         r"^\s*interface\s+BatchRunnerDeps\b",
@@ -1111,7 +1122,6 @@ FORBIDDEN_PATTERN_RULES = (
         )
         for index, path in enumerate(
             (
-                "frontend/src/composables/forms/decode-form-bindings.ts",
                 "frontend/src/composables/forms/decode-profile-bindings.ts",
                 "frontend/src/composables/forms/decode-hardware-bindings.ts",
                 "frontend/src/composables/forms/encode-form-bindings.ts",
@@ -1187,6 +1197,18 @@ FORBIDDEN_PATTERN_RULES = (
         "duplicated decoder hardware verification helper",
     ),
     _forbid(
+        "recursive-decoder-probe-workspace",
+        "backend/app/utils/ffmpeg/capability_probe.py",
+        r"return\s+probe_decoder_hardware_(?:devices|device_options)\s*\(",
+        "recursive decoder probe workspace lifecycle",
+    ),
+    _forbid(
+        "direct-cli-ndjson-error-emission",
+        "backend/app/__main__.py",
+        r"\bndjson\.error\s*\(",
+        "typed CLI error emitted outside shared helper",
+    ),
+    _forbid(
         "duplicate-dll-root-appends",
         "backend/app/utils/dll_paths.py",
         r"roots\.append\s*\(\s*bin_dir\s*\)",
@@ -1237,6 +1259,12 @@ FORBIDDEN_PATTERN_RULES = (
 
 REQUIRED_PATTERN_RULES = (
     RequiredPatternRule(
+        "inferred-batch-lifecycle-type",
+        "frontend/src/services/task/batch/lifecycle/index.ts",
+        r"export\s+type\s+BatchLifecycle\s*=\s*ReturnType<typeof\s+createBatchLifecycle>",
+        "BatchLifecycle must be inferred from the facade return value",
+    ),
+    RequiredPatternRule(
         "shared-cli-guards",
         "backend/app/cli/commands/_guards.py",
         r"def\s+ensure_ffmpeg_available\b[\s\S]*def\s+ensure_input_and_ffmpeg\b",
@@ -1253,6 +1281,12 @@ REQUIRED_PATTERN_RULES = (
         "backend/app/utils/ffmpeg/capability_probe.py",
         r"def\s+_verify_decoder_hardware\b[\s\S]*device_value:\s*str\s*\|\s*None",
         "shared decoder hardware verifier is missing",
+    ),
+    RequiredPatternRule(
+        "shared-decoder-probe-workspace",
+        "backend/app/utils/ffmpeg/capability_probe.py",
+        r"@contextmanager[\s\S]*def\s+_decoder_probe_workspace\b[\s\S]*TemporaryDirectory\s*\(",
+        "shared decoder probe workspace is missing",
     ),
     RequiredPatternRule(
         "shared-dll-directory-dedup",
@@ -1395,8 +1429,8 @@ REQUIRED_PATTERN_RULES = (
     RequiredPatternRule(
         "typed-ndjson-errors",
         "backend/app/__main__.py",
-        r"from\s+app\.protocol\s+import\s+ndjson[\s\S]*ndjson\.error\s*\([\s\S]*ndjson\.error\s*\(",
-        "normal CLI failures must use typed NDJSON errors",
+        r"def\s+_emit_typed_error\b[\s\S]*emitter\.error\s*\([\s\S]*def\s+_emit_unhandled_exception\b[\s\S]*_emit_error_payload\s*\(",
+        "normal and bootstrap CLI failures must use shared error emitters",
     ),
     RequiredPatternRule(
         "private-ndjson-emitter",
@@ -1444,6 +1478,13 @@ REQUIRED_PATTERN_RULES = (
 
 
 REFERENCE_RULES = (
+    ForbiddenReferenceRule(
+        "obsolete-decode-form-aggregator-reference",
+        roots=("frontend/src", "frontend/tests"),
+        patterns=(r"composables/forms/decode-form-bindings",),
+        message="obsolete Decode form aggregator reference",
+        suffixes=(".ts", ".vue"),
+    ),
     ForbiddenReferenceRule(
         "obsolete-stage-file-rules-reference",
         roots=("backend/app", "backend/tests"),

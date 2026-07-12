@@ -94,6 +94,7 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
     [
         ("base-select-local-option-type", "interface SelectOption { value: string }\n"),
         ("batch-lifecycle-type-reexport", "export type { BatchLifecycle } from './types'\n"),
+        ("batch-lifecycle-interface-mirror", "interface BatchLifecycle { start(): void }\n"),
         ("pipeline-owned-lifecycle", "decision = manifest.prepare('sig', {})\n"),
         ("encoder-finalization-signature", "def finalize_segmented_output(*, signature: str): pass\n"),
         (

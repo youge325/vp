@@ -1,6 +1,7 @@
 """Low-level FFmpeg codec capability probe tests."""
 
 import subprocess
+from pathlib import Path
 
 from app.utils.ffmpeg import capability_probe
 
@@ -125,3 +126,62 @@ def test_probe_decoder_device_options_keeps_only_verified_values(tmp_path, monke
     )
 
     assert options == {"cuda": [{"value": "0", "label": "0"}]}
+
+
+def test_standalone_decoder_probe_owns_and_cleans_temporary_workspace(monkeypatch) -> None:
+    sample_paths: list[Path] = []
+
+    def fake_run(command: list[str], *, timeout: int = 3600):
+        if "testsrc2=size=256x256:rate=1" in command:
+            sample_paths.append(Path(command[-1]))
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(capability_probe, "run_ffmpeg_command", fake_run)
+
+    devices = capability_probe.probe_decoder_hardware_devices(
+        "ffmpeg",
+        "h264_cuvid",
+        "h264",
+        ["cuda"],
+        ["cuda"],
+        {"libx264"},
+    )
+
+    assert devices == ["cuda"]
+    assert len(sample_paths) == 1
+    assert not sample_paths[0].parent.exists()
+
+
+def test_decoder_probe_reuses_shared_sample_cache(tmp_path, monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], *, timeout: int = 3600):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(capability_probe, "_DECODER_HARDWARE_DEVICE_PROBE_VALUES", ("0",))
+    monkeypatch.setattr(capability_probe, "run_ffmpeg_command", fake_run)
+    cache: dict[str, str | None] = {}
+
+    capability_probe.probe_decoder_hardware_devices(
+        "ffmpeg",
+        "h264_cuvid",
+        "h264",
+        ["cuda"],
+        ["cuda"],
+        {"libx264"},
+        probe_dir=str(tmp_path),
+        sample_cache=cache,
+    )
+    capability_probe.probe_decoder_hardware_device_options(
+        "ffmpeg",
+        "h264_cuvid",
+        "h264",
+        ["cuda"],
+        {"libx264"},
+        probe_dir=str(tmp_path),
+        sample_cache=cache,
+    )
+
+    sample_generations = [command for command in calls if "testsrc2=size=256x256:rate=1" in command]
+    assert len(sample_generations) == 1

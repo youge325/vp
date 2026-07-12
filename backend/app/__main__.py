@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import traceback
+from typing import Any
 
 
 def _emit(payload: dict) -> None:
@@ -19,6 +20,25 @@ def _emit_error_payload(code: object, message: str, details: dict) -> None:
             "message": message,
             "details": details,
         }
+    )
+
+
+def _emit_typed_error(emitter: Any, error: Any) -> None:
+    emitter.error(
+        code=_wire_error_code(error.code),
+        message=error.message,
+        details=error.details,
+    )
+
+
+def _emit_unhandled_exception(exc: BaseException) -> None:
+    _emit_error_payload(
+        _bootstrap_error_code(exc),
+        str(exc) or exc.__class__.__name__,
+        {
+            "exception": exc.__class__.__name__,
+            "traceback": traceback.format_exc(),
+        },
     )
 
 
@@ -91,42 +111,19 @@ def _run() -> None:
         from app.cli import main
         from app.protocol import ndjson
     except Exception as exc:  # pragma: no cover - defensive bootstrap boundary
-        _emit_error_payload(
-            _bootstrap_error_code(exc),
-            str(exc) or exc.__class__.__name__,
-            {
-                "exception": exc.__class__.__name__,
-                "traceback": traceback.format_exc(),
-            },
-        )
+        _emit_unhandled_exception(exc)
         raise SystemExit(1) from exc
 
     try:
         main()
     except ProcessError as exc:
-        ndjson.error(
-            code=_wire_error_code(exc.code),
-            message=exc.message,
-            details=exc.details,
-        )
+        _emit_typed_error(ndjson, exc)
         raise SystemExit(1) from exc
     except Exception as exc:  # pragma: no cover - defensive boundary
         if ProcessError is not None:
-            pe = ProcessError.from_exception(exc)
-            ndjson.error(
-                code=_wire_error_code(pe.code),
-                message=pe.message,
-                details=pe.details,
-            )
+            _emit_typed_error(ndjson, ProcessError.from_exception(exc))
         else:
-            _emit_error_payload(
-                _bootstrap_error_code(exc),
-                str(exc) or exc.__class__.__name__,
-                {
-                    "exception": exc.__class__.__name__,
-                    "traceback": traceback.format_exc(),
-                },
-            )
+            _emit_unhandled_exception(exc)
         raise SystemExit(1) from exc
 
 
