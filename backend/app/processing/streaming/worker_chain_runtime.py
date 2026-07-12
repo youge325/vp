@@ -2,27 +2,18 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import queue
-import sys
-import tempfile
-import threading
 from typing import Any
 
 from app.planning import StagePlan
 from app.planning.manifest import ResumeState
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.worker_plans import StageWorkerPlan
-from app.processing.streaming.worker_process_events import read_worker_stderr
 from app.processing.streaming.worker_process_io import (
-    close_pipe,
     drain_final_worker_output,
-    write_decoded_frames_to_worker,
+    start_decoded_frame_writer,
 )
-from app.processing.streaming.worker_processes import (
-    spawn_stage_workers,
-    wait_for_workers,
-)
+from app.processing.streaming.worker_processes import stage_worker_session
 
 
 def run_worker_chain_runtime(
@@ -42,40 +33,24 @@ def run_worker_chain_runtime(
     python_executable: str | None = None,
 ) -> None:
     start_source_frame = int(resume_state.start_source_frame)
-    with tempfile.TemporaryDirectory(prefix="vp-stage-workers-") as config_dir:
-        handles = spawn_stage_workers(
-            plans,
-            config_dir=Path(config_dir),
-            python_executable=python_executable or sys.executable,
+    with stage_worker_session(
+        plans,
+        progress_callbacks=progress_callbacks,
+        error_queue=error_queue,
+        stop_event=stop_event,
+        python_executable=python_executable,
+    ) as handles:
+        decode_thread = start_decoded_frame_writer(
+            thread_name="vp-stage-worker-decode-writer",
+            ffmpeg=ffmpeg,
+            input_path=input_path,
+            decode_config=decode_config,
+            video_info=video_info,
+            start_source_frame=start_source_frame,
+            worker_stdin=handles[0].process.stdin,
+            error_queue=error_queue,
+            stop_event=stop_event,
         )
-        stderr_threads = [
-            threading.Thread(
-                target=read_worker_stderr,
-                name=f"vp-stage-worker-stderr-{handle.plan.config.stage_index}",
-                args=(handle, progress_callbacks, error_queue, stop_event),
-                daemon=True,
-            )
-            for handle in handles
-        ]
-        for thread in stderr_threads:
-            thread.start()
-
-        decode_thread = threading.Thread(
-            target=write_decoded_frames_to_worker,
-            name="vp-stage-worker-decode-writer",
-            kwargs={
-                "ffmpeg": ffmpeg,
-                "input_path": input_path,
-                "decode_config": decode_config,
-                "video_info": video_info,
-                "start_source_frame": start_source_frame,
-                "worker_stdin": handles[0].process.stdin,
-                "error_queue": error_queue,
-                "stop_event": stop_event,
-            },
-            daemon=True,
-        )
-        decode_thread.start()
 
         try:
             drain_final_worker_output(
@@ -91,12 +66,6 @@ def run_worker_chain_runtime(
             )
         finally:
             decode_thread.join()
-            for handle in handles:
-                close_pipe(handle.process.stdin)
-                close_pipe(handle.process.stdout)
-            wait_for_workers(handles, error_queue)
-            for thread in stderr_threads:
-                thread.join(timeout=1)
 
 
 __all__ = ["run_worker_chain_runtime"]

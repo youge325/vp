@@ -13,6 +13,7 @@ from app.planning.processing_steps import (
     ProcessingStep,
 )
 from app.utils.ffmpeg import FFmpegWrapper
+from app.utils.ffmpeg.media_probe import get_primary_video_dimensions
 
 
 @dataclass(slots=True)
@@ -28,13 +29,7 @@ class StagePlan:
 def resolve_video_info(ffmpeg: FFmpegWrapper, input_path: str) -> dict[str, Any]:
     """Probe a video and return canonical dimension / fps / frame-count metadata."""
     info = ffmpeg.get_video_info(input_path)
-    width = 0
-    height = 0
-    for stream in info.get("streams", []):
-        if stream.get("codec_type") == "video":
-            width = int(stream.get("width", 0))
-            height = int(stream.get("height", 0))
-            break
+    width, height = get_primary_video_dimensions(info)
 
     if width <= 0 or height <= 0:
         raise RuntimeError(f"Unable to resolve video dimensions for {input_path}")

@@ -141,6 +141,13 @@ def get_primary_video_codec(info: dict[str, Any]) -> str:
     return ""
 
 
+def get_primary_video_dimensions(info: dict[str, Any]) -> tuple[int, int]:
+    for stream in info.get("streams", []):
+        if stream.get("codec_type") == "video":
+            return int(stream.get("width", 0)), int(stream.get("height", 0))
+    return 0, 0
+
+
 def is_available(ffmpeg_path: str) -> bool:
     try:
         result = subprocess.run(

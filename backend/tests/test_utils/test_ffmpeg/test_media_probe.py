@@ -10,7 +10,13 @@ def test_media_metadata_helpers_read_primary_streams() -> None:
     info = {
         "format": {"duration": "2.5"},
         "streams": [
-            {"codec_type": "video", "codec_name": "hevc", "r_frame_rate": "60000/1001"},
+            {
+                "codec_type": "video",
+                "codec_name": "hevc",
+                "r_frame_rate": "60000/1001",
+                "width": 1920,
+                "height": 1080,
+            },
             {"codec_type": "audio", "codec_name": "aac"},
         ],
     }
@@ -19,6 +25,11 @@ def test_media_metadata_helpers_read_primary_streams() -> None:
     assert media_probe.get_duration(info) == 2.5
     assert media_probe.has_audio(info) is True
     assert media_probe.get_primary_video_codec(info) == "hevc"
+    assert media_probe.get_primary_video_dimensions(info) == (1920, 1080)
+
+
+def test_primary_video_dimensions_default_to_zero_without_video_stream() -> None:
+    assert media_probe.get_primary_video_dimensions({"streams": [{"codec_type": "audio"}]}) == (0, 0)
 
 
 def test_get_video_info_caches_by_file_identity(tmp_path, monkeypatch) -> None:

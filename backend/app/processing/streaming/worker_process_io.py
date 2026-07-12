@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import queue
+import threading
 from typing import Any
 
 from app.planning import StagePlan
@@ -56,6 +57,39 @@ def write_decoded_frames_to_worker(
             except BaseException as exc:  # pragma: no cover - close failures are real pipeline failures
                 stop_event.set()
                 error_queue.put(exc)
+
+
+def start_decoded_frame_writer(
+    *,
+    thread_name: str,
+    ffmpeg: Any,
+    input_path: str,
+    decode_config: dict[str, Any],
+    video_info: dict[str, Any],
+    start_source_frame: int,
+    worker_stdin: Any,
+    error_queue: queue.Queue[BaseException],
+    stop_event: Any,
+    frame_count: int | None = None,
+) -> threading.Thread:
+    thread = threading.Thread(
+        target=write_decoded_frames_to_worker,
+        name=thread_name,
+        kwargs={
+            "ffmpeg": ffmpeg,
+            "input_path": input_path,
+            "decode_config": decode_config,
+            "video_info": video_info,
+            "start_source_frame": start_source_frame,
+            "frame_count": frame_count,
+            "worker_stdin": worker_stdin,
+            "error_queue": error_queue,
+            "stop_event": stop_event,
+        },
+        daemon=True,
+    )
+    thread.start()
+    return thread
 
 
 def drain_final_worker_output(
@@ -115,4 +149,9 @@ def close_pipe(pipe: Any) -> None:
         pass
 
 
-__all__ = ["close_pipe", "drain_final_worker_output", "write_decoded_frames_to_worker"]
+__all__ = [
+    "close_pipe",
+    "drain_final_worker_output",
+    "start_decoded_frame_writer",
+    "write_decoded_frames_to_worker",
+]

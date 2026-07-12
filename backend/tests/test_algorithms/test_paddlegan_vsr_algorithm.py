@@ -115,6 +115,31 @@ def test_paddlegan_window_runner_reports_completed_frames_by_window(monkeypatch)
     assert progress_calls == [(1, 3), (2, 3), (3, 3)]
 
 
+def test_paddlegan_chunk_trace_records_shared_shape_payload(monkeypatch):
+    trace_chunks = []
+    sync_calls = []
+    monkeypatch.setattr(runner_module, "_sync_paddle", lambda paddle: sync_calls.append(paddle))
+
+    tensor = np.zeros((1, 2, 3, 4, 5), dtype=np.float32)
+    output = np.zeros((1, 2, 3, 16, 20), dtype=np.float32)
+    runner_module._record_chunk_trace(
+        trace_chunks,
+        "paddle",
+        tensor=tensor,
+        output=output,
+        frame_count=2,
+    )
+
+    assert sync_calls == ["paddle"]
+    assert trace_chunks == [
+        {
+            "chunkFrameCount": 2,
+            "inputShape": [1, 2, 3, 4, 5],
+            "outputShape": [1, 2, 3, 16, 20],
+        }
+    ]
+
+
 def test_configure_tensorrt_predictor_enables_gpu_trt_and_shape():
     from app.algorithms.paddle.paddlegan_vsr.runner import _configure_tensorrt_config
 

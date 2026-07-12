@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 from collections import deque
+from contextlib import contextmanager
 from dataclasses import dataclass
 import json
 from pathlib import Path
 import queue
 import subprocess
+import sys
+import tempfile
+import threading
+from typing import Any, Iterator
 
 from app.errors import ProcessError, TaskErrorCode
+from app.processing.streaming.worker_process_events import read_worker_stderr
+from app.processing.streaming.worker_process_io import close_pipe
 from app.processing.streaming.worker_plans import StageWorkerPlan
 from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
@@ -82,7 +89,46 @@ def wait_for_workers(handles: list[_WorkerHandle], error_queue: queue.Queue[Base
         )
 
 
+@contextmanager
+def stage_worker_session(
+    plans: list[StageWorkerPlan],
+    *,
+    progress_callbacks: list[Any],
+    error_queue: queue.Queue[BaseException],
+    stop_event: Any,
+    python_executable: str | None = None,
+) -> Iterator[list[_WorkerHandle]]:
+    with tempfile.TemporaryDirectory(prefix="vp-stage-workers-") as config_dir:
+        handles = spawn_stage_workers(
+            plans,
+            config_dir=Path(config_dir),
+            python_executable=python_executable or sys.executable,
+        )
+        stderr_threads = [
+            threading.Thread(
+                target=read_worker_stderr,
+                name=f"vp-stage-worker-stderr-{handle.plan.config.stage_index}",
+                args=(handle, progress_callbacks, error_queue, stop_event),
+                daemon=True,
+            )
+            for handle in handles
+        ]
+        for thread in stderr_threads:
+            thread.start()
+
+        try:
+            yield handles
+        finally:
+            for handle in handles:
+                close_pipe(handle.process.stdin)
+                close_pipe(handle.process.stdout)
+            wait_for_workers(handles, error_queue)
+            for thread in stderr_threads:
+                thread.join(timeout=1)
+
+
 __all__ = [
     "spawn_stage_workers",
+    "stage_worker_session",
     "wait_for_workers",
 ]

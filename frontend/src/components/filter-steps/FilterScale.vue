@@ -1,77 +1,61 @@
 <script setup lang="ts">
+import BaseSelect from '@/components/forms/BaseSelect.vue'
+import FilterNumberField from './FilterNumberField.vue'
+import { createFilterModelParamsPatch } from '@/services/filters/filter-params'
 import type { FilterStep } from '@/types/protocol'
-import { createFilterParamsPatch } from '@/services/filters/filter-params'
 
-const props = defineProps<{
-  modelValue: FilterStep
-}>()
-
-const emit = defineEmits<{
-  (e: 'update:modelValue', value: FilterStep): void
-}>()
+const MODE_OPTIONS = [
+  { value: 'factor', label: '缩放系数' },
+  { value: 'resolution', label: '目标分辨率' },
+] as const
 
 const INTERP_OPTIONS = [
   { value: 'lanczos4', label: 'Lanczos4' },
   { value: 'cubic', label: 'Cubic' },
   { value: 'area', label: 'Area' },
   { value: 'linear', label: 'Linear' },
-]
+] as const
 
-const patch = createFilterParamsPatch(
-  () => props.modelValue,
-  (value) => emit('update:modelValue', value),
-)
+const modelValue = defineModel<FilterStep>({ required: true })
+const patch = createFilterModelParamsPatch(modelValue)
 </script>
 
 <template>
   <div class="field-grid field-grid-2">
-    <label class="field">
-      <span>模式</span>
-      <select
-        :value="modelValue.params.mode ?? 'factor'"
-        @change="patch((p) => (p.mode = ($event.target as HTMLSelectElement).value))"
-      >
-        <option value="factor">缩放系数</option>
-        <option value="resolution">目标分辨率</option>
-      </select>
-    </label>
-    <label class="field">
-      <span>插值算法</span>
-      <select
-        :value="modelValue.params.interpolation ?? 'lanczos4'"
-        @change="patch((p) => (p.interpolation = ($event.target as HTMLSelectElement).value))"
-      >
-        <option v-for="opt in INTERP_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-      </select>
-    </label>
-    <label v-if="modelValue.params.mode === 'resolution'" class="field">
-      <span>宽度</span>
-      <input
-        :value="Number(modelValue.params.width ?? 1920)"
-        type="number"
-        min="1"
-        @input="patch((p) => (p.width = Number(($event.target as HTMLInputElement).value)))"
-      />
-    </label>
-    <label v-if="modelValue.params.mode === 'resolution'" class="field">
-      <span>高度</span>
-      <input
-        :value="Number(modelValue.params.height ?? 1080)"
-        type="number"
-        min="1"
-        @input="patch((p) => (p.height = Number(($event.target as HTMLInputElement).value)))"
-      />
-    </label>
-    <label v-if="modelValue.params.mode !== 'resolution'" class="field">
-      <span>缩放系数</span>
-      <input
-        :value="Number(modelValue.params.factor ?? 0.5)"
-        type="number"
-        step="0.01"
-        min="0.01"
-        max="10"
-        @input="patch((p) => (p.factor = Number(($event.target as HTMLInputElement).value)))"
-      />
-    </label>
+    <BaseSelect
+      :model-value="String(modelValue.params.mode ?? 'factor')"
+      label="模式"
+      :options="MODE_OPTIONS"
+      @update:model-value="patch((params) => (params.mode = $event))"
+    />
+    <BaseSelect
+      :model-value="String(modelValue.params.interpolation ?? 'lanczos4')"
+      label="插值算法"
+      :options="INTERP_OPTIONS"
+      @update:model-value="patch((params) => (params.interpolation = $event))"
+    />
+    <FilterNumberField
+      v-if="modelValue.params.mode === 'resolution'"
+      :model-value="Number(modelValue.params.width ?? 1920)"
+      label="宽度"
+      :min="1"
+      @update:model-value="patch((params) => (params.width = $event))"
+    />
+    <FilterNumberField
+      v-if="modelValue.params.mode === 'resolution'"
+      :model-value="Number(modelValue.params.height ?? 1080)"
+      label="高度"
+      :min="1"
+      @update:model-value="patch((params) => (params.height = $event))"
+    />
+    <FilterNumberField
+      v-if="modelValue.params.mode !== 'resolution'"
+      :model-value="Number(modelValue.params.factor ?? 0.5)"
+      label="缩放系数"
+      :step="0.01"
+      :min="0.01"
+      :max="10"
+      @update:model-value="patch((params) => (params.factor = $event))"
+    />
   </div>
 </template>

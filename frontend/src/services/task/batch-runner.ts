@@ -5,35 +5,12 @@
 // 这一层故意保持薄,只负责复用类型与组合内部 API:旧导入路径
 // (``@/services/task/batch-runner``) 保持不变,以便测试与编排层无感知。
 
-import type {
-  ResumeStatusPayload,
-  TaskCancelledPayload,
-  TaskCompletedPayload,
-  TaskLogPayload,
-  TaskProgressPayload,
-} from '@/types/protocol'
-import type { TaskError } from '@/types/domain/media'
-import type { ResumeConflictAction } from '@/types/domain/batch'
 import { createBatchLifecycle } from './batch/lifecycle'
 import type { BatchLifecycleDeps } from './batch/lifecycle/types'
 import { createConflictResolver } from './batch/conflict'
 import { createEventHandlers } from './batch/events'
 
-export interface BatchRunner {
-  start(ids: string[]): Promise<void>
-  pause(): Promise<void>
-  resume(): Promise<void>
-  cancel(): Promise<void>
-  resolveConflict(action: ResumeConflictAction): Promise<void>
-  onProgress(payload: TaskProgressPayload): void
-  onLog(payload: TaskLogPayload): void
-  onCompleted(payload: TaskCompletedPayload): Promise<void>
-  onError(error: TaskError): Promise<void>
-  onCancelled(payload?: TaskCancelledPayload | null): Promise<void>
-  onResumeStatus(payload: ResumeStatusPayload): void
-}
-
-export function createBatchRunner(deps: BatchLifecycleDeps): BatchRunner {
+export function createBatchRunner(deps: BatchLifecycleDeps) {
   const lifecycle = createBatchLifecycle(deps)
   const conflict = createConflictResolver(deps, lifecycle)
   const events = createEventHandlers(deps, lifecycle, conflict)
@@ -52,3 +29,5 @@ export function createBatchRunner(deps: BatchLifecycleDeps): BatchRunner {
     onResumeStatus: events.onResumeStatus,
   }
 }
+
+export type BatchRunner = ReturnType<typeof createBatchRunner>

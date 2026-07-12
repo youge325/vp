@@ -38,21 +38,12 @@ type EventHandlersDeps = Pick<
   'setItemTaskState' | 'setItemLastOutputPath' | 'setTaskIssue'
 >
 
-interface EventHandlers {
-  onProgress(payload: TaskProgressPayload): void
-  onLog(payload: TaskLogPayload): void
-  onCompleted(payload: TaskCompletedPayload): Promise<void>
-  onError(error: TaskError): Promise<void>
-  onCancelled(payload?: TaskCancelledPayload | null): Promise<void>
-  onResumeStatus(payload: ResumeStatusPayload): void
-}
-
 export function createEventHandlers(
   deps: EventHandlersDeps,
   lifecycle: BatchLifecycle,
   conflict: ConflictResolver,
-): EventHandlers {
-  function onProgress(): void {
+) {
+  function onProgress(_payload: TaskProgressPayload): void {
     const item = lifecycle.getConsoleItem()
     const runState = lifecycle.getConsoleRunState()
     if (item && runState) {
