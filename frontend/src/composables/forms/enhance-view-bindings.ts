@@ -29,14 +29,10 @@ export function createEnhanceViewBindings({
 
   const interpolationModelDetails = computed(() => enhanceViewModel.value.interpolationModelDetails)
   const interpolationOnnxModelDetails = computed(() => enhanceViewModel.value.interpolationOnnxModelDetails)
-  const superResolutionModelDetails = computed(() => enhanceViewModel.value.superResolutionModelDetails)
   const superResolutionOnnxModelDetails = computed(() => enhanceViewModel.value.superResolutionOnnxModelDetails)
   const currentInterpolationModelDetail = computed(() => enhanceViewModel.value.currentInterpolationModelDetail)
-  const currentSuperResolutionModelDetail = computed(() => enhanceViewModel.value.currentSuperResolutionModelDetail)
   const currentInterpolationRuntimeDetail = computed(() => enhanceViewModel.value.currentInterpolationRuntimeDetail)
-  const currentSuperResolutionRuntimeDetail = computed(() => enhanceViewModel.value.currentSuperResolutionRuntimeDetail)
   const interpolationRuntimeEstimate = computed(() => enhanceViewModel.value.interpolationRuntimeEstimate)
-  const superResolutionRuntimeEstimate = computed(() => enhanceViewModel.value.superResolutionRuntimeEstimate)
   const interpolationMetricRows = computed(() => enhanceViewModel.value.interpolationMetricRows)
   const superResolutionMetricRows = computed(() => enhanceViewModel.value.superResolutionMetricRows)
   const combinedPeakVramBytes = computed(() => enhanceViewModel.value.combinedPeakVramBytes)
@@ -51,14 +47,10 @@ export function createEnhanceViewBindings({
   return {
     interpolationModelDetails,
     interpolationOnnxModelDetails,
-    superResolutionModelDetails,
     superResolutionOnnxModelDetails,
     currentInterpolationModelDetail,
-    currentSuperResolutionModelDetail,
     currentInterpolationRuntimeDetail,
-    currentSuperResolutionRuntimeDetail,
     interpolationRuntimeEstimate,
-    superResolutionRuntimeEstimate,
     interpolationMetricRows,
     superResolutionMetricRows,
     combinedPeakVramBytes,

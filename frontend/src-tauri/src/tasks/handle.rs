@@ -16,13 +16,13 @@ use crate::tasks::cancellation::{CancelReason, CancellationToken};
 use crate::tasks::TaskControlMessage;
 
 #[derive(Clone)]
-pub struct TaskHandle {
-    pub control_tx: mpsc::Sender<TaskControlMessage>,
-    pub cancel_token: CancellationToken,
+pub(crate) struct TaskHandle {
+    pub(crate) control_tx: mpsc::Sender<TaskControlMessage>,
+    pub(crate) cancel_token: CancellationToken,
 }
 
 impl TaskHandle {
-    pub fn new(
+    pub(crate) fn new(
         control_tx: mpsc::Sender<TaskControlMessage>,
         cancel_token: CancellationToken,
     ) -> Self {
@@ -33,7 +33,7 @@ impl TaskHandle {
     }
 
     /// Idempotent: subsequent calls are no-ops at the token level.
-    pub fn cancel(&self, reason: CancelReason) {
+    pub(crate) fn cancel(&self, reason: CancelReason) {
         self.cancel_token.cancel(reason);
     }
 }

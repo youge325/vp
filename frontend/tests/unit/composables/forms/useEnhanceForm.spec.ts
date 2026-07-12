@@ -318,11 +318,11 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     })
 
     const form = useEnhanceForm()
-    const before = form.superResolutionRuntimeEstimate?.vramBytes
+    const before = form.superResolutionMetricRows[2]?.value
 
     form.superResolutionNumFrames = 2
 
-    expect(form.superResolutionRuntimeEstimate?.vramBytes).toBe(before)
+    expect(form.superResolutionMetricRows[2]?.value).toBe(before)
   })
 
   it('applies recurrent input frame edits to every selected media item before task start', () => {

@@ -72,13 +72,13 @@ TS_TASK_ERROR_CODE_PATH = TS_GENERATED_DIR / "TaskErrorCode.ts"
 NDJSON_ONESHOT_WHITELIST = frozenset({"info", "check", "resume_inspection"})
 
 # 注意:正则被特意写得"严"以拒绝畸形文件。
-# Rust:  从 ``pub enum FooBar { ... }`` 块中提取 PascalCase variant 名;
+# Rust:  从带任意可见性的 ``enum FooBar { ... }`` 块中提取 PascalCase variant 名;
 #        按 ``#[serde(rename_all = "...")]`` 的语义本地转换。Phase D.3.5
 #        删除了之前手维护的 ``as_str()`` 字符串映射(零调用方、易漂移),所以脚本
 #        现在直接消费 enum 定义本身,不再需要 as_str() 同步。
 _RUST_ENUM_HEADER_PATTERN = re.compile(
     r"#\[serde\(rename_all\s*=\s*\"(?P<rename>[a-z_-]+)\"\)\][^}]*?"
-    r"pub\s+enum\s+(?P<name>[A-Z][A-Za-z0-9]+)\s*\{(?P<body>[^}]+)\}",
+    r"pub(?:\s*\([^)]*\))?\s+enum\s+(?P<name>[A-Z][A-Za-z0-9]+)\s*\{(?P<body>[^}]+)\}",
     re.DOTALL,
 )
 _RUST_VARIANT_PATTERN = re.compile(r"\b(?P<variant>[A-Z][A-Za-z0-9]+)\b")
@@ -102,11 +102,11 @@ _PY_NDJSON_MEMBER_PATTERN = re.compile(
     r"^[ \t]+[A-Z_]+\s*=\s*\"(?P<wire>[a-z_]+)\"",
     re.MULTILINE,
 )
-# Rust ``pub enum NdjsonEnvelope { ... }`` block. Each variant carries an
+# Rust ``NdjsonEnvelope`` block. Each variant carries an
 # explicit ``#[serde(rename = "...")]`` attribute so we collect those
 # directly rather than reapplying the top-level ``rename_all`` rule.
 _RUST_NDJSON_ENVELOPE_BLOCK = re.compile(
-    r"pub\s+enum\s+NdjsonEnvelope\s*\{(?P<body>[^}]+)\}",
+    r"pub(?:\s*\([^)]*\))?\s+enum\s+NdjsonEnvelope\s*\{(?P<body>[^}]+)\}",
     re.DOTALL,
 )
 _RUST_NDJSON_VARIANT_RENAME_PATTERN = re.compile(

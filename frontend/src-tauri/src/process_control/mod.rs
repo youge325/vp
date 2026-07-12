@@ -34,7 +34,7 @@ use windows as imp;
 /// task layer can distinguish "process is already gone" (which is often
 /// benign during cancellation races) from a real permission / OS issue.
 #[derive(Debug)]
-pub enum ProcessControlError {
+pub(crate) enum ProcessControlError {
     /// The target process / thread tree has no live members we can
     /// touch — usually because the backend already exited between the
     /// pause/resume dispatch and the controller waking up.
@@ -74,7 +74,7 @@ impl From<io::Error> for ProcessControlError {
     }
 }
 
-pub trait ProcessController: Send + Sync {
+pub(crate) trait ProcessController: Send + Sync {
     fn suspend(&self, root_pid: u32) -> Result<(), ProcessControlError>;
     fn resume(&self, root_pid: u32) -> Result<(), ProcessControlError>;
 }
@@ -86,7 +86,7 @@ pub trait ProcessController: Send + Sync {
 /// ``cached_threads`` stays empty and the field is gated behind
 /// ``#[cfg(target_os = "windows")]`` anyway.
 #[derive(Default)]
-pub struct DefaultProcessController {
+pub(crate) struct DefaultProcessController {
     /// Cache of thread IDs collected on the last ``suspend()`` per root pid.
     ///
     /// Phase C.2.6 — populated by [`imp::set_process_tree_suspended`] when
@@ -102,7 +102,7 @@ pub struct DefaultProcessController {
 }
 
 impl DefaultProcessController {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 }
@@ -150,7 +150,7 @@ impl DefaultProcessController {
 // 不再调用 ``store_thread_cache`` / ``take_thread_cache``(通过 ``#[cfg]``
 // 条件编译),因此无需保留无意义的方法。
 
-pub fn default_controller() -> Arc<dyn ProcessController> {
+pub(crate) fn default_controller() -> Arc<dyn ProcessController> {
     Arc::new(DefaultProcessController::new())
 }
 

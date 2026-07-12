@@ -78,11 +78,10 @@ function makeBindings() {
 }
 
 describe('enhance view bindings', () => {
-  it('projects enhance view-model rows and selected model details', () => {
+  it('projects enhance view-model rows and interpolation model details', () => {
     const { bindings } = makeBindings()
 
     expect(bindings.currentInterpolationModelDetail.value?.name).toBe('4.25')
-    expect(bindings.currentSuperResolutionModelDetail.value?.name).toBe('x4')
     expect(bindings.interpolationMetricRows.value.length).toBeGreaterThan(0)
     expect(bindings.superResolutionMetricRows.value.length).toBeGreaterThan(0)
     expect(bindings.superResolutionFixedWindowRows.value).toEqual([

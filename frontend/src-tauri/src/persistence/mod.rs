@@ -1,5 +1,5 @@
-pub mod commands;
-pub mod storage;
+pub(crate) mod commands;
+pub(crate) mod storage;
 
 pub(crate) use storage::{
     app_data_dir, build_environment_fingerprint, current_timestamp, load_environment_cache,

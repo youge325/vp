@@ -24,7 +24,7 @@ const CREATE_NO_WINDOW: u32 = windows_sys::Win32::System::Threading::CREATE_NO_W
 /// the working directory and the env map set. Callers are expected to
 /// append their own ``--flag value`` arguments, stdio configuration and
 /// platform-specific flags (``apply_no_window``, ``spawn_no_window_group``).
-pub fn backend_command(paths: &ResolvedRuntimePaths, subcommand: &str) -> Command {
+pub(crate) fn backend_command(paths: &ResolvedRuntimePaths, subcommand: &str) -> Command {
     let mut command = Command::new(&paths.python_executable);
     command.args(["-m", "app", subcommand]);
     command.current_dir(&paths.backend_dir);
@@ -48,7 +48,7 @@ fn build_config_stdin_payload(request: &TaskRequest) -> Result<String, serde_jso
     }))
 }
 
-pub fn build_process_command(
+pub(crate) fn build_process_command(
     paths: &ResolvedRuntimePaths,
     request: &TaskRequest,
 ) -> Result<(Command, String), serde_json::Error> {
@@ -72,7 +72,7 @@ pub fn build_process_command(
     Ok((command, stdin_payload))
 }
 
-pub fn build_inspect_output_args(
+pub(crate) fn build_inspect_output_args(
     request: &TaskRequest,
 ) -> Result<(Vec<String>, String), serde_json::Error> {
     let args = vec![
@@ -86,20 +86,20 @@ pub fn build_inspect_output_args(
 }
 
 #[cfg(windows)]
-pub fn apply_no_window(command: &mut Command) {
+pub(crate) fn apply_no_window(command: &mut Command) {
     command.creation_flags(CREATE_NO_WINDOW);
 }
 
 #[cfg(not(windows))]
-pub fn apply_no_window(_command: &mut Command) {}
+pub(crate) fn apply_no_window(_command: &mut Command) {}
 
 #[cfg(windows)]
-pub fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChild> {
+pub(crate) fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChild> {
     command.group().creation_flags(CREATE_NO_WINDOW).spawn()
 }
 
 #[cfg(not(windows))]
-pub fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChild> {
+pub(crate) fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChild> {
     command.group_spawn()
 }
 

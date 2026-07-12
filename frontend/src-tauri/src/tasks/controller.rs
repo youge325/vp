@@ -31,15 +31,15 @@ const STALL_TIMEOUT_ENV: &str = "VP_TASK_STALL_TIMEOUT_SECS";
 /// timeouts instead of seconds and (b) lets future PRs source the
 /// config from app settings without touching the controller spawn site.
 #[derive(Debug, Clone, Copy)]
-pub struct WatchdogConfig {
-    pub poll_interval: Duration,
+pub(crate) struct WatchdogConfig {
+    pub(crate) poll_interval: Duration,
     /// ``None`` disables the watchdog entirely (matches the legacy
     /// ``VP_TASK_STALL_TIMEOUT_SECS=0`` opt-out).
-    pub stall_timeout: Option<Duration>,
+    pub(crate) stall_timeout: Option<Duration>,
 }
 
 impl WatchdogConfig {
-    pub fn from_env() -> Self {
+    pub(crate) fn from_env() -> Self {
         Self {
             poll_interval: Duration::from_secs(DEFAULT_WATCHDOG_POLL_INTERVAL_SECS),
             stall_timeout: parse_stall_timeout(),
@@ -54,7 +54,7 @@ impl Default for WatchdogConfig {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn spawn_task_controller<R: Runtime + 'static>(
+pub(crate) fn spawn_task_controller<R: Runtime + 'static>(
     app: AppHandle<R>,
     child: AsyncGroupChild,
     root_pid: u32,

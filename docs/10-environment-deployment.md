@@ -170,13 +170,15 @@ ONNX 引擎默认走 CUDA EP。启用 TensorRT EP：
 
 | 工作流 | 触发条件 | 职责 |
 |--------|----------|------|
-| `e2e.yml` | push/PR 修改 backend/app/ 或 frontend/ | Windows CLI smoke + 非 task 文件夹 UI E2E |
-| `e2e-arc.yml` | push/PR 修改 backend/app/ 或 frontend/ | ARC CLI smoke + 非 task 文件夹 UI E2E |
-| `e2e-task.yml` | push/PR 修改 backend/app/ 或 frontend/ | Windows task 文件夹 UI E2E |
-| `e2e-task-arc.yml` | push/PR 修改 backend/app/ 或 frontend/ | ARC task 文件夹 UI E2E |
+| `e2e.yml` | push/PR 修改 backend/app/ 或 frontend/ | Windows CLI smoke + 排除 `tests/e2e/task/**/*.spec.ts` 的 UI E2E |
+| `e2e-arc.yml` | 手工 `workflow_dispatch` | Linux ARC CLI smoke + 排除 task 分组的 UI E2E |
+| `e2e-task.yml` | push/PR 修改 backend/app/ 或 frontend/ | Windows `tests/e2e/task/**/*.spec.ts` UI E2E |
+| `e2e-task-arc.yml` | 手工 `workflow_dispatch` | Linux ARC task 分组 UI E2E |
 | `release.yml` | push v* 标签 | 构建并发布到 GitHub Release |
 | `test-backend.yml` | push/PR 修改 backend/ | PyTorch 和 Paddle 后端测试 |
 | `test.yml` | push/PR 修改 backend/app/ 或 frontend/ | 前端测试 + 类型检查 + 错误码一致性检查 |
+
+E2E release 构建启用 Istanbul 插桩，WebDriver 测试把覆盖率 JSON 固定写到运行目录下的 `frontend/.nyc_output/`。CI 在生成 `nyc` 报告前要求至少存在一个 JSON，避免测试路径或工作目录漂移被静默忽略。WebDriver launcher 只在其子进程环境中移除代理变量，父 shell 和其他 `VP_*` 运行配置保持不变。
 
 ## 平台差异
 

@@ -10,7 +10,7 @@ use std::io;
 
 use super::ProcessControlError;
 
-pub fn set_process_tree_suspended(
+pub(crate) fn set_process_tree_suspended(
     root_pid: u32,
     suspend: bool,
     _cached_threads: Option<Vec<u32>>,

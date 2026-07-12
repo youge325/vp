@@ -60,7 +60,7 @@ enum TaskStatePhase {
 }
 
 #[derive(Default)]
-pub struct TaskState {
+pub(crate) struct TaskState {
     phase: Mutex<TaskStatePhase>,
 }
 
@@ -79,7 +79,7 @@ impl TaskState {
     /// across two files (drift hazard), and the docstring on
     /// ``is_idle`` itself admitted the authoritative check was here.
     /// ``try_start`` is now the only entry point.
-    pub async fn try_start(&self, handle: TaskHandle) -> Result<(), ShellError> {
+    pub(crate) async fn try_start(&self, handle: TaskHandle) -> Result<(), ShellError> {
         let mut guard = self.phase.lock().await;
         if !matches!(*guard, TaskStatePhase::Idle) {
             return Err(ShellError::InvalidInput(
@@ -96,7 +96,7 @@ impl TaskState {
     /// Errors:
     /// - ``Idle`` → ``NoActiveTask``
     /// - ``Cancelling`` → ``InvalidInput`` ("already being cancelled")
-    pub async fn begin_cancel(&self) -> Result<TaskHandle, ShellError> {
+    pub(crate) async fn begin_cancel(&self) -> Result<TaskHandle, ShellError> {
         let mut guard = self.phase.lock().await;
         // Take the current phase out so we can transition without
         // cloning ``TaskHandle`` twice; restore the original variant
@@ -129,7 +129,7 @@ impl TaskState {
     /// controller's ``cancel_token.cancelled()`` select branch will
     /// race it to the kill path either way; this matches the
     /// pre-Phase-5d semantics).
-    pub async fn current_handle(&self) -> Result<TaskHandle, ShellError> {
+    pub(crate) async fn current_handle(&self) -> Result<TaskHandle, ShellError> {
         let guard = self.phase.lock().await;
         match &*guard {
             TaskStatePhase::Idle => Err(ShellError::NoActiveTask),
@@ -141,7 +141,7 @@ impl TaskState {
     /// Drop to `Idle` from any phase. Called by the controller after
     /// the child process exits — clean exit, error, or post-cancel kill
     /// all funnel through here so the next ``try_start`` can succeed.
-    pub async fn finish(&self) {
+    pub(crate) async fn finish(&self) {
         let mut guard = self.phase.lock().await;
         *guard = TaskStatePhase::Idle;
     }

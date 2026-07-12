@@ -6,8 +6,7 @@
 // 委托给哪个 ``Base*`` 控件,父组件只需要绑 ``v-model`` + 喂 ``option``。
 //
 // 把每一种 type 都收敛到对应的 Base* 控件而不是手写 input,可顺手关掉
-// 一批散布在视图模板里 ``setX(coerceOptionValue(option, $event))`` 的
-// "把 event 当 value 处理"细节;CapabilityValue 类型在 props 出入两端
+// 一批散布在视图模板里的 event/value 转换细节;CapabilityValue 类型在 props 出入两端
 // 保持一致,caller 不需要知道某种 type 内部用了 string-typed event。
 
 import { computed } from 'vue'
@@ -30,9 +29,7 @@ const emit = defineEmits<{
 // BaseSelect 期待 ``{ value: string, label: string }``;capability choice
 // 的 value 在协议上是 ``CapabilityValue``(string | number | boolean),
 // 但实际后端探测出的 ffmpeg 选项 99% 是 string。这里统一 ``String(...)``
-// 保险一次,emit 时透传 BaseSelect 给出的 string —— 与原视图里
-// ``coerceOptionValue`` 的 choice 路径 (``return target.value``) 行为完全
-// 一致,不会引入回归。
+// 保险一次,emit 时透传 BaseSelect 给出的 string,保持 choice 写回语义一致。
 const choiceOptions = computed(() =>
   props.option.choices.map((choice) => ({
     value: String(choice.value),

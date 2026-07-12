@@ -7,7 +7,7 @@ use ts_rs::TS;
 #[ts(export, export_to = "../../src/types/generated/")]
 // Variants intentionally mirror the full Tauri event names exported to TypeScript.
 #[allow(clippy::enum_variant_names)]
-pub enum TaskEventName {
+pub(crate) enum TaskEventName {
     TaskProgress,
     TaskCompleted,
     TaskError,
@@ -17,7 +17,7 @@ pub enum TaskEventName {
 }
 
 impl TaskEventName {
-    pub fn as_str(&self) -> &'static str {
+    pub(crate) fn as_str(&self) -> &'static str {
         match self {
             Self::TaskProgress => "task-progress",
             Self::TaskCompleted => "task-completed",

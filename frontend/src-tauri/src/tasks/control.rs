@@ -18,7 +18,7 @@ use crate::error::ShellError;
 use crate::tasks::cancellation::CancelReason;
 use crate::tasks::{TaskControlKind, TaskControlMessage, TaskState};
 
-pub async fn cancel_running_task(state: &TaskState) -> Result<(), ShellError> {
+pub(crate) async fn cancel_running_task(state: &TaskState) -> Result<(), ShellError> {
     // Phase 5d — atomic Running → Cancelling. ``begin_cancel`` rejects
     // duplicate calls (Cancelling → Cancelling) and bare-Idle cancels
     // (no task) on its own, replacing the bespoke checks the old code
@@ -31,7 +31,10 @@ pub async fn cancel_running_task(state: &TaskState) -> Result<(), ShellError> {
     Ok(())
 }
 
-pub async fn send_task_control(state: &TaskState, kind: TaskControlKind) -> Result<(), ShellError> {
+pub(crate) async fn send_task_control(
+    state: &TaskState,
+    kind: TaskControlKind,
+) -> Result<(), ShellError> {
     // Phase 5d — ``current_handle`` returns the active handle even in
     // the ``Cancelling`` phase so an in-flight pause/resume from the
     // UI lands cleanly during the cancel window; the early reject for

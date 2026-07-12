@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CancelReason {
+pub(crate) enum CancelReason {
     User,
     Stalled,
 }
@@ -41,36 +41,36 @@ struct CancellationInner {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct CancellationToken {
+pub(crate) struct CancellationToken {
     inner: Arc<CancellationInner>,
 }
 
 impl CancellationToken {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Mark the token as cancelled. First call wins for the reason and
     /// wakes all current ``cancelled()`` waiters. Subsequent calls are
     /// no-ops (no dropped signal — unlike a bounded mpsc).
-    pub fn cancel(&self, reason: CancelReason) {
+    pub(crate) fn cancel(&self, reason: CancelReason) {
         if !self.inner.cancelled.swap(true, Ordering::SeqCst) {
             self.inner.reason.store(reason.as_u8(), Ordering::SeqCst);
             self.inner.notify.notify_waiters();
         }
     }
 
-    pub fn is_cancelled(&self) -> bool {
+    pub(crate) fn is_cancelled(&self) -> bool {
         self.inner.cancelled.load(Ordering::SeqCst)
     }
 
-    pub fn reason(&self) -> Option<CancelReason> {
+    pub(crate) fn reason(&self) -> Option<CancelReason> {
         CancelReason::from_u8(self.inner.reason.load(Ordering::SeqCst))
     }
 
     /// Resolves once the token is cancelled. Safe to call from multiple
     /// tasks concurrently.
-    pub async fn cancelled(&self) {
+    pub(crate) async fn cancelled(&self) {
         if self.is_cancelled() {
             return;
         }

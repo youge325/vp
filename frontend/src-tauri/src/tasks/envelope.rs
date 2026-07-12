@@ -7,7 +7,7 @@ use crate::models::{
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum NdjsonEnvelope {
+pub(crate) enum NdjsonEnvelope {
     #[serde(rename = "progress")]
     Progress(TaskProgressPayload),
     #[serde(rename = "completed")]
@@ -18,7 +18,7 @@ pub enum NdjsonEnvelope {
     ResumeStatus(ResumeStatusPayload),
 }
 
-pub fn parse_last_json_line(stdout: &str) -> Option<Value> {
+pub(crate) fn parse_last_json_line(stdout: &str) -> Option<Value> {
     stdout
         .lines()
         .rev()

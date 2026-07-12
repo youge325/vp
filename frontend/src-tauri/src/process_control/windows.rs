@@ -47,7 +47,7 @@ use super::ProcessControlError;
 /// exclude-set of already-touched thread IDs and short-circuits before
 /// calling ``SuspendThread`` on them, so each tid has its suspend-count
 /// raised at most once per ``set_process_tree_suspended`` invocation.
-pub fn set_process_tree_suspended(
+pub(crate) fn set_process_tree_suspended(
     root_pid: u32,
     suspend: bool,
     cached_threads: Option<Vec<u32>>,

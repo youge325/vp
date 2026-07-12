@@ -45,7 +45,7 @@ export type { Relative } from '@/types/generated/Relative'
 export type { Unused } from '@/types/generated/Unused'
 """
     consumers = [
-        "import type { Used, Aliased as LocalAlias } from '@/types/protocol'\n",
+        "import { computed } from 'vue'\nimport type { Used, Aliased as LocalAlias } from '@/types/protocol'\n",
         "import type { Relative } from '../protocol'\n",
     ]
 

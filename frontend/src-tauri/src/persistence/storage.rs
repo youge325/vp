@@ -24,24 +24,24 @@ const DEFAULT_RIFE_MODEL_VERSION: &str = "4.25";
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct EnvironmentCacheEntry {
-    pub schema_version: u32,
-    pub checked_at: String,
-    pub fingerprint: String,
-    pub result: Value,
+    pub(crate) schema_version: u32,
+    pub(crate) checked_at: String,
+    pub(crate) fingerprint: String,
+    pub(crate) result: Value,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkbenchPresetEntry {
-    pub schema_version: u32,
-    pub preset: WorkbenchPreset,
+    pub(crate) schema_version: u32,
+    pub(crate) preset: WorkbenchPreset,
 }
 
 /// 解析并创建应用本地数据目录。
 ///
 /// Phase C.2.2:从 ``std::fs::create_dir_all`` 改为 ``tokio::fs``,避免
 /// ``#[tauri::command] async fn`` 在 tokio runtime 上阻塞。
-pub async fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, ShellError> {
+pub(crate) async fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, ShellError> {
     let dir = env::var_os("VP_APP_DATA_DIR")
         .map(PathBuf::from)
         .map(Ok)
@@ -67,7 +67,7 @@ fn workbench_preset_path(base_dir: &Path) -> PathBuf {
     base_dir.join(WORKBENCH_PRESET_FILE)
 }
 
-pub fn current_timestamp() -> Result<String, ShellError> {
+pub(crate) fn current_timestamp() -> Result<String, ShellError> {
     OffsetDateTime::now_utc()
         .format(&Rfc3339)
         .map_err(|error| ShellError::Persistence(format!("Unable to format timestamp: {error}")))
@@ -76,7 +76,7 @@ pub fn current_timestamp() -> Result<String, ShellError> {
 /// 构造环境检查的指纹字符串,用于决定缓存命中。
 ///
 /// 内部对 ffmpeg / ffprobe / model 等路径做 metadata stat,所以也是 async。
-pub async fn build_environment_fingerprint(
+pub(crate) async fn build_environment_fingerprint(
     paths: &ResolvedRuntimePaths,
 ) -> Result<String, ShellError> {
     let model_version = env::var("VP_RIFE_MODEL_VERSION")
@@ -213,7 +213,7 @@ async fn atomic_write_bytes(path: &Path, data: &[u8]) -> Result<(), ShellError> 
     Ok(())
 }
 
-pub async fn save_environment_cache(
+pub(crate) async fn save_environment_cache(
     base_dir: &Path,
     checked_at: &str,
     fingerprint: &str,
@@ -228,7 +228,7 @@ pub async fn save_environment_cache(
     atomic_write_json(&environment_cache_path(base_dir), &entry).await
 }
 
-pub async fn load_workbench_preset(base_dir: &Path) -> Option<WorkbenchPreset> {
+pub(crate) async fn load_workbench_preset(base_dir: &Path) -> Option<WorkbenchPreset> {
     let raw = fs::read_to_string(workbench_preset_path(base_dir))
         .await
         .ok()?;
@@ -239,7 +239,7 @@ pub async fn load_workbench_preset(base_dir: &Path) -> Option<WorkbenchPreset> {
     Some(entry.preset)
 }
 
-pub async fn save_workbench_preset(
+pub(crate) async fn save_workbench_preset(
     base_dir: &Path,
     preset: &WorkbenchPreset,
 ) -> Result<(), ShellError> {

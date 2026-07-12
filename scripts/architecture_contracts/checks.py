@@ -88,7 +88,7 @@ def _collect_rust_command_args(root: Path) -> dict[str, set[str]]:
     tauri_src = root / "frontend/src-tauri/src"
     command_args: dict[str, set[str]] = {}
     command_attr = re.compile(r"^\s*#\s*\[\s*tauri::command\s*\]", re.MULTILINE)
-    function_decl = re.compile(r"(?:#\[[^\]]+\]\s*)*pub\s+(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)")
+    function_decl = re.compile(r"(?:#\[[^\]]+\]\s*)*pub(?:\s*\([^)]*\))?\s+(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)")
 
     for path in sorted(tauri_src.rglob("*.rs")):
         text = read_source(path, root)
@@ -313,9 +313,8 @@ def _find_unconsumed_protocol_reexports(index_text: str, consumer_texts: list[st
     )
     imported: set[str] = set()
     import_pattern = re.compile(
-        r"import(?:\s+type)?\s*\{(?P<body>.*?)\}\s*from\s*['\"]"
+        r"import(?:\s+type)?\s*\{(?P<body>[^}]*)\}\s*from\s*['\"]"
         r"(?:@/types/protocol|(?:\.\./)+protocol|\./index)['\"]",
-        re.DOTALL,
     )
     for text in consumer_texts:
         for match in import_pattern.finditer(text):
@@ -532,6 +531,25 @@ def _check_stage_sequence_metrics(root: Path) -> list[str]:
     return issues
 
 
+def _check_rust_public_surface(root: Path) -> list[str]:
+    rust_root = root / "frontend/src-tauri/src"
+    allowed_public_files = {
+        "frontend/src-tauri/src/lib.rs",
+        "frontend/src-tauri/src/models/mod.rs",
+        "frontend/src-tauri/src/models/config.rs",
+        "frontend/src-tauri/src/models/task.rs",
+    }
+    bare_public = re.compile(r"^\s*pub\s+(?!\()", re.MULTILINE)
+    issues: list[str] = []
+    for path in sorted(rust_root.rglob("*.rs")):
+        relative = relative_path(path, root)
+        if relative in allowed_public_files:
+            continue
+        if bare_public.search(read_source(path, root)):
+            issues.append(f"Rust crate-internal source exposes a public item: {relative}")
+    return issues
+
+
 def collect_architecture_issues(root: Path) -> list[str]:
     issues = run_rules(root, RULES)
     issues.extend(_check_command_surface(root))
@@ -545,4 +563,5 @@ def collect_architecture_issues(root: Path) -> list[str]:
     issues.extend(_check_frontend_test_support_exports(root))
     issues.extend(_check_typed_ndjson_error_emission(root))
     issues.extend(_check_stage_sequence_metrics(root))
+    issues.extend(_check_rust_public_surface(root))
     return issues

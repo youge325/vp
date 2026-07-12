@@ -4,6 +4,8 @@
 
 Rust 层通过 `#[tauri::command]` 暴露 11 个命令，前端通过 `@tauri-apps/api/core` 的 `invoke()` 调用。
 
+Rust crate 对外源码面只保留 `run()`、`models::config` 和 `models::task`。Tauri 命令及 `tasks`、`runtime`、`persistence`、`services`、`process_control`、`protocol`、`error`、环境探测模型均为 crate 内部接口；命令是否可由前端调用由 Tauri handler 与权限清单决定，不依赖 Rust `pub` 可见性。
+
 ### Command 清单
 
 | Command | 签名 | 职责 | 实现文件 |
@@ -14,7 +16,7 @@ Rust 层通过 `#[tauri::command]` 暴露 11 个命令，前端通过 `@tauri-ap
 | `load_workbench_preset` | `() -> Result<Option<WorkbenchPreset>, ShellError>` | 从本地加载工作台预设 | [`persistence/commands.rs`](../frontend/src-tauri/src/persistence/commands.rs) |
 | `save_workbench_preset` | `(preset: WorkbenchPreset) -> Result<(), ShellError>` | 保存工作台预设（原子写） | [`persistence/commands.rs`](../frontend/src-tauri/src/persistence/commands.rs) |
 | `inspect_video` | `(inputPath: String) -> Result<VideoInfo, ShellError>` | 探测输入视频元数据 | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
-| `check_resume_state` | `(request: TaskRequest) -> Result<Value, ShellError>` | 预检查输出文件和续传 sidecar 状态 | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
+| `check_resume_state` | `(request: TaskRequest) -> Result<ResumeInspectionResult, ShellError>` | 预检查输出文件和续传 sidecar 状态 | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
 | `start_task` | `(request: TaskRequest) -> Result<(), ShellError>` | 启动 Python 处理子进程 | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
 | `cancel_task` | `() -> Result<(), ShellError>` | 取消当前运行任务（协作式） | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
 | `control_task` | `(kind: TaskControlKind) -> Result<(), ShellError>` | 暂停或恢复当前运行任务（`pause` / `resume`） | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
@@ -22,21 +24,19 @@ Rust 层通过 `#[tauri::command]` 暴露 11 个命令，前端通过 `@tauri-ap
 
 所有命令体均为 `async fn`；对话框命令使用 `rfd::AsyncFileDialog` 避免阻塞 tokio runtime。
 
-### 单一真相源：commands_manifest.rs
+### 命令契约清单：commands_manifest.rs
 
-[`frontend/src-tauri/src/commands_manifest.rs`](../frontend/src-tauri/src/commands_manifest.rs) 是命令清单的唯一声明位置：
+[`frontend/src-tauri/src/commands_manifest.rs`](../frontend/src-tauri/src/commands_manifest.rs) 是权限生成与契约校验使用的私有命令清单：
 
 ```rust
-pub const APP_COMMAND_NAMES: &[&str] = &[
+const APP_COMMAND_NAMES: &[&str] = &[
     "pick_inputs",
     "pick_output_directory",
     // ... 11 个命令
 ];
 ```
 
-该常量被两处消费：
-1. `lib.rs` 的 `tauri::generate_handler![...]` —— 命令注册
-2. `lib.rs::tests` 模块 —— 反向断言：每个命令名都出现在 `permissions/default.toml` 和 `gen/schemas/acl-manifests.json` 中
+该私有片段被 `build.rs` 与 `lib.rs::tests` 直接 include，用于生成和验证权限清单。架构契约脚本还会把它与 `tauri::generate_handler![...]`、前端 IPC endpoint 和类型化参数表做集合比对，防止任一入口漂移。
 
 **新增命令的 checklist：** 实现函数 → 加入 `commands_manifest.rs` → 注册到 `generate_handler!` → 更新 `permissions/default.toml`。
 
@@ -148,7 +148,7 @@ sequenceDiagram
 ```rust
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum NdjsonEnvelope {
+pub(crate) enum NdjsonEnvelope {
     #[serde(rename = "progress")]
     Progress(TaskProgressPayload),
     Completed(TaskCompletedPayload),
