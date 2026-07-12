@@ -31,8 +31,6 @@ from app.cli.defaults import (
 from app.cli.runtime_configs import RuntimeConfigs
 from app.errors import TaskErrorCode, raise_error
 from app.models import DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig
-from app.utils.ffmpeg import FFmpegWrapper
-from app.utils.file_utils import validate_input_path
 
 _ConfigModel = TypeVar("_ConfigModel", DecodeConfig, EncodeConfig, WorkflowConfig, OutputConfig)
 
@@ -78,32 +76,6 @@ def _validate_config_section(
         raise ValueError("Config validation failed for OutputConfig: outputDir is required.")
 
     return validated
-
-
-def ensure_input_and_ffmpeg(input_path: str) -> FFmpegWrapper:
-    """Fail-fast guards before any config work happens.
-
-    Returns the resolved ``FFmpegWrapper`` so callers don't have to construct
-    it twice. Either guard failing emits a typed ``ProcessError``.
-    """
-    if not validate_input_path(input_path):
-        raise_error(
-            TaskErrorCode.INVALID_INPUT,
-            f"Input file is invalid or unsupported: {input_path}",
-            details={"input_path": input_path},
-        )
-
-    ffmpeg = FFmpegWrapper()
-    if not ffmpeg.is_available():
-        raise_error(
-            TaskErrorCode.MISSING_FFMPEG,
-            "FFmpeg is not available.",
-            details={
-                "ffmpeg_path": ffmpeg.ffmpeg_path,
-                "ffprobe_path": ffmpeg.ffprobe_path,
-            },
-        )
-    return ffmpeg
 
 
 def _read_stdin_config_sections() -> dict[str, str | None]:

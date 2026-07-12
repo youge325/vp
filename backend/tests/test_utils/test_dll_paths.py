@@ -10,6 +10,8 @@ import pytest
 
 from app.utils import dll_paths
 
+_ORIGINAL_PYTHON_PACKAGE_DLL_DIRS = dll_paths._python_package_dll_dirs
+
 
 @pytest.fixture(autouse=True)
 def _reset_registry(monkeypatch):
@@ -136,6 +138,16 @@ def test_pip_tensorrt_dirs_skip_auto_discovered_roots(tmp_path: Path, monkeypatc
 
     assert [Path(p) for p in captured] == [trt_libs.resolve()]
     assert registered == [trt_libs.resolve()]
+
+
+def test_python_package_dll_dirs_deduplicate_repeated_roots(tmp_path: Path, monkeypatch):
+    trt_libs = tmp_path / "tensorrt_libs"
+    trt_libs.mkdir()
+    monkeypatch.setattr(dll_paths.site, "getsitepackages", lambda: [str(tmp_path), str(tmp_path)])
+    monkeypatch.setattr(dll_paths.site, "getusersitepackages", lambda: str(tmp_path))
+    monkeypatch.setattr(dll_paths.sys, "path", [str(tmp_path)])
+
+    assert _ORIGINAL_PYTHON_PACKAGE_DLL_DIRS() == [trt_libs]
 
 
 def test_picks_up_cuda_path_when_present(tmp_path: Path, monkeypatch):

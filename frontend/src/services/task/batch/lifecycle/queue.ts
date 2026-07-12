@@ -26,16 +26,10 @@ interface QueueInternalRefs {
   handleErrored: (error: ReturnType<typeof normalizeError>) => Promise<void>
 }
 
-interface QueueOps {
-  start(ids: string[]): Promise<void>
-  runNextQueuedItem(): Promise<void>
-  launchCurrentItem(item: MediaItem, resumeMode?: ResumeMode): Promise<void>
-}
-
 export function createQueueOps(
   deps: BatchLifecycleDeps,
   internal: QueueInternalRefs,
-): QueueOps {
+) {
   function resetBatchRunState(ids: string[]): void {
     deps.setRuntimeIds([...ids])
     deps.setBatch({

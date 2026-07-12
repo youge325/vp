@@ -5,9 +5,9 @@ from __future__ import annotations
 import argparse
 import os
 
+from app.cli.commands._guards import ensure_ffmpeg_available
 from app.errors import ProcessError, TaskErrorCode, raise_error
 from app.protocol import ndjson
-from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.ffmpeg.media_probe import get_primary_video_dimensions
 
 
@@ -20,16 +20,7 @@ def cmd_info(args: argparse.Namespace) -> None:
             details={"input_path": input_path},
         )
 
-    ffmpeg = FFmpegWrapper()
-    if not ffmpeg.is_available():
-        raise_error(
-            TaskErrorCode.MISSING_FFMPEG,
-            "FFmpeg is not available.",
-            details={
-                "ffmpeg_path": ffmpeg.ffmpeg_path,
-                "ffprobe_path": ffmpeg.ffprobe_path,
-            },
-        )
+    ffmpeg = ensure_ffmpeg_available()
 
     try:
         info = ffmpeg.get_video_info(input_path)

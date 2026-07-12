@@ -16,10 +16,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from app.cli.commands._process_validation import (
-    ensure_input_and_ffmpeg,
-    load_runtime_configs,
-)
+from app.cli.commands._guards import ensure_input_and_ffmpeg
+from app.cli.commands._process_validation import load_runtime_configs
 from app.models import WorkflowConfig
 from app.planning import (
     SegmentManifest,

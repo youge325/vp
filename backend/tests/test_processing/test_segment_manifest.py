@@ -186,6 +186,38 @@ def test_prepare_force_fresh_purges_final_and_sidecar(tmp_path):
     assert payload["config_snapshot"] == {"foo": "bar"}
 
 
+def test_prepare_force_resume_reuses_matching_progress_with_final_output(tmp_path):
+    output = tmp_path / "out.mp4"
+    manifest = SegmentManifest(str(output))
+    manifest.prepare("sig-resume", {}, mode="auto")
+    _make_chunk(manifest.sidecar_dir, index=1, start=0, end=99, next_src=50)
+    output.write_bytes(b"previous-final")
+
+    decision = manifest.prepare("sig-resume", {}, mode="force-resume")
+
+    assert decision.kind == "resume"
+    assert decision.sidecar_signature_match is True
+    assert decision.state.completed_output_frames == 100
+    assert output.read_bytes() == b"previous-final"
+
+
+def test_prepare_force_resume_resets_mismatched_progress_without_deleting_final(tmp_path):
+    output = tmp_path / "out.mp4"
+    manifest = SegmentManifest(str(output))
+    manifest.prepare("sig-old", {}, mode="auto")
+    _make_chunk(manifest.sidecar_dir, index=1, start=0, end=99, next_src=50)
+    output.write_bytes(b"previous-final")
+
+    decision = manifest.prepare("sig-new", {"updated": True}, mode="force-resume")
+
+    assert decision.kind == "fresh"
+    assert decision.state.completed_output_frames == 0
+    assert output.read_bytes() == b"previous-final"
+    payload = json.loads(manifest.manifest_path.read_text(encoding="utf-8"))
+    assert payload["signature"] == "sig-new"
+    assert payload["config_snapshot"] == {"updated": True}
+
+
 def test_finalize_chunk_renames_atomically(tmp_path):
     manifest = SegmentManifest(str(tmp_path / "out.mp4"))
     manifest.prepare("sig-8", {}, mode="auto")
