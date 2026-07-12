@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import queue
-import tempfile
 import threading
 from typing import Any
 
@@ -13,12 +11,8 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_file_chunk_encoding import encode_stage_worker_output
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import StageChunkPlan, StageWorkerPlan
-from app.processing.streaming.worker_process_events import read_worker_stderr
-from app.processing.streaming.worker_process_io import close_pipe, write_decoded_frames_to_worker
-from app.processing.streaming.worker_processes import (
-    spawn_stage_workers,
-    wait_for_workers,
-)
+from app.processing.streaming.worker_process_io import start_decoded_frame_writer
+from app.processing.streaming.worker_processes import stage_worker_session
 
 
 def run_stage_chunk_to_file(
@@ -61,76 +55,63 @@ def run_stage_chunk_to_file(
     error_queue: queue.Queue[BaseException] = queue.Queue()
     stop_event = threading.Event()
 
-    with tempfile.TemporaryDirectory(prefix="vp-stage-chunk-") as config_dir:
-        handle = spawn_stage_workers([plan], config_dir=Path(config_dir), python_executable=python_executable)[0]
-        callbacks: list[Any | None] = []
-        if progress_callback is not None:
+    callbacks: list[Any | None] = []
+    if progress_callback is not None:
 
-            def adapt_progress(current: int, *_worker_progress: Any, **kwargs: Any) -> None:
-                current_value = min(chunk.input_start_frame + max(int(current), 0), stage_total_frames)
-                progress_callback(current_value, stage_total_frames, **kwargs)
+        def adapt_progress(current: int, *_worker_progress: Any, **kwargs: Any) -> None:
+            current_value = min(chunk.input_start_frame + max(int(current), 0), stage_total_frames)
+            progress_callback(current_value, stage_total_frames, **kwargs)
 
-            callbacks = [None] * stage_total
-            callbacks[stage_index - 1] = adapt_progress
-        stderr_thread = threading.Thread(
-            target=read_worker_stderr,
-            name=f"vp-stage-file-stderr-{stage_index}",
-            args=(handle, callbacks, error_queue, stop_event),
-            daemon=True,
-        )
-        stderr_thread.start()
+        callbacks = [None] * stage_total
+        callbacks[stage_index - 1] = adapt_progress
 
-        decode_thread = threading.Thread(
-            target=write_decoded_frames_to_worker,
-            name=f"vp-stage-file-decode-{stage_index}",
-            kwargs={
-                "ffmpeg": ffmpeg,
-                "input_path": input_path,
-                "decode_config": decode_config,
-                "video_info": {
-                    "width": input_width,
-                    "height": input_height,
-                },
-                "start_source_frame": chunk.input_start_frame,
-                "frame_count": chunk.input_frame_count,
-                "worker_stdin": handle.process.stdin,
-                "error_queue": error_queue,
-                "stop_event": stop_event,
-            },
-            daemon=True,
-        )
-        decode_thread.start()
-
-        try:
-            if handle.process.stdout is None:
-                raise RuntimeError("Stage worker stdout is unavailable.")
-            encoded_frames = encode_stage_worker_output(
+    try:
+        with stage_worker_session(
+            [plan],
+            progress_callbacks=callbacks,
+            error_queue=error_queue,
+            stop_event=stop_event,
+            python_executable=python_executable,
+        ) as handles:
+            handle = handles[0]
+            decode_thread = start_decoded_frame_writer(
+                thread_name=f"vp-stage-file-decode-{stage_index}",
                 ffmpeg=ffmpeg,
-                encode_config=encode_config,
-                output_path=output_path,
-                worker_stdout=handle.process.stdout,
-                chunk=chunk,
-                output_width=output_width,
-                output_height=output_height,
-                output_fps=output_fps,
-                encode_output_fps=encode_output_fps,
-                metrics=metrics,
+                input_path=input_path,
+                decode_config=decode_config,
+                video_info={"width": input_width, "height": input_height},
+                start_source_frame=chunk.input_start_frame,
+                frame_count=chunk.input_frame_count,
+                worker_stdin=handle.process.stdin,
+                error_queue=error_queue,
+                stop_event=stop_event,
             )
-            if not error_queue.empty():
-                raise error_queue.get()
-            return encoded_frames
-        except BaseException as exc:
-            stop_event.set()
-            error_queue.put(exc)
-            raise
-        finally:
-            decode_thread.join()
-            close_pipe(handle.process.stdin)
-            close_pipe(handle.process.stdout)
-            wait_for_workers([handle], error_queue)
-            stderr_thread.join(timeout=1)
-            if not error_queue.empty():
-                raise error_queue.get()
+
+            try:
+                if handle.process.stdout is None:
+                    raise RuntimeError("Stage worker stdout is unavailable.")
+                encoded_frames = encode_stage_worker_output(
+                    ffmpeg=ffmpeg,
+                    encode_config=encode_config,
+                    output_path=output_path,
+                    worker_stdout=handle.process.stdout,
+                    chunk=chunk,
+                    output_width=output_width,
+                    output_height=output_height,
+                    output_fps=output_fps,
+                    encode_output_fps=encode_output_fps,
+                    metrics=metrics,
+                )
+            finally:
+                decode_thread.join()
+    except BaseException as exc:
+        stop_event.set()
+        error_queue.put(exc)
+        raise
+
+    if not error_queue.empty():
+        raise error_queue.get()
+    return encoded_frames
 
 
 __all__ = ["run_stage_chunk_to_file"]

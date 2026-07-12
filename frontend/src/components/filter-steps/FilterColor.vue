@@ -1,55 +1,16 @@
 <script setup lang="ts">
+import FilterNumberField from './FilterNumberField.vue'
+import { createFilterModelParamsPatch } from '@/services/filters/filter-params'
 import type { FilterStep } from '@/types/protocol'
-import { createFilterParamsPatch } from '@/services/filters/filter-params'
 
-const props = defineProps<{
-  modelValue: FilterStep
-}>()
-
-const emit = defineEmits<{
-  (e: 'update:modelValue', value: FilterStep): void
-}>()
-
-const patch = createFilterParamsPatch(
-  () => props.modelValue,
-  (value) => emit('update:modelValue', value),
-)
+const modelValue = defineModel<FilterStep>({ required: true })
+const patch = createFilterModelParamsPatch(modelValue)
 </script>
 
 <template>
   <div class="field-grid field-grid-3">
-    <label class="field">
-      <span>亮度 (-1~1)</span>
-      <input
-        :value="Number(modelValue.params.brightness ?? 0)"
-        type="number"
-        step="0.05"
-        min="-1"
-        max="1"
-        @input="patch((p) => (p.brightness = Number(($event.target as HTMLInputElement).value)))"
-      />
-    </label>
-    <label class="field">
-      <span>对比度 (0~3)</span>
-      <input
-        :value="Number(modelValue.params.contrast ?? 1)"
-        type="number"
-        step="0.05"
-        min="0"
-        max="3"
-        @input="patch((p) => (p.contrast = Number(($event.target as HTMLInputElement).value)))"
-      />
-    </label>
-    <label class="field">
-      <span>饱和度 (0~3)</span>
-      <input
-        :value="Number(modelValue.params.saturation ?? 1)"
-        type="number"
-        step="0.05"
-        min="0"
-        max="3"
-        @input="patch((p) => (p.saturation = Number(($event.target as HTMLInputElement).value)))"
-      />
-    </label>
+    <FilterNumberField :model-value="Number(modelValue.params.brightness ?? 0)" label="亮度 (-1~1)" :step="0.05" :min="-1" :max="1" @update:model-value="patch((params) => (params.brightness = $event))" />
+    <FilterNumberField :model-value="Number(modelValue.params.contrast ?? 1)" label="对比度 (0~3)" :step="0.05" :min="0" :max="3" @update:model-value="patch((params) => (params.contrast = $event))" />
+    <FilterNumberField :model-value="Number(modelValue.params.saturation ?? 1)" label="饱和度 (0~3)" :step="0.05" :min="0" :max="3" @update:model-value="patch((params) => (params.saturation = $event))" />
   </div>
 </template>

@@ -1080,10 +1080,115 @@ FORBIDDEN_PATTERN_RULES = (
             )
         )
     ),
+    ForbiddenReferenceRule(
+        "filter-step-number-event-glue",
+        roots=("frontend/src/components/filter-steps",),
+        patterns=(
+            r"Number\(\(\$event\.target\s+as\s+HTMLInputElement\)\.value\)",
+            r"defineProps<\{[\s\S]*?modelValue:\s*FilterStep",
+        ),
+        message="duplicated filter-step model or number event glue",
+        suffixes=(".vue",),
+        excludes=("frontend/src/components/filter-steps/FilterNumberField.vue",),
+    ),
+    _forbid(
+        "batch-runner-interface-mirror",
+        "frontend/src/services/task/batch-runner.ts",
+        r"\bexport\s+interface\s+BatchRunner\b",
+        "handwritten BatchRunner interface mirror",
+    ),
+    _forbid(
+        "batch-event-interface-mirror",
+        "frontend/src/services/task/batch/events.ts",
+        r"\binterface\s+EventHandlers\b",
+        "handwritten batch event interface mirror",
+    ),
+    *(
+        _forbid(
+            f"worker-runtime-lifecycle-{index}",
+            path,
+            r"\b(?:spawn_stage_workers|read_worker_stderr|close_pipe|wait_for_workers|write_decoded_frames_to_worker)\b|threading\.Thread\s*\(|TemporaryDirectory\s*\(",
+            "worker process lifecycle outside shared boundary",
+        )
+        for index, path in enumerate(
+            (
+                "backend/app/processing/streaming/worker_chain_runtime.py",
+                "backend/app/processing/streaming/stage_file_chunk_runtime.py",
+            )
+        )
+    ),
+    *(
+        _forbid(
+            f"video-dimension-stream-loop-{index}",
+            path,
+            r"for\s+stream\s+in\s+info\.get\([\"']streams[\"']",
+            "duplicated primary video dimension traversal",
+        )
+        for index, path in enumerate(
+            (
+                "backend/app/planning/stage_plan.py",
+                "backend/app/cli/commands/info.py",
+            )
+        )
+    ),
+    _forbid(
+        "benchmark-direction-comparator-duplicates",
+        "backend/app/benchmark/comparison.py",
+        r"def\s+_compare_(?:lower|higher)_is_worse\b",
+        "duplicated directional benchmark comparator",
+    ),
+    _forbid(
+        "paddlegan-inline-chunk-trace",
+        "backend/app/algorithms/paddle/paddlegan_vsr/runner.py",
+        r"(?s)^    def _process_(?:recurrent|window)_model\b(?:(?!^    def ).)*trace_chunks\.append",
+        "duplicated PaddleGAN chunk trace implementation",
+    ),
 )
 
 
 REQUIRED_PATTERN_RULES = (
+    RequiredPatternRule(
+        "shared-filter-number-field",
+        "frontend/src/components/filter-steps/FilterNumberField.vue",
+        r"\bfunction\s+handleInput\b[\s\S]*emit\([\"']update:modelValue[\"']",
+        "shared filter number field is missing",
+    ),
+    RequiredPatternRule(
+        "inferred-batch-runner-type",
+        "frontend/src/services/task/batch-runner.ts",
+        r"export\s+type\s+BatchRunner\s*=\s*ReturnType<typeof\s+createBatchRunner>",
+        "inferred BatchRunner type is missing",
+    ),
+    RequiredPatternRule(
+        "shared-stage-worker-session",
+        "backend/app/processing/streaming/worker_processes.py",
+        r"def\s+stage_worker_session\b[\s\S]*spawn_stage_workers\s*\([\s\S]*read_worker_stderr[\s\S]*wait_for_workers\s*\(",
+        "shared stage-worker session lifecycle is missing",
+    ),
+    RequiredPatternRule(
+        "shared-decoded-frame-writer-thread",
+        "backend/app/processing/streaming/worker_process_io.py",
+        r"def\s+start_decoded_frame_writer\b[\s\S]*target=write_decoded_frames_to_worker",
+        "shared decoded-frame writer thread helper is missing",
+    ),
+    RequiredPatternRule(
+        "primary-video-dimensions-helper",
+        "backend/app/utils/ffmpeg/media_probe.py",
+        r"def\s+get_primary_video_dimensions\b",
+        "primary video dimension helper is missing",
+    ),
+    RequiredPatternRule(
+        "shared-benchmark-threshold-comparator",
+        "backend/app/benchmark/comparison.py",
+        r"def\s+_compare_threshold\b[\s\S]*direction:\s*_ThresholdDirection",
+        "shared benchmark threshold comparator is missing",
+    ),
+    RequiredPatternRule(
+        "shared-paddlegan-chunk-trace",
+        "backend/app/algorithms/paddle/paddlegan_vsr/runner.py",
+        r"def\s+_record_chunk_trace\b[\s\S]*trace_chunks\.append",
+        "shared PaddleGAN chunk trace helper is missing",
+    ),
     RequiredPatternRule(
         "typed-environment-protocol",
         "frontend/src-tauri/src/models/env.rs",

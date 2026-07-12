@@ -191,6 +191,21 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
         ("obsolete-decode-queue-symbols", "class DecodedFrame:\n    pass\n"),
         ("form-binding-param-export-0", "export type DecodeFormBindingParams = {}\n"),
         (
+            "filter-step-number-event-glue",
+            '@input="patch((params) => params.x = Number(($event.target as HTMLInputElement).value))"\n',
+        ),
+        ("batch-runner-interface-mirror", "export interface BatchRunner {}\n"),
+        ("batch-event-interface-mirror", "interface EventHandlers {}\n"),
+        ("worker-runtime-lifecycle-0", "spawn_stage_workers(plans)\n"),
+        ("worker-runtime-lifecycle-1", "threading.Thread(target=run)\n"),
+        ("video-dimension-stream-loop-0", "for stream in info.get('streams', []):\n    pass\n"),
+        ("video-dimension-stream-loop-1", "for stream in info.get('streams', []):\n    pass\n"),
+        ("benchmark-direction-comparator-duplicates", "def _compare_lower_is_worse():\n    pass\n"),
+        (
+            "paddlegan-inline-chunk-trace",
+            "    def _process_window_model(self):\n        trace_chunks.append({})\n",
+        ),
+        (
             "pipeline-test-private-aliases",
             "from app.processing.streaming.pipeline import _run_streaming_pipeline\n",
         ),

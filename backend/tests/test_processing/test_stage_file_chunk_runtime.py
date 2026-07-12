@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -63,21 +64,19 @@ def test_stage_chunk_runtime_writes_unskipped_worker_frames(monkeypatch, tmp_pat
     )
     stdout = BytesIO(b"".join(np.ascontiguousarray(_frame(value)).tobytes() for value in (1, 2, 3)))
     fake_process = SimpleNamespace(stdin=BytesIO(), stdout=stdout)
-    waited = []
     progress_events = []
 
-    monkeypatch.setattr(
-        runtime,
-        "spawn_stage_workers",
-        lambda plans, **_kwargs: [SimpleNamespace(process=fake_process, plan=plans[0])],
-    )
+    @contextmanager
+    def fake_session(plans, *, progress_callbacks, **_kwargs):
+        progress_callbacks[0](3, 999, phase="stage")
+        yield [SimpleNamespace(process=fake_process, plan=plans[0])]
 
-    def emit_worker_progress(_handle, callbacks, _error_queue, _stop_event) -> None:
-        callbacks[0](3, 999, phase="stage")
+    class _DecodeThread:
+        def join(self) -> None:
+            return None
 
-    monkeypatch.setattr(runtime, "read_worker_stderr", emit_worker_progress)
-    monkeypatch.setattr(runtime, "write_decoded_frames_to_worker", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(runtime, "wait_for_workers", lambda handles, _error_queue: waited.extend(handles))
+    monkeypatch.setattr(runtime, "stage_worker_session", fake_session)
+    monkeypatch.setattr(runtime, "start_decoded_frame_writer", lambda **_kwargs: _DecodeThread())
 
     ffmpeg = _FakeFFmpeg()
     output_path = tmp_path / "chunk.mp4"
@@ -107,7 +106,6 @@ def test_stage_chunk_runtime_writes_unskipped_worker_frames(monkeypatch, tmp_pat
 
     assert encoded_frames == 2
     assert output_path.read_bytes() == b"encoded"
-    assert waited
     assert progress_events == [(5, 10, {"phase": "stage"})]
     assert ffmpeg.writer is not None
     assert ffmpeg.writer.closed is True

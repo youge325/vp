@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import queue
 import threading
-from pathlib import Path
+from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any
 
@@ -39,7 +39,7 @@ def _stage_plan_and_worker_plan() -> tuple[Any, StageWorkerPlan]:
     return stage_plan, worker_plan
 
 
-def test_worker_chain_runtime_owns_spawn_threads_drain_and_cleanup(monkeypatch) -> None:
+def test_worker_chain_runtime_runs_decode_and_drain_inside_worker_session(monkeypatch) -> None:
     import app.processing.streaming.worker_chain_runtime as runtime
 
     stage_plan, worker_plan = _stage_plan_and_worker_plan()
@@ -51,15 +51,17 @@ def test_worker_chain_runtime_owns_spawn_threads_drain_and_cleanup(monkeypatch) 
     )
     calls: list[tuple[str, Any]] = []
 
-    def fake_spawn(plans, *, config_dir: Path, python_executable: str):
-        calls.append(("spawn", (plans, config_dir.exists(), python_executable)))
-        return [handle]
+    @contextmanager
+    def fake_session(plans, **kwargs):
+        calls.append(("session", (plans, kwargs["python_executable"])))
+        yield [handle]
+        calls.append(("session_closed", len(plans)))
 
-    def fake_read_worker_stderr(handle_arg, progress_callbacks, error_queue, stop_event):
-        calls.append(("stderr", handle_arg.plan.config.stage_index))
-        progress_callbacks[0](1, 2)
+    class _DecodeThread:
+        def join(self):
+            calls.append(("decode_join", None))
 
-    def fake_write_decoded_frames_to_worker(**kwargs):
+    def fake_start_decoded_frame_writer(**kwargs):
         calls.append(
             (
                 "decode",
@@ -70,6 +72,7 @@ def test_worker_chain_runtime_owns_spawn_threads_drain_and_cleanup(monkeypatch) 
                 ),
             )
         )
+        return _DecodeThread()
 
     def fake_drain_final_worker_output(**kwargs):
         calls.append(
@@ -83,18 +86,9 @@ def test_worker_chain_runtime_owns_spawn_threads_drain_and_cleanup(monkeypatch) 
             )
         )
 
-    def fake_close_pipe(pipe):
-        calls.append(("close", pipe.name))
-
-    def fake_wait_for_workers(handles, error_queue):
-        calls.append(("wait", len(handles)))
-
-    monkeypatch.setattr(runtime, "spawn_stage_workers", fake_spawn)
-    monkeypatch.setattr(runtime, "read_worker_stderr", fake_read_worker_stderr)
-    monkeypatch.setattr(runtime, "write_decoded_frames_to_worker", fake_write_decoded_frames_to_worker)
+    monkeypatch.setattr(runtime, "stage_worker_session", fake_session)
+    monkeypatch.setattr(runtime, "start_decoded_frame_writer", fake_start_decoded_frame_writer)
     monkeypatch.setattr(runtime, "drain_final_worker_output", fake_drain_final_worker_output)
-    monkeypatch.setattr(runtime, "close_pipe", fake_close_pipe)
-    monkeypatch.setattr(runtime, "wait_for_workers", fake_wait_for_workers)
 
     progress_calls: list[tuple[int, int]] = []
     run_worker_chain_runtime(
@@ -113,14 +107,11 @@ def test_worker_chain_runtime_owns_spawn_threads_drain_and_cleanup(monkeypatch) 
         python_executable="python-test",
     )
 
-    assert calls[0][0] == "spawn"
+    assert calls[0][0] == "session"
     assert calls[0][1][0] == [worker_plan]
-    assert calls[0][1][1] is True
-    assert calls[0][1][2] == "python-test"
-    assert ("stderr", 1) in calls
+    assert calls[0][1][1] == "python-test"
     assert ("decode", (1, True, 3)) in calls
     assert ("drain", (True, True, 3)) in calls
-    assert ("close", "stdin") in calls
-    assert ("close", "stdout") in calls
-    assert ("wait", 1) in calls
-    assert progress_calls == [(1, 2)]
+    assert ("decode_join", None) in calls
+    assert ("session_closed", 1) in calls
+    assert progress_calls == []

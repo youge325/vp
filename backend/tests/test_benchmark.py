@@ -65,6 +65,9 @@ def test_compare_reports_fails_on_throughput_duration_and_transfer_regressions()
     assert "summary.median.completedTimeSeconds" in metrics
     assert "summary.median.transferCounts.h2d" in metrics
     assert "summary.median.transferDurationsSeconds.h2d" in metrics
+    directions = {item["metric"]: item["direction"] for item in comparison["regressions"]}
+    assert directions["summary.median.throughputFps"] == "lower_is_worse"
+    assert directions["summary.median.wallTimeSeconds"] == "higher_is_worse"
 
 
 def test_compare_reports_passes_when_current_is_within_threshold() -> None:

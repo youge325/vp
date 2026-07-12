@@ -1,42 +1,27 @@
 <script setup lang="ts">
+import FilterNumberField from './FilterNumberField.vue'
+import { createFilterModelParamsPatch } from '@/services/filters/filter-params'
 import type { FilterStep } from '@/types/protocol'
-import { createFilterParamsPatch } from '@/services/filters/filter-params'
 
-const props = defineProps<{
-  modelValue: FilterStep
-}>()
-
-const emit = defineEmits<{
-  (e: 'update:modelValue', value: FilterStep): void
-}>()
-
-const patch = createFilterParamsPatch(
-  () => props.modelValue,
-  (value) => emit('update:modelValue', value),
-)
+const modelValue = defineModel<FilterStep>({ required: true })
+const patch = createFilterModelParamsPatch(modelValue)
 </script>
 
 <template>
   <div class="field-grid field-grid-2">
-    <label class="field">
-      <span>强度 (1~20)</span>
-      <input
-        :value="Number(modelValue.params.strength ?? 10)"
-        type="number"
-        min="1"
-        max="20"
-        @input="patch((p) => (p.strength = Number(($event.target as HTMLInputElement).value)))"
-      />
-    </label>
-    <label class="field">
-      <span>色彩强度 (1~20)</span>
-      <input
-        :value="Number(modelValue.params.colorStrength ?? 10)"
-        type="number"
-        min="1"
-        max="20"
-        @input="patch((p) => (p.colorStrength = Number(($event.target as HTMLInputElement).value)))"
-      />
-    </label>
+    <FilterNumberField
+      :model-value="Number(modelValue.params.strength ?? 10)"
+      label="强度 (1~20)"
+      :min="1"
+      :max="20"
+      @update:model-value="patch((params) => (params.strength = $event))"
+    />
+    <FilterNumberField
+      :model-value="Number(modelValue.params.colorStrength ?? 10)"
+      label="色彩强度 (1~20)"
+      :min="1"
+      :max="20"
+      @update:model-value="patch((params) => (params.colorStrength = $event))"
+    />
   </div>
 </template>

@@ -12,7 +12,11 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import EncodedFrame
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import StageWorkerPlan
-from app.processing.streaming.worker_process_io import drain_final_worker_output, write_decoded_frames_to_worker
+from app.processing.streaming.worker_process_io import (
+    drain_final_worker_output,
+    start_decoded_frame_writer,
+    write_decoded_frames_to_worker,
+)
 
 
 class _FakeReader:
@@ -79,6 +83,32 @@ def test_write_decoded_frames_to_worker_streams_frames_and_closes_reader() -> No
         "start_frame": 3,
         "frame_count": 2,
     }
+
+
+def test_start_decoded_frame_writer_starts_named_daemon_thread(monkeypatch) -> None:
+    import app.processing.streaming.worker_process_io as worker_io
+
+    calls: list[dict] = []
+    monkeypatch.setattr(worker_io, "write_decoded_frames_to_worker", lambda **kwargs: calls.append(kwargs))
+
+    thread = start_decoded_frame_writer(
+        thread_name="vp-test-decoder",
+        ffmpeg=object(),
+        input_path="input.mp4",
+        decode_config={"mode": "software"},
+        video_info={"width": 1, "height": 1},
+        start_source_frame=4,
+        frame_count=2,
+        worker_stdin=object(),
+        error_queue=queue.Queue(),
+        stop_event=threading.Event(),
+    )
+    thread.join()
+
+    assert thread.name == "vp-test-decoder"
+    assert thread.daemon is True
+    assert calls[0]["start_source_frame"] == 4
+    assert calls[0]["frame_count"] == 2
 
 
 def test_drain_final_worker_output_stops_after_expected_frame_count() -> None:

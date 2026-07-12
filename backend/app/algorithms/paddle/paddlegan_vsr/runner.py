@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 import tempfile
 import time
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
@@ -58,19 +58,28 @@ class PaddleGanVsrRunner:
 
         model = self._ensure_model()
         if self.spec.sequence_mode == "window":
-            output_frames = self._process_window_model(
-                model,
-                input_frames,
-                progress_callback=progress_callback,
-                trace_chunks=trace_chunks,
+            batches = (
+                [input_frames[i] for i in _edvr_neighbor_indexes(index, len(input_frames))]
+                for index in range(len(input_frames))
             )
+            output_to_frames = _image_tensor_to_frames
+            select_last_output = False
         else:
-            output_frames = self._process_recurrent_model(
-                model,
-                input_frames,
-                progress_callback=progress_callback,
-                trace_chunks=trace_chunks,
+            batches = (
+                list(input_frames[start : start + self.num_frames])
+                for start in range(0, len(input_frames), self.num_frames)
             )
+            output_to_frames = _sequence_tensor_to_frames
+            select_last_output = True
+        output_frames = self._process_batches(
+            model,
+            batches,
+            total=len(input_frames),
+            output_to_frames=output_to_frames,
+            select_last_output=select_last_output,
+            progress_callback=progress_callback,
+            trace_chunks=trace_chunks,
+        )
         if trace_path:
             _write_trace(
                 trace_path,
@@ -113,64 +122,27 @@ class PaddleGanVsrRunner:
         self._paddle = paddle
         return paddle
 
-    def _process_recurrent_model(
+    def _process_batches(
         self,
-        model,
-        input_frames: Sequence[np.ndarray],
+        model: Any,
+        batches: Iterable[Sequence[np.ndarray]],
         *,
-        progress_callback: Callable[[int, int], None] | None = None,
-        trace_chunks: list[dict[str, Any]] | None = None,
+        total: int,
+        output_to_frames: Callable[[Any], list[np.ndarray]],
+        select_last_output: bool,
+        progress_callback: Callable[[int, int], None] | None,
+        trace_chunks: list[dict[str, Any]] | None,
     ) -> list[np.ndarray]:
         paddle = self._ensure_paddle()
         output_frames: list[np.ndarray] = []
-        total = len(input_frames)
         with paddle.no_grad():
-            for start in range(0, len(input_frames), self.num_frames):
-                chunk = list(input_frames[start : start + self.num_frames])
-                tensor = self._frames_to_tensor(chunk)
+            for batch in batches:
+                tensor = self._frames_to_tensor(batch)
                 output = self._run_tensor(model, tensor)
-                if isinstance(output, (list, tuple)):
+                if select_last_output and isinstance(output, (list, tuple)):
                     output = output[-1]
-                if trace_chunks is not None:
-                    _sync_paddle(paddle)
-                    trace_chunks.append(
-                        {
-                            "chunkFrameCount": len(chunk),
-                            "inputShape": _shape_list(tensor),
-                            "outputShape": _shape_list(output),
-                        }
-                    )
-                output_frames.extend(_sequence_tensor_to_frames(output))
-                if progress_callback is not None:
-                    progress_callback(min(len(output_frames), total), total)
-        return output_frames
-
-    def _process_window_model(
-        self,
-        model,
-        input_frames: Sequence[np.ndarray],
-        *,
-        progress_callback: Callable[[int, int], None] | None = None,
-        trace_chunks: list[dict[str, Any]] | None = None,
-    ) -> list[np.ndarray]:
-        paddle = self._ensure_paddle()
-        output_frames: list[np.ndarray] = []
-        total = len(input_frames)
-        with paddle.no_grad():
-            for index in range(len(input_frames)):
-                neighbors = [input_frames[i] for i in _edvr_neighbor_indexes(index, len(input_frames))]
-                tensor = self._frames_to_tensor(neighbors)
-                output = self._run_tensor(model, tensor)
-                if trace_chunks is not None:
-                    _sync_paddle(paddle)
-                    trace_chunks.append(
-                        {
-                            "chunkFrameCount": len(neighbors),
-                            "inputShape": _shape_list(tensor),
-                            "outputShape": _shape_list(output),
-                        }
-                    )
-                output_frames.extend(_image_tensor_to_frames(output))
+                _record_chunk_trace(trace_chunks, paddle, tensor=tensor, output=output, frame_count=len(batch))
+                output_frames.extend(output_to_frames(output))
                 if progress_callback is not None:
                     progress_callback(min(len(output_frames), total), total)
         return output_frames
@@ -480,6 +452,26 @@ def _shape_list(value: Any) -> list[int] | None:
     if shape is None:
         return None
     return [int(dim) for dim in shape]
+
+
+def _record_chunk_trace(
+    trace_chunks: list[dict[str, Any]] | None,
+    paddle: Any,
+    *,
+    tensor: Any,
+    output: Any,
+    frame_count: int,
+) -> None:
+    if trace_chunks is None:
+        return
+    _sync_paddle(paddle)
+    trace_chunks.append(
+        {
+            "chunkFrameCount": frame_count,
+            "inputShape": _shape_list(tensor),
+            "outputShape": _shape_list(output),
+        }
+    )
 
 
 def _reset_paddle_peak(paddle: Any) -> None:

@@ -8,6 +8,7 @@ import os
 from app.errors import ProcessError, TaskErrorCode, raise_error
 from app.protocol import ndjson
 from app.utils.ffmpeg import FFmpegWrapper
+from app.utils.ffmpeg.media_probe import get_primary_video_dimensions
 
 
 def cmd_info(args: argparse.Namespace) -> None:
@@ -34,14 +35,7 @@ def cmd_info(args: argparse.Namespace) -> None:
         info = ffmpeg.get_video_info(input_path)
         fps = ffmpeg.get_fps(input_path)
         video_codec = ffmpeg.get_primary_video_codec(input_path)
-
-        width = 0
-        height = 0
-        for stream in info.get("streams", []):
-            if stream.get("codec_type") == "video":
-                width = int(stream.get("width", 0))
-                height = int(stream.get("height", 0))
-                break
+        width, height = get_primary_video_dimensions(info)
 
         ndjson.info(
             fps=fps,

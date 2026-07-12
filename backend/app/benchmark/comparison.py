@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
+
+_ThresholdDirection = Literal["lower_is_worse", "higher_is_worse"]
 
 
 def _get_path(payload: dict[str, Any], path: str) -> Any:
@@ -29,32 +31,24 @@ def _regression(metric: str, current: float, baseline: float, threshold: float, 
     }
 
 
-def _compare_lower_is_worse(
+def _compare_threshold(
     *,
     metric: str,
     current: dict[str, Any],
     baseline: dict[str, Any],
     threshold: float,
+    direction: _ThresholdDirection,
     regressions: list[dict[str, Any]],
 ) -> None:
     current_value = float(_get_path(current, metric))
     baseline_value = float(_get_path(baseline, metric))
-    if current_value < baseline_value * (1.0 - threshold):
-        regressions.append(_regression(metric, current_value, baseline_value, threshold, "lower_is_worse"))
-
-
-def _compare_higher_is_worse(
-    *,
-    metric: str,
-    current: dict[str, Any],
-    baseline: dict[str, Any],
-    threshold: float,
-    regressions: list[dict[str, Any]],
-) -> None:
-    current_value = float(_get_path(current, metric))
-    baseline_value = float(_get_path(baseline, metric))
-    if current_value > baseline_value * (1.0 + threshold):
-        regressions.append(_regression(metric, current_value, baseline_value, threshold, "higher_is_worse"))
+    regressed = (
+        current_value < baseline_value * (1.0 - threshold)
+        if direction == "lower_is_worse"
+        else current_value > baseline_value * (1.0 + threshold)
+    )
+    if regressed:
+        regressions.append(_regression(metric, current_value, baseline_value, threshold, direction))
 
 
 def _compare_transfer_count(
@@ -96,11 +90,12 @@ def compare_reports(*, current: dict[str, Any], baseline: dict[str, Any], thresh
     """
     regressions: list[dict[str, Any]] = []
 
-    _compare_lower_is_worse(
+    _compare_threshold(
         metric="summary.median.throughputFps",
         current=current,
         baseline=baseline,
         threshold=threshold,
+        direction="lower_is_worse",
         regressions=regressions,
     )
 
@@ -110,11 +105,12 @@ def compare_reports(*, current: dict[str, Any], baseline: dict[str, Any], thresh
         *_nested_metric_paths(current, "summary.median.stageDurationsSeconds"),
         *_nested_metric_paths(current, "summary.median.transferDurationsSeconds"),
     ]:
-        _compare_higher_is_worse(
+        _compare_threshold(
             metric=metric,
             current=current,
             baseline=baseline,
             threshold=threshold,
+            direction="higher_is_worse",
             regressions=regressions,
         )
 

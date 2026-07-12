@@ -1,58 +1,17 @@
 <script setup lang="ts">
+import FilterNumberField from './FilterNumberField.vue'
+import { createFilterModelParamsPatch } from '@/services/filters/filter-params'
 import type { FilterStep } from '@/types/protocol'
-import { createFilterParamsPatch } from '@/services/filters/filter-params'
 
-const props = defineProps<{
-  modelValue: FilterStep
-}>()
-
-const emit = defineEmits<{
-  (e: 'update:modelValue', value: FilterStep): void
-}>()
-
-const patch = createFilterParamsPatch(
-  () => props.modelValue,
-  (value) => emit('update:modelValue', value),
-)
+const modelValue = defineModel<FilterStep>({ required: true })
+const patch = createFilterModelParamsPatch(modelValue)
 </script>
 
 <template>
   <div class="field-grid field-grid-4">
-    <label class="field">
-      <span>X</span>
-      <input
-        :value="Number(modelValue.params.x ?? 0)"
-        type="number"
-        min="0"
-        @input="patch((p) => (p.x = Number(($event.target as HTMLInputElement).value)))"
-      />
-    </label>
-    <label class="field">
-      <span>Y</span>
-      <input
-        :value="Number(modelValue.params.y ?? 0)"
-        type="number"
-        min="0"
-        @input="patch((p) => (p.y = Number(($event.target as HTMLInputElement).value)))"
-      />
-    </label>
-    <label class="field">
-      <span>宽度</span>
-      <input
-        :value="Number(modelValue.params.width ?? 1920)"
-        type="number"
-        min="1"
-        @input="patch((p) => (p.width = Number(($event.target as HTMLInputElement).value)))"
-      />
-    </label>
-    <label class="field">
-      <span>高度</span>
-      <input
-        :value="Number(modelValue.params.height ?? 1080)"
-        type="number"
-        min="1"
-        @input="patch((p) => (p.height = Number(($event.target as HTMLInputElement).value)))"
-      />
-    </label>
+    <FilterNumberField :model-value="Number(modelValue.params.x ?? 0)" label="X" :min="0" @update:model-value="patch((params) => (params.x = $event))" />
+    <FilterNumberField :model-value="Number(modelValue.params.y ?? 0)" label="Y" :min="0" @update:model-value="patch((params) => (params.y = $event))" />
+    <FilterNumberField :model-value="Number(modelValue.params.width ?? 1920)" label="宽度" :min="1" @update:model-value="patch((params) => (params.width = $event))" />
+    <FilterNumberField :model-value="Number(modelValue.params.height ?? 1080)" label="高度" :min="1" @update:model-value="patch((params) => (params.height = $event))" />
   </div>
 </template>
