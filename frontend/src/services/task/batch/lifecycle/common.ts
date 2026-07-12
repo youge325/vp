@@ -15,15 +15,7 @@ import type { MediaItem, MediaRunState } from '@/types/domain/media'
 
 import type { BatchLifecycleDeps } from './types'
 
-interface CommonHelpers {
-  getCurrentItem(): MediaItem | null
-  getConsoleItem(): MediaItem | null
-  getCurrentRunState(): MediaRunState | null
-  getConsoleRunState(): MediaRunState | null
-  clearBatchRuntimeArtifacts(preserveLogs?: boolean): void
-}
-
-export function createCommonHelpers(deps: BatchLifecycleDeps): CommonHelpers {
+export function createCommonHelpers(deps: BatchLifecycleDeps) {
   function getCurrentItem(): MediaItem | null {
     const id = deps.getBatch().currentId
     return id ? deps.getMediaItem(id) : null

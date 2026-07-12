@@ -31,16 +31,22 @@ interface FinalizeInternalRefs {
   runNextQueuedItem: () => Promise<void>
 }
 
-interface FinalizeOps {
-  finalizeCurrent(state: 'completed' | 'error' | 'cancelled'): Promise<void>
-  handleErrored(error: TaskError): Promise<void>
-}
-
 export function createFinalizeOps(
   deps: BatchLifecycleDeps,
   helpers: CommonHelpers,
   internal: FinalizeInternalRefs,
-): FinalizeOps {
+) {
+  function finishBatchRun(): void {
+    deps.setBatch({
+      isRunning: false,
+      isPaused: false,
+      isCancelling: false,
+    })
+    helpers.clearBatchRuntimeArtifacts(true)
+    deps.setBatch({ completedCount: 0, failedCount: 0 })
+    deps.setRuntimeIds([])
+  }
+
   async function finalizeCurrent(state: 'completed' | 'error' | 'cancelled'): Promise<void> {
     const item = helpers.getCurrentItem()
     if (!item) {
@@ -49,14 +55,7 @@ export function createFinalizeOps(
       if (queue.length > 0) {
         await internal.runNextQueuedItem()
       } else {
-        deps.setBatch({
-          isRunning: false,
-          isPaused: false,
-          isCancelling: false,
-        })
-        helpers.clearBatchRuntimeArtifacts(true)
-        deps.setBatch({ completedCount: 0, failedCount: 0 })
-        deps.setRuntimeIds([])
+        finishBatchRun()
       }
       return
     }
@@ -88,14 +87,7 @@ export function createFinalizeOps(
       return
     }
 
-    deps.setBatch({
-      isRunning: false,
-      isPaused: false,
-      isCancelling: false,
-    })
-    helpers.clearBatchRuntimeArtifacts(true)
-    deps.setBatch({ completedCount: 0, failedCount: 0 })
-    deps.setRuntimeIds([])
+    finishBatchRun()
   }
 
   async function handleErrored(error: TaskError): Promise<void> {

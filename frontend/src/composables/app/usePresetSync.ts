@@ -39,8 +39,19 @@ export function usePresetSync() {
   const issueStore = useIssueStore()
   let saveTimer: ReturnType<typeof setTimeout> | null = null
 
-  function reportPresetIssue(error: unknown, fallbackMessage: string): void {
+  function handlePersistenceFailure(
+    error: unknown,
+    fallbackMessage: string,
+    resetDraft: boolean,
+  ): void {
     const normalized = normalizeError(error, TASK_ERROR_CODES.PersistenceFailed)
+    if (normalized.code === TASK_ERROR_CODES.SchemaMismatch) {
+      recoverFromSchemaMismatch()
+      return
+    }
+    if (resetDraft) {
+      presetStore.replaceDraftPreset(createDefaultWorkbenchPreset(envStore.env.checkResult))
+    }
     issueStore.setIssue('preset', {
       ...normalized,
       message: normalized.message || fallbackMessage,
@@ -62,12 +73,7 @@ export function usePresetSync() {
       // Clear any prior preset-scoped error once a write succeeds.
       issueStore.clearIssue('preset')
     } catch (error) {
-      const normalized = normalizeError(error, TASK_ERROR_CODES.PersistenceFailed)
-      if (normalized.code === TASK_ERROR_CODES.SchemaMismatch) {
-        recoverFromSchemaMismatch()
-        return
-      }
-      reportPresetIssue(error, 'Unable to save the workbench preset.')
+      handlePersistenceFailure(error, 'Unable to save the workbench preset.', false)
     }
   }
 
@@ -94,13 +100,7 @@ export function usePresetSync() {
       presetStore.replaceDraftPreset(coercePreset(preset, envStore.env.checkResult))
       issueStore.clearIssue('preset')
     } catch (error) {
-      const normalized = normalizeError(error, TASK_ERROR_CODES.PersistenceFailed)
-      if (normalized.code === TASK_ERROR_CODES.SchemaMismatch) {
-        recoverFromSchemaMismatch()
-        return
-      }
-      presetStore.replaceDraftPreset(createDefaultWorkbenchPreset(envStore.env.checkResult))
-      reportPresetIssue(error, 'Unable to load the saved workbench preset.')
+      handlePersistenceFailure(error, 'Unable to load the saved workbench preset.', true)
     }
   }
 

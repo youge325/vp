@@ -64,6 +64,7 @@ export function useWorkbenchEditor() {
     clone: (c: TConfig) => TConfig,
     buildPartial: (config: TConfig) => ItemConfigPartial,
     patchPreset: (mutator: (c: TConfig) => void) => void,
+    syncPreset = false,
   ): (mutator: (c: TConfig) => void) => void {
     return (mutator) => {
       if (activeItem.value) {
@@ -76,7 +77,8 @@ export function useWorkbenchEditor() {
           mutator(next)
           mediaStore.replaceItemConfig(item.id, buildPartial(next))
         }
-      } else {
+      }
+      if (!activeItem.value || syncPreset) {
         patchPreset(mutator)
       }
     }
@@ -103,20 +105,13 @@ export function useWorkbenchEditor() {
     presetStore.patchWorkflow,
   )
 
-  const patchWorkflowAndPreset = (mutator: (c: WorkflowConfig) => void): void => {
-    if (activeItem.value) {
-      const targetIds = mediaStore.getEditableTargetIds()
-      for (const item of mediaStore.mediaItems) {
-        if (!targetIds.has(item.id)) {
-          continue
-        }
-        const next = cloneWorkflowConfig(item.workflowConfig)
-        mutator(next)
-        mediaStore.replaceItemConfig(item.id, { workflowConfig: next })
-      }
-    }
-    presetStore.patchWorkflow(mutator)
-  }
+  const patchWorkflowAndPreset = makePatcher(
+    (item) => item.workflowConfig,
+    cloneWorkflowConfig,
+    (next) => ({ workflowConfig: next }),
+    presetStore.patchWorkflow,
+    true,
+  )
 
   const patchOutput = makePatcher(
     (item) => item.outputConfig,

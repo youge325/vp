@@ -24,16 +24,10 @@ import type { BatchLifecycleDeps } from './types'
 
 type CommonHelpers = ReturnType<typeof createCommonHelpers>
 
-interface ControlOps {
-  pause(): Promise<void>
-  resume(): Promise<void>
-  cancel(): Promise<void>
-}
-
 export function createControlOps(
   deps: BatchLifecycleDeps,
   helpers: CommonHelpers,
-): ControlOps {
+) {
   async function pause(): Promise<void> {
     const batch = deps.getBatch()
     if (!batch.isRunning || batch.isPaused || batch.isCancelling) {

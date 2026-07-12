@@ -30,6 +30,15 @@ _registered: set[str] = set()
 _scanned_tensorrt_roots: list[Path] | None = None
 
 
+def _append_unique_directory(roots: list[Path], seen: set[str], candidate: Path) -> None:
+    key = str(candidate.resolve(strict=False)).lower()
+    if key in seen:
+        return
+    seen.add(key)
+    if candidate.is_dir():
+        roots.append(candidate)
+
+
 def _scan_common_tensorrt_roots() -> list[Path]:
     """Scan typical TensorRT installation roots when VP_TENSORRT_DIR is unset."""
     global _scanned_tensorrt_roots
@@ -47,12 +56,7 @@ def _scan_common_tensorrt_roots() -> list[Path]:
             try:
                 for entry in drive_path.iterdir():
                     if entry.is_dir() and entry.name.lower().startswith(prefix.lower()):
-                        bin_dir = entry / "bin"
-                        if bin_dir.is_dir():
-                            key = str(bin_dir.resolve()).lower()
-                            if key not in seen:
-                                seen.add(key)
-                                roots.append(bin_dir)
+                        _append_unique_directory(roots, seen, entry / "bin")
             except (OSError, PermissionError):
                 continue
     # Also check NVIDIA default install location
@@ -61,12 +65,7 @@ def _scan_common_tensorrt_roots() -> list[Path]:
         try:
             for entry in nvidia_path.iterdir():
                 if entry.is_dir() and "tensorrt" in entry.name.lower():
-                    bin_dir = entry / "bin"
-                    if bin_dir.is_dir():
-                        key = str(bin_dir.resolve()).lower()
-                        if key not in seen:
-                            seen.add(key)
-                            roots.append(bin_dir)
+                    _append_unique_directory(roots, seen, entry / "bin")
         except (OSError, PermissionError):
             pass
     _scanned_tensorrt_roots = roots
@@ -124,12 +123,7 @@ def _python_package_dll_dirs() -> list[Path]:
             continue
         root = Path(raw_root)
         for candidate in (root / "tensorrt_libs", root / "tensorrt_rtx_libs", root / "torch_tensorrt" / "lib"):
-            key = str(candidate.resolve(strict=False)).lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            if candidate.is_dir():
-                roots.append(candidate)
+            _append_unique_directory(roots, seen, candidate)
     return roots
 
 

@@ -1149,6 +1149,49 @@ FORBIDDEN_PATTERN_RULES = (
         r"\binterface\s+EventHandlers\b",
         "handwritten batch event interface mirror",
     ),
+    ForbiddenReferenceRule(
+        "batch-lifecycle-return-interface-mirrors",
+        roots=("frontend/src/services/task/batch/lifecycle",),
+        patterns=(r"\binterface\s+(?:CommonHelpers|QueueOps|ControlOps|FinalizeOps)\b",),
+        message="handwritten lifecycle return interface mirror",
+        suffixes=(".ts",),
+    ),
+    _forbid(
+        "preset-sync-duplicate-error-normalization",
+        "frontend/src/composables/app/usePresetSync.ts",
+        r"\breportPresetIssue\b",
+        "duplicated preset persistence error normalization",
+    ),
+    _forbid(
+        "workbench-editor-duplicate-workflow-patcher",
+        "frontend/src/composables/selectors/useWorkbenchEditor.ts",
+        r"const\s+patchWorkflowAndPreset\s*=\s*\([^)]*\)\s*(?::[^=]+)?=>",
+        "duplicate workflow and preset item traversal",
+    ),
+    _forbid(
+        "process-validation-cli-guards",
+        "backend/app/cli/commands/_process_validation.py",
+        r"\b(?:ensure_input_and_ffmpeg|FFmpegWrapper|validate_input_path)\b",
+        "CLI guard implementation in config validation",
+    ),
+    _forbid(
+        "info-direct-ffmpeg-availability-check",
+        "backend/app/cli/commands/info.py",
+        r"\bFFmpegWrapper\b|\.is_available\s*\(",
+        "direct FFmpeg availability check outside CLI guard",
+    ),
+    _forbid(
+        "duplicate-decoder-hardware-verifiers",
+        "backend/app/utils/ffmpeg/capability_probe.py",
+        r"\b_verify_decoder_hardware_device(?:_option)?\b",
+        "duplicated decoder hardware verification helper",
+    ),
+    _forbid(
+        "duplicate-dll-root-appends",
+        "backend/app/utils/dll_paths.py",
+        r"roots\.append\s*\(\s*bin_dir\s*\)",
+        "duplicated native DLL directory append logic",
+    ),
     *(
         _forbid(
             f"worker-runtime-lifecycle-{index}",
@@ -1193,6 +1236,30 @@ FORBIDDEN_PATTERN_RULES = (
 
 
 REQUIRED_PATTERN_RULES = (
+    RequiredPatternRule(
+        "shared-cli-guards",
+        "backend/app/cli/commands/_guards.py",
+        r"def\s+ensure_ffmpeg_available\b[\s\S]*def\s+ensure_input_and_ffmpeg\b",
+        "shared CLI guard boundary is missing",
+    ),
+    RequiredPatternRule(
+        "manifest-resume-decision-helpers",
+        "backend/app/planning/manifest.py",
+        r"def\s+_resume_decision\b[\s\S]*def\s+_prepare_changed_signature\b",
+        "shared manifest resume decision helpers are missing",
+    ),
+    RequiredPatternRule(
+        "shared-decoder-hardware-verifier",
+        "backend/app/utils/ffmpeg/capability_probe.py",
+        r"def\s+_verify_decoder_hardware\b[\s\S]*device_value:\s*str\s*\|\s*None",
+        "shared decoder hardware verifier is missing",
+    ),
+    RequiredPatternRule(
+        "shared-dll-directory-dedup",
+        "backend/app/utils/dll_paths.py",
+        r"def\s+_append_unique_directory\b",
+        "shared native DLL directory dedup helper is missing",
+    ),
     RequiredPatternRule(
         "declarative-simple-filter-editor",
         "frontend/src/components/FilterChainEditor.vue",

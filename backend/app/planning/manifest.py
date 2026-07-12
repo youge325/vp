@@ -124,30 +124,33 @@ class SegmentManifest:
                 return self._prepare_fresh(signature, config_snapshot, delete_final=True)
             if mode == "force-resume":
                 if not signature_match:
-                    decision = self._prepare_fresh(signature, config_snapshot)
-                    logger.info("Configuration changed; previous progress invalidated.")
-                    return decision
-                state = self._scan_resume_state()
-                return _ResumeDecision(
-                    kind="resume" if state.completed_output_frames > 0 else "fresh",
-                    state=state,
-                    sidecar_signature_match=True,
-                )
+                    return self._prepare_changed_signature(signature, config_snapshot)
+                return self._resume_decision()
 
         if not self.manifest_path.is_file():
             return self._prepare_fresh(signature, config_snapshot)
 
         if not signature_match:
-            decision = self._prepare_fresh(signature, config_snapshot)
-            logger.info("Configuration changed; previous progress invalidated.")
-            return decision
+            return self._prepare_changed_signature(signature, config_snapshot)
 
+        return self._resume_decision()
+
+    def _resume_decision(self) -> _ResumeDecision:
         state = self._scan_resume_state()
         return _ResumeDecision(
             kind="resume" if state.completed_output_frames > 0 else "fresh",
             state=state,
             sidecar_signature_match=True,
         )
+
+    def _prepare_changed_signature(
+        self,
+        signature: str,
+        config_snapshot: dict[str, Any],
+    ) -> _ResumeDecision:
+        decision = self._prepare_fresh(signature, config_snapshot)
+        logger.info("Configuration changed; previous progress invalidated.")
+        return decision
 
     # -------------------------------------------------------------- inspection
     def inspect(

@@ -349,11 +349,13 @@ def _ensure_decoder_probe_sample(
     return None
 
 
-def _verify_decoder_hardware_device(
+def _verify_decoder_hardware(
     ffmpeg_path: str,
     decoder: str,
     device: str,
     sample_path: str,
+    *,
+    device_value: str | None = None,
 ) -> bool:
     cmd = [
         ffmpeg_path,
@@ -362,65 +364,40 @@ def _verify_decoder_hardware_device(
         "error",
         "-hwaccel",
         device,
-        "-c:v",
-        decoder,
-        "-i",
-        sample_path,
-        "-frames:v",
-        "1",
-        "-f",
-        "null",
-        "-",
     ]
+    if device_value is not None:
+        cmd.extend(["-hwaccel_device", device_value])
+    cmd.extend(
+        [
+            "-c:v",
+            decoder,
+            "-i",
+            sample_path,
+            "-frames:v",
+            "1",
+            "-f",
+            "null",
+            "-",
+        ]
+    )
     try:
         run_ffmpeg_command(cmd, timeout=30)
     except Exception as exc:  # pragma: no cover - exact FFmpeg errors vary by build
-        logger.debug(
-            "Decoder hardware probe failed for decoder %s device %s: %s",
-            decoder,
-            device,
-            exc,
-        )
-        return False
-    return True
-
-
-def _verify_decoder_hardware_device_option(
-    ffmpeg_path: str,
-    decoder: str,
-    device: str,
-    device_value: str,
-    sample_path: str,
-) -> bool:
-    cmd = [
-        ffmpeg_path,
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-hwaccel",
-        device,
-        "-hwaccel_device",
-        device_value,
-        "-c:v",
-        decoder,
-        "-i",
-        sample_path,
-        "-frames:v",
-        "1",
-        "-f",
-        "null",
-        "-",
-    ]
-    try:
-        run_ffmpeg_command(cmd, timeout=30)
-    except Exception as exc:  # pragma: no cover - exact FFmpeg errors vary by build
-        logger.debug(
-            "Decoder hardware device option probe failed for decoder %s device %s value %s: %s",
-            decoder,
-            device,
-            device_value,
-            exc,
-        )
+        if device_value is None:
+            logger.debug(
+                "Decoder hardware probe failed for decoder %s device %s: %s",
+                decoder,
+                device,
+                exc,
+            )
+        else:
+            logger.debug(
+                "Decoder hardware device option probe failed for decoder %s device %s value %s: %s",
+                decoder,
+                device,
+                device_value,
+                exc,
+            )
         return False
     return True
 
@@ -458,9 +435,7 @@ def probe_decoder_hardware_devices(
         logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
         return []
 
-    devices = [
-        device for device in candidates if _verify_decoder_hardware_device(ffmpeg_path, decoder, device, sample_path)
-    ]
+    devices = [device for device in candidates if _verify_decoder_hardware(ffmpeg_path, decoder, device, sample_path)]
     if not devices:
         logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
     return devices
@@ -501,7 +476,13 @@ def probe_decoder_hardware_device_options(
         options = [
             {"value": value, "label": value}
             for value in _DECODER_HARDWARE_DEVICE_PROBE_VALUES
-            if _verify_decoder_hardware_device_option(ffmpeg_path, decoder, device, value, sample_path)
+            if _verify_decoder_hardware(
+                ffmpeg_path,
+                decoder,
+                device,
+                sample_path,
+                device_value=value,
+            )
         ]
         if not options:
             logger.debug(

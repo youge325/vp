@@ -14,8 +14,9 @@ from __future__ import annotations
 import argparse
 
 from app.cli.commands._process_execution import execute_plan, finalize_and_emit
+from app.cli.commands._guards import ensure_input_and_ffmpeg
 from app.cli.commands._process_planning import build_plan
-from app.cli.commands._process_validation import ensure_input_and_ffmpeg, load_runtime_configs
+from app.cli.commands._process_validation import load_runtime_configs
 from app.errors import ProcessError, ResumeConflictError, TaskErrorCode
 from app.planning import resolve_primary_algorithm
 
