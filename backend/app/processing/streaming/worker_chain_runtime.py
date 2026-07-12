@@ -10,6 +10,7 @@ from app.planning.manifest import ResumeState
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.worker_plans import StageWorkerPlan
 from app.processing.streaming.worker_process_io import (
+    DecodedFrameWriterConfig,
     drain_final_worker_output,
     start_decoded_frame_writer,
 )
@@ -41,15 +42,17 @@ def run_worker_chain_runtime(
         python_executable=python_executable,
     ) as handles:
         decode_thread = start_decoded_frame_writer(
+            DecodedFrameWriterConfig(
+                ffmpeg=ffmpeg,
+                input_path=input_path,
+                decode_config=decode_config,
+                video_info=video_info,
+                start_source_frame=start_source_frame,
+                worker_stdin=handles[0].process.stdin,
+                error_queue=error_queue,
+                stop_event=stop_event,
+            ),
             thread_name="vp-stage-worker-decode-writer",
-            ffmpeg=ffmpeg,
-            input_path=input_path,
-            decode_config=decode_config,
-            video_info=video_info,
-            start_source_frame=start_source_frame,
-            worker_stdin=handles[0].process.stdin,
-            error_queue=error_queue,
-            stop_event=stop_event,
         )
 
         try:

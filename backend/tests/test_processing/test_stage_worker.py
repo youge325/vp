@@ -8,7 +8,6 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from app.algorithms.factory import AlgorithmFactory
 from app.cli.commands import stage_worker as stage_worker_command
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import ProcessingStep
@@ -285,18 +284,15 @@ def test_sequence_stage_skips_write_progress_when_algorithm_reports_progress() -
     assert not any(event["current"] in (1, 2) for event in progress_events)
 
 
-def test_stage_worker_uses_stage_tensor_backend_without_passing_it_to_algorithm(monkeypatch) -> None:
+def test_stage_worker_passes_configured_backend_to_algorithm_factory() -> None:
     output = io.BytesIO()
     captured = {}
 
-    def fake_create(*, algorithm_type, tensor_backend, tensor_backend_name, **kwargs):
-        captured["algorithm_type"] = algorithm_type
-        captured["tensor_backend"] = tensor_backend
-        captured["tensor_backend_name"] = tensor_backend_name
-        captured["kwargs"] = kwargs
+    def fake_create(stage, backend):
+        captured["stage"] = stage
+        captured["backend"] = backend
         return _SequenceAlgorithm()
 
-    monkeypatch.setattr(AlgorithmFactory, "create", staticmethod(fake_create))
     config = StageWorkerConfig(
         stage=ProcessingStep(
             algorithm_type="super_resolution",
@@ -318,14 +314,13 @@ def test_stage_worker_uses_stage_tensor_backend_without_passing_it_to_algorithm(
         config,
         _stream_of([_frame(1)]),
         output,
+        algorithm_factory=fake_create,
         backend_factory=lambda _name: _IdentityBackend(),
         event_sink=lambda _event: None,
     )
 
-    assert captured["algorithm_type"] == "super_resolution"
-    assert captured["tensor_backend"].get_name() == "identity"
-    assert captured["tensor_backend_name"] == "identity"
-    assert captured["kwargs"] == {"sr_algorithm": "ppmsvsr", "num_frames": 5}
+    assert captured["stage"] is config.stage
+    assert captured["backend"].get_name() == "identity"
 
 
 def test_stage_worker_error_event_uses_wire_error_code(monkeypatch, capsys) -> None:

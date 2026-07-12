@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import queue
 import threading
+from dataclasses import dataclass
 from typing import Any
 
 from app.planning import StagePlan
@@ -14,78 +15,67 @@ from app.processing.streaming.stage_worker_io import read_rgb_frame, write_rgb_f
 from app.processing.streaming.worker_plans import StageWorkerPlan, boundary_schedule_for_stage_plan
 
 
-def write_decoded_frames_to_worker(
-    *,
-    ffmpeg: Any,
-    input_path: str,
-    decode_config: dict[str, Any],
-    video_info: dict[str, Any],
-    start_source_frame: int,
-    worker_stdin: Any,
-    error_queue: queue.Queue[BaseException],
-    stop_event: Any,
-    frame_count: int | None = None,
-) -> None:
-    if worker_stdin is None:
-        error_queue.put(RuntimeError("Stage worker stdin is unavailable."))
-        stop_event.set()
+@dataclass(frozen=True, slots=True)
+class DecodedFrameWriterConfig:
+    ffmpeg: Any
+    input_path: str
+    decode_config: dict[str, Any]
+    video_info: dict[str, Any]
+    start_source_frame: int
+    worker_stdin: Any
+    error_queue: queue.Queue[BaseException]
+    stop_event: Any
+    frame_count: int | None = None
+
+
+def _write_decoded_frames_to_worker(config: DecodedFrameWriterConfig) -> None:
+    if config.worker_stdin is None:
+        config.error_queue.put(RuntimeError("Stage worker stdin is unavailable."))
+        config.stop_event.set()
         return
     reader = None
     try:
-        reader = ffmpeg.open_rawvideo_decoder(
-            input_path=input_path,
-            width=int(video_info["width"]),
-            height=int(video_info["height"]),
-            decode_config=decode_config,
-            start_frame=start_source_frame,
-            frame_count=frame_count,
+        reader = config.ffmpeg.open_rawvideo_decoder(
+            input_path=config.input_path,
+            width=int(config.video_info["width"]),
+            height=int(config.video_info["height"]),
+            decode_config=config.decode_config,
+            start_frame=config.start_source_frame,
+            frame_count=config.frame_count,
         )
-        while not stop_event.is_set():
+        while not config.stop_event.is_set():
             frame = reader.read_frame()
             if frame is None:
                 break
-            write_rgb_frame(worker_stdin, frame, width=int(video_info["width"]), height=int(video_info["height"]))
-        worker_stdin.close()
+            write_rgb_frame(
+                config.worker_stdin,
+                frame,
+                width=int(config.video_info["width"]),
+                height=int(config.video_info["height"]),
+            )
+        config.worker_stdin.close()
     except BaseException as exc:  # pragma: no cover - thread boundary
-        stop_event.set()
-        error_queue.put(exc)
-        close_pipe(worker_stdin)
+        config.stop_event.set()
+        config.error_queue.put(exc)
+        close_pipe(config.worker_stdin)
     finally:
         if reader is not None:
             try:
                 reader.close()
             except BaseException as exc:  # pragma: no cover - close failures are real pipeline failures
-                stop_event.set()
-                error_queue.put(exc)
+                config.stop_event.set()
+                config.error_queue.put(exc)
 
 
 def start_decoded_frame_writer(
+    config: DecodedFrameWriterConfig,
     *,
     thread_name: str,
-    ffmpeg: Any,
-    input_path: str,
-    decode_config: dict[str, Any],
-    video_info: dict[str, Any],
-    start_source_frame: int,
-    worker_stdin: Any,
-    error_queue: queue.Queue[BaseException],
-    stop_event: Any,
-    frame_count: int | None = None,
 ) -> threading.Thread:
     thread = threading.Thread(
-        target=write_decoded_frames_to_worker,
+        target=_write_decoded_frames_to_worker,
         name=thread_name,
-        kwargs={
-            "ffmpeg": ffmpeg,
-            "input_path": input_path,
-            "decode_config": decode_config,
-            "video_info": video_info,
-            "start_source_frame": start_source_frame,
-            "frame_count": frame_count,
-            "worker_stdin": worker_stdin,
-            "error_queue": error_queue,
-            "stop_event": stop_event,
-        },
+        args=(config,),
         daemon=True,
     )
     thread.start()
@@ -150,8 +140,8 @@ def close_pipe(pipe: Any) -> None:
 
 
 __all__ = [
+    "DecodedFrameWriterConfig",
     "close_pipe",
     "drain_final_worker_output",
     "start_decoded_frame_writer",
-    "write_decoded_frames_to_worker",
 ]

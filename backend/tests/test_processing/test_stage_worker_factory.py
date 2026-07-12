@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.algorithms.factory import AlgorithmFactory
 from app.planning import ProcessingStep
 from app.processing.streaming import stage_worker_factory
 
@@ -42,34 +41,26 @@ def test_stage_worker_factory_uses_backend_factory_for_tensor_stages() -> None:
     assert stage_worker_factory.create_backend(config, lambda name: {"backend": name}) == {"backend": "paddle"}
 
 
-def test_stage_worker_factory_passes_filtered_kwargs_to_algorithm_factory(monkeypatch) -> None:
+def test_stage_worker_factory_passes_filtered_kwargs_to_algorithm(monkeypatch) -> None:
+    from app.processing import super_resolution
+
     captured = {}
 
-    def fake_create(*, algorithm_type, tensor_backend, tensor_backend_name, **kwargs):
-        captured.update(
-            {
-                "algorithm_type": algorithm_type,
-                "tensor_backend": tensor_backend,
-                "tensor_backend_name": tensor_backend_name,
-                "kwargs": kwargs,
-            }
-        )
-        return "algorithm"
+    class FakeAlgorithm:
+        def __init__(self, *, tensor_backend, **kwargs):
+            captured.update({"tensor_backend": tensor_backend, "kwargs": kwargs})
 
-    monkeypatch.setattr(AlgorithmFactory, "create", staticmethod(fake_create))
+    monkeypatch.setattr(super_resolution, "SuperResolutionAlgorithm", FakeAlgorithm)
     stage = ProcessingStep(
         algorithm_type="super_resolution",
         algorithm_kwargs={"sr_algorithm": "placeholder", "tensor_backend": "pytorch", "scale_factor": 2.0},
         stage_name="01_super_resolution",
     )
 
-    assert stage_worker_factory.create_algorithm(stage, _Backend()) == "algorithm"
-    assert captured == {
-        "algorithm_type": "super_resolution",
-        "tensor_backend": captured["tensor_backend"],
-        "tensor_backend_name": "identity",
-        "kwargs": {"sr_algorithm": "placeholder", "scale_factor": 2.0},
-    }
+    algorithm = stage_worker_factory.create_algorithm(stage, _Backend())
+
+    assert isinstance(algorithm, FakeAlgorithm)
+    assert captured["kwargs"] == {"sr_algorithm": "placeholder", "scale_factor": 2.0}
     assert captured["tensor_backend"].get_name() == "identity"
 
 

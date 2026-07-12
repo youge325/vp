@@ -169,22 +169,15 @@ class IAlgorithm(ABC):
 - `process_frame` — 单帧处理（超分辨率、降噪等）
 - `process_frame_pair` — 帧对处理（插帧，在 `frame_a` 和 `frame_b` 之间生成中间帧）
 
-### AlgorithmFactory
+### Stage Worker 算法装配
 
-[`backend/app/algorithms/factory.py`](../backend/app/algorithms/factory.py):
+[`backend/app/processing/streaming/stage_worker_factory.py`](../backend/app/processing/streaming/stage_worker_factory.py)
+根据已经完成规划的 stage 类型惰性导入并实例化具体算法。该边界只暴露 `create_backend()` 和
+`create_algorithm()`，不维护全局 registry，也不要求测试或应用启动代码预先注册算法。
 
-```python
-class AlgorithmFactory:
-    _registry: dict[str, type[IAlgorithm]] = {}
-
-    @classmethod
-    def register(cls, name: str, algorithm_class: type[IAlgorithm]) -> None: ...
-    @classmethod
-    def create(cls, name: str, **kwargs: Any) -> IAlgorithm: ...
-```
-
-- 显式注册模式，避免 import 副作用
-- 空注册表早失败：若请求未注册的算法名，立即抛 `KeyError`
+- filter chain 不创建 tensor backend，直接构造 `FrameFilterChainAlgorithm`
+- interpolation 与 super-resolution 复用规划层过滤后的 kwargs 和已创建 backend
+- 未支持的 stage 类型在装配边界立即失败
 
 ### RIFE 补帧家族
 
