@@ -416,7 +416,7 @@ def _decoder_probe_workspace(
         yield temp_dir, {}
 
 
-def probe_decoder_hardware_devices(
+def probe_decoder_hardware_capabilities(
     ffmpeg_path: str,
     decoder: str,
     codec: str,
@@ -425,42 +425,22 @@ def probe_decoder_hardware_devices(
     encoder_names: set[str],
     probe_dir: str | None = None,
     sample_cache: dict[str, str | None] | None = None,
-) -> list[str]:
+) -> tuple[list[str], dict[str, list[dict[str, str]]]]:
     candidates = _decoder_hardware_candidates(hardware_devices, hwaccels)
     if not candidates:
-        return []
+        return [], {}
 
     with _decoder_probe_workspace(probe_dir, sample_cache) as (resolved_probe_dir, cache):
         sample_path = _ensure_decoder_probe_sample(ffmpeg_path, codec, encoder_names, resolved_probe_dir, cache)
         if sample_path is None:
             logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
-            return []
+            return [], {}
 
         devices = [
             device for device in candidates if _verify_decoder_hardware(ffmpeg_path, decoder, device, sample_path)
         ]
         if not devices:
             logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
-        return devices
-
-
-def probe_decoder_hardware_device_options(
-    ffmpeg_path: str,
-    decoder: str,
-    codec: str,
-    devices: list[str],
-    encoder_names: set[str],
-    probe_dir: str | None = None,
-    sample_cache: dict[str, str | None] | None = None,
-) -> dict[str, list[dict[str, str]]]:
-    if not devices:
-        return {}
-
-    with _decoder_probe_workspace(probe_dir, sample_cache) as (resolved_probe_dir, cache):
-        sample_path = _ensure_decoder_probe_sample(ffmpeg_path, codec, encoder_names, resolved_probe_dir, cache)
-        if sample_path is None:
-            logger.debug("No decoder hardware device options passed FFmpeg verification for decoder %s", decoder)
-            return {device: [] for device in devices}
 
         options_by_device: dict[str, list[dict[str, str]]] = {}
         for device in devices:
@@ -482,4 +462,4 @@ def probe_decoder_hardware_device_options(
                     device,
                 )
             options_by_device[device] = options
-        return options_by_device
+        return devices, options_by_device

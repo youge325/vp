@@ -14,42 +14,34 @@ export function createControlOps(
   deps: BatchLifecycleDeps,
   helpers: CommonHelpers,
 ) {
-  async function pause(): Promise<void> {
+  async function setPaused(paused: boolean): Promise<void> {
     const batch = deps.getBatch()
-    if (!batch.isRunning || batch.isPaused || batch.isCancelling) {
+    if (!batch.isRunning || batch.isPaused === paused || batch.isCancelling) {
       return
     }
 
     try {
-      await deps.pauseTask()
-      deps.setBatch({ isPaused: true })
+      await (paused ? deps.pauseTask() : deps.resumeTask())
+      deps.setBatch({ isPaused: paused })
       const item = helpers.getCurrentItem()
       const runState = helpers.getCurrentRunState()
       if (item && runState) {
-        deps.setItemTaskState(item.id, applyTaskPaused(runState.taskState))
+        const nextState = paused
+          ? applyTaskPaused(runState.taskState)
+          : applyTaskResumed(runState.taskState)
+        deps.setItemTaskState(item.id, nextState)
       }
     } catch (error) {
       throw normalizeError(error, TASK_ERROR_CODES.ProcessFailed)
     }
   }
 
-  async function resume(): Promise<void> {
-    const batch = deps.getBatch()
-    if (!batch.isRunning || !batch.isPaused || batch.isCancelling) {
-      return
-    }
+  async function pause(): Promise<void> {
+    await setPaused(true)
+  }
 
-    try {
-      await deps.resumeTask()
-      deps.setBatch({ isPaused: false })
-      const item = helpers.getCurrentItem()
-      const runState = helpers.getCurrentRunState()
-      if (item && runState) {
-        deps.setItemTaskState(item.id, applyTaskResumed(runState.taskState))
-      }
-    } catch (error) {
-      throw normalizeError(error, TASK_ERROR_CODES.ProcessFailed)
-    }
+  async function resume(): Promise<void> {
+    await setPaused(false)
   }
 
   async function cancel(): Promise<void> {

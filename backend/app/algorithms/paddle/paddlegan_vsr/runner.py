@@ -310,17 +310,34 @@ def _build_model(model_id: str):
 
 
 def _sequence_tensor_to_frames(tensor) -> list[np.ndarray]:
-    array = _as_numpy(tensor)
-    if array.ndim != 5:
-        raise RuntimeError(f"PaddleGAN recurrent VSR output must be 5D, got shape {array.shape}.")
-    return [_chw_float_to_rgb_uint8(array[0, index]) for index in range(array.shape[1])]
+    return _tensor_output_to_frames(
+        tensor,
+        expected_ndim=5,
+        description="PaddleGAN recurrent VSR output",
+        batch_index=0,
+    )
 
 
 def _image_tensor_to_frames(tensor) -> list[np.ndarray]:
+    return _tensor_output_to_frames(
+        tensor,
+        expected_ndim=4,
+        description="PaddleGAN EDVR output",
+    )
+
+
+def _tensor_output_to_frames(
+    tensor,
+    *,
+    expected_ndim: int,
+    description: str,
+    batch_index: int | None = None,
+) -> list[np.ndarray]:
     array = _as_numpy(tensor)
-    if array.ndim != 4:
-        raise RuntimeError(f"PaddleGAN EDVR output must be 4D, got shape {array.shape}.")
-    return [_chw_float_to_rgb_uint8(array[index]) for index in range(array.shape[0])]
+    if array.ndim != expected_ndim:
+        raise RuntimeError(f"{description} must be {expected_ndim}D, got shape {array.shape}.")
+    chw_batch = array if batch_index is None else array[batch_index]
+    return [_chw_float_to_rgb_uint8(chw) for chw in chw_batch]
 
 
 def _chw_float_to_rgb_uint8(chw: np.ndarray) -> np.ndarray:

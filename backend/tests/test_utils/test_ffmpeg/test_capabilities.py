@@ -25,15 +25,11 @@ def _install_probe_stubs(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         capability_probe,
-        "probe_decoder_hardware_devices",
-        lambda _path, _decoder, _codec, devices, _hwaccels, _encoders, **_kwargs: list(devices),
-    )
-    monkeypatch.setattr(
-        capability_probe,
-        "probe_decoder_hardware_device_options",
-        lambda _path, _decoder, _codec, devices, _encoders, **_kwargs: {
-            device: [{"value": "0", "label": "0"}] for device in devices
-        },
+        "probe_decoder_hardware_capabilities",
+        lambda _path, _decoder, _codec, devices, _hwaccels, _encoders, **_kwargs: (
+            list(devices),
+            {device: [{"value": "0", "label": "0"}] for device in devices},
+        ),
     )
 
 
@@ -46,16 +42,19 @@ def test_discover_capabilities_filters_profiles_by_gpu_vendor(monkeypatch) -> No
     assert [profile["name"] for profile in result["encoderProfiles"]] == ["libx264", "hevc_nvenc"]
     assert [profile["name"] for profile in result["decoderProfiles"]] == ["software", "hevc_cuvid"]
     assert result["encoderProfiles"][0]["rateControlModes"] == [{"mode": "bitrate", "defaultValue": 8}]
+    assert result["decoderProfiles"][1]["hardwareDevices"] == ["cuda"]
+    assert result["decoderProfiles"][1]["hardwareDeviceOptions"] == {"cuda": [{"value": "0", "label": "0"}]}
 
 
 def test_discover_capabilities_returns_only_verified_hwaccels(monkeypatch) -> None:
     _install_probe_stubs(monkeypatch)
     monkeypatch.setattr(
         capability_probe,
-        "probe_decoder_hardware_devices",
-        lambda _path, _decoder, _codec, devices, _hwaccels, _encoders, **_kwargs: [
-            device for device in devices if device == "cuda"
-        ],
+        "probe_decoder_hardware_capabilities",
+        lambda _path, _decoder, _codec, devices, _hwaccels, _encoders, **_kwargs: (
+            [device for device in devices if device == "cuda"],
+            {"cuda": []} if "cuda" in devices else {},
+        ),
     )
 
     result = capabilities.discover_capabilities(

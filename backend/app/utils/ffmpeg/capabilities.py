@@ -51,7 +51,7 @@ def discover_capabilities(ffmpeg_path: str, gpu_adapters: list[dict[str, Any]] |
                 candidate,
                 _probe.describe_codec(ffmpeg_path, "decoder", candidate["name"]),
             )
-            profile["hardwareDevices"] = _probe.probe_decoder_hardware_devices(
+            hardware_devices, hardware_device_options = _probe.probe_decoder_hardware_capabilities(
                 ffmpeg_path,
                 profile["name"],
                 profile["codec"],
@@ -61,18 +61,11 @@ def discover_capabilities(ffmpeg_path: str, gpu_adapters: list[dict[str, Any]] |
                 probe_dir=decoder_probe_dir,
                 sample_cache=decoder_sample_cache,
             )
-            for device in profile["hardwareDevices"]:
+            profile["hardwareDevices"] = hardware_devices
+            profile["hardwareDeviceOptions"] = hardware_device_options
+            for device in hardware_devices:
                 if device not in verified_hwaccels:
                     verified_hwaccels.append(device)
-            profile["hardwareDeviceOptions"] = _probe.probe_decoder_hardware_device_options(
-                ffmpeg_path,
-                profile["name"],
-                profile["codec"],
-                profile["hardwareDevices"],
-                encoder_names,
-                probe_dir=decoder_probe_dir,
-                sample_cache=decoder_sample_cache,
-            )
             decoder_profiles.append(profile)
 
     return {

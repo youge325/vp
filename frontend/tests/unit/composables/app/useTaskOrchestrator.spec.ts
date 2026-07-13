@@ -30,7 +30,7 @@ vi.mock('@/lib/ipc/endpoints/task', () => ({
   },
 }))
 
-import { disposeRunner } from '@/composables/app/taskOrchestratorRuntime'
+import { disposeRunner, getTaskRunner } from '@/composables/app/taskOrchestratorRuntime'
 import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { useMediaStore } from '@/stores/media'
 import { createMediaItem } from '@/services/media/factory'
@@ -51,10 +51,12 @@ describe('useTaskOrchestrator singleton', () => {
 
   it('only registers the IPC listener once across repeated attach calls', async () => {
     const orchestrator = useTaskOrchestrator()
+    const runner = getTaskRunner()
     await orchestrator.attachTaskListeners()
     await orchestrator.attachTaskListeners()
     await orchestrator.attachTaskListeners()
     expect(listenMock).toHaveBeenCalledTimes(1)
+    expect(listenMock).toHaveBeenCalledWith(runner)
   })
 
   it('disposeRunner drops the cached runner and the listener handle', async () => {

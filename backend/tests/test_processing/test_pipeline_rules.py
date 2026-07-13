@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.processing.streaming import pipeline_rules as pipeline_rules_module
 from app.planning import ProcessingStep, StagePlan, build_stage_plan
 from app.processing.streaming.pipeline_rules import (
     resolved_output_dimensions,
@@ -83,3 +84,26 @@ def test_resolved_stream_fps_uses_source_fps_without_interpolation() -> None:
     stage_plan = build_stage_plan([], 5, source_duration=5 / 24, output_fps=None)
 
     assert resolved_stream_fps(24.0, stage_plan) == 24.0
+
+
+def test_resolved_stream_fps_delegates_interpolation_math_to_stage_rule(monkeypatch) -> None:
+    interpolation_step = ProcessingStep(
+        algorithm_type="frame_interpolation",
+        algorithm_kwargs={"multi": 4},
+        stage_name="01_frame_interpolation",
+    )
+    stage_plan = StagePlan(
+        pre_steps=[],
+        interpolation_step=interpolation_step,
+        post_steps=[],
+        total_encoded_frames=1,
+    )
+    calls: list[tuple[ProcessingStep, float]] = []
+    monkeypatch.setattr(
+        pipeline_rules_module,
+        "stage_output_fps",
+        lambda step, source_fps: calls.append((step, source_fps)) or 96.0,
+    )
+
+    assert resolved_stream_fps(24.0, stage_plan) == 96.0
+    assert calls == [(interpolation_step, 24.0)]

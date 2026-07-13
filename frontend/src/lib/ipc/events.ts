@@ -18,7 +18,7 @@ interface TaskEventHandlers {
   onCompleted: (payload: TaskCompletedPayload) => void
   onError: (payload: TaskError) => void
   onCancelled: (payload: TaskCancelledPayload | null) => void
-  onResumeStatus?: (payload: ResumeStatusPayload) => void
+  onResumeStatus: (payload: ResumeStatusPayload) => void
 }
 
 export async function listenTaskEvents(handlers: TaskEventHandlers): Promise<UnlistenFn> {
@@ -37,7 +37,7 @@ export async function listenTaskEvents(handlers: TaskEventHandlers): Promise<Unl
       handlers.onCancelled(event.payload ?? null),
     ),
     listen<ResumeStatusPayload>(TASK_EVENT_NAMES.TaskResumeStatus, (event) =>
-      handlers.onResumeStatus?.(event.payload),
+      handlers.onResumeStatus(event.payload),
     ),
   ])
 

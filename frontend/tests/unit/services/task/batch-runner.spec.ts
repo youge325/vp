@@ -131,7 +131,11 @@ describe('batch-runner', () => {
   })
 
   it('pauses the current task', async () => {
-    const deps = makeDeps()
+    const setItemTaskState = vi.fn()
+    const deps = makeDeps({
+      getItemRunState: () => ({ taskState: createIdleTaskState(), lastOutputPath: '' }),
+      setItemTaskState,
+    })
     const runner = createBatchRunner(deps)
     const item = makeItem('a')
     deps.getMediaItem = () => item
@@ -141,6 +145,106 @@ describe('batch-runner', () => {
     await runner.pause()
     expect(deps.pauseTask).toHaveBeenCalledOnce()
     expect(deps.getBatch().isPaused).toBe(true)
+    expect(setItemTaskState).toHaveBeenCalledWith(
+      'a',
+      expect.objectContaining({ status: 'paused' }),
+    )
+  })
+
+  it('resumes the current task through the shared pause-state transition', async () => {
+    const setItemTaskState = vi.fn()
+    const deps = makeDeps({
+      getItemRunState: () => ({
+        taskState: { ...createIdleTaskState(), status: 'paused' },
+        lastOutputPath: '',
+      }),
+      setItemTaskState,
+    })
+    const runner = createBatchRunner(deps)
+    const item = makeItem('a')
+    deps.getMediaItem = () => item
+    deps.getBatch().isRunning = true
+    deps.getBatch().isPaused = true
+    deps.getBatch().currentId = 'a'
+
+    await runner.resume()
+
+    expect(deps.resumeTask).toHaveBeenCalledOnce()
+    expect(deps.getBatch().isPaused).toBe(false)
+    expect(setItemTaskState).toHaveBeenCalledWith(
+      'a',
+      expect.objectContaining({ status: 'running' }),
+    )
+  })
+
+  it('keeps pause state unchanged when the control command fails', async () => {
+    const deps = makeDeps({ pauseTask: vi.fn().mockRejectedValue(new Error('pause failed')) })
+    const runner = createBatchRunner(deps)
+    deps.getBatch().isRunning = true
+
+    await expect(runner.pause()).rejects.toMatchObject({ message: 'pause failed' })
+
+    expect(deps.getBatch().isPaused).toBe(false)
+  })
+
+  it('skips pause and resume commands when the requested state is already active', async () => {
+    const deps = makeDeps()
+    const runner = createBatchRunner(deps)
+    deps.getBatch().isRunning = true
+    deps.getBatch().isPaused = true
+
+    await runner.pause()
+    expect(deps.pauseTask).not.toHaveBeenCalled()
+
+    deps.getBatch().isPaused = false
+    await runner.resume()
+    expect(deps.resumeTask).not.toHaveBeenCalled()
+  })
+
+  it('projects progress, log and resume events through the console task state', () => {
+    const item = makeItem('a')
+    let runState: MediaRunState = {
+      taskState: createIdleTaskState(),
+      lastOutputPath: '',
+    }
+    const setItemTaskState = vi.fn((_id: string, taskState: MediaTaskState) => {
+      runState = { ...runState, taskState }
+    })
+    const deps = makeDeps({
+      getMediaItem: () => item,
+      getItemRunState: () => runState,
+      setItemTaskState,
+    })
+    deps.getBatch().currentId = 'a'
+    const runner = createBatchRunner(deps)
+
+    runner.onProgress({
+      current: 1,
+      total: 2,
+      percent: 50,
+      stage: 'decode',
+      stageIndex: 1,
+      stageTotal: 2,
+    })
+    runner.onLog({ message: 'working' })
+    runner.onResumeStatus({
+      resumed: true,
+      completedChunks: 2,
+      completedOutputFrames: 40,
+      startSourceFrame: 20,
+      totalOutputFrames: 100,
+    })
+
+    expect(runState.taskState.status).toBe('running')
+    expect(runState.taskState.logs).toEqual(['working'])
+    expect(runState.taskState.resumeStatus).toEqual({
+      resumed: true,
+      completedChunks: 2,
+      completedOutputFrames: 40,
+      startSourceFrame: 20,
+      totalOutputFrames: 100,
+    })
+    expect(setItemTaskState).toHaveBeenCalledTimes(3)
   })
 
   it('cancels the batch', async () => {

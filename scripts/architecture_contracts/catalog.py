@@ -564,7 +564,7 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "ffmpeg-dead-delegates",
         "backend/app/utils/ffmpeg/__init__.py",
-        r"^\s*def\s+(?:list_codec_names|list_hwaccels|describe_codec|parse_codec_profile|parse_avoptions|probe_rate_control_modes|probe_decoder_hardware_devices|probe_decoder_hardware_device_options|build_decode_input_args|build_encode_output_args|build_rawvideo_decode_command|build_rawvideo_encode_command|convert_format|build_encode_video_args)\b|__all__\s*=\s*\[[^\]]*\b(?:RawVideoReader|RawVideoWriter|build_rawvideo_|open_rawvideo_)",
+        r"^\s*def\s+(?:list_codec_names|list_hwaccels|describe_codec|parse_codec_profile|parse_avoptions|probe_rate_control_modes|probe_decoder_hardware_capabilities|build_decode_input_args|build_encode_output_args|build_rawvideo_decode_command|build_rawvideo_encode_command|convert_format|build_encode_video_args)\b|__all__\s*=\s*\[[^\]]*\b(?:RawVideoReader|RawVideoWriter|build_rawvideo_|open_rawvideo_)",
         "unused FFmpeg facade",
     ),
     _forbid(
@@ -1227,8 +1227,57 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "recursive-decoder-probe-workspace",
         "backend/app/utils/ffmpeg/capability_probe.py",
-        r"return\s+probe_decoder_hardware_(?:devices|device_options)\s*\(",
+        r"return\s+probe_decoder_hardware_capabilities\s*\(",
         "recursive decoder probe workspace lifecycle",
+    ),
+    ForbiddenReferenceRule(
+        "obsolete-decoder-hardware-probe-interfaces",
+        roots=(
+            "backend/app/utils/ffmpeg/capability_probe.py",
+            "backend/app/utils/ffmpeg/capabilities.py",
+        ),
+        patterns=(
+            r"\bprobe_decoder_hardware_devices\b",
+            r"\bprobe_decoder_hardware_device_options\b",
+        ),
+        message="split decoder hardware probe interface",
+        suffixes=(".py",),
+    ),
+    _forbid(
+        "task-listener-forwarding-adapter",
+        "frontend/src/composables/app/taskOrchestratorRuntime.ts",
+        r"listenTaskEvents\s*\(\s*\{",
+        "task listener method forwarding adapter",
+    ),
+    _forbid(
+        "optional-resume-event-handler",
+        "frontend/src/lib/ipc/events.ts",
+        r"onResumeStatus\s*\?|onResumeStatus\?\.",
+        "optional resume event handler branch",
+    ),
+    _forbid(
+        "duplicated-pause-resume-transitions",
+        "frontend/src/services/task/batch/lifecycle/control.ts",
+        r"async\s+function\s+pause\b[\s\S]*?deps\.pauseTask\s*\([\s\S]*?async\s+function\s+resume\b[\s\S]*?deps\.resumeTask\s*\(",
+        "duplicated pause and resume state transitions",
+    ),
+    _forbid(
+        "duplicated-console-task-state-lookups",
+        "frontend/src/services/task/batch/events.ts",
+        r"function\s+on(?:Progress|Log|ResumeStatus)\b[\s\S]{0,240}\bgetConsoleItem\s*\(",
+        "event-specific console task state lookup",
+    ),
+    _forbid(
+        "pipeline-stream-fps-multi-rule",
+        "backend/app/processing/streaming/pipeline_rules.py",
+        r"def\s+resolved_stream_fps\b[\s\S]{0,300}\balgorithm_kwargs\b",
+        "duplicate pipeline-level interpolation FPS rule",
+    ),
+    _forbid(
+        "paddlegan-output-conversion-duplicates",
+        "backend/app/algorithms/paddle/paddlegan_vsr/runner.py",
+        r"def\s+_(?:sequence|image)_tensor_to_frames\b[\s\S]{0,240}\b_as_numpy\s*\(",
+        "duplicated PaddleGAN tensor output conversion",
     ),
     _forbid(
         "direct-cli-ndjson-error-emission",
@@ -1517,6 +1566,42 @@ REQUIRED_PATTERN_RULES = (
         "shared decoder probe workspace is missing",
     ),
     _require(
+        "shared-decoder-hardware-capability-probe",
+        "backend/app/utils/ffmpeg/capability_probe.py",
+        r"def\s+probe_decoder_hardware_capabilities\b[\s\S]*return\s+devices\s*,\s*options_by_device",
+        "combined decoder hardware capability probe is missing",
+    ),
+    _require(
+        "direct-task-listener-composition",
+        "frontend/src/composables/app/taskOrchestratorRuntime.ts",
+        r"runner\s*=\s*getTaskRunner\(\)[\s\S]*listenTaskEvents\(runner\)",
+        "BatchRunner is not attached directly to task events",
+    ),
+    _require(
+        "shared-task-pause-transition",
+        "frontend/src/services/task/batch/lifecycle/control.ts",
+        r"async\s+function\s+setPaused\(paused:\s*boolean\)[\s\S]*batch\.isPaused\s*===\s*paused[\s\S]*deps\.pauseTask\(\)[\s\S]*deps\.resumeTask\(\)",
+        "shared task pause transition is missing",
+    ),
+    _require(
+        "shared-console-task-state-updater",
+        "frontend/src/services/task/batch/events.ts",
+        r"function\s+updateConsoleTaskState\b[\s\S]*getConsoleItem\(\)[\s\S]*getConsoleRunState\(\)[\s\S]*setItemTaskState",
+        "shared console task state updater is missing",
+    ),
+    _require(
+        "stage-fps-rule-delegation",
+        "backend/app/processing/streaming/pipeline_rules.py",
+        r"def\s+resolved_stream_fps\b[\s\S]{0,300}return\s+stage_output_fps\(interpolation_step,\s*source_fps\)",
+        "pipeline stream FPS does not delegate to stage rules",
+    ),
+    _require(
+        "shared-paddlegan-output-conversion",
+        "backend/app/algorithms/paddle/paddlegan_vsr/runner.py",
+        r"def\s+_tensor_output_to_frames\b[\s\S]*expected_ndim[\s\S]*batch_index[\s\S]*_chw_float_to_rgb_uint8",
+        "shared PaddleGAN tensor output conversion is missing",
+    ),
+    _require(
         "shared-dll-directory-dedup",
         "backend/app/utils/dll_paths.py",
         r"def\s+_append_unique_directory\b",
@@ -1699,7 +1784,7 @@ REQUIRED_PATTERN_RULES = (
     _require(
         "ffmpeg-capability-probe-boundary",
         "backend/app/utils/ffmpeg/capability_probe.py",
-        r"def\s+parse_codec_profile\b[\s\S]*def\s+probe_rate_control_modes\b[\s\S]*def\s+probe_decoder_hardware_devices\b",
+        r"def\s+parse_codec_profile\b[\s\S]*def\s+probe_rate_control_modes\b[\s\S]*def\s+probe_decoder_hardware_capabilities\b",
         "FFmpeg capability probe boundary is missing",
     ),
     _require(

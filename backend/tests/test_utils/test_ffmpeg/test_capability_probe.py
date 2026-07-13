@@ -81,17 +81,20 @@ def test_probe_rate_control_modes_returns_empty_when_every_probe_fails(monkeypat
     assert capability_probe.probe_rate_control_modes("ffmpeg", "libx264", []) == []
 
 
-def test_probe_decoder_hardware_devices_verifies_candidates(tmp_path, monkeypatch) -> None:
+def test_probe_decoder_hardware_capabilities_verifies_devices_and_options(tmp_path, monkeypatch) -> None:
     calls: list[list[str]] = []
 
     def fake_run(command: list[str], *, timeout: int = 3600):
         calls.append(command)
         if "-hwaccel" in command and command[command.index("-hwaccel") + 1] == "qsv":
             raise RuntimeError("qsv unavailable")
+        if "-hwaccel_device" in command and command[command.index("-hwaccel_device") + 1] == "1":
+            raise RuntimeError("device unavailable")
         return subprocess.CompletedProcess(command, 0, "", "")
 
+    monkeypatch.setattr(capability_probe, "_DECODER_HARDWARE_DEVICE_PROBE_VALUES", ("0", "1"))
     monkeypatch.setattr(capability_probe, "run_ffmpeg_command", fake_run)
-    devices = capability_probe.probe_decoder_hardware_devices(
+    devices, options = capability_probe.probe_decoder_hardware_capabilities(
         "ffmpeg",
         "h264_cuvid",
         "h264",
@@ -103,29 +106,42 @@ def test_probe_decoder_hardware_devices_verifies_candidates(tmp_path, monkeypatc
     )
 
     assert devices == ["cuda"]
+    assert options == {"cuda": [{"value": "0", "label": "0"}]}
     assert any("testsrc2=size=256x256:rate=1" in command for command in calls)
 
 
-def test_probe_decoder_device_options_keeps_only_verified_values(tmp_path, monkeypatch) -> None:
-    def fake_run(command: list[str], *, timeout: int = 3600):
-        if "-hwaccel_device" in command and command[command.index("-hwaccel_device") + 1] == "1":
-            raise RuntimeError("device unavailable")
-        return subprocess.CompletedProcess(command, 0, "", "")
+def test_probe_decoder_hardware_capabilities_returns_empty_without_candidates(monkeypatch) -> None:
+    monkeypatch.setattr(
+        capability_probe,
+        "run_ffmpeg_command",
+        lambda _command, *, timeout=3600: (_ for _ in ()).throw(AssertionError("unexpected probe")),
+    )
 
-    monkeypatch.setattr(capability_probe, "_DECODER_HARDWARE_DEVICE_PROBE_VALUES", ("0", "1"))
-    monkeypatch.setattr(capability_probe, "run_ffmpeg_command", fake_run)
+    result = capability_probe.probe_decoder_hardware_capabilities(
+        "ffmpeg",
+        "h264_cuvid",
+        "h264",
+        ["qsv"],
+        ["cuda"],
+        {"libx264"},
+    )
 
-    options = capability_probe.probe_decoder_hardware_device_options(
+    assert result == ([], {})
+
+
+def test_probe_decoder_hardware_capabilities_returns_empty_without_sample_encoder(tmp_path) -> None:
+    result = capability_probe.probe_decoder_hardware_capabilities(
         "ffmpeg",
         "h264_cuvid",
         "h264",
         ["cuda"],
-        {"libx264"},
+        ["cuda"],
+        set(),
         probe_dir=str(tmp_path),
         sample_cache={},
     )
 
-    assert options == {"cuda": [{"value": "0", "label": "0"}]}
+    assert result == ([], {})
 
 
 def test_standalone_decoder_probe_owns_and_cleans_temporary_workspace(monkeypatch) -> None:
@@ -136,9 +152,10 @@ def test_standalone_decoder_probe_owns_and_cleans_temporary_workspace(monkeypatc
             sample_paths.append(Path(command[-1]))
         return subprocess.CompletedProcess(command, 0, "", "")
 
+    monkeypatch.setattr(capability_probe, "_DECODER_HARDWARE_DEVICE_PROBE_VALUES", ("0", "1"))
     monkeypatch.setattr(capability_probe, "run_ffmpeg_command", fake_run)
 
-    devices = capability_probe.probe_decoder_hardware_devices(
+    devices, options = capability_probe.probe_decoder_hardware_capabilities(
         "ffmpeg",
         "h264_cuvid",
         "h264",
@@ -148,6 +165,7 @@ def test_standalone_decoder_probe_owns_and_cleans_temporary_workspace(monkeypatc
     )
 
     assert devices == ["cuda"]
+    assert options == {"cuda": [{"value": "0", "label": "0"}, {"value": "1", "label": "1"}]}
     assert len(sample_paths) == 1
     assert not sample_paths[0].parent.exists()
 
@@ -163,7 +181,7 @@ def test_decoder_probe_reuses_shared_sample_cache(tmp_path, monkeypatch) -> None
     monkeypatch.setattr(capability_probe, "run_ffmpeg_command", fake_run)
     cache: dict[str, str | None] = {}
 
-    capability_probe.probe_decoder_hardware_devices(
+    capability_probe.probe_decoder_hardware_capabilities(
         "ffmpeg",
         "h264_cuvid",
         "h264",
@@ -173,10 +191,11 @@ def test_decoder_probe_reuses_shared_sample_cache(tmp_path, monkeypatch) -> None
         probe_dir=str(tmp_path),
         sample_cache=cache,
     )
-    capability_probe.probe_decoder_hardware_device_options(
+    capability_probe.probe_decoder_hardware_capabilities(
         "ffmpeg",
         "h264_cuvid",
         "h264",
+        ["cuda"],
         ["cuda"],
         {"libx264"},
         probe_dir=str(tmp_path),

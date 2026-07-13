@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from app.algorithms.paddle.paddlegan_vsr import runner as runner_module
 from app.algorithms.paddle.paddlegan_vsr.runner import PaddleGanVsrRunner
@@ -113,6 +114,41 @@ def test_paddlegan_window_runner_reports_completed_frames_by_window(monkeypatch)
 
     assert len(output) == 3
     assert progress_calls == [(1, 3), (2, 3), (3, 3)]
+
+
+def test_paddlegan_tensor_outputs_share_rgb_uint8_conversion() -> None:
+    chw = np.array([[[0.0]], [[0.5]], [[1.0]]], dtype=np.float32)
+    sequence = np.stack([chw, chw * 0.5], axis=0)[np.newaxis, ...]
+    images = np.stack([chw, chw * 0.5], axis=0)
+
+    sequence_frames = runner_module._sequence_tensor_to_frames(sequence)
+    image_frames = runner_module._image_tensor_to_frames(images)
+
+    assert len(sequence_frames) == 2
+    assert len(image_frames) == 2
+    np.testing.assert_array_equal(sequence_frames[0], np.array([[[0, 128, 255]]], dtype=np.uint8))
+    np.testing.assert_array_equal(image_frames[0], sequence_frames[0])
+    np.testing.assert_array_equal(image_frames[1], sequence_frames[1])
+
+
+@pytest.mark.parametrize(
+    ("converter", "tensor", "message"),
+    [
+        (
+            runner_module._sequence_tensor_to_frames,
+            np.zeros((1, 3, 2, 2), dtype=np.float32),
+            "PaddleGAN recurrent VSR output must be 5D",
+        ),
+        (
+            runner_module._image_tensor_to_frames,
+            np.zeros((1, 1, 3, 2, 2), dtype=np.float32),
+            "PaddleGAN EDVR output must be 4D",
+        ),
+    ],
+)
+def test_paddlegan_tensor_outputs_reject_wrong_dimensions(converter, tensor, message) -> None:
+    with pytest.raises(RuntimeError, match=message):
+        converter(tensor)
 
 
 def test_paddlegan_chunk_trace_records_shared_shape_payload(monkeypatch):
