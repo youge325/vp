@@ -17,7 +17,11 @@ from architecture_contracts.rules import (  # noqa: E402
     RequiredPatternRule,
     run_rules,
 )
-from architecture_contracts.catalog import RULES  # noqa: E402
+from architecture_contracts.catalog import (  # noqa: E402
+    FORBIDDEN_PATTERN_RULES,
+    REQUIRED_PATTERN_RULES,
+    RULES,
+)
 from architecture_contracts.checks import (  # noqa: E402
     _check_rust_public_surface,
     _check_stage_sequence_metrics,
@@ -25,29 +29,46 @@ from architecture_contracts.checks import (  # noqa: E402
 )
 
 
-def test_forbidden_pattern_rule_reports_matching_source(tmp_path: Path) -> None:
-    source = tmp_path / "src" / "module.py"
-    source.parent.mkdir()
-    source.write_text("def obsolete_helper():\n    pass\n", encoding="utf-8")
-
-    issues = run_rules(
-        tmp_path,
-        [ForbiddenPatternRule("dead-helper", "src/module.py", r"def\s+obsolete_helper\b", "dead helper")],
-    )
-
-    assert issues == ["dead helper: src/module.py"]
-
-
-def test_required_pattern_rule_reports_missing_contract(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("rule", "source_text", "expected"),
+    [
+        (
+            ForbiddenPatternRule("dead-helper", "contract.ts", r"obsolete_helper", "dead helper"),
+            "obsolete_helper()\n",
+            ["dead helper: contract.ts"],
+        ),
+        (
+            ForbiddenPatternRule("dead-helper", "contract.ts", r"obsolete_helper", "dead helper"),
+            "supported_helper()\n",
+            [],
+        ),
+        (
+            RequiredPatternRule("typed-command", "contract.ts", r"type\s+IpcCommand\b", "typed IPC command"),
+            "type IpcCommand = string\n",
+            [],
+        ),
+        (
+            RequiredPatternRule("typed-command", "contract.ts", r"type\s+IpcCommand\b", "typed IPC command"),
+            "export const value = 1\n",
+            ["typed IPC command: contract.ts"],
+        ),
+    ],
+)
+def test_pattern_rule_polarity(
+    tmp_path: Path,
+    rule: ForbiddenPatternRule | RequiredPatternRule,
+    source_text: str,
+    expected: list[str],
+) -> None:
     source = tmp_path / "contract.ts"
-    source.write_text("export const value = 1\n", encoding="utf-8")
+    source.write_text(source_text, encoding="utf-8")
 
-    issues = run_rules(
-        tmp_path,
-        [RequiredPatternRule("typed-command", "contract.ts", r"type\s+IpcCommand\b", "typed IPC command")],
-    )
+    assert run_rules(tmp_path, [rule]) == expected
 
-    assert issues == ["typed IPC command: contract.ts"]
+
+def test_pattern_rule_catalogs_are_classified_by_polarity() -> None:
+    assert not any(isinstance(rule, RequiredPatternRule) for rule in FORBIDDEN_PATTERN_RULES)
+    assert all(isinstance(rule, RequiredPatternRule) for rule in REQUIRED_PATTERN_RULES)
 
 
 def test_absent_path_rule_reports_reintroduced_file(tmp_path: Path) -> None:
@@ -209,6 +230,12 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "enhance-runtime-view-dead-output",
             "interface EnhanceRuntimeView {\n  superResolutionRuntimeEstimate: RuntimeMetricEstimate\n}\n",
         ),
+        ("enhance-model-selection-return-mirror", "interface EnhanceModelSelection {}\n"),
+        ("enhance-runtime-estimates-return-mirror", "interface EnhanceRuntimeEstimates {}\n"),
+        ("enhance-runtime-rows-return-mirror", "interface EnhanceRuntimeRows {}\n"),
+        ("rate-control-view-state-return-mirror", "interface RateControlViewState {}\n"),
+        ("batch-preflight-verdict-return-mirror", "interface BatchPreflightVerdict {}\n"),
+        ("algorithm-lens-return-mirror", "interface AlgorithmLens {}\n"),
         ("enhance-view-model-internal-output", "interface EnhanceViewModel {}\n"),
         ("positional-workbench-module-access", "const module = WORKBENCH_MODULES[0]\n"),
         ("hardcoded-workbench-module-route", "const route = { path: '/home' }\n"),
@@ -224,6 +251,18 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
         ("worker-runtime-lifecycle-0", "spawn_stage_workers(plans)\n"),
         ("worker-runtime-lifecycle-1", "threading.Thread(target=run)\n"),
         ("worker-processes-public-lifecycle-helpers", "def spawn_stage_workers(plans):\n    pass\n"),
+        (
+            "stage-worker-frame-count-return",
+            "def run_stage_worker_stream(config, input_stream, output_stream) -> int:\n    return written\n",
+        ),
+        (
+            "stage-worker-execution-frame-count-return",
+            "def run_sequence_stage(config, input_stream, output_stream) -> int:\n    return len(output_frames)\n",
+        ),
+        (
+            "native-dll-registration-result",
+            "def register_native_dll_paths() -> list[Path]:\n    return targets\n",
+        ),
         ("video-dimension-stream-loop-0", "for stream in info.get('streams', []):\n    pass\n"),
         ("video-dimension-stream-loop-1", "for stream in info.get('streams', []):\n    pass\n"),
         ("benchmark-direction-comparator-duplicates", "def _compare_lower_is_worse():\n    pass\n"),

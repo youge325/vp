@@ -10,7 +10,7 @@ from app.utils import opencv_runtime
 
 
 def test_import_cv2_error_mentions_opencv_env_paths(monkeypatch):
-    monkeypatch.setattr(opencv_runtime, "register_native_dll_paths", lambda: [])
+    monkeypatch.setattr(opencv_runtime, "register_native_dll_paths", lambda: None)
     real_import = builtins.__import__
 
     def fake_import(name, *args, **kwargs):

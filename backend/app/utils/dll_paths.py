@@ -160,12 +160,10 @@ def _opencv_candidate_dirs() -> list[Path]:
 def register_native_dll_paths(
     tensorrt_dir: str | None = None,
     extra: Iterable[Path] | None = None,
-) -> list[Path]:
+) -> None:
     """Add GPU-runtime directories to the Windows DLL search path.
 
-    Returns the list of directories registered on this call (excluding ones
-    already registered by a previous call). On non-Windows hosts the function
-    short-circuits and returns an empty list.
+    On non-Windows hosts the function short-circuits without side effects.
 
     Implementation note: ``os.add_dll_directory`` alone is **not enough** on
     Windows because ONNX Runtime's TensorRT provider DLL has a static import
@@ -176,7 +174,7 @@ def register_native_dll_paths(
     transitive dependencies.
     """
     if not sys.platform.startswith("win"):
-        return []
+        return
 
     candidates = list(_candidate_dirs(tensorrt_dir))
     if extra:
@@ -184,11 +182,10 @@ def register_native_dll_paths(
 
     # 快速路径：所有候选目录都已经被注册过，跳过扫描和日志
     if all(str(p.resolve(strict=False)).lower() in _registered for p in candidates):
-        return []
+        return
 
     add_dll_directory = getattr(os, "add_dll_directory", None)
 
-    targets: list[Path] = []
     for path in candidates:
         resolved = path.resolve(strict=False)
         key = str(resolved).lower()
@@ -205,10 +202,7 @@ def register_native_dll_paths(
         # Always prepend to PATH so legacy LoadLibrary search picks it up.
         _prepend_to_path(str(resolved))
         _registered.add(key)
-        targets.append(resolved)
         logger.info("Registered native DLL directory %s", resolved)
-
-    return targets
 
 
 def _prepend_to_path(directory: str) -> None:

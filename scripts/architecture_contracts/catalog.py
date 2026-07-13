@@ -13,6 +13,10 @@ def _forbid(rule_id: str, path: str, pattern: str, message: str) -> ForbiddenPat
     return ForbiddenPatternRule(rule_id, path, pattern, message)
 
 
+def _require(rule_id: str, path: str, pattern: str, message: str) -> RequiredPatternRule:
+    return RequiredPatternRule(rule_id, path, pattern, message)
+
+
 ABSENT_PATH_RULES = (
     _absent("frontend-legacy-e2e-root", "frontend/e2e"),
     _absent("frontend-misclassified-event-order-e2e", "frontend/tests/e2e/env/event-order.spec.ts"),
@@ -142,12 +146,6 @@ FORBIDDEN_PATTERN_RULES = (
         r"\bfrontendRoot\b|fileURLToPath\s*\(",
         "E2E coverage output is not rooted at the frontend working directory",
     ),
-    RequiredPatternRule(
-        "e2e-coverage-working-directory",
-        "frontend/tests/e2e/fixtures.ts",
-        r"resolve\s*\(\s*process\.cwd\(\)\s*,\s*[\"']\.nyc_output[\"']\s*\)",
-        "E2E coverage must be written under frontend/.nyc_output",
-    ),
     _forbid(
         "encode-form-profile-forwarding",
         "frontend/src/composables/forms/encode-form-bindings.ts",
@@ -177,6 +175,46 @@ FORBIDDEN_PATTERN_RULES = (
         "frontend/src/services/preset/enhance-runtime-view.ts",
         r"\binterface\s+EnhanceRuntimeView\b|return\s*\{[\s\S]{0,800}\bsuperResolutionRuntimeEstimate\s*:|\.\.\.estimates\b",
         "enhance runtime view exposes an internal super-resolution estimate",
+    ),
+    *(
+        _forbid(
+            rule_id,
+            path,
+            rf"^\s*interface\s+{interface_name}\b",
+            "private function return shape is mirrored by a handwritten interface",
+        )
+        for rule_id, path, interface_name in (
+            (
+                "enhance-model-selection-return-mirror",
+                "frontend/src/services/preset/enhance-model-selection.ts",
+                "EnhanceModelSelection",
+            ),
+            (
+                "enhance-runtime-estimates-return-mirror",
+                "frontend/src/services/preset/enhance-runtime-estimates.ts",
+                "EnhanceRuntimeEstimates",
+            ),
+            (
+                "enhance-runtime-rows-return-mirror",
+                "frontend/src/services/preset/enhance-runtime-rows.ts",
+                "EnhanceRuntimeRows",
+            ),
+            (
+                "rate-control-view-state-return-mirror",
+                "frontend/src/services/preset/io-form-rules.ts",
+                "RateControlViewState",
+            ),
+            (
+                "batch-preflight-verdict-return-mirror",
+                "frontend/src/services/task/preflight.ts",
+                "BatchPreflightVerdict",
+            ),
+            (
+                "algorithm-lens-return-mirror",
+                "frontend/src/composables/forms/enhance-lens.ts",
+                "AlgorithmLens",
+            ),
+        )
     ),
     ForbiddenReferenceRule(
         "obsolete-backend-internal-symbols",
@@ -232,12 +270,6 @@ FORBIDDEN_PATTERN_RULES = (
         "backend/app/processing/streaming/stage_worker_factory.py",
         r"^\s*(?:def\s+(?:register_single_algorithm|backend_name)\b|AlgorithmFactory(?:Fn)?\s*=|BackendFactoryFn\s*=)|\bAlgorithmFactory\b|\.register\s*\(",
         "public stage-worker factory implementation detail",
-    ),
-    RequiredPatternRule(
-        "stage-worker-factory-public-api",
-        "backend/app/processing/streaming/stage_worker_factory.py",
-        r"__all__\s*=\s*\[\s*[\"']create_algorithm[\"']\s*,\s*[\"']create_backend[\"']\s*,?\s*\]",
-        "stage-worker factory must expose only create_algorithm/create_backend",
     ),
     _forbid(
         "worker-processes-public-backend-dir",
@@ -323,23 +355,11 @@ FORBIDDEN_PATTERN_RULES = (
         r"^\s*mod\s+commands_manifest\s*;",
         "test-only command manifest module",
     ),
-    RequiredPatternRule(
-        "rust-command-manifest-test-include",
-        "frontend/src-tauri/src/lib.rs",
-        r"#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*mod\s+tests\s*\{[\s\S]{0,300}include!\s*\(\s*[\"']commands_manifest\.rs[\"']\s*\)\s*;",
-        "Rust tests must consume the private command manifest directly",
-    ),
     _forbid(
         "protocol-reporter-metrics-view-import",
         "backend/app/protocol/reporter.py",
         r"app\.protocol\.metrics_view|\bMetricsSnapshot\b",
         "obsolete public metrics view interface",
-    ),
-    RequiredPatternRule(
-        "protocol-reporter-private-metrics-contract",
-        "backend/app/protocol/reporter.py",
-        r"class\s+_MetricsSnapshot\s*\(\s*Protocol\s*\)[\s\S]{0,200}def\s+snapshot\s*\(",
-        "reporter private metrics contract is missing",
     ),
     _forbid(
         "frame-filter-write-only-logger",
@@ -370,42 +390,6 @@ FORBIDDEN_PATTERN_RULES = (
         "frontend/src-tauri/src/tasks/commands.rs",
         r"check_resume_state[\s\S]{0,300}->\s*Result<\s*Value\b",
         "resume inspection command returns untyped JSON",
-    ),
-    RequiredPatternRule(
-        "rust-typed-resume-inspection-command",
-        "frontend/src-tauri/src/tasks/commands.rs",
-        r"check_resume_state[\s\S]{0,500}serde_json::from_value::<ResumeInspectionResult>",
-        "resume inspection command must validate the backend payload",
-    ),
-    RequiredPatternRule(
-        "generated-resume-inspection-contract",
-        "frontend/src/types/generated/ResumeInspectionResult.ts",
-        r"type:\s*ResumeInspectionEventType[\s\S]*pipeline_kind:\s*ResumePipelineKind[\s\S]*input_path:\s*string",
-        "generated resume inspection TypeScript contract is missing",
-    ),
-    RequiredPatternRule(
-        "resume-inspection-json-schema",
-        "frontend/src-tauri/schemas/resume_inspection_result.schema.json",
-        r"[\"']pipeline_kind[\"'][\s\S]*[\"']input_path[\"']",
-        "resume inspection JSON Schema is missing",
-    ),
-    RequiredPatternRule(
-        "rust-resume-mode-contract",
-        "frontend/src-tauri/src/models/task.rs",
-        r"enum\s+ResumeMode\s*\{\s*Auto,\s*ForceFresh,\s*ForceResume,?\s*\}[\s\S]*?pub\s+struct\s+TaskRequest[\s\S]*?pub\s+resume_mode:\s*Option<ResumeMode>",
-        "Rust TaskRequest resume mode contract is missing",
-    ),
-    RequiredPatternRule(
-        "frontend-resume-mode-protocol-export",
-        "frontend/src/types/protocol/index.ts",
-        r"export\s+type\s+\{\s*ResumeMode\s*\}\s+from\s+[\"']@/types/generated/ResumeMode[\"']",
-        "frontend protocol must export the generated resume mode",
-    ),
-    RequiredPatternRule(
-        "task-request-resume-mode-schema",
-        "frontend/src-tauri/schemas/task_request.schema.json",
-        r"[\"']resumeMode[\"'][\s\S]*[\"']\$ref[\"']\s*:\s*[\"']#\/\$defs\/ResumeMode[\"'][\s\S]*[\"']force-fresh[\"'][\s\S]*[\"']force-resume[\"']",
-        "TaskRequest JSON Schema must constrain resume mode",
     ),
     _forbid(
         "rust-runtime-output-dir-state",
@@ -737,6 +721,18 @@ FORBIDDEN_PATTERN_RULES = (
         "stage worker helper implementation",
     ),
     _forbid(
+        "stage-worker-frame-count-return",
+        "backend/app/processing/streaming/stage_worker.py",
+        r"def\s+run_stage_worker_stream\s*\([^)]*\)\s*->\s*int\b|\bwritten\s*=\s*run_(?:sequence|interpolation|single_frame)_stage\b|^\s*return\s+written\s*$",
+        "stage worker exposes or forwards an unused output-frame count",
+    ),
+    _forbid(
+        "stage-worker-execution-frame-count-return",
+        "backend/app/processing/streaming/stage_worker_execution.py",
+        r"def\s+run_(?:sequence|interpolation|single_frame)_stage\s*\([^)]*\)\s*->\s*int\b|^\s*written\s*=|^\s*return\s+(?:written|len\(output_frames\)|[01])\s*$",
+        "stage execution loop exposes an unused output-frame count",
+    ),
+    _forbid(
         "worker-process-helper-definitions",
         "backend/app/processing/streaming/worker_processes.py",
         r"^\s*def\s+(?:parse_stage_event_line|read_worker_stderr|write_decoded_frames_to_worker|drain_final_worker_output|close_pipe)\b",
@@ -942,12 +938,6 @@ FORBIDDEN_PATTERN_RULES = (
         "backend/app/planning/run_identity.py",
         r"\bapp\.processing\b",
         "planning run identity dependency on streaming",
-    ),
-    RequiredPatternRule(
-        "preflight-run-identity",
-        "backend/app/processing/streaming/pipeline_preflight.py",
-        r"\bidentity\s*=\s*build_run_identity\s*\(",
-        "streaming preflight must build one shared run identity",
     ),
     _forbid(
         "backend-architecture-stale-stage-plan-fields",
@@ -1242,6 +1232,12 @@ FORBIDDEN_PATTERN_RULES = (
         r"roots\.append\s*\(\s*bin_dir\s*\)",
         "duplicated native DLL directory append logic",
     ),
+    _forbid(
+        "native-dll-registration-result",
+        "backend/app/utils/dll_paths.py",
+        r"def\s+register_native_dll_paths\s*\([^)]*\)\s*->\s*list\[Path\]|\btargets\.append\s*\(|^\s*return\s+targets\s*$",
+        "native DLL registration exposes a test-only path result",
+    ),
     *(
         _forbid(
             f"worker-runtime-lifecycle-{index}",
@@ -1286,235 +1282,301 @@ FORBIDDEN_PATTERN_RULES = (
 
 
 REQUIRED_PATTERN_RULES = (
-    RequiredPatternRule(
+    _require(
+        "e2e-coverage-working-directory",
+        "frontend/tests/e2e/fixtures.ts",
+        r"resolve\s*\(\s*process\.cwd\(\)\s*,\s*[\"']\.nyc_output[\"']\s*\)",
+        "E2E coverage must be written under frontend/.nyc_output",
+    ),
+    _require(
+        "stage-worker-factory-public-api",
+        "backend/app/processing/streaming/stage_worker_factory.py",
+        r"__all__\s*=\s*\[\s*[\"']create_algorithm[\"']\s*,\s*[\"']create_backend[\"']\s*,?\s*\]",
+        "stage-worker factory must expose only create_algorithm/create_backend",
+    ),
+    _require(
+        "rust-command-manifest-test-include",
+        "frontend/src-tauri/src/lib.rs",
+        r"#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*mod\s+tests\s*\{[\s\S]{0,300}include!\s*\(\s*[\"']commands_manifest\.rs[\"']\s*\)\s*;",
+        "Rust tests must consume the private command manifest directly",
+    ),
+    _require(
+        "protocol-reporter-private-metrics-contract",
+        "backend/app/protocol/reporter.py",
+        r"class\s+_MetricsSnapshot\s*\(\s*Protocol\s*\)[\s\S]{0,200}def\s+snapshot\s*\(",
+        "reporter private metrics contract is missing",
+    ),
+    _require(
+        "rust-typed-resume-inspection-command",
+        "frontend/src-tauri/src/tasks/commands.rs",
+        r"check_resume_state[\s\S]{0,500}serde_json::from_value::<ResumeInspectionResult>",
+        "resume inspection command must validate the backend payload",
+    ),
+    _require(
+        "generated-resume-inspection-contract",
+        "frontend/src/types/generated/ResumeInspectionResult.ts",
+        r"type:\s*ResumeInspectionEventType[\s\S]*pipeline_kind:\s*ResumePipelineKind[\s\S]*input_path:\s*string",
+        "generated resume inspection TypeScript contract is missing",
+    ),
+    _require(
+        "resume-inspection-json-schema",
+        "frontend/src-tauri/schemas/resume_inspection_result.schema.json",
+        r"[\"']pipeline_kind[\"'][\s\S]*[\"']input_path[\"']",
+        "resume inspection JSON Schema is missing",
+    ),
+    _require(
+        "rust-resume-mode-contract",
+        "frontend/src-tauri/src/models/task.rs",
+        r"enum\s+ResumeMode\s*\{\s*Auto,\s*ForceFresh,\s*ForceResume,?\s*\}[\s\S]*?pub\s+struct\s+TaskRequest[\s\S]*?pub\s+resume_mode:\s*Option<ResumeMode>",
+        "Rust TaskRequest resume mode contract is missing",
+    ),
+    _require(
+        "frontend-resume-mode-protocol-export",
+        "frontend/src/types/protocol/index.ts",
+        r"export\s+type\s+\{\s*ResumeMode\s*\}\s+from\s+[\"']@/types/generated/ResumeMode[\"']",
+        "frontend protocol must export the generated resume mode",
+    ),
+    _require(
+        "task-request-resume-mode-schema",
+        "frontend/src-tauri/schemas/task_request.schema.json",
+        r"[\"']resumeMode[\"'][\s\S]*[\"']\$ref[\"']\s*:\s*[\"']#\/\$defs\/ResumeMode[\"'][\s\S]*[\"']force-fresh[\"'][\s\S]*[\"']force-resume[\"']",
+        "TaskRequest JSON Schema must constrain resume mode",
+    ),
+    _require(
+        "preflight-run-identity",
+        "backend/app/processing/streaming/pipeline_preflight.py",
+        r"\bidentity\s*=\s*build_run_identity\s*\(",
+        "streaming preflight must build one shared run identity",
+    ),
+    _require(
         "shared-encoder-runtime-config",
         "backend/app/processing/streaming/encoder_runtime_config.py",
         r"@dataclass\(frozen=True,\s*slots=True\)[\s\S]*class\s+EncoderRuntimeConfig\b",
         "shared immutable encoder runtime configuration is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "raw-pipeline-encoder-config-root",
         "backend/app/processing/streaming/pipeline_raw.py",
         r"encoder_config\s*=\s*EncoderRuntimeConfig\s*\([\s\S]*start_raw_encoder_thread\s*\([\s\S]*config\s*=\s*encoder_config",
         "raw pipeline must construct and pass one encoder runtime configuration",
     ),
-    RequiredPatternRule(
+    _require(
         "encoder-worker-config-consumer",
         "backend/app/processing/streaming/encoder_worker.py",
         r"def\s+run_encoder_worker\s*\([\s\S]{0,300}\bconfig\s*:\s*EncoderRuntimeConfig[\s\S]{0,500}EncoderSegmentWriter\s*\(\s*config\s*\)",
         "encoder worker must pass the shared runtime configuration to the segment writer",
     ),
-    RequiredPatternRule(
+    _require(
         "batch-runner-composition-root",
         "frontend/src/services/task/batch-runner.ts",
         r"createCommonHelpers\b[\s\S]*createQueueOps\b[\s\S]*createFinalizeOps\b[\s\S]*createControlOps\b",
         "BatchRunner must compose lifecycle operations directly",
     ),
-    RequiredPatternRule(
+    _require(
         "shared-cli-guards",
         "backend/app/cli/commands/_guards.py",
         r"def\s+ensure_ffmpeg_available\b[\s\S]*def\s+ensure_input_and_ffmpeg\b",
         "shared CLI guard boundary is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "manifest-resume-decision-helpers",
         "backend/app/planning/manifest.py",
         r"def\s+_resume_decision\b[\s\S]*def\s+_prepare_changed_signature\b",
         "shared manifest resume decision helpers are missing",
     ),
-    RequiredPatternRule(
+    _require(
         "shared-decoder-hardware-verifier",
         "backend/app/utils/ffmpeg/capability_probe.py",
         r"def\s+_verify_decoder_hardware\b[\s\S]*device_value:\s*str\s*\|\s*None",
         "shared decoder hardware verifier is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "shared-decoder-probe-workspace",
         "backend/app/utils/ffmpeg/capability_probe.py",
         r"@contextmanager[\s\S]*def\s+_decoder_probe_workspace\b[\s\S]*TemporaryDirectory\s*\(",
         "shared decoder probe workspace is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "shared-dll-directory-dedup",
         "backend/app/utils/dll_paths.py",
         r"def\s+_append_unique_directory\b",
         "shared native DLL directory dedup helper is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "declarative-simple-filter-editor",
         "frontend/src/components/FilterChainEditor.vue",
         r"<FilterFields\b[\s\S]*getFilterCatalogEntry\(step\.kind\)\.editor",
         "simple filters must use the declarative catalog editor",
     ),
-    RequiredPatternRule(
+    _require(
         "simple-filter-catalog-schema",
         "frontend/src/services/filters/filter-catalog.ts",
         r"kind:\s*[\"']crop[\"'][\s\S]*editor:\s*\{[\s\S]*kind:\s*[\"']pad[\"'][\s\S]*kind:\s*[\"']sharpen[\"'][\s\S]*kind:\s*[\"']denoise[\"'][\s\S]*kind:\s*[\"']color[\"']",
         "simple filter field schemas are missing from the catalog",
     ),
-    RequiredPatternRule(
+    _require(
         "shared-filter-number-field",
         "frontend/src/components/filter-steps/FilterNumberField.vue",
         r"\bfunction\s+handleInput\b[\s\S]*emit\([\"']update:modelValue[\"']",
         "shared filter number field is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "inferred-batch-runner-type",
         "frontend/src/services/task/batch-runner.ts",
         r"export\s+type\s+BatchRunner\s*=\s*ReturnType<typeof\s+createBatchRunner>",
         "inferred BatchRunner type is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "shared-stage-worker-session",
         "backend/app/processing/streaming/worker_processes.py",
         r"def\s+stage_worker_session\b[\s\S]*_spawn_stage_workers\s*\([\s\S]*read_worker_stderr[\s\S]*_wait_for_workers\s*\(",
         "shared stage-worker session lifecycle is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "declarative-frame-filter-handlers",
         "backend/app/processing/frame_filter_handlers.py",
         r"class\s+_FilterHandler\b[\s\S]*_FILTER_HANDLERS\s*:\s*Mapping\[[^\]]+_FilterHandler\][\s\S]*[\"']anime_cleanup[\"']\s*:\s*_FilterHandler",
         "single declarative frame-filter descriptor registry is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "shared-decoded-frame-writer-thread",
         "backend/app/processing/streaming/worker_process_io.py",
         r"class\s+DecodedFrameWriterConfig\b[\s\S]*def\s+start_decoded_frame_writer\b[\s\S]*target=_write_decoded_frames_to_worker",
         "shared decoded-frame writer thread helper is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "primary-video-dimensions-helper",
         "backend/app/utils/ffmpeg/media_probe.py",
         r"def\s+get_primary_video_dimensions\b",
         "primary video dimension helper is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "shared-benchmark-threshold-comparator",
         "backend/app/benchmark/comparison.py",
         r"def\s+_compare_threshold\b[\s\S]*direction:\s*_ThresholdDirection",
         "shared benchmark threshold comparator is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "shared-paddlegan-chunk-trace",
         "backend/app/algorithms/paddle/paddlegan_vsr/runner.py",
         r"def\s+_record_chunk_trace\b[\s\S]*trace_chunks\.append",
         "shared PaddleGAN chunk trace helper is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "typed-environment-protocol",
         "frontend/src-tauri/src/models/env.rs",
         r"string_enum!\(AlgorithmFamily\b[\s\S]*string_enum!\(EnvironmentCheckSource\b[\s\S]*string_enum!\(InferenceEngine\b[\s\S]*string_enum!\(InputFrameMode\b[\s\S]*pub(?:\s*\([^)]*\))?\s+enum\s+RuntimeMode\b",
         "strongly typed Rust environment protocol is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "environment-cache-schema-12",
         "frontend/src-tauri/src/persistence/storage.rs",
         r"ENVIRONMENT_CACHE_SCHEMA_VERSION:\s*u32\s*=\s*12\s*;",
         "environment cache schema 12 is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "runtime-config-model-projection",
         "backend/app/cli/runtime_configs.py",
         r"def\s+json_section\b[\s\S]*def\s+json_sections\b[\s\S]*def\s+with_workflow\b",
         "RuntimeConfigs model projection API is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "windows-rust-clippy-gate",
         ".github/workflows/test.yml",
         r"cargo\s+clippy\s+--all-targets\s+--\s+-D\s+warnings",
         "Windows Rust Clippy CI gate is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "linux-rust-clippy-gate",
         ".github/workflows/test-arc.yml",
         r"cargo\s+clippy\s+--all-targets\s+--\s+-D\s+warnings",
         "Linux Rust Clippy CI gate is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "rust-anime-cleanup-filter-kind",
         "frontend/src-tauri/src/models/config.rs",
         r"\bAnimeCleanup\b",
         "Rust anime_cleanup filter kind is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "python-anime-cleanup-filter-kind",
         "backend/app/models/__init__.py",
         r"Literal\[[^\]]*[\"']anime_cleanup[\"']",
         "Python anime_cleanup filter kind is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "frontend-anime-cleanup-catalog",
         "frontend/src/services/filters/filter-catalog.ts",
         r"kind:\s*[\"']anime_cleanup[\"']",
         "frontend anime_cleanup filter catalog entry is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "backend-anime-cleanup-runtime",
         "backend/app/processing/frame_filter_handlers.py",
         r"def\s+_apply_numpy_anime_cleanup\b[\s\S]*?\bapply_anime_cleanup\s*\(",
         "backend anime_cleanup frame filter dispatch is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "ipc-command-keyof",
         "frontend/src/lib/ipc/contract.ts",
         r"\bexport\s+type\s+IpcCommand\s*=\s*keyof\s+IpcCommandArgs\b",
         "IPC command keyof source is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "pydantic-model-camel-alias",
         "backend/app/models/__init__.py",
         r"from\s+pydantic\.alias_generators\s+import\s+to_camel",
         "Pydantic camel alias must use library helper",
     ),
-    RequiredPatternRule(
+    _require(
         "pydantic-payload-camel-alias",
         "backend/app/protocol/payloads.py",
         r"from\s+pydantic\.alias_generators\s+import\s+to_camel",
         "payload camel alias must use library helper",
     ),
-    RequiredPatternRule(
+    _require(
         "typed-ndjson-errors",
         "backend/app/__main__.py",
         r"def\s+_emit_typed_error\b[\s\S]*emitter\.error\s*\([\s\S]*def\s+_emit_unhandled_exception\b[\s\S]*_emit_error_payload\s*\(",
         "normal and bootstrap CLI failures must use shared error emitters",
     ),
-    RequiredPatternRule(
+    _require(
         "private-ndjson-emitter",
         "backend/app/protocol/__init__.py",
         r"\bclass\s+_NdjsonEmitter\b",
         "private NDJSON emitter is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "shared-stage-route-component",
         "frontend/src/router/index.ts",
         r"const\s+StageModuleView\s*=.*StageModuleView\.vue[\s\S]*preprocess:\s*\{\s*component:\s*StageModuleView,\s*props:\s*\{\s*stage:\s*['\"]preprocess['\"]\s*\}\s*\}[\s\S]*postprocess:\s*\{\s*component:\s*StageModuleView,\s*props:\s*\{\s*stage:\s*['\"]postprocess['\"]\s*\}\s*\}",
         "preprocess and postprocess routes must share StageModuleView",
     ),
-    RequiredPatternRule(
+    _require(
         "ffmpeg-media-probe-boundary",
         "backend/app/utils/ffmpeg/media_probe.py",
         r"def\s+get_video_info\b[\s\S]*def\s+get_frame_count\b[\s\S]*def\s+is_available\b",
         "FFmpeg media probe boundary is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "ffmpeg-capability-probe-boundary",
         "backend/app/utils/ffmpeg/capability_probe.py",
         r"def\s+parse_codec_profile\b[\s\S]*def\s+probe_rate_control_modes\b[\s\S]*def\s+probe_decoder_hardware_devices\b",
         "FFmpeg capability probe boundary is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "ffmpeg-capability-aggregation-boundary",
         "backend/app/utils/ffmpeg/capabilities.py",
         r"def\s+discover_capabilities\b",
         "FFmpeg capability aggregation boundary is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "ruff-unused-argument-gate",
         "ruff.toml",
         r"select\s*=\s*\[[^\]]*['\"]ARG['\"]",
         "Ruff ARG production gate is missing",
     ),
-    RequiredPatternRule(
+    _require(
         "benchmark-default-scenario-ssot",
         "backend/app/cli/parser.py",
         r"from\s+app\.benchmark\.runner\s+import\s+DEFAULT_SCENARIO[\s\S]*default\s*=\s*DEFAULT_SCENARIO",

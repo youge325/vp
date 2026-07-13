@@ -3,7 +3,7 @@
 
 import type { ModelVariantInfo } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
-import type { RuntimeMetricEstimate, VideoDimensions } from '@/types/view/model-metrics'
+import type { VideoDimensions } from '@/types/view/model-metrics'
 import {
   estimateCombinedPeakVram,
   estimateModelRuntimeMetrics,
@@ -16,13 +16,6 @@ interface EnhanceRuntimeEstimatesInput {
   currentInterpolationRuntimeDetail: ModelVariantInfo | null
   currentSuperResolutionRuntimeDetail: ModelVariantInfo | null
   superResolutionRuntimeFrameCount: number | null
-}
-
-interface EnhanceRuntimeEstimates {
-  interpolationInputDimensions: VideoDimensions | null
-  interpolationRuntimeEstimate: RuntimeMetricEstimate | null
-  superResolutionRuntimeEstimate: RuntimeMetricEstimate | null
-  combinedPeakVramBytes: number | null
 }
 
 function scaledDimensions(video: VideoDimensions, scale: number): VideoDimensions {
@@ -39,7 +32,7 @@ export function buildEnhanceRuntimeEstimates({
   currentInterpolationRuntimeDetail,
   currentSuperResolutionRuntimeDetail,
   superResolutionRuntimeFrameCount,
-}: EnhanceRuntimeEstimatesInput): EnhanceRuntimeEstimates {
+}: EnhanceRuntimeEstimatesInput) {
   const interpolationInputDimensions =
     activeVideoDimensions &&
     workflow.superResolution.enabled &&

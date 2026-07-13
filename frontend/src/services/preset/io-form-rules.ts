@@ -22,13 +22,6 @@ import type { SelectOption } from '@/types/view/select-option'
 
 const RATE_CONTROL_UNAVAILABLE_HINT = '未探测到可用码率控制模式'
 
-interface RateControlViewState {
-  options: SelectOption[]
-  disabled: boolean
-  modeHint?: string
-  valueHint?: string
-}
-
 export function buildDecoderHardwareDeviceOptions(
   profile: Pick<DecoderProfileSpec, 'hardwareDevices'> | null,
 ): SelectOption[] {
@@ -71,7 +64,7 @@ export function applyDecodeHwaccelDeviceSelection(
 export function buildRateControlViewState(
   profile: EncoderProfileSpec | null,
   mode: RateControlMode,
-): RateControlViewState {
+) {
   const disabled = !hasRateControlModes(profile)
   if (disabled) {
     return {

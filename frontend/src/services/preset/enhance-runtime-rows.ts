@@ -33,12 +33,6 @@ interface EnhanceRuntimeRowsInput {
   combinedPeakVramBytes: number | null
 }
 
-interface EnhanceRuntimeRows extends EnhanceRuntimeFrameState {
-  interpolationMetricRows: MetricRow[]
-  superResolutionMetricRows: MetricRow[]
-  combinedVramMetricRows: MetricRow[]
-}
-
 export function buildEnhanceRuntimeFrameState({
   workflow,
   currentSuperResolutionAlgorithm,
@@ -71,7 +65,7 @@ export function buildEnhanceRuntimeRows({
   interpolationRuntimeEstimate,
   superResolutionRuntimeEstimate,
   combinedPeakVramBytes,
-}: EnhanceRuntimeRowsInput): EnhanceRuntimeRows {
+}: EnhanceRuntimeRowsInput) {
   const interpolationMetricRows = metricRows(currentInterpolationRuntimeDetail, interpolationRuntimeEstimate)
   const superResolutionMetricRows = metricRows(currentSuperResolutionRuntimeDetail, superResolutionRuntimeEstimate)
   const combinedRows =

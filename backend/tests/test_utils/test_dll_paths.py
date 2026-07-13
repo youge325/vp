@@ -24,7 +24,9 @@ def _reset_registry(monkeypatch):
 
 def test_register_native_dll_paths_is_noop_off_windows(monkeypatch):
     monkeypatch.setattr(dll_paths.sys, "platform", "linux")
-    assert dll_paths.register_native_dll_paths() == []
+    dll_paths.register_native_dll_paths()
+
+    assert dll_paths._registered == set()
 
 
 def test_registers_tensorrt_bin_when_dir_exists(tmp_path: Path, monkeypatch):
@@ -38,9 +40,9 @@ def test_registers_tensorrt_bin_when_dir_exists(tmp_path: Path, monkeypatch):
     captured: list[str] = []
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
 
-    registered = dll_paths.register_native_dll_paths(tensorrt_dir=str(tmp_path))
+    dll_paths.register_native_dll_paths(tensorrt_dir=str(tmp_path))
+
     assert [Path(p) for p in captured] == [bin_dir.resolve()]
-    assert registered == [bin_dir.resolve()]
 
 
 def test_double_registration_is_idempotent(tmp_path: Path, monkeypatch):
@@ -55,8 +57,8 @@ def test_double_registration_is_idempotent(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
 
     dll_paths.register_native_dll_paths(tensorrt_dir=str(tmp_path))
-    second = dll_paths.register_native_dll_paths(tensorrt_dir=str(tmp_path))
-    assert second == []  # already registered
+    dll_paths.register_native_dll_paths(tensorrt_dir=str(tmp_path))
+
     assert len(captured) == 1
 
 
@@ -68,9 +70,9 @@ def test_missing_bin_subdir_warns_but_does_not_raise(tmp_path: Path, monkeypatch
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", lambda _path: None)
 
     with caplog.at_level("WARNING"):
-        registered = dll_paths.register_native_dll_paths(tensorrt_dir=str(tmp_path))
+        dll_paths.register_native_dll_paths(tensorrt_dir=str(tmp_path))
 
-    assert registered == []
+    assert dll_paths._registered == set()
     assert any("does not contain a 'bin'" in r.message for r in caplog.records)
 
 
@@ -85,7 +87,8 @@ def test_unset_tensorrt_dir_skips_silently(monkeypatch):
     captured: list[str] = []
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
 
-    assert dll_paths.register_native_dll_paths() == []
+    dll_paths.register_native_dll_paths()
+
     assert captured == []
 
 
@@ -112,10 +115,9 @@ def test_registers_pip_tensorrt_package_dll_dirs(tmp_path: Path, monkeypatch):
     captured: list[str] = []
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
 
-    registered = dll_paths.register_native_dll_paths()
+    dll_paths.register_native_dll_paths()
 
     assert [Path(p) for p in captured] == [trt_libs.resolve(), trt_rtx_libs.resolve(), torch_trt_lib.resolve()]
-    assert registered == [trt_libs.resolve(), trt_rtx_libs.resolve(), torch_trt_lib.resolve()]
 
 
 def test_pip_tensorrt_dirs_skip_auto_discovered_roots(tmp_path: Path, monkeypatch):
@@ -134,10 +136,9 @@ def test_pip_tensorrt_dirs_skip_auto_discovered_roots(tmp_path: Path, monkeypatc
     captured: list[str] = []
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
 
-    registered = dll_paths.register_native_dll_paths()
+    dll_paths.register_native_dll_paths()
 
     assert [Path(p) for p in captured] == [trt_libs.resolve()]
-    assert registered == [trt_libs.resolve()]
 
 
 def test_python_package_dll_dirs_deduplicate_repeated_roots(tmp_path: Path, monkeypatch):
@@ -164,9 +165,9 @@ def test_picks_up_cuda_path_when_present(tmp_path: Path, monkeypatch):
     captured: list[str] = []
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
 
-    registered = dll_paths.register_native_dll_paths()
+    dll_paths.register_native_dll_paths()
+
     assert [Path(p) for p in captured] == [cuda_bin.resolve()]
-    assert registered == [cuda_bin.resolve()]
 
 
 def test_extra_paths_are_registered_after_settings(tmp_path: Path, monkeypatch):
@@ -182,9 +183,9 @@ def test_extra_paths_are_registered_after_settings(tmp_path: Path, monkeypatch):
     captured: list[str] = []
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
 
-    registered = dll_paths.register_native_dll_paths(extra=[extra_dir])
+    dll_paths.register_native_dll_paths(extra=[extra_dir])
+
     assert [Path(p) for p in captured] == [extra_dir.resolve()]
-    assert registered == [extra_dir.resolve()]
 
 
 def test_registers_opencv_bin_dir_from_env(tmp_path: Path, monkeypatch):
@@ -201,9 +202,9 @@ def test_registers_opencv_bin_dir_from_env(tmp_path: Path, monkeypatch):
     captured: list[str] = []
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
 
-    registered = dll_paths.register_native_dll_paths()
+    dll_paths.register_native_dll_paths()
+
     assert [Path(p) for p in captured] == [opencv_bin.resolve()]
-    assert registered == [opencv_bin.resolve()]
 
 
 def test_registers_opencv_root_bin_candidates_from_env(tmp_path: Path, monkeypatch):
@@ -223,9 +224,9 @@ def test_registers_opencv_root_bin_candidates_from_env(tmp_path: Path, monkeypat
     captured: list[str] = []
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
 
-    registered = dll_paths.register_native_dll_paths()
+    dll_paths.register_native_dll_paths()
+
     assert [Path(p) for p in captured] == [direct_bin.resolve(), vc_bin.resolve()]
-    assert registered == [direct_bin.resolve(), vc_bin.resolve()]
 
 
 def test_registers_directory_into_path_for_legacy_loader(tmp_path: Path, monkeypatch):

@@ -89,7 +89,7 @@ def test_single_frame_execution_reads_processes_and_writes_frames() -> None:
         input_frame_count=2,
     )
 
-    written = run_single_frame_stage(
+    run_single_frame_stage(
         config,
         _stream_of([_frame(1), _frame(2)]),
         output,
@@ -100,7 +100,6 @@ def test_single_frame_execution_reads_processes_and_writes_frames() -> None:
     )
 
     frames = _frames_from_bytes(output.getvalue(), count=2)
-    assert written == 2
     assert [int(frame[0, 0, 0]) for frame in frames] == [2, 3]
     assert events[-1]["current"] == 2
 
@@ -117,7 +116,7 @@ def test_interpolation_execution_outputs_source_and_mid_frames() -> None:
         input_frame_count=2,
     )
 
-    written = run_interpolation_stage(
+    run_interpolation_stage(
         config,
         _stream_of([_frame(0), _frame(90)]),
         output,
@@ -128,7 +127,6 @@ def test_interpolation_execution_outputs_source_and_mid_frames() -> None:
     )
 
     frames = _frames_from_bytes(output.getvalue(), count=4)
-    assert written == 4
     assert [int(frame[0, 0, 0]) for frame in frames] == [0, 30, 60, 90]
     assert events[-1]["current"] == events[-1]["total"] == 1
 
@@ -145,7 +143,7 @@ def test_sequence_execution_uses_algorithm_progress_instead_of_write_progress() 
         input_frame_count=3,
     )
 
-    written = run_sequence_stage(
+    run_sequence_stage(
         config,
         _stream_of([_frame(1), _frame(2), _frame(3)]),
         output,
@@ -155,7 +153,6 @@ def test_sequence_execution_uses_algorithm_progress_instead_of_write_progress() 
 
     frames = _frames_from_bytes(output.getvalue(), count=3)
     progress_events = [event for event in events if event["type"] == "progress"]
-    assert written == 3
     assert [int(frame[0, 0, 0]) for frame in frames] == [11, 12, 13]
     assert [event["current"] for event in progress_events] == [0, 3, 3]
 
