@@ -57,22 +57,21 @@ def test_worker_chain_runtime_runs_decode_and_drain_inside_worker_session(monkey
         yield [handle]
         calls.append(("session_closed", len(plans)))
 
-    class _DecodeThread:
-        def join(self):
-            calls.append(("decode_join", None))
-
-    def fake_start_decoded_frame_writer(config, **_kwargs):
+    @contextmanager
+    def fake_decoded_frame_writer_session(config, **_kwargs):
         calls.append(
             (
                 "decode",
                 (
                     config.start_source_frame,
                     config.worker_stdin is stdin,
-                    config.video_info["source_frames"],
+                    config.width,
+                    config.height,
                 ),
             )
         )
-        return _DecodeThread()
+        yield
+        calls.append(("decode_join", None))
 
     def fake_drain_final_worker_output(**kwargs):
         calls.append(
@@ -87,7 +86,7 @@ def test_worker_chain_runtime_runs_decode_and_drain_inside_worker_session(monkey
         )
 
     monkeypatch.setattr(runtime, "stage_worker_session", fake_session)
-    monkeypatch.setattr(runtime, "start_decoded_frame_writer", fake_start_decoded_frame_writer)
+    monkeypatch.setattr(runtime, "decoded_frame_writer_session", fake_decoded_frame_writer_session)
     monkeypatch.setattr(runtime, "drain_final_worker_output", fake_drain_final_worker_output)
 
     progress_calls: list[tuple[int, int]] = []
@@ -110,7 +109,7 @@ def test_worker_chain_runtime_runs_decode_and_drain_inside_worker_session(monkey
     assert calls[0][0] == "session"
     assert calls[0][1][0] == [worker_plan]
     assert calls[0][1][1] == "python-test"
-    assert ("decode", (1, True, 3)) in calls
+    assert ("decode", (1, True, 1, 1)) in calls
     assert ("drain", (True, True, 3)) in calls
     assert ("decode_join", None) in calls
     assert ("session_closed", 1) in calls

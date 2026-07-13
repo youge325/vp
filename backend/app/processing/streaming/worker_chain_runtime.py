@@ -11,8 +11,8 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.worker_plans import StageWorkerPlan
 from app.processing.streaming.worker_process_io import (
     DecodedFrameWriterConfig,
+    decoded_frame_writer_session,
     drain_final_worker_output,
-    start_decoded_frame_writer,
 )
 from app.processing.streaming.worker_processes import stage_worker_session
 
@@ -41,21 +41,20 @@ def run_worker_chain_runtime(
         stop_event=stop_event,
         python_executable=python_executable,
     ) as handles:
-        decode_thread = start_decoded_frame_writer(
+        with decoded_frame_writer_session(
             DecodedFrameWriterConfig(
                 ffmpeg=ffmpeg,
                 input_path=input_path,
                 decode_config=decode_config,
-                video_info=video_info,
+                width=int(video_info["width"]),
+                height=int(video_info["height"]),
                 start_source_frame=start_source_frame,
                 worker_stdin=handles[0].process.stdin,
                 error_queue=error_queue,
                 stop_event=stop_event,
             ),
             thread_name="vp-stage-worker-decode-writer",
-        )
-
-        try:
+        ):
             drain_final_worker_output(
                 final_stdout=handles[-1].process.stdout,
                 final_plan=plans[-1],
@@ -67,8 +66,6 @@ def run_worker_chain_runtime(
                 stop_event=stop_event,
                 metrics=metrics,
             )
-        finally:
-            decode_thread.join()
 
 
 __all__ = ["run_worker_chain_runtime"]

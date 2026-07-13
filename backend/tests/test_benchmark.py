@@ -44,6 +44,29 @@ def _report(
     }
 
 
+def _benchmark_args(tmp_path: Path, **overrides) -> argparse.Namespace:
+    values = {
+        "scenario": "interpolation-e2e-cpu-transfer",
+        "baseline": str(tmp_path / "baseline.json"),
+        "threshold": 0.15,
+        "report_json": str(tmp_path / "report.json"),
+        "report_markdown": str(tmp_path / "report.md"),
+        "work_dir": str(tmp_path / "work"),
+        "update_baseline": False,
+        "warmup_runs": 0,
+        "runs": 1,
+        "width": 640,
+        "height": 360,
+        "fps": 24,
+        "frames": 96,
+        "multi": 2,
+        "backend": "pytorch",
+        "model": "4.25",
+    }
+    values.update(overrides)
+    return argparse.Namespace(**values)
+
+
 def test_compare_reports_fails_on_throughput_duration_and_transfer_regressions() -> None:
     from app.benchmark.comparison import compare_reports
 
@@ -176,29 +199,69 @@ def test_cmd_benchmark_writes_reports_and_fails_on_missing_baseline(tmp_path: Pa
         lambda _options: _report(throughput=1.0, wall=1.0, completed=1.0),
     )
 
-    args = argparse.Namespace(
-        scenario="interpolation-e2e-cpu-transfer",
-        baseline=str(tmp_path / "missing.json"),
-        threshold=0.15,
-        report_json=str(tmp_path / "report.json"),
-        report_markdown=str(tmp_path / "report.md"),
-        work_dir=str(tmp_path / "work"),
-        update_baseline=False,
-        warmup_runs=0,
-        runs=1,
-        width=640,
-        height=360,
-        fps=24,
-        frames=96,
-        multi=2,
-        backend="pytorch",
-        model="4.25",
-    )
+    args = _benchmark_args(tmp_path, baseline=str(tmp_path / "missing.json"))
 
     with pytest.raises(ProcessError) as exc_info:
         benchmark_command.cmd_benchmark(args)
 
     assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
     assert "Baseline file does not exist" in exc_info.value.message
+    assert (tmp_path / "report.json").is_file()
+    assert (tmp_path / "report.md").is_file()
+
+
+def test_cmd_benchmark_writes_only_the_final_compared_report(tmp_path: Path, monkeypatch) -> None:
+    from app.cli.commands import benchmark as benchmark_command
+
+    current = _report(throughput=100.0, wall=10.0, completed=9.0)
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(json.dumps(current), encoding="utf-8")
+    monkeypatch.setattr(benchmark_command, "run_benchmark", lambda _options: current)
+    writes: list[dict] = []
+    monkeypatch.setattr(
+        benchmark_command,
+        "_write_reports",
+        lambda report, **_kwargs: writes.append(json.loads(json.dumps(report))),
+    )
+
+    benchmark_command.cmd_benchmark(_benchmark_args(tmp_path))
+
+    assert len(writes) == 1
+    assert writes[0]["comparison"]["passed"] is True
+
+
+def test_cmd_benchmark_update_baseline_uses_single_final_report_write(tmp_path: Path, monkeypatch) -> None:
+    from app.cli.commands import benchmark as benchmark_command
+
+    current = _report(throughput=100.0, wall=10.0, completed=9.0)
+    monkeypatch.setattr(benchmark_command, "run_benchmark", lambda _options: current)
+    writes: list[dict] = []
+    monkeypatch.setattr(
+        benchmark_command,
+        "_write_reports",
+        lambda report, **_kwargs: writes.append(json.loads(json.dumps(report))),
+    )
+
+    benchmark_command.cmd_benchmark(_benchmark_args(tmp_path, update_baseline=True))
+
+    assert len(writes) == 1
+    assert writes[0]["comparison"]["updatedBaseline"] == str(tmp_path / "baseline.json")
+    assert (tmp_path / "baseline.json").is_file()
+
+
+def test_cmd_benchmark_writes_reports_before_rethrowing_invalid_baseline(tmp_path: Path, monkeypatch) -> None:
+    from app.cli.commands import benchmark as benchmark_command
+    from app.errors import ProcessError
+
+    (tmp_path / "baseline.json").write_text("{", encoding="utf-8")
+    monkeypatch.setattr(
+        benchmark_command,
+        "run_benchmark",
+        lambda _options: _report(throughput=1.0, wall=1.0, completed=1.0),
+    )
+
+    with pytest.raises(ProcessError, match="not valid JSON"):
+        benchmark_command.cmd_benchmark(_benchmark_args(tmp_path))
+
     assert (tmp_path / "report.json").is_file()
     assert (tmp_path / "report.md").is_file()

@@ -18,19 +18,10 @@ type ConflictLifecycle = Pick<ReturnType<typeof createCommonHelpers>, 'getCurren
   Pick<ReturnType<typeof createQueueOps>, 'launchCurrentItem'> &
   Pick<ReturnType<typeof createFinalizeOps>, 'finalizeCurrent'>
 
-interface ConflictResolver {
-  resolveConflict(action: ResumeConflictAction): Promise<void>
-  /**
-   * 尝试把 ``TaskError`` 解析为续传冲突;返回 ``true`` 表示已暂存为待解决冲突,
-   * 调用方应停止后续错误传播。
-   */
-  tryStashFromError(error: TaskError): boolean
-}
-
 export function createConflictResolver(
   deps: ConflictResolverDeps,
   lifecycle: ConflictLifecycle,
-): ConflictResolver {
+) {
   async function resolveConflict(action: ResumeConflictAction): Promise<void> {
     const batch = deps.getBatch()
     const conflictItem: MediaItem | null = batch.currentId
