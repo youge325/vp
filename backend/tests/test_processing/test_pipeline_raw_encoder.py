@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from app.planning import ResumeState, SegmentManifest
+from app.processing.streaming.encoder_runtime_config import EncoderRuntimeConfig
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_raw_encoder import start_raw_encoder_thread
 from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, StreamEnd
@@ -18,6 +19,20 @@ def test_start_raw_encoder_thread_wires_worker_and_resume_progress(tmp_path: Pat
     manifest = SegmentManifest(str(tmp_path / "out.mp4"))
     worker_calls: list[dict[str, Any]] = []
     progress_events: list[tuple[int, str]] = []
+    config = EncoderRuntimeConfig(
+        ffmpeg=object(),  # type: ignore[arg-type]
+        encode_config={"container": "mp4"},
+        manifest=manifest,
+        width=2,
+        height=3,
+        fps=24.0,
+        output_fps=None,
+        segment_frames=10,
+        resume_state=ResumeState(start_source_frame=5, completed_output_frames=7, completed_segments=[]),
+        output_path=str(tmp_path / "out.mp4"),
+        encode_progress_callback=lambda frame, _fps, _speed, _time, progress: progress_events.append((frame, progress)),
+        metrics=PipelineMetrics(),
+    )
 
     def fake_run_encoder_worker(**kwargs: Any) -> None:
         worker_calls.append(kwargs)
@@ -28,18 +43,7 @@ def test_start_raw_encoder_thread_wires_worker_and_resume_progress(tmp_path: Pat
     )
 
     thread = start_raw_encoder_thread(
-        ffmpeg=object(),  # type: ignore[arg-type]
-        encode_config={"container": "mp4"},
-        manifest=manifest,
-        output_width=2,
-        output_height=3,
-        stream_fps=24.0,
-        output_fps=None,
-        segment_frames=10,
-        resume_state=ResumeState(start_source_frame=5, completed_output_frames=7, completed_segments=[]),
-        output_path=str(tmp_path / "out.mp4"),
-        encode_progress_callback=lambda frame, _fps, _speed, _time, progress: progress_events.append((frame, progress)),
-        metrics=PipelineMetrics(),
+        config=config,
         encode_queue=encode_queue,
         error_queue=error_queue,
         stop_event=stop_event,
@@ -54,6 +58,7 @@ def test_start_raw_encoder_thread_wires_worker_and_resume_progress(tmp_path: Pat
     assert worker_kwargs["encode_queue"] is encode_queue
     assert worker_kwargs["error_queue"] is error_queue
     assert worker_kwargs["stop_event"] is stop_event
-    assert worker_kwargs["width"] == 2
-    assert worker_kwargs["height"] == 3
-    assert worker_kwargs["fps"] == 24.0
+    assert worker_kwargs["config"] is config
+    assert config.width == 2
+    assert config.height == 3
+    assert config.fps == 24.0

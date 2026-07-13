@@ -95,7 +95,7 @@ Rust 模型使用 `#[derive(TS)]` 宏，编译时自动生成 TypeScript 类型�
 
 ### 3. stage-worker 流式处理
 
-Python 后端通过 `pipeline_preflight` 规划 stage plan，再由 `pipeline_dispatch` 选择 rawvideo stage-worker chain 或 stage-file pipeline。rawvideo 路径中 stage-worker 子进程负责解码与算法 stage 链，主进程只维护 `encode_queue` 和 `encoder_worker`，帧数据不经过临时帧目录，显著减少磁盘 I/O。
+Python 后端通过 `pipeline_preflight` 规划 stage plan，再由 `pipeline_dispatch` 选择 rawvideo stage-worker chain 或 stage-file pipeline。rawvideo 路径中 stage-worker 子进程负责解码与算法 stage 链，主进程只维护 `encode_queue` 和 `encoder_worker`；编码线程、worker 与 segment writer 共享单个不可变 runtime config，帧数据不经过临时帧目录，显著减少磁盘 I/O。
 
 ### 4. 断点续传（filesystem-as-state）
 
