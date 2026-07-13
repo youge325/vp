@@ -8,6 +8,7 @@ from app.planning import StagePlan
 from app.processing.streaming.stage_rules import (
     ordered_steps,
     resolve_stage_plan_output_dimensions,
+    stage_output_fps,
     stage_output_frame_count,
     stage_requires_file_pipeline,
 )
@@ -30,8 +31,7 @@ def resolved_stream_fps(source_fps: float, stage_plan: StagePlan) -> float:
     interpolation_step = stage_plan.interpolation_step
     if interpolation_step is None:
         return source_fps
-    multi = int(interpolation_step.algorithm_kwargs.get("multi") or 2)
-    return source_fps * multi
+    return stage_output_fps(interpolation_step, source_fps)
 
 
 def resolved_output_dimensions(

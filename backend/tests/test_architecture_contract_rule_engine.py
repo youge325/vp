@@ -291,6 +291,35 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "baseline = _load_baseline(baseline_path)\n",
         ),
         (
+            "obsolete-decoder-hardware-probe-interfaces",
+            "probe_decoder_hardware_devices('ffmpeg', 'h264', 'h264', [], [], set())\n",
+        ),
+        (
+            "task-listener-forwarding-adapter",
+            "listenTaskEvents({ onProgress: (payload) => runner.onProgress(payload) })\n",
+        ),
+        (
+            "optional-resume-event-handler",
+            "interface Handlers { onResumeStatus?: (payload: object) => void }\n",
+        ),
+        (
+            "duplicated-pause-resume-transitions",
+            "async function pause() { await deps.pauseTask() }\nasync function resume() { await deps.resumeTask() }\n",
+        ),
+        (
+            "duplicated-console-task-state-lookups",
+            "function onProgress() { const item = getConsoleItem() }\n",
+        ),
+        (
+            "pipeline-stream-fps-multi-rule",
+            "def resolved_stream_fps(source_fps, stage_plan):\n"
+            "    return source_fps * stage_plan.interpolation_step.algorithm_kwargs['multi']\n",
+        ),
+        (
+            "paddlegan-output-conversion-duplicates",
+            "def _sequence_tensor_to_frames(tensor):\n    array = _as_numpy(tensor)\n",
+        ),
+        (
             "pipeline-test-private-aliases",
             "from app.processing.streaming.pipeline import _run_streaming_pipeline\n",
         ),
@@ -377,6 +406,44 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
             "    thread.start()\n"
             "    yield\n"
             "    thread.join()\n",
+        ),
+        (
+            "shared-decoder-hardware-capability-probe",
+            "def probe_decoder_hardware_capabilities():\n"
+            "    devices = []\n"
+            "    options_by_device = {}\n"
+            "    return devices, options_by_device\n",
+        ),
+        (
+            "direct-task-listener-composition",
+            "runner = getTaskRunner()\ndetachHandle = await listenTaskEvents(runner)\n",
+        ),
+        (
+            "shared-task-pause-transition",
+            "async function setPaused(paused: boolean) {\n"
+            "  if (batch.isPaused === paused) return\n"
+            "  await deps.pauseTask()\n"
+            "  await deps.resumeTask()\n"
+            "}\n",
+        ),
+        (
+            "shared-console-task-state-updater",
+            "function updateConsoleTaskState(update) {\n"
+            "  const item = getConsoleItem()\n"
+            "  const state = getConsoleRunState()\n"
+            "  setItemTaskState(item.id, update(state.taskState))\n"
+            "}\n",
+        ),
+        (
+            "stage-fps-rule-delegation",
+            "def resolved_stream_fps(source_fps, stage_plan):\n"
+            "    interpolation_step = stage_plan.interpolation_step\n"
+            "    return stage_output_fps(interpolation_step, source_fps)\n",
+        ),
+        (
+            "shared-paddlegan-output-conversion",
+            "def _tensor_output_to_frames(tensor, expected_ndim, batch_index):\n"
+            "    return [_chw_float_to_rgb_uint8(frame) for frame in tensor]\n",
         ),
     ],
 )

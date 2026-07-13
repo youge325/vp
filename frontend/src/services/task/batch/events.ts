@@ -2,7 +2,7 @@
 // terminal transitions through a narrow lifecycle capability.
 
 import { TASK_ERROR_CODES } from '@/types/protocol'
-import type { TaskError } from '@/types/domain/media'
+import type { MediaTaskState, TaskError } from '@/types/domain/media'
 import type {
   ResumeStatusPayload,
   TaskCancelledPayload,
@@ -37,20 +37,22 @@ export function createEventHandlers(
   lifecycle: EventLifecycle,
   conflict: ReturnType<typeof createConflictResolver>,
 ) {
-  function onProgress(_payload: TaskProgressPayload): void {
+  function updateConsoleTaskState(
+    update: (state: MediaTaskState) => MediaTaskState,
+  ): void {
     const item = lifecycle.getConsoleItem()
     const runState = lifecycle.getConsoleRunState()
     if (item && runState) {
-      deps.setItemTaskState(item.id, applyTaskProgress(runState.taskState))
+      deps.setItemTaskState(item.id, update(runState.taskState))
     }
   }
 
+  function onProgress(_payload: TaskProgressPayload): void {
+    updateConsoleTaskState(applyTaskProgress)
+  }
+
   function onLog(payload: TaskLogPayload): void {
-    const item = lifecycle.getConsoleItem()
-    const runState = lifecycle.getConsoleRunState()
-    if (item && runState) {
-      deps.setItemTaskState(item.id, appendTaskLog(runState.taskState, payload))
-    }
+    updateConsoleTaskState((state) => appendTaskLog(state, payload))
   }
 
   async function onCompleted(payload: TaskCompletedPayload): Promise<void> {
@@ -96,11 +98,7 @@ export function createEventHandlers(
   }
 
   function onResumeStatus(payload: ResumeStatusPayload): void {
-    const item = lifecycle.getConsoleItem()
-    const runState = lifecycle.getConsoleRunState()
-    if (item && runState) {
-      deps.setItemTaskState(item.id, applyTaskResumeStatus(runState.taskState, payload))
-    }
+    updateConsoleTaskState((state) => applyTaskResumeStatus(state, payload))
   }
 
   return {

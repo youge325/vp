@@ -71,12 +71,5 @@ export async function attachTaskListeners(): Promise<void> {
   }
 
   const runner = getTaskRunner()
-  detachHandle = await listenTaskEvents({
-    onProgress: (payload) => runner.onProgress(payload),
-    onLog: (payload) => runner.onLog(payload),
-    onCompleted: (payload) => void runner.onCompleted(payload),
-    onError: (error) => void runner.onError(error),
-    onCancelled: (payload) => void runner.onCancelled(payload),
-    onResumeStatus: (payload) => runner.onResumeStatus(payload),
-  })
+  detachHandle = await listenTaskEvents(runner)
 }
