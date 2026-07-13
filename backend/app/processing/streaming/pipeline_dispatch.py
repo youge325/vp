@@ -10,6 +10,7 @@ from app.processing.streaming.pipeline_lifecycle import emit_resume_status_event
 from app.processing.streaming.pipeline_raw import run_raw_streaming_pipeline
 from app.processing.streaming.stage_file_pipeline import run_stage_file_pipeline
 from app.utils.ffmpeg import FFmpegWrapper
+from app.utils.ffmpeg._progress import EncodeProgressCallback
 
 
 def run_streaming_pipeline(
@@ -30,7 +31,7 @@ def run_streaming_pipeline(
     use_stage_file_pipeline: bool,
     output_path: str,
     output_fps: float | None,
-    encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
+    encode_progress_callback: EncodeProgressCallback | None,
     metrics: PipelineMetrics,
 ) -> int:
     emit_resume_status_event(

@@ -224,7 +224,7 @@ def test_finalize_chunk_renames_atomically(tmp_path):
     tmp_path_str = manifest.chunk_tmp_path(".mp4")
     Path(tmp_path_str).write_bytes(b"chunk-data")
 
-    final_path = manifest.finalize_chunk(
+    manifest.finalize_chunk(
         tmp_path_str,
         index=1,
         start_output_frame=0,
@@ -232,9 +232,12 @@ def test_finalize_chunk_renames_atomically(tmp_path):
         next_source_frame=500,
     )
 
-    assert Path(final_path).is_file()
+    completed = manifest.scan_completed_chunks()
+    assert len(completed) == 1
+    final_path = manifest.sidecar_dir / completed[0].path
+    assert final_path.is_file()
     assert not Path(tmp_path_str).exists()
-    assert Path(final_path).name == "chunk-0001-out00000000-00000999-src00000500.mp4"
+    assert final_path.name == "chunk-0001-out00000000-00000999-src00000500.mp4"
 
 
 def test_inspect_reports_sidecar_state(tmp_path):

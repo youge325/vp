@@ -219,7 +219,7 @@ class SegmentManifest:
         start_output_frame: int,
         end_output_frame: int,
         next_source_frame: int,
-    ) -> str:
+    ) -> None:
         """Atomically rename the sentinel file to its canonical chunk name."""
         extension = Path(tmp_path).suffix
         final_path = self._chunk_final_path(
@@ -230,7 +230,6 @@ class SegmentManifest:
             extension=extension,
         )
         os.replace(tmp_path, final_path)
-        return final_path
 
     def concat_temp_path(self, extension: str) -> str:
         """Return the temporary concat output path inside the sidecar directory."""

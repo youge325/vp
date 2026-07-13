@@ -15,10 +15,9 @@ class _FakeFFmpeg:
         self.concat_calls: list[tuple[list[str], str]] = []
         self.merged: tuple[str, str, str] | None = None
 
-    def concat_videos(self, segment_paths: list[str], output_path: str) -> str:
+    def concat_videos(self, segment_paths: list[str], output_path: str) -> None:
         self.concat_calls.append((segment_paths, output_path))
         Path(output_path).write_bytes(b"concat")
-        return output_path
 
     def has_audio(self, _input_path: str) -> bool:
         return self.has_audio_value

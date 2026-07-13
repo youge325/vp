@@ -177,6 +177,21 @@ pub(crate) fn spawn_task_controller<R: Runtime + 'static>(
     });
 }
 
+fn backend_error_payload(
+    code: TaskErrorCode,
+    message: String,
+    stderr_capture: &StderrCapture,
+) -> TaskErrorPayload {
+    let details = stderr_capture
+        .summary()
+        .map(|traceback| json!({ "traceback": traceback }));
+    TaskErrorPayload {
+        code,
+        message,
+        details,
+    }
+}
+
 fn emit_terminal_event<R: Runtime>(
     app: &AppHandle<R>,
     status: io::Result<ExitStatus>,
@@ -222,31 +237,25 @@ fn emit_terminal_event<R: Runtime>(
     match status {
         Ok(exit_status) => {
             if !exit_status.success() && !terminal_sent {
-                let details = stderr_capture
-                    .summary()
-                    .map(|traceback| json!({ "traceback": traceback }));
                 let _ = app.emit(
                     TaskEventName::TaskError.as_str(),
-                    TaskErrorPayload {
-                        code: TaskErrorCode::RuntimePanic,
-                        message: format!("Backend process exited with status {exit_status}."),
-                        details,
-                    },
+                    backend_error_payload(
+                        TaskErrorCode::RuntimePanic,
+                        format!("Backend process exited with status {exit_status}."),
+                        stderr_capture,
+                    ),
                 );
             }
         }
         Err(error) => {
             if !terminal_sent {
-                let details = stderr_capture
-                    .summary()
-                    .map(|traceback| json!({ "traceback": traceback }));
                 let _ = app.emit(
                     TaskEventName::TaskError.as_str(),
-                    TaskErrorPayload {
-                        code: TaskErrorCode::ProcessFailed,
-                        message: format!("Failed while waiting for backend process: {error}"),
-                        details,
-                    },
+                    backend_error_payload(
+                        TaskErrorCode::ProcessFailed,
+                        format!("Failed while waiting for backend process: {error}"),
+                        stderr_capture,
+                    ),
                 );
             }
         }
@@ -415,5 +424,40 @@ mod tests {
     fn instant_elapsed_is_monotonic() {
         let now = Instant::now();
         assert!(now.elapsed() < Duration::from_secs(60));
+    }
+
+    #[test]
+    fn backend_error_payload_preserves_code_and_message_without_stderr() {
+        let payload = backend_error_payload(
+            TaskErrorCode::ProcessFailed,
+            "wait failed".to_string(),
+            &StderrCapture::new(),
+        );
+
+        assert_eq!(payload.code, TaskErrorCode::ProcessFailed);
+        assert_eq!(payload.message, "wait failed");
+        assert_eq!(payload.details, None);
+    }
+
+    #[test]
+    fn backend_error_payload_includes_stderr_traceback() {
+        let capture = StderrCapture::new();
+        capture.record("Traceback (most recent call last):");
+        capture.record("RuntimeError: failed");
+
+        let payload = backend_error_payload(
+            TaskErrorCode::RuntimePanic,
+            "backend exited".to_string(),
+            &capture,
+        );
+
+        assert_eq!(payload.code, TaskErrorCode::RuntimePanic);
+        assert_eq!(payload.message, "backend exited");
+        assert_eq!(
+            payload.details,
+            Some(json!({
+                "traceback": "Traceback (most recent call last):\nRuntimeError: failed"
+            }))
+        );
     }
 }

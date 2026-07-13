@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from app.processing.streaming.encoder_segments import (
-    make_segment_progress_callback,
-    resolve_segment_output_frame_count,
-)
+from app.processing.streaming.encoder_segments import resolve_segment_output_frame_count
 
 
 class _FakeWriter:
@@ -19,20 +16,6 @@ class _FakeFFmpeg:
     def get_frame_count(self, path: str) -> int | None:
         self.counted_path = path
         return self.frame_count
-
-
-def test_make_segment_progress_callback_offsets_frame_numbers() -> None:
-    calls: list[tuple[int, float | None, float | None, float | None, str]] = []
-    callback = make_segment_progress_callback(10, lambda *args: calls.append(args))
-
-    assert callback is not None
-    callback({"frame": "3", "fps": 48.0, "speed": 1.25, "out_time_seconds": 2.5, "progress": "continue"})
-
-    assert calls == [(13, 48.0, 1.25, 2.5, "continue")]
-
-
-def test_make_segment_progress_callback_returns_none_without_consumer() -> None:
-    assert make_segment_progress_callback(10, None) is None
 
 
 def test_resolve_segment_output_frame_count_prefers_writer_counter() -> None:

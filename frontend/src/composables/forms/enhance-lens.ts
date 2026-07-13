@@ -9,10 +9,8 @@ import { algorithmSupportsBackend } from '@/services/preset/enhance-workflow-loo
 import type { AlgorithmInfo } from '@/types/protocol'
 import type { TensorBackend } from '@/types/protocol'
 
-type AlgorithmSpec = AlgorithmInfo
-
 export function createAlgorithmLens(
-  allAlgorithms: ComputedRef<AlgorithmSpec[]>,
+  allAlgorithms: ComputedRef<AlgorithmInfo[]>,
   algorithmName: ComputedRef<string>,
   backend: ComputedRef<TensorBackend>,
 ) {

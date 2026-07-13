@@ -149,8 +149,8 @@ class FFmpegWrapper:
     def merge_audio(self, video_path: str, audio_path: str, output_path: str) -> str:
         return _encode.merge_audio(self.ffmpeg_path, video_path, audio_path, output_path)
 
-    def concat_videos(self, segment_paths: list[str], output_path: str) -> str:
-        return _encode.concat_videos(self.ffmpeg_path, segment_paths, output_path)
+    def concat_videos(self, segment_paths: list[str], output_path: str) -> None:
+        _encode.concat_videos(self.ffmpeg_path, segment_paths, output_path)
 
     def transcode_video(
         self,
@@ -161,14 +161,13 @@ class FFmpegWrapper:
         encode_config: dict[str, Any] | None = None,
         output_fps: float | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
-    ) -> str:
+    ) -> None:
         encode_config = encode_config or {}
         keep_audio = bool(encode_config.get("keepAudio", True))
         decode_input_args = _encode.build_decode_input_args(input_path, decode_config)
         encode_output_args = _encode.build_encode_output_args(output_path, encode_config)
-        return _encode.transcode_video(
+        _encode.transcode_video(
             self.ffmpeg_path,
-            output_path=output_path,
             decode_input_args=decode_input_args,
             encode_output_args=encode_output_args,
             output_fps=output_fps,

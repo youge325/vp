@@ -14,6 +14,7 @@ from app.errors import ResumeConflictError
 from app.processing.streaming import process_video_streaming
 from app.protocol import ndjson
 from app.utils.ffmpeg import FFmpegWrapper
+from app.utils.ffmpeg._progress import make_encode_progress_callback
 
 from app.cli.commands._process_planning import ProcessingPlan
 
@@ -88,13 +89,7 @@ def _run_format_conversion(
         output_path=plan.output_path,
         decode_config=decode_config,
         encode_config=encode_config,
-        progress_callback=lambda progress: plan.progress_reporter.update(
-            int(progress.get("frame") or 0),
-            progress.get("fps"),
-            progress.get("speed"),
-            progress.get("out_time_seconds"),
-            str(progress.get("progress") or ""),
-        ),
+        progress_callback=make_encode_progress_callback(plan.progress_reporter.update),
     )
     return {
         "output_path": plan.output_path,

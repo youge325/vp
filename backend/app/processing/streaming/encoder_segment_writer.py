@@ -7,10 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from app.processing.streaming.encoder_runtime_config import EncoderRuntimeConfig
-from app.processing.streaming.encoder_segments import (
-    make_segment_progress_callback,
-    resolve_segment_output_frame_count,
-)
+from app.processing.streaming.encoder_segments import resolve_segment_output_frame_count
+from app.utils.ffmpeg._progress import make_encode_progress_callback
 
 
 class EncoderSegmentWriter:
@@ -68,9 +66,9 @@ class EncoderSegmentWriter:
             fps=config.fps,
             output_fps=config.output_fps,
             encode_config=config.encode_config,
-            progress_callback=make_segment_progress_callback(
-                self._current_segment_start,
+            progress_callback=make_encode_progress_callback(
                 config.encode_progress_callback,
+                frame_offset=self._current_segment_start,
             ),
         )
 

@@ -173,7 +173,7 @@ class _FakeFFmpegWrapper:
             progress_callback=progress_callback,
         )
 
-    def concat_videos(self, segment_paths: list[str], output_path: str) -> str:
+    def concat_videos(self, segment_paths: list[str], output_path: str) -> None:
         frames: list[np.ndarray] = []
         for path in segment_paths:
             frames.extend(self.video_frames[path])
@@ -181,7 +181,6 @@ class _FakeFFmpegWrapper:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(b"concat")
         self.video_frames[str(output)] = [frame.copy() for frame in frames]
-        return str(output)
 
     def extract_audio(self, _input_path: str, output_path: str) -> str:
         audio_path = Path(output_path)
@@ -372,14 +371,15 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
     assert decision.kind == "fresh"
     first_segment_tmp = manifest.chunk_tmp_path(".mp4", index=1)
     Path(first_segment_tmp).write_bytes(b"segment-1")
-    first_segment = manifest.finalize_chunk(
+    manifest.finalize_chunk(
         first_segment_tmp,
         index=1,
         start_output_frame=0,
         end_output_frame=1,
         next_source_frame=1,
     )
-    wrapper.video_frames[str(Path(first_segment))] = [_frame(0), _frame(50)]
+    first_segment = manifest.sidecar_dir / manifest.scan_completed_chunks()[0].path
+    wrapper.video_frames[str(first_segment)] = [_frame(0), _frame(50)]
 
     _install_video_frames_rename_hook(monkeypatch, wrapper)
     _install_fake_stage_worker_pipeline(monkeypatch)

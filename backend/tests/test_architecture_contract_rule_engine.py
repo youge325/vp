@@ -274,6 +274,40 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "pipeline-test-private-aliases",
             "from app.processing.streaming.pipeline import _run_streaming_pipeline\n",
         ),
+        ("algorithm-info-private-alias", "type AlgorithmSpec = AlgorithmInfo\n"),
+        (
+            "paddlegan-tensorrt-config-result",
+            "def _configure_tensorrt_config(config) -> Any:\n    return config\n",
+        ),
+        (
+            "manifest-finalize-chunk-result",
+            "class Manifest:\n    def finalize_chunk(self) -> str:\n        return final_path\n",
+        ),
+        (
+            "ffmpeg-encode-command-results",
+            "def concat_videos() -> str:\n    return output_path\n",
+        ),
+        (
+            "ffmpeg-wrapper-command-results",
+            "class Wrapper:\n    def transcode_video(self) -> str:\n        return _encode.transcode_video()\n",
+        ),
+        ("obsolete-segment-progress-adapter", "make_segment_progress_callback(10, callback)\n"),
+        (
+            "inline-encode-progress-adapter",
+            "progress_callback=lambda progress: progress.get('fps') and progress.get('out_time_seconds')\n",
+        ),
+        (
+            "duplicate-frame-filter-crop-params",
+            "def _apply_numpy_crop(frame, params):\n    return params.get('x')\n",
+        ),
+        (
+            "duplicate-frame-filter-padding-params",
+            "def _apply_tensor_pad(frame, params):\n    return params.get('top')\n",
+        ),
+        (
+            "rust-inline-backend-error-payload",
+            "match status { Ok(_) => TaskErrorPayload { code, message, details } }\n",
+        ),
     ],
 )
 def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule_id: str, source: str) -> None:
@@ -294,6 +328,33 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
     target.write_text(source, encoding="utf-8")
 
     assert rule.check(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("rule_id", "source"),
+    [
+        (
+            "shared-ffmpeg-encode-progress-adapter",
+            "EncodeProgressCallback = Callable[[int], None]\n"
+            "def make_encode_progress_callback(callback, *, frame_offset: int = 0):\n    pass\n",
+        ),
+        (
+            "shared-frame-filter-geometry-params",
+            "def _crop_slices(params):\n    pass\n\ndef _padding(params):\n    pass\n",
+        ),
+        (
+            "shared-rust-backend-error-payload",
+            "fn backend_error_payload(stderr_capture: &StderrCapture) -> TaskErrorPayload { todo!() }\n",
+        ),
+    ],
+)
+def test_critical_required_catalog_rules_accept_shared_boundaries(tmp_path: Path, rule_id: str, source: str) -> None:
+    rule = next(rule for rule in REQUIRED_PATTERN_RULES if rule.rule_id == rule_id)
+    target = tmp_path / rule.path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(source, encoding="utf-8")
+
+    assert rule.check(tmp_path) == []
 
 
 def test_stage_sequence_metrics_semantic_check_rejects_dead_parameter(tmp_path: Path) -> None:

@@ -360,7 +360,7 @@ def _configure_tensorrt_config(
     max_shape: list[int],
     optim_shape: list[int],
     cache_dir: str | None = None,
-) -> Any:
+) -> None:
     precision = paddle.inference.PrecisionType.Float32
     config.enable_use_gpu(512, 0)
     switch_ir_optim = getattr(config, "switch_ir_optim", None)
@@ -391,7 +391,6 @@ def _configure_tensorrt_config(
     tensorrt_engine_enabled = getattr(config, "tensorrt_engine_enabled", None)
     if callable(tensorrt_engine_enabled) and not tensorrt_engine_enabled():
         raise RuntimeError("Paddle Inference TensorRT engine was requested but is not enabled in Config.")
-    return config
 
 
 def _create_tensorrt_predictor(

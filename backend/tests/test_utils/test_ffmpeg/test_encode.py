@@ -1,5 +1,7 @@
 """FFmpeg encode/decode argument builder tests."""
 
+from pathlib import Path
+
 from app.utils.ffmpeg import encode
 
 
@@ -30,3 +32,52 @@ def test_argument_builders_support_hardware_decode_and_encode_options() -> None:
     assert "-cq" in encode_args
     assert "-preset" in encode_args
     assert "output.mp4" in encode_args
+
+
+def test_concat_videos_runs_command_and_removes_temporary_manifest(tmp_path, monkeypatch) -> None:
+    commands: list[list[str]] = []
+    segment_path = tmp_path / "segment.mp4"
+    segment_path.write_bytes(b"segment")
+    output_path = tmp_path / "output.mp4"
+    monkeypatch.setattr(encode, "run_ffmpeg_command", commands.append)
+
+    encode.concat_videos("ffmpeg", [str(segment_path)], str(output_path))
+
+    assert len(commands) == 1
+    command = commands[0]
+    manifest_path = Path(command[command.index("-i") + 1])
+    assert str(output_path) in command
+    assert not manifest_path.exists()
+
+
+def test_transcode_video_runs_non_progress_command(monkeypatch) -> None:
+    commands: list[list[str]] = []
+    monkeypatch.setattr(encode, "run_ffmpeg_command", commands.append)
+
+    encode.transcode_video(
+        "ffmpeg",
+        decode_input_args=["-i", "input.mp4"],
+        encode_output_args=["-c:v", "libx264", "output.mp4", "-y"],
+        output_fps=60.0,
+        keep_audio=False,
+    )
+
+    assert commands == [
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            "input.mp4",
+            "-map",
+            "0:v:0",
+            "-an",
+            "-r",
+            "60.0",
+            "-c:v",
+            "libx264",
+            "output.mp4",
+            "-y",
+        ]
+    ]

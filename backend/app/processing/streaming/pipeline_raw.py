@@ -20,6 +20,7 @@ from app.processing.streaming.queues import (
 )
 from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
 from app.utils.ffmpeg import FFmpegWrapper
+from app.utils.ffmpeg._progress import EncodeProgressCallback
 
 
 def run_raw_streaming_pipeline(
@@ -39,7 +40,7 @@ def run_raw_streaming_pipeline(
     segment_frames: int,
     output_path: str,
     output_fps: float | None,
-    encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None,
+    encode_progress_callback: EncodeProgressCallback | None,
     metrics: PipelineMetrics,
 ) -> int:
     encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object] = queue.Queue(maxsize=8)

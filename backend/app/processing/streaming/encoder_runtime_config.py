@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from app.planning import ResumeState, SegmentManifest
 from app.processing.streaming.metrics import PipelineMetrics
 from app.utils.ffmpeg import FFmpegWrapper
-
-_EncoderProgressCallback = Callable[[int, float | None, float | None, float | None, str], None]
+from app.utils.ffmpeg._progress import EncodeProgressCallback
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,7 +25,7 @@ class EncoderRuntimeConfig:
     segment_frames: int
     resume_state: ResumeState
     output_path: str
-    encode_progress_callback: _EncoderProgressCallback | None
+    encode_progress_callback: EncodeProgressCallback | None
     metrics: PipelineMetrics
 
 
