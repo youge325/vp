@@ -143,11 +143,11 @@ class FFmpegWrapper:
     #  Encoding / processing (delegate to encode.py)
     # ------------------------------------------------------------------ #
 
-    def extract_audio(self, input_path: str, output_path: str) -> str | None:
+    def extract_audio(self, input_path: str, output_path: str) -> bool:
         return _encode.extract_audio(self.ffmpeg_path, input_path, output_path)
 
-    def merge_audio(self, video_path: str, audio_path: str, output_path: str) -> str:
-        return _encode.merge_audio(self.ffmpeg_path, video_path, audio_path, output_path)
+    def merge_audio(self, video_path: str, audio_path: str, output_path: str) -> None:
+        _encode.merge_audio(self.ffmpeg_path, video_path, audio_path, output_path)
 
     def concat_videos(self, segment_paths: list[str], output_path: str) -> None:
         _encode.concat_videos(self.ffmpeg_path, segment_paths, output_path)

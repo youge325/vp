@@ -7,7 +7,7 @@ import type { TaskError } from '@/types/domain/media'
 
 function makeIssue(message: string): TaskError {
   return {
-    code: TASK_ERROR_CODES.Unknown,
+    code: TASK_ERROR_CODES.ProcessFailed,
     message,
     details: null,
   }

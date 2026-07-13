@@ -103,15 +103,15 @@ Python 后端通过 `pipeline_preflight` 规划 stage plan，再由 `pipeline_di
 
 ### 5. 编译期协议一致性
 
-前端使用 TypeScript 的 `satisfies` 约束确保事件名和错误码的完整性：
+前端使用生成类型和 TypeScript 的 `satisfies` 约束保持协议一致：
 
 - `TASK_EVENT_NAMES`（[`frontend/src/types/protocol/events.ts`](../frontend/src/types/protocol/events.ts)）使用 `as const satisfies Record<string, TaskEventName>` —— 若 Rust 新增事件名但未同步到前端，编译失败
-- `TASK_ERROR_CODES`（[`frontend/src/types/protocol/errors.ts`](../frontend/src/types/protocol/errors.ts)）同理
+- 完整错误码集合由 ts-rs 生成的 `TaskErrorCode` union 表示；`TASK_ERROR_CODES` 只为生产代码实际分支的错误码提供运行时别名，并用 `satisfies` 校验每个值
 - `_contract_check.ts` 对核心 IPC 类型做形状反向锁
 
 ### 6. 错误码三层同步
 
-Python `TaskErrorCode`、Rust `TaskErrorCode`、TypeScript `TASK_ERROR_CODES` 三者通过 snake_case 字符串保持一致。`test_schema_drift.py` 测试自动比对字符串枚举值，CI 和 pre-commit 均执行该检查，防止三层漂移。
+Python `TaskErrorCode`、Rust `TaskErrorCode`、ts-rs 生成的 TypeScript `TaskErrorCode` union 三者通过 snake_case 字符串保持一致。`test_schema_drift.py` 与 `check_error_code_drift.py` 自动比对完整枚举集合，CI 和 pre-commit 均执行检查。
 
 ## 工作流视图映射
 

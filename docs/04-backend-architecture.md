@@ -155,7 +155,9 @@ stage-file 路径在每个 stage 规划完成后创建一次不可变的 `StageF
 所有片段完成后，`finalize_segmented_output()`：
 1. 使用 FFmpeg concat demuxer 拼接视频片段
 2. 合并原始音频（若 `keepAudio=true`）
-3. 清理 `.vp_segments/` 和 sidecar 文件
+3. 将结果写入调用方提供的最终输出路径
+
+该 helper 是写入调用方指定 `output_path` 的命令并返回 `None`。音频提取仅返回成功布尔值，音频合并同样是无返回值命令；pipeline lifecycle 和 stage-file runtime 始终继续使用自身已持有的输出路径。只有最终输出成功后，pipeline lifecycle 才清理 `.vp_segments/` 和 sidecar；finalize 失败时保留现场用于续传。
 
 ## 算法层
 

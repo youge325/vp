@@ -9,7 +9,7 @@ import {
 } from '@/types/protocol'
 
 import { createIdleTaskState } from '../../events'
-import { classifyResumeConflict } from '../../resume-classifier'
+import { buildResumeConflictDescriptor } from '../../resume-classifier'
 
 import type { BatchLifecycleDeps } from './types'
 
@@ -79,14 +79,9 @@ export function createQueueOps(
       return
     }
 
-    const conflict = classifyResumeConflict(inspection)
+    const conflict = buildResumeConflictDescriptor(inspection)
     if (conflict) {
-      deps.setPendingConflict({
-        itemId: nextId,
-        kind: conflict,
-        outputPath: inspection.outputPath,
-        inspection,
-      })
+      deps.setPendingConflict(conflict)
       return
     }
 

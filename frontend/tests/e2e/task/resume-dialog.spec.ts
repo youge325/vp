@@ -1,61 +1,15 @@
 import { test, expect } from '../fixtures'
-
-// Minimal descriptor shape needed to mount the dialog
-interface ResumeConflictDescriptor {
-  kind: 'final_exists_with_resume' | 'final_exists_no_resume'
-  outputPath: string
-  inspection: {
-    completedChunks: number
-    completedOutputFrames: number
-    totalOutputFrames: number
-  }
-}
-
-async function injectConflict(
-  tauriPage: any,
-  descriptor: ResumeConflictDescriptor,
-): Promise<boolean> {
-  return await tauriPage.evaluate((d: ResumeConflictDescriptor) => {
-    // Vue app is mounted on #app
-    const root = document.querySelector('#app')
-    if (!root) return false
-
-    const vueApp = (root as any).__vue_app__
-    if (!vueApp) return false
-
-    // Pinia stores state is at app.config.globalProperties.$pinia.state.value
-    const pinia = vueApp.config?.globalProperties?.$pinia
-    if (pinia?.state?.value?.task) {
-      pinia.state.value.task.pendingConflict = d
-      return true
-    }
-
-    return false
-  }, descriptor)
-}
-
-async function clearConflict(tauriPage: any): Promise<void> {
-  await tauriPage.evaluate(() => {
-    const root = document.querySelector('#app')
-    const vueApp = (root as any)?.__vue_app__
-    if (vueApp) {
-      const pinia = vueApp.config?.globalProperties?.$pinia
-      if (pinia?.state?.value?.task) {
-        pinia.state.value.task.pendingConflict = null
-      }
-    }
-  })
-}
+import { clearResumeConflict, injectResumeConflict } from './resume-conflict-fixture'
 
 test.describe('Resume conflict dialog', () => {
   test('resume mode renders correct title and buttons', async ({ tauriPage }) => {
     await tauriPage.click('.rail-link:has-text("渲染")')
     await expect(tauriPage.locator('h2:has-text("批处理队列")')).toBeVisible({ timeout: 5000 })
 
-    const ok = await injectConflict(tauriPage, {
+    const ok = await injectResumeConflict(tauriPage, {
       kind: 'final_exists_with_resume',
       outputPath: 'C:/tmp/output.mp4',
-      inspection: { completedChunks: 3, completedOutputFrames: 150, totalOutputFrames: 300 },
+      progress: { completedChunks: 3, completedOutputFrames: 150, totalOutputFrames: 300 },
     })
     test.skip(!ok, 'Cannot access Pinia store from evaluate')
 
@@ -76,17 +30,17 @@ test.describe('Resume conflict dialog', () => {
     await tauriPage.locator('button').filter({ hasText: '取消批次' }).click()
     await expect(overlay).not.toBeVisible()
 
-    await clearConflict(tauriPage)
+    await clearResumeConflict(tauriPage)
   })
 
   test('overwrite mode renders correct title and buttons', async ({ tauriPage }) => {
     await tauriPage.click('.rail-link:has-text("渲染")')
     await expect(tauriPage.locator('h2:has-text("批处理队列")')).toBeVisible({ timeout: 5000 })
 
-    const ok = await injectConflict(tauriPage, {
-      kind: 'final_exists_no_resume',
+    const ok = await injectResumeConflict(tauriPage, {
+      kind: 'final_exists_only',
       outputPath: 'C:/tmp/output.mp4',
-      inspection: { completedChunks: 0, completedOutputFrames: 0, totalOutputFrames: 0 },
+      progress: { completedChunks: 0, completedOutputFrames: 0, totalOutputFrames: 0 },
     })
     test.skip(!ok, 'Cannot access Pinia store from evaluate')
 
@@ -104,6 +58,6 @@ test.describe('Resume conflict dialog', () => {
     await tauriPage.keyboard.press('Escape')
     await expect(overlay).not.toBeVisible()
 
-    await clearConflict(tauriPage)
+    await clearResumeConflict(tauriPage)
   })
 })

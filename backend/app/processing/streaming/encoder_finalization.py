@@ -20,7 +20,7 @@ def finalize_segmented_output(
     completed_output_frames: int,
     total_output_frames: int,
     strict_total_frames: bool,
-) -> str:
+) -> None:
     completed_segments = manifest.scan_completed_chunks()
     segment_paths = [str(manifest.sidecar_dir / record.path) for record in completed_segments]
     if strict_total_frames and completed_output_frames != total_output_frames:
@@ -37,16 +37,15 @@ def finalize_segmented_output(
 
     keep_audio = bool(encode_config.get("keepAudio", True))
     if keep_audio and ffmpeg.has_audio(input_path):
-        audio_path = ffmpeg.extract_audio(input_path, str(manifest.sidecar_dir / "source_audio.aac"))
-        if audio_path:
-            final_output = ffmpeg.merge_audio(concat_path, audio_path, output_path)
+        audio_path = str(manifest.sidecar_dir / "source_audio.aac")
+        if ffmpeg.extract_audio(input_path, audio_path):
+            ffmpeg.merge_audio(concat_path, audio_path, output_path)
             Path(audio_path).unlink(missing_ok=True)
             Path(concat_path).unlink(missing_ok=True)
-            return final_output
+            return
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     os.replace(concat_path, output_path)
-    return output_path
 
 
 __all__ = ["finalize_segmented_output"]

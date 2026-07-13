@@ -324,6 +324,39 @@ FORBIDDEN_PATTERN_RULES = (
         "manual frontend resume inspection protocol mirror",
     ),
     _forbid(
+        "frontend-resume-conflict-dead-state",
+        "frontend/src/types/domain/batch.ts",
+        r"\bresume_available\b|\b(?:itemId|inspection)\??\s*:",
+        "resume conflict domain model retains dead wire or item state",
+    ),
+    ForbiddenReferenceRule(
+        "frontend-resume-conflict-stale-test-fixtures",
+        roots=("frontend/tests",),
+        patterns=(r"\bresume_available\b", r"\bfinal_exists_no_resume\b", r"\binspection\s*:"),
+        message="frontend test fixture uses the obsolete resume conflict domain shape",
+        suffixes=(".ts", ".tsx", ".vue"),
+    ),
+    ForbiddenReferenceRule(
+        "frontend-resume-conflict-e2e-helper-bypass",
+        roots=("frontend/tests/e2e/task",),
+        patterns=(r"interface\s+ResumeConflictDescriptor\b", r"\.pendingConflict\s*="),
+        message="resume conflict E2E fixture bypasses the shared helper",
+        suffixes=(".ts",),
+        excludes=("frontend/tests/e2e/task/resume-conflict-fixture.ts",),
+    ),
+    _forbid(
+        "frontend-resume-conflict-wire-fabrication",
+        "frontend/src/services/task/resume-classifier.ts",
+        r"\bbuildInspectionFromError\b|^\s*(?:type|pipeline_kind|input_path|finalExists|sidecarExists|nextSourceFrame)\s*:",
+        "resume conflict adapter fabricates an inspection wire payload",
+    ),
+    _forbid(
+        "frontend-unused-task-error-code-aliases",
+        "frontend/src/types/protocol/errors.ts",
+        r"\b(?:MissingFfmpeg|MissingModel|MissingTensorBackend|MissingPythonDependency|Cancelled|SpawnFailed|RuntimePanic|InvalidInput|InvalidConfig)\s*:",
+        "frontend runtime error map contains an unconsumed alias",
+    ),
+    _forbid(
         "frontend-resume-status-protocol-mirror",
         "frontend/src/types/domain/batch.ts",
         r"^export\s+interface\s+ResumeStatus\b",
@@ -1495,6 +1528,34 @@ FORBIDDEN_PATTERN_RULES = (
         r"(?s)^[ \t]{4}def\s+(?:concat_videos|transcode_video)\b(?:(?!^[ \t]{4}def\s).)*(?:->\s*str\b|^\s+return\s+_encode\.(?:concat_videos|transcode_video)\s*\()",
         "FFmpeg wrapper command forwards an unused output path result",
     ),
+    _forbid(
+        "ffmpeg-audio-command-path-results",
+        "backend/app/utils/ffmpeg/encode.py",
+        r"(?s)(?:^def\s+extract_audio\b(?:(?!^def\s).)*(?:->\s*str\s*\|\s*None\b|^\s+return\s+output_path\s*$)|^def\s+merge_audio\b(?:(?!^def\s).)*(?:->\s*str\b|^\s+return\s+output_path\s*$))",
+        "FFmpeg audio command exposes a redundant output path result",
+    ),
+    _forbid(
+        "ffmpeg-wrapper-audio-command-path-results",
+        "backend/app/utils/ffmpeg/__init__.py",
+        r"(?s)^[ \t]{4}def\s+(?:extract_audio|merge_audio)\b(?:(?!^[ \t]{4}def\s).)*(?:->\s*(?:str\s*\|\s*None|str)\b|^\s+return\s+_encode\.merge_audio\s*\()",
+        "FFmpeg wrapper audio command exposes a redundant output path result",
+    ),
+    _forbid(
+        "encoder-finalization-path-result",
+        "backend/app/processing/streaming/encoder_finalization.py",
+        r"(?s)^def\s+finalize_segmented_output\b(?:(?!^def\s).)*(?:->\s*str\b|^\s+return\s+(?:output_path|final_output)\s*$)",
+        "segmented finalization exposes a redundant output path result",
+    ),
+    ForbiddenReferenceRule(
+        "assigned-segmented-finalization-result",
+        roots=(
+            "backend/app/processing/streaming/pipeline_lifecycle.py",
+            "backend/app/processing/streaming/stage_file_pipeline.py",
+        ),
+        patterns=(r"\b\w+\s*=\s*finalize_segmented_output\s*\(",),
+        message="caller assigns the command-only segmented finalization result",
+        suffixes=(".py",),
+    ),
     ForbiddenReferenceRule(
         "obsolete-segment-progress-adapter",
         roots=("backend/app", "backend/tests"),
@@ -1574,6 +1635,12 @@ REQUIRED_PATTERN_RULES = (
         "frontend/src/types/generated/ResumeInspectionResult.ts",
         r"type:\s*ResumeInspectionEventType[\s\S]*pipeline_kind:\s*ResumePipelineKind[\s\S]*input_path:\s*string",
         "generated resume inspection TypeScript contract is missing",
+    ),
+    _require(
+        "frontend-resume-conflict-domain-projection",
+        "frontend/src/services/task/resume-classifier.ts",
+        r"function\s+createResumeConflictDescriptor\b[\s\S]*signatureMatch\s*&&\s*source\.completedChunks\s*>\s*0[\s\S]*progress:\s*\{[\s\S]*export\s+function\s+buildResumeConflictDescriptor\b[\s\S]*createResumeConflictDescriptor\(inspection\)[\s\S]*export\s+function\s+buildResumeConflictDescriptorFromError\b",
+        "shared resume conflict domain projection is missing",
     ),
     _require(
         "resume-inspection-json-schema",
@@ -1838,6 +1905,18 @@ REQUIRED_PATTERN_RULES = (
         "backend/app/utils/ffmpeg/_progress.py",
         r"EncodeProgressCallback\s*=\s*Callable[\s\S]*def\s+make_encode_progress_callback\b[\s\S]*frame_offset",
         "shared FFmpeg encode progress adapter is missing",
+    ),
+    _require(
+        "ffmpeg-audio-command-contract",
+        "backend/app/utils/ffmpeg/encode.py",
+        r"def\s+extract_audio\b[\s\S]*->\s*bool\s*:[\s\S]*def\s+merge_audio\b[\s\S]*->\s*None\s*:",
+        "FFmpeg audio command contract is missing",
+    ),
+    _require(
+        "segmented-finalization-command-contract",
+        "backend/app/processing/streaming/encoder_finalization.py",
+        r"def\s+finalize_segmented_output\b[\s\S]{0,500}->\s*None\s*:",
+        "segmented finalization command contract is missing",
     ),
     _require(
         "shared-frame-filter-geometry-params",

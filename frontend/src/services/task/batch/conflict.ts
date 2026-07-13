@@ -7,7 +7,7 @@ import type { createCommonHelpers } from './lifecycle/common'
 import type { createFinalizeOps } from './lifecycle/finalize'
 import type { createQueueOps } from './lifecycle/queue'
 import type { BatchLifecycleDeps } from './lifecycle/types'
-import { buildInspectionFromError } from '../resume-classifier'
+import { buildResumeConflictDescriptorFromError } from '../resume-classifier'
 import { TASK_ERROR_CODES, type ResumeMode } from '@/types/protocol'
 
 type ConflictResolverDeps = Pick<
@@ -53,17 +53,10 @@ export function createConflictResolver(
     if (error.code !== TASK_ERROR_CODES.ResumeConflict) {
       return false
     }
-    const item = lifecycle.getCurrentItem()
-    if (!item) {
+    if (!lifecycle.getCurrentItem()) {
       return false
     }
-    const inspection = buildInspectionFromError(error, item.inputPath)
-    deps.setPendingConflict({
-      itemId: item.id,
-      kind: inspection.signatureMatch ? 'final_exists_with_resume' : 'final_exists_only',
-      outputPath: inspection.outputPath,
-      inspection,
-    })
+    deps.setPendingConflict(buildResumeConflictDescriptorFromError(error))
     return true
   }
 

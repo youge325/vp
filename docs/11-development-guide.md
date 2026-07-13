@@ -61,7 +61,7 @@ graph LR
 
 - 修改 `frontend/src-tauri/src/models/*.rs` 后必须运行 `cargo build`，否则前端类型不同步
 - 环境协议类型只在 Rust `models/env.rs` 定义，前端统一从 `types/protocol` 导入，不新增手写镜像或 normalize 层
-- 新增字段到 Rust 模型时，检查是否需要更新前端的 `TASK_EVENT_NAMES` 或 `TASK_ERROR_CODES`
+- 新增字段到 Rust 模型时，检查是否需要更新前端的 `TASK_EVENT_NAMES`；新增错误码由 generated `TaskErrorCode` 自动同步，仅在前端需要主动比较该错误码时才加入 `TASK_ERROR_CODES`
 - `ts-rs` 生成的文件不要手工修改，会在下次 `cargo build` 时被覆盖
 
 ## 测试策略

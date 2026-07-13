@@ -149,6 +149,26 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "frontend-resume-inspection-protocol-mirror",
             "export interface ResumeInspectionResult {}\n",
         ),
+        (
+            "frontend-resume-conflict-dead-state",
+            "export interface ResumeConflictDescriptor { itemId: string }\n",
+        ),
+        (
+            "frontend-resume-conflict-stale-test-fixtures",
+            "const conflict = { kind: 'final_exists_no_resume', inspection: {} }\n",
+        ),
+        (
+            "frontend-resume-conflict-e2e-helper-bypass",
+            "pinia.state.value.task.pendingConflict = conflict\n",
+        ),
+        (
+            "frontend-resume-conflict-wire-fabrication",
+            "function buildInspectionFromError() { return { pipeline_kind: 'streaming' } }\n",
+        ),
+        (
+            "frontend-unused-task-error-code-aliases",
+            "export const TASK_ERROR_CODES = { MissingModel: 'missing_model' }\n",
+        ),
         ("frontend-resume-status-protocol-mirror", "export interface ResumeStatus {}\n"),
         (
             "frontend-resume-mode-protocol-mirror",
@@ -380,6 +400,22 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "ffmpeg-wrapper-command-results",
             "class Wrapper:\n    def transcode_video(self) -> str:\n        return _encode.transcode_video()\n",
         ),
+        (
+            "ffmpeg-audio-command-path-results",
+            "def merge_audio(video_path, audio_path, output_path) -> str:\n    return output_path\n",
+        ),
+        (
+            "ffmpeg-wrapper-audio-command-path-results",
+            "class Wrapper:\n    def merge_audio(self, video_path, audio_path, output_path) -> str:\n        return output_path\n",
+        ),
+        (
+            "encoder-finalization-path-result",
+            "def finalize_segmented_output(output_path) -> str:\n    return output_path\n",
+        ),
+        (
+            "assigned-segmented-finalization-result",
+            "final_output = finalize_segmented_output(output_path='out.mp4')\n",
+        ),
         ("obsolete-segment-progress-adapter", "make_segment_progress_callback(10, callback)\n"),
         (
             "inline-encode-progress-adapter",
@@ -426,6 +462,25 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
             "shared-ffmpeg-encode-progress-adapter",
             "EncodeProgressCallback = Callable[[int], None]\n"
             "def make_encode_progress_callback(callback, *, frame_offset: int = 0):\n    pass\n",
+        ),
+        (
+            "frontend-resume-conflict-domain-projection",
+            "function createResumeConflictDescriptor(source) {\n"
+            "  const kind = source.signatureMatch && source.completedChunks > 0\n"
+            "  return { kind, progress: {} }\n"
+            "}\n"
+            "export function buildResumeConflictDescriptor(inspection) {\n"
+            "  return createResumeConflictDescriptor(inspection)\n"
+            "}\n"
+            "export function buildResumeConflictDescriptorFromError(error) { return error }\n",
+        ),
+        (
+            "ffmpeg-audio-command-contract",
+            "def extract_audio() -> bool:\n    return True\n\ndef merge_audio() -> None:\n    pass\n",
+        ),
+        (
+            "segmented-finalization-command-contract",
+            "def finalize_segmented_output(*, output_path: str) -> None:\n    pass\n",
         ),
         (
             "shared-frame-filter-geometry-params",

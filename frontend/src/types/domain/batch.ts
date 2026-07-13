@@ -1,17 +1,19 @@
 // 领域层 — 批处理与续跑领域模型。
 
-import type { ResumeInspectionResult } from '@/types/protocol'
-
-export type ResumeConflictKind =
-  | 'resume_available'
+type ResumeConflictKind =
   | 'final_exists_with_resume'
   | 'final_exists_only'
 
+interface ResumeConflictProgress {
+  completedChunks: number
+  completedOutputFrames: number
+  totalOutputFrames: number
+}
+
 export interface ResumeConflictDescriptor {
-  itemId: string
   kind: ResumeConflictKind
   outputPath: string
-  inspection: ResumeInspectionResult
+  progress: ResumeConflictProgress
 }
 
 export type ResumeConflictAction = 'resume' | 'fresh' | 'skip' | 'cancel'

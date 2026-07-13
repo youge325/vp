@@ -1,19 +1,10 @@
-// 协议层 — Tauri 错误码常量与类型。
-// 与 Rust protocol.rs 同步,不要手工编辑常量值。
+// 前端生产代码实际消费的错误码运行时别名。
+// 完整集合由 Rust `TaskErrorCode` 生成；这里的值通过 `satisfies` 校验。
 
 import type { TaskErrorCode } from '@/types/generated/TaskErrorCode'
 
 export const TASK_ERROR_CODES = {
-  MissingFfmpeg: 'missing_ffmpeg',
-  MissingModel: 'missing_model',
-  MissingTensorBackend: 'missing_tensor_backend',
-  MissingPythonDependency: 'missing_python_dependency',
-  Cancelled: 'cancelled',
   ProcessFailed: 'process_failed',
-  SpawnFailed: 'spawn_failed',
-  RuntimePanic: 'runtime_panic',
-  InvalidInput: 'invalid_input',
-  InvalidConfig: 'invalid_config',
   ResumeConflict: 'resume_conflict',
   IoError: 'io_error',
   SchemaMismatch: 'schema_mismatch',

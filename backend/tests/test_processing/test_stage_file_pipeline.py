@@ -47,7 +47,7 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
         )
         return int(kwargs["output_frame_count"])
 
-    def fake_finalize_segmented_output(**kwargs: Any) -> str:
+    def fake_finalize_segmented_output(**kwargs: Any) -> None:
         finalized_outputs.append(
             {
                 "completed_output_frames": kwargs["completed_output_frames"],
@@ -57,7 +57,6 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
             }
         )
         Path(kwargs["output_path"]).write_bytes(b"stage")
-        return str(kwargs["output_path"])
 
     monkeypatch.setattr(stage_file_pipeline, "run_single_stage_file_chunks", fake_run_single_stage_file_chunks)
     monkeypatch.setattr(stage_file_pipeline, "finalize_segmented_output", fake_finalize_segmented_output)

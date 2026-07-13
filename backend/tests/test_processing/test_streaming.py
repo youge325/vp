@@ -182,18 +182,17 @@ class _FakeFFmpegWrapper:
         output.write_bytes(b"concat")
         self.video_frames[str(output)] = [frame.copy() for frame in frames]
 
-    def extract_audio(self, _input_path: str, output_path: str) -> str:
+    def extract_audio(self, _input_path: str, output_path: str) -> bool:
         audio_path = Path(output_path)
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         audio_path.write_bytes(b"audio")
-        return str(audio_path)
+        return True
 
-    def merge_audio(self, video_path: str, _audio_path: str, output_path: str) -> str:
+    def merge_audio(self, video_path: str, _audio_path: str, output_path: str) -> None:
         output = Path(output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(b"final")
         self.video_frames[str(output)] = [frame.copy() for frame in self.video_frames[video_path]]
-        return str(output)
 
 
 def _frame(value: int) -> np.ndarray:
