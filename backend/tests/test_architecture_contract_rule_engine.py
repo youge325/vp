@@ -93,8 +93,7 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
     ("rule_id", "source"),
     [
         ("base-select-local-option-type", "interface SelectOption { value: string }\n"),
-        ("batch-lifecycle-type-reexport", "export type { BatchLifecycle } from './types'\n"),
-        ("batch-lifecycle-interface-mirror", "interface BatchLifecycle { start(): void }\n"),
+        ("obsolete-batch-lifecycle-facade-reference", "createBatchLifecycle(deps)\n"),
         ("pipeline-owned-lifecycle", "decision = manifest.prepare('sig', {})\n"),
         ("encoder-finalization-signature", "def finalize_segmented_output(*, signature: str): pass\n"),
         (
@@ -148,6 +147,8 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "frame-filter-imperative-dispatch",
             "if kind == 'scale':\n    return self._apply_scale(frame, params)\n",
         ),
+        ("parallel-frame-filter-handler-maps", "_NUMPY_FILTER_HANDLERS = {}\n"),
+        ("frame-filter-kind-capability-branch", "if kind == 'denoise':\n    return False\n"),
         (
             "rust-untyped-resume-inspection-command",
             "async fn check_resume_state() -> Result<Value, ShellError> { todo!() }\n",

@@ -3,7 +3,9 @@
 
 import type { MediaItem, TaskError } from '@/types/domain/media'
 import type { ResumeConflictAction } from '@/types/domain/batch'
-import type { BatchLifecycle } from './lifecycle'
+import type { createCommonHelpers } from './lifecycle/common'
+import type { createFinalizeOps } from './lifecycle/finalize'
+import type { createQueueOps } from './lifecycle/queue'
 import type { BatchLifecycleDeps } from './lifecycle/types'
 import { buildInspectionFromError } from '../resume-classifier'
 import { TASK_ERROR_CODES, type ResumeMode } from '@/types/protocol'
@@ -12,6 +14,9 @@ type ConflictResolverDeps = Pick<
   BatchLifecycleDeps,
   'getBatch' | 'setBatch' | 'getMediaItem' | 'setPendingConflict'
 >
+type ConflictLifecycle = Pick<ReturnType<typeof createCommonHelpers>, 'getCurrentItem'> &
+  Pick<ReturnType<typeof createQueueOps>, 'launchCurrentItem'> &
+  Pick<ReturnType<typeof createFinalizeOps>, 'finalizeCurrent'>
 
 interface ConflictResolver {
   resolveConflict(action: ResumeConflictAction): Promise<void>
@@ -24,7 +29,7 @@ interface ConflictResolver {
 
 export function createConflictResolver(
   deps: ConflictResolverDeps,
-  lifecycle: BatchLifecycle,
+  lifecycle: ConflictLifecycle,
 ): ConflictResolver {
   async function resolveConflict(action: ResumeConflictAction): Promise<void> {
     const batch = deps.getBatch()

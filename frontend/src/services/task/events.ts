@@ -1,19 +1,5 @@
-// pure: no Vue / no Pinia / no Tauri
-// 任务事件 reducer — 把 IPC payload 应用到 MediaTaskState。
-//
-// Phase 16 — ``MediaTaskState.error`` 字段移除,reducer 不再写 error。
-// 错误展示统一走 [[useIssueStore]] 的 ``'task'`` scope。
-//
-// Phase 17 — ``MediaTaskState`` 11 个 dead 字段移除(percent / current /
-// total / stage / stageIndex / stageTotal / processedFrames / timeSeconds /
-// outputPath / startedAt / finishedAt)。reducer 现在只动 ``status`` /
-// ``logs`` / ``resumeStatus``。payload 的进度数据(``percent`` 等)没有
-// reducer 持久化语义,batch 粒度的进度条用 ``batch.completedCount /
-// batchTotal``(见 [[TaskConsole.vue]])。
-//
-// ``applyTaskCancelled`` 不接 payload —— payload 对 reducer 的可见影响
-// 只是 error message/details,而 error 已经搬到 issueStore,reducer 本身
-// 不需要 payload。caller(``onCancelled``)拿到 payload 后自己构造 banner。
+// Pure MediaTaskState reducers. Task errors are displayed through issueStore;
+// this state retains only status, compacted logs and resume metadata.
 
 import { TERMINAL_PROGRESS_PREFIX } from '@/types/protocol'
 import type { ResumeStatusPayload, TaskLogPayload } from '@/types/protocol'
@@ -100,9 +86,7 @@ export function appendTaskLog(state: MediaTaskState, payload: TaskLogPayload): M
 }
 
 export function applyTaskProgress(state: MediaTaskState): MediaTaskState {
-  // Phase 17 — percent / current / total / stage 没有 taskState reader。
-  // 这条 reducer 唯一的作用是把 status 从 idle 拉到 running
-  // (paused / cancelling 不被覆盖)。
+  // Progress only promotes idle state; paused/cancelling states are preserved.
   const status = state.status === 'paused' || state.status === 'cancelling' ? state.status : 'running'
   if (status === state.status) {
     return state
@@ -123,9 +107,6 @@ export function applyTaskCancelling(state: MediaTaskState): MediaTaskState {
 }
 
 export function applyTaskCompleted(state: MediaTaskState): MediaTaskState {
-  // Phase 17 — processedFrames / timeSeconds 没有 taskState reader。
-  // outputPath 进 ``mediaRunState.lastOutputPath`` 走另一条写入路径
-  // (见 batch/events.ts onCompleted),不再经过 taskState。
   return { ...state, status: 'completed' }
 }
 

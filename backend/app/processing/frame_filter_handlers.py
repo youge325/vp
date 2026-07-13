@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 import re
 from types import MappingProxyType
 from typing import Any, Callable
@@ -15,6 +16,18 @@ from app.utils.opencv_runtime import import_cv2
 type _FilterParams = dict[str, Any]
 type _NumpyFilterHandler = Callable[[np.ndarray, _FilterParams], np.ndarray]
 type _TensorFilterHandler = Callable[[Any, _FilterParams], Any]
+type _TensorCapability = Callable[[_FilterParams], bool]
+
+
+@dataclass(frozen=True, slots=True)
+class _FilterHandler:
+    numpy: _NumpyFilterHandler
+    tensor: _TensorFilterHandler | None = None
+    tensor_capability: _TensorCapability | None = None
+
+    def can_apply_tensor(self, params: _FilterParams) -> bool:
+        return self.tensor is not None and (self.tensor_capability is None or self.tensor_capability(params))
+
 
 _INTERP_MAP: dict[str, int] = {}
 
@@ -239,6 +252,10 @@ def _apply_tensor_denoise(tensor: Any, params: _FilterParams) -> Any:
     raise RuntimeError("frame_filter_chain denoise does not support tensor processing.")
 
 
+def _can_apply_tensor_denoise(params: _FilterParams) -> bool:
+    return float(params.get("strength", 10)) <= 0 and float(params.get("colorStrength", 10)) <= 0
+
+
 def _apply_tensor_color(tensor: Any, params: _FilterParams) -> Any:
     import torch
 
@@ -255,55 +272,49 @@ def _apply_tensor_color(tensor: Any, params: _FilterParams) -> Any:
     return tensor.clamp(0.0, 1.0)
 
 
-_NUMPY_FILTER_HANDLERS: Mapping[str, _NumpyFilterHandler] = MappingProxyType(
+_FILTER_HANDLERS: Mapping[str, _FilterHandler] = MappingProxyType(
     {
-        "scale": _apply_numpy_scale,
-        "crop": _apply_numpy_crop,
-        "pad": _apply_numpy_pad,
-        "sharpen": _apply_numpy_sharpen,
-        "denoise": _apply_numpy_denoise,
-        "color": _apply_numpy_color,
-        "anime_cleanup": _apply_numpy_anime_cleanup,
+        "scale": _FilterHandler(_apply_numpy_scale, _apply_tensor_scale),
+        "crop": _FilterHandler(_apply_numpy_crop, _apply_tensor_crop),
+        "pad": _FilterHandler(_apply_numpy_pad, _apply_tensor_pad),
+        "sharpen": _FilterHandler(_apply_numpy_sharpen, _apply_tensor_sharpen),
+        "denoise": _FilterHandler(
+            _apply_numpy_denoise,
+            _apply_tensor_denoise,
+            _can_apply_tensor_denoise,
+        ),
+        "color": _FilterHandler(_apply_numpy_color, _apply_tensor_color),
+        "anime_cleanup": _FilterHandler(_apply_numpy_anime_cleanup),
     }
 )
-_TENSOR_FILTER_HANDLERS: Mapping[str, _TensorFilterHandler] = MappingProxyType(
-    {
-        "scale": _apply_tensor_scale,
-        "crop": _apply_tensor_crop,
-        "pad": _apply_tensor_pad,
-        "sharpen": _apply_tensor_sharpen,
-        "denoise": _apply_tensor_denoise,
-        "color": _apply_tensor_color,
-    }
-)
-FILTER_KINDS = frozenset(_NUMPY_FILTER_HANDLERS)
+
+
+def is_supported_filter_kind(kind: str) -> bool:
+    return kind in _FILTER_HANDLERS
 
 
 def apply_numpy_filter(kind: str, frame: np.ndarray, params: _FilterParams) -> np.ndarray:
-    handler = _NUMPY_FILTER_HANDLERS.get(kind)
+    handler = _FILTER_HANDLERS.get(kind)
     if handler is None:
         raise ValueError(f"Unsupported filter kind: {kind}")
-    return handler(frame, params)
+    return handler.numpy(frame, params)
 
 
 def can_apply_tensor_filter(kind: str, params: _FilterParams) -> bool:
-    if kind not in _TENSOR_FILTER_HANDLERS:
-        return False
-    if kind != "denoise":
-        return True
-    return float(params.get("strength", 10)) <= 0 and float(params.get("colorStrength", 10)) <= 0
+    handler = _FILTER_HANDLERS.get(kind)
+    return handler is not None and handler.can_apply_tensor(params)
 
 
 def apply_tensor_filter(kind: str, tensor: Any, params: _FilterParams) -> Any:
-    handler = _TENSOR_FILTER_HANDLERS.get(kind)
-    if handler is None:
+    handler = _FILTER_HANDLERS.get(kind)
+    if handler is None or handler.tensor is None:
         raise ValueError(f"Unsupported filter kind: {kind}")
-    return handler(tensor, params)
+    return handler.tensor(tensor, params)
 
 
 __all__ = [
-    "FILTER_KINDS",
     "apply_numpy_filter",
     "apply_tensor_filter",
     "can_apply_tensor_filter",
+    "is_supported_filter_kind",
 ]

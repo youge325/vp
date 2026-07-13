@@ -1,13 +1,4 @@
-// 队列推进 — start / runNextQueuedItem / launchCurrentItem / resetBatchRunState。
-//
-// Phase 7a — 从原 ``lifecycle.ts`` 抽出。负责把待处理 ids 推入队列,
-// 逐个 ``checkResume`` → ``classifyResumeConflict`` → 启动任务的流程,
-// 以及在 ``cancel`` / ``finalize`` 之后回到 idle 时的清理。
-//
-// 不直接管理终态回收:finalize.ts 的 ``finalizeCurrent`` 负责 completed /
-// cancelled / error 的 batch 计数与递归调度,本文件只在每个任务的"启动
-// 前"阶段工作,并通过传入的 ``internal.handleErrored`` 把启动失败转交给
-// finalize 层处理。
+// Queue initialization, resume inspection and task launch.
 
 import type { MediaItem } from '@/types/domain/media'
 import { normalizeError } from '@/services/error/normalize'

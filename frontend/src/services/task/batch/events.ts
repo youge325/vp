@@ -1,16 +1,5 @@
-// NDJSON 事件订阅与归一 — 把 Tauri/Python 上抛的事件载荷映射到 store 状态。
-// 不感知队列推进,仅做 "事件 → 当前/激活 item 的 taskState" 归一,
-// 状态机迁移交给 [[lifecycle]] 完成。
-//
-// Phase 13.1 — ``item.taskState`` 改读 ``lifecycle.getConsoleRunState`` /
-// ``getCurrentRunState``。``MediaItem`` 已不持有运行时投影,事件 reducer
-// 把上一帧 ``taskState`` 从 [[useMediaRunState]] 拉出来后再 apply 新载荷。
-//
-// Phase 16 — ``onCancelled`` 在 stalled reason 下额外把构造的 banner
-// error 写到 ``deps.setTaskIssue`` (``useIssueStore('task')``)。user
-// 手动取消不写 banner —— "任务已取消" 是正常 UX 流转,不该弹错误条;
-// 而 stalled 是 watchdog 主动判定的系统错误,需要 surfacing 给用户看
-// stderr details。
+// NDJSON event adapter. It updates the current/console item and delegates
+// terminal transitions through a narrow lifecycle capability.
 
 import { TASK_ERROR_CODES } from '@/types/protocol'
 import type { TaskError } from '@/types/domain/media'
@@ -29,7 +18,8 @@ import {
   applyTaskResumeStatus,
 } from '../events'
 import type { createConflictResolver } from './conflict'
-import type { BatchLifecycle } from './lifecycle'
+import type { createCommonHelpers } from './lifecycle/common'
+import type { createFinalizeOps } from './lifecycle/finalize'
 import type { BatchLifecycleDeps } from './lifecycle/types'
 
 type ConflictResolver = ReturnType<typeof createConflictResolver>
@@ -38,10 +28,15 @@ type EventHandlersDeps = Pick<
   BatchLifecycleDeps,
   'setItemTaskState' | 'setItemLastOutputPath' | 'setTaskIssue'
 >
+type EventLifecycle = Pick<
+  ReturnType<typeof createCommonHelpers>,
+  'getConsoleItem' | 'getConsoleRunState' | 'getCurrentItem' | 'getCurrentRunState'
+> &
+  Pick<ReturnType<typeof createFinalizeOps>, 'finalizeCurrent' | 'handleErrored'>
 
 export function createEventHandlers(
   deps: EventHandlersDeps,
-  lifecycle: BatchLifecycle,
+  lifecycle: EventLifecycle,
   conflict: ConflictResolver,
 ) {
   function onProgress(_payload: TaskProgressPayload): void {
@@ -87,9 +82,7 @@ export function createEventHandlers(
     if (item && runState) {
       deps.setItemTaskState(item.id, applyTaskCancelled(runState.taskState))
     }
-    // Phase D.1.2 — stall is a cancellation with reason "stalled". Surface
-    // it as ProcessFailed in the 'task' banner. User-initiated cancels stay
-    // silent (banner is for unexpected errors, not normal UX flow).
+    // A watchdog stall is exceptional; user cancellation remains silent.
     const reason = payload?.reason ?? 'user'
     if (reason === 'stalled') {
       const stalledError: TaskError = {

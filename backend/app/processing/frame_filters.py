@@ -9,10 +9,10 @@ import numpy as np
 from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
 from app.processing.frame_filter_handlers import (
-    FILTER_KINDS,
     apply_numpy_filter,
     apply_tensor_filter,
     can_apply_tensor_filter,
+    is_supported_filter_kind,
 )
 
 
@@ -27,7 +27,7 @@ class FrameFilterChainAlgorithm(IAlgorithm):
     def _validate_filters(self) -> None:
         for step in self._filters:
             kind = step.get("kind")
-            if kind not in FILTER_KINDS:
+            if not isinstance(kind, str) or not is_supported_filter_kind(kind):
                 raise ValueError(f"Unknown filter kind: {kind}")
             if not isinstance(step.get("params"), dict):
                 raise ValueError(f"Filter step '{kind}' missing params dict.")

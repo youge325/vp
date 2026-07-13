@@ -1,25 +1,36 @@
 // Pure: no Vue / no Pinia / no Tauri.
-// 批处理状态机的 facade — 把 [[lifecycle]]/[[conflict]]/[[events]] 三个子模块装配为单一 BatchRunner 实例。
-// 调度顺序: start → checkResume → (conflict ? pending : launch) → 事件回调 → finalize → next。
-//
-// 这一层故意保持薄,只负责复用类型与组合内部 API:旧导入路径
-// (``@/services/task/batch-runner``) 保持不变,以便测试与编排层无感知。
+// Batch state-machine composition root. Queue and finalization reference each
+// other lazily; only the public BatchRunner operations leave this module.
 
-import { createBatchLifecycle } from './batch/lifecycle'
+import { createCommonHelpers } from './batch/lifecycle/common'
+import { createControlOps } from './batch/lifecycle/control'
+import { createFinalizeOps } from './batch/lifecycle/finalize'
+import { createQueueOps } from './batch/lifecycle/queue'
 import type { BatchLifecycleDeps } from './batch/lifecycle/types'
 import { createConflictResolver } from './batch/conflict'
 import { createEventHandlers } from './batch/events'
 
 export function createBatchRunner(deps: BatchLifecycleDeps) {
-  const lifecycle = createBatchLifecycle(deps)
-  const conflict = createConflictResolver(deps, lifecycle)
-  const events = createEventHandlers(deps, lifecycle, conflict)
+  const helpers = createCommonHelpers(deps)
+  let finalizeOps: ReturnType<typeof createFinalizeOps>
+  let queueOps: ReturnType<typeof createQueueOps>
+
+  queueOps = createQueueOps(deps, {
+    handleErrored: (error) => finalizeOps.handleErrored(error),
+  })
+  finalizeOps = createFinalizeOps(deps, helpers, {
+    runNextQueuedItem: () => queueOps.runNextQueuedItem(),
+  })
+  const controlOps = createControlOps(deps, helpers)
+  const operations = { ...helpers, ...queueOps, ...finalizeOps }
+  const conflict = createConflictResolver(deps, operations)
+  const events = createEventHandlers(deps, operations, conflict)
 
   return {
-    start: lifecycle.start,
-    pause: lifecycle.pause,
-    resume: lifecycle.resume,
-    cancel: lifecycle.cancel,
+    start: queueOps.start,
+    pause: controlOps.pause,
+    resume: controlOps.resume,
+    cancel: controlOps.cancel,
     resolveConflict: conflict.resolveConflict,
     onProgress: events.onProgress,
     onLog: events.onLog,

@@ -164,7 +164,7 @@ stateDiagram-v2
     idle --> running: applyTaskProgress
     running --> paused: applyTaskPaused
     paused --> running: applyTaskResumed
-    running --> cancelling: applyTaskCancelRequested
+    running --> cancelling: applyTaskCancelling
     cancelling --> cancelled: applyTaskCancelled
     running --> completed: applyTaskCompleted
     running --> error: applyTaskError
@@ -173,37 +173,35 @@ stateDiagram-v2
 ```
 
 关键变换函数：
-- `applyTaskProgress` — 更新进度、阶段、metrics
-- `applyTaskCompleted` — 标记完成，记录输出路径和处理帧数
-- `applyTaskError` — 记录错误码和消息
-- `applyTaskCancelled` — 标记取消原因（User / Stalled）
-- `applyTaskLog` — 追加日志，自动折叠连续进度行（保留最近 300 条）
+- `applyTaskProgress` — 将空闲任务推进为运行中，不覆盖暂停或取消中状态
+- `applyTaskPaused` / `applyTaskResumed` / `applyTaskCancelling` — 更新控制状态
+- `applyTaskCompleted` / `applyTaskError` / `applyTaskCancelled` — 仅写入终态
+- `appendTaskLog` — 追加日志并折叠连续阶段进度行（保留最近 300 条）
+- `applyTaskResumeStatus` — 保存续传进度元数据
 
 ## 批处理编排
 
 ### BatchRunner 组合模式
 
-[`frontend/src/services/task/batch-runner.ts`](../frontend/src/services/task/batch-runner.ts) 是批处理门面，组合三个子模块：
+[`frontend/src/services/task/batch-runner.ts`](../frontend/src/services/task/batch-runner.ts) 是唯一组合根，直接装配生命周期操作、冲突处理和事件适配：
 
 ```mermaid
 graph LR
-    A[BatchRunner] --> B[lifecycle/]
-    A --> C[conflict.ts]
-    A --> D[events.ts]
-
-    B --> B1[common.ts 通用状态]
-    B --> B2[control.ts 启动/停止]
-    B --> B3[finalize.ts 完成清理]
-    B --> B4[queue.ts 任务队列]
+    A[BatchRunner composition root] --> B1[common.ts 状态查询]
+    A --> B2[control.ts 暂停/恢复/取消]
+    A --> B3[finalize.ts 终态清理]
+    A --> B4[queue.ts 任务队列]
+    A --> C[conflict.ts 续传冲突]
+    A --> D[events.ts NDJSON 适配]
+    B3 -. lazy callback .-> B4
+    B4 -. lazy callback .-> B3
 ```
 
-- `lifecycle/` — 任务生命周期管理（启动、停止、完成、队列）
-- `conflict.ts` — 续传冲突解析与分类
-- `events.ts` — NDJSON 事件到 store 状态的归一化映射
+`conflict.ts` 和 `events.ts` 只接收各自需要的 lifecycle capability；内部 queue/finalize 方法不会成为 BatchRunner 的公共返回字段。
 
-### useTaskOrchestrator 模块级单例
+### Task orchestrator runtime 单例
 
-[`frontend/src/composables/app/useTaskOrchestrator.ts`](../frontend/src/composables/app/useTaskOrchestrator.ts) 内部缓存 `BatchRunner` 实例。5 处调用者（启动、取消、暂停、恢复、冲突处理）操作的是同一个 runner，保证状态一致性。
+[`frontend/src/composables/app/taskOrchestratorRuntime.ts`](../frontend/src/composables/app/taskOrchestratorRuntime.ts) 缓存 `BatchRunner` 并连接 Pinia、IPC 与事件监听；`useTaskOrchestrator()` 及启动、取消、暂停、恢复、冲突处理路径都取得同一实例。
 
 ## 视图与路由
 
