@@ -323,6 +323,18 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "duplicate-workflow-summary-label",
             "const workflowLabel = computed(() => workflow.interpolation.enabled ? '补帧' : '转码')\n",
         ),
+        ("app-task-status-projection", "const shell = useAppShellStatus()\n"),
+        ("step-rail-task-status-projection", "const state = useTaskOrchestrator()\n"),
+        (
+            "stage-file-chunks-static-config-signature",
+            "def run_single_stage_file_chunks(*, ffmpeg: object) -> int:\n    return 0\n",
+        ),
+        (
+            "stage-file-chunk-runtime-static-config-signature",
+            "def run_stage_chunk_to_file(*, input_path: str) -> int:\n    return 0\n",
+        ),
+        ("cli-startup-hook-forwarder", "def _startup_hooks():\n    pass\n"),
+        ("obsolete-app-shell-status-reference", "useAppShellStatus()\n"),
         (
             "stage-worker-python-executable-plumbing",
             "def run_worker_chain(*, python_executable=None):\n    pass\n",
@@ -501,6 +513,45 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
             "    value = os.environ.get('VP_TENSORRT_DIR')\n"
             "def register_native_dll_paths() -> None:\n"
             "    pass\n",
+        ),
+        (
+            "shared-current-task-status-selector",
+            "const currentItem = mediaStore.findItem(taskStore.batch.currentId)\n"
+            "const currentStatus = runStateStore.getByItemId(currentItem?.id)?.taskState.status ?? null\n"
+            "return getTaskStatusLabel(taskStore.batch, currentStatus)\n",
+        ),
+        (
+            "app-current-task-status-selector",
+            "const envStore = useEnvStore()\nconst taskStatusLabel = useCurrentTaskStatusLabel()\n",
+        ),
+        (
+            "step-rail-current-task-status-selector",
+            "const taskStore = useTaskStore()\n"
+            "const taskStatusLabel = useCurrentTaskStatusLabel()\n"
+            "const moduleStates = computed(() => ({ render: taskStore.batch.isRunning }))\n",
+        ),
+        (
+            "shared-stage-file-runtime-config",
+            "@dataclass(frozen=True, slots=True)\nclass StageFileRuntimeConfig:\n    pass\n",
+        ),
+        (
+            "stage-file-runtime-config-root",
+            "runtime_config = StageFileRuntimeConfig(ffmpeg=ffmpeg)\n"
+            "run_single_stage_file_chunks(config=runtime_config)\n",
+        ),
+        (
+            "stage-file-chunk-config-forwarding",
+            "stage_total_frames = stage_progress_total(config.step, input_frames, output_frames)\n"
+            "for chunk in chunks:\n"
+            "    run_stage_chunk_to_file(\n"
+            "        config=config,\n"
+            "        chunk=chunk,\n"
+            "        stage_total_frames=stage_total_frames,\n"
+            "    )\n",
+        ),
+        (
+            "direct-cli-logging-setup",
+            "args = parser.parse_args()\nsetup_logging()\nargs.func(args)\n",
         ),
     ],
 )

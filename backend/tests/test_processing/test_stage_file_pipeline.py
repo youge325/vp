@@ -6,6 +6,7 @@ from typing import Any
 import app.processing.streaming.stage_file_pipeline as stage_file_pipeline
 from app.planning import ProcessingStep, ResumeState, SegmentManifest, build_stage_plan
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 
 
 def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(monkeypatch, tmp_path) -> None:
@@ -26,27 +27,22 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
     manifest.prepare("sig", {"test": True}, mode="force-fresh")
     input_path = str(tmp_path / "input.mp4")
     output_path = str(tmp_path / "final.mp4")
+    ffmpeg = object()
+    decode_config: dict[str, Any] = {}
+    encode_config: dict[str, Any] = {"container": "mp4", "keepAudio": True}
+    metrics = PipelineMetrics()
     stage_calls: list[dict[str, Any]] = []
     finalized_outputs: list[dict[str, Any]] = []
 
     def fake_run_single_stage_file_chunks(**kwargs: Any) -> int:
+        config = kwargs["config"]
+        assert isinstance(config, StageFileRuntimeConfig)
         stage_calls.append(
             {
-                "algorithm": kwargs["step"].algorithm_type,
-                "encode_config": kwargs["encode_config"],
-                "encode_output_fps": kwargs["encode_output_fps"],
+                "config": config,
                 "input_frame_count": kwargs["input_frame_count"],
-                "input_height": kwargs["input_height"],
-                "input_path": kwargs["input_path"],
-                "input_width": kwargs["input_width"],
                 "manifest": kwargs["manifest"],
-                "output_fps": kwargs["output_fps"],
                 "output_frame_count": kwargs["output_frame_count"],
-                "output_height": kwargs["output_height"],
-                "output_width": kwargs["output_width"],
-                "stage_index": kwargs["stage_index"],
-                "stage_total": kwargs["stage_total"],
-                "tensor_backend_name": kwargs["tensor_backend_name"],
             }
         )
         return int(kwargs["output_frame_count"])
@@ -67,10 +63,10 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
     monkeypatch.setattr(stage_file_pipeline, "finalize_segmented_output", fake_finalize_segmented_output)
 
     completed = stage_file_pipeline.run_stage_file_pipeline(
-        ffmpeg=object(),
+        ffmpeg=ffmpeg,
         input_path=input_path,
-        decode_config={},
-        encode_config={"container": "mp4", "keepAudio": True},
+        decode_config=decode_config,
+        encode_config=encode_config,
         manifest=manifest,
         stage_plan=stage_plan,
         tensor_backend_name="pytorch",
@@ -80,33 +76,38 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
         segment_frames=2,
         output_path=output_path,
         output_fps=None,
-        metrics=PipelineMetrics(),
+        metrics=metrics,
     )
 
     assert completed == 9
-    assert [call["algorithm"] for call in stage_calls] == ["frame_interpolation", "super_resolution"]
-    assert [call["stage_index"] for call in stage_calls] == [1, 2]
-    assert [call["stage_total"] for call in stage_calls] == [2, 2]
-    assert stage_calls[0]["input_path"] == input_path
+    configs = [call["config"] for call in stage_calls]
+    assert [config.step.algorithm_type for config in configs] == ["frame_interpolation", "super_resolution"]
+    assert [config.stage_index for config in configs] == [1, 2]
+    assert [config.stage_total for config in configs] == [2, 2]
+    assert configs[0].input_path == input_path
+    assert configs[0].ffmpeg is ffmpeg
+    assert all(config.decode_config is decode_config for config in configs)
+    assert all(config.metrics is metrics for config in configs)
     assert stage_calls[0]["input_frame_count"] == 5
     assert stage_calls[0]["output_frame_count"] == 9
-    assert stage_calls[0]["output_fps"] == 48.0
-    assert stage_calls[0]["input_width"] == 1
-    assert stage_calls[0]["output_width"] == 1
-    assert stage_calls[0]["encode_config"]["keepAudio"] is False
-    assert stage_calls[0]["encode_output_fps"] is None
+    assert configs[0].output_fps == 48.0
+    assert configs[0].input_width == 1
+    assert configs[0].output_width == 1
+    assert configs[0].encode_config["keepAudio"] is False
+    assert configs[0].encode_output_fps is None
 
     assert len(finalized_outputs) == 1
     intermediate_output_path = str(stage_calls[0]["manifest"].output_path)
-    assert stage_calls[1]["input_path"] == intermediate_output_path
+    assert configs[1].input_path == intermediate_output_path
     assert stage_calls[1]["input_frame_count"] == 9
     assert stage_calls[1]["output_frame_count"] == 9
-    assert stage_calls[1]["output_fps"] == 48.0
-    assert stage_calls[1]["input_width"] == 1
-    assert stage_calls[1]["output_width"] == 4
+    assert configs[1].output_fps == 48.0
+    assert configs[1].input_width == 1
+    assert configs[1].output_width == 4
     assert stage_calls[1]["manifest"] is manifest
-    assert stage_calls[1]["encode_config"]["keepAudio"] is True
-    assert stage_calls[1]["tensor_backend_name"] == "pytorch"
+    assert configs[1].encode_config is encode_config
+    assert configs[1].encode_config["keepAudio"] is True
+    assert configs[1].tensor_backend_name == "pytorch"
 
     assert finalized_outputs == [
         {

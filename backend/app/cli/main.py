@@ -19,16 +19,11 @@ from app.utils.logger import get_logger, setup_logging
 logger = get_logger(__name__)
 
 
-def _startup_hooks() -> None:
-    """Run the CLI's one-shot setup tasks in a single readable place."""
-    setup_logging()
-
-
 def main() -> None:
     parser = build_parser()
     try:
         args = parser.parse_args()
-        _startup_hooks()
+        setup_logging()
         args.func(args)
     except KeyboardInterrupt:
         raise_error(TaskErrorCode.CANCELLED, "Operation cancelled by the user.")

@@ -36,6 +36,10 @@ ABSENT_PATH_RULES = (
     _absent("frontend-enhance-option-aggregator", "frontend/src/composables/forms/enhance-option-bindings.ts"),
     _absent("frontend-decode-form-aggregator", "frontend/src/composables/forms/decode-form-bindings.ts"),
     _absent(
+        "frontend-app-shell-status-facade",
+        "frontend/src/composables/selectors/useAppShellStatus.ts",
+    ),
+    _absent(
         "frontend-batch-lifecycle-aggregator",
         "frontend/src/services/task/batch/lifecycle/index.ts",
     ),
@@ -1285,6 +1289,36 @@ FORBIDDEN_PATTERN_RULES = (
         r"const\s+workflowLabel\s*=\s*computed[\s\S]{0,360}\b(?:interpolation|superResolution)\.enabled",
         "workflow summary label rule outside shared formatter",
     ),
+    _forbid(
+        "app-task-status-projection",
+        "frontend/src/App.vue",
+        r"\b(?:useAppShellStatus|useTaskOrchestrator|useMediaRunState|getTaskStatusLabel)\b",
+        "App composes task status outside the shared selector",
+    ),
+    _forbid(
+        "step-rail-task-status-projection",
+        "frontend/src/composables/selectors/useStepRailState.ts",
+        r"\b(?:useAppShellStatus|useTaskOrchestrator|useMediaRunState|getTaskStatusLabel)\b",
+        "StepRail composes task status outside the shared selector",
+    ),
+    _forbid(
+        "stage-file-chunks-static-config-signature",
+        "backend/app/processing/streaming/stage_file_chunks.py",
+        r"def\s+run_single_stage_file_chunks\s*\((?:(?!\)\s*->)[\s\S])*\b(?:ffmpeg|input_path|decode_config|encode_config|step|stage_index|stage_total|tensor_backend_name|progress_callback|input_width|input_height|output_width|output_height|output_fps|encode_output_fps|metrics)\s*:",
+        "stage-file chunk planner repeats shared runtime configuration",
+    ),
+    _forbid(
+        "stage-file-chunk-runtime-static-config-signature",
+        "backend/app/processing/streaming/stage_file_chunk_runtime.py",
+        r"def\s+run_stage_chunk_to_file\s*\((?:(?!\)\s*->)[\s\S])*\b(?:ffmpeg|input_path|decode_config|encode_config|step|stage_index|stage_total|tensor_backend_name|progress_callback|input_width|input_height|output_width|output_height|output_fps|encode_output_fps|metrics)\s*:",
+        "stage-file chunk runtime repeats shared runtime configuration",
+    ),
+    _forbid(
+        "cli-startup-hook-forwarder",
+        "backend/app/cli/main.py",
+        r"\b_startup_hooks\b",
+        "CLI startup forwarding helper",
+    ),
     ForbiddenReferenceRule(
         "stage-worker-python-executable-plumbing",
         roots=(
@@ -1576,6 +1610,48 @@ REQUIRED_PATTERN_RULES = (
         "backend/app/processing/streaming/encoder_runtime_config.py",
         r"@dataclass\(frozen=True,\s*slots=True\)[\s\S]*class\s+EncoderRuntimeConfig\b",
         "shared immutable encoder runtime configuration is missing",
+    ),
+    _require(
+        "shared-current-task-status-selector",
+        "frontend/src/composables/selectors/useCurrentTaskStatusLabel.ts",
+        r"currentItem\s*=\s*mediaStore\.findItem\(taskStore\.batch\.currentId\)[\s\S]{0,320}runStateStore\.getByItemId\(currentItem\?\.id\)[\s\S]{0,240}getTaskStatusLabel\(taskStore\.batch,\s*currentStatus\)",
+        "shared current-task status selector is missing",
+    ),
+    _require(
+        "app-current-task-status-selector",
+        "frontend/src/App.vue",
+        r"envStore\s*=\s*useEnvStore\(\)[\s\S]{0,160}taskStatusLabel\s*=\s*useCurrentTaskStatusLabel\(\)",
+        "App must consume environment state and the shared task-status selector directly",
+    ),
+    _require(
+        "step-rail-current-task-status-selector",
+        "frontend/src/composables/selectors/useStepRailState.ts",
+        r"taskStore\s*=\s*useTaskStore\(\)[\s\S]{0,240}taskStatusLabel\s*=\s*useCurrentTaskStatusLabel\(\)[\s\S]{0,1200}render:\s*taskStore\.batch\.isRunning",
+        "StepRail must consume task state and the shared task-status selector directly",
+    ),
+    _require(
+        "shared-stage-file-runtime-config",
+        "backend/app/processing/streaming/stage_file_runtime_config.py",
+        r"@dataclass\(frozen=True,\s*slots=True\)[\s\S]*class\s+StageFileRuntimeConfig\b",
+        "shared immutable stage-file runtime configuration is missing",
+    ),
+    _require(
+        "stage-file-runtime-config-root",
+        "backend/app/processing/streaming/stage_file_pipeline.py",
+        r"runtime_config\s*=\s*StageFileRuntimeConfig\s*\([\s\S]{0,1200}run_single_stage_file_chunks\s*\(\s*config\s*=\s*runtime_config",
+        "stage-file pipeline must construct and pass one runtime configuration per stage",
+    ),
+    _require(
+        "stage-file-chunk-config-forwarding",
+        "backend/app/processing/streaming/stage_file_chunks.py",
+        r"stage_total_frames\s*=\s*stage_progress_total\([^\n]+\)[\s\S]{0,400}for\s+chunk\s+in\s+chunks:[\s\S]{0,500}run_stage_chunk_to_file\s*\(\s*config\s*=\s*config[\s\S]{0,220}stage_total_frames\s*=\s*stage_total_frames",
+        "stage-file chunk planner must forward one runtime config and precomputed progress total",
+    ),
+    _require(
+        "direct-cli-logging-setup",
+        "backend/app/cli/main.py",
+        r"args\s*=\s*parser\.parse_args\(\)\s*setup_logging\(\)\s*args\.func\(args\)",
+        "CLI must initialize logging directly after argument parsing",
     ),
     _require(
         "raw-pipeline-encoder-config-root",
@@ -1899,6 +1975,13 @@ REQUIRED_PATTERN_RULES = (
 
 
 REFERENCE_RULES = (
+    ForbiddenReferenceRule(
+        "obsolete-app-shell-status-reference",
+        roots=("frontend/src", "frontend/tests"),
+        patterns=(r"\buseAppShellStatus\b", r"composables/selectors/useAppShellStatus"),
+        message="obsolete AppShell status facade reference",
+        suffixes=(".ts", ".vue"),
+    ),
     ForbiddenReferenceRule(
         "obsolete-batch-lifecycle-facade-reference",
         roots=("frontend/src", "frontend/tests"),

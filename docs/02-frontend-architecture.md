@@ -87,20 +87,26 @@ graph TB
 
 ## Pinia Store 设计
 
-使用 Composition API 风格（`reactive` + `ref`），共 5 个 store：
+使用 Composition API 风格（`reactive` + `ref`），共 6 个 store：
 
 | Store | 文件 | 职责 |
 |-------|------|------|
 | `useEnvStore` | [`stores/env.ts`](../frontend/src/stores/env.ts) | 环境探测状态（是否探测中、探测结果、错误） |
-| `useMediaStore` | [`stores/media.ts`](../frontend/src/stores/media.ts) | 媒体列表（增删改查、选中状态、激活项、任务状态） |
+| `useMediaStore` | [`stores/media.ts`](../frontend/src/stores/media.ts) | 媒体列表（增删改查、选中状态、激活项和配置快照） |
+| `useMediaRunState` | [`stores/mediaRunState.ts`](../frontend/src/stores/mediaRunState.ts) | 按媒体 ID 保存任务状态和最近输出路径 |
 | `usePresetStore` | [`stores/preset.ts`](../frontend/src/stores/preset.ts) | 预设草稿（解码/编码/工作流/输出配置的编辑状态） |
 | `useTaskStore` | [`stores/task.ts`](../frontend/src/stores/task.ts) | 批处理任务队列（运行状态、暂停、冲突、进度统计） |
 | `useIssueStore` | [`stores/issue.ts`](../frontend/src/stores/issue.ts) | 全局操作错误横幅（按 scope 管理） |
 
 **设计要点：**
 - `useMediaStore` 是核心，管理媒体项列表和每个项的配置快照
+- `useMediaRunState` 独立保存逐媒体运行状态，避免任务事件写入污染媒体实体
 - `useTaskStore` 只管理批处理运行时状态，不直接持有媒体数据
 - `useIssueStore` 从 `mediaStore` 中分离出来，避免测试依赖耦合
+
+App 顶栏和 StepRail 通过 `useCurrentTaskStatusLabel()` 读取同一任务状态投影。selector 先用
+`useMediaStore.findItem(batch.currentId)` 校验当前媒体，再组合 `useTaskStore` 与
+`useMediaRunState`，确保失效的 current ID 不会读取遗留运行状态。
 
 ## IPC 调用层
 
