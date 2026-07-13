@@ -103,19 +103,17 @@ def build_encode_output_args(output_path: str, encode_config: dict[str, Any] | N
     return args
 
 
-def extract_audio(ffmpeg_path: str, input_path: str, output_path: str) -> str | None:
+def extract_audio(ffmpeg_path: str, input_path: str, output_path: str) -> bool:
     cmd = [ffmpeg_path, "-i", input_path, "-vn", "-acodec", "copy", output_path, "-y"]
     try:
         run_ffmpeg_command(cmd)
     except Exception as exc:  # pragma: no cover - defensive boundary
         logger.warning("Audio extraction failed: %s", exc)
-        return None
-    if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
-        return output_path
-    return None
+        return False
+    return os.path.isfile(output_path) and os.path.getsize(output_path) > 0
 
 
-def merge_audio(ffmpeg_path: str, video_path: str, audio_path: str, output_path: str) -> str:
+def merge_audio(ffmpeg_path: str, video_path: str, audio_path: str, output_path: str) -> None:
     cmd = [
         ffmpeg_path,
         "-i",
@@ -135,7 +133,6 @@ def merge_audio(ffmpeg_path: str, video_path: str, audio_path: str, output_path:
         "-y",
     ]
     run_ffmpeg_command(cmd)
-    return output_path
 
 
 def concat_videos(ffmpeg_path: str, segment_paths: list[str], output_path: str) -> None:

@@ -28,12 +28,13 @@ describe('useTaskStore', () => {
   it('setPendingConflict accepts a descriptor and null', () => {
     const store = useTaskStore()
     const descriptor = {
-      mediaId: 'media-1',
       outputPath: 'D:/out.mp4',
       kind: 'final_exists_with_resume' as const,
-      completedChunks: 2,
-      completedOutputFrames: 200,
-      sidecarSignatureMatch: true,
+      progress: {
+        completedChunks: 2,
+        completedOutputFrames: 200,
+        totalOutputFrames: 400,
+      },
     }
     store.setPendingConflict(descriptor)
     expect(store.pendingConflict).toEqual(descriptor)

@@ -205,6 +205,8 @@ graph LR
 
 `conflict.ts` 和 `events.ts` 只接收各自需要的 lifecycle capability；内部 queue/finalize 方法不会成为 BatchRunner 的公共返回字段。
 
+`ResumeInspectionResult` 只存在于 IPC 边界。进入任务状态前，`resume-classifier.ts` 将它或运行时 error details 投影为 `{ kind, outputPath, progress }`；对话框不保存输入路径、pipeline kind、sidecar 标记等未消费 wire 字段。
+
 ### Task orchestrator runtime 单例
 
 [`frontend/src/composables/app/taskOrchestratorRuntime.ts`](../frontend/src/composables/app/taskOrchestratorRuntime.ts) 缓存 `BatchRunner` 并连接 Pinia、IPC 与事件监听；`useTaskOrchestrator()` 及启动、取消、暂停、恢复、冲突处理路径都取得同一实例。
@@ -297,16 +299,21 @@ const _COVERAGE_CHECK: _VariantsCovered = true
 - 若 Rust 新增 `TaskEventName` variant 但未同步到 `TASK_EVENT_NAMES`，`_VariantsCovered` 变为 `never`，`tsc` 报错
 - 若 `TASK_EVENT_NAMES` 的值不是合法的 `TaskEventName`（如 typo），`satisfies` 直接报错
 
-### 错误码覆盖检查
+### 错误码类型检查
 
-[`frontend/src/types/protocol/errors.ts`](../frontend/src/types/protocol/errors.ts) 采用相同模式：
+完整错误码集合由 ts-rs 生成的 `TaskErrorCode` union 提供；运行时代码只为实际需要比较或构造的错误码维护别名：
 
 ```typescript
 export const TASK_ERROR_CODES = {
-  MissingFfmpeg: 'missing_ffmpeg',
-  // ... 14 个错误码
+  ProcessFailed: 'process_failed',
+  ResumeConflict: 'resume_conflict',
+  IoError: 'io_error',
+  SchemaMismatch: 'schema_mismatch',
+  PersistenceFailed: 'persistence_failed',
 } as const satisfies Record<string, TaskErrorCode>
 ```
+
+完整性由 Rust/Python/generated TypeScript 三层漂移检查负责；运行时别名表不复制未被前端消费的枚举成员。
 
 ### 形状反向锁
 

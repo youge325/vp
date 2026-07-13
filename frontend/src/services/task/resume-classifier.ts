@@ -1,36 +1,48 @@
 // pure: no Vue / no Pinia / no Tauri
-// Resume 冲突分类与从错误 details 重建 inspection 结构。
+// Resume 冲突分类与 wire/error payload 到领域 descriptor 的投影。
 
 import type { TaskError } from '@/types/domain/media'
-import type { ResumeConflictKind } from '@/types/domain/batch'
+import type { ResumeConflictDescriptor } from '@/types/domain/batch'
 import type { ResumeInspectionResult } from '@/types/protocol'
 
-export function classifyResumeConflict(inspection: ResumeInspectionResult): ResumeConflictKind | null {
+interface ResumeConflictSource {
+  outputPath: string
+  signatureMatch: boolean
+  completedChunks: number
+  completedOutputFrames: number
+  totalOutputFrames: number
+}
+
+function createResumeConflictDescriptor(source: ResumeConflictSource): ResumeConflictDescriptor {
+  return {
+    kind: source.signatureMatch && source.completedChunks > 0
+      ? 'final_exists_with_resume'
+      : 'final_exists_only',
+    outputPath: source.outputPath,
+    progress: {
+      completedChunks: source.completedChunks,
+      completedOutputFrames: source.completedOutputFrames,
+      totalOutputFrames: source.totalOutputFrames,
+    },
+  }
+}
+
+export function buildResumeConflictDescriptor(
+  inspection: ResumeInspectionResult,
+): ResumeConflictDescriptor | null {
   if (!inspection.finalExists) {
     return null
   }
-  if (inspection.signatureMatch && inspection.completedChunks > 0) {
-    return 'final_exists_with_resume'
-  }
-  return 'final_exists_only'
+  return createResumeConflictDescriptor(inspection)
 }
 
-export function buildInspectionFromError(
-  error: TaskError,
-  fallbackInputPath: string,
-): ResumeInspectionResult {
+export function buildResumeConflictDescriptorFromError(error: TaskError): ResumeConflictDescriptor {
   const details = (error.details ?? {}) as Record<string, unknown>
-  return {
-    type: 'resume_inspection',
-    pipeline_kind: 'streaming',
+  return createResumeConflictDescriptor({
     outputPath: typeof details.outputPath === 'string' ? details.outputPath : '',
-    input_path: typeof details.inputPath === 'string' ? details.inputPath : fallbackInputPath,
-    finalExists: true,
-    sidecarExists: Boolean(details.sidecarSignatureMatch),
     signatureMatch: Boolean(details.sidecarSignatureMatch),
     completedChunks: Number(details.completedChunks ?? 0),
     completedOutputFrames: Number(details.completedOutputFrames ?? 0),
-    nextSourceFrame: 0,
     totalOutputFrames: 0,
-  }
+  })
 }

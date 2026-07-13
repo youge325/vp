@@ -113,7 +113,7 @@ def run_stage_file_pipeline(
         if is_final_stage:
             return completed_frames
 
-        finalized = finalize_segmented_output(
+        finalize_segmented_output(
             ffmpeg=ffmpeg,
             input_path=current_path,
             output_path=stage_context.output_path,
@@ -124,7 +124,7 @@ def run_stage_file_pipeline(
             strict_total_frames=True,
         )
         stage_context.manifest.cleanup()
-        current_path = finalized
+        current_path = stage_context.output_path
         current_width = output_width
         current_height = output_height
         current_fps = stage_fps

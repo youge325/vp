@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildInspectionFromError, classifyResumeConflict } from '@/services/task/resume-classifier'
+import {
+  buildResumeConflictDescriptor,
+  buildResumeConflictDescriptorFromError,
+} from '@/services/task/resume-classifier'
 import type { TaskError } from '@/types/domain/media'
 
 describe('resume conflict classification', () => {
   it('classifies final output with resumable chunks', () => {
-    expect(classifyResumeConflict({
+    expect(buildResumeConflictDescriptor({
       type: 'resume_inspection',
       pipeline_kind: 'streaming',
       outputPath: 'D:/out.mp4',
@@ -17,10 +20,18 @@ describe('resume conflict classification', () => {
       completedOutputFrames: 120,
       nextSourceFrame: 60,
       totalOutputFrames: 240,
-    })).toBe('final_exists_with_resume')
+    })).toEqual({
+      kind: 'final_exists_with_resume',
+      outputPath: 'D:/out.mp4',
+      progress: {
+        completedChunks: 2,
+        completedOutputFrames: 120,
+        totalOutputFrames: 240,
+      },
+    })
   })
 
-  it('rebuilds the generated inspection wire shape from error details', () => {
+  it('projects error details without fabricating an inspection wire payload', () => {
     const error: TaskError = {
       code: 'resume_conflict',
       message: 'resume conflict',
@@ -33,18 +44,27 @@ describe('resume conflict classification', () => {
       },
     }
 
-    expect(buildInspectionFromError(error, 'D:/fallback.mp4')).toEqual({
-      type: 'resume_inspection',
-      pipeline_kind: 'streaming',
+    expect(buildResumeConflictDescriptorFromError(error)).toEqual({
+      kind: 'final_exists_with_resume',
       outputPath: 'D:/out.mp4',
-      input_path: 'D:/in.mp4',
-      finalExists: true,
-      sidecarExists: true,
-      signatureMatch: true,
-      completedChunks: 2,
-      completedOutputFrames: 120,
-      nextSourceFrame: 0,
-      totalOutputFrames: 0,
+      progress: {
+        completedChunks: 2,
+        completedOutputFrames: 120,
+        totalOutputFrames: 0,
+      },
     })
+  })
+
+  it('does not offer resume when a matching sidecar has no completed chunks', () => {
+    expect(buildResumeConflictDescriptorFromError({
+      code: 'resume_conflict',
+      message: 'resume conflict',
+      details: {
+        outputPath: 'D:/out.mp4',
+        sidecarSignatureMatch: true,
+        completedChunks: 0,
+        completedOutputFrames: 0,
+      },
+    }).kind).toBe('final_exists_only')
   })
 })

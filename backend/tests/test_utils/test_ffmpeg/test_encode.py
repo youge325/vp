@@ -50,6 +50,31 @@ def test_concat_videos_runs_command_and_removes_temporary_manifest(tmp_path, mon
     assert not manifest_path.exists()
 
 
+def test_extract_audio_reports_whether_the_requested_output_was_created(tmp_path, monkeypatch) -> None:
+    output_path = tmp_path / "audio.aac"
+
+    def create_output(_command: list[str]) -> None:
+        output_path.write_bytes(b"audio")
+
+    monkeypatch.setattr(encode, "run_ffmpeg_command", create_output)
+
+    assert encode.extract_audio("ffmpeg", "input.mp4", str(output_path)) is True
+
+    output_path.unlink()
+    monkeypatch.setattr(encode, "run_ffmpeg_command", lambda _command: None)
+    assert encode.extract_audio("ffmpeg", "input.mp4", str(output_path)) is False
+
+
+def test_merge_audio_runs_as_a_command(monkeypatch) -> None:
+    commands: list[list[str]] = []
+    monkeypatch.setattr(encode, "run_ffmpeg_command", commands.append)
+
+    result = encode.merge_audio("ffmpeg", "video.mp4", "audio.aac", "output.mp4")
+
+    assert result is None
+    assert commands[0][-2:] == ["output.mp4", "-y"]
+
+
 def test_transcode_video_runs_non_progress_command(monkeypatch) -> None:
     commands: list[list[str]] = []
     monkeypatch.setattr(encode, "run_ffmpeg_command", commands.append)

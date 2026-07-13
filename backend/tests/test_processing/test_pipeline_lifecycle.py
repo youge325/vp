@@ -67,14 +67,12 @@ def test_emit_resume_status_event_uses_existing_ndjson_payload(monkeypatch) -> N
 
 def test_finalize_streaming_output_cleans_sidecar_after_success_and_builds_result(monkeypatch, tmp_path) -> None:
     output_path = tmp_path / "out.mp4"
-    final_path = tmp_path / "final.mp4"
     manifest = SegmentManifest(str(output_path))
     manifest.sidecar_dir.mkdir(parents=True)
     calls: dict[str, object] = {}
 
     def fake_finalize(**kwargs):
         calls.update(kwargs)
-        return str(final_path)
 
     monkeypatch.setattr(
         "app.processing.streaming.pipeline_lifecycle.finalize_segmented_output",
@@ -94,11 +92,11 @@ def test_finalize_streaming_output_cleans_sidecar_after_success_and_builds_resul
     )
 
     assert result == {
-        "output_path": str(final_path),
+        "output_path": str(output_path),
         "processed_frames": 12,
         "audio_merged": False,
     }
-    assert ffmpeg.counted_path == str(final_path)
+    assert ffmpeg.counted_path == str(output_path)
     assert calls["manifest"] is manifest
     assert calls["strict_total_frames"] is True
     assert not manifest.sidecar_dir.exists()

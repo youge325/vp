@@ -22,16 +22,15 @@ class _FakeFFmpeg:
     def has_audio(self, _input_path: str) -> bool:
         return self.has_audio_value
 
-    def extract_audio(self, _input_path: str, output_path: str) -> str | None:
+    def extract_audio(self, _input_path: str, output_path: str) -> bool:
         if not self.extracted_audio:
-            return None
+            return False
         Path(output_path).write_bytes(b"audio")
-        return output_path
+        return True
 
-    def merge_audio(self, video_path: str, audio_path: str, output_path: str) -> str:
+    def merge_audio(self, video_path: str, audio_path: str, output_path: str) -> None:
         self.merged = (video_path, audio_path, output_path)
         Path(output_path).write_bytes(b"merged")
-        return output_path
 
 
 def _manifest_with_chunk(tmp_path: Path, *, output_name: str = "out.mp4") -> SegmentManifest:
@@ -55,7 +54,7 @@ def test_finalize_segmented_output_concats_segments_without_audio(tmp_path: Path
     output_path = str(tmp_path / "out.mp4")
     ffmpeg = _FakeFFmpeg(has_audio=False)
 
-    result = finalize_segmented_output(
+    finalize_segmented_output(
         ffmpeg=ffmpeg,
         input_path=str(tmp_path / "input.mp4"),
         output_path=output_path,
@@ -66,7 +65,6 @@ def test_finalize_segmented_output_concats_segments_without_audio(tmp_path: Path
         strict_total_frames=True,
     )
 
-    assert result == output_path
     assert Path(output_path).read_bytes() == b"concat"
     assert ffmpeg.concat_calls[0][0] == [str(manifest.sidecar_dir / manifest.scan_completed_chunks()[0].path)]
     assert ffmpeg.merged is None
@@ -77,7 +75,7 @@ def test_finalize_segmented_output_merges_audio_when_requested(tmp_path: Path) -
     output_path = str(tmp_path / "out.mp4")
     ffmpeg = _FakeFFmpeg(has_audio=True)
 
-    result = finalize_segmented_output(
+    finalize_segmented_output(
         ffmpeg=ffmpeg,
         input_path=str(tmp_path / "input.mp4"),
         output_path=output_path,
@@ -88,7 +86,6 @@ def test_finalize_segmented_output_merges_audio_when_requested(tmp_path: Path) -
         strict_total_frames=True,
     )
 
-    assert result == output_path
     assert Path(output_path).read_bytes() == b"merged"
     assert ffmpeg.merged is not None
     assert not Path(ffmpeg.merged[0]).exists()

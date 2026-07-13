@@ -5,7 +5,7 @@
 VP Workbench 采用**结构化错误**替代字符串错误，核心原则：
 
 1. **具名 variant 优于 catch-all**：每个失败场景对应一个具体的错误变体，便于前端按码路由
-2. **三层同名枚举保证可路由性**：Python `TaskErrorCode`、Rust `TaskErrorCode`、TypeScript `TASK_ERROR_CODES` 使用相同的 snake_case 字符串
+2. **三层同名枚举保证可路由性**：Python `TaskErrorCode`、Rust `TaskErrorCode`、ts-rs 生成的 TypeScript `TaskErrorCode` union 使用相同的 snake_case 字符串；`TASK_ERROR_CODES` 只保留前端实际使用的运行时别名
 3. **保留 error source chain**：Rust 的 `ShellError` 保留原始 `io::Error` / `serde_json::Error`，不丢失上下文
 
 ## Rust 层：ShellError

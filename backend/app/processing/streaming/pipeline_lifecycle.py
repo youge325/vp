@@ -58,7 +58,7 @@ def finalize_streaming_output(
     total_output_frames: int,
     strict_total_frames: bool,
 ) -> dict[str, Any]:
-    final_output = finalize_segmented_output(
+    finalize_segmented_output(
         ffmpeg=ffmpeg,
         input_path=input_path,
         output_path=output_path,
@@ -70,9 +70,9 @@ def finalize_streaming_output(
     )
 
     manifest.cleanup()
-    processed_frames = ffmpeg.get_frame_count(final_output)
+    processed_frames = ffmpeg.get_frame_count(output_path)
     return {
-        "output_path": final_output,
+        "output_path": output_path,
         "processed_frames": processed_frames or completed_output_frames,
         "audio_merged": bool(encode_config.get("keepAudio", True)),
     }

@@ -219,22 +219,26 @@ pub enum TaskEventName {
 
 ### 三层一致的 TaskErrorCode
 
-| 错误码 | Python 枚举 | Rust 枚举 | TS 常量 |
+| 错误码 | Python 枚举 | Rust 枚举 | TS generated union |
 |--------|------------|-----------|---------|
-| `missing_ffmpeg` | `MISSING_FFMPEG` | `MissingFfmpeg` | `MissingFfmpeg` |
-| `missing_model` | `MISSING_MODEL` | `MissingModel` | `MissingModel` |
-| `missing_tensor_backend` | `MISSING_TENSOR_BACKEND` | `MissingTensorBackend` | `MissingTensorBackend` |
-| `missing_python_dependency` | `MISSING_PYTHON_DEPENDENCY` | `MissingPythonDependency` | `MissingPythonDependency` |
-| `cancelled` | `CANCELLED` | `Cancelled` | `Cancelled` |
-| `process_failed` | `PROCESS_FAILED` | `ProcessFailed` | `ProcessFailed` |
-| `spawn_failed` | `SPAWN_FAILED` | `SpawnFailed` | `SpawnFailed` |
-| `runtime_panic` | `RUNTIME_PANIC` | `RuntimePanic` | `RuntimePanic` |
-| `invalid_input` | `INVALID_INPUT` | `InvalidInput` | `InvalidInput` |
-| `invalid_config` | `INVALID_CONFIG` | `InvalidConfig` | `InvalidConfig` |
-| `resume_conflict` | `RESUME_CONFLICT` | `ResumeConflict` | `ResumeConflict` |
-| `io_error` | `IO_ERROR` | `IoError` | `IoError` |
-| `schema_mismatch` | `SCHEMA_MISMATCH` | `SchemaMismatch` | `SchemaMismatch` |
-| `persistence_failed` | `PERSISTENCE_FAILED` | `PersistenceFailed` | `PersistenceFailed` |
+| `missing_ffmpeg` | `MISSING_FFMPEG` | `MissingFfmpeg` | `"missing_ffmpeg"` |
+| `missing_model` | `MISSING_MODEL` | `MissingModel` | `"missing_model"` |
+| `missing_tensor_backend` | `MISSING_TENSOR_BACKEND` | `MissingTensorBackend` | `"missing_tensor_backend"` |
+| `missing_python_dependency` | `MISSING_PYTHON_DEPENDENCY` | `MissingPythonDependency` | `"missing_python_dependency"` |
+| `cancelled` | `CANCELLED` | `Cancelled` | `"cancelled"` |
+| `process_failed` | `PROCESS_FAILED` | `ProcessFailed` | `"process_failed"` |
+| `spawn_failed` | `SPAWN_FAILED` | `SpawnFailed` | `"spawn_failed"` |
+| `runtime_panic` | `RUNTIME_PANIC` | `RuntimePanic` | `"runtime_panic"` |
+| `invalid_input` | `INVALID_INPUT` | `InvalidInput` | `"invalid_input"` |
+| `invalid_config` | `INVALID_CONFIG` | `InvalidConfig` | `"invalid_config"` |
+| `resume_conflict` | `RESUME_CONFLICT` | `ResumeConflict` | `"resume_conflict"` |
+| `io_error` | `IO_ERROR` | `IoError` | `"io_error"` |
+| `schema_mismatch` | `SCHEMA_MISMATCH` | `SchemaMismatch` | `"schema_mismatch"` |
+| `persistence_failed` | `PERSISTENCE_FAILED` | `PersistenceFailed` | `"persistence_failed"` |
+| `backend_no_json` | `BACKEND_NO_JSON` | `BackendNoJson` | `"backend_no_json"` |
+| `backend_envelope` | `BACKEND_ENVELOPE` | `BackendEnvelope` | `"backend_envelope"` |
+| `controller_unavailable` | `CONTROLLER_UNAVAILABLE` | `ControllerUnavailable` | `"controller_unavailable"` |
+| `backend_probe_failed` | `BACKEND_PROBE_FAILED` | `BackendProbeFailed` | `"backend_probe_failed"` |
 
 ### Rust ShellError → TaskErrorCode 映射
 
@@ -311,6 +315,6 @@ Controller 根据三个信号的组合决定终止事件类型：
 |--------|-----------|---------|---------|
 | Tauri Command 清单 | `commands_manifest.rs` | `lib.rs` handler + `permissions/default.toml` | `lib.rs::tests` 反向断言 |
 | 事件名 | Rust `TaskEventName` | TS `TASK_EVENT_NAMES` | `satisfies Record<string, TaskEventName>` |
-| 错误码 | Rust `TaskErrorCode` | TS `TASK_ERROR_CODES` + Python `TaskErrorCode` | `test_schema_drift.py` + `satisfies` |
+| 错误码 | Rust `TaskErrorCode` | generated TS union + Python `TaskErrorCode` | `check_error_code_drift.py` + `test_schema_drift.py` |
 | 配置模型 | Rust `models/*.rs` | TS `types/generated/*.ts` | `ts-rs` 编译时生成 + `cargo build` |
 | ACL 清单 | `permissions/default.toml` | `gen/schemas/acl-manifests.json` | `lib.rs::tests` 反向断言 |
