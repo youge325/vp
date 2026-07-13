@@ -22,8 +22,6 @@ import type { createCommonHelpers } from './lifecycle/common'
 import type { createFinalizeOps } from './lifecycle/finalize'
 import type { BatchLifecycleDeps } from './lifecycle/types'
 
-type ConflictResolver = ReturnType<typeof createConflictResolver>
-
 type EventHandlersDeps = Pick<
   BatchLifecycleDeps,
   'setItemTaskState' | 'setItemLastOutputPath' | 'setTaskIssue'
@@ -37,7 +35,7 @@ type EventLifecycle = Pick<
 export function createEventHandlers(
   deps: EventHandlersDeps,
   lifecycle: EventLifecycle,
-  conflict: ConflictResolver,
+  conflict: ReturnType<typeof createConflictResolver>,
 ) {
   function onProgress(_payload: TaskProgressPayload): void {
     const item = lifecycle.getConsoleItem()

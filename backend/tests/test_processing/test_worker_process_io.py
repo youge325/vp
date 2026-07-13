@@ -14,8 +14,8 @@ from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import StageWorkerPlan
 from app.processing.streaming.worker_process_io import (
     DecodedFrameWriterConfig,
+    decoded_frame_writer_session,
     drain_final_worker_output,
-    start_decoded_frame_writer,
 )
 
 
@@ -23,8 +23,12 @@ class _FakeReader:
     def __init__(self, frames: list[np.ndarray]) -> None:
         self.frames = list(frames)
         self.closed = False
+        self.thread_name: str | None = None
+        self.thread_daemon: bool | None = None
 
     def read_frame(self) -> np.ndarray | None:
+        self.thread_name = threading.current_thread().name
+        self.thread_daemon = threading.current_thread().daemon
         if not self.frames:
             return None
         return self.frames.pop(0)
@@ -52,19 +56,20 @@ class _FakeStdin(io.BytesIO):
         self.was_closed = True
 
 
-def test_start_decoded_frame_writer_streams_frames_and_closes_reader() -> None:
+def test_decoded_frame_writer_session_streams_frames_and_joins_on_exit() -> None:
     frames = [np.array([[[1, 2, 3]]], dtype=np.uint8), np.array([[[4, 5, 6]]], dtype=np.uint8)]
     reader = _FakeReader(frames)
     ffmpeg = _FakeFFmpeg(reader)
     stdin = _FakeStdin()
     error_queue: queue.Queue[BaseException] = queue.Queue()
 
-    thread = start_decoded_frame_writer(
+    with decoded_frame_writer_session(
         DecodedFrameWriterConfig(
             ffmpeg=ffmpeg,
             input_path="input.mp4",
             decode_config={"mode": "software"},
-            video_info={"width": 1, "height": 1},
+            width=1,
+            height=1,
             start_source_frame=3,
             worker_stdin=stdin,
             error_queue=error_queue,
@@ -72,8 +77,8 @@ def test_start_decoded_frame_writer_streams_frames_and_closes_reader() -> None:
             frame_count=2,
         ),
         thread_name="vp-test-decoder",
-    )
-    thread.join()
+    ):
+        pass
 
     assert error_queue.empty()
     assert reader.closed is True
@@ -87,8 +92,8 @@ def test_start_decoded_frame_writer_streams_frames_and_closes_reader() -> None:
         "start_frame": 3,
         "frame_count": 2,
     }
-    assert thread.name == "vp-test-decoder"
-    assert thread.daemon is True
+    assert reader.thread_name == "vp-test-decoder"
+    assert reader.thread_daemon is True
 
 
 def test_drain_final_worker_output_stops_after_expected_frame_count() -> None:

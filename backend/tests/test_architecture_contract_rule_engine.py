@@ -270,6 +270,26 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "paddlegan-inline-chunk-trace",
             "    def _process_window_model(self):\n        trace_chunks.append({})\n",
         ),
+        ("batch-conflict-return-interface-mirror", "interface ConflictResolver {}\n"),
+        (
+            "obsolete-decoded-frame-writer-starter",
+            "start_decoded_frame_writer(config, thread_name='decode')\n",
+        ),
+        (
+            "decoded-frame-writer-video-info-bag",
+            "class DecodedFrameWriterConfig:\n    video_info: dict\n",
+        ),
+        ("decoded-writer-manual-lifecycle-0", "decode_thread.join()\n"),
+        ("decoded-writer-manual-lifecycle-1", "decode_thread.join()\n"),
+        (
+            "stage-file-chunk-requeued-raised-error",
+            "except BaseException as exc:\n    error_queue.put(exc)\n    raise\n",
+        ),
+        (
+            "benchmark-success-report-prewrite",
+            "_write_reports(report, json_path=json_path, markdown_path=markdown_path)\n"
+            "baseline = _load_baseline(baseline_path)\n",
+        ),
         (
             "pipeline-test-private-aliases",
             "from app.processing.streaming.pipeline import _run_streaming_pipeline\n",
@@ -345,6 +365,18 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
         (
             "shared-rust-backend-error-payload",
             "fn backend_error_payload(stderr_capture: &StderrCapture) -> TaskErrorPayload { todo!() }\n",
+        ),
+        (
+            "shared-decoded-frame-writer-session",
+            "class DecodedFrameWriterConfig:\n"
+            "    width: int\n"
+            "    height: int\n"
+            "@contextmanager\n"
+            "def decoded_frame_writer_session(config):\n"
+            "    thread = Thread(target=_write_decoded_frames_to_worker)\n"
+            "    thread.start()\n"
+            "    yield\n"
+            "    thread.join()\n",
         ),
     ],
 )

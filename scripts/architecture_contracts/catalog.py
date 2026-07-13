@@ -1184,6 +1184,16 @@ FORBIDDEN_PATTERN_RULES = (
         message="handwritten lifecycle return interface mirror",
         suffixes=(".ts",),
     ),
+    ForbiddenReferenceRule(
+        "batch-conflict-return-interface-mirror",
+        roots=(
+            "frontend/src/services/task/batch/conflict.ts",
+            "frontend/src/services/task/batch/events.ts",
+        ),
+        patterns=(r"\b(?:interface|type)\s+ConflictResolver\b",),
+        message="handwritten or one-use conflict resolver return mirror",
+        suffixes=(".ts",),
+    ),
     _forbid(
         "preset-sync-duplicate-error-normalization",
         "frontend/src/composables/app/usePresetSync.ts",
@@ -1251,6 +1261,46 @@ FORBIDDEN_PATTERN_RULES = (
                 "backend/app/processing/streaming/stage_file_chunk_runtime.py",
             )
         )
+    ),
+    ForbiddenReferenceRule(
+        "obsolete-decoded-frame-writer-starter",
+        roots=("backend/app", "backend/tests"),
+        patterns=(r"\bstart_decoded_frame_writer\b",),
+        message="obsolete decoded-frame writer thread starter",
+        suffixes=(".py",),
+        excludes=("backend/tests/test_architecture_contract_rule_engine.py",),
+    ),
+    _forbid(
+        "decoded-frame-writer-video-info-bag",
+        "backend/app/processing/streaming/worker_process_io.py",
+        r"class\s+DecodedFrameWriterConfig\b[\s\S]*?\bvideo_info\s*:",
+        "decoded-frame writer config carries an overbroad video info bag",
+    ),
+    *(
+        _forbid(
+            f"decoded-writer-manual-lifecycle-{index}",
+            path,
+            r"\bdecode_thread\b|\bstart_decoded_frame_writer\b",
+            "decoded-frame writer lifecycle outside shared session",
+        )
+        for index, path in enumerate(
+            (
+                "backend/app/processing/streaming/worker_chain_runtime.py",
+                "backend/app/processing/streaming/stage_file_chunk_runtime.py",
+            )
+        )
+    ),
+    _forbid(
+        "stage-file-chunk-requeued-raised-error",
+        "backend/app/processing/streaming/stage_file_chunk_runtime.py",
+        r"except\s+BaseException\s+as\s+(\w+):[\s\S]{0,200}\berror_queue\.put\(\1\)[\s\S]{0,80}\braise\b",
+        "stage-file chunk requeues an exception that is immediately raised",
+    ),
+    _forbid(
+        "benchmark-success-report-prewrite",
+        "backend/app/cli/commands/benchmark.py",
+        r"_write_reports\s*\([^\n]+\)\s*\n\s*baseline\s*=\s*_load_baseline\s*\(",
+        "benchmark writes an incomplete report before a successful comparison",
     ),
     *(
         _forbid(
@@ -1509,10 +1559,10 @@ REQUIRED_PATTERN_RULES = (
         "single declarative frame-filter descriptor registry is missing",
     ),
     _require(
-        "shared-decoded-frame-writer-thread",
+        "shared-decoded-frame-writer-session",
         "backend/app/processing/streaming/worker_process_io.py",
-        r"class\s+DecodedFrameWriterConfig\b[\s\S]*def\s+start_decoded_frame_writer\b[\s\S]*target=_write_decoded_frames_to_worker",
-        "shared decoded-frame writer thread helper is missing",
+        r"class\s+DecodedFrameWriterConfig\b[\s\S]*\bwidth:\s*int[\s\S]*\bheight:\s*int[\s\S]*@contextmanager\s+def\s+decoded_frame_writer_session\b[\s\S]*target=_write_decoded_frames_to_worker[\s\S]*thread\.start\(\)[\s\S]*yield[\s\S]*thread\.join\(\)",
+        "shared decoded-frame writer session is missing",
     ),
     _require(
         "primary-video-dimensions-helper",

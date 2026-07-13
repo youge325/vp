@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import queue
 import threading
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterator
 
 from app.planning import StagePlan
 from app.planning.manifest import ResumeState
@@ -20,7 +21,8 @@ class DecodedFrameWriterConfig:
     ffmpeg: Any
     input_path: str
     decode_config: dict[str, Any]
-    video_info: dict[str, Any]
+    width: int
+    height: int
     start_source_frame: int
     worker_stdin: Any
     error_queue: queue.Queue[BaseException]
@@ -37,8 +39,8 @@ def _write_decoded_frames_to_worker(config: DecodedFrameWriterConfig) -> None:
     try:
         reader = config.ffmpeg.open_rawvideo_decoder(
             input_path=config.input_path,
-            width=int(config.video_info["width"]),
-            height=int(config.video_info["height"]),
+            width=config.width,
+            height=config.height,
             decode_config=config.decode_config,
             start_frame=config.start_source_frame,
             frame_count=config.frame_count,
@@ -50,8 +52,8 @@ def _write_decoded_frames_to_worker(config: DecodedFrameWriterConfig) -> None:
             write_rgb_frame(
                 config.worker_stdin,
                 frame,
-                width=int(config.video_info["width"]),
-                height=int(config.video_info["height"]),
+                width=config.width,
+                height=config.height,
             )
         config.worker_stdin.close()
     except BaseException as exc:  # pragma: no cover - thread boundary
@@ -67,11 +69,12 @@ def _write_decoded_frames_to_worker(config: DecodedFrameWriterConfig) -> None:
                 config.error_queue.put(exc)
 
 
-def start_decoded_frame_writer(
+@contextmanager
+def decoded_frame_writer_session(
     config: DecodedFrameWriterConfig,
     *,
     thread_name: str,
-) -> threading.Thread:
+) -> Iterator[None]:
     thread = threading.Thread(
         target=_write_decoded_frames_to_worker,
         name=thread_name,
@@ -79,7 +82,10 @@ def start_decoded_frame_writer(
         daemon=True,
     )
     thread.start()
-    return thread
+    try:
+        yield
+    finally:
+        thread.join()
 
 
 def drain_final_worker_output(
@@ -142,6 +148,6 @@ def close_pipe(pipe: Any) -> None:
 __all__ = [
     "DecodedFrameWriterConfig",
     "close_pipe",
+    "decoded_frame_writer_session",
     "drain_final_worker_output",
-    "start_decoded_frame_writer",
 ]

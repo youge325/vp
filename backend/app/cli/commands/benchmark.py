@@ -74,20 +74,21 @@ def cmd_benchmark(args: argparse.Namespace) -> None:
 
     if args.update_baseline:
         write_json_report(report, baseline_path)
-        report["comparison"] = {
+        comparison = {
             "baselineName": report.get("name"),
             "threshold": args.threshold,
             "passed": True,
             "regressions": [],
             "updatedBaseline": str(baseline_path),
         }
-        _write_reports(report, json_path=json_path, markdown_path=markdown_path)
-        print(json.dumps(report, ensure_ascii=False), flush=True)
-        return
+    else:
+        try:
+            baseline = _load_baseline(baseline_path)
+        except BaseException:
+            _write_reports(report, json_path=json_path, markdown_path=markdown_path)
+            raise
+        comparison = compare_reports(current=report, baseline=baseline, threshold=args.threshold)
 
-    _write_reports(report, json_path=json_path, markdown_path=markdown_path)
-    baseline = _load_baseline(baseline_path)
-    comparison = compare_reports(current=report, baseline=baseline, threshold=args.threshold)
     report["comparison"] = comparison
     _write_reports(report, json_path=json_path, markdown_path=markdown_path)
     print(json.dumps(report, ensure_ascii=False), flush=True)

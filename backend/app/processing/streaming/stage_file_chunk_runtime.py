@@ -11,7 +11,7 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_file_chunk_encoding import encode_stage_worker_output
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_plans import StageChunkPlan, StageWorkerPlan
-from app.processing.streaming.worker_process_io import DecodedFrameWriterConfig, start_decoded_frame_writer
+from app.processing.streaming.worker_process_io import DecodedFrameWriterConfig, decoded_frame_writer_session
 from app.processing.streaming.worker_processes import stage_worker_session
 
 
@@ -74,12 +74,13 @@ def run_stage_chunk_to_file(
             python_executable=python_executable,
         ) as handles:
             handle = handles[0]
-            decode_thread = start_decoded_frame_writer(
+            with decoded_frame_writer_session(
                 DecodedFrameWriterConfig(
                     ffmpeg=ffmpeg,
                     input_path=input_path,
                     decode_config=decode_config,
-                    video_info={"width": input_width, "height": input_height},
+                    width=input_width,
+                    height=input_height,
                     start_source_frame=chunk.input_start_frame,
                     frame_count=chunk.input_frame_count,
                     worker_stdin=handle.process.stdin,
@@ -87,9 +88,7 @@ def run_stage_chunk_to_file(
                     stop_event=stop_event,
                 ),
                 thread_name=f"vp-stage-file-decode-{stage_index}",
-            )
-
-            try:
+            ):
                 if handle.process.stdout is None:
                     raise RuntimeError("Stage worker stdout is unavailable.")
                 encoded_frames = encode_stage_worker_output(
@@ -104,11 +103,8 @@ def run_stage_chunk_to_file(
                     encode_output_fps=encode_output_fps,
                     metrics=metrics,
                 )
-            finally:
-                decode_thread.join()
-    except BaseException as exc:
+    except BaseException:
         stop_event.set()
-        error_queue.put(exc)
         raise
 
     if not error_queue.empty():
