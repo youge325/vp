@@ -32,6 +32,10 @@ ABSENT_PATH_RULES = (
     _absent("frontend-enhance-option-aggregator", "frontend/src/composables/forms/enhance-option-bindings.ts"),
     _absent("frontend-decode-form-aggregator", "frontend/src/composables/forms/decode-form-bindings.ts"),
     _absent(
+        "frontend-batch-lifecycle-aggregator",
+        "frontend/src/services/task/batch/lifecycle/index.ts",
+    ),
+    _absent(
         "frontend-decode-form-aggregator-test",
         "frontend/tests/unit/composables/forms/decode-form-bindings.spec.ts",
     ),
@@ -348,6 +352,18 @@ FORBIDDEN_PATTERN_RULES = (
         "backend/app/processing/frame_filters.py",
         r"kind\s+not\s+in\s+\{|getattr\s*\(\s*self\s*,\s*f?[\"']_apply_|^\s+def\s+_apply_(?:tensor_)?(?:scale|crop|pad|sharpen|denoise|color|anime_cleanup)\b|^\s*(?:if|elif)\s+kind\s*==",
         "frame-filter orchestration contains concrete handler or imperative dispatch logic",
+    ),
+    _forbid(
+        "parallel-frame-filter-handler-maps",
+        "backend/app/processing/frame_filter_handlers.py",
+        r"\b(?:_NUMPY_FILTER_HANDLERS|_TENSOR_FILTER_HANDLERS|FILTER_KINDS)\b",
+        "parallel frame-filter registries or exported kind collection",
+    ),
+    _forbid(
+        "frame-filter-kind-capability-branch",
+        "backend/app/processing/frame_filter_handlers.py",
+        r"\bkind\s*(?:==|!=)\s*[\"']denoise[\"']",
+        "filter kind-specific tensor capability branch",
     ),
     _forbid(
         "rust-untyped-resume-inspection-command",
@@ -820,18 +836,6 @@ FORBIDDEN_PATTERN_RULES = (
         )
     ),
     _forbid(
-        "batch-lifecycle-type-reexport",
-        "frontend/src/services/task/batch/lifecycle/index.ts",
-        r"\bexport\s+type\s*\{[^}]*\bBatchLifecycle(?:Deps)?\b",
-        "batch lifecycle facade type re-export",
-    ),
-    _forbid(
-        "batch-lifecycle-interface-mirror",
-        "frontend/src/services/task/batch/lifecycle/types.ts",
-        r"\binterface\s+BatchLifecycle\b",
-        "handwritten BatchLifecycle return interface mirror",
-    ),
-    _forbid(
         "batch-runner-duplicate-deps",
         "frontend/src/services/task/batch-runner.ts",
         r"^\s*interface\s+BatchRunnerDeps\b",
@@ -1259,10 +1263,10 @@ FORBIDDEN_PATTERN_RULES = (
 
 REQUIRED_PATTERN_RULES = (
     RequiredPatternRule(
-        "inferred-batch-lifecycle-type",
-        "frontend/src/services/task/batch/lifecycle/index.ts",
-        r"export\s+type\s+BatchLifecycle\s*=\s*ReturnType<typeof\s+createBatchLifecycle>",
-        "BatchLifecycle must be inferred from the facade return value",
+        "batch-runner-composition-root",
+        "frontend/src/services/task/batch-runner.ts",
+        r"createCommonHelpers\b[\s\S]*createQueueOps\b[\s\S]*createFinalizeOps\b[\s\S]*createControlOps\b",
+        "BatchRunner must compose lifecycle operations directly",
     ),
     RequiredPatternRule(
         "shared-cli-guards",
@@ -1327,8 +1331,8 @@ REQUIRED_PATTERN_RULES = (
     RequiredPatternRule(
         "declarative-frame-filter-handlers",
         "backend/app/processing/frame_filter_handlers.py",
-        r"_NUMPY_FILTER_HANDLERS\s*:[\s\S]*[\"']anime_cleanup[\"'][\s\S]*_TENSOR_FILTER_HANDLERS\s*:[\s\S]*FILTER_KINDS\s*=\s*frozenset",
-        "declarative frame-filter handler maps are missing",
+        r"class\s+_FilterHandler\b[\s\S]*_FILTER_HANDLERS\s*:\s*Mapping\[[^\]]+_FilterHandler\][\s\S]*[\"']anime_cleanup[\"']\s*:\s*_FilterHandler",
+        "single declarative frame-filter descriptor registry is missing",
     ),
     RequiredPatternRule(
         "shared-decoded-frame-writer-thread",
@@ -1478,6 +1482,13 @@ REQUIRED_PATTERN_RULES = (
 
 
 REFERENCE_RULES = (
+    ForbiddenReferenceRule(
+        "obsolete-batch-lifecycle-facade-reference",
+        roots=("frontend/src", "frontend/tests"),
+        patterns=(r"\bcreateBatchLifecycle\b", r"\bBatchLifecycle\b", r"batch/lifecycle[\"']"),
+        message="obsolete broad BatchLifecycle facade reference",
+        suffixes=(".ts", ".vue"),
+    ),
     ForbiddenReferenceRule(
         "obsolete-decode-form-aggregator-reference",
         roots=("frontend/src", "frontend/tests"),

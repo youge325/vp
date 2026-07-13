@@ -1,18 +1,4 @@
-// 控制信号 — pause / resume / cancel。
-//
-// Phase 7a — 从原 ``lifecycle.ts`` 抽出。这三个函数都是"对运行中任务发
-// 出 IPC 控制信号 + 同步 batch 标志位 + 在失败时回滚"的对称结构,集中
-// 到一个文件后将来想统一加 retry / 信号节流时只改这里一处。
-//
-// 与 queue / finalize 不同,control 不需要前向引用 — pause/resume/cancel
-// 不调用对方,失败也只是把状态翻回去并抛错,由 caller(orchestrator /
-// UI)决定下一步。
-//
-// Phase 13.1 — ``item.taskState`` 改读 ``helpers.getCurrentRunState()``,
-// 因为运行时投影已经从 ``MediaItem`` 拆到独立的 ``mediaRunState`` store。
-// pause/resume/cancel 都只有在 ``batch.isRunning`` 时才会执行,意味着
-// run state 至少已经被 queue 启动时初始化过一次,所以下面的 ``runState``
-// 在正常路径上不会为 null;为了 control flow 简明仍然显式 short-circuit。
+// Pause, resume and cancel IPC operations with state rollback on failure.
 
 import { normalizeError } from '@/services/error/normalize'
 import { TASK_ERROR_CODES } from '@/types/protocol'

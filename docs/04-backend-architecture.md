@@ -180,8 +180,8 @@ class IAlgorithm(ABC):
 - 未支持的 stage 类型在装配边界立即失败
 
 帧滤镜链由 `FrameFilterChainAlgorithm` 负责验证、顺序执行和 CPU/Tensor fallback；
-具体滤镜实现与支持能力集中在 `frame_filter_handlers.py` 的静态 handler 映射中。
-新增滤镜必须同时声明 CPU handler，并按实际能力选择性声明 Tensor handler，不使用运行时全局注册表。
+具体滤镜实现与支持能力集中在 `frame_filter_handlers.py` 的单一不可变 descriptor registry 中。
+每种滤镜只注册一次 NumPy handler，并按实际能力选择性声明 Tensor handler 与 capability predicate；不维护平行 kind 列表或运行时全局注册表。
 
 ### RIFE 补帧家族
 

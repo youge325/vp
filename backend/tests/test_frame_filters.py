@@ -353,6 +353,19 @@ def test_can_process_tensor_rejects_nonzero_denoise():
     assert algo.can_process_tensor(_FakePyTorchBackend()) is False
 
 
+def test_zero_denoise_keeps_tensor_identity_path():
+    torch = pytest.importorskip("torch")
+    tensor = torch.rand((1, 3, 8, 10), dtype=torch.float32)
+    algo = _make_pytorch_algorithm(
+        [
+            {"kind": "denoise", "enabled": True, "params": {"strength": 0, "colorStrength": 0}},
+        ]
+    )
+
+    assert algo.can_process_tensor(_FakePyTorchBackend()) is True
+    assert algo.process_tensor(tensor, _FakePyTorchBackend()) is tensor
+
+
 def test_process_tensor_scale_crop_pad_color_preserves_tensor_contract():
     torch = pytest.importorskip("torch")
     tensor = torch.full((1, 3, 8, 10), 0.25, dtype=torch.float32)
