@@ -41,18 +41,15 @@ def run_stage_worker_stream(
     algorithm_factory: Callable[[ProcessingStep, Any], Any] | None = None,
     backend_factory: Callable[[str], Any] | None = None,
     event_sink: EventSink | None = None,
-) -> int:
-    """Run exactly one configured stage over rawvideo streams.
-
-    Returns the number of frames written to ``output_stream``.
-    """
+) -> None:
+    """Run exactly one configured stage over rawvideo streams."""
     sink = event_sink or (lambda _event: None)
     backend = create_backend(config, backend_factory or get_tensor_backend)
     algorithm = (algorithm_factory or create_algorithm)(config.stage, backend)
     metrics = PipelineMetrics()
 
     if algorithm_needs_sequence(algorithm):
-        written = run_sequence_stage(
+        run_sequence_stage(
             config,
             input_stream,
             output_stream,
@@ -61,14 +58,13 @@ def run_stage_worker_stream(
             heartbeat_seconds=stage_worker_progress.SEQUENCE_STAGE_HEARTBEAT_SECONDS,
         )
     elif algorithm_needs_pairs(algorithm):
-        written = run_interpolation_stage(config, input_stream, output_stream, backend, algorithm, sink, metrics)
+        run_interpolation_stage(config, input_stream, output_stream, backend, algorithm, sink, metrics)
     else:
-        written = run_single_frame_stage(config, input_stream, output_stream, backend, algorithm, sink, metrics)
+        run_single_frame_stage(config, input_stream, output_stream, backend, algorithm, sink, metrics)
 
     flush = getattr(output_stream, "flush", None)
     if callable(flush):
         flush()
-    return written
 
 
 __all__ = ["run_stage_worker_stream"]

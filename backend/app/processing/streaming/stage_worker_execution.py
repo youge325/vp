@@ -29,7 +29,7 @@ def run_sequence_stage(
     event_sink: EventSink,
     *,
     heartbeat_seconds: float = SEQUENCE_STAGE_HEARTBEAT_SECONDS,
-) -> int:
+) -> None:
     frames = _read_declared_frames(config, input_stream)
     total = max(int(config.output_frame_count or config.input_frame_count or len(frames)), 1)
     progress_state = StageProgressState()
@@ -68,7 +68,6 @@ def run_sequence_stage(
             event_sink(progress_event(config, index, total, force=index >= total))
     if not emit_write_progress:
         event_sink(progress_event(config, total, total, force=True))
-    return len(output_frames)
 
 
 def run_interpolation_stage(
@@ -79,20 +78,19 @@ def run_interpolation_stage(
     algorithm: Any,
     event_sink: EventSink,
     metrics: PipelineMetrics,
-) -> int:
+) -> None:
     frames = _read_declared_frames(config, input_stream)
     if not frames:
-        return 0
+        return
     if len(frames) == 1:
         write_rgb_frame(output_stream, frames[0], width=config.output_width, height=config.output_height)
         event_sink(progress_event(config, 1, 1))
-        return 1
+        return
 
     multi = int(
         config.stage.algorithm_kwargs.get("multi") or getattr(algorithm, "get_interpolation_multi", lambda: 2)()
     )
     total_pairs = len(frames) - 1
-    written = 0
     previous_payload = FramePayload.from_numpy(frames[0])
     for pair_index, current_frame in enumerate(frames[1:], start=1):
         current_payload = FramePayload.from_numpy(current_frame)
@@ -105,13 +103,11 @@ def run_interpolation_stage(
             width=config.output_width,
             height=config.output_height,
         )
-        written += 1
         for mid_index in range(1, multi):
             timestep = mid_index / multi
             mid_tensor = algorithm.process_frame_pair(prev_tensor, current_tensor, timestep=timestep)
             mid_frame = FramePayload.from_tensor(mid_tensor, backend).ensure_numpy(metrics)
             write_rgb_frame(output_stream, mid_frame, width=config.output_width, height=config.output_height)
-            written += 1
         event_sink(progress_event(config, pair_index, total_pairs))
         previous_payload = current_payload
 
@@ -121,7 +117,6 @@ def run_interpolation_stage(
         width=config.output_width,
         height=config.output_height,
     )
-    return written + 1
 
 
 def run_single_frame_stage(
@@ -132,10 +127,9 @@ def run_single_frame_stage(
     algorithm: Any,
     event_sink: EventSink,
     metrics: PipelineMetrics,
-) -> int:
+) -> None:
     entry = StepAlgorithm(step=config.stage, backend=backend, algorithm=algorithm)
     total = max(config.input_frame_count, 1)
-    written = 0
     for index in range(config.input_frame_count):
         frame = read_rgb_frame(input_stream, width=config.input_width, height=config.input_height)
         if frame is None:
@@ -151,9 +145,7 @@ def run_single_frame_stage(
         write_rgb_frame(
             output_stream, payload.ensure_numpy(metrics), width=config.output_width, height=config.output_height
         )
-        written += 1
         event_sink(progress_event(config, index + 1, total))
-    return written
 
 
 def _read_declared_frames(config: Any, input_stream: BinaryIO) -> list[Any]:

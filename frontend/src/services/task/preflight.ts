@@ -20,12 +20,7 @@ interface BatchPreflightInput {
   selectedItems: BatchPreflightItem[]
 }
 
-interface BatchPreflightVerdict {
-  ok: boolean
-  reason: string | null
-}
-
-export function evaluateStartReadiness(input: BatchPreflightInput): BatchPreflightVerdict {
+export function evaluateStartReadiness(input: BatchPreflightInput) {
   if (input.isRunning) {
     // 运行中按钮被 isRunning 自己管控,不展示额外 disabled 原因。
     return { ok: false, reason: null }

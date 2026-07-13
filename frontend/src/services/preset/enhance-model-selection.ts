@@ -11,16 +11,6 @@ interface EnhanceModelSelectionInput {
   currentSuperResolutionAlgorithm: AlgorithmInfo | undefined
 }
 
-interface EnhanceModelSelection {
-  interpolationModelDetails: ModelVariantInfo[]
-  interpolationOnnxModelDetails: ModelVariantInfo[]
-  superResolutionOnnxModelDetails: ModelVariantInfo[]
-  currentInterpolationModelDetail: ModelVariantInfo | undefined
-  currentInterpolationRuntimeDetail: ModelVariantInfo | null
-  currentSuperResolutionRuntimeDetail: ModelVariantInfo | null
-  superResolutionRuntimeFrameCount: number | null
-}
-
 function selectedModelDetail(
   details: ModelVariantInfo[],
   selected: string | null | undefined,
@@ -32,7 +22,7 @@ export function buildEnhanceModelSelection({
   workflow,
   currentInterpolationAlgorithm,
   currentSuperResolutionAlgorithm,
-}: EnhanceModelSelectionInput): EnhanceModelSelection {
+}: EnhanceModelSelectionInput) {
   const interpolationModelDetails = currentInterpolationAlgorithm?.modelDetails ?? []
   const interpolationOnnxModelDetails = currentInterpolationAlgorithm?.onnxModelDetails ?? []
   const superResolutionModelDetails = currentSuperResolutionAlgorithm?.modelDetails ?? []

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 
 class ContractParseError(RuntimeError):
@@ -33,34 +33,47 @@ def _issue(message: str, path: str) -> str:
     return f"{message}: {path}"
 
 
+def _check_pattern(
+    *,
+    root: Path,
+    path: str,
+    pattern: str,
+    message: str,
+    flags: int,
+    required: bool,
+) -> list[str]:
+    matches = re.search(pattern, read_source(root / path, root), flags) is not None
+    return [] if matches == required else [_issue(message, path)]
+
+
 @dataclass(frozen=True, slots=True)
-class ForbiddenPatternRule:
+class _PatternRule:
     rule_id: str
     path: str
     pattern: str
     message: str
     flags: int = re.MULTILINE
+    required: ClassVar[bool]
 
     def check(self, root: Path) -> list[str]:
-        text = read_source(root / self.path, root)
-        if re.search(self.pattern, text, self.flags):
-            return [_issue(self.message, self.path)]
-        return []
+        return _check_pattern(
+            root=root,
+            path=self.path,
+            pattern=self.pattern,
+            message=self.message,
+            flags=self.flags,
+            required=self.required,
+        )
 
 
 @dataclass(frozen=True, slots=True)
-class RequiredPatternRule:
-    rule_id: str
-    path: str
-    pattern: str
-    message: str
-    flags: int = re.MULTILINE
+class ForbiddenPatternRule(_PatternRule):
+    required = False
 
-    def check(self, root: Path) -> list[str]:
-        text = read_source(root / self.path, root)
-        if not re.search(self.pattern, text, self.flags):
-            return [_issue(self.message, self.path)]
-        return []
+
+@dataclass(frozen=True, slots=True)
+class RequiredPatternRule(_PatternRule):
+    required = True
 
 
 @dataclass(frozen=True, slots=True)

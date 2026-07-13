@@ -11,18 +11,11 @@ import type { TensorBackend } from '@/types/protocol'
 
 type AlgorithmSpec = AlgorithmInfo
 
-interface AlgorithmLens {
-  algorithms: ComputedRef<AlgorithmSpec[]>
-  current: ComputedRef<AlgorithmSpec | undefined>
-  onnxModels: ComputedRef<string[]>
-  models: ComputedRef<string[]>
-}
-
 export function createAlgorithmLens(
   allAlgorithms: ComputedRef<AlgorithmSpec[]>,
   algorithmName: ComputedRef<string>,
   backend: ComputedRef<TensorBackend>,
-): AlgorithmLens {
+) {
   const algorithms = computed(() =>
     allAlgorithms.value.filter((a) => algorithmSupportsBackend(a, backend.value)),
   )
