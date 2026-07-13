@@ -1,9 +1,9 @@
 // pure: no Vue / no Pinia / no Tauri
 // Derived read-model rules for the enhance form.
 
-import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
+import type { AlgorithmInfo } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
-import type { MetricRow, RuntimeMetricEstimate, VideoDimensions } from '@/types/view/model-metrics'
+import type { VideoDimensions } from '@/types/view/model-metrics'
 import { buildEnhanceModelSelection } from './enhance-model-selection'
 import { buildEnhanceRuntimeView } from './enhance-runtime-view'
 
@@ -14,30 +14,12 @@ interface EnhanceViewModelInput {
   currentSuperResolutionAlgorithm: AlgorithmInfo | undefined
 }
 
-interface EnhanceViewModel {
-  interpolationModelDetails: ModelVariantInfo[]
-  interpolationOnnxModelDetails: ModelVariantInfo[]
-  superResolutionOnnxModelDetails: ModelVariantInfo[]
-  currentInterpolationModelDetail: ModelVariantInfo | undefined
-  currentInterpolationRuntimeDetail: ModelVariantInfo | null
-  isPaddleGanSuperResolution: boolean
-  isSuperResolutionInputFramesEditable: boolean
-  effectiveSuperResolutionNumFrames: number
-  superResolutionFixedWindowRows: MetricRow[]
-  interpolationInputDimensions: VideoDimensions | null
-  interpolationRuntimeEstimate: RuntimeMetricEstimate | null
-  interpolationMetricRows: MetricRow[]
-  superResolutionMetricRows: MetricRow[]
-  combinedPeakVramBytes: number | null
-  combinedVramMetricRows: MetricRow[]
-}
-
 export function buildEnhanceViewModel({
   workflow,
   activeVideoDimensions,
   currentInterpolationAlgorithm,
   currentSuperResolutionAlgorithm,
-}: EnhanceViewModelInput): EnhanceViewModel {
+}: EnhanceViewModelInput) {
   const modelSelection = buildEnhanceModelSelection({
     workflow,
     currentInterpolationAlgorithm,

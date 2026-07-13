@@ -11,9 +11,11 @@ def test_run_encoder_worker_seals_stream_end_and_discards_open_segment(monkeypat
     from app.processing.streaming import encoder_worker as module
 
     instances: list[Any] = []
+    config = object()
 
     class FakeSegmentWriter:
-        def __init__(self, **_kwargs: Any) -> None:
+        def __init__(self, received_config: object) -> None:
+            self.config = received_config
             self.actions: list[tuple[str, int] | tuple[str]] = []
             instances.append(self)
 
@@ -34,22 +36,12 @@ def test_run_encoder_worker_seals_stream_end_and_discards_open_segment(monkeypat
     encode_queue.put(StreamEnd(next_source_frame=7))
 
     module.run_encoder_worker(
-        ffmpeg=object(),
-        encode_config={},
-        manifest=object(),
-        width=128,
-        height=72,
-        fps=24.0,
-        output_fps=None,
-        segment_frames=1000,
-        resume_state=object(),
-        output_path="out.mp4",
+        config=config,  # type: ignore[arg-type]
         encode_queue=encode_queue,
         error_queue=queue.Queue(),
         stop_event=threading.Event(),
-        encode_progress_callback=None,
-        metrics=object(),
     )
 
     assert instances
+    assert instances[0].config is config
     assert instances[0].actions == [("seal_remaining", 7), ("discard",)]

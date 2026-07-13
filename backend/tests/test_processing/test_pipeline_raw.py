@@ -195,4 +195,7 @@ def test_raw_pipeline_stops_and_joins_encoder_when_stage_worker_raises(tmp_path:
 
     assert runtime["stop_event"].is_set()
     assert runtime["encode_queue"].get_nowait() is _ENCODE_END
+    assert runtime["config"].width == 1
+    assert runtime["config"].height == 1
+    assert runtime["config"].fps == 24.0
     assert encoder_thread.joined is True

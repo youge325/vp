@@ -3,7 +3,7 @@
 
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
-import type { MetricRow, RuntimeMetricEstimate, VideoDimensions } from '@/types/view/model-metrics'
+import type { VideoDimensions } from '@/types/view/model-metrics'
 import { buildEnhanceRuntimeEstimates } from './enhance-runtime-estimates'
 import { buildEnhanceRuntimeFrameState, buildEnhanceRuntimeRows } from './enhance-runtime-rows'
 
@@ -16,19 +16,6 @@ interface EnhanceRuntimeViewInput {
   superResolutionRuntimeFrameCount: number | null
 }
 
-interface EnhanceRuntimeView {
-  isPaddleGanSuperResolution: boolean
-  isSuperResolutionInputFramesEditable: boolean
-  effectiveSuperResolutionNumFrames: number
-  superResolutionFixedWindowRows: MetricRow[]
-  interpolationInputDimensions: VideoDimensions | null
-  interpolationRuntimeEstimate: RuntimeMetricEstimate | null
-  interpolationMetricRows: MetricRow[]
-  superResolutionMetricRows: MetricRow[]
-  combinedPeakVramBytes: number | null
-  combinedVramMetricRows: MetricRow[]
-}
-
 export function buildEnhanceRuntimeView({
   workflow,
   activeVideoDimensions,
@@ -36,7 +23,7 @@ export function buildEnhanceRuntimeView({
   currentInterpolationRuntimeDetail,
   currentSuperResolutionRuntimeDetail,
   superResolutionRuntimeFrameCount,
-}: EnhanceRuntimeViewInput): EnhanceRuntimeView {
+}: EnhanceRuntimeViewInput) {
   const frameState = buildEnhanceRuntimeFrameState({ workflow, currentSuperResolutionAlgorithm })
   const estimates = buildEnhanceRuntimeEstimates({
     workflow,

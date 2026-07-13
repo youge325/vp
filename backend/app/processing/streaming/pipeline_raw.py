@@ -7,6 +7,7 @@ import threading
 from typing import Any, Callable
 
 from app.planning import ResumeState, SegmentManifest, StagePlan
+from app.processing.streaming.encoder_runtime_config import EncoderRuntimeConfig
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_raw_encoder import start_raw_encoder_thread
 from app.processing.streaming.pipeline_rules import resolved_stream_fps
@@ -45,20 +46,23 @@ def run_raw_streaming_pipeline(
     error_queue: queue.Queue[BaseException] = queue.Queue()
     stop_event = threading.Event()
     stream_fps = resolved_stream_fps(video_info["source_fps"], stage_plan)
-
-    encoder_thread = start_raw_encoder_thread(
+    encoder_config = EncoderRuntimeConfig(
         ffmpeg=ffmpeg,
         encode_config=encode_config,
         manifest=manifest,
-        output_width=output_width,
-        output_height=output_height,
-        stream_fps=stream_fps,
+        width=output_width,
+        height=output_height,
+        fps=stream_fps,
         output_fps=output_fps,
         segment_frames=segment_frames,
         resume_state=resume_state,
         output_path=output_path,
         encode_progress_callback=encode_progress_callback,
         metrics=metrics,
+    )
+
+    encoder_thread = start_raw_encoder_thread(
+        config=encoder_config,
         encode_queue=encode_queue,
         error_queue=error_queue,
         stop_event=stop_event,

@@ -163,7 +163,7 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "enhance-view-model-internal-output",
         "frontend/src/services/preset/enhance-view-model.ts",
-        r"^  (?:superResolutionModelDetails|currentSuperResolutionModelDetail|currentSuperResolutionRuntimeDetail|superResolutionRuntimeFrameCount|superResolutionRuntimeEstimate)\s*:|\.\.\.(?:modelSelection|runtimeView)\b",
+        r"\binterface\s+EnhanceViewModel\b|^  (?:superResolutionModelDetails|currentSuperResolutionModelDetail|currentSuperResolutionRuntimeDetail|superResolutionRuntimeFrameCount|superResolutionRuntimeEstimate)\s*:|\.\.\.(?:modelSelection|runtimeView)\b",
         "enhance view-model exposes an internal super-resolution calculation",
     ),
     _forbid(
@@ -175,7 +175,7 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "enhance-runtime-view-dead-output",
         "frontend/src/services/preset/enhance-runtime-view.ts",
-        r"interface\s+EnhanceRuntimeView\s*\{[\s\S]{0,1000}\bsuperResolutionRuntimeEstimate\s*:|\.\.\.estimates\b",
+        r"\binterface\s+EnhanceRuntimeView\b|return\s*\{[\s\S]{0,800}\bsuperResolutionRuntimeEstimate\s*:|\.\.\.estimates\b",
         "enhance runtime view exposes an internal super-resolution estimate",
     ),
     ForbiddenReferenceRule(
@@ -1004,6 +1004,30 @@ FORBIDDEN_PATTERN_RULES = (
         "encoder worker segment writer implementation",
     ),
     _forbid(
+        "encoder-worker-static-config-signature",
+        "backend/app/processing/streaming/encoder_worker.py",
+        r"def\s+run_encoder_worker\s*\([\s\S]{0,900}\b(?:ffmpeg|encode_config|manifest|width|height|fps|output_fps|segment_frames|resume_state|output_path|encode_progress_callback|metrics)\s*:",
+        "encoder worker repeats the shared static encoder configuration",
+    ),
+    _forbid(
+        "raw-encoder-static-config-signature",
+        "backend/app/processing/streaming/pipeline_raw_encoder.py",
+        r"def\s+start_raw_encoder_thread\s*\([\s\S]{0,900}\b(?:ffmpeg|encode_config|manifest|output_width|output_height|stream_fps|output_fps|segment_frames|resume_state|output_path|encode_progress_callback|metrics)\s*:",
+        "raw encoder thread repeats the shared static encoder configuration",
+    ),
+    _forbid(
+        "encoder-writer-public-config-state",
+        "backend/app/processing/streaming/encoder_segment_writer.py",
+        r"self\.(?:ffmpeg|encode_config|manifest|width|height|fps|output_fps|segment_frames|resume_state|output_path|encode_progress_callback|metrics)\s*=",
+        "encoder segment writer exposes mirrored runtime configuration",
+    ),
+    _forbid(
+        "encoder-writer-seal-result",
+        "backend/app/processing/streaming/encoder_segment_writer.py",
+        r"def\s+seal_(?:if_ready|remaining)\s*\([^)]*\)\s*->\s*bool\b",
+        "encoder segment sealing exposes an unused boolean result",
+    ),
+    _forbid(
         "stage-file-chunks-runtime",
         "backend/app/processing/streaming/stage_file_chunks.py",
         r"^\s*def\s+run_stage_chunk_to_file\b|^\s*import\s+(?:queue|tempfile|threading)\b|\b(?:StageWorkerConfig|read_rgb_frame|spawn_stage_workers|write_decoded_frames_to_worker)\b|^from\s+app\.processing\.streaming\.stage_file_chunk_runtime\s+import\s+run_stage_chunk_to_file\s*$|\b_run_stage_chunk_to_file\s*\(|__all__\s*=\s*\[[\s\S]*[\"']run_stage_chunk_to_file[\"']",
@@ -1262,6 +1286,24 @@ FORBIDDEN_PATTERN_RULES = (
 
 
 REQUIRED_PATTERN_RULES = (
+    RequiredPatternRule(
+        "shared-encoder-runtime-config",
+        "backend/app/processing/streaming/encoder_runtime_config.py",
+        r"@dataclass\(frozen=True,\s*slots=True\)[\s\S]*class\s+EncoderRuntimeConfig\b",
+        "shared immutable encoder runtime configuration is missing",
+    ),
+    RequiredPatternRule(
+        "raw-pipeline-encoder-config-root",
+        "backend/app/processing/streaming/pipeline_raw.py",
+        r"encoder_config\s*=\s*EncoderRuntimeConfig\s*\([\s\S]*start_raw_encoder_thread\s*\([\s\S]*config\s*=\s*encoder_config",
+        "raw pipeline must construct and pass one encoder runtime configuration",
+    ),
+    RequiredPatternRule(
+        "encoder-worker-config-consumer",
+        "backend/app/processing/streaming/encoder_worker.py",
+        r"def\s+run_encoder_worker\s*\([\s\S]{0,300}\bconfig\s*:\s*EncoderRuntimeConfig[\s\S]{0,500}EncoderSegmentWriter\s*\(\s*config\s*\)",
+        "encoder worker must pass the shared runtime configuration to the segment writer",
+    ),
     RequiredPatternRule(
         "batch-runner-composition-root",
         "frontend/src/services/task/batch-runner.ts",
