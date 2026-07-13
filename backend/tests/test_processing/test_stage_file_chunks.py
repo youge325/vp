@@ -49,7 +49,6 @@ def test_single_stage_file_chunks_finalize_manifest_segments(monkeypatch, tmp_pa
         start_chunk_index=1,
         segment_frames=2,
         metrics=PipelineMetrics(),
-        python_executable="python",
     )
 
     segments = manifest.scan_completed_chunks()

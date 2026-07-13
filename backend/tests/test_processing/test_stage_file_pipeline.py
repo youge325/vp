@@ -81,7 +81,6 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
         output_path=output_path,
         output_fps=None,
         metrics=PipelineMetrics(),
-        python_executable="python",
     )
 
     assert completed == 9

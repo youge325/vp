@@ -13,7 +13,7 @@ class _Backend:
         return "identity"
 
 
-def test_stage_worker_factory_skips_backend_for_frame_filter_chain() -> None:
+def test_stage_worker_factory_skips_backend_for_frame_filter_chain(monkeypatch) -> None:
     config = SimpleNamespace(
         stage=ProcessingStep(
             algorithm_type="frame_filter_chain",
@@ -23,12 +23,13 @@ def test_stage_worker_factory_skips_backend_for_frame_filter_chain() -> None:
         tensor_backend_name="pytorch",
     )
     calls: list[str] = []
+    monkeypatch.setattr(stage_worker_factory, "get_tensor_backend", lambda name: calls.append(name))
 
-    assert stage_worker_factory.create_backend(config, lambda name: calls.append(name)) is None
+    assert stage_worker_factory.create_backend(config) is None
     assert calls == []
 
 
-def test_stage_worker_factory_uses_backend_factory_for_tensor_stages() -> None:
+def test_stage_worker_factory_resolves_backend_for_tensor_stages(monkeypatch) -> None:
     config = SimpleNamespace(
         stage=ProcessingStep(
             algorithm_type="super_resolution",
@@ -37,8 +38,9 @@ def test_stage_worker_factory_uses_backend_factory_for_tensor_stages() -> None:
         ),
         tensor_backend_name="paddle",
     )
+    monkeypatch.setattr(stage_worker_factory, "get_tensor_backend", lambda name: {"backend": name})
 
-    assert stage_worker_factory.create_backend(config, lambda name: {"backend": name}) == {"backend": "paddle"}
+    assert stage_worker_factory.create_backend(config) == {"backend": "paddle"}
 
 
 def test_stage_worker_factory_passes_filtered_kwargs_to_algorithm(monkeypatch) -> None:

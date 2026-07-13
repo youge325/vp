@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+from contextlib import redirect_stderr
 from types import SimpleNamespace
 
 from app.planning import ProcessingStep
@@ -30,7 +31,8 @@ def _config() -> SimpleNamespace:
 def test_stage_worker_progress_emits_prefixed_json_event() -> None:
     stream = io.StringIO()
 
-    emit_stage_event({"type": "progress", "current": 1}, stream=stream)
+    with redirect_stderr(stream):
+        emit_stage_event({"type": "progress", "current": 1})
 
     line = stream.getvalue().strip()
     assert line.startswith(STAGE_EVENT_PREFIX)

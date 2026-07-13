@@ -32,7 +32,6 @@ def run_stage_worker_pipeline(
     error_queue: queue.Queue[BaseException],
     stop_event: Any,
     metrics: PipelineMetrics,
-    python_executable: str | None = None,
 ) -> None:
     """Run algorithm stages as isolated rawvideo subprocesses.
 
@@ -72,7 +71,6 @@ def run_stage_worker_pipeline(
         error_queue=error_queue,
         stop_event=stop_event,
         metrics=metrics,
-        python_executable=python_executable,
     )
 
     if not error_queue.empty():

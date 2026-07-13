@@ -18,7 +18,6 @@ import os
 import site
 import sys
 from pathlib import Path
-from typing import Iterable
 
 from app.utils.logger import get_logger
 
@@ -75,12 +74,11 @@ def _scan_common_tensorrt_roots() -> list[Path]:
     return roots
 
 
-def _candidate_dirs(tensorrt_dir: str | None = None) -> list[Path]:
+def _candidate_dirs() -> list[Path]:
     """Build the ordered list of directories to register, dedup'd downstream."""
     candidates: list[Path] = []
 
-    if tensorrt_dir is None:
-        tensorrt_dir = os.environ.get("VP_TENSORRT_DIR", "").strip()
+    tensorrt_dir = os.environ.get("VP_TENSORRT_DIR", "").strip()
     if tensorrt_dir:
         root = Path(tensorrt_dir).expanduser()
         bin_dir = root / "bin"
@@ -157,10 +155,7 @@ def _opencv_candidate_dirs() -> list[Path]:
     return candidates
 
 
-def register_native_dll_paths(
-    tensorrt_dir: str | None = None,
-    extra: Iterable[Path] | None = None,
-) -> None:
+def register_native_dll_paths() -> None:
     """Add GPU-runtime directories to the Windows DLL search path.
 
     On non-Windows hosts the function short-circuits without side effects.
@@ -176,9 +171,7 @@ def register_native_dll_paths(
     if not sys.platform.startswith("win"):
         return
 
-    candidates = list(_candidate_dirs(tensorrt_dir))
-    if extra:
-        candidates.extend(extra)
+    candidates = _candidate_dirs()
 
     # 快速路径：所有候选目录都已经被注册过，跳过扫描和日志
     if all(str(p.resolve(strict=False)).lower() in _registered for p in candidates):

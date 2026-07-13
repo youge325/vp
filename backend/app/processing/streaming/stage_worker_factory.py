@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
+from app.algorithms.tensor_backend import get_tensor_backend
 from app.planning import ProcessingStep
 from app.processing.streaming.stage_rules import algorithm_kwargs_for_create
 
+if TYPE_CHECKING:
+    from app.processing.streaming.stage_worker_config import StageWorkerConfig
 
-def create_backend(config: Any, backend_factory: Callable[[str], Any]) -> Any:
+
+def create_backend(config: StageWorkerConfig) -> Any:
     if config.stage.algorithm_type == "frame_filter_chain":
         return None
-    return backend_factory(config.tensor_backend_name)
+    return get_tensor_backend(config.tensor_backend_name)
 
 
 def create_algorithm(stage: ProcessingStep, backend: Any) -> Any:

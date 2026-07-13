@@ -32,7 +32,6 @@ def _spawn_stage_workers(
     plans: list[StageWorkerPlan],
     *,
     config_dir: Path,
-    python_executable: str,
 ) -> list[_WorkerHandle]:
     handles: list[_WorkerHandle] = []
     previous_stdout = None
@@ -44,7 +43,7 @@ def _spawn_stage_workers(
         stdin = subprocess.PIPE if index == 0 else previous_stdout
         process = subprocess.Popen(
             [
-                python_executable,
+                sys.executable,
                 "-m",
                 "app",
                 "stage-worker",
@@ -96,13 +95,11 @@ def stage_worker_session(
     progress_callbacks: list[Any],
     error_queue: queue.Queue[BaseException],
     stop_event: Any,
-    python_executable: str | None = None,
 ) -> Iterator[list[_WorkerHandle]]:
     with tempfile.TemporaryDirectory(prefix="vp-stage-workers-") as config_dir:
         handles = _spawn_stage_workers(
             plans,
             config_dir=Path(config_dir),
-            python_executable=python_executable or sys.executable,
         )
         stderr_threads = [
             threading.Thread(

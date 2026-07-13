@@ -1,12 +1,23 @@
 import logging
 import re
-import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 import app.utils.logger as logger_module
+
+
+def _use_test_settings(monkeypatch, log_dir: Path) -> None:
+    settings = SimpleNamespace(
+        DEBUG=False,
+        LOG_DIR=str(log_dir),
+        LOG_FILE_MAX_BYTES=10 * 1024 * 1024,
+        LOG_FILE_BACKUP_COUNT=5,
+        LOG_STARTUP_FILE_KEEP_COUNT=5,
+    )
+    monkeypatch.setattr(logger_module, "_load_settings", lambda: settings)
 
 
 def _get_file_handler() -> RotatingFileHandler:
@@ -45,8 +56,9 @@ def restore_root_logger():
     logger_module._initialized = False
 
 
-def test_setup_logging_creates_startup_log_file(tmp_path):
-    logger_module.setup_logging(log_dir=str(tmp_path), force=True)
+def test_setup_logging_creates_startup_log_file(tmp_path, monkeypatch):
+    _use_test_settings(monkeypatch, tmp_path)
+    logger_module.setup_logging()
 
     file_handler = _get_file_handler()
     log_file = Path(file_handler.baseFilename)
@@ -56,21 +68,21 @@ def test_setup_logging_creates_startup_log_file(tmp_path):
     assert not (tmp_path / "app.log").exists()
 
 
-def test_setup_logging_force_creates_new_log_file(tmp_path):
-    logger_module.setup_logging(log_dir=str(tmp_path), force=True)
+def test_setup_logging_is_idempotent(tmp_path, monkeypatch):
+    _use_test_settings(monkeypatch, tmp_path)
+    logger_module.setup_logging()
     first_log_file = Path(_get_file_handler().baseFilename)
 
-    time.sleep(0.001)
-    logger_module.setup_logging(log_dir=str(tmp_path), force=True)
+    logger_module.setup_logging()
     second_log_file = Path(_get_file_handler().baseFilename)
 
-    assert second_log_file != first_log_file
+    assert second_log_file == first_log_file
     assert first_log_file.exists()
-    assert second_log_file.exists()
 
 
-def test_log_records_are_written_to_current_startup_log(tmp_path):
-    logger_module.setup_logging(log_dir=str(tmp_path), force=True)
+def test_log_records_are_written_to_current_startup_log(tmp_path, monkeypatch):
+    _use_test_settings(monkeypatch, tmp_path)
+    logger_module.setup_logging()
 
     logger = logger_module.get_logger("tests.logger")
     logger.info("startup-log-message")
@@ -82,14 +94,15 @@ def test_log_records_are_written_to_current_startup_log(tmp_path):
     assert "startup-log-message" in log_file.read_text(encoding="utf-8")
 
 
-def test_setup_logging_keeps_latest_5_startup_log_groups(tmp_path):
+def test_setup_logging_keeps_latest_5_startup_log_groups(tmp_path, monkeypatch):
     for index in range(6):
         _make_startup_log_files(tmp_path, index)
 
     preserved_file = tmp_path / "desktop.log"
     preserved_file.write_text("desktop", encoding="utf-8")
 
-    logger_module.setup_logging(log_dir=str(tmp_path), force=True)
+    _use_test_settings(monkeypatch, tmp_path)
+    logger_module.setup_logging()
 
     remaining_groups = {
         match.group("base")
@@ -121,7 +134,8 @@ def test_setup_logging_skips_locked_startup_log_files(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "unlink", fake_unlink)
 
-    logger_module.setup_logging(log_dir=str(tmp_path), force=True)
+    _use_test_settings(monkeypatch, tmp_path)
+    logger_module.setup_logging()
 
     assert locked_file.exists()
     assert not (tmp_path / "app-20240101-000000-000000.log.1").exists()

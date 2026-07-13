@@ -38,12 +38,10 @@ def test_worker_pipeline_delegates_runtime_and_emits_stream_end(monkeypatch) -> 
         error_queue=queue.Queue(),
         stop_event=threading.Event(),
         metrics=PipelineMetrics(),
-        python_executable="python-test",
     )
 
     assert len(runtime_calls) == 1
     assert runtime_calls[0]["plans"][0].config.input_frame_count == 2
-    assert runtime_calls[0]["python_executable"] == "python-test"
     item = encode_queue.get_nowait()
     assert isinstance(item, StreamEnd)
     assert item.next_source_frame == 3

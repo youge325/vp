@@ -81,60 +81,25 @@ def _cleanup_old_startup_logs(log_dir: Path, keep_count: int, current_log_file: 
                 continue
 
 
-def setup_logging(
-    level: str | int | None = None,
-    log_dir: str | None = None,
-    log_file_max_bytes: int | None = None,
-    log_file_backup_count: int | None = None,
-    force: bool = False,
-) -> None:
-    """一次性配置全局日志系统。
-
-    参数:
-        level: 日志级别（"DEBUG"/"INFO"/"WARNING"/"ERROR"）。
-               默认从 config.settings 读取，DEBUG=True 时自动降为 DEBUG。
-        log_dir: 日志文件目录。默认为 backend/logs/。
-        log_file_max_bytes: 单个日志文件最大字节数（默认 10MB）。
-        log_file_backup_count: 保留的轮转备份文件数（默认 5）。
-        force: 是否强制重新配置（默认 False，重复调用时跳过）。
-    """
+def setup_logging() -> None:
+    """根据应用 settings 一次性配置全局日志系统。"""
     global _initialized
-    if _initialized and not force:
+    if _initialized:
         return
 
     settings = _load_settings()
-
-    # 确定日志级别
-    if level is None:
-        if settings is not None:
-            level = logging.DEBUG if settings.DEBUG else logging.INFO
-        else:
-            level = logging.INFO
-    elif isinstance(level, str):
-        level = getattr(logging, level.upper(), logging.INFO)
-
-    # 确定 log_dir
-    if log_dir is None:
-        if settings is not None:
-            log_dir = settings.LOG_DIR
-        else:
-            log_dir = _default_log_dir()
-
-    if log_file_max_bytes is None:
-        if settings is not None:
-            log_file_max_bytes = settings.LOG_FILE_MAX_BYTES
-        else:
-            log_file_max_bytes = 10 * 1024 * 1024
-
-    if log_file_backup_count is None:
-        if settings is not None:
-            log_file_backup_count = settings.LOG_FILE_BACKUP_COUNT
-        else:
-            log_file_backup_count = 5
-
-    log_startup_file_keep_count = 30
     if settings is not None:
+        level = logging.DEBUG if settings.DEBUG else logging.INFO
+        log_dir = settings.LOG_DIR
+        log_file_max_bytes = settings.LOG_FILE_MAX_BYTES
+        log_file_backup_count = settings.LOG_FILE_BACKUP_COUNT
         log_startup_file_keep_count = settings.LOG_STARTUP_FILE_KEEP_COUNT
+    else:
+        level = logging.INFO
+        log_dir = _default_log_dir()
+        log_file_max_bytes = 10 * 1024 * 1024
+        log_file_backup_count = 5
+        log_startup_file_keep_count = 30
 
     # 确保日志目录存在
     log_dir_path = Path(log_dir)

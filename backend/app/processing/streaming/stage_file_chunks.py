@@ -39,7 +39,6 @@ def run_single_stage_file_chunks(
     start_chunk_index: int,
     segment_frames: int,
     metrics: PipelineMetrics,
-    python_executable: str,
 ) -> int:
     extension = os.path.splitext(str(manifest.output_path))[1] or f".{encode_config.get('container') or 'mp4'}"
     chunks = [
@@ -78,7 +77,6 @@ def run_single_stage_file_chunks(
             output_fps=output_fps,
             encode_output_fps=encode_output_fps,
             metrics=metrics,
-            python_executable=python_executable,
         )
         if actual_written <= 0:
             Path(tmp_path).unlink(missing_ok=True)
