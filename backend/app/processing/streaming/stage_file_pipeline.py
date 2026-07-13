@@ -8,6 +8,7 @@ from app.planning import StagePlan
 from app.processing.streaming.encoder_finalization import finalize_segmented_output
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_file_chunks import run_single_stage_file_chunks
+from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 from app.processing.streaming.stage_file_stage_context import build_stage_file_stage_context
 from app.processing.streaming.stage_rules import (
     ordered_steps,
@@ -78,12 +79,11 @@ def run_stage_file_pipeline(
             output_fps=output_fps,
         )
 
-        completed_frames = run_single_stage_file_chunks(
+        runtime_config = StageFileRuntimeConfig(
             ffmpeg=ffmpeg,
             input_path=current_path,
             decode_config=decode_config,
             encode_config=stage_context.encode_config,
-            manifest=stage_context.manifest,
             step=step,
             stage_index=stage_position,
             stage_total=len(steps),
@@ -95,15 +95,19 @@ def run_stage_file_pipeline(
             input_height=current_height,
             output_width=output_width,
             output_height=output_height,
-            input_frame_count=current_frame_count,
-            output_frame_count=stage_output_frames,
             output_fps=stage_fps,
             encode_output_fps=stage_context.encode_output_fps,
+            metrics=metrics,
+        )
+        completed_frames = run_single_stage_file_chunks(
+            config=runtime_config,
+            manifest=stage_context.manifest,
             resume_state=stage_context.resume_state,
             start_frame=stage_context.start_frame,
             start_chunk_index=stage_context.chunk_start_index,
             segment_frames=segment_frames,
-            metrics=metrics,
+            input_frame_count=current_frame_count,
+            output_frame_count=stage_output_frames,
         )
 
         if is_final_stage:

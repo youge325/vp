@@ -13,6 +13,7 @@ from app.planning import ProcessingStep
 from app.processing.streaming.metrics import PipelineMetrics
 import app.processing.streaming.stage_file_chunk_runtime as runtime
 from app.processing.streaming.stage_file_chunk_runtime import run_stage_chunk_to_file
+from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 from app.processing.streaming.worker_plans import StageChunkPlan
 
 
@@ -57,26 +58,29 @@ def _run_chunk(
     chunk: StageChunkPlan,
     progress_callback: Any = None,
 ) -> int:
-    return run_stage_chunk_to_file(
+    config = StageFileRuntimeConfig(
         ffmpeg=ffmpeg,
         input_path="input.mp4",
         decode_config={},
         encode_config={"container": "mp4"},
-        output_path=str(output_path),
         step=step,
         stage_index=1,
         stage_total=1,
         tensor_backend_name="paddle",
         progress_callback=progress_callback,
-        chunk=chunk,
         input_width=1,
         input_height=1,
         output_width=1,
         output_height=1,
-        stage_total_frames=10,
         output_fps=24.0,
         encode_output_fps=None,
         metrics=PipelineMetrics(),
+    )
+    return run_stage_chunk_to_file(
+        config=config,
+        output_path=str(output_path),
+        chunk=chunk,
+        stage_total_frames=10,
     )
 
 

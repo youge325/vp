@@ -2,20 +2,20 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
-import { useMediaRunState } from '@/stores/mediaRunState'
+import { useTaskStore } from '@/stores/task'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
-import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
+import { useCurrentTaskStatusLabel } from '@/composables/selectors/useCurrentTaskStatusLabel'
 import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
-import { getTaskStatusLabel, getWorkflowSummaryLabel } from '@/services/format/labels'
+import { getWorkflowSummaryLabel } from '@/services/format/labels'
 import { DEFAULT_WORKBENCH_MODULE_KEY, type ModuleKey } from '@/config/workbench-modules'
 
 export function useStepRailState() {
   const route = useRoute()
   const envStore = useEnvStore()
   const mediaStore = useMediaStore()
-  const runStateStore = useMediaRunState()
+  const taskStore = useTaskStore()
   const { editorConfig, isPresetMode } = useWorkbenchEditor()
-  const { batch, currentTaskItem } = useTaskOrchestrator()
+  const taskStatusLabel = useCurrentTaskStatusLabel()
 
   const activeModuleKey = computed<ModuleKey>(
     () => route.meta.module?.key ?? DEFAULT_WORKBENCH_MODULE_KEY,
@@ -32,7 +32,7 @@ export function useStepRailState() {
       enhance: env ? 'ready' : 'idle',
       postprocess: wf.postprocess.enabled ? 'ready' : 'idle',
       encode: env && getVisibleEncoderProfiles(env).length > 0 ? 'ready' : 'idle',
-      render: batch.isRunning ||
+      render: taskStore.batch.isRunning ||
         (mediaStore.selectedItems.length > 0 && mediaStore.selectedItems.every((item) => Boolean(item.inputPath)))
         ? 'ready' : 'idle',
     }
@@ -46,13 +46,6 @@ export function useStepRailState() {
     isPresetMode.value
       ? '默认预设'
       : `${mediaStore.selectedIds.length || 1}/${mediaStore.mediaItems.length} 已选`,
-  )
-
-  const taskStatusLabel = computed(() =>
-    getTaskStatusLabel(
-      batch,
-      runStateStore.getByItemId(currentTaskItem.value?.id)?.taskState.status ?? null,
-    ),
   )
 
   return { activeModuleKey, moduleStates, workflowLabel, selectionLabel, taskStatusLabel }
