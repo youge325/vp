@@ -1,16 +1,15 @@
 // pure: no Vue / no Pinia / no Tauri
 // UI 标签格式化 — 按业务规则把领域数据投影成显示字符串。
 
-import type { MediaItem } from '@/types/domain/media'
 import type { BatchState } from '@/types/domain/batch'
-import type { EncoderProfileSpec } from '@/types/protocol'
+import type { EncoderProfileSpec, WorkflowConfig } from '@/types/protocol'
 
 const FORMAT_CONVERSION_LABEL = '转码'
 
-export function getWorkflowSummaryLabel(item: MediaItem): string {
+export function getWorkflowSummaryLabel(workflowConfig: WorkflowConfig): string {
   const labels = [
-    item.workflowConfig.interpolation.enabled ? '补帧' : null,
-    item.workflowConfig.superResolution.enabled ? '超分' : null,
+    workflowConfig.interpolation.enabled ? '补帧' : null,
+    workflowConfig.superResolution.enabled ? '超分' : null,
   ].filter(Boolean)
 
   return labels.length > 0

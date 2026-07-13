@@ -33,6 +33,6 @@ export function useMediaListEditor() {
     removeItem,
     fpsLabelOf: (item: MediaItem) =>
       item.info ? `${formatFps(item.info.fps)} FPS` : '--',
-    workflowLabelOf: (item: MediaItem) => getWorkflowSummaryLabel(item),
+    workflowLabelOf: (item: MediaItem) => getWorkflowSummaryLabel(item.workflowConfig),
   }
 }

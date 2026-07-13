@@ -4,6 +4,7 @@ import io
 import json
 import time
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -11,6 +12,7 @@ import pytest
 from app.cli.commands import stage_worker as stage_worker_command
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import ProcessingStep
+from app.processing.streaming import stage_worker as stage_worker_runtime
 from app.processing.streaming import stage_worker_progress
 from app.processing.streaming.stage_worker import (
     run_stage_worker_stream,
@@ -117,6 +119,25 @@ def _config(step: ProcessingStep, *, input_frame_count: int = 2) -> StageWorkerC
     )
 
 
+def _run_worker(
+    config: StageWorkerConfig,
+    input_stream: io.BytesIO,
+    output_stream: io.BytesIO,
+    algorithm,
+    event_sink,
+) -> None:
+    with (
+        patch.object(stage_worker_runtime, "create_backend", return_value=_IdentityBackend()),
+        patch.object(stage_worker_runtime, "create_algorithm", return_value=algorithm),
+    ):
+        run_stage_worker_stream(
+            config,
+            input_stream,
+            output_stream,
+            event_sink=event_sink,
+        )
+
+
 def test_single_frame_stage_reads_and_writes_rawvideo_frames() -> None:
     output = io.BytesIO()
     events = []
@@ -129,13 +150,12 @@ def test_single_frame_stage_reads_and_writes_rawvideo_frames() -> None:
         input_frame_count=2,
     )
 
-    run_stage_worker_stream(
+    _run_worker(
         config,
         _stream_of([_frame(1), _frame(2)]),
         output,
-        algorithm_factory=lambda _stage, _backend: _IncrementAlgorithm(),
-        backend_factory=lambda _name: _IdentityBackend(),
-        event_sink=events.append,
+        _IncrementAlgorithm(),
+        events.append,
     )
 
     frames = _frames_from_bytes(output.getvalue(), count=2)
@@ -156,13 +176,12 @@ def test_interpolation_stage_outputs_source_and_intermediate_frames() -> None:
         input_frame_count=2,
     )
 
-    run_stage_worker_stream(
+    _run_worker(
         config,
         _stream_of([_frame(0), _frame(90)]),
         output,
-        algorithm_factory=lambda _stage, _backend: _MidpointAlgorithm(),
-        backend_factory=lambda _name: _IdentityBackend(),
-        event_sink=events.append,
+        _MidpointAlgorithm(),
+        events.append,
     )
 
     frames = _frames_from_bytes(output.getvalue(), count=4)
@@ -181,13 +200,12 @@ def test_sequence_stage_buffers_all_input_frames_before_writing_output() -> None
         input_frame_count=3,
     )
 
-    run_stage_worker_stream(
+    _run_worker(
         config,
         _stream_of([_frame(1), _frame(2), _frame(3)]),
         output,
-        algorithm_factory=lambda _stage, _backend: _SequenceAlgorithm(),
-        backend_factory=lambda _name: _IdentityBackend(),
-        event_sink=lambda _event: None,
+        _SequenceAlgorithm(),
+        lambda _event: None,
     )
 
     frames = _frames_from_bytes(output.getvalue(), count=3)
@@ -207,13 +225,12 @@ def test_sequence_stage_emits_start_and_heartbeat_during_blocking_process(monkey
         input_frame_count=3,
     )
 
-    run_stage_worker_stream(
+    _run_worker(
         config,
         _stream_of([_frame(1), _frame(2), _frame(3)]),
         output,
-        algorithm_factory=lambda _stage, _backend: _SlowSequenceAlgorithm(),
-        backend_factory=lambda _name: _IdentityBackend(),
-        event_sink=events.append,
+        _SlowSequenceAlgorithm(),
+        events.append,
     )
 
     progress_events = [event for event in events if event["type"] == "progress"]
@@ -243,13 +260,12 @@ def test_sequence_stage_heartbeat_uses_latest_algorithm_progress(monkeypatch) ->
         input_frame_count=3,
     )
 
-    run_stage_worker_stream(
+    _run_worker(
         config,
         _stream_of([_frame(1), _frame(2), _frame(3)]),
         output,
-        algorithm_factory=lambda _stage, _backend: _SlowProgressSequenceAlgorithm(),
-        backend_factory=lambda _name: _IdentityBackend(),
-        event_sink=events.append,
+        _SlowProgressSequenceAlgorithm(),
+        events.append,
     )
 
     heartbeat_events = [event for event in events if event.get("heartbeat") is True]
@@ -270,13 +286,12 @@ def test_sequence_stage_skips_write_progress_when_algorithm_reports_progress() -
         input_frame_count=3,
     )
 
-    run_stage_worker_stream(
+    _run_worker(
         config,
         _stream_of([_frame(1), _frame(2), _frame(3)]),
         output,
-        algorithm_factory=lambda _stage, _backend: _ProgressSequenceAlgorithm(),
-        backend_factory=lambda _name: _IdentityBackend(),
-        event_sink=events.append,
+        _ProgressSequenceAlgorithm(),
+        events.append,
     )
 
     progress_events = [event for event in events if event["type"] == "progress"]
@@ -284,7 +299,7 @@ def test_sequence_stage_skips_write_progress_when_algorithm_reports_progress() -
     assert not any(event["current"] in (1, 2) for event in progress_events)
 
 
-def test_stage_worker_passes_configured_backend_to_algorithm_factory() -> None:
+def test_stage_worker_passes_configured_backend_to_algorithm() -> None:
     output = io.BytesIO()
     captured = {}
 
@@ -310,15 +325,19 @@ def test_stage_worker_passes_configured_backend_to_algorithm_factory() -> None:
         tensor_backend_name="paddle",
     )
 
-    run_stage_worker_stream(
-        config,
-        _stream_of([_frame(1)]),
-        output,
-        algorithm_factory=fake_create,
-        backend_factory=lambda _name: _IdentityBackend(),
-        event_sink=lambda _event: None,
-    )
+    backend = _IdentityBackend()
+    with (
+        patch.object(stage_worker_runtime, "create_backend", return_value=backend) as create_backend_mock,
+        patch.object(stage_worker_runtime, "create_algorithm", side_effect=fake_create),
+    ):
+        run_stage_worker_stream(
+            config,
+            _stream_of([_frame(1)]),
+            output,
+            event_sink=lambda _event: None,
+        )
 
+    create_backend_mock.assert_called_once_with(config)
     assert captured["stage"] is config.stage
     assert captured["backend"].get_name() == "identity"
 

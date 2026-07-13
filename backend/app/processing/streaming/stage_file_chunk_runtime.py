@@ -36,7 +36,6 @@ def run_stage_chunk_to_file(
     output_fps: float,
     encode_output_fps: float | None,
     metrics: PipelineMetrics,
-    python_executable: str,
 ) -> int:
     config = StageWorkerConfig(
         stage=step,
@@ -71,7 +70,6 @@ def run_stage_chunk_to_file(
             progress_callbacks=callbacks,
             error_queue=error_queue,
             stop_event=stop_event,
-            python_executable=python_executable,
         ) as handles:
             handle = handles[0]
             with decoded_frame_writer_session(

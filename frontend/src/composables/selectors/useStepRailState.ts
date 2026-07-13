@@ -6,7 +6,7 @@ import { useMediaRunState } from '@/stores/mediaRunState'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
 import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
-import { getTaskStatusLabel } from '@/services/format/labels'
+import { getTaskStatusLabel, getWorkflowSummaryLabel } from '@/services/format/labels'
 import { DEFAULT_WORKBENCH_MODULE_KEY, type ModuleKey } from '@/config/workbench-modules'
 
 export function useStepRailState() {
@@ -38,14 +38,9 @@ export function useStepRailState() {
     }
   })
 
-  const workflowLabel = computed(() => {
-    const wf = editorConfig.value.workflowConfig
-    const enabled = [
-      wf.interpolation.enabled ? '补帧' : null,
-      wf.superResolution.enabled ? '超分' : null,
-    ].filter(Boolean)
-    return enabled.length > 0 ? enabled.join(' / ') : '转码'
-  })
+  const workflowLabel = computed(() =>
+    getWorkflowSummaryLabel(editorConfig.value.workflowConfig),
+  )
 
   const selectionLabel = computed(() =>
     isPresetMode.value

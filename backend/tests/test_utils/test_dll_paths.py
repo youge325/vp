@@ -19,6 +19,7 @@ def _reset_registry(monkeypatch):
     monkeypatch.setattr(dll_paths, "_scanned_tensorrt_roots", None)
     monkeypatch.delenv("VP_OPENCV_BIN_DIR", raising=False)
     monkeypatch.delenv("VP_OPENCV_DIR", raising=False)
+    monkeypatch.delenv("VP_TENSORRT_DIR", raising=False)
     monkeypatch.setattr(dll_paths, "_python_package_dll_dirs", lambda: [], raising=False)
 
 
@@ -36,11 +37,12 @@ def test_registers_tensorrt_bin_when_dir_exists(tmp_path: Path, monkeypatch):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     monkeypatch.delenv("CUDA_PATH", raising=False)
+    monkeypatch.setenv("VP_TENSORRT_DIR", str(tmp_path))
 
     captured: list[str] = []
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
 
-    dll_paths.register_native_dll_paths(tensorrt_dir=str(tmp_path))
+    dll_paths.register_native_dll_paths()
 
     assert [Path(p) for p in captured] == [bin_dir.resolve()]
 
@@ -52,12 +54,13 @@ def test_double_registration_is_idempotent(tmp_path: Path, monkeypatch):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     monkeypatch.delenv("CUDA_PATH", raising=False)
+    monkeypatch.setenv("VP_TENSORRT_DIR", str(tmp_path))
 
     captured: list[str] = []
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
 
-    dll_paths.register_native_dll_paths(tensorrt_dir=str(tmp_path))
-    dll_paths.register_native_dll_paths(tensorrt_dir=str(tmp_path))
+    dll_paths.register_native_dll_paths()
+    dll_paths.register_native_dll_paths()
 
     assert len(captured) == 1
 
@@ -67,10 +70,11 @@ def test_missing_bin_subdir_warns_but_does_not_raise(tmp_path: Path, monkeypatch
         pytest.skip("Windows-only behaviour")
 
     monkeypatch.delenv("CUDA_PATH", raising=False)
+    monkeypatch.setenv("VP_TENSORRT_DIR", str(tmp_path))
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", lambda _path: None)
 
     with caplog.at_level("WARNING"):
-        dll_paths.register_native_dll_paths(tensorrt_dir=str(tmp_path))
+        dll_paths.register_native_dll_paths()
 
     assert dll_paths._registered == set()
     assert any("does not contain a 'bin'" in r.message for r in caplog.records)
@@ -170,24 +174,6 @@ def test_picks_up_cuda_path_when_present(tmp_path: Path, monkeypatch):
     assert [Path(p) for p in captured] == [cuda_bin.resolve()]
 
 
-def test_extra_paths_are_registered_after_settings(tmp_path: Path, monkeypatch):
-    if not sys.platform.startswith("win"):
-        pytest.skip("Windows-only behaviour")
-
-    extra_dir = tmp_path / "extra"
-    extra_dir.mkdir()
-    monkeypatch.delenv("VP_TENSORRT_DIR", raising=False)
-    monkeypatch.delenv("CUDA_PATH", raising=False)
-    monkeypatch.setattr(dll_paths, "_scan_common_tensorrt_roots", lambda: [])
-
-    captured: list[str] = []
-    monkeypatch.setattr(dll_paths.os, "add_dll_directory", captured.append)
-
-    dll_paths.register_native_dll_paths(extra=[extra_dir])
-
-    assert [Path(p) for p in captured] == [extra_dir.resolve()]
-
-
 def test_registers_opencv_bin_dir_from_env(tmp_path: Path, monkeypatch):
     if not sys.platform.startswith("win"):
         pytest.skip("Windows-only behaviour")
@@ -240,10 +226,11 @@ def test_registers_directory_into_path_for_legacy_loader(tmp_path: Path, monkeyp
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     monkeypatch.delenv("CUDA_PATH", raising=False)
+    monkeypatch.setenv("VP_TENSORRT_DIR", str(tmp_path))
     monkeypatch.setenv("PATH", "C:\\some\\dir;C:\\other")
     monkeypatch.setattr(dll_paths.os, "add_dll_directory", lambda _path: None)
 
-    dll_paths.register_native_dll_paths(tensorrt_dir=str(tmp_path))
+    dll_paths.register_native_dll_paths()
 
     parts = os.environ["PATH"].split(os.pathsep)
     assert parts[0].lower() == str(bin_dir.resolve()).lower(), (

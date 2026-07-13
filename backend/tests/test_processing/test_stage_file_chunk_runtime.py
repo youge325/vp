@@ -77,7 +77,6 @@ def _run_chunk(
         output_fps=24.0,
         encode_output_fps=None,
         metrics=PipelineMetrics(),
-        python_executable="python",
     )
 
 

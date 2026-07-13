@@ -53,7 +53,7 @@ def test_worker_chain_runtime_runs_decode_and_drain_inside_worker_session(monkey
 
     @contextmanager
     def fake_session(plans, **kwargs):
-        calls.append(("session", (plans, kwargs["python_executable"])))
+        calls.append(("session", plans))
         yield [handle]
         calls.append(("session_closed", len(plans)))
 
@@ -103,12 +103,9 @@ def test_worker_chain_runtime_runs_decode_and_drain_inside_worker_session(monkey
         error_queue=queue.Queue(),
         stop_event=threading.Event(),
         metrics=PipelineMetrics(),
-        python_executable="python-test",
     )
 
-    assert calls[0][0] == "session"
-    assert calls[0][1][0] == [worker_plan]
-    assert calls[0][1][1] == "python-test"
+    assert calls[0] == ("session", [worker_plan])
     assert ("decode", (1, True, 1, 1)) in calls
     assert ("drain", (True, True, 3)) in calls
     assert ("decode_join", None) in calls

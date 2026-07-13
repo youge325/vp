@@ -20,10 +20,9 @@ class StageProgressState:
     total: int = 1
 
 
-def emit_stage_event(event: dict[str, Any], *, stream: Any = None) -> None:
+def emit_stage_event(event: dict[str, Any]) -> None:
     """Emit one worker event to stderr with a parseable prefix."""
-    target = stream if stream is not None else sys.stderr
-    print(f"{STAGE_EVENT_PREFIX}{json.dumps(event, ensure_ascii=False)}", file=target, flush=True)
+    print(f"{STAGE_EVENT_PREFIX}{json.dumps(event, ensure_ascii=False)}", file=sys.stderr, flush=True)
 
 
 def progress_event(

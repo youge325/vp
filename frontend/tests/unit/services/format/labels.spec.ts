@@ -1,20 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import * as labelModule from '@/services/format/labels'
 import { getWorkflowSummaryLabel } from '@/services/format/labels'
+import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
 
-function itemWithWorkflow({
+function workflowWithEnhancements({
   interpolation = false,
   superResolution = false,
 }: {
   interpolation?: boolean
   superResolution?: boolean
 }) {
-  return {
-    workflowConfig: {
-      interpolation: { enabled: interpolation },
-      superResolution: { enabled: superResolution },
-    },
-  } as any
+  const workflowConfig = createDefaultWorkflowConfigForEnvironment(null)
+  workflowConfig.interpolation.enabled = interpolation
+  workflowConfig.superResolution.enabled = superResolution
+  return workflowConfig
 }
 
 describe('getWorkflowSummaryLabel', () => {
@@ -23,20 +22,20 @@ describe('getWorkflowSummaryLabel', () => {
   })
 
   it('returns the interpolation summary when interpolation is enabled', () => {
-    expect(getWorkflowSummaryLabel(itemWithWorkflow({ interpolation: true }))).toBe('补帧')
+    expect(getWorkflowSummaryLabel(workflowWithEnhancements({ interpolation: true }))).toBe('补帧')
   })
 
   it('returns the super-resolution summary when only super-resolution is enabled', () => {
-    expect(getWorkflowSummaryLabel(itemWithWorkflow({ superResolution: true }))).toBe('超分')
+    expect(getWorkflowSummaryLabel(workflowWithEnhancements({ superResolution: true }))).toBe('超分')
   })
 
   it('returns the conversion summary when no enhancement is enabled', () => {
-    expect(getWorkflowSummaryLabel(itemWithWorkflow({}))).toBe('转码')
+    expect(getWorkflowSummaryLabel(workflowWithEnhancements({}))).toBe('转码')
   })
 
   it('joins enabled enhancement labels in workflow order', () => {
     expect(
-      getWorkflowSummaryLabel(itemWithWorkflow({ interpolation: true, superResolution: true })),
+      getWorkflowSummaryLabel(workflowWithEnhancements({ interpolation: true, superResolution: true })),
     ).toBe('补帧 / 超分')
   })
 })

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from typing import TYPE_CHECKING, Any
 
 from app.planning import StagePlan
@@ -38,7 +37,6 @@ def run_stage_file_pipeline(
     output_path: str,
     output_fps: float | None,
     metrics: PipelineMetrics,
-    python_executable: str | None = None,
 ) -> int:
     """Run each algorithm stage as segmented files instead of one rawvideo chain."""
     steps = ordered_steps(stage_plan)
@@ -106,7 +104,6 @@ def run_stage_file_pipeline(
             start_chunk_index=stage_context.chunk_start_index,
             segment_frames=segment_frames,
             metrics=metrics,
-            python_executable=python_executable or sys.executable,
         )
 
         if is_final_stage:

@@ -31,7 +31,6 @@ def run_worker_chain_runtime(
     error_queue: queue.Queue[BaseException],
     stop_event: Any,
     metrics: PipelineMetrics,
-    python_executable: str | None = None,
 ) -> None:
     start_source_frame = int(resume_state.start_source_frame)
     with stage_worker_session(
@@ -39,7 +38,6 @@ def run_worker_chain_runtime(
         progress_callbacks=progress_callbacks,
         error_queue=error_queue,
         stop_event=stop_event,
-        python_executable=python_executable,
     ) as handles:
         with decoded_frame_writer_session(
             DecodedFrameWriterConfig(

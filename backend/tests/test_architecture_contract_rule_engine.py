@@ -320,6 +320,34 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "def _sequence_tensor_to_frames(tensor):\n    array = _as_numpy(tensor)\n",
         ),
         (
+            "duplicate-workflow-summary-label",
+            "const workflowLabel = computed(() => workflow.interpolation.enabled ? '补帧' : '转码')\n",
+        ),
+        (
+            "stage-worker-python-executable-plumbing",
+            "def run_worker_chain(*, python_executable=None):\n    pass\n",
+        ),
+        (
+            "stage-worker-factory-injection-parameters",
+            "def run_stage_worker_stream(*, algorithm_factory=None):\n    pass\n",
+        ),
+        (
+            "optional-stage-worker-event-sink",
+            "def run_stage_worker_stream(*, event_sink: EventSink | None = None):\n    pass\n",
+        ),
+        (
+            "stage-event-stream-injection",
+            "def emit_stage_event(event, *, stream=None):\n    pass\n",
+        ),
+        (
+            "logging-configuration-injection",
+            "def setup_logging(log_dir=None, force=False):\n    pass\n",
+        ),
+        (
+            "native-dll-path-injection",
+            "def register_native_dll_paths(tensorrt_dir=None, extra=None):\n    pass\n",
+        ),
+        (
             "pipeline-test-private-aliases",
             "from app.processing.streaming.pipeline import _run_streaming_pipeline\n",
         ),
@@ -444,6 +472,35 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
             "shared-paddlegan-output-conversion",
             "def _tensor_output_to_frames(tensor, expected_ndim, batch_index):\n"
             "    return [_chw_float_to_rgb_uint8(frame) for frame in tensor]\n",
+        ),
+        (
+            "shared-workflow-summary-label",
+            "const workflowLabel = computed(() =>\n  getWorkflowSummaryLabel(editorConfig.value.workflowConfig),\n)\n",
+        ),
+        (
+            "stage-worker-current-interpreter",
+            "def _spawn_stage_workers():\n    process = subprocess.Popen([sys.executable, '-m', 'app'])\n",
+        ),
+        (
+            "direct-stage-worker-factory-composition",
+            "def run_stage_worker_stream(*, event_sink: EventSink):\n"
+            "    backend = create_backend(config)\n"
+            "    algorithm = create_algorithm(config.stage, backend)\n",
+        ),
+        (
+            "fixed-stage-event-stderr",
+            "def emit_stage_event(event: dict[str, Any]) -> None:\n    print(event, file=sys.stderr)\n",
+        ),
+        (
+            "settings-driven-logging",
+            "def setup_logging() -> None:\n    settings = _load_settings()\n",
+        ),
+        (
+            "environment-driven-native-dll-paths",
+            "def _candidate_dirs() -> list[Path]:\n"
+            "    value = os.environ.get('VP_TENSORRT_DIR')\n"
+            "def register_native_dll_paths() -> None:\n"
+            "    pass\n",
         ),
     ],
 )
