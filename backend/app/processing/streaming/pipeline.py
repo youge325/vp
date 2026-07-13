@@ -21,6 +21,7 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline
 from app.processing.streaming.pipeline_preflight import build_streaming_pipeline_preflight
 from app.utils.ffmpeg import FFmpegWrapper
+from app.utils.ffmpeg._progress import EncodeProgressCallback
 
 
 def process_video_streaming(
@@ -36,7 +37,7 @@ def process_video_streaming(
     tensor_backend_name: str,
     progress_callbacks: list[Callable[[int, int], None]],
     output_fps: float | None = None,
-    encode_progress_callback: Callable[[int, float | None, float | None, float | None, str], None] | None = None,
+    encode_progress_callback: EncodeProgressCallback | None = None,
     resume_mode: ResumeMode = "auto",
     metrics: PipelineMetrics | None = None,
 ) -> dict[str, Any]:

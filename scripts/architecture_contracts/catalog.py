@@ -990,7 +990,7 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "encoder-worker-segment-implementation",
         "backend/app/processing/streaming/encoder_worker.py",
-        r"^\s*from\s+pathlib\s+import\s+Path\b|^\s*import\s+os\b|\bopen_rawvideo_encoder\b|\bwriter\.(?:write_frame|close)\s*\(|\bfinalize_chunk\s*\(|\bchunk_tmp_path\s*\(|\b(?:_?make_segment_progress_callback|_?resolve_segment_output_frame_count)\b|\bunlink\s*\(|\b(?:current_segment_input_frames|segment_index|tmp_path)\b",
+        r"^\s*from\s+pathlib\s+import\s+Path\b|^\s*import\s+os\b|\bopen_rawvideo_encoder\b|\bwriter\.(?:write_frame|close)\s*\(|\bfinalize_chunk\s*\(|\bchunk_tmp_path\s*\(|\b_?resolve_segment_output_frame_count\b|\bunlink\s*\(|\b(?:current_segment_input_frames|segment_index|tmp_path)\b",
         "encoder worker segment writer implementation",
     ),
     _forbid(
@@ -1278,6 +1278,76 @@ FORBIDDEN_PATTERN_RULES = (
         r"(?s)^    def _process_(?:recurrent|window)_model\b(?:(?!^    def ).)*trace_chunks\.append",
         "duplicated PaddleGAN chunk trace implementation",
     ),
+    _forbid(
+        "algorithm-info-private-alias",
+        "frontend/src/composables/forms/enhance-lens.ts",
+        r"^\s*type\s+\w+\s*=\s*AlgorithmInfo\s*$",
+        "redundant private alias for generated AlgorithmInfo",
+    ),
+    _forbid(
+        "paddlegan-tensorrt-config-result",
+        "backend/app/algorithms/paddle/paddlegan_vsr/runner.py",
+        r"(?s)^def\s+_configure_tensorrt_config\b(?:(?!^def\s).)*(?:->\s*Any\b|^\s+return\s+config\s*$)",
+        "TensorRT configuration command exposes an unused return value",
+    ),
+    _forbid(
+        "manifest-finalize-chunk-result",
+        "backend/app/planning/manifest.py",
+        r"(?s)^[ \t]{4}def\s+finalize_chunk\b(?:(?!^[ \t]{4}def\s).)*(?:->\s*str\b|^\s+return\s+final_path\s*$)",
+        "manifest chunk finalization exposes an unused path result",
+    ),
+    _forbid(
+        "ffmpeg-encode-command-results",
+        "backend/app/utils/ffmpeg/encode.py",
+        r"(?s)(?:^def\s+(?:concat_videos|transcode_video)\b(?:(?!^def\s).)*(?:->\s*str\b|^\s+return\s+output_path\s*$)|^def\s+transcode_video\b(?:(?!^def\s).)*\boutput_path\s*:)",
+        "FFmpeg encode command exposes an unused output path result",
+    ),
+    _forbid(
+        "ffmpeg-wrapper-command-results",
+        "backend/app/utils/ffmpeg/__init__.py",
+        r"(?s)^[ \t]{4}def\s+(?:concat_videos|transcode_video)\b(?:(?!^[ \t]{4}def\s).)*(?:->\s*str\b|^\s+return\s+_encode\.(?:concat_videos|transcode_video)\s*\()",
+        "FFmpeg wrapper command forwards an unused output path result",
+    ),
+    ForbiddenReferenceRule(
+        "obsolete-segment-progress-adapter",
+        roots=("backend/app", "backend/tests"),
+        patterns=(r"\bmake_segment_progress_callback\b",),
+        message="obsolete segment-only FFmpeg progress adapter",
+        suffixes=(".py",),
+        excludes=("backend/tests/test_architecture_contract_rule_engine.py",),
+    ),
+    ForbiddenReferenceRule(
+        "inline-encode-progress-adapter",
+        roots=(
+            "backend/app/cli/commands/_process_execution.py",
+            "backend/app/processing/streaming/encoder_segments.py",
+            "backend/app/processing/streaming/encoder_segment_writer.py",
+        ),
+        patterns=(
+            r"progress_callback\s*=\s*lambda",
+            r"progress\.get\([\"']fps[\"']\)[\s\S]{0,400}progress\.get\([\"']out_time_seconds[\"']\)",
+        ),
+        message="inline FFmpeg encode progress payload adaptation",
+        suffixes=(".py",),
+    ),
+    _forbid(
+        "duplicate-frame-filter-crop-params",
+        "backend/app/processing/frame_filter_handlers.py",
+        r"(?s)^def\s+_apply_(?:numpy|tensor)_crop\b(?:(?!^def\s).)*params\.get\([\"'](?:x|y|width|height)[\"']",
+        "concrete frame-filter handler repeats crop parameter parsing",
+    ),
+    _forbid(
+        "duplicate-frame-filter-padding-params",
+        "backend/app/processing/frame_filter_handlers.py",
+        r"(?s)^def\s+_apply_(?:numpy|tensor)_pad\b(?:(?!^def\s).)*params\.get\([\"'](?:top|bottom|left|right)[\"']",
+        "concrete frame-filter handler repeats padding parameter parsing",
+    ),
+    _forbid(
+        "rust-inline-backend-error-payload",
+        "frontend/src-tauri/src/tasks/controller.rs",
+        r"(?s)match\s+status\s*\{.*?TaskErrorPayload\s*\{",
+        "task controller constructs backend error payloads outside the shared builder",
+    ),
 )
 
 
@@ -1461,6 +1531,24 @@ REQUIRED_PATTERN_RULES = (
         "backend/app/algorithms/paddle/paddlegan_vsr/runner.py",
         r"def\s+_record_chunk_trace\b[\s\S]*trace_chunks\.append",
         "shared PaddleGAN chunk trace helper is missing",
+    ),
+    _require(
+        "shared-ffmpeg-encode-progress-adapter",
+        "backend/app/utils/ffmpeg/_progress.py",
+        r"EncodeProgressCallback\s*=\s*Callable[\s\S]*def\s+make_encode_progress_callback\b[\s\S]*frame_offset",
+        "shared FFmpeg encode progress adapter is missing",
+    ),
+    _require(
+        "shared-frame-filter-geometry-params",
+        "backend/app/processing/frame_filter_handlers.py",
+        r"def\s+_crop_slices\b[\s\S]*def\s+_padding\b",
+        "shared frame-filter geometry parameter helpers are missing",
+    ),
+    _require(
+        "shared-rust-backend-error-payload",
+        "frontend/src-tauri/src/tasks/controller.rs",
+        r"fn\s+backend_error_payload\b[\s\S]*stderr_capture[\s\S]*TaskErrorPayload",
+        "shared Rust backend error payload builder is missing",
     ),
     _require(
         "typed-environment-protocol",

@@ -61,6 +61,31 @@ def _parse_hex_color(color_str: str) -> tuple[int, int, int]:
     )
 
 
+def _crop_slices(
+    params: _FilterParams,
+    *,
+    frame_width: int,
+    frame_height: int,
+) -> tuple[slice, slice]:
+    x = max(0, int(params.get("x", 0)))
+    y = max(0, int(params.get("y", 0)))
+    width = int(params.get("width", frame_width))
+    height = int(params.get("height", frame_height))
+    return (
+        slice(y, min(frame_height, y + height)),
+        slice(x, min(frame_width, x + width)),
+    )
+
+
+def _padding(params: _FilterParams) -> tuple[int, int, int, int]:
+    return (
+        int(params.get("top", 0)),
+        int(params.get("bottom", 0)),
+        int(params.get("left", 0)),
+        int(params.get("right", 0)),
+    )
+
+
 def _apply_numpy_scale(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
     _ensure_cv2()
     cv2 = import_cv2()
@@ -80,20 +105,14 @@ def _apply_numpy_scale(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
 
 
 def _apply_numpy_crop(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
-    x = max(0, int(params.get("x", 0)))
-    y = max(0, int(params.get("y", 0)))
-    width = int(params.get("width", frame.shape[1]))
-    height = int(params.get("height", frame.shape[0]))
     frame_height, frame_width = frame.shape[:2]
-    return frame[y : min(frame_height, y + height), x : min(frame_width, x + width)]
+    rows, columns = _crop_slices(params, frame_width=frame_width, frame_height=frame_height)
+    return frame[rows, columns]
 
 
 def _apply_numpy_pad(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
     cv2 = import_cv2()
-    top = int(params.get("top", 0))
-    bottom = int(params.get("bottom", 0))
-    left = int(params.get("left", 0))
-    right = int(params.get("right", 0))
+    top, bottom, left, right = _padding(params)
     if top == bottom == left == right == 0:
         return frame
     return cv2.copyMakeBorder(
@@ -183,22 +202,16 @@ def _apply_tensor_scale(tensor: Any, params: _FilterParams) -> Any:
 
 
 def _apply_tensor_crop(tensor: Any, params: _FilterParams) -> Any:
-    x = max(0, int(params.get("x", 0)))
-    y = max(0, int(params.get("y", 0)))
-    width = int(params.get("width", tensor.shape[-1]))
-    height = int(params.get("height", tensor.shape[-2]))
     frame_height = int(tensor.shape[-2])
     frame_width = int(tensor.shape[-1])
-    return tensor[:, :, y : min(frame_height, y + height), x : min(frame_width, x + width)]
+    rows, columns = _crop_slices(params, frame_width=frame_width, frame_height=frame_height)
+    return tensor[:, :, rows, columns]
 
 
 def _apply_tensor_pad(tensor: Any, params: _FilterParams) -> Any:
     import torch
 
-    top = int(params.get("top", 0))
-    bottom = int(params.get("bottom", 0))
-    left = int(params.get("left", 0))
-    right = int(params.get("right", 0))
+    top, bottom, left, right = _padding(params)
     if top == bottom == left == right == 0:
         return tensor
 

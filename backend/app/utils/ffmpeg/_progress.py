@@ -2,7 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
+
+EncodeProgressCallback = Callable[[int, float | None, float | None, float | None, str], None]
+
+
+def make_encode_progress_callback(
+    callback: EncodeProgressCallback | None,
+    *,
+    frame_offset: int = 0,
+) -> Callable[[dict[str, Any]], None] | None:
+    if callback is None:
+        return None
+
+    def report(progress: dict[str, Any]) -> None:
+        callback(
+            frame_offset + int(progress.get("frame") or 0),
+            progress.get("fps"),
+            progress.get("speed"),
+            progress.get("out_time_seconds"),
+            str(progress.get("progress") or ""),
+        )
+
+    return report
 
 
 def _parse_progress_float(raw_value: str | None) -> float | None:

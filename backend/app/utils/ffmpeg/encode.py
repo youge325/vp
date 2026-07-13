@@ -138,7 +138,7 @@ def merge_audio(ffmpeg_path: str, video_path: str, audio_path: str, output_path:
     return output_path
 
 
-def concat_videos(ffmpeg_path: str, segment_paths: list[str], output_path: str) -> str:
+def concat_videos(ffmpeg_path: str, segment_paths: list[str], output_path: str) -> None:
     if not segment_paths:
         raise ValueError("segment_paths must not be empty")
 
@@ -174,7 +174,6 @@ def concat_videos(ffmpeg_path: str, segment_paths: list[str], output_path: str) 
             "-y",
         ]
         run_ffmpeg_command(cmd)
-        return output_path
     finally:
         if list_file_path and os.path.isfile(list_file_path):
             os.remove(list_file_path)
@@ -183,13 +182,12 @@ def concat_videos(ffmpeg_path: str, segment_paths: list[str], output_path: str) 
 def transcode_video(
     ffmpeg_path: str,
     *,
-    output_path: str,
     decode_input_args: list[str],
     encode_output_args: list[str],
     output_fps: float | None = None,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
     keep_audio: bool = True,
-) -> str:
+) -> None:
     cmd = [ffmpeg_path, "-hide_banner", "-loglevel", "error"]
     if progress_callback is not None:
         cmd.extend(["-nostats", "-progress", "pipe:2"])
@@ -204,7 +202,7 @@ def transcode_video(
     cmd.extend(encode_output_args)
     if progress_callback is None:
         run_ffmpeg_command(cmd)
-        return output_path
+        return
 
     process = subprocess.Popen(
         cmd,
@@ -215,4 +213,3 @@ def transcode_video(
     )
     monitor = _FFmpegPipeBase(process, progress_callback=progress_callback)
     monitor._wait_for_process()
-    return output_path
