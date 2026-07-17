@@ -20,7 +20,6 @@ def cmd_check(_args: argparse.Namespace) -> None:
 
     tensor_engines = probe_tensor_engines()
     gpu_adapters = list_gpu_adapters()
-    public_gpu_adapters = [{"name": adapter["name"], "vendor": adapter["vendor"]} for adapter in gpu_adapters]
     onnx_models = scan_onnx_models(settings.RIFE_MODEL_DIR)
     onnx_model_details = scan_onnx_model_details(settings.RIFE_MODEL_DIR)
     ffmpeg_capabilities = (
@@ -57,7 +56,7 @@ def cmd_check(_args: argparse.Namespace) -> None:
             "encoderProfiles": ffmpeg_capabilities["encoderProfiles"],
             "decoderProfiles": ffmpeg_capabilities["decoderProfiles"],
         },
-        gpu={"adapters": public_gpu_adapters},
+        gpu={"adapters": gpu_adapters},
         tensorEngines=tensor_engines,
         interpolationAlgorithms=interpolation_algorithms_payload,
         superResolutionAlgorithms=super_resolution_algorithms_payload,

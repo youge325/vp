@@ -647,6 +647,24 @@ FORBIDDEN_PATTERN_RULES = (
         "internal system probe constant is public",
     ),
     _forbid(
+        "obsolete-gpu-device-type",
+        "backend/app/utils/system_probe.py",
+        r"\bdevice_type\b|def\s+_classify_gpu_device_type\b",
+        "obsolete GPU device type classification",
+    ),
+    _forbid(
+        "environment-gpu-adapter-projection",
+        "backend/app/cli/commands/check.py",
+        r"\b(?:public|wire)_gpu_adapters\b|\[\s*\{\s*[\"']name[\"']:\s*adapter\[[\"']name[\"']\]",
+        "duplicate environment GPU adapter projection",
+    ),
+    _forbid(
+        "frontend-virtual-gpu-filtering",
+        "frontend/src/composables/selectors/useHomeDashboard.ts",
+        r"gpu\.adapters\s*\.filter\s*\(|virtual\s+display|gameviewer|idddriver",
+        "frontend virtual GPU filtering duplicates the system probe boundary",
+    ),
+    _forbid(
         "public-file-extension-constant",
         "backend/app/utils/file_utils.py",
         r"^SUPPORTED_EXTENSIONS\s*=",
@@ -1937,10 +1955,23 @@ REQUIRED_PATTERN_RULES = (
         "strongly typed Rust environment protocol is missing",
     ),
     _require(
-        "environment-cache-schema-12",
+        "environment-cache-schema-13",
         "frontend/src-tauri/src/persistence/storage.rs",
-        r"ENVIRONMENT_CACHE_SCHEMA_VERSION:\s*u32\s*=\s*12\s*;",
-        "environment cache schema 12 is missing",
+        r"ENVIRONMENT_CACHE_SCHEMA_VERSION:\s*u32\s*=\s*13\s*;",
+        "environment cache schema 13 is missing",
+    ),
+    _require(
+        "windows-virtual-gpu-filter",
+        "backend/app/utils/system_probe.py",
+        r"def\s+_is_virtual_gpu_adapter\b[\s\S]*Select-Object\s+Name,AdapterCompatibility,PNPDeviceID"
+        r"[\s\S]*if\s+_is_virtual_gpu_adapter\([\s\S]{0,200}continue",
+        "Windows virtual GPU filtering boundary is missing",
+    ),
+    _require(
+        "gpu-vendor-word-boundaries",
+        "backend/app/utils/system_probe.py",
+        r"re\.compile\(r[\"']\\bnvidia\\b[\"'][\s\S]*re\.compile\(r[\"']\\bati\\b[\"']",
+        "GPU vendor matching must use word boundaries",
     ),
     _require(
         "runtime-config-model-projection",

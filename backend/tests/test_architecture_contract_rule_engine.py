@@ -229,6 +229,15 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
         ("public-error-code-cache", "ALL_CODES = frozenset()\n"),
         ("public-onnx-internals", "def select_onnx_providers(engine, runtime):\n    return []\n"),
         ("public-system-probe-constants", "GPU_VENDOR_KEYWORDS = {}\n"),
+        ("obsolete-gpu-device-type", "def _classify_gpu_device_type(name):\n    return 'virtual'\n"),
+        (
+            "environment-gpu-adapter-projection",
+            "public_gpu_adapters = [{'name': adapter['name']} for adapter in gpu_adapters]\n",
+        ),
+        (
+            "frontend-virtual-gpu-filtering",
+            "const adapters = gpu.adapters.filter((adapter) => adapter.vendor === 'nvidia')\n",
+        ),
         ("public-file-extension-constant", "SUPPORTED_EXTENSIONS = set()\n"),
         ("public-paddlegan-weight-root", "def fixed_weight_root():\n    return None\n"),
         ("obsolete-ffmpeg-probe-imports", "from app.utils.ffmpeg.probe import get_video_info\n"),
@@ -607,6 +616,18 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
         (
             "direct-cli-logging-setup",
             "args = parser.parse_args()\nsetup_logging()\nargs.func(args)\n",
+        ),
+        (
+            "windows-virtual-gpu-filter",
+            "def _is_virtual_gpu_adapter(name, compatibility, pnp_device_id):\n"
+            "    return True\n"
+            "script = 'Select-Object Name,AdapterCompatibility,PNPDeviceID'\n"
+            "if _is_virtual_gpu_adapter(name, compatibility, pnp_device_id):\n"
+            "    continue\n",
+        ),
+        (
+            "gpu-vendor-word-boundaries",
+            "NVIDIA = re.compile(r'\\bnvidia\\b', re.IGNORECASE)\nATI = re.compile(r'\\bati\\b', re.IGNORECASE)\n",
         ),
     ],
 )

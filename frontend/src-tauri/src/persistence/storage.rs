@@ -13,9 +13,9 @@ use crate::error::ShellError;
 use crate::models::WorkbenchPreset;
 use crate::runtime::ResolvedRuntimePaths;
 
-// Schema 12 replaces compatibility-derived environment data with the strict,
-// generated capability protocol. Older cache entries must be re-probed.
-const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 12;
+// Schema 13 removes virtual display adapters from GPU capabilities. Older
+// cache entries must be re-probed so stale adapters do not remain visible.
+const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 13;
 const WORKBENCH_PRESET_SCHEMA_VERSION: u32 = 1;
 const ENVIRONMENT_CACHE_FILE: &str = "environment-cache.json";
 const WORKBENCH_PRESET_FILE: &str = "workbench-preset.json";
@@ -444,10 +444,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn invalidates_environment_cache_with_schema_version_eleven() {
-        let dir = temp_dir("env-schema-v11");
+    async fn invalidates_environment_cache_with_schema_version_twelve() {
+        let dir = temp_dir("env-schema-v12");
         let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
-            schema_version: 11,
+            schema_version: 12,
             checked_at: "2026-07-11T12:00:00Z".to_string(),
             fingerprint: "fingerprint-a".to_string(),
             result: json!({"type":"check", "runtimeMode":"bundled"}),
