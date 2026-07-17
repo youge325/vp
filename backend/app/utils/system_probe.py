@@ -3,63 +3,67 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
-from typing import Any
 
 from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
 
-_GPU_VENDOR_KEYWORDS = {
-    "nvidia": "nvidia",
-    "intel": "intel",
-    "amd": "amd",
-    "advanced micro devices": "amd",
-    "ati": "amd",
-    "hygon": "hygon",
-    "dcu": "hygon",
-}
+_GPU_VENDOR_PATTERNS = (
+    (re.compile(r"\bnvidia\b", re.IGNORECASE), "nvidia"),
+    (re.compile(r"\bintel\b", re.IGNORECASE), "intel"),
+    (re.compile(r"\badvanced\s+micro\s+devices\b", re.IGNORECASE), "amd"),
+    (re.compile(r"\bamd\b", re.IGNORECASE), "amd"),
+    (re.compile(r"\bati\b", re.IGNORECASE), "amd"),
+    (re.compile(r"\bhygon\b", re.IGNORECASE), "hygon"),
+    (re.compile(r"\bdcu\b", re.IGNORECASE), "hygon"),
+)
 
-_VIRTUAL_GPU_KEYWORDS = (
-    "virtual",
-    "remote",
+_VIRTUAL_GPU_NAME_MARKERS = (
+    "virtual display",
+    "remote display",
     "mirror",
-    "idd",
+    "idddriver",
+    "indirect display",
     "gameviewer",
+)
+
+_VIRTUAL_GPU_PNP_PREFIXES = (
+    "root\\display\\",
+    "indirectdsp\\",
 )
 
 
 def _classify_gpu_vendor(*values: str) -> str:
     """Return a normalized GPU vendor label."""
-    haystack = " ".join(value.lower() for value in values if value)
-    for keyword, vendor in _GPU_VENDOR_KEYWORDS.items():
-        if keyword in haystack:
+    haystack = " ".join(value for value in values if value)
+    for pattern, vendor in _GPU_VENDOR_PATTERNS:
+        if pattern.search(haystack):
             return vendor
     return "other"
 
 
-def _classify_gpu_device_type(name: str, vendor: str) -> str:
-    """Return a normalized GPU device type."""
-    lowered = name.lower()
-    if any(keyword in lowered for keyword in _VIRTUAL_GPU_KEYWORDS):
-        return "virtual"
-    if vendor == "intel":
-        return "integrated"
-    if vendor in {"nvidia", "amd", "hygon"}:
-        return "discrete"
-    return "other"
+def _is_virtual_gpu_adapter(name: str, compatibility: str, pnp_device_id: str) -> bool:
+    """Return whether a Windows display controller is a virtual adapter."""
+    description = f"{name} {compatibility}".casefold()
+    normalized_pnp_id = pnp_device_id.casefold()
+    return any(marker in description for marker in _VIRTUAL_GPU_NAME_MARKERS) or normalized_pnp_id.startswith(
+        _VIRTUAL_GPU_PNP_PREFIXES
+    )
 
 
-def list_gpu_adapters() -> list[dict[str, Any]]:
+def list_gpu_adapters() -> list[dict[str, str]]:
     """Return normalized GPU adapters for the current host."""
     if sys.platform.startswith("win"):
         return _list_windows_gpu_adapters()
     return []
 
 
-def _list_windows_gpu_adapters() -> list[dict[str, Any]]:
+def _list_windows_gpu_adapters() -> list[dict[str, str]]:
     script = (
-        "Get-CimInstance Win32_VideoController | Select-Object Name,AdapterCompatibility | ConvertTo-Json -Compress"
+        "Get-CimInstance Win32_VideoController | "
+        "Select-Object Name,AdapterCompatibility,PNPDeviceID | ConvertTo-Json -Compress"
     )
     try:
         result = subprocess.run(
@@ -84,17 +88,21 @@ def _list_windows_gpu_adapters() -> list[dict[str, Any]]:
         return []
 
     rows = payload if isinstance(payload, list) else [payload]
-    adapters: list[dict[str, Any]] = []
+    adapters: list[dict[str, str]] = []
     for row in rows:
+        if not isinstance(row, dict):
+            continue
         name = str(row.get("Name") or "").strip()
+        if not name:
+            continue
         compatibility = str(row.get("AdapterCompatibility") or "").strip()
-        vendor = _classify_gpu_vendor(name, compatibility)
-        device_type = _classify_gpu_device_type(name, vendor)
+        pnp_device_id = str(row.get("PNPDeviceID") or "").strip()
+        if _is_virtual_gpu_adapter(name, compatibility, pnp_device_id):
+            continue
         adapters.append(
             {
                 "name": name,
-                "vendor": vendor,
-                "device_type": device_type,
+                "vendor": _classify_gpu_vendor(name, compatibility),
             }
         )
     return adapters

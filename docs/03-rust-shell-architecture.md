@@ -192,8 +192,8 @@ pub(crate) enum NdjsonEnvelope {
 
 - 缓存优先策略：若 fingerprint（运行时路径哈希）未变，直接返回缓存结果
 - 首次或强制刷新时，通过 `oneshot.rs` 运行 `python -m app check` 子命令
-- 输出结构仅包含 UI 消费的 FFmpeg 能力、GPU adapter `name/vendor`、三个 backend 的实际 `tensorEngines`、算法能力元数据和 `runtimeMode`
-- 环境缓存使用 schema 12；旧 schema、fingerprint 变化、损坏缓存和 force refresh 都会触发重新探测
+- 输出结构仅包含 UI 消费的 FFmpeg 能力、GPU adapter `name/vendor`、三个 backend 的实际 `tensorEngines`、算法能力元数据和 `runtimeMode`；Windows 虚拟显示适配器在 Python 系统探测边界过滤，UI 与 FFmpeg 能力探测共享同一结果
+- 环境缓存使用 schema 13；旧 schema、fingerprint 变化、损坏缓存和 force refresh 都会触发重新探测
 
 ```mermaid
 sequenceDiagram

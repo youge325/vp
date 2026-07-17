@@ -38,10 +38,13 @@ def test_processing_plan_does_not_store_unused_output_directory() -> None:
 
 
 class _FakeCheckFFmpeg:
+    discovered_gpu_adapters = None
+
     def is_available(self) -> bool:
         return True
 
-    def discover_capabilities(self, _gpu_adapters):
+    def discover_capabilities(self, gpu_adapters):
+        type(self).discovered_gpu_adapters = gpu_adapters
         return {"hwaccels": [], "encoderProfiles": [], "decoderProfiles": []}
 
 
@@ -389,7 +392,9 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
         "app.cli.commands.check.probe_tensor_engines",
         lambda: {"pytorch": [], "paddle": [], "onnx": []},
     )
-    monkeypatch.setattr("app.cli.commands.check.list_gpu_adapters", lambda: [])
+    gpu_adapters = [{"name": "NVIDIA GeForce RTX 3070 Laptop GPU", "vendor": "nvidia"}]
+    _FakeCheckFFmpeg.discovered_gpu_adapters = None
+    monkeypatch.setattr("app.cli.commands.check.list_gpu_adapters", lambda: gpu_adapters)
     monkeypatch.setattr(settings, "RIFE_MODEL_DIR", str(model_dir))
     cmd_check(argparse.Namespace())
 
@@ -404,7 +409,8 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
         "runtimeMode",
     }
     assert set(payload["ffmpeg"]) == {"available", "hwaccels", "encoderProfiles", "decoderProfiles"}
-    assert payload["gpu"] == {"adapters": []}
+    assert _FakeCheckFFmpeg.discovered_gpu_adapters is gpu_adapters
+    assert payload["gpu"] == {"adapters": gpu_adapters}
     assert payload["tensorEngines"]["onnx"] == []
     assert payload["runtimeMode"] == settings.runtime_mode
     assert "onnxModels" not in payload
