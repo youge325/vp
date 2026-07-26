@@ -1,16 +1,7 @@
 //! One-shot CLI runner for ``check`` / ``info`` / ``inspect-output``.
 //!
-//! Split out of the legacy ``tasks::runner`` mod in Phase 5b/c.
-//!
-//! Phase 5c introduces the [`CliOutcome`] enum so callers must explicitly
-//! ``match`` on success / structured-error / unstructured-error variants.
-//! Previously the runner returned ``Result<Value, ShellError>`` and
-//! happily packaged a backend error envelope as ``Ok(value)`` when the
-//! process exited non-zero — silently flipping the outcome's meaning the
-//! moment a downstream caller tried to deserialize the value as a
-//! success-shaped struct (e.g. ``EnvironmentCheckResult``). With the
-//! three-way enum a missed branch becomes a rustc error rather than a
-//! quiet schema mismatch at runtime.
+//! The runner maps backend failures to ``ShellError`` before returning, so
+//! command callers only receive success-shaped JSON values.
 
 use std::process::Stdio;
 
@@ -23,39 +14,6 @@ use crate::models::{TaskErrorCode, TaskErrorPayload};
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks::builder::{apply_no_window, backend_command};
 use crate::tasks::envelope::parse_last_json_line;
-
-/// Result classification for [`run_single_cli_command`].
-#[derive(Debug)]
-pub(crate) enum CliOutcome {
-    /// The process exited 0 and the last JSON line on stdout decoded
-    /// successfully. The caller is responsible for further validation
-    /// (typed deserialization, etc.).
-    Ok(Value),
-    /// The process exited non-zero and the last JSON line decoded as a
-    /// proper ``{"type":"error", code, message, details}`` envelope.
-    /// The frontend can route on ``payload.code`` directly.
-    FailedWithEnvelope(TaskErrorPayload),
-    /// The process exited non-zero and we could not recover an
-    /// envelope — the payload is the trimmed stderr summary so the
-    /// user at least sees what the backend printed.
-    FailedWithoutEnvelope(String),
-}
-
-impl CliOutcome {
-    /// Phase 2.2 — 将三种 outcome 变体折叠为 ``Result<Value, ShellError>``。
-    /// 消除 ``tasks/commands.rs`` 与 ``services/environment_service.rs`` 的重复
-    /// match 逻辑,使信封折叠语义单点维护。
-    pub(crate) fn into_result(self) -> Result<Value, ShellError> {
-        match self {
-            Self::Ok(value) => Ok(value),
-            Self::FailedWithEnvelope(envelope) => Err(ShellError::BackendEnvelope {
-                code: envelope.code,
-                message: envelope.message,
-            }),
-            Self::FailedWithoutEnvelope(message) => Err(ShellError::BackendProbeFailed(message)),
-        }
-    }
-}
 
 /// Lightweight shape probe used to decide whether ``last_json_line`` is
 /// a real error envelope or just success-shaped data that happens to
@@ -82,23 +40,20 @@ fn try_parse_error_envelope(value: &Value) -> Option<TaskErrorPayload> {
     })
 }
 
-/// Run a one-shot CLI subcommand and classify the outcome.
+/// Run a one-shot CLI subcommand and return its success-shaped JSON value.
 ///
 /// ``args[0]`` is the subcommand name; remaining elements become flag /
 /// value pairs (``--input <path>`` style) appended after it.
 ///
-/// Phase D.3.1 — ``stdin_payload`` lets callers feed config through
-/// stdin instead of command-line flags. ``None`` keeps the legacy
-/// ``Stdio::null`` behaviour for subcommands that don't take input
-/// (e.g. ``check``, ``info``). When ``Some(payload)`` is provided the
-/// command is spawned manually (instead of ``Command::output``), the
-/// payload is written to stdin, the handle is dropped to signal EOF,
-/// and stdout/stderr are then drained synchronously.
+/// ``stdin_payload`` lets callers feed config through stdin instead of
+/// command-line flags. ``None`` uses ``Stdio::null`` for commands without
+/// input; ``Some`` writes the payload and closes stdin before collecting
+/// stdout and stderr.
 pub(crate) async fn run_single_cli_command(
     paths: &ResolvedRuntimePaths,
     args: &[String],
     stdin_payload: Option<&str>,
-) -> Result<CliOutcome, ShellError> {
+) -> Result<Value, ShellError> {
     let (subcommand, extra_args) = args.split_first().ok_or_else(|| {
         ShellError::InvalidInput("run_single_cli_command requires a subcommand".to_string())
     })?;
@@ -132,20 +87,19 @@ pub(crate) async fn run_single_cli_command(
     let last_json = parse_last_json_line(&stdout);
 
     if !output.status.success() {
-        return Ok(
-            match last_json.as_ref().and_then(try_parse_error_envelope) {
-                Some(envelope) => CliOutcome::FailedWithEnvelope(envelope),
-                None => CliOutcome::FailedWithoutEnvelope(format!(
-                    "Backend command failed: {}",
-                    stderr.trim().trim_matches('"')
-                )),
-            },
-        );
+        return match last_json.as_ref().and_then(try_parse_error_envelope) {
+            Some(envelope) => Err(ShellError::BackendEnvelope {
+                code: envelope.code,
+                message: envelope.message,
+            }),
+            None => Err(ShellError::BackendProbeFailed(format!(
+                "Backend command failed: {}",
+                stderr.trim().trim_matches('"')
+            ))),
+        };
     }
 
-    last_json
-        .map(CliOutcome::Ok)
-        .ok_or(ShellError::BackendNoJson)
+    last_json.ok_or(ShellError::BackendNoJson)
 }
 
 #[cfg(test)]

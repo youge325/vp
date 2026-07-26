@@ -14,7 +14,7 @@ type ConflictResolverDeps = Pick<
   BatchLifecycleDeps,
   'getBatch' | 'setBatch' | 'getMediaItem' | 'setPendingConflict'
 >
-type ConflictLifecycle = Pick<ReturnType<typeof createCommonHelpers>, 'getCurrentItem'> &
+type ConflictLifecycle = Pick<ReturnType<typeof createCommonHelpers>, 'getCurrentTaskContext'> &
   Pick<ReturnType<typeof createQueueOps>, 'launchCurrentItem'> &
   Pick<ReturnType<typeof createFinalizeOps>, 'finalizeCurrent'>
 
@@ -53,7 +53,7 @@ export function createConflictResolver(
     if (error.code !== TASK_ERROR_CODES.ResumeConflict) {
       return false
     }
-    if (!lifecycle.getCurrentItem()) {
+    if (!lifecycle.getCurrentTaskContext().item) {
       return false
     }
     deps.setPendingConflict(buildResumeConflictDescriptorFromError(error))

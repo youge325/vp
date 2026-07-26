@@ -18,6 +18,7 @@ from app.processing.streaming.pipeline_lifecycle import (
     prepare_streaming_manifest,
 )
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.pipeline_context import StreamingPipelineContext
 from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline
 from app.processing.streaming.pipeline_preflight import build_streaming_pipeline_preflight
 from app.utils.ffmpeg import FFmpegWrapper
@@ -41,7 +42,7 @@ def process_video_streaming(
     resume_mode: ResumeMode = "auto",
     metrics: PipelineMetrics | None = None,
 ) -> dict[str, Any]:
-    """Process a video without writing temporary frames to disk."""
+    """Process a video through the selected streaming runtime."""
     if metrics is None:
         # Standalone caller (tests, smoke scripts) — keep the call site
         # simple by self-provisioning metrics that nobody reads.
@@ -64,38 +65,28 @@ def process_video_streaming(
         config_snapshot=preflight.config_snapshot,
         resume_mode=resume_mode,
     )
+    context = StreamingPipelineContext(
+        ffmpeg=ffmpeg,
+        input_path=input_path,
+        output_path=output_path,
+        decode_config=decode_config,
+        encode_config=encode_config,
+        preflight=preflight,
+        manifest=manifest,
+        resume_state=resume_state,
+        tensor_backend_name=tensor_backend_name,
+        progress_callbacks=progress_callbacks,
+        output_fps=output_fps,
+        encode_progress_callback=encode_progress_callback,
+        metrics=metrics,
+    )
 
     if resume_state.start_source_frame >= preflight.resume_source_frames:
         completed_output_frames = resume_state.completed_output_frames
     else:
-        completed_output_frames = run_streaming_pipeline(
-            ffmpeg=ffmpeg,
-            input_path=input_path,
-            decode_config=decode_config,
-            encode_config=encode_config,
-            manifest=manifest,
-            stage_plan=preflight.stage_plan,
-            tensor_backend_name=tensor_backend_name,
-            progress_callbacks=progress_callbacks,
-            video_info=preflight.video_info,
-            output_width=preflight.output_width,
-            output_height=preflight.output_height,
-            resume_state=resume_state,
-            segment_frames=preflight.segment_frames,
-            use_stage_file_pipeline=preflight.use_stage_file_pipeline,
-            output_path=output_path,
-            output_fps=output_fps,
-            encode_progress_callback=encode_progress_callback,
-            metrics=metrics,
-        )
+        completed_output_frames = run_streaming_pipeline(context=context)
 
     return finalize_streaming_output(
-        ffmpeg=ffmpeg,
-        input_path=input_path,
-        output_path=output_path,
-        encode_config=encode_config,
-        manifest=manifest,
+        context=context,
         completed_output_frames=completed_output_frames,
-        total_output_frames=preflight.stage_plan.total_encoded_frames,
-        strict_total_frames=output_fps is None,
     )

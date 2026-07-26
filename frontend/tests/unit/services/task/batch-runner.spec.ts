@@ -20,8 +20,6 @@ function makeDeps(overrides: Partial<BatchRunnerDeps> = {}): BatchRunnerDeps {
   const runtimeIds: string[] = []
   let pendingConflict: ResumeConflictDescriptor | null = null
   const items = new Map<string, MediaItem>()
-  // Phase 13.1 — run state lives in its own store; fake here keeps the
-  // same Map shape so test cases can probe what's been written to it.
   const runStates = new Map<string, MediaRunState>()
 
   return {
@@ -247,6 +245,34 @@ describe('batch-runner', () => {
     expect(setItemTaskState).toHaveBeenCalledTimes(3)
   })
 
+  it('keeps the console item and run state paired when a stale current id falls back to the active item', () => {
+    const activeItem = makeItem('active')
+    const staleState: MediaRunState = {
+      taskState: { ...createIdleTaskState(), logs: ['stale'] },
+      lastOutputPath: '',
+    }
+    const activeState: MediaRunState = {
+      taskState: { ...createIdleTaskState(), logs: ['active'] },
+      lastOutputPath: '',
+    }
+    const setItemTaskState = vi.fn()
+    const deps = makeDeps({
+      getMediaItem: (id) => id === activeItem.id ? activeItem : null,
+      getItemRunState: (id) => id === 'stale' ? staleState : id === activeItem.id ? activeState : null,
+      getActiveItemId: () => activeItem.id,
+      setItemTaskState,
+    })
+    deps.getBatch().currentId = 'stale'
+    const runner = createBatchRunner(deps)
+
+    runner.onLog({ message: 'working' })
+
+    expect(setItemTaskState).toHaveBeenCalledWith(
+      activeItem.id,
+      expect.objectContaining({ logs: ['active', 'working'] }),
+    )
+  })
+
   it('cancels the batch', async () => {
     const deps = makeDeps()
     const runner = createBatchRunner(deps)
@@ -289,9 +315,6 @@ describe('batch-runner', () => {
     expect(deps.getBatch().failedCount).toBe(1)
   })
 
-  // Phase 16 — onError 必须把 error 路由到 deps.setTaskIssue
-  // (实际接到 issueStore.setIssue('task', error)),否则
-  // useOperationIssue('task') 看不到 banner 数据,真正的错误展示链路断开。
   it('routes onError to setTaskIssue so the task banner picks it up', async () => {
     const deps = makeDeps()
     const runner = createBatchRunner(deps)
@@ -305,9 +328,6 @@ describe('batch-runner', () => {
     expect(deps.setTaskIssue).toHaveBeenCalledWith(err)
   })
 
-  // Phase 16 — onCancelled 分两种 reason:
-  //   - 'stalled' 是 watchdog 主动中止,要 surface 给 banner 看 stderr
-  //   - 'user' 是正常 UX 流转,banner 应该清空(避免上次的错误条挂着)
   it('user-initiated cancel clears the task banner instead of surfacing it', async () => {
     const deps = makeDeps()
     const runner = createBatchRunner(deps)

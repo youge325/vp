@@ -23,8 +23,7 @@ export function createControlOps(
     try {
       await (paused ? deps.pauseTask() : deps.resumeTask())
       deps.setBatch({ isPaused: paused })
-      const item = helpers.getCurrentItem()
-      const runState = helpers.getCurrentRunState()
+      const { item, runState } = helpers.getCurrentTaskContext()
       if (item && runState) {
         const nextState = paused
           ? applyTaskPaused(runState.taskState)
@@ -54,8 +53,8 @@ export function createControlOps(
 
     const previousQueue = [...batch.queue]
     const wasPaused = batch.isPaused
-    const item = helpers.getCurrentItem()
-    const previousTaskState = helpers.getCurrentRunState()?.taskState ?? null
+    const { item, runState } = helpers.getCurrentTaskContext()
+    const previousTaskState = runState?.taskState ?? null
 
     deps.setBatch({
       queue: [],

@@ -6,12 +6,9 @@ use crate::persistence;
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks;
 
-/// Tauri command wrapper.
-///
-/// Phase C.2.5 sank this here from ``lib.rs`` so the entry crate only owns
-/// ``run()`` and integration tests. The ``forceRefresh`` argument name must
-/// stay camelCase to match the frontend payload — Rust ``rename_all`` cannot
-/// rewrite tauri command parameter names, so we ``#[allow(non_snake_case)]``.
+/// Tauri command wrapper. The ``forceRefresh`` argument name must stay
+/// camelCase to match the frontend payload because Rust ``rename_all`` cannot
+/// rewrite Tauri command parameter names.
 #[tauri::command]
 #[allow(non_snake_case)]
 pub(crate) async fn check_environment<R: Runtime>(
@@ -52,12 +49,7 @@ async fn check_environment_impl<R: Runtime>(
         }
     }
 
-    // Phase 5c — the one-shot runner now returns a [`CliOutcome`]; the
-    // exhaustive match below replaces the previous ``?`` that silently
-    // turned a backend error envelope into ``Ok(value)`` that then
-    // failed downstream as a schema-mismatch.
-    let outcome = tasks::run_single_cli_command(&paths, &[String::from("check")], None).await?;
-    let raw = outcome.into_result()?;
+    let raw = tasks::run_single_cli_command(&paths, &[String::from("check")], None).await?;
     let result = serde_json::from_value::<EnvironmentCheckResult>(raw).map_err(|error| {
         ShellError::SchemaValidation(format!(
             "Unable to deserialize environment check result: {error}"

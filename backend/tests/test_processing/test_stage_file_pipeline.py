@@ -6,6 +6,10 @@ from typing import Any
 import app.processing.streaming.stage_file_pipeline as stage_file_pipeline
 from app.planning import ProcessingStep, ResumeState, SegmentManifest, build_stage_plan
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.pipeline_context import (
+    StreamingPipelineContext,
+    StreamingPipelinePreflight,
+)
 from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 
 
@@ -61,22 +65,32 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
     monkeypatch.setattr(stage_file_pipeline, "run_single_stage_file_chunks", fake_run_single_stage_file_chunks)
     monkeypatch.setattr(stage_file_pipeline, "finalize_segmented_output", fake_finalize_segmented_output)
 
-    completed = stage_file_pipeline.run_stage_file_pipeline(
+    context = StreamingPipelineContext(
         ffmpeg=ffmpeg,
         input_path=input_path,
+        output_path=output_path,
         decode_config=decode_config,
         encode_config=encode_config,
+        preflight=StreamingPipelinePreflight(
+            video_info={"width": 1, "height": 1, "source_fps": 24.0, "source_frames": 5},
+            stage_plan=stage_plan,
+            signature="sig",
+            config_snapshot={"test": True},
+            use_stage_file_pipeline=True,
+            resume_source_frames=5,
+            output_width=4,
+            output_height=4,
+            segment_frames=2,
+        ),
         manifest=manifest,
-        stage_plan=stage_plan,
+        resume_state=ResumeState(completed_output_frames=0, start_source_frame=0, completed_segments=[]),
         tensor_backend_name="pytorch",
         progress_callbacks=[lambda *_args, **_kwargs: None, lambda *_args, **_kwargs: None],
-        video_info={"width": 1, "height": 1, "source_fps": 24.0, "source_frames": 5},
-        resume_state=ResumeState(completed_output_frames=0, start_source_frame=0, completed_segments=[]),
-        segment_frames=2,
-        output_path=output_path,
         output_fps=None,
+        encode_progress_callback=None,
         metrics=metrics,
     )
+    completed = stage_file_pipeline.run_stage_file_pipeline(context=context)
 
     assert completed == 9
     configs = [call["config"] for call in stage_calls]

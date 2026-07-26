@@ -7,8 +7,8 @@ from typing import Any
 from app.errors import ResumeConflictError
 from app.planning import ResumeMode, ResumeState, SegmentManifest
 from app.processing.streaming.encoder_finalization import finalize_segmented_output
+from app.processing.streaming.pipeline_context import StreamingPipelineContext
 from app.protocol import ndjson
-from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -49,30 +49,24 @@ def emit_resume_status_event(*, resume_state: ResumeState, total_output_frames: 
 
 def finalize_streaming_output(
     *,
-    ffmpeg: FFmpegWrapper,
-    input_path: str,
-    output_path: str,
-    encode_config: dict[str, Any],
-    manifest: SegmentManifest,
+    context: StreamingPipelineContext,
     completed_output_frames: int,
-    total_output_frames: int,
-    strict_total_frames: bool,
 ) -> dict[str, Any]:
     finalize_segmented_output(
-        ffmpeg=ffmpeg,
-        input_path=input_path,
-        output_path=output_path,
-        encode_config=encode_config,
-        manifest=manifest,
+        ffmpeg=context.ffmpeg,
+        input_path=context.input_path,
+        output_path=context.output_path,
+        encode_config=context.encode_config,
+        manifest=context.manifest,
         completed_output_frames=completed_output_frames,
-        total_output_frames=total_output_frames,
-        strict_total_frames=strict_total_frames,
+        total_output_frames=context.preflight.stage_plan.total_encoded_frames,
+        strict_total_frames=context.output_fps is None,
     )
 
-    manifest.cleanup()
-    processed_frames = ffmpeg.get_frame_count(output_path)
+    context.manifest.cleanup()
+    processed_frames = context.ffmpeg.get_frame_count(context.output_path)
     return {
-        "output_path": output_path,
+        "output_path": context.output_path,
         "processed_frames": processed_frames or completed_output_frames,
-        "audio_merged": bool(encode_config.get("keepAudio", True)),
+        "audio_merged": bool(context.encode_config.get("keepAudio", True)),
     }

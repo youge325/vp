@@ -911,6 +911,12 @@ FORBIDDEN_PATTERN_RULES = (
         "unused one-shot app context",
     ),
     _forbid(
+        "rust-cli-outcome-intermediate",
+        "frontend/src-tauri/src/tasks/oneshot.rs",
+        r"\b(?:CliOutcome|into_result)\b",
+        "one-shot CLI outcome intermediate",
+    ),
+    _forbid(
         "protocol-error-code-reexport",
         "frontend/src-tauri/src/protocol.rs",
         r"\bTaskErrorCode\b",
@@ -963,6 +969,38 @@ FORBIDDEN_PATTERN_RULES = (
         "backend/app/processing/streaming/pipeline.py",
         r"\b(?:resolve_video_info|build_stage_plan|build_run_identity|should_use_stage_file_pipeline|stage_file_resume_source_frames|resolved_output_dimensions)\b|from\s+app\.processing\.streaming\.pipeline_rules\s+import",
         "streaming preflight implementation",
+    ),
+    ForbiddenReferenceRule(
+        "streaming-context-secondary-construction",
+        roots=("backend/app/processing/streaming",),
+        patterns=(r"\bStreamingPipelineContext\s*\(",),
+        message="streaming pipeline context constructed outside the composition root",
+        suffixes=(".py",),
+        excludes=("backend/app/processing/streaming/pipeline.py",),
+    ),
+    _forbid(
+        "pipeline-dispatch-static-context-signature",
+        "backend/app/processing/streaming/pipeline_dispatch.py",
+        r"def\s+run_streaming_pipeline\s*\((?:(?!\)\s*->)[\s\S])*\b(?:ffmpeg|input_path|output_path|decode_config|encode_config|stage_plan|manifest|resume_state|tensor_backend_name|progress_callbacks|output_fps|metrics)\s*:",
+        "pipeline dispatch repeats streaming context fields",
+    ),
+    _forbid(
+        "raw-pipeline-static-context-signature",
+        "backend/app/processing/streaming/pipeline_raw.py",
+        r"def\s+run_raw_streaming_pipeline\s*\((?:(?!\)\s*->)[\s\S])*\b(?:ffmpeg|input_path|output_path|decode_config|encode_config|stage_plan|manifest|resume_state|tensor_backend_name|progress_callbacks|output_fps|metrics)\s*:",
+        "raw pipeline repeats streaming context fields",
+    ),
+    _forbid(
+        "stage-file-pipeline-static-context-signature",
+        "backend/app/processing/streaming/stage_file_pipeline.py",
+        r"def\s+run_stage_file_pipeline\s*\((?:(?!\)\s*->)[\s\S])*\b(?:ffmpeg|input_path|output_path|decode_config|encode_config|stage_plan|manifest|resume_state|tensor_backend_name|progress_callbacks|output_fps|metrics)\s*:",
+        "stage-file pipeline repeats streaming context fields",
+    ),
+    _forbid(
+        "pipeline-finalization-static-context-signature",
+        "backend/app/processing/streaming/pipeline_lifecycle.py",
+        r"def\s+finalize_streaming_output\s*\((?:(?!\)\s*->)[\s\S])*\b(?:ffmpeg|input_path|output_path|encode_config|stage_plan|manifest|output_fps|metrics)\s*:",
+        "pipeline finalization repeats streaming context fields",
     ),
     ForbiddenReferenceRule(
         "obsolete-run-identity-builders",
@@ -1316,11 +1354,12 @@ FORBIDDEN_PATTERN_RULES = (
         r"async\s+function\s+pause\b[\s\S]*?deps\.pauseTask\s*\([\s\S]*?async\s+function\s+resume\b[\s\S]*?deps\.resumeTask\s*\(",
         "duplicated pause and resume state transitions",
     ),
-    _forbid(
-        "duplicated-console-task-state-lookups",
-        "frontend/src/services/task/batch/events.ts",
-        r"function\s+on(?:Progress|Log|ResumeStatus)\b[\s\S]{0,240}\bgetConsoleItem\s*\(",
-        "event-specific console task state lookup",
+    ForbiddenReferenceRule(
+        "split-task-context-lookups",
+        roots=("frontend/src/services/task/batch",),
+        patterns=(r"\bget(?:Current|Console)(?:Item|RunState)\b",),
+        message="split task item and run-state lookup",
+        suffixes=(".ts",),
     ),
     _forbid(
         "pipeline-stream-fps-multi-rule",
@@ -1883,6 +1922,54 @@ REQUIRED_PATTERN_RULES = (
         "BatchRunner must compose lifecycle operations directly",
     ),
     _require(
+        "paired-task-context-resolver",
+        "frontend/src/services/task/batch/lifecycle/common.ts",
+        r"function\s+resolveTaskContext\(id:\s*string\s*\|\s*null\)[\s\S]{0,320}getMediaItem\(id\)[\s\S]{0,160}getItemRunState\(id\)[\s\S]*function\s+getCurrentTaskContext\(\)[\s\S]{0,180}resolveTaskContext\(deps\.getBatch\(\)\.currentId\)[\s\S]*function\s+getConsoleTaskContext\(\)[\s\S]{0,320}if\s*\(current\.item\)[\s\S]{0,160}resolveTaskContext\(deps\.getActiveItemId\(\)\)",
+        "paired task item and run-state context resolver is missing",
+    ),
+    _require(
+        "oneshot-direct-shell-result",
+        "frontend/src-tauri/src/tasks/oneshot.rs",
+        r"pub\(crate\)\s+async\s+fn\s+run_single_cli_command\b[\s\S]{0,500}->\s*Result<Value,\s*ShellError>[\s\S]*if\s+!output\.status\.success\(\)[\s\S]*Err\(ShellError::BackendEnvelope[\s\S]*Err\(ShellError::BackendProbeFailed[\s\S]*last_json\.ok_or\(ShellError::BackendNoJson\)",
+        "one-shot CLI command does not map directly to ShellError",
+    ),
+    _require(
+        "immutable-streaming-pipeline-contexts",
+        "backend/app/processing/streaming/pipeline_context.py",
+        r"@dataclass\(frozen=True,\s*slots=True\)\s*class\s+StreamingPipelinePreflight\b[\s\S]*@dataclass\(frozen=True,\s*slots=True\)\s*class\s+StreamingPipelineContext\b",
+        "immutable streaming preflight and execution contexts are missing",
+    ),
+    _require(
+        "streaming-context-composition-root",
+        "backend/app/processing/streaming/pipeline.py",
+        r"context\s*=\s*StreamingPipelineContext\s*\([\s\S]{0,1400}run_streaming_pipeline\(context=context\)[\s\S]{0,500}finalize_streaming_output\s*\(\s*context=context,\s*completed_output_frames=completed_output_frames",
+        "streaming pipeline does not construct and reuse one execution context",
+    ),
+    _require(
+        "pipeline-dispatch-context-boundary",
+        "backend/app/processing/streaming/pipeline_dispatch.py",
+        r"def\s+run_streaming_pipeline\s*\(\s*\*,\s*context:\s*StreamingPipelineContext,\s*\)\s*->\s*int:",
+        "pipeline dispatch does not consume the shared streaming context",
+    ),
+    _require(
+        "raw-pipeline-context-boundary",
+        "backend/app/processing/streaming/pipeline_raw.py",
+        r"def\s+run_raw_streaming_pipeline\s*\(\s*\*,\s*context:\s*StreamingPipelineContext,\s*\)\s*->\s*int:",
+        "raw pipeline does not consume the shared streaming context",
+    ),
+    _require(
+        "stage-file-pipeline-context-boundary",
+        "backend/app/processing/streaming/stage_file_pipeline.py",
+        r"def\s+run_stage_file_pipeline\s*\(\s*\*,\s*context:\s*StreamingPipelineContext,\s*\)\s*->\s*int:",
+        "stage-file pipeline does not consume the shared streaming context",
+    ),
+    _require(
+        "pipeline-finalization-context-boundary",
+        "backend/app/processing/streaming/pipeline_lifecycle.py",
+        r"def\s+finalize_streaming_output\s*\(\s*\*,\s*context:\s*StreamingPipelineContext,\s*completed_output_frames:\s*int,\s*\)\s*->\s*dict\[str,\s*Any\]:",
+        "pipeline finalization does not consume the shared streaming context",
+    ),
+    _require(
         "shared-cli-guards",
         "backend/app/cli/commands/_guards.py",
         r"def\s+ensure_ffmpeg_available\b[\s\S]*def\s+ensure_input_and_ffmpeg\b",
@@ -1927,7 +2014,7 @@ REQUIRED_PATTERN_RULES = (
     _require(
         "shared-console-task-state-updater",
         "frontend/src/services/task/batch/events.ts",
-        r"function\s+updateConsoleTaskState\b[\s\S]*getConsoleItem\(\)[\s\S]*getConsoleRunState\(\)[\s\S]*setItemTaskState",
+        r"function\s+updateConsoleTaskState\b[\s\S]{0,300}const\s+\{\s*item,\s*runState\s*\}\s*=\s*lifecycle\.getConsoleTaskContext\(\)[\s\S]{0,260}setItemTaskState\(item\.id,\s*update\(runState\.taskState\)\)",
         "shared console task state updater is missing",
     ),
     _require(

@@ -2,35 +2,21 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 from app.planning import (
     ProcessingStep,
-    StagePlan,
     build_run_identity,
     build_stage_plan,
     resolve_video_info,
 )
+from app.processing.streaming.pipeline_context import StreamingPipelinePreflight
 from app.processing.streaming.pipeline_rules import (
     resolved_output_dimensions,
     should_use_stage_file_pipeline,
     stage_file_resume_source_frames,
 )
 from app.utils.ffmpeg import FFmpegWrapper
-
-
-@dataclass(slots=True)
-class _StreamingPipelinePreflight:
-    video_info: dict[str, Any]
-    stage_plan: StagePlan
-    signature: str
-    config_snapshot: dict[str, Any]
-    use_stage_file_pipeline: bool
-    resume_source_frames: int
-    output_width: int
-    output_height: int
-    segment_frames: int
 
 
 def build_streaming_pipeline_preflight(
@@ -44,7 +30,7 @@ def build_streaming_pipeline_preflight(
     output_config: dict[str, Any],
     processing_steps: list[ProcessingStep],
     output_fps: float | None,
-) -> _StreamingPipelinePreflight:
+) -> StreamingPipelinePreflight:
     video_info = resolve_video_info(ffmpeg, input_path)
     stage_plan = build_stage_plan(
         processing_steps,
@@ -73,7 +59,7 @@ def build_streaming_pipeline_preflight(
         stage_plan=stage_plan,
     )
 
-    return _StreamingPipelinePreflight(
+    return StreamingPipelinePreflight(
         video_info=video_info,
         stage_plan=stage_plan,
         signature=identity.signature,

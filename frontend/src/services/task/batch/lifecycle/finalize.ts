@@ -30,7 +30,8 @@ export function createFinalizeOps(
   }
 
   async function finalizeCurrent(state: 'completed' | 'error' | 'cancelled'): Promise<void> {
-    const item = helpers.getCurrentItem()
+    const context = helpers.getCurrentTaskContext()
+    const item = context.item
     if (!item) {
       const queue = deps.getBatch().queue
       deps.setBatch({ currentId: null })
@@ -43,7 +44,7 @@ export function createFinalizeOps(
     }
 
     if (state === 'completed' || state === 'cancelled') {
-      const lastOutputPath = helpers.getCurrentRunState()?.lastOutputPath ?? ''
+      const lastOutputPath = context.runState?.lastOutputPath ?? ''
       if (item.outputConfig.openOnComplete && lastOutputPath) {
         try {
           await deps.openOutputLocation(lastOutputPath)
@@ -73,8 +74,7 @@ export function createFinalizeOps(
   }
 
   async function handleErrored(error: TaskError): Promise<void> {
-    const item = helpers.getCurrentItem()
-    const runState = helpers.getCurrentRunState()
+    const { item, runState } = helpers.getCurrentTaskContext()
     if (item && runState) {
       deps.setItemTaskState(item.id, applyTaskError(runState.taskState))
     }
