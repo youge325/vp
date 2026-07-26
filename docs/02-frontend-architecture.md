@@ -209,7 +209,7 @@ graph LR
 
 ### Task orchestrator runtime 单例
 
-[`frontend/src/composables/app/taskOrchestratorRuntime.ts`](../frontend/src/composables/app/taskOrchestratorRuntime.ts) 缓存 `BatchRunner` 并连接 Pinia、IPC 与事件监听；`useTaskOrchestrator()` 及启动、取消、暂停、恢复、冲突处理路径都取得同一实例。
+[`frontend/src/composables/app/taskOrchestratorRuntime.ts`](../frontend/src/composables/app/taskOrchestratorRuntime.ts) 缓存 `BatchRunner` 并连接 Pinia、IPC 与事件监听。`useBootstrap()` 直接负责监听器注册和卸载；`useTaskOrchestrator()` 只投影视图状态并把启动、取消、暂停、恢复和冲突处理命令发送给同一 runner，不暴露 listener lifecycle。
 
 ## 视图与路由
 

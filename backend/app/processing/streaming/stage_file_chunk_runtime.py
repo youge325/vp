@@ -74,16 +74,10 @@ def run_stage_chunk_to_file(
                 if handle.process.stdout is None:
                     raise RuntimeError("Stage worker stdout is unavailable.")
                 encoded_frames = encode_stage_worker_output(
-                    ffmpeg=config.ffmpeg,
-                    encode_config=config.encode_config,
+                    config=config,
                     output_path=output_path,
                     worker_stdout=handle.process.stdout,
                     chunk=chunk,
-                    output_width=config.output_width,
-                    output_height=config.output_height,
-                    output_fps=config.output_fps,
-                    encode_output_fps=config.encode_output_fps,
-                    metrics=config.metrics,
                 )
     except BaseException:
         stop_event.set()

@@ -32,8 +32,6 @@
 //!                                                  Idle
 //! ```
 
-use std::time::Instant;
-
 use tokio::sync::Mutex;
 
 use crate::error::ShellError;
@@ -50,13 +48,8 @@ enum TaskStatePhase {
     Running { handle: TaskHandle },
     /// A cancel request has been accepted and propagated to the
     /// controller; we're waiting for the child to actually exit.
-    /// ``started_at`` is observability-only — the watchdog may use it
-    /// to escalate (e.g. SIGKILL) if the child ignores SIGTERM for
-    /// too long. ``finish`` is the only legal transition.
-    Cancelling {
-        handle: TaskHandle,
-        started_at: Instant,
-    },
+    /// ``finish`` is the only legal transition.
+    Cancelling { handle: TaskHandle },
 }
 
 #[derive(Default)]
@@ -106,14 +99,11 @@ impl TaskState {
             TaskStatePhase::Idle => Err(ShellError::NoActiveTask),
             TaskStatePhase::Running { handle } => {
                 let cloned = handle.clone();
-                *guard = TaskStatePhase::Cancelling {
-                    handle,
-                    started_at: Instant::now(),
-                };
+                *guard = TaskStatePhase::Cancelling { handle };
                 Ok(cloned)
             }
-            TaskStatePhase::Cancelling { handle, started_at } => {
-                *guard = TaskStatePhase::Cancelling { handle, started_at };
+            TaskStatePhase::Cancelling { handle } => {
+                *guard = TaskStatePhase::Cancelling { handle };
                 Err(ShellError::InvalidInput(
                     "The task is already being cancelled.".to_string(),
                 ))
@@ -134,7 +124,7 @@ impl TaskState {
         match &*guard {
             TaskStatePhase::Idle => Err(ShellError::NoActiveTask),
             TaskStatePhase::Running { handle } => Ok(handle.clone()),
-            TaskStatePhase::Cancelling { handle, .. } => Ok(handle.clone()),
+            TaskStatePhase::Cancelling { handle } => Ok(handle.clone()),
         }
     }
 

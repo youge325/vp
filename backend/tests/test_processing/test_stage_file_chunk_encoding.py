@@ -7,8 +7,10 @@ from typing import Any
 import numpy as np
 import pytest
 
+from app.planning import ProcessingStep
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_file_chunk_encoding import encode_stage_worker_output
+from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 from app.processing.streaming.worker_plans import StageChunkPlan
 
 
@@ -45,6 +47,31 @@ class _FakeFFmpeg:
         return 0
 
 
+def _runtime_config(ffmpeg: Any, metrics: PipelineMetrics) -> StageFileRuntimeConfig:
+    return StageFileRuntimeConfig(
+        ffmpeg=ffmpeg,
+        input_path="input.mp4",
+        decode_config={},
+        encode_config={"container": "mp4"},
+        step=ProcessingStep(
+            algorithm_type="super_resolution",
+            algorithm_kwargs={"scale_factor": 1.0},
+            stage_name="01_super_resolution",
+        ),
+        stage_index=1,
+        stage_total=1,
+        tensor_backend_name="paddle",
+        progress_callback=None,
+        input_width=1,
+        input_height=1,
+        output_width=1,
+        output_height=1,
+        output_fps=24.0,
+        encode_output_fps=None,
+        metrics=metrics,
+    )
+
+
 def test_encode_stage_worker_output_skips_duplicate_frames_and_counts_encoded_frames(tmp_path: Path) -> None:
     chunk = StageChunkPlan(
         input_start_frame=2,
@@ -60,16 +87,10 @@ def test_encode_stage_worker_output_skips_duplicate_frames_and_counts_encoded_fr
     output_path = tmp_path / "chunk.mp4"
 
     encoded_frames = encode_stage_worker_output(
-        ffmpeg=ffmpeg,
-        encode_config={"container": "mp4"},
+        config=_runtime_config(ffmpeg, metrics),
         output_path=str(output_path),
         worker_stdout=stdout,
         chunk=chunk,
-        output_width=1,
-        output_height=1,
-        output_fps=24.0,
-        encode_output_fps=None,
-        metrics=metrics,
     )
 
     assert encoded_frames == 2
@@ -94,16 +115,10 @@ def test_encode_stage_worker_output_closes_writer_when_frame_count_mismatches(tm
 
     with pytest.raises(RuntimeError, match="Stage chunk output frame count mismatch"):
         encode_stage_worker_output(
-            ffmpeg=ffmpeg,
-            encode_config={"container": "mp4"},
+            config=_runtime_config(ffmpeg, PipelineMetrics()),
             output_path=str(tmp_path / "chunk.mp4"),
             worker_stdout=stdout,
             chunk=chunk,
-            output_width=1,
-            output_height=1,
-            output_fps=24.0,
-            encode_output_fps=None,
-            metrics=PipelineMetrics(),
         )
 
     assert ffmpeg.writer is not None

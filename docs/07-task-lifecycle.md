@@ -19,9 +19,7 @@ stateDiagram-v2
 |------|------|---------|
 | `Idle` | 无任务运行 | `try_start`（转入 Running） |
 | `Running { handle }` | 任务正常运行 | `begin_cancel`（转入 Cancelling）或 `finish`（回到 Idle） |
-| `Cancelling { handle, started_at }` | 取消请求已接受，等待子进程退出 | `finish`（回到 Idle） |
-
-`started_at` 仅用于可观测性 —— Watchdog 可能用它来决定是否升级终止手段（如 SIGKILL）。
+| `Cancelling { handle }` | 取消请求已接受，等待子进程退出 | `finish`（回到 Idle） |
 
 ### 原子转换
 
@@ -66,18 +64,17 @@ sequenceDiagram
     participant Controller as TaskController
 
     Frontend->>Rust: start_task(request)
-    Rust->>State: is_idle() 快速检查
+    Rust->>Builder: build_process_command()
+    Rust->>Child: spawn + write stdin JSON payload
     Rust->>State: try_start(handle) 原子转换
     alt 已有任务运行
+        Rust->>Child: kill()
         State-->>Rust: Err(InvalidInput)
         Rust-->>Frontend: 拒绝
     else
-        Rust->>Builder: build_process_command()
-        Builder-->>Rust: AsyncGroupChild
-        Rust->>Child: write stdin JSON payload
         Rust->>Stdout: spawn_stdout_reader()
         Rust->>Stderr: spawn_stderr_reader()
-        Rust->>Controller: spawn_task_controller()
+        Rust->>Controller: spawn_task_controller(session)
         Rust-->>Frontend: Ok(())
     end
 ```
@@ -90,38 +87,33 @@ sequenceDiagram
 
 ## Controller 并发模型
 
-[`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 的 `spawn_task_controller` 启动 4 个并发异步 task：
+[`frontend/src-tauri/src/tasks/spawn.rs`](../frontend/src-tauri/src/tasks/spawn.rs) 启动 stdout/stderr reader，并把 child、控制通道、终态标志、stderr capture、取消 token 和 progress beat 收进一个 `TaskControllerSession`。[`controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 消费该会话并启动三个运行单元：
 
 ```mermaid
 graph TB
-    A[spawn_task_controller] --> B[stdout 解析器]
-    A --> C[stderr 转发器]
-    A --> D[控制消息通道]
-    A --> E[Watchdog 轮询]
-
-    B --> F[NDJSON 解析]
-    F --> G[Tauri event emit]
-    C --> H[滚动缓冲]
-    H --> I[task-log 事件]
-    D --> J[暂停/恢复]
-    J --> K[ProcessController]
-    E --> L[超时检测]
-    L --> M[cancel_token.cancel]
+    A[spawn_task] --> B[stdout NDJSON reader]
+    A --> C[stderr reader]
+    A --> D[TaskControllerSession]
+    D --> E[child wait task]
+    D --> F[控制与终态 actor]
+    D --> G[可选 Watchdog]
+    F --> H[暂停/恢复]
+    H --> I[ProcessController]
+    G --> J[超时检测]
+    J --> K[cancel_token.cancel]
 ```
 
-这 4 个 task 通过 `tokio::select!` 在 Controller 中并发等待：
+控制与终态 actor 通过 `tokio::select!` 等待：
 
 ```rust
 loop {
     tokio::select! {
-        // 1. stdout 解析器完成
-        _ = stdout_task => { ... }
-        // 2. stderr 转发器完成
-        _ = stderr_task => { ... }
-        // 3. 收到控制消息
+        // 1. 收到暂停/恢复消息
         msg = control_rx.recv() => { ... }
-        // 4. cancel_token 被取消
+        // 2. cancel_token 被取消
         _ = cancel_token.notified() => { ... }
+        // 3. child wait task 返回退出状态
+        status = exit_rx => { ... }
     }
 }
 ```
@@ -145,7 +137,7 @@ Controller 根据三个信号决定终止事件：
 
 ### progress_beat 更新
 
-stdout 解析器每解析到一行有效 NDJSON（尤其是 progress 事件），更新 `Arc<AtomicU64>` 中的时间戳。Watchdog 轮询时读取该时间戳判断是否超时。
+stdout 解析器每解析到一行有效 NDJSON 时更新共享的 `ProgressBeat = Arc<Mutex<Instant>>`。Watchdog 轮询时读取 `Instant::elapsed()` 判断是否超时。
 
 ## Watchdog Stall 检测
 
@@ -156,7 +148,7 @@ graph LR
     B -->|>0| D[启用]
     D --> E[默认 600s]
 
-    F[每秒轮询] --> G[读取 progress_beat]
+    F[每 5 秒轮询] --> G[读取 progress_beat]
     G --> H{超时?}
     H -->|是| I[cancel_token.cancel(Stalled)]
     H -->|否| F
@@ -164,16 +156,7 @@ graph LR
     J --> K[emit task-cancelled<br/>{reason:"stalled"}]
 ```
 
-[`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 的 `WatchdogConfig`：
-
-```rust
-pub struct WatchdogConfig {
-    pub poll_interval: Duration,      // 默认 5s
-    pub stall_timeout: Option<Duration>,  // 默认 600s, None 禁用
-}
-```
-
-Phase D.3.2 将 poll interval 和 stall timeout 拆分为独立配置结构，使 Watchdog 可用毫秒级超时测试，且未来可从 app settings 读取配置。
+[`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 在 controller 边界读取 `VP_TASK_STALL_TIMEOUT_SECS`：默认 600 秒，`0` 表示禁用，非法值回退默认值。轮询间隔固定为 5 秒，不通过 spawn 参数或额外配置对象传递。
 
 ## 取消流程
 

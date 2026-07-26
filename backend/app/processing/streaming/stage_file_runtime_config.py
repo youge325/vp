@@ -12,7 +12,7 @@ from app.utils.ffmpeg import FFmpegWrapper
 
 @dataclass(frozen=True, slots=True)
 class StageFileRuntimeConfig:
-    """Static state shared by a stage's chunk planner and chunk runtime."""
+    """Static state shared by a stage's chunk planner, runtime, and encoder."""
 
     ffmpeg: FFmpegWrapper
     input_path: str

@@ -61,8 +61,8 @@ pub(crate) fn resolve_runtime_paths<R: Runtime>(
 
     let python_executable = python::resolve_python_executable(runtime_root.as_ref())?;
 
-    let ffmpeg_path = ffmpeg::resolve_ffmpeg_path(runtime_root.as_ref(), resource_dir.as_ref());
-    let ffprobe_path = ffmpeg::resolve_ffprobe_path(runtime_root.as_ref(), resource_dir.as_ref());
+    let (ffmpeg_path, ffprobe_path) =
+        ffmpeg::resolve_ffmpeg_tools(runtime_root.as_deref(), resource_dir.as_deref());
     let model_dir = model::resolve_model_dir(
         runtime_root.as_ref(),
         resource_dir.as_ref(),
