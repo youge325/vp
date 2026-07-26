@@ -1353,6 +1353,30 @@ FORBIDDEN_PATTERN_RULES = (
         "StepRail composes task status outside the shared selector",
     ),
     _forbid(
+        "task-orchestrator-current-item-return",
+        "frontend/src/composables/app/useTaskOrchestrator.ts",
+        r"\bcurrentTaskItem\b",
+        "task orchestrator exposes an unconsumed current-item projection",
+    ),
+    _forbid(
+        "task-orchestrator-direct-media-search",
+        "frontend/src/composables/app/useTaskOrchestrator.ts",
+        r"mediaStore\.mediaItems\.find\s*\(",
+        "task orchestrator duplicates the media store item lookup",
+    ),
+    _forbid(
+        "settings-runtime-root-path-forwarder",
+        "backend/app/config.py",
+        r"def\s+runtime_root_path\b",
+        "settings exposes a single-consumer runtime-root forwarding property",
+    ),
+    _forbid(
+        "settings-python-candidate-builder",
+        "backend/app/config.py",
+        r"def\s+_candidate_python_paths\b",
+        "settings duplicates bundled executable candidate construction for Python",
+    ),
+    _forbid(
         "stage-file-chunks-static-config-signature",
         "backend/app/processing/streaming/stage_file_chunks.py",
         r"def\s+run_single_stage_file_chunks\s*\((?:(?!\)\s*->)[\s\S])*\b(?:ffmpeg|input_path|decode_config|encode_config|step|stage_index|stage_total|tensor_backend_name|progress_callback|input_width|input_height|output_width|output_height|output_fps|encode_output_fps|metrics)\s*:",
@@ -1713,6 +1737,30 @@ REQUIRED_PATTERN_RULES = (
         "frontend/src/composables/selectors/useStepRailState.ts",
         r"taskStore\s*=\s*useTaskStore\(\)[\s\S]{0,240}taskStatusLabel\s*=\s*useCurrentTaskStatusLabel\(\)[\s\S]{0,1200}render:\s*taskStore\.batch\.isRunning",
         "StepRail must consume task state and the shared task-status selector directly",
+    ),
+    _require(
+        "task-orchestrator-store-item-lookup",
+        "frontend/src/composables/app/useTaskOrchestrator.ts",
+        r"consoleTaskItem\s*=\s*computed\s*\(\s*\(\)\s*=>\s*mediaStore\.findItem\(\s*taskStore\.batch\.currentId\s*\)\s*\?\?\s*mediaStore\.activeItem",
+        "task orchestrator must reuse the media store lookup for console projection",
+    ),
+    _require(
+        "shared-runtime-executable-candidates",
+        "backend/app/config.py",
+        r"def\s+_candidate_executable_paths\s*\([\s\S]{0,240}\bprefer_tool_directory:\s*bool\s*=\s*False[\s\S]{0,500}if\s+prefer_tool_directory:",
+        "bundled executable candidates must share one ordered resolver",
+    ),
+    _require(
+        "embedded-python-candidate-order",
+        "backend/app/config.py",
+        r"_candidate_executable_paths\s*\(\s*runtime_root,\s*[\"']python[\"'],\s*prefer_tool_directory=True,\s*\)",
+        "embedded Python resolution must preserve tool-directory precedence",
+    ),
+    _require(
+        "direct-runtime-mode-root-resolution",
+        "backend/app/config.py",
+        r"def\s+runtime_mode\s*\(\s*self\s*\)\s*->\s*str:\s*runtime_root\s*=\s*_resolve_path\(\s*self\.RUNTIME_ROOT\s*\)",
+        "runtime mode must resolve its configured root without a forwarding property",
     ),
     _require(
         "shared-stage-file-runtime-config",

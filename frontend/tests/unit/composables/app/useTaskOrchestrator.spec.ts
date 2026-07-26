@@ -33,6 +33,7 @@ vi.mock('@/lib/ipc/endpoints/task', () => ({
 import { disposeRunner, getTaskRunner } from '@/composables/app/taskOrchestratorRuntime'
 import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { useMediaStore } from '@/stores/media'
+import { useTaskStore } from '@/stores/task'
 import { createMediaItem } from '@/services/media/factory'
 import { normalizeOutputDir } from '@/services/preset/normalize'
 import type { WorkbenchPreset } from '@/types/protocol'
@@ -104,6 +105,11 @@ describe('useTaskOrchestrator singleton', () => {
     const orchestrator = useTaskOrchestrator()
     expect('cancelCurrentTask' in orchestrator).toBe(false)
   })
+
+  it('does not expose the internal current-item projection', () => {
+    const orchestrator = useTaskOrchestrator()
+    expect('currentTaskItem' in orchestrator).toBe(false)
+  })
 })
 
 // Phase 18 — 启动门禁:outputDir 强制必填,任一 selected item 的
@@ -119,7 +125,9 @@ describe('useTaskOrchestrator outputDir gating', () => {
     disposeRunner()
   })
 
-  function seedItem(overrides: { outputDir?: string; selected?: boolean } = {}): void {
+  function seedItem(
+    overrides: { outputDir?: string; selected?: boolean; inputPath?: string } = {},
+  ) {
     const samplePreset: WorkbenchPreset = {
       decodeConfig: { mode: 'software', hwaccel: '', hwaccelDevice: '', decoder: 'software', options: {} },
       workflowConfig: {
@@ -142,10 +150,34 @@ describe('useTaskOrchestrator outputDir gating', () => {
       outputConfig: { outputDir: normalizeOutputDir(overrides.outputDir ?? ''), openOnComplete: true, segmentFrames: 1000 },
     }
     const mediaStore = useMediaStore()
-    const item = createMediaItem('/video/a.mp4', samplePreset)
+    const item = createMediaItem(overrides.inputPath ?? '/video/a.mp4', samplePreset)
     item.selected = overrides.selected ?? true
     mediaStore.appendItems([item])
+    return item
   }
+
+  it('projects the current batch item and falls back to the active item for a stale id', () => {
+    const activeItem = seedItem({
+      inputPath: '/video/active.mp4',
+      outputDir: 'D:/out',
+      selected: false,
+    })
+    const currentItem = seedItem({
+      inputPath: '/video/current.mp4',
+      outputDir: 'D:/out',
+      selected: false,
+    })
+    const mediaStore = useMediaStore()
+    const taskStore = useTaskStore()
+    mediaStore.setActive(activeItem.id)
+    taskStore.setBatch({ currentId: currentItem.id })
+
+    const orchestrator = useTaskOrchestrator()
+    expect(orchestrator.consoleTaskItem.value?.id).toBe(currentItem.id)
+
+    taskStore.setBatch({ currentId: 'missing-item' })
+    expect(orchestrator.consoleTaskItem.value?.id).toBe(activeItem.id)
+  })
 
   it('canStartBatch is false when selected item has empty outputDir', () => {
     seedItem({ outputDir: '' })
