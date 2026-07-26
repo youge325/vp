@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures'
-import { existsSync, statSync, rmSync } from 'fs'
 import { join } from 'node:path'
+import { removeFileWhenUnlocked, waitForNonEmptyFile } from '../utils/files'
 
 function buildTaskRequest(
   inputPath: string,
@@ -35,39 +35,6 @@ function buildTaskRequest(
   }
 }
 
-async function waitForOutputFile(outputPath: string, maxWaitMs: number = 60000): Promise<boolean> {
-  const interval = 500
-  const iterations = maxWaitMs / interval
-  for (let i = 0; i < iterations; i++) {
-    if (existsSync(outputPath) && statSync(outputPath).size > 0) {
-      return true
-    }
-    await new Promise((r) => setTimeout(r, interval))
-  }
-  return false
-}
-
-async function removeIfExists(outputPath: string, maxWaitMs: number = 15000): Promise<void> {
-  const interval = 250
-  const deadline = Date.now() + maxWaitMs
-  let lastError: unknown
-
-  while (Date.now() <= deadline) {
-    if (!existsSync(outputPath)) {
-      return
-    }
-    try {
-      rmSync(outputPath)
-      return
-    } catch (error) {
-      lastError = error
-      await new Promise((resolve) => setTimeout(resolve, interval))
-    }
-  }
-
-  throw lastError
-}
-
 test.describe('Encode options', () => {
   const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
   const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
@@ -77,7 +44,7 @@ test.describe('Encode options', () => {
       encodeConfig: { rateControl: { mode: 'qp', value: 23 } },
     })
     const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
-    await removeIfExists(outFile)
+    await removeFileWhenUnlocked(outFile)
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -88,7 +55,7 @@ test.describe('Encode options', () => {
       }
     }, request)
 
-    const found = await waitForOutputFile(outFile)
+    const found = await waitForNonEmptyFile(outFile)
     expect(found).toBe(true)
   })
 
@@ -97,7 +64,7 @@ test.describe('Encode options', () => {
       encodeConfig: { rateControl: { mode: 'bitrate', value: '2000k' } },
     })
     const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
-    await removeIfExists(outFile)
+    await removeFileWhenUnlocked(outFile)
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -108,7 +75,7 @@ test.describe('Encode options', () => {
       }
     }, request)
 
-    const found = await waitForOutputFile(outFile)
+    const found = await waitForNonEmptyFile(outFile)
     expect(found).toBe(true)
   })
 
@@ -117,7 +84,7 @@ test.describe('Encode options', () => {
       encodeConfig: { keepAudio: false },
     })
     const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
-    await removeIfExists(outFile)
+    await removeFileWhenUnlocked(outFile)
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -128,7 +95,7 @@ test.describe('Encode options', () => {
       }
     }, request)
 
-    const found = await waitForOutputFile(outFile)
+    const found = await waitForNonEmptyFile(outFile)
     expect(found).toBe(true)
   })
 
@@ -137,7 +104,7 @@ test.describe('Encode options', () => {
       encodeConfig: { options: { preset: 'fast' } },
     })
     const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
-    await removeIfExists(outFile)
+    await removeFileWhenUnlocked(outFile)
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -148,7 +115,7 @@ test.describe('Encode options', () => {
       }
     }, request)
 
-    const found = await waitForOutputFile(outFile)
+    const found = await waitForNonEmptyFile(outFile)
     expect(found).toBe(true)
   })
 })

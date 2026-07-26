@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures'
-import { existsSync, statSync, rmSync } from 'fs'
 import { join } from 'node:path'
+import { removeFileWhenUnlocked } from '../utils/files'
 
 function buildTaskRequest(inputPath: string, outputDir: string, overrides: { encodeConfig?: Record<string, unknown> } = {}) {
   return {
@@ -70,39 +70,6 @@ async function cleanupListeners(tauriPage: any) {
   })
 }
 
-async function waitForOutputFile(outputPath: string, maxWaitMs: number = 60000): Promise<boolean> {
-  const interval = 500
-  const iterations = maxWaitMs / interval
-  for (let i = 0; i < iterations; i++) {
-    if (existsSync(outputPath) && statSync(outputPath).size > 0) {
-      return true
-    }
-    await new Promise((r) => setTimeout(r, interval))
-  }
-  return false
-}
-
-async function removeIfExists(outputPath: string, maxWaitMs: number = 15000): Promise<void> {
-  const interval = 250
-  const deadline = Date.now() + maxWaitMs
-  let lastError: unknown
-
-  while (Date.now() <= deadline) {
-    if (!existsSync(outputPath)) {
-      return
-    }
-    try {
-      rmSync(outputPath)
-      return
-    } catch (error) {
-      lastError = error
-      await new Promise((resolve) => setTimeout(resolve, interval))
-    }
-  }
-
-  throw lastError
-}
-
 test.describe('Sequential task execution', () => {
   const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
   const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
@@ -110,7 +77,7 @@ test.describe('Sequential task execution', () => {
 
   test('two consecutive start_task calls both succeed after state reset', async ({ tauriPage }) => {
     // Clean up any existing output
-    await removeIfExists(outFile)
+    await removeFileWhenUnlocked(outFile)
 
     await setupEventListener(tauriPage, 'task-completed')
 
@@ -142,7 +109,7 @@ test.describe('Sequential task execution', () => {
     expect(firstEvents[0].data.processedFrames).toBeGreaterThan(0)
 
     // Clean output for second task
-    await removeIfExists(outFile)
+    await removeFileWhenUnlocked(outFile)
 
     // Second task with different encode options
     await tauriPage.evaluate(async (req) => {
@@ -175,7 +142,7 @@ test.describe('Sequential task execution', () => {
   })
 
   test('start_task after cancel_task can start a new task', async ({ tauriPage }) => {
-    await removeIfExists(outFile)
+    await removeFileWhenUnlocked(outFile)
 
     await setupEventListener(tauriPage, 'task-cancelled')
     await setupEventListener(tauriPage, 'task-completed')
@@ -208,7 +175,7 @@ test.describe('Sequential task execution', () => {
     )
 
     // Clean and start new task
-    await removeIfExists(outFile)
+    await removeFileWhenUnlocked(outFile)
     const completedBeforeRestart = await tauriPage.evaluate(() => {
       // @ts-expect-error
       return window.__E2E_EVENTS.filter((e: any) => e.name === 'task-completed').length

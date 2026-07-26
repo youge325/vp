@@ -81,6 +81,20 @@ const readText = async (element: WdioElement) => {
   return (await getBrowser().execute((node: Element) => node.textContent ?? '', element)) as string
 }
 
+const readTexts = async (elements: WdioElement[]) => {
+  if (elements.length === 0) {
+    return []
+  }
+  try {
+    return (await getBrowser().execute((nodes: Element[]) => nodes.map((node) => {
+      const renderedText = node instanceof HTMLElement ? node.innerText : ''
+      return renderedText || node.textContent || ''
+    }), elements)) as string[]
+  } catch {
+    return await Promise.all(elements.map((element) => readText(element)))
+  }
+}
+
 const isElementVisible = async (element: WdioElement) => {
   return (await getBrowser().execute((node: Element) => {
     const style = window.getComputedStyle(node)
@@ -153,7 +167,7 @@ export class LocatorAdapter {
 
   async allTextContents() {
     const elements = await this.resolve()
-    return Promise.all(elements.map((element) => readText(element)))
+    return await readTexts(elements)
   }
 
   async all() {
@@ -195,31 +209,36 @@ export class LocatorAdapter {
   async click(_options?: { position?: { x: number; y: number } }) {
     await this.waitFor({ state: 'visible', timeout: 5000 })
     const element = await this.element()
-    await getBrowser().execute((node: Element) => {
+    await getBrowser().executeAsync((node: Element, done: () => void) => {
       const target = node as HTMLElement
       target.scrollIntoView({ block: 'center', inline: 'center' })
       target.click()
+      requestAnimationFrame(() => done())
     }, element)
-    await sleep(50)
   }
 
   async fill(value: string) {
     await this.waitFor({ state: 'visible', timeout: 5000 })
     const element = await this.element()
-    const assigned = await getBrowser().execute((node: Element, nextValue: string) => {
+    const assigned = await getBrowser().executeAsync((
+      node: Element,
+      nextValue: string,
+      done: (value: boolean) => void,
+    ) => {
       if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
         node.focus()
         node.value = nextValue
         node.dispatchEvent(new Event('input', { bubbles: true }))
         node.dispatchEvent(new Event('change', { bubbles: true }))
-        return true
+        requestAnimationFrame(() => done(true))
+        return
       }
-      return false
+      done(false)
     }, element, value)
     if (!assigned) {
       await element.setValue(value)
+      await getBrowser().executeAsync((done: () => void) => requestAnimationFrame(() => done()))
     }
-    await sleep(50)
   }
 
   async blur() {
@@ -272,21 +291,16 @@ export class LocatorAdapter {
     const element = await this.element()
     if (typeof option === 'string') {
       await element.selectByAttribute('value', option)
-      return
-    }
-    if (option.label !== undefined) {
+    } else if (option.label !== undefined) {
       await element.selectByVisibleText(option.label)
-      return
-    }
-    if (option.value !== undefined) {
+    } else if (option.value !== undefined) {
       await element.selectByAttribute('value', option.value)
-      return
-    }
-    if (option.index !== undefined) {
+    } else if (option.index !== undefined) {
       await element.selectByIndex(option.index)
-      return
+    } else {
+      throw new Error(`Unsupported selectOption payload: ${stringifyValue(option)}`)
     }
-    throw new Error(`Unsupported selectOption payload: ${stringifyValue(option)}`)
+    await getBrowser().executeAsync((done: () => void) => requestAnimationFrame(() => done()))
   }
 
   async waitFor(options: WaitForOptions = {}) {
@@ -343,15 +357,19 @@ export class LocatorAdapter {
       for (const root of activeRoots) {
         let elements: WdioElement[]
         try {
-          elements = (await root.$$(segment.selector)) as unknown as WdioElement[]
+          elements = Array.from(
+            (await root.$$(segment.selector)) as unknown as ArrayLike<WdioElement>,
+          )
         } catch {
           continue
         }
-        for (const element of elements) {
+        let matchingElements = elements
+        if (segment.hasText !== undefined) {
+          const texts = await readTexts(elements)
+          matchingElements = elements.filter((_, index) => matchesText(texts[index] ?? '', segment.hasText!))
+        }
+        for (const element of matchingElements) {
           try {
-            if (segment.hasText !== undefined && !matchesText(await readText(element), segment.hasText)) {
-              continue
-            }
             if (segment.has !== undefined && (await segment.has.resolveWithin(element)).length === 0) {
               continue
             }
@@ -470,6 +488,76 @@ export const waitForAppShell = async (timeout = 15000) => {
   await createTauriPage().locator('[data-testid="app-shell"]').waitFor({ state: 'visible', timeout })
 }
 
+interface AppBootstrapStatus {
+  piniaAvailable: boolean
+  isBootstrapping: boolean
+  isChecking: boolean
+  presetPersistenceReady: boolean
+}
+
+export const isAppBootstrapReady = (status: AppBootstrapStatus) => {
+  return status.piniaAvailable
+    && !status.isBootstrapping
+    && !status.isChecking
+    && status.presetPersistenceReady
+}
+
+const readAppBootstrapStatus = async (): Promise<AppBootstrapStatus> => {
+  return await getBrowser().execute(() => {
+    const root = document.querySelector('#app') as HTMLElement & { __vue_app__?: unknown } | null
+    const vueApp = root?.__vue_app__ as {
+      config?: { globalProperties?: { $pinia?: { state?: { value?: Record<string, any> } } } }
+    } | undefined
+    const state = vueApp?.config?.globalProperties?.$pinia?.state?.value
+    return {
+      piniaAvailable: Boolean(state),
+      isBootstrapping: state?.env?.env?.isBootstrapping ?? true,
+      isChecking: state?.env?.env?.isChecking ?? true,
+      presetPersistenceReady: state?.preset?.presetPersistenceReady ?? false,
+    }
+  }) as AppBootstrapStatus
+}
+
+export const waitForAppBootstrap = async (timeout = 60000) => {
+  await waitUntil(
+    async () => isAppBootstrapReady(await readAppBootstrapStatus()),
+    timeout,
+    'application bootstrap did not complete',
+  )
+}
+
+export const captureAppStateBaseline = async () => {
+  const result = await getBrowser().execute(() => {
+    try {
+      const root = document.querySelector('#app') as HTMLElement & { __vue_app__?: unknown } | null
+      const vueApp = root?.__vue_app__ as {
+        config?: { globalProperties?: { $pinia?: { state?: { value?: Record<string, unknown> } } } }
+      } | undefined
+      const state = vueApp?.config?.globalProperties?.$pinia?.state?.value
+      if (!state) {
+        return { ok: false, error: 'Pinia state is not available' }
+      }
+
+      const clone = (value: unknown) => JSON.parse(JSON.stringify(value))
+      const win = window as typeof window & {
+        __VP_E2E_INITIAL_PINIA_STATE?: Record<string, unknown>
+        __E2E_EVENTS?: unknown[]
+        __E2E_UNLISTENERS?: unknown[]
+      }
+      win.__VP_E2E_INITIAL_PINIA_STATE = clone(state) as Record<string, unknown>
+      win.__E2E_EVENTS = []
+      win.__E2E_UNLISTENERS = []
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }) as { ok: boolean; error?: string }
+
+  if (!result.ok) {
+    throw new Error(result.error ?? 'failed to capture app state baseline')
+  }
+}
+
 export const resetAppState = async () => {
   await getBrowser().executeAsync((done: (payload: { ok: boolean; error?: string }) => void) => {
     const clone = (value: unknown) => JSON.parse(JSON.stringify(value))
@@ -515,7 +603,8 @@ export const resetAppState = async () => {
 
         const win = window as typeof window & { __VP_E2E_INITIAL_PINIA_STATE?: Record<string, unknown>; __E2E_EVENTS?: unknown[]; __E2E_UNLISTENERS?: unknown[] }
         if (!win.__VP_E2E_INITIAL_PINIA_STATE) {
-          win.__VP_E2E_INITIAL_PINIA_STATE = clone(state) as Record<string, unknown>
+          done({ ok: false, error: 'Pinia state baseline is not available' })
+          return
         }
         const initial = clone(win.__VP_E2E_INITIAL_PINIA_STATE) as Record<string, unknown>
 

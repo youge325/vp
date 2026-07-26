@@ -1,14 +1,16 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { platform } from 'node:os'
 import net from 'node:net'
+import { resolveE2ECacheDir, rustLauncherCachePath } from './e2e-cache.mjs'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const rootDir = resolve(scriptDir, '..')
 const launcherSource = resolve(rootDir, 'tests', 'e2e', 'utils', 'run-hidden-desktop.rs')
-const launcherPath = resolve(rootDir, 'node_modules', '.cache', 'vp-e2e', 'run-hidden-desktop.exe')
+const e2eCacheDir = resolveE2ECacheDir()
+const launcherPath = rustLauncherCachePath(e2eCacheDir, launcherSource, 'run-hidden-desktop')
 const wdioCli = resolve(rootDir, 'node_modules', '@wdio', 'cli', 'bin', 'wdio.js')
 const networkProxyVariables = new Set([
   'all_proxy',
@@ -73,7 +75,10 @@ if (!process.env.VP_TAURI_NATIVE_DRIVER_PORT || Number(process.env.VP_TAURI_NATI
 const run = (command, commandArgs) => {
   const result = spawnSync(command, commandArgs, {
     cwd: rootDir,
-    env: withoutNetworkProxy(process.env),
+    env: withoutNetworkProxy({
+      ...process.env,
+      VP_E2E_CACHE_DIR: process.env.VP_E2E_CACHE_DIR ?? e2eCacheDir,
+    }),
     stdio: 'inherit',
     windowsHide: true,
   })
@@ -84,10 +89,7 @@ const run = (command, commandArgs) => {
 }
 
 const ensureHiddenDesktopLauncher = () => {
-  const shouldBuild = !existsSync(launcherPath)
-    || statSync(launcherPath).mtimeMs < statSync(launcherSource).mtimeMs
-
-  if (!shouldBuild) {
+  if (existsSync(launcherPath)) {
     return launcherPath
   }
 

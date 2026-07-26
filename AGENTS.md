@@ -24,7 +24,13 @@ Python 目标版本为 3.12，使用 Ruff：行宽 120、空格缩进、双引�
 
 ## 测试指南
 
-后端测试使用 pytest，涉及重型框架加载时使用 `paddle`、`pytorch` 等 marker；避免在同一测试进程混用不兼容的 GPU 框架。前端单元测试运行在 Vitest + `jsdom`，只匹配 `tests/unit/**/*.spec.ts`；定向运行示例为 `cd frontend; npm run test -- tests/unit/services/preset/defaults.spec.ts`。桌面端 E2E 通过 `cd frontend; npm run e2e` 运行，需要已构建的 Tauri 可执行文件；`VP_E2E_SPECS` 和 `VP_E2E_EXCLUDE` 使用 `tests/e2e/...` 路径，插桩覆盖率固定写入 `frontend/.nyc_output/`。运行本地 release E2E 时必须显式注入本地 `VP_BACKEND_DIR`、`VP_PYTHON_EXECUTABLE`、`VP_FFMPEG_PATH`、`VP_FFPROBE_PATH` 和 `VP_RIFE_MODEL_DIR`，不得依赖 debug 模式的仓库路径回退。启动 WebDriver session 前，E2E launcher 必须只在子进程环境中临时移除网络代理环境变量并强制直连，不得清除 Python、FFmpeg 等 `VP_*` runtime 配置或永久修改父 shell 环境。Rust crate 对外源码面只保留 `run()` 与 `models::config`/`models::task` schema；其他模块使用 private、`pub(super)` 或 `pub(crate)`。修改 Rust 模型、Tauri 命令或跨语言协议时，运行 `cargo build`、`cargo clippy --all-targets -- -D warnings`、`npm run build` 和 pre-commit，确保生成类型、静态质量与契约一致。
+后端测试使用 pytest，涉及重型框架加载时使用 `paddle`、`pytorch` 等 marker；避免在同一测试进程混用不兼容的 GPU 框架。前端单元测试运行在 Vitest + `jsdom`，只匹配 `tests/unit/**/*.spec.ts`；定向运行示例为 `cd frontend; npm run test -- tests/unit/services/preset/defaults.spec.ts`。
+
+桌面端 E2E 通过 `cd frontend; npm run e2e` 运行，需要已构建的 Tauri 可执行文件。完整套件必须使用 `wdio.conf.ts` 中的领域分组在最多 10 个真实 Tauri WebView session 内运行；`VP_E2E_SPECS` 选择的 spec 在同一 session 执行，`--spec` 和 watch 模式保持非分组的开发体验。插桩覆盖率按 session 写入 `frontend/.nyc_output/`，不得在 `afterEach` 中逐 case 拉取。测试媒体统一通过 `node frontend/scripts/generate-e2e-fixture.mjs <output-path>` 生成 `320x180`、`10fps`、`0.5s` 且带音频的 `vp-e2e-test.mp4`。`VP_E2E_CACHE_DIR` 可指定 EdgeDriver 与 Rust launcher 的持久缓存，避免 `npm ci` 后重复下载或编译。
+
+`VP_E2E_SPECS` 和 `VP_E2E_EXCLUDE` 使用 `tests/e2e/...` 路径。运行本地 release E2E 时必须显式注入本地 `VP_BACKEND_DIR`、`VP_PYTHON_EXECUTABLE`、`VP_FFMPEG_PATH`、`VP_FFPROBE_PATH` 和 `VP_RIFE_MODEL_DIR`，不得依赖 debug 模式的仓库路径回退。启动 WebDriver session 前，E2E launcher 必须只在子进程环境中临时移除网络代理环境变量并强制直连，不得清除 Python、FFmpeg 等 `VP_*` runtime 配置或永久修改父 shell 环境。
+
+Rust crate 对外源码面只保留 `run()` 与 `models::config`/`models::task` schema；其他模块使用 private、`pub(super)` 或 `pub(crate)`。修改 Rust 模型、Tauri 命令或跨语言协议时，运行 `cargo build`、`cargo clippy --all-targets -- -D warnings`、`npm run build` 和 pre-commit，确保生成类型、静态质量与契约一致。
 
 ## Commit 与 Pull Request 规范
 

@@ -1,22 +1,4 @@
 import { test, expect } from '../fixtures'
-import type { LocatorAdapter, TauriPage } from '../utils/wdio-tauri'
-
-const readSelectOptions = async (
-  tauriPage: TauriPage,
-  select: LocatorAdapter,
-  timeout = 10000,
-) => {
-  const deadline = Date.now() + timeout
-  let options: string[] = []
-  while (Date.now() <= deadline) {
-    options = await select.locator('option').allTextContents()
-    if (options.length > 0) {
-      return options
-    }
-    await tauriPage.waitForTimeout(100)
-  }
-  return options
-}
 
 test.describe('Encode module UI', () => {
   test('switching codec select updates container options', async ({ tauriPage }) => {
@@ -26,7 +8,7 @@ test.describe('Encode module UI', () => {
     const codecSelect = tauriPage.locator('label.field').filter({ hasText: '编码器' }).locator('select')
     await expect(codecSelect).toBeVisible()
 
-    const initialOptions = await readSelectOptions(tauriPage, codecSelect)
+    const initialOptions = await codecSelect.locator('option').allTextContents()
     if (initialOptions.length === 0) {
       test.skip(true, 'No encoder options are available in this runtime')
       return
@@ -43,7 +25,7 @@ test.describe('Encode module UI', () => {
 
     const containerSelect = tauriPage.locator('label.field').filter({ hasText: '容器' }).locator('select')
     await expect(containerSelect).toBeVisible()
-    const containerOptions = await readSelectOptions(tauriPage, containerSelect, 5000)
+    const containerOptions = await containerSelect.locator('option').allTextContents()
     expect(containerOptions.length).toBeGreaterThan(0)
   })
 
@@ -87,7 +69,7 @@ test.describe('Encode module UI', () => {
     const codecSelect = tauriPage.locator('label.field').filter({ hasText: '编码器' }).locator('select')
     await expect(codecSelect).toBeVisible()
 
-    const options = await readSelectOptions(tauriPage, codecSelect)
+    const options = await codecSelect.locator('option').allTextContents()
     if (options.length < 2) {
       test.skip(true, 'Need at least two encoder options to verify panel switching')
       return
@@ -105,7 +87,6 @@ test.describe('Encode module UI', () => {
     let changed = false
     for (let i = 1; i < options.length; i++) {
       await codecSelect.selectOption({ index: i })
-      await tauriPage.waitForTimeout(200)
       const newVisible = await encoderSection.isVisible().catch(() => false)
       const newOptionCount = newVisible
         ? await encoderSection.locator('.field-grid label.field').count()
@@ -134,21 +115,20 @@ test.describe('Encode module UI', () => {
     await expect(containerSelect).toBeVisible()
 
     // Get initial container options
-    const initialContainerOptions = await readSelectOptions(tauriPage, containerSelect, 5000)
+    const initialContainerOptions = await containerSelect.locator('option').allTextContents()
     if (initialContainerOptions.length === 0) {
       test.skip(true, 'No container options are available in this runtime')
       return
     }
 
     // Try switching to a different codec
-    const codecOptions = await readSelectOptions(tauriPage, codecSelect)
+    const codecOptions = await codecSelect.locator('option').allTextContents()
     if (codecOptions.length < 2) {
       test.skip(true, 'Need at least two encoder options to verify container switching')
       return
     }
 
     await codecSelect.selectOption({ index: 1 })
-    await tauriPage.waitForTimeout(300)
 
     // Container options may have updated
     const newContainerOptions = await containerSelect.locator('option').allTextContents()

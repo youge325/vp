@@ -2,9 +2,18 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import net from 'node:net'
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { platform, tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
+import { resolveE2ECacheDir, rustLauncherCachePath } from './scripts/e2e-cache.mjs'
+import {
+  prepareE2ECoverageDirectory,
+  writeE2ESessionCoverage,
+} from './tests/e2e/config/coverage'
+import {
+  resolveE2ESpecs,
+  splitSpecPatterns,
+} from './tests/e2e/config/spec-groups'
 
 const driverPort = Number(process.env.VP_TAURI_DRIVER_PORT ?? '4444')
 const nativeDriverPort = Number(process.env.VP_TAURI_NATIVE_DRIVER_PORT ?? '0')
@@ -12,20 +21,24 @@ let driverProcess: ChildProcessWithoutNullStreams | undefined
 const temporaryRunDirs: string[] = []
 
 const isWindows = platform() === 'win32'
+const coverageEnabled = process.env.E2E_COVERAGE === '1'
 const executableName = isWindows ? 'vp-workbench.exe' : 'vp-workbench'
 const cargoTargetDir = process.env.CARGO_TARGET_DIR
 const defaultTargetDir = cargoTargetDir ? resolve(cargoTargetDir) : resolve(process.cwd(), 'src-tauri', 'target')
 const applicationPath = process.env.VP_TAURI_EXE_PATH ?? resolve(defaultTargetDir, 'release', executableName)
 const useOffscreenWindow = process.env.VP_E2E_OFFSCREEN_WINDOW === '1'
+const e2eCacheDir = resolveE2ECacheDir()
 const hiddenEdgeDriverSource = resolve(process.cwd(), 'tests', 'e2e', 'utils', 'hidden-msedgedriver.rs')
-const hiddenEdgeDriverPath = resolve(process.cwd(), 'node_modules', '.cache', 'vp-e2e', 'hidden-msedgedriver.exe')
+const hiddenEdgeDriverPath = rustLauncherCachePath(
+  e2eCacheDir,
+  hiddenEdgeDriverSource,
+  'hidden-msedgedriver',
+)
 const delay = (ms: number) => new Promise<void>((resolveDelay) => setTimeout(resolveDelay, ms))
 const versionPattern = /^\d+\.\d+\.\d+\.\d+$/
-
-const splitSpecPatterns = (value: string | undefined) => value
-  ?.split(/[\n,;]/)
-  .map((entry) => entry.trim())
-  .filter((entry) => entry.length > 0)
+const cliSpecMode = process.argv.some((argument) => argument === '--spec' || argument.startsWith('--spec='))
+const watchMode = process.argv.includes('--watch')
+const selectedSpecPatterns = splitSpecPatterns(process.env.VP_E2E_SPECS)
 
 const createRunDir = (label: string) => {
   const dir = resolve(tmpdir(), `vp-e2e-${label}-${process.pid}-${randomUUID()}`)
@@ -59,10 +72,7 @@ const cleanupTemporaryRunDirs = async () => {
 }
 
 const ensureHiddenEdgeDriver = () => {
-  const shouldBuild = !existsSync(hiddenEdgeDriverPath)
-    || statSync(hiddenEdgeDriverPath).mtimeMs < statSync(hiddenEdgeDriverSource).mtimeMs
-
-  if (!shouldBuild) {
+  if (existsSync(hiddenEdgeDriverPath)) {
     return hiddenEdgeDriverPath
   }
 
@@ -142,15 +152,17 @@ const canConnect = (port: number, host: string) => new Promise<boolean>((resolve
 
 export const config = {
   runner: 'local',
-  specs: splitSpecPatterns(process.env.VP_E2E_SPECS) ?? ['./tests/e2e/**/*.spec.ts'],
+  specs: resolveE2ESpecs({
+    selectedPatterns: selectedSpecPatterns,
+    watchMode,
+    cliSpecMode,
+  }),
   exclude: [
     './tests/e2e/utils/**',
     './tests/e2e/fixtures.ts',
     ...(splitSpecPatterns(process.env.VP_E2E_EXCLUDE) ?? []),
   ],
   maxInstances: 1,
-  specFileRetries: isWindows ? 1 : 0,
-  specFileRetriesDeferred: true,
   logLevel: 'warn',
   framework: 'mocha',
   reporters: ['spec'],
@@ -176,6 +188,7 @@ export const config = {
   mochaOpts: {
     ui: 'bdd',
     timeout: 120000,
+    retries: isWindows ? 1 : 0,
   },
   autoCompileOpts: {
     autoCompile: true,
@@ -185,11 +198,13 @@ export const config = {
     },
   },
   onPrepare: async () => {
+    prepareE2ECoverageDirectory(process.cwd(), coverageEnabled)
     if (!existsSync(applicationPath)) {
       throw new Error(`Tauri application binary was not found: ${applicationPath}`)
     }
 
     const appEnv = { ...process.env }
+    appEnv.VP_E2E_CACHE_DIR = appEnv.VP_E2E_CACHE_DIR ?? e2eCacheDir
     appEnv.VP_APP_DATA_DIR = appEnv.VP_APP_DATA_DIR ?? createRunDir('app-data')
     appEnv.VP_LOG_DIR = appEnv.VP_LOG_DIR ?? createRunDir('logs')
     if (useOffscreenWindow) {
@@ -211,8 +226,8 @@ export const config = {
         ?? appEnv.EDGEDRIVER_VERSION
         ?? findInstalledWebView2Version()
       const edgeDriverCacheDir = edgeDriverVersion
-        ? resolve(process.cwd(), 'node_modules', '.cache', 'vp-e2e', 'edgedriver', edgeDriverVersion)
-        : undefined
+        ? resolve(e2eCacheDir, 'edgedriver', edgeDriverVersion)
+        : resolve(e2eCacheDir, 'edgedriver')
       appEnv.VP_EDGE_DRIVER_PATH = appEnv.VP_EDGE_DRIVER_PATH ?? await download(edgeDriverVersion, edgeDriverCacheDir)
       if (edgeDriverVersion) {
         process.stdout.write(`Using EdgeDriver for WebView2 ${edgeDriverVersion}\n`)
@@ -234,6 +249,15 @@ export const config = {
     })
 
     await waitForPort(driverPort)
+  },
+  after: async (_result: number, _capabilities: unknown, specs: string[]) => {
+    if (!coverageEnabled) {
+      return
+    }
+    const serializedCoverage = await browser.execute(
+      () => JSON.stringify((window as typeof window & { __coverage__?: unknown }).__coverage__ ?? null),
+    )
+    writeE2ESessionCoverage(process.cwd(), specs, serializedCoverage)
   },
   onComplete: async () => {
     const processToStop = driverProcess

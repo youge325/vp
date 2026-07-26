@@ -19,6 +19,8 @@ def _require(rule_id: str, path: str, pattern: str, message: str) -> RequiredPat
 
 ABSENT_PATH_RULES = (
     _absent("frontend-legacy-e2e-root", "frontend/e2e"),
+    _absent("duplicate-windows-task-e2e-workflow", ".github/workflows/e2e-task.yml"),
+    _absent("duplicate-linux-task-e2e-workflow", ".github/workflows/e2e-task-arc.yml"),
     _absent("frontend-misclassified-event-order-e2e", "frontend/tests/e2e/env/event-order.spec.ts"),
     _absent("frontend-environment-domain-mirror", "frontend/src/types/domain/env.ts"),
     _absent("frontend-capability-domain-mirror", "frontend/src/types/domain/capability.ts"),
@@ -145,10 +147,52 @@ FORBIDDEN_PATTERN_RULES = (
         suffixes=(".yml", ".yaml"),
     ),
     _forbid(
-        "e2e-coverage-wrong-root",
+        "e2e-per-test-coverage-dump",
         "frontend/tests/e2e/fixtures.ts",
-        r"\bfrontendRoot\b|fileURLToPath\s*\(",
-        "E2E coverage output is not rooted at the frontend working directory",
+        r"__coverage__|\.nyc_output|writeFileSync",
+        "E2E coverage is collected per test instead of once per worker session",
+    ),
+    _forbid(
+        "e2e-flat-spec-sessions",
+        "frontend/wdio.conf.ts",
+        r"\bspecFileRetries(?:Deferred)?\b|specs:\s*splitSpecPatterns\s*\(|specs:\s*\[\s*[\"']\./tests/e2e/\*\*/\*\.spec\.ts",
+        "E2E configuration restores flat per-spec sessions or grouped-worker retries",
+    ),
+    _forbid(
+        "e2e-bootstrap-baseline-race",
+        "frontend/tests/e2e/utils/wdio-tauri.ts",
+        r"if\s*\(\s*!win\.__VP_E2E_INITIAL_PINIA_STATE\s*\)\s*\{\s*win\.__VP_E2E_INITIAL_PINIA_STATE\s*=",
+        "E2E state baseline is captured before explicit bootstrap readiness",
+    ),
+    _forbid(
+        "e2e-encode-option-readiness-poll",
+        "frontend/tests/e2e/encode/encode-ui.spec.ts",
+        r"\breadSelectOptions\b|timeout\s*=\s*10000",
+        "Encode E2E conflates bootstrap readiness with capability absence",
+    ),
+    ForbiddenReferenceRule(
+        "obsolete-large-e2e-fixture",
+        roots=(".github/workflows", "frontend/scripts"),
+        patterns=(
+            r"testsrc=duration=1:size=1280x720:rate=30",
+            r"testsrc=duration=0\.5:size=1280x720",
+        ),
+        message="obsolete large E2E media fixture",
+        suffixes=(".yml", ".yaml", ".mjs"),
+    ),
+    ForbiddenReferenceRule(
+        "e2e-cache-under-node-modules",
+        roots=("frontend/wdio.conf.ts", "frontend/scripts/run-wdio.mjs"),
+        patterns=(r"node_modules[\"', )]+[\"']?\.cache[\"', )]+[\"']?vp-e2e",),
+        message="E2E runtime cache is wiped by npm ci",
+        suffixes=(".ts", ".mjs"),
+    ),
+    ForbiddenReferenceRule(
+        "e2e-reactive-batch-replacement",
+        roots=("frontend/tests/e2e",),
+        patterns=(r"pinia\.state\.value\.task\.batch\s*=",),
+        message="E2E replaces the task store reactive batch object",
+        suffixes=(".ts",),
     ),
     _forbid(
         "encode-form-profile-forwarding",
@@ -1725,9 +1769,57 @@ FORBIDDEN_PATTERN_RULES = (
 REQUIRED_PATTERN_RULES = (
     _require(
         "e2e-coverage-working-directory",
-        "frontend/tests/e2e/fixtures.ts",
-        r"resolve\s*\(\s*process\.cwd\(\)\s*,\s*[\"']\.nyc_output[\"']\s*\)",
+        "frontend/tests/e2e/config/coverage.ts",
+        r"E2E_COVERAGE_DIRECTORY\s*=\s*[\"']\.nyc_output[\"'][\s\S]*resolve\(cwd,\s*E2E_COVERAGE_DIRECTORY\)",
         "E2E coverage must be written under frontend/.nyc_output",
+    ),
+    _require(
+        "grouped-native-e2e-specs",
+        "frontend/tests/e2e/config/spec-groups.ts",
+        r"E2E_SPEC_GROUPS\s*=\s*\[[\s\S]*TASK_UI_SPECS[\s\S]*TASK_RUNTIME_SPECS[\s\S]*return\s+E2E_SPEC_GROUPS\.map",
+        "native E2E specs are not organized into reusable worker sessions",
+    ),
+    _require(
+        "wdio-grouped-spec-selection",
+        "frontend/wdio.conf.ts",
+        r"specs:\s*resolveE2ESpecs\s*\([\s\S]{0,240}selectedPatterns:\s*selectedSpecPatterns[\s\S]{0,240}watchMode[\s\S]{0,120}cliSpecMode",
+        "WDIO does not use the grouped/targeted spec resolver",
+    ),
+    _require(
+        "bootstrap-ready-e2e-baseline",
+        "frontend/tests/e2e/fixtures.ts",
+        r"await\s+waitForAppBootstrap\(\)[\s\S]{0,120}await\s+navigateHome\(\)[\s\S]{0,120}await\s+captureAppStateBaseline\(\)[\s\S]{0,160}return[\s\S]{0,120}await\s+navigateHome\(\)[\s\S]{0,120}await\s+resetAppState\(\)",
+        "E2E root hook does not capture one post-bootstrap baseline per session",
+    ),
+    _require(
+        "session-level-e2e-coverage",
+        "frontend/wdio.conf.ts",
+        r"after:\s*async[\s\S]{0,500}JSON\.stringify\([\s\S]{0,240}__coverage__[\s\S]{0,300}writeE2ESessionCoverage",
+        "E2E coverage is not serialized once at worker-session completion",
+    ),
+    _require(
+        "clean-e2e-coverage-on-prepare",
+        "frontend/wdio.conf.ts",
+        r"onPrepare:\s*async[\s\S]{0,160}prepareE2ECoverageDirectory\(process\.cwd\(\),\s*coverageEnabled\)",
+        "WDIO does not clear stale coverage before the run",
+    ),
+    _require(
+        "small-shared-e2e-media-fixture",
+        "frontend/scripts/generate-e2e-fixture.mjs",
+        r"testsrc=duration=0\.5:size=320x180:rate=10[\s\S]*sine=frequency=1000:duration=0\.5[\s\S]*-shortest",
+        "shared small E2E media fixture generator is missing",
+    ),
+    _require(
+        "persistent-e2e-runtime-cache",
+        "frontend/scripts/e2e-cache.mjs",
+        r"VP_E2E_CACHE_DIR[\s\S]*rustLauncherCachePath[\s\S]*createHash\([\"']sha256[\"']\)",
+        "persistent hashed E2E runtime cache is missing",
+    ),
+    _require(
+        "shared-e2e-file-polling",
+        "frontend/tests/e2e/utils/files.ts",
+        r"E2E_FILE_POLL_INTERVAL_MS\s*=\s*100[\s\S]*waitForNonEmptyFile[\s\S]*removeFileWhenUnlocked",
+        "shared 100 ms E2E file polling helpers are missing",
     ),
     _require(
         "stage-worker-factory-public-api",

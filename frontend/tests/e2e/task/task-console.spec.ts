@@ -59,31 +59,6 @@ async function injectTaskConsoleState(tauriPage: any): Promise<boolean> {
   })
 }
 
-async function clearTaskConsoleState(tauriPage: any): Promise<void> {
-  await tauriPage.evaluate(() => {
-    const root = document.querySelector('#app')
-    const vueApp = (root as any)?.__vue_app__
-    if (vueApp) {
-      const pinia = vueApp.config?.globalProperties?.$pinia
-      if (pinia?.state?.value?.mediaRunState) {
-        pinia.state.value.mediaRunState = {}
-      }
-      if (pinia?.state?.value?.task) {
-        pinia.state.value.task.batch = {
-          queue: [],
-          currentId: null,
-          completedCount: 0,
-          failedCount: 0,
-          isRunning: false,
-          isPaused: false,
-          isCancelling: false,
-        }
-        pinia.state.value.task.batchRuntimeIds = []
-      }
-    }
-  })
-}
-
 test.describe('Task console', () => {
   test('log panel and progress bar update after state injection', async ({ tauriPage }) => {
     await tauriPage.click('.rail-link:has-text("渲染")')
@@ -107,7 +82,5 @@ test.describe('Task console', () => {
     // not resolve due to reactive timing across evaluate boundary)
     const logPanel = console.locator('.log-panel')
     await expect(logPanel).toBeVisible()
-
-    await clearTaskConsoleState(tauriPage)
   })
 })

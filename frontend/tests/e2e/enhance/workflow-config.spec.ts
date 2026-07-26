@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures'
-import { existsSync, statSync, rmSync } from 'fs'
 import { join } from 'node:path'
+import { removeFileWhenUnlocked, waitForNonEmptyFile } from '../utils/files'
 
 function buildTaskRequest(
   inputPath: string,
@@ -35,39 +35,6 @@ function buildTaskRequest(
   }
 }
 
-async function waitForOutputFile(outputPath: string, maxWaitMs: number = 60000): Promise<boolean> {
-  const interval = 500
-  const iterations = maxWaitMs / interval
-  for (let i = 0; i < iterations; i++) {
-    if (existsSync(outputPath) && statSync(outputPath).size > 0) {
-      return true
-    }
-    await new Promise((r) => setTimeout(r, interval))
-  }
-  return false
-}
-
-async function removeIfExists(outputPath: string, maxWaitMs: number = 15000): Promise<void> {
-  const interval = 250
-  const deadline = Date.now() + maxWaitMs
-  let lastError: unknown
-
-  while (Date.now() <= deadline) {
-    if (!existsSync(outputPath)) {
-      return
-    }
-    try {
-      rmSync(outputPath)
-      return
-    } catch (error) {
-      lastError = error
-      await new Promise((resolve) => setTimeout(resolve, interval))
-    }
-  }
-
-  throw lastError
-}
-
 test.describe('Workflow config variants', () => {
   const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
   const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
@@ -75,7 +42,7 @@ test.describe('Workflow config variants', () => {
   test('format_conversion with fpsMode target produces output file', async ({ tauriPage }) => {
     const request = buildTaskRequest(inputPath, outputDir, { fpsMode: 'target' })
     const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
-    await removeIfExists(outFile)
+    await removeFileWhenUnlocked(outFile)
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -86,7 +53,7 @@ test.describe('Workflow config variants', () => {
       }
     }, request)
 
-    const found = await waitForOutputFile(outFile)
+    const found = await waitForNonEmptyFile(outFile)
     expect(found).toBe(true)
   })
 
@@ -95,7 +62,7 @@ test.describe('Workflow config variants', () => {
       processOrder: 'frame_interpolation_then_super_resolution',
     })
     const outFile = join(outputDir, 'vp-e2e-test_processed.mp4')
-    await removeIfExists(outFile)
+    await removeFileWhenUnlocked(outFile)
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -106,7 +73,7 @@ test.describe('Workflow config variants', () => {
       }
     }, request)
 
-    const found = await waitForOutputFile(outFile)
+    const found = await waitForNonEmptyFile(outFile)
     expect(found).toBe(true)
   })
 })

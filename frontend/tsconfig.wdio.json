@@ -8,5 +8,10 @@
     "strict": false,
     "erasableSyntaxOnly": false
   },
-  "include": ["wdio.conf.ts", "tests/e2e/fixtures.ts", "tests/e2e/utils/**/*.ts"]
+  "include": [
+    "wdio.conf.ts",
+    "tests/e2e/config/**/*.ts",
+    "tests/e2e/fixtures.ts",
+    "tests/e2e/utils/**/*.ts"
+  ]
 }
