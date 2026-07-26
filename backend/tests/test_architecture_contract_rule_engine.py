@@ -354,6 +354,19 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
         ),
         ("app-task-status-projection", "const shell = useAppShellStatus()\n"),
         ("step-rail-task-status-projection", "const state = useTaskOrchestrator()\n"),
+        ("task-orchestrator-current-item-return", "return { currentTaskItem }\n"),
+        (
+            "task-orchestrator-direct-media-search",
+            "const item = mediaStore.mediaItems.find((candidate) => candidate.id === id)\n",
+        ),
+        (
+            "settings-runtime-root-path-forwarder",
+            "def runtime_root_path(self) -> Path | None:\n    return _resolve_path(self.RUNTIME_ROOT)\n",
+        ),
+        (
+            "settings-python-candidate-builder",
+            "def _candidate_python_paths(runtime_root: Path) -> list[Path]:\n    return []\n",
+        ),
         (
             "stage-file-chunks-static-config-signature",
             "def run_single_stage_file_chunks(*, ffmpeg: object) -> int:\n    return 0\n",
@@ -593,6 +606,35 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
             "const taskStore = useTaskStore()\n"
             "const taskStatusLabel = useCurrentTaskStatusLabel()\n"
             "const moduleStates = computed(() => ({ render: taskStore.batch.isRunning }))\n",
+        ),
+        (
+            "task-orchestrator-store-item-lookup",
+            "const consoleTaskItem = computed(\n"
+            "  () => mediaStore.findItem(taskStore.batch.currentId) ?? mediaStore.activeItem,\n"
+            ")\n",
+        ),
+        (
+            "shared-runtime-executable-candidates",
+            "def _candidate_executable_paths(\n"
+            "    runtime_root: Path,\n"
+            "    name: str,\n"
+            "    *,\n"
+            "    prefer_tool_directory: bool = False,\n"
+            ") -> list[Path]:\n"
+            "    root_path = runtime_root / name\n"
+            "    tool_paths = [runtime_root / name]\n"
+            "    if prefer_tool_directory:\n"
+            "        return [root_path, *tool_paths]\n",
+        ),
+        (
+            "embedded-python-candidate-order",
+            '_candidate_executable_paths(\n    runtime_root,\n    "python",\n    prefer_tool_directory=True,\n)\n',
+        ),
+        (
+            "direct-runtime-mode-root-resolution",
+            "def runtime_mode(self) -> str:\n"
+            "    runtime_root = _resolve_path(self.RUNTIME_ROOT)\n"
+            '    return "bundled" if runtime_root else "external"\n',
         ),
         (
             "shared-stage-file-runtime-config",

@@ -39,24 +39,22 @@ def _candidate_runtime_roots(app_root: Path, backend_root: Path) -> list[Path]:
     ]
 
 
-def _candidate_executable_paths(runtime_root: Path, name: str) -> list[Path]:
+def _candidate_executable_paths(
+    runtime_root: Path,
+    name: str,
+    *,
+    prefer_tool_directory: bool = False,
+) -> list[Path]:
     executable_name = _platform_executable(name)
-    return [
-        runtime_root / executable_name,
-        runtime_root / "bin" / executable_name,
+    root_path = runtime_root / executable_name
+    shared_bin_path = runtime_root / "bin" / executable_name
+    tool_paths = [
         runtime_root / name / executable_name,
         runtime_root / name / "bin" / executable_name,
     ]
-
-
-def _candidate_python_paths(runtime_root: Path) -> list[Path]:
-    executable_name = _platform_executable("python")
-    return [
-        runtime_root / executable_name,
-        runtime_root / "python" / executable_name,
-        runtime_root / "python" / "bin" / executable_name,
-        runtime_root / "bin" / executable_name,
-    ]
+    if prefer_tool_directory:
+        return [root_path, *tool_paths, shared_bin_path]
+    return [root_path, shared_bin_path, *tool_paths]
 
 
 class _Settings(BaseSettings):
@@ -112,7 +110,13 @@ class _Settings(BaseSettings):
             if ffprobe_path is None:
                 ffprobe_path = _first_existing_path(_candidate_executable_paths(runtime_root, "ffprobe"))
             if python_executable is None:
-                python_executable = _first_existing_path(_candidate_python_paths(runtime_root))
+                python_executable = _first_existing_path(
+                    _candidate_executable_paths(
+                        runtime_root,
+                        "python",
+                        prefer_tool_directory=True,
+                    )
+                )
 
         ffmpeg_value = str(ffmpeg_path) if ffmpeg_path is not None else _system_executable("ffmpeg")
         ffprobe_value = str(ffprobe_path) if ffprobe_path is not None else _system_executable("ffprobe")
@@ -131,12 +135,8 @@ class _Settings(BaseSettings):
         return Path(__file__).resolve().parents[1]
 
     @property
-    def runtime_root_path(self) -> Path | None:
-        return _resolve_path(self.RUNTIME_ROOT)
-
-    @property
     def runtime_mode(self) -> str:
-        runtime_root = self.runtime_root_path
+        runtime_root = _resolve_path(self.RUNTIME_ROOT)
         if runtime_root is None:
             return "external"
         if runtime_root.exists():
