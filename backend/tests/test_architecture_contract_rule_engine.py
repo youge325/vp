@@ -360,6 +360,30 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "const item = mediaStore.mediaItems.find((candidate) => candidate.id === id)\n",
         ),
         (
+            "task-orchestrator-listener-lifecycle-return",
+            "return { attachTaskListeners }\n",
+        ),
+        (
+            "rust-task-controller-argument-suppression",
+            "#[allow(clippy::too_many_arguments)]\nfn spawn_task_controller() {}\n",
+        ),
+        (
+            "rust-task-controller-watchdog-config",
+            "struct WatchdogConfig { stall_timeout: Duration }\n",
+        ),
+        (
+            "rust-cancelling-started-at",
+            "enum TaskStatePhase { Cancelling { started_at: Instant } }\n",
+        ),
+        (
+            "rust-task-spawn-runtime-policy",
+            "let controller = process_control::default_controller();\n",
+        ),
+        (
+            "rust-split-ffmpeg-tool-resolvers",
+            "fn resolve_ffmpeg_path() {}\nfn resolve_ffprobe_path() {}\n",
+        ),
+        (
             "settings-runtime-root-path-forwarder",
             "def runtime_root_path(self) -> Path | None:\n    return _resolve_path(self.RUNTIME_ROOT)\n",
         ),
@@ -374,6 +398,10 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
         (
             "stage-file-chunk-runtime-static-config-signature",
             "def run_stage_chunk_to_file(*, input_path: str) -> int:\n    return 0\n",
+        ),
+        (
+            "stage-file-encoder-static-config-signature",
+            "def encode_stage_worker_output(*, output_width: int) -> int:\n    return 0\n",
         ),
         ("cli-startup-hook-forwarder", "def _startup_hooks():\n    pass\n"),
         ("obsolete-app-shell-status-reference", "useAppShellStatus()\n"),
@@ -614,6 +642,33 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
             ")\n",
         ),
         (
+            "bootstrap-task-listener-lifecycle",
+            "import { attachTaskListeners, disposeRunner } from './taskOrchestratorRuntime'\n"
+            "await attachTaskListeners()\n"
+            "disposeRunner()\n",
+        ),
+        (
+            "rust-task-controller-session",
+            "struct TaskControllerSession<R: Runtime> { app: AppHandle<R> }\n"
+            "fn spawn_task_controller<R: Runtime + 'static>(session: TaskControllerSession<R>) {}\n",
+        ),
+        (
+            "rust-controller-owned-runtime-policy",
+            "let controller = process_control::default_controller();\n"
+            "if let Some(timeout) = parse_stall_timeout() {}\n",
+        ),
+        (
+            "rust-shared-ffmpeg-tool-resolver",
+            "fn resolve_ffmpeg_tools() {\n"
+            '    resolve_tool_path(None, None, None, "ffmpeg");\n'
+            "}\n"
+            "fn resolve_tool_path() {}\n",
+        ),
+        (
+            "rust-ffmpeg-tool-pair-consumer",
+            "let (ffmpeg_path, ffprobe_path) = ffmpeg::resolve_ffmpeg_tools(None, None);\n",
+        ),
+        (
             "shared-runtime-executable-candidates",
             "def _candidate_executable_paths(\n"
             "    runtime_root: Path,\n"
@@ -654,6 +709,12 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
             "        chunk=chunk,\n"
             "        stage_total_frames=stage_total_frames,\n"
             "    )\n",
+        ),
+        (
+            "stage-file-encoder-config-consumer",
+            "def encode_stage_worker_output(*, config: StageFileRuntimeConfig, output_path: str):\n"
+            "    writer = config.ffmpeg.open_rawvideo_encoder(output_path=output_path)\n"
+            "    config.metrics.record_processed_frames(1)\n",
         ),
         (
             "direct-cli-logging-setup",

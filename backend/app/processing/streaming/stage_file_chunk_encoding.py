@@ -2,52 +2,50 @@
 
 from __future__ import annotations
 
-from typing import Any, BinaryIO
+from typing import BinaryIO
 
 from app.processing.streaming.encoder_segments import resolve_segment_output_frame_count
-from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 from app.processing.streaming.stage_worker_io import read_rgb_frame
 from app.processing.streaming.worker_plans import StageChunkPlan
 
 
 def encode_stage_worker_output(
     *,
-    ffmpeg: Any,
-    encode_config: dict[str, Any],
+    config: StageFileRuntimeConfig,
     output_path: str,
     worker_stdout: BinaryIO,
     chunk: StageChunkPlan,
-    output_width: int,
-    output_height: int,
-    output_fps: float,
-    encode_output_fps: float | None,
-    metrics: PipelineMetrics,
 ) -> int:
     writer = None
     written_frames = 0
     try:
-        writer = ffmpeg.open_rawvideo_encoder(
+        writer = config.ffmpeg.open_rawvideo_encoder(
             output_path=output_path,
-            width=output_width,
-            height=output_height,
-            fps=output_fps,
-            output_fps=encode_output_fps,
-            encode_config=encode_config,
+            width=config.output_width,
+            height=config.output_height,
+            fps=config.output_fps,
+            output_fps=config.encode_output_fps,
+            encode_config=config.encode_config,
         )
         active_writer = writer
         for raw_index in range(chunk.raw_output_frame_count):
-            frame = read_rgb_frame(worker_stdout, width=output_width, height=output_height)
+            frame = read_rgb_frame(
+                worker_stdout,
+                width=config.output_width,
+                height=config.output_height,
+            )
             if frame is None:
                 break
             if raw_index < chunk.skip_output_frames:
                 continue
             active_writer.write_frame(frame)
             written_frames += 1
-            metrics.record_processed_frames(1)
+            config.metrics.record_processed_frames(1)
         active_writer.close()
         writer = None
         encoded_frames = resolve_segment_output_frame_count(
-            ffmpeg,
+            config.ffmpeg,
             active_writer,
             output_path,
             fallback_frame_count=written_frames,

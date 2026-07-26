@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::models::{TaskCancelledPayload, TaskCancelledReason, TaskErrorCode, TaskErrorPayload};
-use crate::process_control::{ProcessControlError, ProcessController};
+use crate::process_control::{self, ProcessControlError, ProcessController};
 use crate::protocol::TaskEventName;
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
 use crate::tasks::readers::ProgressBeat;
@@ -22,51 +22,29 @@ const DEFAULT_STALL_TIMEOUT_SECS: u64 = 600;
 const DEFAULT_WATCHDOG_POLL_INTERVAL_SECS: u64 = 5;
 const STALL_TIMEOUT_ENV: &str = "VP_TASK_STALL_TIMEOUT_SECS";
 
-/// Watchdog configuration for the task controller.
-///
-/// Phase D.3.2 — previously the poll interval was a hard-coded ``const``
-/// and the stall timeout was read from ``VP_TASK_STALL_TIMEOUT_SECS``
-/// directly inside ``spawn_task_controller``. Splitting them into a
-/// dedicated struct (a) makes the watchdog testable with millisecond
-/// timeouts instead of seconds and (b) lets future PRs source the
-/// config from app settings without touching the controller spawn site.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct WatchdogConfig {
-    pub(crate) poll_interval: Duration,
-    /// ``None`` disables the watchdog entirely (matches the legacy
-    /// ``VP_TASK_STALL_TIMEOUT_SECS=0`` opt-out).
-    pub(crate) stall_timeout: Option<Duration>,
+pub(super) struct TaskControllerSession<R: Runtime> {
+    pub(super) app: AppHandle<R>,
+    pub(super) child: AsyncGroupChild,
+    pub(super) root_pid: u32,
+    pub(super) control_rx: mpsc::Receiver<TaskControlMessage>,
+    pub(super) terminal_sent: Arc<AtomicBool>,
+    pub(super) stderr_capture: StderrCapture,
+    pub(super) cancel_token: CancellationToken,
+    pub(super) progress_beat: ProgressBeat,
 }
 
-impl WatchdogConfig {
-    pub(crate) fn from_env() -> Self {
-        Self {
-            poll_interval: Duration::from_secs(DEFAULT_WATCHDOG_POLL_INTERVAL_SECS),
-            stall_timeout: parse_stall_timeout(),
-        }
-    }
-}
-
-impl Default for WatchdogConfig {
-    fn default() -> Self {
-        Self::from_env()
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn spawn_task_controller<R: Runtime + 'static>(
-    app: AppHandle<R>,
-    child: AsyncGroupChild,
-    root_pid: u32,
-    mut control_rx: mpsc::Receiver<TaskControlMessage>,
-    terminal_sent: Arc<AtomicBool>,
-    stderr_capture: StderrCapture,
-    cancel_token: CancellationToken,
-    progress_beat: ProgressBeat,
-    controller: Arc<dyn ProcessController>,
-    watchdog: WatchdogConfig,
-) {
-    let controller: Arc<dyn ProcessController> = controller;
+pub(super) fn spawn_task_controller<R: Runtime + 'static>(session: TaskControllerSession<R>) {
+    let TaskControllerSession {
+        app,
+        child,
+        root_pid,
+        mut control_rx,
+        terminal_sent,
+        stderr_capture,
+        cancel_token,
+        progress_beat,
+    } = session;
+    let controller = process_control::default_controller();
 
     // Oneshot kill signal to the wait task — single-use, never dropped silently.
     let (kill_tx, kill_rx) = oneshot::channel::<()>();
@@ -90,11 +68,11 @@ pub(crate) fn spawn_task_controller<R: Runtime + 'static>(
 
     // Optional stall watchdog: polls ``progress_beat`` and cancels the
     // token with ``Stalled`` reason if no stdout progress arrives within
-    // the configured window. Disabled by ``watchdog.stall_timeout == None``.
-    if let Some(timeout) = watchdog.stall_timeout {
+    // the configured window. ``VP_TASK_STALL_TIMEOUT_SECS=0`` disables it.
+    if let Some(timeout) = parse_stall_timeout() {
         let watchdog_token = cancel_token.clone();
         let watchdog_beat = progress_beat.clone();
-        let poll_interval = watchdog.poll_interval;
+        let poll_interval = Duration::from_secs(DEFAULT_WATCHDOG_POLL_INTERVAL_SECS);
         tauri::async_runtime::spawn(async move {
             let mut interval = tokio::time::interval(poll_interval);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -317,7 +295,6 @@ fn parse_stall_timeout() -> Option<Duration> {
 mod tests {
     use super::*;
     use std::sync::Mutex;
-    use std::time::Instant;
 
     // Phase 2.1 修复 — ``env::set_var`` / ``env::remove_var`` 不是线程安全的。
     // 三个 ``parse_stall_timeout_*`` 测试并行运行时会互相覆盖全局环境变量,
@@ -417,13 +394,6 @@ mod tests {
         );
         assert!(matches!(result, Err(ProcessControlError::NotFound)));
         assert!(!paused, "paused flag must not flip when controller errored");
-    }
-
-    // Quick sanity that the Instant type wires up — used by the watchdog.
-    #[test]
-    fn instant_elapsed_is_monotonic() {
-        let now = Instant::now();
-        assert!(now.elapsed() < Duration::from_secs(60));
     }
 
     #[test]

@@ -7,10 +7,7 @@ import { useMediaStore } from '@/stores/media'
 import { useTaskStore } from '@/stores/task'
 import type { BatchRunner } from '@/services/task/batch-runner'
 import { evaluateStartReadiness } from '@/services/task/preflight'
-import {
-  attachTaskListeners as attachRuntimeTaskListeners,
-  getTaskRunner,
-} from './taskOrchestratorRuntime'
+import { getTaskRunner } from './taskOrchestratorRuntime'
 
 export function useTaskOrchestrator() {
   const mediaStore = useMediaStore()
@@ -66,10 +63,6 @@ export function useTaskOrchestrator() {
     await getTaskRunner().resolveConflict(action)
   }
 
-  async function attachTaskListeners(): Promise<void> {
-    await attachRuntimeTaskListeners()
-  }
-
   return {
     batch,
     pendingConflict,
@@ -82,6 +75,5 @@ export function useTaskOrchestrator() {
     resumeCurrentTask,
     interruptBatch,
     resolveConflict,
-    attachTaskListeners,
   }
 }

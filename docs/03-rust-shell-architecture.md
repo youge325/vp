@@ -110,7 +110,7 @@ stateDiagram-v2
 
 - `Idle` — 无任务运行，`try_start` 是唯一合法转换
 - `Running { handle }` — 任务正常运行，`begin_cancel` 或 `finish`
-- `Cancelling { handle, started_at }` — 取消请求已发出，等待子进程退出，`finish` 是唯一合法转换
+- `Cancelling { handle }` — 取消请求已发出，等待子进程退出，`finish` 是唯一合法转换
 
 所有转换在 `Mutex` 保护下原子执行，消除 "read-then-write" 竞态窗口。`try_start` 拒绝双启动，`begin_cancel` 拒绝重复取消。
 
@@ -135,11 +135,7 @@ sequenceDiagram
     Rust-->>Frontend: Ok(())
 ```
 
-`spawn_task_controller` 内部启动 4 个异步 task：
-1. **stdout 解析器** — 逐行读取 NDJSON，解析为 `NdjsonEnvelope`，发射 Tauri 事件
-2. **stderr 转发器** — 滚动缓冲 stderr，转发为 `task-log` 事件
-3. **控制消息通道** — 接收暂停/恢复请求，转发到 `ProcessController`
-4. **Watchdog** — 检测 stdout 沉默超时
+`spawn_task` 先启动 stdout NDJSON reader 与 stderr reader，再构造一个 `TaskControllerSession` 交给 controller。`spawn_task_controller` 从该会话启动 child wait task、可选 Watchdog 和控制/终态 actor；默认 `ProcessController` 与 Watchdog 环境策略由 controller 边界内部创建，不由 spawn 层逐项传递。
 
 ### NDJSON 信封解析
 

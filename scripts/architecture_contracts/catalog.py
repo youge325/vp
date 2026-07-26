@@ -1365,6 +1365,42 @@ FORBIDDEN_PATTERN_RULES = (
         "task orchestrator duplicates the media store item lookup",
     ),
     _forbid(
+        "task-orchestrator-listener-lifecycle-return",
+        "frontend/src/composables/app/useTaskOrchestrator.ts",
+        r"\battachTaskListeners\b",
+        "task orchestrator exposes listener lifecycle owned by bootstrap",
+    ),
+    _forbid(
+        "rust-task-controller-argument-suppression",
+        "frontend/src-tauri/src/tasks/controller.rs",
+        r"allow\s*\(\s*clippy::too_many_arguments\s*\)",
+        "task controller suppresses an over-wide argument list",
+    ),
+    _forbid(
+        "rust-task-controller-watchdog-config",
+        "frontend/src-tauri/src/tasks/controller.rs",
+        r"\bWatchdogConfig\b",
+        "single-consumer task watchdog configuration wrapper",
+    ),
+    _forbid(
+        "rust-cancelling-started-at",
+        "frontend/src-tauri/src/tasks/state.rs",
+        r"\bstarted_at\b",
+        "write-only task cancellation timestamp",
+    ),
+    _forbid(
+        "rust-task-spawn-runtime-policy",
+        "frontend/src-tauri/src/tasks/spawn.rs",
+        r"\b(?:WatchdogConfig|process_control::default_controller)\b",
+        "task spawn layer owns controller runtime policy",
+    ),
+    _forbid(
+        "rust-split-ffmpeg-tool-resolvers",
+        "frontend/src-tauri/src/runtime/ffmpeg.rs",
+        r"\bresolve_ff(?:mpeg|probe)_path\b",
+        "duplicated FFmpeg and FFprobe path resolvers",
+    ),
+    _forbid(
         "settings-runtime-root-path-forwarder",
         "backend/app/config.py",
         r"def\s+runtime_root_path\b",
@@ -1387,6 +1423,12 @@ FORBIDDEN_PATTERN_RULES = (
         "backend/app/processing/streaming/stage_file_chunk_runtime.py",
         r"def\s+run_stage_chunk_to_file\s*\((?:(?!\)\s*->)[\s\S])*\b(?:ffmpeg|input_path|decode_config|encode_config|step|stage_index|stage_total|tensor_backend_name|progress_callback|input_width|input_height|output_width|output_height|output_fps|encode_output_fps|metrics)\s*:",
         "stage-file chunk runtime repeats shared runtime configuration",
+    ),
+    _forbid(
+        "stage-file-encoder-static-config-signature",
+        "backend/app/processing/streaming/stage_file_chunk_encoding.py",
+        r"def\s+encode_stage_worker_output\s*\((?:(?!\)\s*->)[\s\S])*\b(?:ffmpeg|encode_config|output_width|output_height|output_fps|encode_output_fps|metrics)\s*:",
+        "stage-file chunk encoder repeats shared runtime configuration",
     ),
     _forbid(
         "cli-startup-hook-forwarder",
@@ -1745,6 +1787,36 @@ REQUIRED_PATTERN_RULES = (
         "task orchestrator must reuse the media store lookup for console projection",
     ),
     _require(
+        "bootstrap-task-listener-lifecycle",
+        "frontend/src/composables/app/useBootstrap.ts",
+        r"import\s*\{\s*attachTaskListeners\s*,\s*disposeRunner\s*\}\s*from\s*[\"']\./taskOrchestratorRuntime[\"'][\s\S]{0,800}await\s+attachTaskListeners\(\)[\s\S]{0,1200}disposeRunner\(\)",
+        "application bootstrap must own task listener attachment and disposal",
+    ),
+    _require(
+        "rust-task-controller-session",
+        "frontend/src-tauri/src/tasks/controller.rs",
+        r"struct\s+TaskControllerSession<R:\s*Runtime>\s*\{[\s\S]{0,900}fn\s+spawn_task_controller<R:\s*Runtime\s*\+\s*'static>\s*\(\s*session:\s*TaskControllerSession<R>",
+        "task controller must consume one session context",
+    ),
+    _require(
+        "rust-controller-owned-runtime-policy",
+        "frontend/src-tauri/src/tasks/controller.rs",
+        r"let\s+controller\s*=\s*process_control::default_controller\(\);[\s\S]{0,1000}if\s+let\s+Some\(timeout\)\s*=\s*parse_stall_timeout\(\)",
+        "task controller must own its production controller and watchdog policy",
+    ),
+    _require(
+        "rust-shared-ffmpeg-tool-resolver",
+        "frontend/src-tauri/src/runtime/ffmpeg.rs",
+        r"fn\s+resolve_ffmpeg_tools\s*\([\s\S]{0,900}resolve_tool_path\s*\([\s\S]{0,900}fn\s+resolve_tool_path\s*\(",
+        "FFmpeg and FFprobe paths must share one tool resolver",
+    ),
+    _require(
+        "rust-ffmpeg-tool-pair-consumer",
+        "frontend/src-tauri/src/runtime/mod.rs",
+        r"let\s+\(ffmpeg_path,\s*ffprobe_path\)\s*=\s*ffmpeg::resolve_ffmpeg_tools\s*\(",
+        "runtime composition must resolve FFmpeg and FFprobe together",
+    ),
+    _require(
         "shared-runtime-executable-candidates",
         "backend/app/config.py",
         r"def\s+_candidate_executable_paths\s*\([\s\S]{0,240}\bprefer_tool_directory:\s*bool\s*=\s*False[\s\S]{0,500}if\s+prefer_tool_directory:",
@@ -1779,6 +1851,12 @@ REQUIRED_PATTERN_RULES = (
         "backend/app/processing/streaming/stage_file_chunks.py",
         r"stage_total_frames\s*=\s*stage_progress_total\([^\n]+\)[\s\S]{0,400}for\s+chunk\s+in\s+chunks:[\s\S]{0,500}run_stage_chunk_to_file\s*\(\s*config\s*=\s*config[\s\S]{0,220}stage_total_frames\s*=\s*stage_total_frames",
         "stage-file chunk planner must forward one runtime config and precomputed progress total",
+    ),
+    _require(
+        "stage-file-encoder-config-consumer",
+        "backend/app/processing/streaming/stage_file_chunk_encoding.py",
+        r"def\s+encode_stage_worker_output\s*\(\s*\*,\s*config:\s*StageFileRuntimeConfig,[\s\S]{0,900}config\.ffmpeg\.open_rawvideo_encoder\s*\([\s\S]{0,1400}config\.metrics\.record_processed_frames",
+        "stage-file chunk encoder must consume the shared runtime configuration",
     ),
     _require(
         "direct-cli-logging-setup",

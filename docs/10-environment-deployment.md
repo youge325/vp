@@ -24,9 +24,10 @@ Release 构建默认不再打包 Python 运行时。若系统 PATH 中已存在�
 
 **FFmpeg / FFprobe**：
 1. `VP_FFMPEG_PATH` / `VP_FFPROBE_PATH` 环境变量
-2. `resources/runtime/ffmpeg/bin/ffmpeg.exe`
-3. 开发环境 `backend/` 下的 FFmpeg
-4. 系统 PATH
+2. runtime root 下的 `ffmpeg/bin/ffmpeg.exe` 与 `ffmpeg/bin/ffprobe.exe`
+3. Tauri resource 下的 `ffmpeg/bin/ffmpeg.exe`；旧 bundle 的 FFprobe 保持 `ffprobe/bin/ffprobe.exe`
+
+Rust 通过一次 `resolve_ffmpeg_tools()` 调用解析这对工具。开发模式未解析到显式路径时，Python FFmpeg wrapper 仍可回退系统 PATH；release bundle 缺少工具时拒绝启动。
 
 **模型目录**：
 1. `VP_RIFE_MODEL_DIR` 环境变量

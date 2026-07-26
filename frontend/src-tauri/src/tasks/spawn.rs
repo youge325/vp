@@ -23,11 +23,10 @@ use tokio::sync::mpsc;
 
 use crate::error::ShellError;
 use crate::models::TaskRequest;
-use crate::process_control;
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks::builder::{build_process_command, spawn_no_window_group};
 use crate::tasks::cancellation::CancellationToken;
-use crate::tasks::controller::{spawn_task_controller, WatchdogConfig};
+use crate::tasks::controller::{spawn_task_controller, TaskControllerSession};
 use crate::tasks::handle::TaskHandle;
 use crate::tasks::readers::{spawn_stderr_reader, spawn_stdout_reader, ProgressBeat};
 use crate::tasks::state::TaskState;
@@ -109,7 +108,7 @@ pub(crate) async fn spawn_task<R: Runtime>(
         progress_beat.clone(),
     );
     spawn_stderr_reader(app.clone(), stderr, stderr_capture.clone());
-    spawn_task_controller(
+    spawn_task_controller(TaskControllerSession {
         app,
         child,
         root_pid,
@@ -118,8 +117,6 @@ pub(crate) async fn spawn_task<R: Runtime>(
         stderr_capture,
         cancel_token,
         progress_beat,
-        process_control::default_controller(),
-        WatchdogConfig::from_env(),
-    );
+    });
     Ok(())
 }

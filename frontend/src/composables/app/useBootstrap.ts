@@ -5,15 +5,13 @@ import { useEnvStore } from '@/stores/env'
 import { usePresetStore } from '@/stores/preset'
 import { useEnvironmentChecker } from './useEnvironmentChecker'
 import { usePresetSync } from './usePresetSync'
-import { disposeRunner } from './taskOrchestratorRuntime'
-import { useTaskOrchestrator } from './useTaskOrchestrator'
+import { attachTaskListeners, disposeRunner } from './taskOrchestratorRuntime'
 
 export function useBootstrap() {
   const envStore = useEnvStore()
   const presetStore = usePresetStore()
   const { recheckEnvironment } = useEnvironmentChecker()
   const { loadPersistedPreset, startAutoSync } = usePresetSync()
-  const { attachTaskListeners } = useTaskOrchestrator()
 
   onMounted(async () => {
     envStore.setBootstrapping(true)
