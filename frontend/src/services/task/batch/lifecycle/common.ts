@@ -1,36 +1,25 @@
-// Shared current/console item lookup and batch runtime cleanup.
-
-import type { MediaItem, MediaRunState } from '@/types/domain/media'
+// Shared current/console task context lookup and batch runtime cleanup.
 
 import type { BatchLifecycleDeps } from './types'
 
 export function createCommonHelpers(deps: BatchLifecycleDeps) {
-  function getCurrentItem(): MediaItem | null {
-    const id = deps.getBatch().currentId
-    return id ? deps.getMediaItem(id) : null
+  function resolveTaskContext(id: string | null) {
+    return {
+      item: id ? deps.getMediaItem(id) : null,
+      runState: id ? deps.getItemRunState(id) : null,
+    }
   }
 
-  function getConsoleItem(): MediaItem | null {
-    const current = getCurrentItem()
-    if (current) {
+  function getCurrentTaskContext() {
+    return resolveTaskContext(deps.getBatch().currentId)
+  }
+
+  function getConsoleTaskContext() {
+    const current = getCurrentTaskContext()
+    if (current.item) {
       return current
     }
-    const activeId = deps.getActiveItemId()
-    return activeId ? deps.getMediaItem(activeId) : null
-  }
-
-  function getCurrentRunState(): MediaRunState | null {
-    const id = deps.getBatch().currentId
-    return id ? deps.getItemRunState(id) : null
-  }
-
-  function getConsoleRunState(): MediaRunState | null {
-    const currentId = deps.getBatch().currentId
-    if (currentId) {
-      return deps.getItemRunState(currentId)
-    }
-    const activeId = deps.getActiveItemId()
-    return activeId ? deps.getItemRunState(activeId) : null
+    return resolveTaskContext(deps.getActiveItemId())
   }
 
   function clearBatchRuntimeArtifacts(preserveLogs = false): void {
@@ -38,10 +27,8 @@ export function createCommonHelpers(deps: BatchLifecycleDeps) {
   }
 
   return {
-    getCurrentItem,
-    getConsoleItem,
-    getCurrentRunState,
-    getConsoleRunState,
+    getCurrentTaskContext,
+    getConsoleTaskContext,
     clearBatchRuntimeArtifacts,
   }
 }

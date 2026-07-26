@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from app.planning import ProcessingStep, ResumeState, SegmentManifest, StagePlan
+from app.processing.streaming.pipeline_context import (
+    StreamingPipelineContext,
+    StreamingPipelinePreflight,
+)
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline
 
@@ -24,6 +28,35 @@ def _resume_state() -> ResumeState:
     return ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[])
 
 
+def _context(tmp_path, *, use_stage_file_pipeline: bool) -> StreamingPipelineContext:
+    stage_plan = _stage_plan()
+    return StreamingPipelineContext(
+        ffmpeg=object(),  # type: ignore[arg-type]
+        input_path=str(tmp_path / "input.mp4"),
+        output_path=str(tmp_path / "out.mp4"),
+        decode_config={"mode": "software"},
+        encode_config={"codec": "libx264"},
+        preflight=StreamingPipelinePreflight(
+            video_info={"source_fps": 24.0, "source_frames": 4},
+            stage_plan=stage_plan,
+            signature="sig",
+            config_snapshot={},
+            use_stage_file_pipeline=use_stage_file_pipeline,
+            resume_source_frames=4,
+            output_width=640,
+            output_height=360,
+            segment_frames=1000,
+        ),
+        manifest=SegmentManifest(str(tmp_path / "out.mp4")),
+        resume_state=_resume_state(),
+        tensor_backend_name="onnx",
+        progress_callbacks=[],
+        output_fps=None,
+        encode_progress_callback=None,
+        metrics=PipelineMetrics(),
+    )
+
+
 def test_run_streaming_pipeline_dispatches_stage_file_pipeline_and_emits_resume_status(monkeypatch, tmp_path) -> None:
     events: list[tuple[int, int]] = []
     calls: dict[str, object] = {}
@@ -40,36 +73,12 @@ def test_run_streaming_pipeline_dispatches_stage_file_pipeline_and_emits_resume_
     )
     monkeypatch.setattr("app.processing.streaming.pipeline_dispatch.run_stage_file_pipeline", fake_stage_file_pipeline)
 
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
-    stage_plan = _stage_plan()
-    result = run_streaming_pipeline(
-        ffmpeg=object(),
-        input_path=str(tmp_path / "input.mp4"),
-        decode_config={"mode": "software"},
-        encode_config={"codec": "libx264"},
-        manifest=manifest,
-        stage_plan=stage_plan,
-        tensor_backend_name="onnx",
-        progress_callbacks=[],
-        video_info={"source_fps": 24.0, "source_frames": 4},
-        output_width=640,
-        output_height=360,
-        resume_state=_resume_state(),
-        segment_frames=1000,
-        use_stage_file_pipeline=True,
-        output_path=str(tmp_path / "out.mp4"),
-        output_fps=None,
-        encode_progress_callback=None,
-        metrics=PipelineMetrics(),
-    )
+    context = _context(tmp_path, use_stage_file_pipeline=True)
+    result = run_streaming_pipeline(context=context)
 
     assert result == 11
     assert events == [(0, 4)]
-    assert calls["manifest"] is manifest
-    assert calls["stage_plan"] is stage_plan
-    assert calls["segment_frames"] == 1000
-    assert "signature" not in calls
-    assert "output_width" not in calls
+    assert calls == {"context": context}
 
 
 def test_run_streaming_pipeline_dispatches_raw_pipeline_without_worker_chain_coupling(monkeypatch, tmp_path) -> None:
@@ -88,32 +97,9 @@ def test_run_streaming_pipeline_dispatches_raw_pipeline_without_worker_chain_cou
     )
     monkeypatch.setattr("app.processing.streaming.pipeline_dispatch.run_raw_streaming_pipeline", fake_raw_pipeline)
 
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
-    stage_plan = _stage_plan()
-    result = run_streaming_pipeline(
-        ffmpeg=object(),
-        input_path=str(tmp_path / "input.mp4"),
-        decode_config={"mode": "software"},
-        encode_config={"codec": "libx264"},
-        manifest=manifest,
-        stage_plan=stage_plan,
-        tensor_backend_name="onnx",
-        progress_callbacks=[],
-        video_info={"source_fps": 24.0, "source_frames": 4},
-        output_width=640,
-        output_height=360,
-        resume_state=_resume_state(),
-        segment_frames=1000,
-        use_stage_file_pipeline=False,
-        output_path=str(tmp_path / "out.mp4"),
-        output_fps=None,
-        encode_progress_callback=None,
-        metrics=PipelineMetrics(),
-    )
+    context = _context(tmp_path, use_stage_file_pipeline=False)
+    result = run_streaming_pipeline(context=context)
 
     assert result == 7
     assert events == [(0, 4)]
-    assert "signature" not in calls
-    assert calls["output_width"] == 640
-    assert calls["output_height"] == 360
-    assert "stage_worker_runner" not in calls
+    assert calls == {"context": context}

@@ -203,6 +203,10 @@ graph LR
     B4 -. lazy callback .-> B3
 ```
 
+`common.ts` 用 `getCurrentTaskContext()` / `getConsoleTaskContext()` 成对解析 `{ item, runState }`。
+两者始终来自同一个媒体 ID；当 `currentId` 已失效时，console context 会整体回退到 active item，
+避免媒体项和运行状态来自不同任务。conflict、events、control 和 finalize 每次操作只读取一次 context。
+
 `conflict.ts` 和 `events.ts` 只接收各自需要的 lifecycle capability；内部 queue/finalize 方法不会成为 BatchRunner 的公共返回字段。
 
 `ResumeInspectionResult` 只存在于 IPC 边界。进入任务状态前，`resume-classifier.ts` 将它或运行时 error details 投影为 `{ kind, outputPath, progress }`；对话框不保存输入路径、pipeline kind、sidecar 标记等未消费 wire 字段。

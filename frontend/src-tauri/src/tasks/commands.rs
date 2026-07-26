@@ -13,13 +13,12 @@ pub(crate) async fn inspect_video(
     paths: State<'_, ResolvedRuntimePaths>,
     input_path: String,
 ) -> Result<VideoInfo, ShellError> {
-    let outcome = run_single_cli_command(
+    let value = run_single_cli_command(
         paths.inner(),
         &[String::from("info"), String::from("--input"), input_path],
         None,
     )
     .await?;
-    let value = outcome.into_result()?;
     serde_json::from_value::<VideoInfo>(value).map_err(|error| {
         ShellError::SchemaValidation(format!("Unable to deserialize video info: {error}"))
     })
@@ -41,8 +40,7 @@ pub(crate) async fn check_resume_state(
     request: TaskRequest,
 ) -> Result<ResumeInspectionResult, ShellError> {
     let (args, stdin_payload) = build_inspect_output_args(&request)?;
-    let outcome = run_single_cli_command(paths.inner(), &args, Some(&stdin_payload)).await?;
-    let value = outcome.into_result()?;
+    let value = run_single_cli_command(paths.inner(), &args, Some(&stdin_payload)).await?;
     serde_json::from_value::<ResumeInspectionResult>(value).map_err(|error| {
         ShellError::SchemaValidation(format!("Unable to deserialize resume inspection: {error}"))
     })
@@ -53,9 +51,8 @@ pub(crate) async fn cancel_task(state: State<'_, TaskState>) -> Result<(), Shell
     cancel_running_task(state.inner()).await
 }
 
-/// Phase A — pause / resume 合并为单一 ``control_task``。前端传 ``kind``
-/// 区分意图,Rust 端拿 ``TaskControlKind`` 枚举去 dispatch,避免两条几乎
-/// 一样的 ``#[tauri::command]`` 走重复 ACL/permission 链路。
+/// Pause and resume share one command and use the typed control kind to
+/// avoid duplicating the permission and dispatch path.
 #[tauri::command]
 pub(crate) async fn control_task(
     state: State<'_, TaskState>,

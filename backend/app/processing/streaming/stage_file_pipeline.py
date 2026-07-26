@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-from app.planning import StagePlan
 from app.processing.streaming.encoder_finalization import finalize_segmented_output
-from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.pipeline_context import StreamingPipelineContext
 from app.processing.streaming.stage_file_chunks import run_single_stage_file_chunks
 from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 from app.processing.streaming.stage_file_stage_context import build_stage_file_stage_context
@@ -18,41 +15,25 @@ from app.processing.streaming.stage_rules import (
     stage_tensor_backend_name,
 )
 
-if TYPE_CHECKING:
-    from app.planning.manifest import ResumeState, SegmentManifest
-
 
 def run_stage_file_pipeline(
     *,
-    ffmpeg: Any,
-    input_path: str,
-    decode_config: dict[str, Any],
-    encode_config: dict[str, Any],
-    manifest: SegmentManifest,
-    stage_plan: StagePlan,
-    tensor_backend_name: str,
-    progress_callbacks: list[Any],
-    video_info: dict[str, Any],
-    resume_state: ResumeState,
-    segment_frames: int,
-    output_path: str,
-    output_fps: float | None,
-    metrics: PipelineMetrics,
+    context: StreamingPipelineContext,
 ) -> int:
     """Run each algorithm stage as segmented files instead of one rawvideo chain."""
-    steps = ordered_steps(stage_plan)
+    steps = ordered_steps(context.preflight.stage_plan)
     if not steps:
         raise RuntimeError("Stage file pipeline requires at least one processing stage.")
 
-    stage_root = manifest.sidecar_dir / "stages"
+    stage_root = context.manifest.sidecar_dir / "stages"
     stage_root.mkdir(parents=True, exist_ok=True)
 
-    current_path = input_path
-    current_width = int(video_info["width"])
-    current_height = int(video_info["height"])
-    current_fps = float(video_info["source_fps"])
-    current_frame_count = int(video_info["source_frames"])
-    completed_frames = int(resume_state.completed_output_frames)
+    current_path = context.input_path
+    current_width = int(context.preflight.video_info["width"])
+    current_height = int(context.preflight.video_info["height"])
+    current_fps = float(context.preflight.video_info["source_fps"])
+    current_frame_count = int(context.preflight.video_info["source_frames"])
+    completed_frames = int(context.resume_state.completed_output_frames)
 
     for stage_position, step in enumerate(steps, start=1):
         is_final_stage = stage_position == len(steps)
@@ -71,25 +52,25 @@ def run_stage_file_pipeline(
             stage_root=stage_root,
             current_path=current_path,
             current_frame_count=current_frame_count,
-            output_path=output_path,
-            manifest=manifest,
-            resume_state=resume_state,
-            encode_config=encode_config,
-            segment_frames=segment_frames,
-            output_fps=output_fps,
+            output_path=context.output_path,
+            manifest=context.manifest,
+            resume_state=context.resume_state,
+            encode_config=context.encode_config,
+            segment_frames=context.preflight.segment_frames,
+            output_fps=context.output_fps,
         )
 
         runtime_config = StageFileRuntimeConfig(
-            ffmpeg=ffmpeg,
+            ffmpeg=context.ffmpeg,
             input_path=current_path,
-            decode_config=decode_config,
+            decode_config=context.decode_config,
             encode_config=stage_context.encode_config,
             step=step,
             stage_index=stage_position,
             stage_total=len(steps),
-            tensor_backend_name=stage_tensor_backend_name(step, tensor_backend_name),
-            progress_callback=progress_callbacks[stage_position - 1]
-            if stage_position - 1 < len(progress_callbacks)
+            tensor_backend_name=stage_tensor_backend_name(step, context.tensor_backend_name),
+            progress_callback=context.progress_callbacks[stage_position - 1]
+            if stage_position - 1 < len(context.progress_callbacks)
             else None,
             input_width=current_width,
             input_height=current_height,
@@ -97,7 +78,7 @@ def run_stage_file_pipeline(
             output_height=output_height,
             output_fps=stage_fps,
             encode_output_fps=stage_context.encode_output_fps,
-            metrics=metrics,
+            metrics=context.metrics,
         )
         completed_frames = run_single_stage_file_chunks(
             config=runtime_config,
@@ -105,7 +86,7 @@ def run_stage_file_pipeline(
             resume_state=stage_context.resume_state,
             start_frame=stage_context.start_frame,
             start_chunk_index=stage_context.chunk_start_index,
-            segment_frames=segment_frames,
+            segment_frames=context.preflight.segment_frames,
             input_frame_count=current_frame_count,
             output_frame_count=stage_output_frames,
         )
@@ -114,7 +95,7 @@ def run_stage_file_pipeline(
             return completed_frames
 
         finalize_segmented_output(
-            ffmpeg=ffmpeg,
+            ffmpeg=context.ffmpeg,
             input_path=current_path,
             output_path=stage_context.output_path,
             encode_config=stage_context.encode_config,

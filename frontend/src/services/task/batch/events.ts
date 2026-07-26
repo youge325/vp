@@ -28,7 +28,7 @@ type EventHandlersDeps = Pick<
 >
 type EventLifecycle = Pick<
   ReturnType<typeof createCommonHelpers>,
-  'getConsoleItem' | 'getConsoleRunState' | 'getCurrentItem' | 'getCurrentRunState'
+  'getConsoleTaskContext' | 'getCurrentTaskContext'
 > &
   Pick<ReturnType<typeof createFinalizeOps>, 'finalizeCurrent' | 'handleErrored'>
 
@@ -40,8 +40,7 @@ export function createEventHandlers(
   function updateConsoleTaskState(
     update: (state: MediaTaskState) => MediaTaskState,
   ): void {
-    const item = lifecycle.getConsoleItem()
-    const runState = lifecycle.getConsoleRunState()
+    const { item, runState } = lifecycle.getConsoleTaskContext()
     if (item && runState) {
       deps.setItemTaskState(item.id, update(runState.taskState))
     }
@@ -56,8 +55,7 @@ export function createEventHandlers(
   }
 
   async function onCompleted(payload: TaskCompletedPayload): Promise<void> {
-    const item = lifecycle.getCurrentItem()
-    const runState = lifecycle.getCurrentRunState()
+    const { item, runState } = lifecycle.getCurrentTaskContext()
     if (item && runState) {
       deps.setItemTaskState(item.id, applyTaskCompleted(runState.taskState))
       if (payload.outputPath) {
@@ -77,8 +75,7 @@ export function createEventHandlers(
   }
 
   async function onCancelled(payload?: TaskCancelledPayload | null): Promise<void> {
-    const item = lifecycle.getCurrentItem()
-    const runState = lifecycle.getCurrentRunState()
+    const { item, runState } = lifecycle.getCurrentTaskContext()
     if (item && runState) {
       deps.setItemTaskState(item.id, applyTaskCancelled(runState.taskState))
     }

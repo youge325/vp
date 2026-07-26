@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from app.errors import ResumeConflictError
-from app.planning import ResumeState, SegmentManifest
+from app.planning import ResumeState, SegmentManifest, StagePlan
+from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.pipeline_context import (
+    StreamingPipelineContext,
+    StreamingPipelinePreflight,
+)
 from app.processing.streaming.pipeline_lifecycle import (
     emit_resume_status_event,
     finalize_streaming_output,
@@ -19,6 +26,46 @@ class _FakeFFmpeg:
     def get_frame_count(self, path: str) -> int | None:
         self.counted_path = path
         return self.frame_count
+
+
+def _context(
+    tmp_path,
+    *,
+    ffmpeg: Any,
+    manifest: SegmentManifest,
+    encode_config: dict[str, Any],
+) -> StreamingPipelineContext:
+    stage_plan = StagePlan(
+        pre_steps=[],
+        interpolation_step=None,
+        post_steps=[],
+        total_encoded_frames=12,
+    )
+    return StreamingPipelineContext(
+        ffmpeg=ffmpeg,
+        input_path=str(tmp_path / "input.mp4"),
+        output_path=str(manifest.output_path),
+        decode_config={},
+        encode_config=encode_config,
+        preflight=StreamingPipelinePreflight(
+            video_info={"source_fps": 24.0, "source_frames": 12},
+            stage_plan=stage_plan,
+            signature="sig",
+            config_snapshot={},
+            use_stage_file_pipeline=False,
+            resume_source_frames=12,
+            output_width=1,
+            output_height=1,
+            segment_frames=1000,
+        ),
+        manifest=manifest,
+        resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
+        tensor_backend_name="onnx",
+        progress_callbacks=[],
+        output_fps=None,
+        encode_progress_callback=None,
+        metrics=PipelineMetrics(),
+    )
 
 
 def test_prepare_streaming_manifest_raises_resume_conflict_for_existing_final_output(tmp_path) -> None:
@@ -79,16 +126,16 @@ def test_finalize_streaming_output_cleans_sidecar_after_success_and_builds_resul
         fake_finalize,
     )
     ffmpeg = _FakeFFmpeg(frame_count=0)
+    context = _context(
+        tmp_path,
+        ffmpeg=ffmpeg,
+        manifest=manifest,
+        encode_config={"keepAudio": False},
+    )
 
     result = finalize_streaming_output(
-        ffmpeg=ffmpeg,
-        input_path=str(tmp_path / "input.mp4"),
-        output_path=str(output_path),
-        encode_config={"keepAudio": False},
-        manifest=manifest,
+        context=context,
         completed_output_frames=12,
-        total_output_frames=12,
-        strict_total_frames=True,
     )
 
     assert result == {
@@ -118,14 +165,13 @@ def test_finalize_streaming_output_preserves_sidecar_when_finalize_fails(monkeyp
 
     with pytest.raises(RuntimeError, match="concat failed"):
         finalize_streaming_output(
-            ffmpeg=_FakeFFmpeg(frame_count=0),
-            input_path=str(tmp_path / "input.mp4"),
-            output_path=str(output_path),
-            encode_config={"keepAudio": True},
-            manifest=manifest,
+            context=_context(
+                tmp_path,
+                ffmpeg=_FakeFFmpeg(frame_count=0),
+                manifest=manifest,
+                encode_config={"keepAudio": True},
+            ),
             completed_output_frames=12,
-            total_output_frames=12,
-            strict_total_frames=True,
         )
 
     assert manifest.sidecar_dir.exists()

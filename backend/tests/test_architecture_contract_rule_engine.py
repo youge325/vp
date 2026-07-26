@@ -328,6 +328,10 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "listenTaskEvents({ onProgress: (payload) => runner.onProgress(payload) })\n",
         ),
         (
+            "rust-cli-outcome-intermediate",
+            "struct CliOutcome { value: Value }\nimpl CliOutcome { fn into_result(self) {} }\n",
+        ),
+        (
             "optional-resume-event-handler",
             "interface Handlers { onResumeStatus?: (payload: object) => void }\n",
         ),
@@ -336,8 +340,28 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "async function pause() { await deps.pauseTask() }\nasync function resume() { await deps.resumeTask() }\n",
         ),
         (
-            "duplicated-console-task-state-lookups",
+            "split-task-context-lookups",
             "function onProgress() { const item = getConsoleItem() }\n",
+        ),
+        (
+            "streaming-context-secondary-construction",
+            "context = StreamingPipelineContext(ffmpeg=ffmpeg)\n",
+        ),
+        (
+            "pipeline-dispatch-static-context-signature",
+            "def run_streaming_pipeline(*, ffmpeg: object) -> int:\n    return 0\n",
+        ),
+        (
+            "raw-pipeline-static-context-signature",
+            "def run_raw_streaming_pipeline(*, input_path: str) -> int:\n    return 0\n",
+        ),
+        (
+            "stage-file-pipeline-static-context-signature",
+            "def run_stage_file_pipeline(*, manifest: object) -> int:\n    return 0\n",
+        ),
+        (
+            "pipeline-finalization-static-context-signature",
+            "def finalize_streaming_output(*, output_path: str) -> dict:\n    return {}\n",
         ),
         (
             "pipeline-stream-fps-multi-rule",
@@ -564,6 +588,78 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
             "runner = getTaskRunner()\ndetachHandle = await listenTaskEvents(runner)\n",
         ),
         (
+            "paired-task-context-resolver",
+            "function resolveTaskContext(id: string | null) {\n"
+            "  return {\n"
+            "    item: id ? deps.getMediaItem(id) : null,\n"
+            "    runState: id ? deps.getItemRunState(id) : null,\n"
+            "  }\n"
+            "}\n"
+            "function getCurrentTaskContext() {\n"
+            "  return resolveTaskContext(deps.getBatch().currentId)\n"
+            "}\n"
+            "function getConsoleTaskContext() {\n"
+            "  const current = getCurrentTaskContext()\n"
+            "  if (current.item) return current\n"
+            "  return resolveTaskContext(deps.getActiveItemId())\n"
+            "}\n",
+        ),
+        (
+            "oneshot-direct-shell-result",
+            "pub(crate) async fn run_single_cli_command() -> Result<Value, ShellError> {\n"
+            "    if !output.status.success() {\n"
+            "        return match envelope {\n"
+            "            Some(value) => Err(ShellError::BackendEnvelope { code, message }),\n"
+            "            None => Err(ShellError::BackendProbeFailed(message)),\n"
+            "        };\n"
+            "    }\n"
+            "    last_json.ok_or(ShellError::BackendNoJson)\n"
+            "}\n",
+        ),
+        (
+            "immutable-streaming-pipeline-contexts",
+            "@dataclass(frozen=True, slots=True)\n"
+            "class StreamingPipelinePreflight:\n"
+            "    pass\n"
+            "@dataclass(frozen=True, slots=True)\n"
+            "class StreamingPipelineContext:\n"
+            "    pass\n",
+        ),
+        (
+            "streaming-context-composition-root",
+            "context = StreamingPipelineContext(ffmpeg=ffmpeg)\n"
+            "completed_output_frames = run_streaming_pipeline(context=context)\n"
+            "return finalize_streaming_output(\n"
+            "    context=context,\n"
+            "    completed_output_frames=completed_output_frames,\n"
+            ")\n",
+        ),
+        (
+            "pipeline-dispatch-context-boundary",
+            "def run_streaming_pipeline(\n    *,\n    context: StreamingPipelineContext,\n) -> int:\n    return 0\n",
+        ),
+        (
+            "raw-pipeline-context-boundary",
+            "def run_raw_streaming_pipeline(\n"
+            "    *,\n"
+            "    context: StreamingPipelineContext,\n"
+            ") -> int:\n"
+            "    return 0\n",
+        ),
+        (
+            "stage-file-pipeline-context-boundary",
+            "def run_stage_file_pipeline(\n    *,\n    context: StreamingPipelineContext,\n) -> int:\n    return 0\n",
+        ),
+        (
+            "pipeline-finalization-context-boundary",
+            "def finalize_streaming_output(\n"
+            "    *,\n"
+            "    context: StreamingPipelineContext,\n"
+            "    completed_output_frames: int,\n"
+            ") -> dict[str, Any]:\n"
+            "    return {}\n",
+        ),
+        (
             "shared-task-pause-transition",
             "async function setPaused(paused: boolean) {\n"
             "  if (batch.isPaused === paused) return\n"
@@ -574,9 +670,8 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
         (
             "shared-console-task-state-updater",
             "function updateConsoleTaskState(update) {\n"
-            "  const item = getConsoleItem()\n"
-            "  const state = getConsoleRunState()\n"
-            "  setItemTaskState(item.id, update(state.taskState))\n"
+            "  const { item, runState } = lifecycle.getConsoleTaskContext()\n"
+            "  setItemTaskState(item.id, update(runState.taskState))\n"
             "}\n",
         ),
         (

@@ -110,19 +110,24 @@ class StagePlan:
 ```mermaid
 graph LR
     A[Pipeline preflight] --> B[Stage plan]
-    B --> C{Stage-file strategy?}
-    C -->|yes| D[stage_file_pipeline]
-    C -->|no| E[pipeline_raw]
-    E --> F[worker_pipeline]
-    F --> G[stage-worker subprocess chain]
-    G --> H[encode_queue]
-    H --> I[encoder_worker]
-    I --> J[FFmpeg 编码]
-    J --> K[片段文件]
+    B --> C[StreamingPipelineContext]
+    C --> D{Stage-file strategy?}
+    D -->|yes| E[stage_file_pipeline]
+    D -->|no| F[pipeline_raw]
+    F --> G[worker_pipeline]
+    G --> H[stage-worker subprocess chain]
+    H --> I[encode_queue]
+    I --> J[encoder_worker]
+    J --> K[FFmpeg 编码]
+    K --> L[片段文件]
 
-    L[error_queue] --> M[异常汇聚]
-    N[stop_event] --> O[协作式终止]
+    M[error_queue] --> N[异常汇聚]
+    O[stop_event] --> P[协作式终止]
 ```
+
+`process_video_streaming()` 在 preflight 和 manifest 准备完成后只构造一次不可变的
+`StreamingPipelineContext`。dispatch、raw/stage-file runtime 与最终 lifecycle 共享同一对象，
+不再逐层展开 FFmpeg、路径、配置、resume state、回调和 metrics；preflight 派生结果由同一对象持有。
 
 rawvideo 路径由 stage-worker 子进程链执行算法，主进程只保留编码队列和生命周期编排：
 
@@ -132,8 +137,9 @@ stage-file 路径在每个 stage 规划完成后创建一次不可变的 `StageF
 
 | 模块 | 职责 |
 |------|------|
+| [`pipeline_context.py`](../backend/app/processing/streaming/pipeline_context.py) | 定义不可变 preflight 与执行 context，保持运行时对象引用 |
 | [`pipeline_preflight.py`](../backend/app/processing/streaming/pipeline_preflight.py) | 解析视频信息、stage plan、signature、resume domain 和输出尺寸 |
-| [`pipeline_dispatch.py`](../backend/app/processing/streaming/pipeline_dispatch.py) | 根据 plan 分派 stage-file 或 rawvideo runtime |
+| [`pipeline_dispatch.py`](../backend/app/processing/streaming/pipeline_dispatch.py) | 消费共享 context，根据 preflight 分派 stage-file 或 rawvideo runtime |
 | [`worker_pipeline.py`](../backend/app/processing/streaming/worker_pipeline.py) | 构建 stage-worker chain 并把处理后帧写入 `encode_queue` |
 | [`stage_file_pipeline.py`](../backend/app/processing/streaming/stage_file_pipeline.py) | 为每个 stage 构造一次 runtime config，并编排 stage 间的 finalize |
 | [`stage_file_runtime_config.py`](../backend/app/processing/streaming/stage_file_runtime_config.py) | 保存 stage-file chunk 编排与执行共享的不可变静态配置 |

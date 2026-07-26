@@ -8,6 +8,10 @@ import pytest
 
 from app.planning import ResumeState, SegmentManifest, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.pipeline_context import (
+    StreamingPipelineContext,
+    StreamingPipelinePreflight,
+)
 from app.processing.streaming.pipeline_raw import run_raw_streaming_pipeline
 from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, StreamEnd, _ENCODE_END
 
@@ -64,6 +68,54 @@ def _frame(value: int) -> np.ndarray:
     return np.full((1, 1, 3), value, dtype=np.uint8)
 
 
+def _context(
+    tmp_path: Path,
+    *,
+    ffmpeg: Any,
+    total_frames: int,
+    source_frames: int,
+    manifest: SegmentManifest | None = None,
+    encode_progress_callback: Any = None,
+) -> StreamingPipelineContext:
+    manifest = manifest or SegmentManifest(str(tmp_path / "out.mp4"))
+    stage_plan = StagePlan(
+        pre_steps=[],
+        interpolation_step=None,
+        post_steps=[],
+        total_encoded_frames=total_frames,
+    )
+    return StreamingPipelineContext(
+        ffmpeg=ffmpeg,
+        input_path=str(tmp_path / "in.mp4"),
+        output_path=str(manifest.output_path),
+        decode_config={"mode": "software"},
+        encode_config={"container": "mp4"},
+        preflight=StreamingPipelinePreflight(
+            video_info={
+                "source_fps": 24.0,
+                "source_frames": source_frames,
+                "width": 1,
+                "height": 1,
+            },
+            stage_plan=stage_plan,
+            signature="sig",
+            config_snapshot={},
+            use_stage_file_pipeline=False,
+            resume_source_frames=source_frames,
+            output_width=1,
+            output_height=1,
+            segment_frames=1,
+        ),
+        manifest=manifest,
+        resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
+        tensor_backend_name="onnx",
+        progress_callbacks=[],
+        output_fps=None,
+        encode_progress_callback=encode_progress_callback,
+        metrics=PipelineMetrics(),
+    )
+
+
 def test_raw_pipeline_runs_stage_worker_chain_into_segmented_encoder(tmp_path: Path, monkeypatch) -> None:
     ffmpeg = _FakeFFmpeg()
     manifest = SegmentManifest(str(tmp_path / "out.mp4"))
@@ -81,30 +133,15 @@ def test_raw_pipeline_runs_stage_worker_chain_into_segmented_encoder(tmp_path: P
         fake_stage_worker_runner,
     )
 
-    completed = run_raw_streaming_pipeline(
+    context = _context(
+        tmp_path,
         ffmpeg=ffmpeg,  # type: ignore[arg-type]
-        input_path=str(tmp_path / "in.mp4"),
-        decode_config={"mode": "software"},
-        encode_config={"container": "mp4"},
+        total_frames=2,
+        source_frames=2,
         manifest=manifest,
-        stage_plan=StagePlan(
-            pre_steps=[],
-            interpolation_step=None,
-            post_steps=[],
-            total_encoded_frames=2,
-        ),
-        tensor_backend_name="onnx",
-        progress_callbacks=[],
-        video_info={"source_fps": 24.0, "source_frames": 2, "width": 1, "height": 1},
-        output_width=1,
-        output_height=1,
-        resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
-        segment_frames=1,
-        output_path=str(tmp_path / "out.mp4"),
-        output_fps=None,
         encode_progress_callback=lambda frame, _fps, _speed, _time, progress: progress_events.append((frame, progress)),
-        metrics=PipelineMetrics(),
     )
+    completed = run_raw_streaming_pipeline(context=context)
 
     assert completed == 2
     assert ffmpeg.encoder_dimensions == [(1, 1), (1, 1)]
@@ -126,28 +163,13 @@ def test_raw_pipeline_raises_worker_error_after_encoder_shutdown(tmp_path: Path,
 
     with pytest.raises(RuntimeError, match="worker failed"):
         run_raw_streaming_pipeline(
-            ffmpeg=_FakeFFmpeg(),  # type: ignore[arg-type]
-            input_path=str(tmp_path / "in.mp4"),
-            decode_config={"mode": "software"},
-            encode_config={"container": "mp4"},
-            manifest=manifest,
-            stage_plan=StagePlan(
-                pre_steps=[],
-                interpolation_step=None,
-                post_steps=[],
-                total_encoded_frames=0,
-            ),
-            tensor_backend_name="onnx",
-            progress_callbacks=[],
-            video_info={"source_fps": 24.0, "source_frames": 0, "width": 1, "height": 1},
-            output_width=1,
-            output_height=1,
-            resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
-            segment_frames=1,
-            output_path=str(tmp_path / "out.mp4"),
-            output_fps=None,
-            encode_progress_callback=None,
-            metrics=PipelineMetrics(),
+            context=_context(
+                tmp_path,
+                ffmpeg=_FakeFFmpeg(),  # type: ignore[arg-type]
+                total_frames=0,
+                source_frames=0,
+                manifest=manifest,
+            )
         )
 
 
@@ -174,23 +196,13 @@ def test_raw_pipeline_stops_and_joins_encoder_when_stage_worker_raises(tmp_path:
 
     with pytest.raises(RuntimeError, match="spawn failed"):
         run_raw_streaming_pipeline(
-            ffmpeg=_FakeFFmpeg(),  # type: ignore[arg-type]
-            input_path=str(tmp_path / "in.mp4"),
-            decode_config={"mode": "software"},
-            encode_config={"container": "mp4"},
-            manifest=SegmentManifest(str(tmp_path / "out.mp4")),
-            stage_plan=StagePlan(pre_steps=[], interpolation_step=None, post_steps=[], total_encoded_frames=1),
-            tensor_backend_name="onnx",
-            progress_callbacks=[],
-            video_info={"source_fps": 24.0, "source_frames": 1, "width": 1, "height": 1},
-            output_width=1,
-            output_height=1,
-            resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
-            segment_frames=1,
-            output_path=str(tmp_path / "out.mp4"),
-            output_fps=None,
-            encode_progress_callback=None,
-            metrics=PipelineMetrics(),
+            context=_context(
+                tmp_path,
+                ffmpeg=_FakeFFmpeg(),  # type: ignore[arg-type]
+                total_frames=1,
+                source_frames=1,
+                manifest=SegmentManifest(str(tmp_path / "out.mp4")),
+            )
         )
 
     assert runtime["stop_event"].is_set()

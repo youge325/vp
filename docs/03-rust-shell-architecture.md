@@ -95,6 +95,13 @@ graph TB
     J --> K
 ```
 
+### One-shot 短命令
+
+[`frontend/src-tauri/src/tasks/oneshot.rs`](../frontend/src-tauri/src/tasks/oneshot.rs) 直接返回
+`Result<Value, ShellError>`。结构化错误信封映射为 `BackendEnvelope`，无信封的非零退出映射为
+`BackendProbeFailed`，成功但没有 JSON 映射为 `BackendNoJson`。command 和 environment service
+只接收成功形状的 JSON 并直接反序列化，不保留额外 outcome 中间状态。
+
 ### 任务状态机
 
 [`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) 定义三阶段状态机：
@@ -167,7 +174,7 @@ pub(crate) enum NdjsonEnvelope {
 - `windows.rs` — Win32 `SuspendThread` / `ResumeThread` 实现
 - `posix.rs` — SIGSTOP / SIGCONT 实现（占位）
 
-控制消息通过 `tokio::sync::mpsc` 通道发送，响应通过 `oneshot` 通道返回结构化错误（Phase 5a — 替代了之前的 `Result<(), String>`，保留原始 `io::Error` source chain）。
+控制消息通过 `tokio::sync::mpsc` 通道发送，响应通过 `oneshot` 通道返回结构化错误，并保留原始 `io::Error` source chain。
 
 ## 本地持久化
 
