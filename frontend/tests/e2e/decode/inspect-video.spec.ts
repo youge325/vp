@@ -18,9 +18,9 @@ test.describe('Video inspection', () => {
     expect(info.height).toBeGreaterThan(0)
 
     // Type assertions for known synthetic video shape
-    expect(info.width).toBe(1280)
-    expect(info.height).toBe(720)
-    expect(info.fps).toBe(30)
+    expect(info.width).toBe(320)
+    expect(info.height).toBe(180)
+    expect(info.fps).toBe(10)
 
     expect(info.videoCodec).toBeTruthy()
     expect(typeof info.videoCodec).toBe('string')

@@ -34,12 +34,8 @@ jobs:
       - name: Setup CI runtime environment
         run: ./scripts/setup-ci-runtime-env.ps1
 
-      - name: Generate synthetic test video
-        run: |
-          & $env:VP_FFMPEG_PATH -f lavfi -i testsrc=duration=1:size=1280x720:rate=30 `
-                                -f lavfi -i sine=frequency=1000:duration=1 `
-                                -pix_fmt yuv420p -c:v libx264 -c:a aac `
-                                "${{ runner.temp }}\vp-e2e-test.mp4" -y
+      - name: Generate shared E2E fixture
+        run: node frontend/scripts/generate-e2e-fixture.mjs "${{ runner.temp }}\vp-e2e-test.mp4"
 
       - name: Run CLI e2e smoke tests
         run: python -m pytest backend/tests/test_integration/test_cli_process_e2e.py -v
@@ -47,7 +43,7 @@ jobs:
           VP_E2E_INPUT: ${{ runner.temp }}\vp-e2e-test.mp4
           VP_E2E_OUTPUT_DIR: ${{ runner.temp }}\vp-e2e-output
 
-  build-e2e-app:
+  e2e-ui:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
     runs-on: [self-hosted, windows]
     defaults:
@@ -56,73 +52,29 @@ jobs:
     env:
       CARGO_TARGET_DIR: D:\ci-cache\cargo-target
       CARGO_HOME: D:\ci-cache\cargo-home
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install frontend dependencies (with Vite cache restore)
-        run: |
-          $viteCache = "node_modules/.vite"
-          $localViteCache = "D:/ci-cache/vite-cache"
-          if (Test-Path $viteCache) {
-            New-Item -ItemType Directory -Force -Path $localViteCache | Out-Null
-            robocopy $viteCache $localViteCache /MIR /R:1 /W:1 /MT:8 | Out-Null
-          }
-          npm ci
-          if (Test-Path $localViteCache) {
-            New-Item -ItemType Directory -Force -Path $viteCache | Out-Null
-            robocopy $localViteCache $viteCache /MIR /R:1 /W:1 /MT:8 | Out-Null
-          }
-        working-directory: frontend
-
-      - name: Regenerate TypeScript types from Rust (ts-rs)
-        run: |
-          New-Item -ItemType Directory -Force -Path "../dist" | Out-Null
-          cargo test --lib --quiet
-        working-directory: frontend/src-tauri
-
-      - name: Build Tauri app (release)
-        run: npm run tauri build -- --no-bundle
-        working-directory: frontend
-        env:
-          CI: true
-          E2E_COVERAGE: 1
-
-      - name: Upload E2E app artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: vp-e2e-app-windows
-          path: ${{ env.CARGO_TARGET_DIR }}\release\vp-workbench.exe
-          if-no-files-found: error
-          overwrite: true
-          retention-days: 1
-
-  e2e-ui:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
-    runs-on: [self-hosted, windows]
-    needs: build-e2e-app
-    defaults:
-      run:
-        shell: pwsh
+      VP_E2E_CACHE_DIR: D:\ci-cache\vp-e2e
     steps:
       - uses: actions/checkout@v6
 
       - name: Setup CI runtime environment
         run: ./scripts/setup-ci-runtime-env.ps1
 
-      - name: Install frontend dependencies (with Vite cache restore)
-        run: |
-          $viteCache = "node_modules/.vite"
-          $localViteCache = "D:/ci-cache/vite-cache"
-          if (Test-Path $viteCache) {
-            New-Item -ItemType Directory -Force -Path $localViteCache | Out-Null
-            robocopy $viteCache $localViteCache /MIR /R:1 /W:1 /MT:8 | Out-Null
-          }
-          npm ci
-          if (Test-Path $localViteCache) {
-            New-Item -ItemType Directory -Force -Path $viteCache | Out-Null
-            robocopy $localViteCache $viteCache /MIR /R:1 /W:1 /MT:8 | Out-Null
-          }
+      - name: Install frontend dependencies
+        run: npm ci
         working-directory: frontend
+
+      - name: Regenerate TypeScript types from Rust
+        run: |
+          New-Item -ItemType Directory -Force -Path "../dist" | Out-Null
+          cargo test --lib --quiet
+        working-directory: frontend/src-tauri
+
+      - name: Build coverage-instrumented Tauri app
+        run: npm run tauri build -- --no-bundle
+        working-directory: frontend
+        env:
+          CI: true
+          E2E_COVERAGE: 1
 
       - name: Install Tauri WebDriver
         run: |
@@ -132,44 +84,42 @@ jobs:
           tauri-driver --help | Select-Object -First 5
         working-directory: frontend
 
-      - name: Download E2E app artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: vp-e2e-app-windows
-          path: ${{ runner.temp }}\vp-e2e-app
-
-      - name: Verify E2E app artifact
+      - name: Verify explicit E2E runtime
         run: |
-          $app = "${{ runner.temp }}\vp-e2e-app\vp-workbench.exe"
-          if (-not (Test-Path -LiteralPath $app -PathType Leaf)) {
-            throw "E2E app artifact not found: $app"
+          $required = @(
+            "VP_PYTHON_EXECUTABLE",
+            "VP_FFMPEG_PATH",
+            "VP_FFPROBE_PATH",
+            "VP_RIFE_MODEL_DIR"
+          )
+          foreach ($name in $required) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "$name must be explicitly configured for release E2E"
+            }
           }
-          Write-Host "E2E app artifact: $app ($(Get-Item -LiteralPath $app).Length bytes)"
 
-      - name: Generate synthetic test video
-        run: |
-          & $env:VP_FFMPEG_PATH -f lavfi -i testsrc=duration=1:size=1280x720:rate=30 `
-                                -f lavfi -i sine=frequency=1000:duration=1 `
-                                -pix_fmt yuv420p -c:v libx264 -c:a aac `
-                                "${{ runner.temp }}\vp-e2e-test.mp4" -y
+      - name: Generate shared E2E fixture
+        run: node frontend/scripts/generate-e2e-fixture.mjs "${{ runner.temp }}\vp-e2e-test.mp4"
 
-      - name: Run WebDriverIO e2e tests
-        timeout-minutes: 25
+      - name: Run complete WebDriverIO E2E suite
+        timeout-minutes: 15
         run: npm run e2e
         working-directory: frontend
         env:
           E2E_COVERAGE: 1
-          VP_E2E_EXCLUDE: './tests/e2e/task/**/*.spec.ts'
-          VP_TAURI_EXE_PATH: ${{ runner.temp }}\vp-e2e-app\vp-workbench.exe
+          VP_TAURI_EXE_PATH: D:\ci-cache\cargo-target\release\vp-workbench.exe
           VP_E2E_INPUT: ${{ runner.temp }}\vp-e2e-test.mp4
           VP_E2E_OUTPUT_DIR: ${{ runner.temp }}\vp-e2e-output
           VP_BACKEND_DIR: ${{ github.workspace }}\backend
 
-      - name: Generate E2E coverage report (nyc)
+      - name: Generate E2E coverage report
         run: |
           $coverageFiles = @(Get-ChildItem -LiteralPath .nyc_output -Filter *.json -File -ErrorAction SilentlyContinue)
           if ($coverageFiles.Count -eq 0) {
             throw "E2E coverage data was not written to frontend/.nyc_output"
+          }
+          if ($coverageFiles.Count -gt 10) {
+            throw "Expected at most 10 session coverage files, found $($coverageFiles.Count)"
           }
           npx nyc report --reporter=text --reporter=html
         working-directory: frontend

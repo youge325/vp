@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures'
-import { existsSync, rmSync } from 'fs'
 import { join } from 'node:path'
+import { removeFileWhenUnlocked, waitForNonEmptyFile } from '../utils/files'
 
 function buildTaskRequest(inputPath: string, outputDir: string) {
   return {
@@ -30,27 +30,6 @@ function buildTaskRequest(inputPath: string, outputDir: string) {
   }
 }
 
-async function removeIfExists(outputPath: string, maxWaitMs: number = 15000): Promise<void> {
-  const interval = 250
-  const deadline = Date.now() + maxWaitMs
-  let lastError: unknown
-
-  while (Date.now() <= deadline) {
-    if (!existsSync(outputPath)) {
-      return
-    }
-    try {
-      rmSync(outputPath)
-      return
-    } catch (error) {
-      lastError = error
-      await new Promise((resolve) => setTimeout(resolve, interval))
-    }
-  }
-
-  throw lastError
-}
-
 test.describe('HEVC output inspection', () => {
   const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
   const outputDir = process.env.VP_E2E_OUTPUT_DIR ?? 'C:/tmp/vp-e2e-output'
@@ -58,7 +37,7 @@ test.describe('HEVC output inspection', () => {
 
   test('hevc+mkv output is inspectable and contains hevc codec info', async ({ tauriPage }) => {
     // Generate HEVC output first
-    await removeIfExists(outFile)
+    await removeFileWhenUnlocked(outFile)
 
     await tauriPage.evaluate(async (req) => {
       try {
@@ -70,15 +49,7 @@ test.describe('HEVC output inspection', () => {
     }, buildTaskRequest(inputPath, outputDir))
 
     // Wait for output file
-    let found = false
-    for (let i = 0; i < 120; i++) {
-      if (existsSync(outFile)) {
-        found = true
-        break
-      }
-      await new Promise((r) => setTimeout(r, 500))
-    }
-    expect(found).toBe(true)
+    expect(await waitForNonEmptyFile(outFile)).toBe(true)
 
     // Inspect the HEVC output
     const info = await tauriPage.evaluate(async (path: string) => {

@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "e2e": "node ./scripts/run-wdio.mjs",
     "e2e:ui": "node ./scripts/run-wdio.mjs --show --watch",
+    "e2e:fixture": "node ./scripts/generate-e2e-fixture.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"

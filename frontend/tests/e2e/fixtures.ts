@@ -1,7 +1,15 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import { createTauriPage, isLocatorAdapter, navigateHome, resetAppState, waitForAppShell, type LocatorAdapter, type TauriPage } from './utils/wdio-tauri'
+import {
+  captureAppStateBaseline,
+  createTauriPage,
+  isLocatorAdapter,
+  navigateHome,
+  resetAppState,
+  waitForAppBootstrap,
+  waitForAppShell,
+  type LocatorAdapter,
+  type TauriPage,
+} from './utils/wdio-tauri'
 
 type TestContext = { tauriPage: TauriPage }
 type TestBody = (context: TestContext) => Promise<void> | void
@@ -13,6 +21,7 @@ class SkipTest extends Error {
 }
 
 let activePage: TauriPage | undefined
+let baselineCaptured = false
 
 const mocha = () => globalThis as typeof globalThis & {
   describe: Mocha.SuiteFunction
@@ -31,28 +40,21 @@ const currentPage = () => {
 mocha().beforeEach(async () => {
   activePage = createTauriPage()
   await waitForAppShell()
-  await resetAppState()
-  await navigateHome()
-})
-
-mocha().afterEach(async function () {
-  const page = activePage
-  activePage = undefined
-  if (!page) {
+  if (!baselineCaptured) {
+    await waitForAppBootstrap()
+    await navigateHome()
+    await captureAppStateBaseline()
+    baselineCaptured = true
     return
   }
 
-  try {
-    const coverage = await page.evaluate(() => (window as any).__coverage__ ?? null)
-    if (coverage) {
-      const outputDir = resolve(process.cwd(), '.nyc_output')
-      mkdirSync(outputDir, { recursive: true })
-      const testTitle = this.currentTest?.fullTitle().replace(/[^a-z0-9_-]+/gi, '-') ?? 'wdio-e2e'
-      writeFileSync(resolve(outputDir, `${Date.now()}-${testTitle}.json`), JSON.stringify(coverage))
-    }
-  } catch {
-    // Coverage is best-effort; assertion failures should stay focused on the spec.
-  }
+  await navigateHome()
+  await resetAppState()
+  await activePage.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+})
+
+mocha().afterEach(() => {
+  activePage = undefined
 })
 
 const runWithSkip = async (context: Mocha.Context, body: TestBody) => {

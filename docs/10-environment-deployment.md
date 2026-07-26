@@ -171,15 +171,15 @@ ONNX 引擎默认走 CUDA EP。启用 TensorRT EP：
 
 | 工作流 | 触发条件 | 职责 |
 |--------|----------|------|
-| `e2e.yml` | push/PR 修改 backend/app/ 或 frontend/ | Windows CLI smoke + 排除 `tests/e2e/task/**/*.spec.ts` 的 UI E2E |
-| `e2e-arc.yml` | 手工 `workflow_dispatch` | Linux ARC CLI smoke + 排除 task 分组的 UI E2E |
-| `e2e-task.yml` | push/PR 修改 backend/app/ 或 frontend/ | Windows `tests/e2e/task/**/*.spec.ts` UI E2E |
-| `e2e-task-arc.yml` | 手工 `workflow_dispatch` | Linux ARC task 分组 UI E2E |
+| `e2e.yml` | push/PR 修改 backend/app/ 或 frontend/ | Windows CLI smoke + 完整原生 WebView E2E |
+| `e2e-arc.yml` | 手工 `workflow_dispatch` | Linux ARC CLI smoke + 完整原生 WebView E2E |
 | `release.yml` | push v* 标签 | 构建并发布到 GitHub Release |
 | `test-backend.yml` | push/PR 修改 backend/ | PyTorch 和 Paddle 后端测试 |
 | `test.yml` | push/PR 修改 backend/app/ 或 frontend/ | 前端测试 + 类型检查 + 错误码一致性检查 |
 
-E2E release 构建启用 Istanbul 插桩，WebDriver 测试把覆盖率 JSON 固定写到运行目录下的 `frontend/.nyc_output/`。CI 在生成 `nyc` 报告前要求至少存在一个 JSON，避免测试路径或工作目录漂移被静默忽略。WebDriver launcher 只在其子进程环境中移除代理变量，父 shell 和其他 `VP_*` 运行配置保持不变。
+E2E release 构建启用 Istanbul 插桩。79 个 spec 按领域分成最多 10 个串行 Tauri WebView session，每个 session 只在结束时把 renderer 内序列化的 coverage JSON 写到 `frontend/.nyc_output/`。CI 会先清空旧 coverage，并在生成 `nyc` 报告前校验 JSON 数量为 1 至 10，避免旧文件掩盖覆盖率采集失败。
+
+Windows 与 Linux 各自在同一个 job 内安装依赖、构建一次插桩应用并运行完整套件，不再为 task 分组重复构建或传递制品。测试媒体由 `frontend/scripts/generate-e2e-fixture.mjs` 统一生成，规格为 `320x180`、`10fps`、`0.5s` 且带音频。EdgeDriver 和两个 Rust launcher 使用 `VP_E2E_CACHE_DIR` 的持久缓存。WebDriver launcher 只在其子进程环境中移除代理变量，父 shell 和其他 `VP_*` 运行配置保持不变。
 
 ## 平台差异
 
