@@ -7,6 +7,7 @@ import { createMediaItem } from '@/services/media/factory'
 import { useMediaStore } from '@/stores/media'
 import { useMediaRunState } from '@/stores/mediaRunState'
 import { usePresetStore } from '@/stores/preset'
+import { useTaskStore } from '@/stores/task'
 
 describe('TaskConsole TensorRT logs', () => {
   beforeEach(() => {
@@ -39,5 +40,30 @@ describe('TaskConsole TensorRT logs', () => {
       '22:03:13 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +
         'TensorRT BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640',
     )
+  })
+
+  it('falls back to the active item without mixing in stale current run state', () => {
+    const presetStore = usePresetStore()
+    const mediaStore = useMediaStore()
+    const runStateStore = useMediaRunState()
+    const activeItem = createMediaItem('/video/active.mp4', presetStore.draftPreset)
+    mediaStore.appendItems([activeItem])
+    mediaStore.setActive(activeItem.id)
+    runStateStore.setTaskState(activeItem.id, {
+      status: 'running',
+      resumeStatus: null,
+      logs: ['active log'],
+    })
+    runStateStore.setTaskState('missing-item', {
+      status: 'paused',
+      resumeStatus: null,
+      logs: ['stale log'],
+    })
+    useTaskStore().setBatch({ currentId: 'missing-item' })
+
+    const wrapper = mount(TaskConsole)
+
+    expect(wrapper.text()).toContain('active log')
+    expect(wrapper.text()).not.toContain('stale log')
   })
 })

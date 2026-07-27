@@ -120,8 +120,10 @@ def test_raw_pipeline_runs_stage_worker_chain_into_segmented_encoder(tmp_path: P
     ffmpeg = _FakeFFmpeg()
     manifest = SegmentManifest(str(tmp_path / "out.mp4"))
     progress_events: list[tuple[int, str]] = []
+    worker_configs = []
 
     def fake_stage_worker_runner(**kwargs: Any) -> None:
+        worker_configs.append(kwargs["config"])
         encode_queue = kwargs["encode_queue"]
         encode_queue.put(EncodedFrame(frame=_frame(10)))
         encode_queue.put(SegmentBoundary(next_source_frame=1))
@@ -147,6 +149,12 @@ def test_raw_pipeline_runs_stage_worker_chain_into_segmented_encoder(tmp_path: P
     assert ffmpeg.encoder_dimensions == [(1, 1), (1, 1)]
     assert progress_events == [(1, "end"), (2, "end")]
     assert [segment.next_source_frame for segment in manifest.scan_completed_chunks()] == [1, 2]
+    assert len(worker_configs) == 1
+    assert worker_configs[0].ffmpeg is context.ffmpeg
+    assert worker_configs[0].decode_config is context.decode_config
+    assert worker_configs[0].stage_plan is context.preflight.stage_plan
+    assert worker_configs[0].resume_state is context.resume_state
+    assert worker_configs[0].metrics is context.metrics
 
 
 def test_raw_pipeline_raises_worker_error_after_encoder_shutdown(tmp_path: Path, monkeypatch) -> None:

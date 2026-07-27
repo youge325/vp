@@ -507,6 +507,56 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "rust-inline-backend-error-payload",
             "match status { Ok(_) => TaskErrorPayload { code, message, details } }\n",
         ),
+        (
+            "batch-local-task-context-resolver",
+            "function resolveTaskContext(id: string | null) { return deps.getMediaItem(id) }\n",
+        ),
+        (
+            "batch-lifecycle-log-policy-forwarding",
+            "function clearBatchRuntimeArtifacts(preserveLogs = false) {}\n",
+        ),
+        (
+            "task-orchestrator-current-item-return",
+            "return { consoleTaskItem, batchTotal }\n",
+        ),
+        (
+            "task-console-duplicate-context-projection",
+            "const { consoleTaskItem } = useTaskOrchestrator()\n",
+        ),
+        (
+            "current-status-duplicate-context-projection",
+            "const runStateStore = useMediaRunState()\n",
+        ),
+        (
+            "runtime-batch-log-policy-forwarding",
+            "resetItemsRunState: (ids, preserveLogs) => store.resetItemsRunState(ids, preserveLogs)\n",
+        ),
+        (
+            "streaming-optional-metrics",
+            "def process_video_streaming(*, metrics: PipelineMetrics | None = None):\n"
+            "    if metrics is None:\n"
+            "        metrics = PipelineMetrics()\n",
+        ),
+        (
+            "worker-pipeline-static-runtime-signature",
+            "def run_stage_worker_pipeline(*, ffmpeg: object, encode_queue: object):\n    pass\n",
+        ),
+        (
+            "worker-chain-static-runtime-signature",
+            "def run_worker_chain_runtime(*, stage_plan: object, plans: list):\n    pass\n",
+        ),
+        (
+            "worker-runtime-secondary-construction",
+            "config = WorkerPipelineRuntimeConfig(ffmpeg=ffmpeg)\n",
+        ),
+        (
+            "stage-file-dead-completion-state",
+            "completed_frames = int(context.resume_state.completed_output_frames)\n",
+        ),
+        (
+            "rust-oneshot-error-envelope-probe",
+            "struct ErrorEnvelopeProbe { kind: String }\nfn try_parse_error_envelope() {}\n",
+        ),
     ],
 )
 def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule_id: str, source: str) -> None:
@@ -589,20 +639,40 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
         ),
         (
             "paired-task-context-resolver",
-            "function resolveTaskContext(id: string | null) {\n"
-            "  return {\n"
-            "    item: id ? deps.getMediaItem(id) : null,\n"
-            "    runState: id ? deps.getItemRunState(id) : null,\n"
-            "  }\n"
+            "function resolveTaskContext(lookup: TaskContextLookup, id: string | null) {\n"
+            "  const item = id ? lookup.getMediaItem(id) : null\n"
+            "  return { item, runState: item ? lookup.getItemRunState(item.id) : null }\n"
             "}\n"
-            "function getCurrentTaskContext() {\n"
-            "  return resolveTaskContext(deps.getBatch().currentId)\n"
-            "}\n"
-            "function getConsoleTaskContext() {\n"
-            "  const current = getCurrentTaskContext()\n"
-            "  if (current.item) return current\n"
-            "  return resolveTaskContext(deps.getActiveItemId())\n"
+            "function resolveConsoleTaskContext(lookup, currentId, activeId) {\n"
+            "  const current = resolveTaskContext(lookup, currentId)\n"
+            "  return current.item ? current : resolveTaskContext(lookup, activeId)\n"
             "}\n",
+        ),
+        (
+            "shared-task-context-selectors",
+            "function useCurrentTaskContext() {\n"
+            "  return computed(() => resolveTaskContext(lookup, taskStore.batch.currentId))\n"
+            "}\n"
+            "function useConsoleTaskContext() {\n"
+            "  return computed(() => resolveConsoleTaskContext(\n"
+            "    lookup, taskStore.batch.currentId, mediaStore.activeItemId,\n"
+            "  ))\n"
+            "}\n",
+        ),
+        (
+            "batch-task-context-resolver-consumer",
+            "import { resolveConsoleTaskContext, resolveTaskContext } from '@/services/task/task-context'\n"
+            "resolveTaskContext(deps, deps.getBatch().currentId)\n"
+            "resolveConsoleTaskContext(\n"
+            "  deps,\n"
+            "  deps.getBatch().currentId,\n"
+            "  deps.getActiveItemId(),\n"
+            ")\n",
+        ),
+        (
+            "fixed-batch-reset-log-policy",
+            "resetItemRunState: (id) => mediaRunState.resetItemRunState(id),\n"
+            "resetItemsRunState: (ids) => mediaRunState.resetItemsRunState(ids, true),\n",
         ),
         (
             "oneshot-direct-shell-result",
@@ -617,6 +687,20 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
             "}\n",
         ),
         (
+            "shared-oneshot-error-envelope-parser",
+            "fn error_payload_from_value(value: Value) -> Option<TaskErrorPayload> {\n"
+            "  match serde_json::from_value::<NdjsonEnvelope>(value).ok()? {\n"
+            "    NdjsonEnvelope::Error(payload) => Some(payload),\n"
+            "    _ => None,\n"
+            "  }\n"
+            "}\n",
+        ),
+        (
+            "oneshot-error-envelope-consumer",
+            "use crate::tasks::envelope::{error_payload_from_value, parse_last_json_line};\n"
+            "let payload = last_json.and_then(error_payload_from_value);\n",
+        ),
+        (
             "immutable-streaming-pipeline-contexts",
             "@dataclass(frozen=True, slots=True)\n"
             "class StreamingPipelinePreflight:\n"
@@ -624,6 +708,41 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
             "@dataclass(frozen=True, slots=True)\n"
             "class StreamingPipelineContext:\n"
             "    pass\n",
+        ),
+        (
+            "shared-worker-pipeline-runtime-config",
+            "@dataclass(frozen=True, slots=True)\n"
+            "class WorkerPipelineRuntimeConfig:\n"
+            "    source_width: int\n"
+            "    source_height: int\n"
+            "    source_frames: int\n",
+        ),
+        (
+            "raw-worker-runtime-config-root",
+            "worker_config = WorkerPipelineRuntimeConfig(stage_plan=stage_plan)\n"
+            "run_stage_worker_pipeline(config=worker_config)\n",
+        ),
+        (
+            "worker-pipeline-runtime-config-boundary",
+            "def run_stage_worker_pipeline(*, config: WorkerPipelineRuntimeConfig, encode_queue):\n"
+            "    run_worker_chain_runtime(config=config)\n",
+        ),
+        (
+            "worker-chain-runtime-config-boundary",
+            "def run_worker_chain_runtime(*, config: WorkerPipelineRuntimeConfig, plans):\n"
+            "    drain_final_worker_output(\n"
+            "        stage_plan=config.stage_plan,\n"
+            "        metrics=config.metrics,\n"
+            "    )\n",
+        ),
+        (
+            "explicit-streaming-metrics",
+            "def process_video_streaming(\n"
+            "    *,\n"
+            "    progress_callbacks: list,\n"
+            "    metrics: PipelineMetrics,\n"
+            ") -> dict:\n"
+            "    return {}\n",
         ),
         (
             "streaming-context-composition-root",
@@ -716,8 +835,8 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
         ),
         (
             "shared-current-task-status-selector",
-            "const currentItem = mediaStore.findItem(taskStore.batch.currentId)\n"
-            "const currentStatus = runStateStore.getByItemId(currentItem?.id)?.taskState.status ?? null\n"
+            "const currentTaskContext = useCurrentTaskContext()\n"
+            "const currentStatus = currentTaskContext.value.runState?.taskState.status ?? null\n"
             "return getTaskStatusLabel(taskStore.batch, currentStatus)\n",
         ),
         (
@@ -731,10 +850,9 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
             "const moduleStates = computed(() => ({ render: taskStore.batch.isRunning }))\n",
         ),
         (
-            "task-orchestrator-store-item-lookup",
-            "const consoleTaskItem = computed(\n"
-            "  () => mediaStore.findItem(taskStore.batch.currentId) ?? mediaStore.activeItem,\n"
-            ")\n",
+            "task-console-context-selector",
+            "const consoleTaskContext = useConsoleTaskContext()\n"
+            "const consoleRunState = computed(() => consoleTaskContext.value.runState)\n",
         ),
         (
             "bootstrap-task-listener-lifecycle",

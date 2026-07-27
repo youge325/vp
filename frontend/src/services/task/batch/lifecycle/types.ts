@@ -20,8 +20,8 @@ export interface BatchLifecycleDeps {
   setItemTaskState: (id: string, state: MediaTaskState) => void
   setTaskIssue: (issue: TaskError | null) => void
   setItemLastOutputPath: (id: string, path: string) => void
-  resetItemRunState: (id: string, preserveLogs?: boolean) => void
-  resetItemsRunState: (ids: Set<string>, preserveLogs?: boolean) => void
+  resetItemRunState: (id: string) => void
+  resetItemsRunState: (ids: Set<string>) => void
   setActiveItem: (id: string | null) => void
   getActiveItemId: () => string | null
 

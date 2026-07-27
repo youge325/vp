@@ -17,6 +17,7 @@ from app.processing.streaming.queues import (
     _queue_put_nowait,
 )
 from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
+from app.processing.streaming.worker_runtime_config import WorkerPipelineRuntimeConfig
 
 
 def run_raw_streaming_pipeline(
@@ -44,6 +45,19 @@ def run_raw_streaming_pipeline(
         encode_progress_callback=context.encode_progress_callback,
         metrics=context.metrics,
     )
+    worker_config = WorkerPipelineRuntimeConfig(
+        ffmpeg=context.ffmpeg,
+        input_path=context.input_path,
+        decode_config=context.decode_config,
+        stage_plan=context.preflight.stage_plan,
+        tensor_backend_name=context.tensor_backend_name,
+        progress_callbacks=context.progress_callbacks,
+        source_width=int(context.preflight.video_info["width"]),
+        source_height=int(context.preflight.video_info["height"]),
+        source_frames=int(context.preflight.video_info["source_frames"]),
+        resume_state=context.resume_state,
+        metrics=context.metrics,
+    )
 
     encoder_thread = start_raw_encoder_thread(
         config=encoder_config,
@@ -53,18 +67,10 @@ def run_raw_streaming_pipeline(
     )
     try:
         run_stage_worker_pipeline(
-            ffmpeg=context.ffmpeg,
-            input_path=context.input_path,
-            decode_config=context.decode_config,
-            stage_plan=context.preflight.stage_plan,
-            tensor_backend_name=context.tensor_backend_name,
-            progress_callbacks=context.progress_callbacks,
-            video_info=context.preflight.video_info,
-            resume_state=context.resume_state,
+            config=worker_config,
             encode_queue=encode_queue,
             error_queue=error_queue,
             stop_event=stop_event,
-            metrics=context.metrics,
         )
     except BaseException:
         stop_event.set()

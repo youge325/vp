@@ -37,8 +37,8 @@ export interface OperationIssue {
 // outputPath / startedAt / finishedAt)。这些在视图 / component /
 // composable 中 **零 reader**(grep 验证):reducer 之间仅做 transfer,
 // spec 测试有断言但实际不驱动 UI。视图侧只读 ``status / logs /
-// resumeStatus`` 三个字段,batch 粒度的进度条用 ``batch.completedCount /
-// batchTotal``(见 [[TaskConsole.vue]] L18-22)。
+// resumeStatus`` 三个字段,batch 粒度的进度条使用 ``batch.completedCount``
+// 与 runtime/selected item 数量(见 [[TaskConsole.vue]])。
 export interface MediaTaskState {
   status: TaskStatus
   logs: string[]

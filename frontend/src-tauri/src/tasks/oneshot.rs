@@ -5,40 +5,13 @@
 
 use std::process::Stdio;
 
-use serde::Deserialize;
 use serde_json::Value;
 use tokio::io::AsyncWriteExt;
 
 use crate::error::ShellError;
-use crate::models::{TaskErrorCode, TaskErrorPayload};
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks::builder::{apply_no_window, backend_command};
-use crate::tasks::envelope::parse_last_json_line;
-
-/// Lightweight shape probe used to decide whether ``last_json_line`` is
-/// a real error envelope or just success-shaped data that happens to
-/// be valid JSON. Mirrors the Python emission in ``backend/app/__main__.py``.
-#[derive(Debug, Deserialize)]
-struct ErrorEnvelopeProbe {
-    #[serde(rename = "type")]
-    kind: String,
-    code: TaskErrorCode,
-    message: String,
-    #[serde(default)]
-    details: Option<Value>,
-}
-
-fn try_parse_error_envelope(value: &Value) -> Option<TaskErrorPayload> {
-    let probe = serde_json::from_value::<ErrorEnvelopeProbe>(value.clone()).ok()?;
-    if probe.kind != "error" {
-        return None;
-    }
-    Some(TaskErrorPayload {
-        code: probe.code,
-        message: probe.message,
-        details: probe.details,
-    })
-}
+use crate::tasks::envelope::{error_payload_from_value, parse_last_json_line};
 
 /// Run a one-shot CLI subcommand and return its success-shaped JSON value.
 ///
@@ -87,7 +60,7 @@ pub(crate) async fn run_single_cli_command(
     let last_json = parse_last_json_line(&stdout);
 
     if !output.status.success() {
-        return match last_json.as_ref().and_then(try_parse_error_envelope) {
+        return match last_json.and_then(error_payload_from_value) {
             Some(envelope) => Err(ShellError::BackendEnvelope {
                 code: envelope.code,
                 message: envelope.message,
@@ -100,58 +73,4 @@ pub(crate) async fn run_single_cli_command(
     }
 
     last_json.ok_or(ShellError::BackendNoJson)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn envelope_probe_accepts_error_type_tag() {
-        let value = json!({
-            "type": "error",
-            "code": "missing_ffmpeg",
-            "message": "ffmpeg.exe missing",
-            "details": null,
-        });
-        let envelope = try_parse_error_envelope(&value).expect("envelope must parse");
-        assert!(matches!(envelope.code, TaskErrorCode::MissingFfmpeg));
-        assert_eq!(envelope.message, "ffmpeg.exe missing");
-    }
-
-    #[test]
-    fn envelope_probe_rejects_non_error_type() {
-        let value = json!({
-            "type": "completed",
-            "code": "missing_ffmpeg",
-            "message": "irrelevant",
-        });
-        assert!(try_parse_error_envelope(&value).is_none());
-    }
-
-    #[test]
-    fn envelope_probe_rejects_success_shape_without_type_field() {
-        // ``check`` / ``info`` success payloads have no ``type`` and no
-        // ``code`` keys — must not be misclassified as an envelope.
-        let value = json!({
-            "ffmpeg": { "available": true },
-            "gpu": { "available": false },
-        });
-        assert!(try_parse_error_envelope(&value).is_none());
-    }
-
-    #[test]
-    fn envelope_probe_rejects_payload_with_unknown_code_string() {
-        // Defensive: an envelope with a misspelled / out-of-band code
-        // string fails to parse as ``TaskErrorCode`` and therefore
-        // falls through to ``FailedWithoutEnvelope`` rather than
-        // silently being treated as success.
-        let value = json!({
-            "type": "error",
-            "code": "definitely_not_a_real_code",
-            "message": "...",
-        });
-        assert!(try_parse_error_envelope(&value).is_none());
-    }
 }

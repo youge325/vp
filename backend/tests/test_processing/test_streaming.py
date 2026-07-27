@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from app.planning import ProcessingStep, SegmentManifest, build_run_identity
+from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import EncodedFrame, StreamEnd
 from app.processing.streaming import process_video_streaming
 from app.processing.streaming.worker_plans import (
@@ -218,19 +219,19 @@ def _install_video_frames_rename_hook(monkeypatch: pytest.MonkeyPatch, wrapper: 
 
 def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_worker_pipeline(**kwargs):
-        ffmpeg = kwargs["ffmpeg"]
-        stage_plan = kwargs["stage_plan"]
-        video_info = kwargs["video_info"]
-        resume_state = kwargs["resume_state"]
+        config = kwargs["config"]
+        ffmpeg = config.ffmpeg
+        stage_plan = config.stage_plan
+        resume_state = config.resume_state
         encode_queue = kwargs["encode_queue"]
         start = resume_state.start_source_frame
         frames = [frame.copy() for frame in ffmpeg._source_frames[start:]]
 
         plans = build_stage_worker_plans(
             stage_plan=stage_plan,
-            tensor_backend_name=kwargs["tensor_backend_name"],
-            source_width=video_info["width"],
-            source_height=video_info["height"],
+            tensor_backend_name=config.tensor_backend_name,
+            source_width=config.source_width,
+            source_height=config.source_height,
             source_frame_count=len(frames),
         )
         for plan in plans:
@@ -239,7 +240,7 @@ def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None
         schedule = boundary_schedule_for_stage_plan(
             stage_plan=stage_plan,
             start_source_frame=start,
-            source_frames=video_info["source_frames"],
+            source_frames=config.source_frames,
         )
         for emitted_count, frame in enumerate(frames, start=1):
             encode_queue.put(EncodedFrame(frame=frame))
@@ -248,7 +249,7 @@ def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None
                 from app.processing.streaming.queues import SegmentBoundary
 
                 encode_queue.put(SegmentBoundary(next_source_frame=next_source_frame))
-        encode_queue.put(StreamEnd(next_source_frame=video_info["source_frames"]))
+        encode_queue.put(StreamEnd(next_source_frame=config.source_frames))
 
     monkeypatch.setattr("app.processing.streaming.pipeline_raw.run_stage_worker_pipeline", fake_worker_pipeline)
     monkeypatch.setattr(
@@ -394,6 +395,7 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
         processing_steps=processing_steps,
         tensor_backend_name="pytorch",
         progress_callbacks=[lambda *_args: None, lambda *_args: None],
+        metrics=PipelineMetrics(),
     )
 
     assert result["output_path"] == str(output_path)
@@ -436,6 +438,7 @@ def test_streaming_pipeline_keeps_sidecar_when_finalization_fails(monkeypatch):
             processing_steps=processing_steps,
             tensor_backend_name="pytorch",
             progress_callbacks=[lambda *_args: None, lambda *_args: None],
+            metrics=PipelineMetrics(),
         )
 
     manifest = SegmentManifest(str(output_path))
@@ -469,6 +472,7 @@ def test_streaming_pipeline_reports_final_encoded_frames_when_resampling(monkeyp
         processing_steps=processing_steps,
         tensor_backend_name="pytorch",
         progress_callbacks=[lambda *_args: None, lambda *_args: None],
+        metrics=PipelineMetrics(),
         output_fps=3.0,
     )
 
@@ -535,6 +539,7 @@ def test_streaming_pipeline_uses_scaled_encoder_dimensions_for_onnx_super_resolu
         processing_steps=processing_steps,
         tensor_backend_name="onnx",
         progress_callbacks=[lambda *_args: None],
+        metrics=PipelineMetrics(),
     )
 
     assert wrapper.encoder_dimensions[0] == (2, 2)
@@ -559,7 +564,7 @@ def test_streaming_pipeline_uses_stage_worker_pipeline_for_processing_steps(monk
     calls = []
 
     def fake_worker_pipeline(**kwargs):
-        calls.append(kwargs["stage_plan"])
+        calls.append(kwargs["config"].stage_plan)
         kwargs["encode_queue"].put(EncodedFrame(frame=_frame(9)))
         kwargs["encode_queue"].put(StreamEnd(next_source_frame=1))
 
@@ -577,6 +582,7 @@ def test_streaming_pipeline_uses_stage_worker_pipeline_for_processing_steps(monk
         processing_steps=processing_steps,
         tensor_backend_name="onnx",
         progress_callbacks=[lambda *_args: None],
+        metrics=PipelineMetrics(),
     )
 
     assert len(calls) == 1

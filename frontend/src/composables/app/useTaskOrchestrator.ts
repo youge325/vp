@@ -20,9 +20,6 @@ export function useTaskOrchestrator() {
   const { pendingConflict } = storeToRefs(taskStore)
 
   const batch = taskStore.batch
-  const consoleTaskItem = computed(
-    () => mediaStore.findItem(taskStore.batch.currentId) ?? mediaStore.activeItem,
-  )
 
   // Keep the UI projection here while the reusable readiness rules live in
   // ``services/task/preflight.ts``.
@@ -38,8 +35,6 @@ export function useTaskOrchestrator() {
   )
   const canStartBatch = computed(() => preflightVerdict.value.ok)
   const cannotStartReason = computed(() => preflightVerdict.value.reason)
-  const batchTotal = computed(() => taskStore.batchRuntimeIds.length || mediaStore.selectedItems.length)
-
   async function startBatch(): Promise<void> {
     if (!canStartBatch.value) {
       return
@@ -66,10 +61,8 @@ export function useTaskOrchestrator() {
   return {
     batch,
     pendingConflict,
-    consoleTaskItem,
     canStartBatch,
     cannotStartReason,
-    batchTotal,
     startBatch,
     pauseCurrentTask,
     resumeCurrentTask,

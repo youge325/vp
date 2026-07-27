@@ -33,7 +33,6 @@ def run_stage_file_pipeline(
     current_height = int(context.preflight.video_info["height"])
     current_fps = float(context.preflight.video_info["source_fps"])
     current_frame_count = int(context.preflight.video_info["source_frames"])
-    completed_frames = int(context.resume_state.completed_output_frames)
 
     for stage_position, step in enumerate(steps, start=1):
         is_final_stage = stage_position == len(steps)
@@ -110,8 +109,6 @@ def run_stage_file_pipeline(
         current_height = output_height
         current_fps = stage_fps
         current_frame_count = stage_output_frames
-
-    return completed_frames
 
 
 __all__ = [

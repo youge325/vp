@@ -199,13 +199,20 @@ graph LR
     A --> B4[queue.ts 任务队列]
     A --> C[conflict.ts 续传冲突]
     A --> D[events.ts NDJSON 适配]
+    B1 --> E[task-context.ts 纯解析规则]
+    F[useTaskContext Vue selector] --> E
+    G[TaskConsole / 状态标签] --> F
     B3 -. lazy callback .-> B4
     B4 -. lazy callback .-> B3
 ```
 
-`common.ts` 用 `getCurrentTaskContext()` / `getConsoleTaskContext()` 成对解析 `{ item, runState }`。
-两者始终来自同一个媒体 ID；当 `currentId` 已失效时，console context 会整体回退到 active item，
-避免媒体项和运行状态来自不同任务。conflict、events、control 和 finalize 每次操作只读取一次 context。
+`task-context.ts` 是纯任务上下文 SSOT：先确认媒体项存在，再用该媒体项的 ID 读取
+`MediaRunState`。batch lifecycle 的 `common.ts` 与 Vue 的 `useTaskContext` selector 共同调用它；
+当 `currentId` 已失效时，current context 不携带孤立 run-state，console context 会整体回退到
+active item。conflict、events、control 和 finalize 每次操作只读取一次 context。
+
+单项开始时的 runtime reset 固定清空日志，批次终结时的批量 reset 固定保留日志。该策略在
+`taskOrchestratorRuntime.ts` 的依赖装配处确定，不再作为 `preserveLogs` 参数穿过 lifecycle。
 
 `conflict.ts` 和 `events.ts` 只接收各自需要的 lifecycle capability；内部 queue/finalize 方法不会成为 BatchRunner 的公共返回字段。
 
@@ -213,7 +220,7 @@ graph LR
 
 ### Task orchestrator runtime 单例
 
-[`frontend/src/composables/app/taskOrchestratorRuntime.ts`](../frontend/src/composables/app/taskOrchestratorRuntime.ts) 缓存 `BatchRunner` 并连接 Pinia、IPC 与事件监听。`useBootstrap()` 直接负责监听器注册和卸载；`useTaskOrchestrator()` 只投影视图状态并把启动、取消、暂停、恢复和冲突处理命令发送给同一 runner，不暴露 listener lifecycle。
+[`frontend/src/composables/app/taskOrchestratorRuntime.ts`](../frontend/src/composables/app/taskOrchestratorRuntime.ts) 缓存 `BatchRunner` 并连接 Pinia、IPC 与事件监听。`useBootstrap()` 直接负责监听器注册和卸载；`useTaskOrchestrator()` 只投影 Render 页消费的状态并把启动、取消、暂停、恢复和冲突处理命令发送给同一 runner，不暴露 listener lifecycle 或 console 专用读模型。`TaskConsole` 直接消费 task/media stores 与 `useConsoleTaskContext()`。
 
 ## 视图与路由
 
