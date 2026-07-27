@@ -4,7 +4,6 @@ import * as ioOptions from '@/services/preset/io-options'
 import {
   buildProfileOptions,
   CONTAINER_SELECT_OPTIONS,
-  toRateControlMode,
 } from '@/services/preset/io-options'
 import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/protocol'
 
@@ -49,10 +48,5 @@ describe('io-options', () => {
       { value: 'mkv', label: 'MKV' },
       { value: 'mov', label: 'MOV' },
     ])
-  })
-
-  it('converts select values to domain values used by encode form setters', () => {
-    expect(toRateControlMode('cq')).toBe('cq')
-    expect(toRateControlMode('bitrate')).toBe('bitrate')
   })
 })

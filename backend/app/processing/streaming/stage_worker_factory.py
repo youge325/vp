@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from app.algorithms.tensor_backend import get_tensor_backend
+from app.algorithms.base import IAlgorithm
+from app.algorithms.tensor_backend import ITensorBackend, get_tensor_backend
 from app.planning import ProcessingStep
 from app.processing.streaming.stage_rules import algorithm_kwargs_for_create
 
@@ -12,13 +13,13 @@ if TYPE_CHECKING:
     from app.processing.streaming.stage_worker_config import StageWorkerConfig
 
 
-def create_backend(config: StageWorkerConfig) -> Any:
+def create_backend(config: StageWorkerConfig) -> ITensorBackend | None:
     if config.stage.algorithm_type == "frame_filter_chain":
         return None
     return get_tensor_backend(config.tensor_backend_name)
 
 
-def create_algorithm(stage: ProcessingStep, backend: Any) -> Any:
+def create_algorithm(stage: ProcessingStep, backend: ITensorBackend | None) -> IAlgorithm:
     if stage.algorithm_type == "frame_filter_chain":
         from app.processing.frame_filters import FrameFilterChainAlgorithm
 
@@ -34,6 +35,8 @@ def create_algorithm(stage: ProcessingStep, backend: Any) -> Any:
         algorithm_class = SuperResolutionAlgorithm
     else:
         raise ValueError(f"Unsupported stage-worker algorithm type: {stage.algorithm_type!r}")
+    if backend is None:
+        raise RuntimeError(f"Stage-worker algorithm {stage.algorithm_type!r} requires a tensor backend.")
     return algorithm_class(tensor_backend=backend, **algorithm_kwargs_for_create(stage))
 
 

@@ -20,10 +20,6 @@ from app.processing.streaming.stage_worker_factory import (
     create_algorithm,
     create_backend,
 )
-from app.processing.streaming.stage_runtime import (
-    algorithm_needs_pairs,
-    algorithm_needs_sequence,
-)
 
 if TYPE_CHECKING:
     from app.processing.streaming.stage_worker_config import StageWorkerConfig
@@ -42,7 +38,7 @@ def run_stage_worker_stream(
     algorithm = create_algorithm(config.stage, backend)
     metrics = PipelineMetrics()
 
-    if algorithm_needs_sequence(algorithm):
+    if algorithm.needs_frame_sequence():
         run_sequence_stage(
             config,
             input_stream,
@@ -51,14 +47,14 @@ def run_stage_worker_stream(
             event_sink,
             heartbeat_seconds=stage_worker_progress.SEQUENCE_STAGE_HEARTBEAT_SECONDS,
         )
-    elif algorithm_needs_pairs(algorithm):
+    elif algorithm.needs_frame_pairs():
+        if backend is None:
+            raise RuntimeError("Frame interpolation stage requires a tensor backend.")
         run_interpolation_stage(config, input_stream, output_stream, backend, algorithm, event_sink, metrics)
     else:
         run_single_frame_stage(config, input_stream, output_stream, backend, algorithm, event_sink, metrics)
 
-    flush = getattr(output_stream, "flush", None)
-    if callable(flush):
-        flush()
+    output_stream.flush()
 
 
 __all__ = ["run_stage_worker_stream"]

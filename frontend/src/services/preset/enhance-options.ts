@@ -1,9 +1,8 @@
 // pure: no Vue / no Pinia / no Tauri
-// Select option and value conversion rules for the enhance view.
+// Select option rules for the enhance view.
 
 import { modelOptionLabel } from '@/services/model-metric-format'
-import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
-import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/protocol'
+import type { AlgorithmInfo, ModelVariantInfo, TensorBackend } from '@/types/protocol'
 import type { SelectOption } from '@/types/view/select-option'
 
 const BACKEND_LABELS: Record<string, string> = {
@@ -78,20 +77,4 @@ export function buildAlgorithmOptions(
       ? modelOptionLabel(algorithm.name, algorithm.modelDetails?.[0])
       : algorithm.name,
   }))
-}
-
-export function toTensorBackend(value: string): TensorBackend {
-  return value as TensorBackend
-}
-
-export function toInferenceEngine(value: string): InferenceEngine {
-  return value as InferenceEngine
-}
-
-export function toFpsMode(value: string): FpsMode {
-  return value as FpsMode
-}
-
-export function toProcessOrder(value: string): ProcessOrder {
-  return value as ProcessOrder
 }

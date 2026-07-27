@@ -557,6 +557,42 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "rust-oneshot-error-envelope-probe",
             "struct ErrorEnvelopeProbe { kind: String }\nfn try_parse_error_envelope() {}\n",
         ),
+        (
+            "rust-oneshot-untyped-success",
+            "async fn run_single_cli_command() -> Result<Value, ShellError> { todo!() }\n",
+        ),
+        (
+            "rust-oneshot-caller-json-decoding",
+            "let value = run_single_cli_command(paths, args).await?;\nserde_json::from_value::<Payload>(value)\n",
+        ),
+        (
+            "frontend-identity-select-cast-helpers",
+            "export function toTensorBackend(value: string) { return value as TensorBackend }\n",
+        ),
+        (
+            "stage-runtime-dynamic-algorithm-contract",
+            'needs_pairs = getattr(algorithm, "needs_frame_pairs", None)\n',
+        ),
+        (
+            "stage-worker-dynamic-runtime-contract",
+            'flush = getattr(output_stream, "flush", None)\n',
+        ),
+        (
+            "stage-execution-dynamic-interpolation-multi",
+            'multi = getattr(algorithm, "get_interpolation_multi", lambda: 2)()\n',
+        ),
+        (
+            "frame-payload-optional-metrics",
+            "def ensure_tensor(self, backend, metrics: PipelineMetrics | None = None):\n    pass\n",
+        ),
+        (
+            "frame-filter-dynamic-backend-name",
+            'def _backend_name(backend):\n    return getattr(backend, "get_name", None)\n',
+        ),
+        (
+            "segment-writer-dynamic-frame-counter",
+            'output_frame_count = getattr(writer, "output_frame_count", 0)\n',
+        ),
     ],
 )
 def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule_id: str, source: str) -> None:
@@ -675,15 +711,70 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
             "resetItemsRunState: (ids) => mediaRunState.resetItemsRunState(ids, true),\n",
         ),
         (
+            "typed-stage-worker-factory-contract",
+            "def create_backend(config: StageWorkerConfig) -> ITensorBackend | None:\n"
+            "    return None\n"
+            "def create_algorithm(stage: ProcessingStep, backend: ITensorBackend | None) -> IAlgorithm:\n"
+            "    return algorithm\n",
+        ),
+        (
+            "typed-stage-runtime-contract",
+            "class StepAlgorithm:\n"
+            "    backend: ITensorBackend | None\n"
+            "    algorithm: IAlgorithm\n"
+            "@runtime_checkable\n"
+            "class _FrameFilterRuntime(Protocol):\n"
+            "    pass\n",
+        ),
+        (
+            "explicit-frame-payload-contract",
+            "_tensor_backend: ITensorBackend | None\n"
+            "def ensure_tensor(self, backend: ITensorBackend, metrics: PipelineMetrics):\n"
+            "    pass\n"
+            "def ensure_numpy(self, metrics: PipelineMetrics):\n"
+            "    pass\n",
+        ),
+        (
+            "direct-stage-worker-mode-contract",
+            "if algorithm.needs_frame_sequence():\n"
+            "    run_sequence_stage()\n"
+            "elif algorithm.needs_frame_pairs():\n"
+            "    run_interpolation_stage()\n"
+            "output_stream.flush()\n",
+        ),
+        (
+            "frontend-enhance-select-write-boundary",
+            "form.interpolationBackend = value as TensorBackend\n"
+            "form.interpolationEngine = value as InferenceEngine\n"
+            "form.fpsMode = value as FpsMode\n"
+            "form.processOrder = value as ProcessOrder\n",
+        ),
+        (
+            "frontend-rate-control-select-write-boundary",
+            "setRateControlMode(value as EncodeConfig['rateControl']['mode'])\n",
+        ),
+        (
+            "rust-typed-resume-inspection-command",
+            "async fn check_resume_state() {\n"
+            "    run_single_cli_command(\n"
+            "        paths,\n"
+            "        args,\n"
+            "        payload,\n"
+            '        "resume inspection",\n'
+            "    ).await\n"
+            "}\n",
+        ),
+        (
             "oneshot-direct-shell-result",
-            "pub(crate) async fn run_single_cli_command() -> Result<Value, ShellError> {\n"
+            "pub(crate) async fn run_single_cli_command<T: DeserializeOwned>() -> Result<T, ShellError> {\n"
             "    if !output.status.success() {\n"
             "        return match envelope {\n"
             "            Some(value) => Err(ShellError::BackendEnvelope { code, message }),\n"
             "            None => Err(ShellError::BackendProbeFailed(message)),\n"
             "        };\n"
             "    }\n"
-            "    last_json.ok_or(ShellError::BackendNoJson)\n"
+            "    let value = last_json.ok_or(ShellError::BackendNoJson)?;\n"
+            "    deserialize_success_payload(value, payload_name)\n"
             "}\n",
         ),
         (

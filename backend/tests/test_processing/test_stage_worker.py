@@ -32,12 +32,23 @@ class _IdentityBackend:
         return "identity"
 
 
-class _IncrementAlgorithm:
+class _AlgorithmModeDefaults:
+    def needs_frame_pairs(self) -> bool:
+        return False
+
+    def needs_frame_sequence(self) -> bool:
+        return False
+
+    def get_interpolation_multi(self) -> int:
+        return 2
+
+
+class _IncrementAlgorithm(_AlgorithmModeDefaults):
     def process_frame(self, tensor):
         return {"tensor": tensor["tensor"] + 1}
 
 
-class _MidpointAlgorithm:
+class _MidpointAlgorithm(_AlgorithmModeDefaults):
     def needs_frame_pairs(self) -> bool:
         return True
 
@@ -47,7 +58,7 @@ class _MidpointAlgorithm:
         return {"tensor": np.rint(prev + (cur - prev) * timestep).astype(np.uint8)}
 
 
-class _SequenceAlgorithm:
+class _SequenceAlgorithm(_AlgorithmModeDefaults):
     def needs_frame_sequence(self) -> bool:
         return True
 
@@ -55,7 +66,7 @@ class _SequenceAlgorithm:
         return [frame + 10 for frame in frames]
 
 
-class _SlowSequenceAlgorithm:
+class _SlowSequenceAlgorithm(_AlgorithmModeDefaults):
     def needs_frame_sequence(self) -> bool:
         return True
 
@@ -64,7 +75,7 @@ class _SlowSequenceAlgorithm:
         return [frame + 10 for frame in frames]
 
 
-class _ProgressSequenceAlgorithm:
+class _ProgressSequenceAlgorithm(_AlgorithmModeDefaults):
     def needs_frame_sequence(self) -> bool:
         return True
 
@@ -75,7 +86,7 @@ class _ProgressSequenceAlgorithm:
         return [frame + 10 for frame in frames]
 
 
-class _SlowProgressSequenceAlgorithm:
+class _SlowProgressSequenceAlgorithm(_AlgorithmModeDefaults):
     def needs_frame_sequence(self) -> bool:
         return True
 

@@ -49,12 +49,13 @@ async fn check_environment_impl<R: Runtime>(
         }
     }
 
-    let raw = tasks::run_single_cli_command(&paths, &[String::from("check")], None).await?;
-    let result = serde_json::from_value::<EnvironmentCheckResult>(raw).map_err(|error| {
-        ShellError::SchemaValidation(format!(
-            "Unable to deserialize environment check result: {error}"
-        ))
-    })?;
+    let result: EnvironmentCheckResult = tasks::run_single_cli_command(
+        &paths,
+        &[String::from("check")],
+        None,
+        "environment check result",
+    )
+    .await?;
     let checked_at = persistence::current_timestamp()?;
 
     if let (Some(data_dir), Some(fingerprint)) = (app_data_dir.as_deref(), fingerprint.as_deref()) {

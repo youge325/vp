@@ -97,10 +97,11 @@ graph TB
 
 ### One-shot 短命令
 
-[`frontend/src-tauri/src/tasks/oneshot.rs`](../frontend/src-tauri/src/tasks/oneshot.rs) 直接返回
-`Result<Value, ShellError>`。结构化错误信封映射为 `BackendEnvelope`，无信封的非零退出映射为
-`BackendProbeFailed`，成功但没有 JSON 映射为 `BackendNoJson`。command 和 environment service
-只接收成功形状的 JSON 并直接反序列化，不保留额外 outcome 中间状态。
+[`frontend/src-tauri/src/tasks/oneshot.rs`](../frontend/src-tauri/src/tasks/oneshot.rs) 通过
+`run_single_cli_command<T>()` 直接返回 schema 校验后的 `Result<T, ShellError>`。结构化错误信封
+映射为 `BackendEnvelope`，无信封的非零退出映射为 `BackendProbeFailed`，成功但没有 JSON 映射为
+`BackendNoJson`。command 和 environment service 只声明预期类型与 payload 名称，不再重复接收
+`Value` 后执行第二次成功 payload 适配；环境缓存仍在 persistence/service 边界独立反序列化。
 
 ### 任务状态机
 
@@ -163,7 +164,8 @@ pub(crate) enum NdjsonEnvelope {
 使用 serde 的 **internally tagged enum** 模式，`"type"` 字段作为 discriminant。任务 stdout reader
 与 one-shot CLI 共用这套协议；`error_payload_from_value()` 只提取 `NdjsonEnvelope::Error`，
 不再维护第二套 error envelope 结构。任务流解析失败时升级为 `SchemaMismatch`；one-shot 的普通
-非零退出和成功无 JSON 仍分别映射为 `BackendProbeFailed` 与 `BackendNoJson`。
+非零退出和成功无 JSON 仍分别映射为 `BackendProbeFailed` 与 `BackendNoJson`，成功 payload 的
+类型漂移由 generic one-shot 边界统一映射为 `SchemaMismatch`。
 
 ### stderr 兜底
 

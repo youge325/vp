@@ -203,6 +203,12 @@ class IAlgorithm(ABC):
 - interpolation 与 super-resolution 复用规划层过滤后的 kwargs 和已创建 backend
 - 未支持的 stage 类型在装配边界立即失败
 
+factory、stage runtime 和 execution loop 共享 `IAlgorithm`、`ITensorBackend` 与
+`StageWorkerConfig` 类型契约。算法模式直接调用基类提供的 sequence/pair/multi 能力，filter
+chain 通过私有窄 protocol 校验一次后执行，不为测试 double 保留动态 `getattr` fallback。
+`FramePayload` 的 host/device 转换必须显式接收同一 `PipelineMetrics`，确保生产和测试路径都
+记录一致的传输指标。
+
 帧滤镜链由 `FrameFilterChainAlgorithm` 负责验证、顺序执行和 CPU/Tensor fallback；
 具体滤镜实现与支持能力集中在 `frame_filter_handlers.py` 的单一不可变 descriptor registry 中。
 每种滤镜只注册一次 NumPy handler，并按实际能力选择性声明 Tensor handler 与 capability predicate；不维护平行 kind 列表或运行时全局注册表。

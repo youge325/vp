@@ -9,10 +9,6 @@ import {
   buildEngineOptions,
   buildModelOptions,
   buildOnnxModelOptions,
-  toFpsMode,
-  toInferenceEngine,
-  toProcessOrder,
-  toTensorBackend,
 } from '@/services/preset/enhance-options'
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
 
@@ -68,7 +64,7 @@ describe('enhance option rules', () => {
     ])
   })
 
-  it('exposes stable static options and typed select conversions', () => {
+  it('exposes stable static options', () => {
     expect(FPS_MODE_OPTIONS).toEqual([
       { value: 'target', label: '目标 FPS' },
       { value: 'multi', label: '倍率' },
@@ -81,10 +77,5 @@ describe('enhance option rules', () => {
       { value: 'super_resolution_then_interpolation', label: '先超分后补帧' },
       { value: 'frame_interpolation_then_super_resolution', label: '先补帧后超分' },
     ])
-
-    expect(toTensorBackend('paddle')).toBe('paddle')
-    expect(toInferenceEngine('tensorrt')).toBe('tensorrt')
-    expect(toFpsMode('multi')).toBe('multi')
-    expect(toProcessOrder('frame_interpolation_then_super_resolution')).toBe('frame_interpolation_then_super_resolution')
   })
 })
