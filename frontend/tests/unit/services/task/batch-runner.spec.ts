@@ -301,6 +301,19 @@ describe('batch-runner', () => {
     expect(deps.getBatch().completedCount).toBe(1)
   })
 
+  it('finishes a batch through the fixed log-preserving reset dependency', async () => {
+    const deps = makeDeps()
+    const item = makeItem('a')
+    deps.getMediaItem = () => item
+    const runner = createBatchRunner(deps)
+
+    await runner.start(['a'])
+    await runner.onCompleted({ outputPath: '/out/a.mp4', processedFrames: 100, timeSeconds: 10 })
+
+    expect(deps.resetItemsRunState).toHaveBeenCalledWith(new Set(['a']))
+    expect(vi.mocked(deps.resetItemsRunState).mock.calls[0]).toHaveLength(1)
+  })
+
   it('handles error event and finalizes', async () => {
     const deps = makeDeps()
     const runner = createBatchRunner(deps)

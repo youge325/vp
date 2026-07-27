@@ -16,7 +16,6 @@ vi.mock('@/lib/ipc/endpoints/task', () => ({
 import { disposeRunner } from '@/composables/app/taskOrchestratorRuntime'
 import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { useMediaStore } from '@/stores/media'
-import { useTaskStore } from '@/stores/task'
 import { createMediaItem } from '@/services/media/factory'
 import { normalizeOutputDir } from '@/services/preset/normalize'
 import type { WorkbenchPreset } from '@/types/protocol'
@@ -60,29 +59,6 @@ describe('useTaskOrchestrator', () => {
     mediaStore.appendItems([item])
     return item
   }
-
-  it('projects the current batch item and falls back to the active item for a stale id', () => {
-    const activeItem = seedItem({
-      inputPath: '/video/active.mp4',
-      outputDir: 'D:/out',
-      selected: false,
-    })
-    const currentItem = seedItem({
-      inputPath: '/video/current.mp4',
-      outputDir: 'D:/out',
-      selected: false,
-    })
-    const mediaStore = useMediaStore()
-    const taskStore = useTaskStore()
-    mediaStore.setActive(activeItem.id)
-    taskStore.setBatch({ currentId: currentItem.id })
-
-    const orchestrator = useTaskOrchestrator()
-    expect(orchestrator.consoleTaskItem.value?.id).toBe(currentItem.id)
-
-    taskStore.setBatch({ currentId: 'missing-item' })
-    expect(orchestrator.consoleTaskItem.value?.id).toBe(activeItem.id)
-  })
 
   it('canStartBatch is false when selected item has empty outputDir', () => {
     seedItem({ outputDir: '' })

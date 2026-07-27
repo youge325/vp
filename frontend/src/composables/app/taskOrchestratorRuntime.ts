@@ -44,8 +44,8 @@ export function getTaskRunner(): BatchRunner {
       }
     },
     setItemLastOutputPath: (id, path) => mediaRunState.setLastOutputPath(id, path),
-    resetItemRunState: (id, preserveLogs) => mediaRunState.resetItemRunState(id, preserveLogs),
-    resetItemsRunState: (ids, preserveLogs) => mediaRunState.resetItemsRunState(ids, preserveLogs),
+    resetItemRunState: (id) => mediaRunState.resetItemRunState(id),
+    resetItemsRunState: (ids) => mediaRunState.resetItemsRunState(ids, true),
     setActiveItem: (id) => mediaStore.setActive(id),
     getActiveItemId: () => mediaStore.activeItemId,
     getBatch: () => taskStore.batch,

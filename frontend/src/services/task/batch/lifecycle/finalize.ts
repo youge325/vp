@@ -24,7 +24,7 @@ export function createFinalizeOps(
       isPaused: false,
       isCancelling: false,
     })
-    helpers.clearBatchRuntimeArtifacts(true)
+    helpers.clearBatchRuntimeArtifacts()
     deps.setBatch({ completedCount: 0, failedCount: 0 })
     deps.setRuntimeIds([])
   }

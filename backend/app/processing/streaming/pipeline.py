@@ -37,16 +37,12 @@ def process_video_streaming(
     processing_steps: list[ProcessingStep],
     tensor_backend_name: str,
     progress_callbacks: list[Callable[[int, int], None]],
+    metrics: PipelineMetrics,
     output_fps: float | None = None,
     encode_progress_callback: EncodeProgressCallback | None = None,
     resume_mode: ResumeMode = "auto",
-    metrics: PipelineMetrics | None = None,
 ) -> dict[str, Any]:
     """Process a video through the selected streaming runtime."""
-    if metrics is None:
-        # Standalone caller (tests, smoke scripts) — keep the call site
-        # simple by self-provisioning metrics that nobody reads.
-        metrics = PipelineMetrics()
     preflight = build_streaming_pipeline_preflight(
         ffmpeg=ffmpeg,
         input_path=input_path,

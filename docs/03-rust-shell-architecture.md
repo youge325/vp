@@ -160,7 +160,10 @@ pub(crate) enum NdjsonEnvelope {
 }
 ```
 
-使用 serde 的 **internally tagged enum** 模式，`"type"` 字段作为 discriminant。解析失败时升级为 `SchemaMismatch` 错误。
+使用 serde 的 **internally tagged enum** 模式，`"type"` 字段作为 discriminant。任务 stdout reader
+与 one-shot CLI 共用这套协议；`error_payload_from_value()` 只提取 `NdjsonEnvelope::Error`，
+不再维护第二套 error envelope 结构。任务流解析失败时升级为 `SchemaMismatch`；one-shot 的普通
+非零退出和成功无 JSON 仍分别映射为 `BackendProbeFailed` 与 `BackendNoJson`。
 
 ### stderr 兜底
 

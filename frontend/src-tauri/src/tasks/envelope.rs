@@ -27,9 +27,19 @@ pub(crate) fn parse_last_json_line(stdout: &str) -> Option<Value> {
         .and_then(|line| serde_json::from_str::<Value>(line).ok())
 }
 
+pub(super) fn error_payload_from_value(value: Value) -> Option<TaskErrorPayload> {
+    match serde_json::from_value::<NdjsonEnvelope>(value).ok()? {
+        NdjsonEnvelope::Error(payload) => Some(payload),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{parse_last_json_line, NdjsonEnvelope};
+    use serde_json::json;
+
+    use super::{error_payload_from_value, parse_last_json_line, NdjsonEnvelope};
+    use crate::models::TaskErrorCode;
 
     #[test]
     fn parses_last_json_line() {
@@ -83,6 +93,50 @@ mod tests {
             }
             other => panic!("expected Error, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn extracts_error_payload_from_the_shared_envelope() {
+        let payload = error_payload_from_value(json!({
+            "type": "error",
+            "code": "missing_ffmpeg",
+            "message": "ffmpeg.exe missing",
+            "details": null,
+        }))
+        .expect("error envelope");
+
+        assert!(matches!(payload.code, TaskErrorCode::MissingFfmpeg));
+        assert_eq!(payload.message, "ffmpeg.exe missing");
+    }
+
+    #[test]
+    fn error_payload_extraction_rejects_non_error_envelopes() {
+        assert!(error_payload_from_value(json!({
+            "type": "completed",
+            "outputPath": "D:/out.mp4",
+            "processedFrames": 1,
+            "timeSeconds": 0.1,
+        }))
+        .is_none());
+    }
+
+    #[test]
+    fn error_payload_extraction_rejects_success_payloads_without_a_type() {
+        assert!(error_payload_from_value(json!({
+            "ffmpeg": { "available": true },
+            "gpu": { "available": false },
+        }))
+        .is_none());
+    }
+
+    #[test]
+    fn error_payload_extraction_rejects_unknown_error_codes() {
+        assert!(error_payload_from_value(json!({
+            "type": "error",
+            "code": "definitely_not_a_real_code",
+            "message": "...",
+        }))
+        .is_none());
     }
 
     #[test]

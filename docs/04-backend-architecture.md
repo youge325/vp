@@ -133,6 +133,12 @@ rawvideo 路径由 stage-worker 子进程链执行算法，主进程只保留编
 
 raw pipeline 在流 FPS 确定后创建一次不可变的 `EncoderRuntimeConfig`，encoder thread、worker 与 segment writer 共享该配置；队列和停止事件仍由各自运行时边界管理，避免跨层重复维护编码参数。
 
+同一 composition root 还创建一次不可变的 `WorkerPipelineRuntimeConfig`，集中 FFmpeg、输入、
+decode config、stage plan、backend、进度回调、源尺寸/帧数、resume state 与 metrics。
+`worker_pipeline` 和 `worker_chain_runtime` 传递同一对象；派生 worker plans、queues、error queue
+和 stop event 仍归各自运行时层所有。`PipelineMetrics` 必须由 processing plan 显式提供，
+streaming entry 不再为测试调用方隐式创建。
+
 stage-file 路径在每个 stage 规划完成后创建一次不可变的 `StageFileRuntimeConfig`，chunk 编排、单 chunk runtime 和 worker-output encoder 共享同一对象。manifest、resume state、segment size 和 chunk boundary 仍由各自生命周期层持有，不进入静态 runtime config。
 
 | 模块 | 职责 |
@@ -141,6 +147,8 @@ stage-file 路径在每个 stage 规划完成后创建一次不可变的 `StageF
 | [`pipeline_preflight.py`](../backend/app/processing/streaming/pipeline_preflight.py) | 解析视频信息、stage plan、signature、resume domain 和输出尺寸 |
 | [`pipeline_dispatch.py`](../backend/app/processing/streaming/pipeline_dispatch.py) | 消费共享 context，根据 preflight 分派 stage-file 或 rawvideo runtime |
 | [`worker_pipeline.py`](../backend/app/processing/streaming/worker_pipeline.py) | 构建 stage-worker chain 并把处理后帧写入 `encode_queue` |
+| [`worker_runtime_config.py`](../backend/app/processing/streaming/worker_runtime_config.py) | 保存 raw worker pipeline 与 chain runtime 共享的不可变静态配置 |
+| [`worker_chain_runtime.py`](../backend/app/processing/streaming/worker_chain_runtime.py) | 管理 worker session、decode writer 与最终 worker stdout drain |
 | [`stage_file_pipeline.py`](../backend/app/processing/streaming/stage_file_pipeline.py) | 为每个 stage 构造一次 runtime config，并编排 stage 间的 finalize |
 | [`stage_file_runtime_config.py`](../backend/app/processing/streaming/stage_file_runtime_config.py) | 保存 stage-file chunk 编排与执行共享的不可变静态配置 |
 | [`stage_file_chunks.py`](../backend/app/processing/streaming/stage_file_chunks.py) | 规划 chunk、推进 manifest，并复用同一 stage runtime config |

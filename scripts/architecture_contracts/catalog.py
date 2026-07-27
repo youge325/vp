@@ -961,6 +961,12 @@ FORBIDDEN_PATTERN_RULES = (
         "one-shot CLI outcome intermediate",
     ),
     _forbid(
+        "rust-oneshot-error-envelope-probe",
+        "frontend/src-tauri/src/tasks/oneshot.rs",
+        r"\b(?:ErrorEnvelopeProbe|try_parse_error_envelope)\b",
+        "one-shot CLI duplicate error envelope parser",
+    ),
+    _forbid(
         "protocol-error-code-reexport",
         "frontend/src-tauri/src/protocol.rs",
         r"\bTaskErrorCode\b",
@@ -1033,6 +1039,38 @@ FORBIDDEN_PATTERN_RULES = (
         "backend/app/processing/streaming/pipeline_raw.py",
         r"def\s+run_raw_streaming_pipeline\s*\((?:(?!\)\s*->)[\s\S])*\b(?:ffmpeg|input_path|output_path|decode_config|encode_config|stage_plan|manifest|resume_state|tensor_backend_name|progress_callbacks|output_fps|metrics)\s*:",
         "raw pipeline repeats streaming context fields",
+    ),
+    _forbid(
+        "streaming-optional-metrics",
+        "backend/app/processing/streaming/pipeline.py",
+        r"metrics\s*:\s*PipelineMetrics\s*\|\s*None|if\s+metrics\s+is\s+None",
+        "streaming pipeline keeps a test-only metrics fallback",
+    ),
+    _forbid(
+        "worker-pipeline-static-runtime-signature",
+        "backend/app/processing/streaming/worker_pipeline.py",
+        r"def\s+run_stage_worker_pipeline\s*\([\s\S]{0,900}\b(?:ffmpeg|input_path|decode_config|stage_plan|tensor_backend_name|progress_callbacks|video_info|resume_state|metrics)\s*:",
+        "worker pipeline repeats shared runtime configuration fields",
+    ),
+    _forbid(
+        "worker-chain-static-runtime-signature",
+        "backend/app/processing/streaming/worker_chain_runtime.py",
+        r"def\s+run_worker_chain_runtime\s*\([\s\S]{0,900}\b(?:ffmpeg|input_path|decode_config|stage_plan|progress_callbacks|video_info|resume_state|metrics)\s*:",
+        "worker-chain runtime repeats shared runtime configuration fields",
+    ),
+    ForbiddenReferenceRule(
+        "worker-runtime-secondary-construction",
+        roots=("backend/app/processing/streaming",),
+        patterns=(r"\bWorkerPipelineRuntimeConfig\s*\(",),
+        message="worker runtime configuration constructed outside raw pipeline",
+        suffixes=(".py",),
+        excludes=("backend/app/processing/streaming/pipeline_raw.py",),
+    ),
+    _forbid(
+        "stage-file-dead-completion-state",
+        "backend/app/processing/streaming/stage_file_pipeline.py",
+        r"completed_frames\s*=\s*int\(context\.resume_state\.completed_output_frames\)|^ {4}return\s+completed_frames\s*$",
+        "stage-file pipeline keeps overwritten or unreachable completion state",
     ),
     _forbid(
         "stage-file-pipeline-static-context-signature",
@@ -1406,6 +1444,19 @@ FORBIDDEN_PATTERN_RULES = (
         suffixes=(".ts",),
     ),
     _forbid(
+        "batch-local-task-context-resolver",
+        "frontend/src/services/task/batch/lifecycle/common.ts",
+        r"function\s+(?:resolveTaskContext|resolveConsoleTaskContext)\b|\bdeps\.get(?:MediaItem|ItemRunState)\s*\(",
+        "batch lifecycle duplicates shared task-context resolution",
+    ),
+    ForbiddenReferenceRule(
+        "batch-lifecycle-log-policy-forwarding",
+        roots=("frontend/src/services/task/batch",),
+        patterns=(r"\bpreserveLogs\b",),
+        message="batch lifecycle forwards an unconsumed log-preservation policy",
+        suffixes=(".ts",),
+    ),
+    _forbid(
         "pipeline-stream-fps-multi-rule",
         "backend/app/processing/streaming/pipeline_rules.py",
         r"def\s+resolved_stream_fps\b[\s\S]{0,300}\balgorithm_kwargs\b",
@@ -1438,8 +1489,8 @@ FORBIDDEN_PATTERN_RULES = (
     _forbid(
         "task-orchestrator-current-item-return",
         "frontend/src/composables/app/useTaskOrchestrator.ts",
-        r"\bcurrentTaskItem\b",
-        "task orchestrator exposes an unconsumed current-item projection",
+        r"\b(?:currentTaskItem|consoleTaskItem|batchTotal)\b",
+        "task orchestrator exposes an unconsumed task-context projection",
     ),
     _forbid(
         "task-orchestrator-direct-media-search",
@@ -1452,6 +1503,24 @@ FORBIDDEN_PATTERN_RULES = (
         "frontend/src/composables/app/useTaskOrchestrator.ts",
         r"\battachTaskListeners\b",
         "task orchestrator exposes listener lifecycle owned by bootstrap",
+    ),
+    _forbid(
+        "task-console-duplicate-context-projection",
+        "frontend/src/components/TaskConsole.vue",
+        r"\b(?:useTaskOrchestrator|useMediaRunState)\b|\.findItem\s*\(|\.getByItemId\s*\(",
+        "task console resolves task context outside the shared selector",
+    ),
+    _forbid(
+        "current-status-duplicate-context-projection",
+        "frontend/src/composables/selectors/useCurrentTaskStatusLabel.ts",
+        r"\b(?:useMediaStore|useMediaRunState)\b|\.findItem\s*\(|\.getByItemId\s*\(",
+        "current-task status selector duplicates task-context resolution",
+    ),
+    _forbid(
+        "runtime-batch-log-policy-forwarding",
+        "frontend/src/composables/app/taskOrchestratorRuntime.ts",
+        r"\bpreserveLogs\b",
+        "task runtime forwards an unconsumed batch log-preservation policy",
     ),
     _forbid(
         "rust-task-controller-argument-suppression",
@@ -1894,9 +1963,15 @@ REQUIRED_PATTERN_RULES = (
         "shared immutable encoder runtime configuration is missing",
     ),
     _require(
+        "shared-worker-pipeline-runtime-config",
+        "backend/app/processing/streaming/worker_runtime_config.py",
+        r"@dataclass\(frozen=True,\s*slots=True\)[\s\S]*class\s+WorkerPipelineRuntimeConfig\b[\s\S]*\bsource_width:\s*int[\s\S]*\bsource_height:\s*int[\s\S]*\bsource_frames:\s*int",
+        "shared immutable worker pipeline runtime configuration is missing",
+    ),
+    _require(
         "shared-current-task-status-selector",
         "frontend/src/composables/selectors/useCurrentTaskStatusLabel.ts",
-        r"currentItem\s*=\s*mediaStore\.findItem\(taskStore\.batch\.currentId\)[\s\S]{0,320}runStateStore\.getByItemId\(currentItem\?\.id\)[\s\S]{0,240}getTaskStatusLabel\(taskStore\.batch,\s*currentStatus\)",
+        r"currentTaskContext\s*=\s*useCurrentTaskContext\(\)[\s\S]{0,320}currentTaskContext\.value\.runState\?\.taskState\.status[\s\S]{0,240}getTaskStatusLabel\(taskStore\.batch,\s*currentStatus\)",
         "shared current-task status selector is missing",
     ),
     _require(
@@ -1912,10 +1987,10 @@ REQUIRED_PATTERN_RULES = (
         "StepRail must consume task state and the shared task-status selector directly",
     ),
     _require(
-        "task-orchestrator-store-item-lookup",
-        "frontend/src/composables/app/useTaskOrchestrator.ts",
-        r"consoleTaskItem\s*=\s*computed\s*\(\s*\(\)\s*=>\s*mediaStore\.findItem\(\s*taskStore\.batch\.currentId\s*\)\s*\?\?\s*mediaStore\.activeItem",
-        "task orchestrator must reuse the media store lookup for console projection",
+        "task-console-context-selector",
+        "frontend/src/components/TaskConsole.vue",
+        r"consoleTaskContext\s*=\s*useConsoleTaskContext\(\)[\s\S]{0,320}consoleRunState\s*=\s*computed\(\(\)\s*=>\s*consoleTaskContext\.value\.runState\)",
+        "task console must consume the shared task-context selector",
     ),
     _require(
         "bootstrap-task-listener-lifecycle",
@@ -2002,6 +2077,30 @@ REQUIRED_PATTERN_RULES = (
         "raw pipeline must construct and pass one encoder runtime configuration",
     ),
     _require(
+        "raw-worker-runtime-config-root",
+        "backend/app/processing/streaming/pipeline_raw.py",
+        r"worker_config\s*=\s*WorkerPipelineRuntimeConfig\s*\([\s\S]{0,1400}run_stage_worker_pipeline\s*\(\s*config=worker_config",
+        "raw pipeline must construct and pass one worker runtime configuration",
+    ),
+    _require(
+        "worker-pipeline-runtime-config-boundary",
+        "backend/app/processing/streaming/worker_pipeline.py",
+        r"def\s+run_stage_worker_pipeline\s*\(\s*\*,\s*config:\s*WorkerPipelineRuntimeConfig,[\s\S]{0,1400}run_worker_chain_runtime\s*\(\s*config=config",
+        "worker pipeline does not forward the shared runtime configuration",
+    ),
+    _require(
+        "worker-chain-runtime-config-boundary",
+        "backend/app/processing/streaming/worker_chain_runtime.py",
+        r"def\s+run_worker_chain_runtime\s*\(\s*\*,\s*config:\s*WorkerPipelineRuntimeConfig,[\s\S]{0,1800}stage_plan=config\.stage_plan[\s\S]{0,600}metrics=config\.metrics",
+        "worker-chain runtime does not consume the shared runtime configuration",
+    ),
+    _require(
+        "explicit-streaming-metrics",
+        "backend/app/processing/streaming/pipeline.py",
+        r"def\s+process_video_streaming\s*\([\s\S]{0,900}\bmetrics:\s*PipelineMetrics,",
+        "streaming pipeline metrics dependency is not explicit",
+    ),
+    _require(
         "encoder-worker-config-consumer",
         "backend/app/processing/streaming/encoder_worker.py",
         r"def\s+run_encoder_worker\s*\([\s\S]{0,300}\bconfig\s*:\s*EncoderRuntimeConfig[\s\S]{0,500}EncoderSegmentWriter\s*\(\s*config\s*\)",
@@ -2015,15 +2114,45 @@ REQUIRED_PATTERN_RULES = (
     ),
     _require(
         "paired-task-context-resolver",
-        "frontend/src/services/task/batch/lifecycle/common.ts",
-        r"function\s+resolveTaskContext\(id:\s*string\s*\|\s*null\)[\s\S]{0,320}getMediaItem\(id\)[\s\S]{0,160}getItemRunState\(id\)[\s\S]*function\s+getCurrentTaskContext\(\)[\s\S]{0,180}resolveTaskContext\(deps\.getBatch\(\)\.currentId\)[\s\S]*function\s+getConsoleTaskContext\(\)[\s\S]{0,320}if\s*\(current\.item\)[\s\S]{0,160}resolveTaskContext\(deps\.getActiveItemId\(\)\)",
+        "frontend/src/services/task/task-context.ts",
+        r"function\s+resolveTaskContext\([^)]*id:\s*string\s*\|\s*null\)[\s\S]{0,320}item\s*=\s*id\s*\?\s*lookup\.getMediaItem\(id\)[\s\S]{0,200}runState:\s*item\s*\?\s*lookup\.getItemRunState\(item\.id\)[\s\S]*function\s+resolveConsoleTaskContext\b[\s\S]{0,420}current\.item\s*\?\s*current\s*:\s*resolveTaskContext\(lookup,\s*activeId\)",
         "paired task item and run-state context resolver is missing",
+    ),
+    _require(
+        "shared-task-context-selectors",
+        "frontend/src/composables/selectors/useTaskContext.ts",
+        r"function\s+useCurrentTaskContext\(\)[\s\S]{0,280}resolveTaskContext\(\s*lookup,\s*taskStore\.batch\.currentId\)[\s\S]*function\s+useConsoleTaskContext\(\)[\s\S]{0,360}resolveConsoleTaskContext\(\s*lookup,\s*taskStore\.batch\.currentId,\s*mediaStore\.activeItemId,?\s*\)",
+        "Vue task-context selectors do not consume the shared resolver",
+    ),
+    _require(
+        "batch-task-context-resolver-consumer",
+        "frontend/src/services/task/batch/lifecycle/common.ts",
+        r"from\s+[\"']@/services/task/task-context[\"'][\s\S]{0,500}resolveTaskContext\(deps,\s*deps\.getBatch\(\)\.currentId\)[\s\S]{0,500}resolveConsoleTaskContext\(\s*deps,\s*deps\.getBatch\(\)\.currentId,\s*deps\.getActiveItemId\(\)",
+        "batch lifecycle does not consume the shared task-context resolver",
+    ),
+    _require(
+        "fixed-batch-reset-log-policy",
+        "frontend/src/composables/app/taskOrchestratorRuntime.ts",
+        r"resetItemRunState:\s*\(id\)\s*=>\s*mediaRunState\.resetItemRunState\(id\)[\s\S]{0,180}resetItemsRunState:\s*\(ids\)\s*=>\s*mediaRunState\.resetItemsRunState\(ids,\s*true\)",
+        "task runtime does not fix single-item and final batch log reset policies",
     ),
     _require(
         "oneshot-direct-shell-result",
         "frontend/src-tauri/src/tasks/oneshot.rs",
         r"pub\(crate\)\s+async\s+fn\s+run_single_cli_command\b[\s\S]{0,500}->\s*Result<Value,\s*ShellError>[\s\S]*if\s+!output\.status\.success\(\)[\s\S]*Err\(ShellError::BackendEnvelope[\s\S]*Err\(ShellError::BackendProbeFailed[\s\S]*last_json\.ok_or\(ShellError::BackendNoJson\)",
         "one-shot CLI command does not map directly to ShellError",
+    ),
+    _require(
+        "shared-oneshot-error-envelope-parser",
+        "frontend/src-tauri/src/tasks/envelope.rs",
+        r"fn\s+error_payload_from_value\(value:\s*Value\)\s*->\s*Option<TaskErrorPayload>[\s\S]{0,320}NdjsonEnvelope::Error\(payload\)\s*=>\s*Some\(payload\)",
+        "shared NDJSON error payload extractor is missing",
+    ),
+    _require(
+        "oneshot-error-envelope-consumer",
+        "frontend/src-tauri/src/tasks/oneshot.rs",
+        r"use\s+crate::tasks::envelope::\{error_payload_from_value,\s*parse_last_json_line\};[\s\S]*last_json\.and_then\(error_payload_from_value\)",
+        "one-shot CLI command does not consume the shared NDJSON error parser",
     ),
     _require(
         "immutable-streaming-pipeline-contexts",

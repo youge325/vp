@@ -11,6 +11,7 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_chain_runtime import run_worker_chain_runtime
 from app.processing.streaming.worker_plans import StageWorkerPlan
+from app.processing.streaming.worker_runtime_config import WorkerPipelineRuntimeConfig
 
 
 def _stage_plan_and_worker_plan() -> tuple[Any, StageWorkerPlan]:
@@ -90,19 +91,25 @@ def test_worker_chain_runtime_runs_decode_and_drain_inside_worker_session(monkey
     monkeypatch.setattr(runtime, "drain_final_worker_output", fake_drain_final_worker_output)
 
     progress_calls: list[tuple[int, int]] = []
-    run_worker_chain_runtime(
-        ffmpeg=object(),
+    config = WorkerPipelineRuntimeConfig(
+        ffmpeg=object(),  # type: ignore[arg-type]
         input_path="input.mp4",
         decode_config={"mode": "software"},
-        plans=[worker_plan],
         stage_plan=stage_plan,
+        tensor_backend_name="onnx",
         progress_callbacks=[lambda current, total, **_kwargs: progress_calls.append((current, total))],
-        video_info={"source_frames": 3, "width": 1, "height": 1},
+        source_width=1,
+        source_height=1,
+        source_frames=3,
         resume_state=ResumeState(start_source_frame=1, completed_output_frames=0, completed_segments=[]),
+        metrics=PipelineMetrics(),
+    )
+    run_worker_chain_runtime(
+        config=config,
+        plans=[worker_plan],
         encode_queue=queue.Queue(),
         error_queue=queue.Queue(),
         stop_event=threading.Event(),
-        metrics=PipelineMetrics(),
     )
 
     assert calls[0] == ("session", [worker_plan])
