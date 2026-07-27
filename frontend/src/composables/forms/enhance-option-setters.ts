@@ -1,19 +1,14 @@
-import {
-  toFpsMode,
-  toInferenceEngine,
-  toProcessOrder,
-  toTensorBackend,
-} from '@/services/preset/enhance-options'
 import { toNumberValue } from '@/services/preset/options'
 import type { EnhanceOptionForm } from '@/composables/forms/enhance-option-state'
+import type { FpsMode, InferenceEngine, ProcessOrder, TensorBackend } from '@/types/protocol'
 
 export function createEnhanceOptionSetters(form: EnhanceOptionForm) {
   function setInterpolationBackend(value: string): void {
-    form.interpolationBackend = toTensorBackend(value)
+    form.interpolationBackend = value as TensorBackend
   }
 
   function setInterpolationEngine(value: string): void {
-    form.interpolationEngine = toInferenceEngine(value)
+    form.interpolationEngine = value as InferenceEngine
   }
 
   function setInterpolationAlgorithm(value: string): void {
@@ -29,7 +24,7 @@ export function createEnhanceOptionSetters(form: EnhanceOptionForm) {
   }
 
   function setFpsMode(value: string): void {
-    form.fpsMode = toFpsMode(value)
+    form.fpsMode = value as FpsMode
   }
 
   function setInterpolationMulti(value: string): void {
@@ -37,11 +32,11 @@ export function createEnhanceOptionSetters(form: EnhanceOptionForm) {
   }
 
   function setSuperResolutionBackend(value: string): void {
-    form.superResolutionBackend = toTensorBackend(value)
+    form.superResolutionBackend = value as TensorBackend
   }
 
   function setSuperResolutionEngine(value: string): void {
-    form.superResolutionEngine = toInferenceEngine(value)
+    form.superResolutionEngine = value as InferenceEngine
   }
 
   function setSuperResolutionAlgorithm(value: string): void {
@@ -57,7 +52,7 @@ export function createEnhanceOptionSetters(form: EnhanceOptionForm) {
   }
 
   function setProcessOrder(value: string): void {
-    form.processOrder = toProcessOrder(value)
+    form.processOrder = value as ProcessOrder
   }
 
   return {

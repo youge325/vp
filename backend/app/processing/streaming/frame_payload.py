@@ -13,6 +13,7 @@ from typing import Any
 
 import numpy as np
 
+from app.algorithms.tensor_backend import ITensorBackend
 from app.processing.streaming.metrics import PipelineMetrics
 
 
@@ -22,17 +23,17 @@ class FramePayload:
 
     _numpy_frame: np.ndarray | None = None
     _tensor: Any | None = None
-    _tensor_backend: Any | None = None
+    _tensor_backend: ITensorBackend | None = None
 
     @classmethod
     def from_numpy(cls, frame: np.ndarray) -> "FramePayload":
         return cls(_numpy_frame=frame)
 
     @classmethod
-    def from_tensor(cls, tensor: Any, backend: Any) -> "FramePayload":
+    def from_tensor(cls, tensor: Any, backend: ITensorBackend) -> "FramePayload":
         return cls(_tensor=tensor, _tensor_backend=backend)
 
-    def ensure_tensor(self, backend: Any, metrics: PipelineMetrics | None = None) -> Any:
+    def ensure_tensor(self, backend: ITensorBackend, metrics: PipelineMetrics) -> Any:
         """Return the backend tensor, uploading from numpy lazily if needed."""
         if self._tensor is not None:
             if self._tensor_backend is backend:
@@ -54,7 +55,7 @@ class FramePayload:
             metrics.record_transfer("h2d", seconds=elapsed)
         return self._tensor
 
-    def ensure_numpy(self, metrics: PipelineMetrics | None = None) -> np.ndarray:
+    def ensure_numpy(self, metrics: PipelineMetrics) -> np.ndarray:
         """Return a numpy frame, downloading from tensor lazily if needed."""
         if self._numpy_frame is not None:
             return self._numpy_frame

@@ -4,7 +4,6 @@ import {
   buildRateControlViewState,
   resolveRateControlModeSelection,
 } from '@/services/preset/io-form-rules'
-import { toRateControlMode } from '@/services/preset/io-options'
 import { toNumberValue } from '@/services/preset/options'
 import type { EncoderProfileSpec } from '@/types/protocol'
 import type { EncodeConfig, WorkbenchPreset } from '@/types/protocol'
@@ -45,7 +44,7 @@ export function createEncodeRateControlBindings({
   }
 
   function setRateControlModeValue(value: string): void {
-    setRateControlMode(toRateControlMode(value))
+    setRateControlMode(value as EncodeConfig['rateControl']['mode'])
   }
 
   function setRateControlValue(value: number): void {

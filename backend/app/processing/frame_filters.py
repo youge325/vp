@@ -46,15 +46,15 @@ class FrameFilterChainAlgorithm(IAlgorithm):
                 frame = apply_numpy_filter(step["kind"], frame, step["params"])
         return frame
 
-    def can_process_tensor(self, backend: Any) -> bool:
-        if _backend_name(backend) != "pytorch":
+    def can_process_tensor(self, backend: ITensorBackend) -> bool:
+        if backend.get_name().lower() != "pytorch":
             return False
         return all(
             not step.get("enabled", True) or can_apply_tensor_filter(step["kind"], step["params"])
             for step in self._filters
         )
 
-    def process_tensor(self, tensor: Any, backend: Any) -> Any:
+    def process_tensor(self, tensor: Any, backend: ITensorBackend) -> Any:
         if not self.can_process_tensor(backend):
             raise RuntimeError("frame_filter_chain does not support tensor processing for this filter set.")
         for step in self._filters:
@@ -64,13 +64,3 @@ class FrameFilterChainAlgorithm(IAlgorithm):
 
     def get_name(self) -> str:
         return "帧级滤镜链"
-
-
-def _backend_name(backend: Any) -> str:
-    get_name = getattr(backend, "get_name", None)
-    if callable(get_name):
-        try:
-            return str(get_name()).lower()
-        except Exception:
-            return ""
-    return ""

@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
+import numpy as np
+
+from app.algorithms.base import IAlgorithm
+from app.algorithms.tensor_backend import ITensorBackend
 from app.planning import ProcessingStep
 from app.processing.streaming.frame_payload import FramePayload
 from app.processing.streaming.metrics import PipelineMetrics
@@ -13,18 +17,17 @@ from app.processing.streaming.metrics import PipelineMetrics
 @dataclass(slots=True)
 class StepAlgorithm:
     step: ProcessingStep
-    backend: Any
-    algorithm: Any
+    backend: ITensorBackend | None
+    algorithm: IAlgorithm
 
 
-def algorithm_needs_sequence(algorithm: Any) -> bool:
-    needs_sequence = getattr(algorithm, "needs_frame_sequence", None)
-    return callable(needs_sequence) and bool(needs_sequence())
+@runtime_checkable
+class _FrameFilterRuntime(Protocol):
+    def can_process_tensor(self, backend: ITensorBackend) -> bool: ...
 
+    def process_tensor(self, tensor: Any, backend: ITensorBackend) -> Any: ...
 
-def algorithm_needs_pairs(algorithm: Any) -> bool:
-    needs_pairs = getattr(algorithm, "needs_frame_pairs", None)
-    return callable(needs_pairs) and bool(needs_pairs())
+    def process_numpy(self, frame: np.ndarray) -> np.ndarray: ...
 
 
 def is_cpu_frame_stage(entry: StepAlgorithm) -> bool:
@@ -50,39 +53,42 @@ def _run_frame_filter_stage(
     *,
     prefer_tensor: bool,
 ) -> FramePayload:
+    if not isinstance(entry.algorithm, _FrameFilterRuntime):
+        raise RuntimeError(f"Frame filter stage '{entry.step.algorithm_type}' has an invalid runtime implementation.")
     if prefer_tensor:
-        can_process_tensor = getattr(entry.algorithm, "can_process_tensor", None)
-        if not callable(can_process_tensor) or not can_process_tensor(entry.backend):
+        backend = _require_tensor_backend(entry)
+        if not entry.algorithm.can_process_tensor(backend):
             raise RuntimeError(
                 f"Frame filter stage '{entry.step.algorithm_type}' does not support tensor processing "
                 "in this tensor chain."
             )
-        process_tensor = getattr(entry.algorithm, "process_tensor", None)
-        if not callable(process_tensor):
-            raise RuntimeError(f"Tensor frame stage '{entry.step.algorithm_type}' does not implement process_tensor().")
-        tensor = payload.ensure_tensor(entry.backend, metrics)
-        return FramePayload.from_tensor(process_tensor(tensor, entry.backend), entry.backend)
+        tensor = payload.ensure_tensor(backend, metrics)
+        return FramePayload.from_tensor(entry.algorithm.process_tensor(tensor, backend), backend)
     return _run_cpu_frame_stage(entry, payload, metrics)
 
 
 def _run_cpu_frame_stage(entry: StepAlgorithm, payload: FramePayload, metrics: PipelineMetrics) -> FramePayload:
-    process_numpy = getattr(entry.algorithm, "process_numpy", None)
-    if not callable(process_numpy):
+    if not isinstance(entry.algorithm, _FrameFilterRuntime):
         raise RuntimeError(f"CPU frame stage '{entry.step.algorithm_type}' does not implement process_numpy().")
     frame = payload.ensure_numpy(metrics)
-    return FramePayload.from_numpy(process_numpy(frame))
+    return FramePayload.from_numpy(entry.algorithm.process_numpy(frame))
 
 
 def _run_tensor_frame_stage(entry: StepAlgorithm, payload: FramePayload, metrics: PipelineMetrics) -> FramePayload:
-    tensor = payload.ensure_tensor(entry.backend, metrics)
+    backend = _require_tensor_backend(entry)
+    tensor = payload.ensure_tensor(backend, metrics)
     processed = entry.algorithm.process_frame(tensor)
-    return FramePayload.from_tensor(processed, entry.backend)
+    return FramePayload.from_tensor(processed, backend)
+
+
+def _require_tensor_backend(entry: StepAlgorithm) -> ITensorBackend:
+    if entry.backend is None:
+        raise RuntimeError(f"Tensor stage '{entry.step.algorithm_type}' requires a tensor backend.")
+    return entry.backend
 
 
 __all__ = [
     "StepAlgorithm",
-    "algorithm_needs_pairs",
-    "algorithm_needs_sequence",
     "is_cpu_frame_stage",
     "run_stage",
 ]

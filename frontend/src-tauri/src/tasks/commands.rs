@@ -13,15 +13,13 @@ pub(crate) async fn inspect_video(
     paths: State<'_, ResolvedRuntimePaths>,
     input_path: String,
 ) -> Result<VideoInfo, ShellError> {
-    let value = run_single_cli_command(
+    run_single_cli_command(
         paths.inner(),
         &[String::from("info"), String::from("--input"), input_path],
         None,
+        "video info",
     )
-    .await?;
-    serde_json::from_value::<VideoInfo>(value).map_err(|error| {
-        ShellError::SchemaValidation(format!("Unable to deserialize video info: {error}"))
-    })
+    .await
 }
 
 #[tauri::command]
@@ -40,10 +38,13 @@ pub(crate) async fn check_resume_state(
     request: TaskRequest,
 ) -> Result<ResumeInspectionResult, ShellError> {
     let (args, stdin_payload) = build_inspect_output_args(&request)?;
-    let value = run_single_cli_command(paths.inner(), &args, Some(&stdin_payload)).await?;
-    serde_json::from_value::<ResumeInspectionResult>(value).map_err(|error| {
-        ShellError::SchemaValidation(format!("Unable to deserialize resume inspection: {error}"))
-    })
+    run_single_cli_command(
+        paths.inner(),
+        &args,
+        Some(&stdin_payload),
+        "resume inspection",
+    )
+    .await
 }
 
 #[tauri::command]

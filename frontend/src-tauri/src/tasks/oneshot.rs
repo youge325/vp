@@ -1,10 +1,11 @@
 //! One-shot CLI runner for ``check`` / ``info`` / ``inspect-output``.
 //!
 //! The runner maps backend failures to ``ShellError`` before returning, so
-//! command callers only receive success-shaped JSON values.
+//! command callers only receive schema-validated success payloads.
 
 use std::process::Stdio;
 
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::io::AsyncWriteExt;
 
@@ -13,7 +14,7 @@ use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks::builder::{apply_no_window, backend_command};
 use crate::tasks::envelope::{error_payload_from_value, parse_last_json_line};
 
-/// Run a one-shot CLI subcommand and return its success-shaped JSON value.
+/// Run a one-shot CLI subcommand and deserialize its success payload.
 ///
 /// ``args[0]`` is the subcommand name; remaining elements become flag /
 /// value pairs (``--input <path>`` style) appended after it.
@@ -22,11 +23,12 @@ use crate::tasks::envelope::{error_payload_from_value, parse_last_json_line};
 /// command-line flags. ``None`` uses ``Stdio::null`` for commands without
 /// input; ``Some`` writes the payload and closes stdin before collecting
 /// stdout and stderr.
-pub(crate) async fn run_single_cli_command(
+pub(crate) async fn run_single_cli_command<T: DeserializeOwned>(
     paths: &ResolvedRuntimePaths,
     args: &[String],
     stdin_payload: Option<&str>,
-) -> Result<Value, ShellError> {
+    payload_name: &'static str,
+) -> Result<T, ShellError> {
     let (subcommand, extra_args) = args.split_first().ok_or_else(|| {
         ShellError::InvalidInput("run_single_cli_command requires a subcommand".to_string())
     })?;
@@ -72,5 +74,54 @@ pub(crate) async fn run_single_cli_command(
         };
     }
 
-    last_json.ok_or(ShellError::BackendNoJson)
+    let value = last_json.ok_or(ShellError::BackendNoJson)?;
+    deserialize_success_payload(value, payload_name)
+}
+
+fn deserialize_success_payload<T: DeserializeOwned>(
+    value: Value,
+    payload_name: &'static str,
+) -> Result<T, ShellError> {
+    serde_json::from_value(value).map_err(|error| {
+        ShellError::SchemaValidation(format!("Unable to deserialize {payload_name}: {error}"))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use serde::Deserialize;
+    use serde_json::json;
+
+    use super::deserialize_success_payload;
+    use crate::error::ShellError;
+
+    #[derive(Debug, Deserialize, PartialEq, Eq)]
+    struct ProbePayload {
+        value: u32,
+    }
+
+    #[test]
+    fn deserializes_typed_success_payload() {
+        let payload =
+            deserialize_success_payload::<ProbePayload>(json!({ "value": 42 }), "probe payload")
+                .expect("typed payload");
+
+        assert_eq!(payload, ProbePayload { value: 42 });
+    }
+
+    #[test]
+    fn maps_success_schema_mismatch_with_payload_name() {
+        let error = deserialize_success_payload::<ProbePayload>(
+            json!({ "value": "invalid" }),
+            "probe payload",
+        )
+        .expect_err("schema mismatch");
+
+        match error {
+            ShellError::SchemaValidation(message) => {
+                assert!(message.starts_with("Unable to deserialize probe payload:"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
 }

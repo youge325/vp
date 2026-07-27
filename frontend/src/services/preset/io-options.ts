@@ -1,8 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
-// Select option and value conversion rules for decode/encode views.
+// Select option rules for decode/encode views.
 
 import type { CodecProfileSpec } from '@/types/protocol'
-import type { RateControlMode } from '@/types/protocol'
 import type { SelectOption } from '@/types/view/select-option'
 
 const CONTAINER_OPTIONS = ['mp4', 'mkv', 'mov'] as const
@@ -16,7 +15,3 @@ function buildContainerOptions(containers: readonly string[]): SelectOption[] {
 }
 
 export const CONTAINER_SELECT_OPTIONS: readonly SelectOption[] = buildContainerOptions(CONTAINER_OPTIONS)
-
-export function toRateControlMode(value: string): RateControlMode {
-  return value as RateControlMode
-}

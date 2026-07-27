@@ -1,6 +1,7 @@
 import numpy as np
 
 from app.processing.streaming.frame_payload import FramePayload
+from app.processing.streaming.metrics import PipelineMetrics
 
 
 class _Backend:
@@ -23,7 +24,7 @@ def test_frame_payload_converts_between_different_tensor_backends_via_numpy():
     second = _Backend("paddle")
     payload = FramePayload.from_tensor(first.numpy_to_tensor(frame), first)
 
-    converted = payload.ensure_tensor(second)
+    converted = payload.ensure_tensor(second, PipelineMetrics())
 
     assert converted[0] == "paddle"
     assert np.array_equal(converted[1], frame)

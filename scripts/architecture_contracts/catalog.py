@@ -832,6 +832,42 @@ FORBIDDEN_PATTERN_RULES = (
         "stage execution loop exposes an unused output-frame count",
     ),
     _forbid(
+        "stage-runtime-dynamic-algorithm-contract",
+        "backend/app/processing/streaming/stage_runtime.py",
+        r"\bdef\s+algorithm_needs_(?:pairs|sequence)\b|getattr\s*\(\s*(?:algorithm|entry\.algorithm)\s*,",
+        "stage runtime dynamically probes the declared algorithm contract",
+    ),
+    _forbid(
+        "stage-worker-dynamic-runtime-contract",
+        "backend/app/processing/streaming/stage_worker.py",
+        r"\balgorithm_needs_(?:pairs|sequence)\b|getattr\s*\(\s*output_stream\s*,\s*[\"']flush[\"']",
+        "stage worker keeps a test-only algorithm or stream fallback",
+    ),
+    _forbid(
+        "stage-execution-dynamic-interpolation-multi",
+        "backend/app/processing/streaming/stage_worker_execution.py",
+        r"getattr\s*\(\s*algorithm\s*,\s*[\"']get_interpolation_multi[\"']",
+        "stage execution dynamically probes the interpolation contract",
+    ),
+    _forbid(
+        "frame-payload-optional-metrics",
+        "backend/app/processing/streaming/frame_payload.py",
+        r"def\s+ensure_(?:tensor|numpy)\s*\([^)]*metrics\s*:\s*PipelineMetrics\s*\|\s*None\s*=\s*None",
+        "frame payload retains a test-only optional metrics path",
+    ),
+    _forbid(
+        "frame-filter-dynamic-backend-name",
+        "backend/app/processing/frame_filters.py",
+        r"\bdef\s+_backend_name\b|getattr\s*\(\s*backend\s*,\s*[\"']get_name[\"']",
+        "frame filter dynamically probes the tensor backend contract",
+    ),
+    _forbid(
+        "segment-writer-dynamic-frame-counter",
+        "backend/app/processing/streaming/encoder_segments.py",
+        r"getattr\s*\(\s*writer\s*,\s*[\"']output_frame_count[\"']",
+        "segment helper dynamically probes the writer contract",
+    ),
+    _forbid(
         "worker-process-helper-definitions",
         "backend/app/processing/streaming/worker_processes.py",
         r"^\s*def\s+(?:parse_stage_event_line|read_worker_stderr|write_decoded_frames_to_worker|drain_final_worker_output|close_pipe)\b",
@@ -878,6 +914,13 @@ FORBIDDEN_PATTERN_RULES = (
         "frontend/src/composables/forms/enhance-form-bindings.ts",
         r"@/services/preset/(?:enhance-workflow|enhance-view-model)|createDraftEditor|createEnhanceFieldBindings",
         "enhance form direct business rule",
+    ),
+    ForbiddenReferenceRule(
+        "frontend-identity-select-cast-helpers",
+        roots=("frontend/src",),
+        patterns=(r"\b(?:toTensorBackend|toInferenceEngine|toFpsMode|toProcessOrder|toRateControlMode)\b",),
+        message="identity select-value cast helper",
+        suffixes=(".ts", ".vue"),
     ),
     _forbid(
         "frontend-io-view-rules-decode",
@@ -965,6 +1008,22 @@ FORBIDDEN_PATTERN_RULES = (
         "frontend/src-tauri/src/tasks/oneshot.rs",
         r"\b(?:ErrorEnvelopeProbe|try_parse_error_envelope)\b",
         "one-shot CLI duplicate error envelope parser",
+    ),
+    _forbid(
+        "rust-oneshot-untyped-success",
+        "frontend/src-tauri/src/tasks/oneshot.rs",
+        r"fn\s+run_single_cli_command\b[\s\S]{0,500}->\s*Result<Value,\s*ShellError>",
+        "one-shot CLI exposes an untyped success value",
+    ),
+    ForbiddenReferenceRule(
+        "rust-oneshot-caller-json-decoding",
+        roots=(
+            "frontend/src-tauri/src/tasks/commands.rs",
+            "frontend/src-tauri/src/services/environment_service.rs",
+        ),
+        patterns=(r"run_single_cli_command[\s\S]{0,300}serde_json::from_value",),
+        message="one-shot caller repeats success payload decoding",
+        suffixes=(".rs",),
     ),
     _forbid(
         "protocol-error-code-reexport",
@@ -1897,6 +1956,42 @@ REQUIRED_PATTERN_RULES = (
         "stage-worker factory must expose only create_algorithm/create_backend",
     ),
     _require(
+        "typed-stage-worker-factory-contract",
+        "backend/app/processing/streaming/stage_worker_factory.py",
+        r"def\s+create_backend\(config:\s*StageWorkerConfig\)\s*->\s*ITensorBackend\s*\|\s*None[\s\S]{0,500}def\s+create_algorithm\(stage:\s*ProcessingStep,\s*backend:\s*ITensorBackend\s*\|\s*None\)\s*->\s*IAlgorithm",
+        "stage-worker factory does not expose typed backend and algorithm contracts",
+    ),
+    _require(
+        "typed-stage-runtime-contract",
+        "backend/app/processing/streaming/stage_runtime.py",
+        r"class\s+StepAlgorithm:[\s\S]{0,180}backend:\s*ITensorBackend\s*\|\s*None[\s\S]{0,100}algorithm:\s*IAlgorithm[\s\S]{0,250}@runtime_checkable\s*class\s+_FrameFilterRuntime\(Protocol\)",
+        "stage runtime does not use the typed algorithm and frame-filter contracts",
+    ),
+    _require(
+        "explicit-frame-payload-contract",
+        "backend/app/processing/streaming/frame_payload.py",
+        r"_tensor_backend:\s*ITensorBackend\s*\|\s*None[\s\S]{0,350}def\s+ensure_tensor\(self,\s*backend:\s*ITensorBackend,\s*metrics:\s*PipelineMetrics\)[\s\S]{0,1000}def\s+ensure_numpy\(self,\s*metrics:\s*PipelineMetrics\)",
+        "frame payload does not require typed backends and explicit metrics",
+    ),
+    _require(
+        "direct-stage-worker-mode-contract",
+        "backend/app/processing/streaming/stage_worker.py",
+        r"if\s+algorithm\.needs_frame_sequence\(\)[\s\S]{0,500}elif\s+algorithm\.needs_frame_pairs\(\)[\s\S]{0,900}output_stream\.flush\(\)",
+        "stage worker does not consume the declared algorithm and stream contracts directly",
+    ),
+    _require(
+        "frontend-enhance-select-write-boundary",
+        "frontend/src/composables/forms/enhance-option-setters.ts",
+        r"form\.interpolationBackend\s*=\s*value\s+as\s+TensorBackend[\s\S]{0,300}form\.interpolationEngine\s*=\s*value\s+as\s+InferenceEngine[\s\S]{0,800}form\.fpsMode\s*=\s*value\s+as\s+FpsMode[\s\S]{0,800}form\.processOrder\s*=\s*value\s+as\s+ProcessOrder",
+        "enhance select values are not narrowed at the write boundary",
+    ),
+    _require(
+        "frontend-rate-control-select-write-boundary",
+        "frontend/src/composables/forms/encode-rate-control-bindings.ts",
+        r"setRateControlMode\(\s*value\s+as\s+EncodeConfig\[[\"']rateControl[\"']\]\[[\"']mode[\"']\]\s*\)",
+        "rate-control select value is not narrowed at the write boundary",
+    ),
+    _require(
         "rust-command-manifest-test-include",
         "frontend/src-tauri/src/lib.rs",
         r"#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*mod\s+tests\s*\{[\s\S]{0,300}include!\s*\(\s*[\"']commands_manifest\.rs[\"']\s*\)\s*;",
@@ -1911,7 +2006,7 @@ REQUIRED_PATTERN_RULES = (
     _require(
         "rust-typed-resume-inspection-command",
         "frontend/src-tauri/src/tasks/commands.rs",
-        r"check_resume_state[\s\S]{0,500}serde_json::from_value::<ResumeInspectionResult>",
+        r"check_resume_state[\s\S]{0,600}run_single_cli_command\([\s\S]{0,300}[\"']resume inspection[\"'][\s\S]{0,80}\.await",
         "resume inspection command must validate the backend payload",
     ),
     _require(
@@ -2139,7 +2234,7 @@ REQUIRED_PATTERN_RULES = (
     _require(
         "oneshot-direct-shell-result",
         "frontend/src-tauri/src/tasks/oneshot.rs",
-        r"pub\(crate\)\s+async\s+fn\s+run_single_cli_command\b[\s\S]{0,500}->\s*Result<Value,\s*ShellError>[\s\S]*if\s+!output\.status\.success\(\)[\s\S]*Err\(ShellError::BackendEnvelope[\s\S]*Err\(ShellError::BackendProbeFailed[\s\S]*last_json\.ok_or\(ShellError::BackendNoJson\)",
+        r"pub\(crate\)\s+async\s+fn\s+run_single_cli_command<T:\s*DeserializeOwned>[\s\S]{0,600}->\s*Result<T,\s*ShellError>[\s\S]*if\s+!output\.status\.success\(\)[\s\S]*Err\(ShellError::BackendEnvelope[\s\S]*Err\(ShellError::BackendProbeFailed[\s\S]*last_json\.ok_or\(ShellError::BackendNoJson\)[\s\S]*deserialize_success_payload\(value,\s*payload_name\)",
         "one-shot CLI command does not map directly to ShellError",
     ),
     _require(

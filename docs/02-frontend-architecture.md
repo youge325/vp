@@ -108,6 +108,13 @@ App 顶栏和 StepRail 通过 `useCurrentTaskStatusLabel()` 读取同一任务�
 `useMediaStore.findItem(batch.currentId)` 校验当前媒体，再组合 `useTaskStore` 与
 `useMediaRunState`，确保失效的 current ID 不会读取遗留运行状态。
 
+## 表单类型边界
+
+`BaseSelect` 向视图和 binding 统一提供字符串值。领域类型收窄只发生在实际写回配置的 setter
+边界，例如 Enhance option setter 和 Encode rate-control binding；纯 option service 只构造
+显示选项，不导出没有运行时校验语义的 identity cast helper。具有真实转换行为并被多个表单
+复用的数值转换仍由共享 service 提供。
+
 ## IPC 调用层
 
 ### safeInvoke 与 InvokeError

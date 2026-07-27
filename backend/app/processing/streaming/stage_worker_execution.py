@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, BinaryIO
+from typing import BinaryIO
 
+import numpy as np
+
+from app.algorithms.base import IAlgorithm
+from app.algorithms.tensor_backend import ITensorBackend
 from app.processing.streaming.frame_payload import FramePayload
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_runtime import StepAlgorithm, is_cpu_frame_stage, run_stage
@@ -12,6 +16,7 @@ from app.processing.streaming.stage_worker_io import (
     read_rgb_frame,
     write_rgb_frame,
 )
+from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.stage_worker_progress import (
     EventSink,
     SEQUENCE_STAGE_HEARTBEAT_SECONDS,
@@ -22,10 +27,10 @@ from app.processing.streaming.stage_worker_progress import (
 
 
 def run_sequence_stage(
-    config: Any,
+    config: StageWorkerConfig,
     input_stream: BinaryIO,
     output_stream: BinaryIO,
-    algorithm: Any,
+    algorithm: IAlgorithm,
     event_sink: EventSink,
     *,
     heartbeat_seconds: float = SEQUENCE_STAGE_HEARTBEAT_SECONDS,
@@ -71,11 +76,11 @@ def run_sequence_stage(
 
 
 def run_interpolation_stage(
-    config: Any,
+    config: StageWorkerConfig,
     input_stream: BinaryIO,
     output_stream: BinaryIO,
-    backend: Any,
-    algorithm: Any,
+    backend: ITensorBackend,
+    algorithm: IAlgorithm,
     event_sink: EventSink,
     metrics: PipelineMetrics,
 ) -> None:
@@ -87,9 +92,7 @@ def run_interpolation_stage(
         event_sink(progress_event(config, 1, 1))
         return
 
-    multi = int(
-        config.stage.algorithm_kwargs.get("multi") or getattr(algorithm, "get_interpolation_multi", lambda: 2)()
-    )
+    multi = int(config.stage.algorithm_kwargs.get("multi") or algorithm.get_interpolation_multi())
     total_pairs = len(frames) - 1
     previous_payload = FramePayload.from_numpy(frames[0])
     for pair_index, current_frame in enumerate(frames[1:], start=1):
@@ -120,11 +123,11 @@ def run_interpolation_stage(
 
 
 def run_single_frame_stage(
-    config: Any,
+    config: StageWorkerConfig,
     input_stream: BinaryIO,
     output_stream: BinaryIO,
-    backend: Any,
-    algorithm: Any,
+    backend: ITensorBackend | None,
+    algorithm: IAlgorithm,
     event_sink: EventSink,
     metrics: PipelineMetrics,
 ) -> None:
@@ -148,8 +151,8 @@ def run_single_frame_stage(
         event_sink(progress_event(config, index + 1, total))
 
 
-def _read_declared_frames(config: Any, input_stream: BinaryIO) -> list[Any]:
-    frames: list[Any] = []
+def _read_declared_frames(config: StageWorkerConfig, input_stream: BinaryIO) -> list[np.ndarray]:
+    frames: list[np.ndarray] = []
     for _index in range(max(config.input_frame_count, 0)):
         frame = read_rgb_frame(input_stream, width=config.input_width, height=config.input_height)
         if frame is None:
