@@ -28,7 +28,7 @@ describe('enhance scalar field bindings', () => {
     scalarBindings.interpolationFp16.value = true
     scalarBindings.superResolutionEngine.value = 'tensorrt'
     scalarBindings.superResolutionOnnxModel.value = 'sr.onnx'
-    scalarBindings.processOrder.value = 'super_resolution_first'
+    scalarBindings.processOrder.value = 'super_resolution_then_interpolation'
 
     expect(workflow.interpolation).toMatchObject({
       engine: 'tensorrt',
@@ -44,6 +44,6 @@ describe('enhance scalar field bindings', () => {
       onnxModel: 'sr.onnx',
     })
     expect(workflow.fpsMode).toBe('multi')
-    expect(workflow.processOrder).toBe('super_resolution_first')
+    expect(workflow.processOrder).toBe('super_resolution_then_interpolation')
   })
 })

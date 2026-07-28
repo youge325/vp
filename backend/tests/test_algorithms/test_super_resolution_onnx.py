@@ -3,12 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from app.processing.super_resolution import SuperResolutionAlgorithm
-
-
-class _OnnxBackend:
-    def get_name(self) -> str:
-        return "onnx"
+from app.processing.super_resolution import OnnxSuperResolution
 
 
 class _Node:
@@ -48,8 +43,7 @@ def test_super_resolution_onnx_lazily_loads_and_scales(tmp_path: Path, monkeypat
         InferenceSession = _Session
 
     monkeypatch.setitem(sys.modules, "onnxruntime", _Ort)
-    algorithm = SuperResolutionAlgorithm(
-        tensor_backend=_OnnxBackend(),
+    algorithm = OnnxSuperResolution(
         scale_factor=2,
         onnx_model="sr.onnx",
         model_dir=str(tmp_path),

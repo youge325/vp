@@ -177,16 +177,10 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-load-workbench-preset`\n- `allow-save-workbench-preset`\n- `allow-inspect-video`\n- `allow-check-resume-state`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-control-task`\n- `allow-open-output-location`",
+          "description": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-load-workbench-preset`\n- `allow-save-workbench-preset`\n- `allow-inspect-video`\n- `allow-check-resume-state`\n- `allow-start-task`\n- `allow-control-task`\n- `allow-open-output-location`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-load-workbench-preset`\n- `allow-save-workbench-preset`\n- `allow-inspect-video`\n- `allow-check-resume-state`\n- `allow-start-task`\n- `allow-cancel-task`\n- `allow-control-task`\n- `allow-open-output-location`"
-        },
-        {
-          "description": "Enables the cancel_task command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-cancel-task",
-          "markdownDescription": "Enables the cancel_task command without any pre-configured scope."
+          "markdownDescription": "Default permissions for the VP Workbench desktop shell.\n#### This default permission set includes:\n\n- `allow-pick-inputs`\n- `allow-pick-output-directory`\n- `allow-check-environment`\n- `allow-load-workbench-preset`\n- `allow-save-workbench-preset`\n- `allow-inspect-video`\n- `allow-check-resume-state`\n- `allow-start-task`\n- `allow-control-task`\n- `allow-open-output-location`"
         },
         {
           "description": "Enables the check_environment command without any pre-configured scope.",
@@ -247,12 +241,6 @@
           "type": "string",
           "const": "allow-start-task",
           "markdownDescription": "Enables the start_task command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the cancel_task command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-cancel-task",
-          "markdownDescription": "Denies the cancel_task command without any pre-configured scope."
         },
         {
           "description": "Denies the check_environment command without any pre-configured scope.",

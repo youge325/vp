@@ -9,15 +9,17 @@ on:
     branches: [main, master, develop]
     paths:
       - 'backend/app/**'
+      - 'contracts/**'
       - 'frontend/**'
-      - 'scripts/setup-ci-runtime-env.ps1'
+      - 'scripts/**'
       - '.github/workflows/e2e.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
       - 'backend/app/**'
+      - 'contracts/**'
       - 'frontend/**'
-      - 'scripts/setup-ci-runtime-env.ps1'
+      - 'scripts/**'
       - '.github/workflows/e2e.yml'
 
 permissions:

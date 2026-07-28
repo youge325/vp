@@ -2,7 +2,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::models::{
-    ResumeStatusPayload, TaskCompletedPayload, TaskErrorPayload, TaskProgressPayload,
+    BackendTaskErrorPayload, ResumeStatusPayload, TaskCompletedPayload, TaskErrorCode,
+    TaskErrorPayload, TaskProgressPayload,
 };
 
 #[derive(Debug, Clone, Deserialize)]
@@ -13,46 +14,165 @@ pub(crate) enum NdjsonEnvelope {
     #[serde(rename = "completed")]
     Completed(TaskCompletedPayload),
     #[serde(rename = "error")]
-    Error(TaskErrorPayload),
+    Error(BackendTaskErrorPayload),
     #[serde(rename = "resume_status")]
     ResumeStatus(ResumeStatusPayload),
 }
 
-pub(crate) fn parse_last_json_line(stdout: &str) -> Option<Value> {
-    stdout
-        .lines()
-        .rev()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .and_then(|line| serde_json::from_str::<Value>(line).ok())
+#[derive(Debug)]
+pub(crate) enum ClassifiedLine {
+    Empty,
+    Progress(TaskProgressPayload),
+    Completed(TaskCompletedPayload),
+    Error(TaskErrorPayload),
+    ResumeStatus(ResumeStatusPayload),
+    SchemaMismatch(TaskErrorPayload),
+    Log(String),
 }
 
-pub(super) fn error_payload_from_value(value: Value) -> Option<TaskErrorPayload> {
-    match serde_json::from_value::<NdjsonEnvelope>(value).ok()? {
-        NdjsonEnvelope::Error(payload) => Some(payload),
-        _ => None,
+/// Parse and classify a backend stdout line once.
+///
+/// Both the runtime reader and tests use this function, so schema-drift
+/// behavior cannot diverge through a test-only mirror parser.
+pub(crate) fn classify_line(line: &str) -> ClassifiedLine {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return ClassifiedLine::Empty;
+    }
+
+    match serde_json::from_str::<NdjsonEnvelope>(trimmed) {
+        Ok(NdjsonEnvelope::Progress(payload)) => ClassifiedLine::Progress(payload),
+        Ok(NdjsonEnvelope::Completed(payload)) => ClassifiedLine::Completed(payload),
+        Ok(NdjsonEnvelope::Error(payload)) => ClassifiedLine::Error(payload.into()),
+        Ok(NdjsonEnvelope::ResumeStatus(payload)) => ClassifiedLine::ResumeStatus(payload),
+        Err(envelope_error) => match serde_json::from_str::<Value>(trimmed) {
+            Ok(value) if value.is_object() => {
+                let type_field = value.get("type").cloned().unwrap_or(Value::Null);
+                ClassifiedLine::SchemaMismatch(TaskErrorPayload {
+                    code: TaskErrorCode::SchemaMismatch,
+                    message: format!(
+                        "Backend emitted an NDJSON object that does not match the IPC schema: {envelope_error}"
+                    ),
+                    details: Some(serde_json::Map::from_iter([
+                        (
+                            "rawLine".to_string(),
+                            Value::String(trimmed.to_string()),
+                        ),
+                        ("type".to_string(), type_field),
+                    ])),
+                })
+            }
+            Err(_) if trimmed.starts_with('{') => {
+                ClassifiedLine::SchemaMismatch(TaskErrorPayload {
+                    code: TaskErrorCode::SchemaMismatch,
+                    message: format!(
+                        "Backend emitted malformed NDJSON that does not match the IPC schema: {envelope_error}"
+                    ),
+                    details: Some(serde_json::Map::from_iter([(
+                        "rawLine".to_string(),
+                        Value::String(trimmed.to_string()),
+                    )])),
+                })
+            }
+            _ => ClassifiedLine::Log(trimmed.to_string()),
+        },
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
-
-    use super::{error_payload_from_value, parse_last_json_line, NdjsonEnvelope};
+    use super::{classify_line, ClassifiedLine, NdjsonEnvelope};
     use crate::models::TaskErrorCode;
 
     #[test]
-    fn parses_last_json_line() {
-        let stdout = "noise\n{\"type\":\"check\",\"ffmpeg\":{\"available\":true}}\n";
-        let parsed = parse_last_json_line(stdout).expect("json");
-        assert_eq!(parsed["type"], "check");
+    fn trims_free_form_log_lines_before_forwarding() {
+        match classify_line("  loading model  \r\n") {
+            ClassifiedLine::Log(message) => assert_eq!(message, "loading model"),
+            other => panic!("expected log, got {other:?}"),
+        }
     }
 
     #[test]
-    fn parses_last_json_line_returns_none_when_no_json() {
-        assert!(parse_last_json_line("noise\nmore noise").is_none());
-        assert!(parse_last_json_line("").is_none());
-        assert!(parse_last_json_line("   \n   ").is_none());
+    fn valid_json_scalar_is_not_mistaken_for_an_ndjson_envelope() {
+        match classify_line("42") {
+            ClassifiedLine::Log(message) => assert_eq!(message, "42"),
+            other => panic!("expected scalar log, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn valid_json_array_is_forwarded_as_a_log() {
+        match classify_line(r#"["diagnostic", 1]"#) {
+            ClassifiedLine::Log(message) => assert_eq!(message, r#"["diagnostic", 1]"#),
+            other => panic!("expected array log, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn malformed_object_reports_the_raw_line() {
+        let line = r#"{"type":"progress","current":"#;
+        match classify_line(line) {
+            ClassifiedLine::SchemaMismatch(payload) => {
+                assert!(matches!(payload.code, TaskErrorCode::SchemaMismatch));
+                assert_eq!(payload.details.expect("details")["rawLine"], line);
+            }
+            other => panic!("expected schema mismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_envelope_reports_the_discriminator() {
+        match classify_line(r#"{"type":"future_event","value":1}"#) {
+            ClassifiedLine::SchemaMismatch(payload) => {
+                let details = payload.details.expect("details");
+                assert_eq!(details["type"], "future_event");
+                assert_eq!(details["rawLine"], r#"{"type":"future_event","value":1}"#);
+            }
+            other => panic!("expected schema mismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn object_without_a_discriminator_reports_null_type() {
+        match classify_line(r#"{"message":"missing type"}"#) {
+            ClassifiedLine::SchemaMismatch(payload) => {
+                assert!(payload.details.expect("details")["type"].is_null());
+            }
+            other => panic!("expected schema mismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn typed_backend_error_keeps_code_message_and_details() {
+        match classify_line(
+            r#"{"type":"error","code":"missing_model","message":"weights missing","details":{"path":"model.pkl"}}"#,
+        ) {
+            ClassifiedLine::Error(payload) => {
+                assert!(matches!(
+                    payload.code,
+                    crate::models::TaskErrorCode::MissingModel
+                ));
+                assert_eq!(payload.message, "weights missing");
+                assert_eq!(payload.details.expect("details")["path"], "model.pkl");
+            }
+            other => panic!("expected backend error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn malformed_non_object_json_remains_a_log() {
+        match classify_line("[unterminated") {
+            ClassifiedLine::Log(message) => assert_eq!(message, "[unterminated"),
+            other => panic!("expected diagnostic log, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn json_string_is_preserved_as_log_text() {
+        match classify_line(r#""backend diagnostic""#) {
+            ClassifiedLine::Log(message) => assert_eq!(message, r#""backend diagnostic""#),
+            other => panic!("expected JSON string log, got {other:?}"),
+        }
     }
 
     #[test]
@@ -96,50 +216,6 @@ mod tests {
     }
 
     #[test]
-    fn extracts_error_payload_from_the_shared_envelope() {
-        let payload = error_payload_from_value(json!({
-            "type": "error",
-            "code": "missing_ffmpeg",
-            "message": "ffmpeg.exe missing",
-            "details": null,
-        }))
-        .expect("error envelope");
-
-        assert!(matches!(payload.code, TaskErrorCode::MissingFfmpeg));
-        assert_eq!(payload.message, "ffmpeg.exe missing");
-    }
-
-    #[test]
-    fn error_payload_extraction_rejects_non_error_envelopes() {
-        assert!(error_payload_from_value(json!({
-            "type": "completed",
-            "outputPath": "D:/out.mp4",
-            "processedFrames": 1,
-            "timeSeconds": 0.1,
-        }))
-        .is_none());
-    }
-
-    #[test]
-    fn error_payload_extraction_rejects_success_payloads_without_a_type() {
-        assert!(error_payload_from_value(json!({
-            "ffmpeg": { "available": true },
-            "gpu": { "available": false },
-        }))
-        .is_none());
-    }
-
-    #[test]
-    fn error_payload_extraction_rejects_unknown_error_codes() {
-        assert!(error_payload_from_value(json!({
-            "type": "error",
-            "code": "definitely_not_a_real_code",
-            "message": "...",
-        }))
-        .is_none());
-    }
-
-    #[test]
     fn deserializes_resume_status_variant() {
         let line = r#"{"type":"resume_status","resumed":true,"completedChunks":3,"completedOutputFrames":300,"startSourceFrame":150,"totalOutputFrames":500}"#;
         let envelope: NdjsonEnvelope = serde_json::from_str(line).expect("parse");
@@ -163,21 +239,12 @@ mod tests {
         );
     }
 
-    // ------------------------------------------------------------------
-    // C.4.5 fixture-style integration: simulate a complete NDJSON stream
-    // and assert that each line is classified as the stdout reader would.
+    // Fixture-style integration: simulate a complete NDJSON stream and
+    // assert that each line is classified as the stdout reader would.
     // This is the closest we can get to a spawn-level test without mocking
     // tauri's AppHandle.
     // ------------------------------------------------------------------
 
-    /// Mirrors the dispatch decision tree in
-    /// ``runner::spawn_stdout_reader``: parse each line, classify it as
-    /// Progress / Completed / ResumeStatus / Error / SchemaMismatch or
-    /// fall back to TaskLog.
-    ///
-    /// Phase D.1.3 — added the ``SchemaMismatch`` arm. JSON objects that
-    /// don't match the envelope schema now fail loudly instead of being
-    /// silently demoted to log lines.
     #[derive(Debug, Clone, PartialEq, Eq)]
     enum LineClassification {
         Progress,
@@ -189,20 +256,15 @@ mod tests {
         Empty,
     }
 
-    fn classify_line(line: &str) -> LineClassification {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            return LineClassification::Empty;
-        }
-        match serde_json::from_str::<NdjsonEnvelope>(trimmed) {
-            Ok(NdjsonEnvelope::Progress(_)) => LineClassification::Progress,
-            Ok(NdjsonEnvelope::Completed(_)) => LineClassification::Completed,
-            Ok(NdjsonEnvelope::Error(_)) => LineClassification::Error,
-            Ok(NdjsonEnvelope::ResumeStatus(_)) => LineClassification::ResumeStatus,
-            Err(_) => match serde_json::from_str::<serde_json::Value>(trimmed) {
-                Ok(value) if value.is_object() => LineClassification::SchemaMismatch,
-                _ => LineClassification::Log,
-            },
+    fn classification(line: &str) -> LineClassification {
+        match classify_line(line) {
+            ClassifiedLine::Empty => LineClassification::Empty,
+            ClassifiedLine::Progress(_) => LineClassification::Progress,
+            ClassifiedLine::Completed(_) => LineClassification::Completed,
+            ClassifiedLine::Error(_) => LineClassification::Error,
+            ClassifiedLine::ResumeStatus(_) => LineClassification::ResumeStatus,
+            ClassifiedLine::SchemaMismatch(_) => LineClassification::SchemaMismatch,
+            ClassifiedLine::Log(_) => LineClassification::Log,
         }
     }
 
@@ -220,7 +282,7 @@ mod tests {
             "\n",
         );
 
-        let classifications: Vec<_> = stream.lines().map(classify_line).collect();
+        let classifications: Vec<_> = stream.lines().map(classification).collect();
         assert_eq!(
             classifications,
             vec![
@@ -248,7 +310,7 @@ mod tests {
             "\n",
         );
 
-        let classifications: Vec<_> = stream.lines().map(classify_line).collect();
+        let classifications: Vec<_> = stream.lines().map(classification).collect();
         assert_eq!(
             classifications,
             vec![
@@ -261,12 +323,9 @@ mod tests {
     }
 
     #[test]
-    fn integration_treats_malformed_json_as_log() {
-        // A line that looks JSON-ish but has typos must fall through to
-        // TaskLog rather than crashing the stdout reader. Phase D.1.3
-        // distinguishes "JSON object with unknown ``type``" from "not
-        // even parseable JSON" — the former is escalated to SchemaMismatch,
-        // the latter is still a plain log line.
+    fn integration_treats_malformed_ndjson_as_schema_mismatch() {
+        // An object-shaped line is part of the NDJSON protocol surface.
+        // Syntax errors must be fatal instead of silently becoming logs.
         let stream = concat!(
             "{\"type\":\"progress\",\"oops\":\n",      // unterminated, not parseable
             "{\"type\":\"unknown_variant\"}\n",         // JSON object, unknown variant
@@ -274,11 +333,11 @@ mod tests {
             "{\"type\":\"completed\",\"outputPath\":\"D:/out.mp4\",\"processedFrames\":1,\"timeSeconds\":0.1}\n",
         );
 
-        let classifications: Vec<_> = stream.lines().map(classify_line).collect();
+        let classifications: Vec<_> = stream.lines().map(classification).collect();
         assert_eq!(
             classifications,
             vec![
-                LineClassification::Log,
+                LineClassification::SchemaMismatch,
                 LineClassification::SchemaMismatch,
                 LineClassification::Log,
                 LineClassification::Completed,
@@ -289,16 +348,16 @@ mod tests {
     #[test]
     fn integration_flags_envelope_with_missing_required_field_as_schema_mismatch() {
         // Progress envelope missing the mandatory ``stage`` field — valid
-        // JSON object but breaks the schema. Phase D.1.3 makes this loud
+        // JSON object but breaks the schema. The classifier makes this loud
         // so backend / Rust drift can't go unnoticed for a whole task.
         let line = r#"{"type":"progress","current":50,"total":100,"percent":50.0}"#;
-        assert_eq!(classify_line(line), LineClassification::SchemaMismatch);
+        assert_eq!(classification(line), LineClassification::SchemaMismatch);
     }
 
     #[test]
     fn integration_skips_empty_and_whitespace_lines() {
         let stream = "\n   \n\t\n";
-        let classifications: Vec<_> = stream.lines().map(classify_line).collect();
+        let classifications: Vec<_> = stream.lines().map(classification).collect();
         assert_eq!(classifications, vec![LineClassification::Empty; 3]);
     }
 }

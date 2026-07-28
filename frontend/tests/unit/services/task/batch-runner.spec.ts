@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createBatchRunner } from '@/services/task/batch-runner'
-import type { BatchState, ResumeConflictDescriptor } from '@/types/domain/batch'
+import type { BatchState } from '@/types/domain/batch'
 import type { MediaItem, MediaRunState, MediaTaskState } from '@/types/domain/media'
 import { createIdleTaskState } from '@/services/task/events'
 import type { TaskRequest } from '@/types/protocol'
+import { createDeferred } from '../../fixtures/deferred'
+import { createTestPreset } from '../../fixtures/preset'
 
 type BatchRunnerDeps = Parameters<typeof createBatchRunner>[0]
 
@@ -12,13 +14,12 @@ function makeDeps(overrides: Partial<BatchRunnerDeps> = {}): BatchRunnerDeps {
     queue: [],
     currentId: null,
     completedCount: 0,
-    failedCount: 0,
     isRunning: false,
     isPaused: false,
     isCancelling: false,
+    controlPending: null,
   }
   const runtimeIds: string[] = []
-  let pendingConflict: ResumeConflictDescriptor | null = null
   const items = new Map<string, MediaItem>()
   const runStates = new Map<string, MediaRunState>()
 
@@ -51,7 +52,6 @@ function makeDeps(overrides: Partial<BatchRunnerDeps> = {}): BatchRunnerDeps {
     setTaskIssue: vi.fn(),
     setItemLastOutputPath: vi.fn(),
     resetItemRunState: vi.fn(),
-    resetItemsRunState: vi.fn(),
     setActiveItem: vi.fn(),
     getActiveItemId: () => null,
 
@@ -59,7 +59,7 @@ function makeDeps(overrides: Partial<BatchRunnerDeps> = {}): BatchRunnerDeps {
     setBatch: (partial) => { Object.assign(batchState, partial) },
     getRuntimeIds: () => runtimeIds,
     setRuntimeIds: (ids) => { runtimeIds.length = 0; runtimeIds.push(...ids) },
-    setPendingConflict: (d) => { pendingConflict = d },
+    setPendingConflict: vi.fn(),
 
     buildRequest: (item) => ({ inputPath: item.inputPath, decodeConfig: item.decodeConfig, workflowConfig: item.workflowConfig, encodeConfig: item.encodeConfig, outputConfig: item.outputConfig } as TaskRequest),
 
@@ -68,6 +68,7 @@ function makeDeps(overrides: Partial<BatchRunnerDeps> = {}): BatchRunnerDeps {
 }
 
 function makeItem(id: string): MediaItem {
+  const preset = createTestPreset({ openOnComplete: false })
   return {
     id,
     inputPath: `/video/${id}.mp4`,
@@ -75,35 +76,10 @@ function makeItem(id: string): MediaItem {
     selected: false,
     inspecting: false,
     info: null,
-    decodeConfig: { mode: 'software', hwaccel: '', hwaccelDevice: '', decoder: 'software', options: {} },
-    workflowConfig: {
-      fpsMode: 'target',
-      processOrder: 'super_resolution_then_interpolation',
-      interpolation: {
-        enabled: false,
-        targetFps: 60,
-        multi: 2,
-        model: '4.25',
-        onnxModel: '',
-        scale: 1,
-        fp16: false,
-        tensorBackend: 'pytorch',
-        engine: 'cuda',
-      },
-      superResolution: {
-        enabled: false,
-        scaleFactor: 2,
-        algorithm: 'placeholder',
-        onnxModel: '',
-        tensorBackend: 'onnx',
-        engine: 'cuda',
-        numFrames: 10,
-      },
-      preprocess: { enabled: false, filters: [] },
-      postprocess: { enabled: false, filters: [] },
-    },
-    encodeConfig: { codec: 'libx265', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 18 }, options: {} },
-    outputConfig: { outputDir: '', openOnComplete: false, segmentFrames: 1000 },
+    decodeConfig: preset.decodeConfig,
+    workflowConfig: preset.workflowConfig,
+    encodeConfig: preset.encodeConfig,
+    outputConfig: preset.outputConfig,
   }
 }
 
@@ -175,14 +151,118 @@ describe('batch-runner', () => {
     )
   })
 
-  it('keeps pause state unchanged when the control command fails', async () => {
+  it('reports a pause command failure through the task issue port', async () => {
     const deps = makeDeps({ pauseTask: vi.fn().mockRejectedValue(new Error('pause failed')) })
     const runner = createBatchRunner(deps)
     deps.getBatch().isRunning = true
 
-    await expect(runner.pause()).rejects.toMatchObject({ message: 'pause failed' })
+    await expect(runner.pause()).resolves.toBeUndefined()
 
     expect(deps.getBatch().isPaused).toBe(false)
+    expect(deps.getBatch().controlPending).toBeNull()
+    expect(deps.setTaskIssue).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'pause failed' }),
+    )
+  })
+
+  it('allows only one control command in flight', async () => {
+    const pauseCall = createDeferred()
+    const deps = makeDeps({
+      pauseTask: vi.fn(() => pauseCall.promise),
+    })
+    const runner = createBatchRunner(deps)
+    deps.getBatch().isRunning = true
+
+    const pausing = runner.pause()
+    expect(deps.getBatch().controlPending).toBe('pause')
+
+    await runner.resume()
+    await runner.cancel()
+
+    expect(deps.resumeTask).not.toHaveBeenCalled()
+    expect(deps.cancelTask).not.toHaveBeenCalled()
+
+    pauseCall.resolve()
+    await pausing
+
+    expect(deps.getBatch().isPaused).toBe(true)
+    expect(deps.getBatch().controlPending).toBeNull()
+  })
+
+  it('does not apply a stale pause result after the task reaches a terminal state', async () => {
+    const pauseCall = createDeferred()
+    const deps = makeDeps({
+      pauseTask: vi.fn(() => pauseCall.promise),
+    })
+    const item = makeItem('a')
+    deps.getMediaItem = () => item
+    const runner = createBatchRunner(deps)
+
+    await runner.start(['a'])
+    const pausing = runner.pause()
+    await runner.onCompleted({
+      outputPath: '/out/a.mp4',
+      processedFrames: 100,
+      timeSeconds: 10,
+    })
+
+    pauseCall.resolve()
+    await pausing
+
+    expect(deps.getBatch()).toMatchObject({
+      isRunning: false,
+      isPaused: false,
+      controlPending: null,
+    })
+  })
+
+  it('ignores a late cancel failure after a cancellation event finalized the task', async () => {
+    const cancelCall = createDeferred()
+    const deps = makeDeps({
+      cancelTask: vi.fn(() => cancelCall.promise),
+    })
+    const item = makeItem('a')
+    deps.getMediaItem = () => item
+    const runner = createBatchRunner(deps)
+
+    await runner.start(['a'])
+    const cancelling = runner.cancel()
+    expect(deps.getBatch()).toMatchObject({
+      isCancelling: true,
+      controlPending: 'cancel',
+    })
+
+    await runner.onCancelled({ reason: 'user', details: null })
+    cancelCall.reject(new Error('late cancellation reply'))
+    await expect(cancelling).resolves.toBeUndefined()
+
+    expect(deps.getBatch()).toMatchObject({
+      isRunning: false,
+      isCancelling: false,
+      controlPending: null,
+    })
+    expect(deps.setTaskIssue).toHaveBeenLastCalledWith(null)
+  })
+
+  it('reports cancel failures and rolls back the optimistic cancelling state', async () => {
+    const deps = makeDeps({
+      cancelTask: vi.fn().mockRejectedValue(new Error('cancel failed')),
+    })
+    const item = makeItem('a')
+    deps.getMediaItem = () => item
+    const runner = createBatchRunner(deps)
+
+    await runner.start(['a'])
+    await expect(runner.cancel()).resolves.toBeUndefined()
+
+    expect(deps.getBatch()).toMatchObject({
+      isRunning: true,
+      isCancelling: false,
+      controlPending: null,
+    })
+    expect(deps.setTaskIssue).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'cancel failed' }),
+    )
   })
 
   it('skips pause and resume commands when the requested state is already active', async () => {
@@ -301,7 +381,7 @@ describe('batch-runner', () => {
     expect(deps.getBatch().completedCount).toBe(1)
   })
 
-  it('finishes a batch through the fixed log-preserving reset dependency', async () => {
+  it('retains the completed projection after the real finalization path', async () => {
     const deps = makeDeps()
     const item = makeItem('a')
     deps.getMediaItem = () => item
@@ -310,8 +390,21 @@ describe('batch-runner', () => {
     await runner.start(['a'])
     await runner.onCompleted({ outputPath: '/out/a.mp4', processedFrames: 100, timeSeconds: 10 })
 
-    expect(deps.resetItemsRunState).toHaveBeenCalledWith(new Set(['a']))
-    expect(vi.mocked(deps.resetItemsRunState).mock.calls[0]).toHaveLength(1)
+    expect(deps.getBatch()).toMatchObject({
+      currentId: null,
+      completedCount: 1,
+      isRunning: false,
+    })
+    expect(deps.getRuntimeIds()).toEqual(['a'])
+    expect(deps.getItemRunState('a')?.taskState.status).toBe('completed')
+
+    await runner.start(['a'])
+
+    expect(deps.getBatch()).toMatchObject({
+      completedCount: 0,
+      isRunning: true,
+    })
+    expect(deps.getItemRunState('a')?.taskState.status).toBe('running')
   })
 
   it('handles error event and finalizes', async () => {
@@ -322,10 +415,10 @@ describe('batch-runner', () => {
     deps.getMediaItem = (id) => id === 'a' ? itemA : id === 'b' ? itemB : null
 
     await runner.start(['a', 'b'])
-    await runner.onError({ code: 'test_error', message: 'fail', details: null })
+    await runner.onError({ code: 'process_failed', message: 'fail', details: null })
 
     expect(deps.getBatch().isRunning).toBe(true)
-    expect(deps.getBatch().failedCount).toBe(1)
+    expect(deps.getBatch().currentId).toBe('b')
   })
 
   it('routes onError to setTaskIssue so the task banner picks it up', async () => {
@@ -393,5 +486,31 @@ describe('batch-runner', () => {
 
     expect(deps.getBatch().currentId).toBe('a')
     expect(deps.startTask).not.toHaveBeenCalled()
+  })
+
+  it('relaunches an accepted resume conflict with force-resume', async () => {
+    const item = makeItem('a')
+    const buildRequest = vi.fn((mediaItem: MediaItem, resumeMode?: TaskRequest['resumeMode']) => ({
+      inputPath: mediaItem.inputPath,
+      decodeConfig: mediaItem.decodeConfig,
+      workflowConfig: mediaItem.workflowConfig,
+      encodeConfig: mediaItem.encodeConfig,
+      outputConfig: mediaItem.outputConfig,
+      resumeMode,
+    } as TaskRequest))
+    const deps = makeDeps({
+      getMediaItem: () => item,
+      buildRequest,
+    })
+    deps.getBatch().currentId = item.id
+    deps.getBatch().isRunning = true
+    const runner = createBatchRunner(deps)
+
+    await runner.resolveConflict('resume')
+
+    expect(buildRequest).toHaveBeenCalledWith(item, 'force-resume')
+    expect(deps.startTask).toHaveBeenCalledWith(
+      expect.objectContaining({ resumeMode: 'force-resume' }),
+    )
   })
 })

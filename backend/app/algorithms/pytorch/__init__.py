@@ -1,6 +1,6 @@
 """PyTorch-backed algorithm implementations.
 
-Phase 8 — algorithms are now partitioned by tensor backend so that
+Algorithms are partitioned by tensor backend so that
 ``app.algorithms.paddle.*`` and ``app.algorithms.pytorch.*`` can coexist
 in the source tree without their dependency closures (cudnn, paddle.fluid
 …) being pulled into the same Python process at import time.

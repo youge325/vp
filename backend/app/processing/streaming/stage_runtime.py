@@ -7,7 +7,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
-from app.algorithms.base import IAlgorithm
+from app.algorithms.interfaces import SingleFrameAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
 from app.planning import ProcessingStep
 from app.processing.streaming.frame_payload import FramePayload
@@ -18,7 +18,7 @@ from app.processing.streaming.metrics import PipelineMetrics
 class StepAlgorithm:
     step: ProcessingStep
     backend: ITensorBackend | None
-    algorithm: IAlgorithm
+    algorithm: SingleFrameAlgorithm
 
 
 @runtime_checkable

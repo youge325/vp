@@ -1,0 +1,1849 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/boundary.schema.json",
+  "title": "VpBoundaryContracts",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "AlgorithmFamily": {
+      "$ref": "#/$defs/AlgorithmFamily"
+    },
+    "AlgorithmInfo": {
+      "$ref": "#/$defs/AlgorithmInfo"
+    },
+    "BackendTaskErrorCode": {
+      "$ref": "#/$defs/BackendTaskErrorCode"
+    },
+    "BackendTaskErrorPayload": {
+      "$ref": "#/$defs/BackendTaskErrorPayload"
+    },
+    "CapabilityChoice": {
+      "$ref": "#/$defs/CapabilityChoice"
+    },
+    "CapabilityOptionKind": {
+      "$ref": "#/$defs/CapabilityOptionKind"
+    },
+    "CapabilityOptionSpec": {
+      "$ref": "#/$defs/CapabilityOptionSpec"
+    },
+    "CodecProfileFamily": {
+      "$ref": "#/$defs/CodecProfileFamily"
+    },
+    "CodecProfileSpec": {
+      "$ref": "#/$defs/CodecProfileSpec"
+    },
+    "DecodeConfig": {
+      "$ref": "#/$defs/DecodeConfig"
+    },
+    "DecodeMode": {
+      "$ref": "#/$defs/DecodeMode"
+    },
+    "EncodeConfig": {
+      "$ref": "#/$defs/EncodeConfig"
+    },
+    "EnvironmentCacheEntry": {
+      "$ref": "#/$defs/EnvironmentCacheEntry"
+    },
+    "EnvironmentCheckPayload": {
+      "$ref": "#/$defs/EnvironmentCheckPayload"
+    },
+    "EnvironmentCheckResult": {
+      "$ref": "#/$defs/EnvironmentCheckResult"
+    },
+    "EnvironmentCheckSource": {
+      "$ref": "#/$defs/EnvironmentCheckSource"
+    },
+    "FfmpegInfo": {
+      "$ref": "#/$defs/FfmpegInfo"
+    },
+    "FilterPipelineConfig": {
+      "$ref": "#/$defs/FilterPipelineConfig"
+    },
+    "FilterStep": {
+      "$ref": "#/$defs/FilterStep"
+    },
+    "FilterStepKind": {
+      "$ref": "#/$defs/FilterStepKind"
+    },
+    "FpsMode": {
+      "$ref": "#/$defs/FpsMode"
+    },
+    "GpuAdapter": {
+      "$ref": "#/$defs/GpuAdapter"
+    },
+    "GpuInfo": {
+      "$ref": "#/$defs/GpuInfo"
+    },
+    "GpuVendor": {
+      "$ref": "#/$defs/GpuVendor"
+    },
+    "HardwareDeviceOptionSpec": {
+      "$ref": "#/$defs/HardwareDeviceOptionSpec"
+    },
+    "InferenceEngine": {
+      "$ref": "#/$defs/InferenceEngine"
+    },
+    "InputFrameMode": {
+      "$ref": "#/$defs/InputFrameMode"
+    },
+    "InterpolationConfig": {
+      "$ref": "#/$defs/InterpolationConfig"
+    },
+    "ModelEngineMetricInfo": {
+      "$ref": "#/$defs/ModelEngineMetricInfo"
+    },
+    "ModelMetricInfo": {
+      "$ref": "#/$defs/ModelMetricInfo"
+    },
+    "ModelVariantInfo": {
+      "$ref": "#/$defs/ModelVariantInfo"
+    },
+    "OutputConfig": {
+      "$ref": "#/$defs/OutputConfig"
+    },
+    "PostprocessConfig": {
+      "$ref": "#/$defs/PostprocessConfig"
+    },
+    "PreprocessConfig": {
+      "$ref": "#/$defs/PreprocessConfig"
+    },
+    "ProcessOrder": {
+      "$ref": "#/$defs/ProcessOrder"
+    },
+    "RateControlConfig": {
+      "$ref": "#/$defs/RateControlConfig"
+    },
+    "RateControlMode": {
+      "$ref": "#/$defs/RateControlMode"
+    },
+    "RateControlModeSpec": {
+      "$ref": "#/$defs/RateControlModeSpec"
+    },
+    "ResumeInspectionEventType": {
+      "$ref": "#/$defs/ResumeInspectionEventType"
+    },
+    "ResumeInspectionResult": {
+      "$ref": "#/$defs/ResumeInspectionResult"
+    },
+    "ResumeMode": {
+      "$ref": "#/$defs/ResumeMode"
+    },
+    "ResumePipelineKind": {
+      "$ref": "#/$defs/ResumePipelineKind"
+    },
+    "ResumeStatusPayload": {
+      "$ref": "#/$defs/ResumeStatusPayload"
+    },
+    "RuntimeMode": {
+      "$ref": "#/$defs/RuntimeMode"
+    },
+    "SegmentManifest": {
+      "$ref": "#/$defs/SegmentManifest"
+    },
+    "ShellTaskErrorCode": {
+      "$ref": "#/$defs/ShellTaskErrorCode"
+    },
+    "SuperResolutionConfig": {
+      "$ref": "#/$defs/SuperResolutionConfig"
+    },
+    "TaskCancelledPayload": {
+      "$ref": "#/$defs/TaskCancelledPayload"
+    },
+    "TaskCancelledReason": {
+      "$ref": "#/$defs/TaskCancelledReason"
+    },
+    "TaskCompletedPayload": {
+      "$ref": "#/$defs/TaskCompletedPayload"
+    },
+    "TaskControlKind": {
+      "$ref": "#/$defs/TaskControlKind"
+    },
+    "TaskErrorCode": {
+      "$ref": "#/$defs/TaskErrorCode"
+    },
+    "TaskErrorPayload": {
+      "$ref": "#/$defs/TaskErrorPayload"
+    },
+    "TaskLogPayload": {
+      "$ref": "#/$defs/TaskLogPayload"
+    },
+    "TaskProgressPayload": {
+      "$ref": "#/$defs/TaskProgressPayload"
+    },
+    "TaskRequest": {
+      "$ref": "#/$defs/TaskRequest"
+    },
+    "TensorBackend": {
+      "$ref": "#/$defs/TensorBackend"
+    },
+    "TensorEngines": {
+      "$ref": "#/$defs/TensorEngines"
+    },
+    "VideoInfo": {
+      "$ref": "#/$defs/VideoInfo"
+    },
+    "WorkbenchPreset": {
+      "$ref": "#/$defs/WorkbenchPreset"
+    },
+    "WorkbenchPresetEntry": {
+      "$ref": "#/$defs/WorkbenchPresetEntry"
+    },
+    "WorkflowConfig": {
+      "$ref": "#/$defs/WorkflowConfig"
+    }
+  },
+  "required": [
+    "AlgorithmFamily",
+    "AlgorithmInfo",
+    "BackendTaskErrorCode",
+    "BackendTaskErrorPayload",
+    "CapabilityChoice",
+    "CapabilityOptionKind",
+    "CapabilityOptionSpec",
+    "CodecProfileFamily",
+    "CodecProfileSpec",
+    "DecodeConfig",
+    "DecodeMode",
+    "EncodeConfig",
+    "EnvironmentCacheEntry",
+    "EnvironmentCheckPayload",
+    "EnvironmentCheckResult",
+    "EnvironmentCheckSource",
+    "FfmpegInfo",
+    "FilterPipelineConfig",
+    "FilterStep",
+    "FilterStepKind",
+    "FpsMode",
+    "GpuAdapter",
+    "GpuInfo",
+    "GpuVendor",
+    "HardwareDeviceOptionSpec",
+    "InferenceEngine",
+    "InputFrameMode",
+    "InterpolationConfig",
+    "ModelEngineMetricInfo",
+    "ModelMetricInfo",
+    "ModelVariantInfo",
+    "OutputConfig",
+    "PostprocessConfig",
+    "PreprocessConfig",
+    "ProcessOrder",
+    "RateControlConfig",
+    "RateControlMode",
+    "RateControlModeSpec",
+    "ResumeInspectionEventType",
+    "ResumeInspectionResult",
+    "ResumeMode",
+    "ResumePipelineKind",
+    "ResumeStatusPayload",
+    "RuntimeMode",
+    "SegmentManifest",
+    "ShellTaskErrorCode",
+    "SuperResolutionConfig",
+    "TaskCancelledPayload",
+    "TaskCancelledReason",
+    "TaskCompletedPayload",
+    "TaskControlKind",
+    "TaskErrorCode",
+    "TaskErrorPayload",
+    "TaskLogPayload",
+    "TaskProgressPayload",
+    "TaskRequest",
+    "TensorBackend",
+    "TensorEngines",
+    "VideoInfo",
+    "WorkbenchPreset",
+    "WorkbenchPresetEntry",
+    "WorkflowConfig"
+  ],
+  "$defs": {
+    "AlgorithmFamily": {
+      "type": "string",
+      "enum": [
+        "rife",
+        "onnx_super_resolution",
+        "paddlegan_vsr"
+      ]
+    },
+    "AlgorithmInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "family": {
+          "$ref": "#/$defs/AlgorithmFamily"
+        },
+        "tensorBackends": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TensorBackend"
+          }
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "onnxModels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "modelDetails": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelVariantInfo"
+          }
+        },
+        "onnxModelDetails": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelVariantInfo"
+          }
+        },
+        "scaleFactors": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "fixedScaleFactor": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "defaultNumFrames": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "inputFrameMode": {
+          "$ref": "#/$defs/InputFrameMode"
+        }
+      },
+      "required": [
+        "name",
+        "family",
+        "tensorBackends",
+        "models",
+        "onnxModels",
+        "modelDetails",
+        "onnxModelDetails",
+        "scaleFactors",
+        "fixedScaleFactor",
+        "defaultNumFrames",
+        "inputFrameMode"
+      ],
+      "additionalProperties": false
+    },
+    "BackendTaskErrorCode": {
+      "type": "string",
+      "enum": [
+        "missing_ffmpeg",
+        "missing_model",
+        "missing_tensor_backend",
+        "missing_python_dependency",
+        "cancelled",
+        "process_failed",
+        "invalid_input",
+        "invalid_config",
+        "resume_conflict",
+        "io_error",
+        "persistence_failed"
+      ]
+    },
+    "BackendTaskErrorPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/BackendTaskErrorCode"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "CapabilityChoice": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "CapabilityOptionKind": {
+      "type": "string",
+      "enum": [
+        "boolean",
+        "number",
+        "string",
+        "choice"
+      ]
+    },
+    "CapabilityOptionSpec": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/CapabilityOptionKind"
+        },
+        "defaultValue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CapabilityChoice"
+          }
+        },
+        "min": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "max": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "required": [
+        "name",
+        "label",
+        "type",
+        "defaultValue",
+        "choices",
+        "min",
+        "max"
+      ],
+      "additionalProperties": false
+    },
+    "CodecProfileFamily": {
+      "type": "string",
+      "enum": [
+        "cpu",
+        "nvidia",
+        "intel",
+        "software"
+      ]
+    },
+    "CodecProfileSpec": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "family": {
+          "$ref": "#/$defs/CodecProfileFamily"
+        },
+        "codec": {
+          "type": "string"
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "hardwareDevices": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CapabilityOptionSpec"
+          }
+        },
+        "rateControlModes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/RateControlModeSpec"
+          }
+        },
+        "hardwareDeviceOptions": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/HardwareDeviceOptionSpec"
+            }
+          }
+        }
+      },
+      "required": [
+        "name",
+        "label",
+        "family",
+        "codec",
+        "available",
+        "hardwareDevices",
+        "options"
+      ],
+      "additionalProperties": false
+    },
+    "DecodeConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/DecodeMode"
+        },
+        "hwaccel": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hwaccelDevice": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "decoder": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "mode",
+        "hwaccel",
+        "hwaccelDevice",
+        "decoder",
+        "options"
+      ],
+      "additionalProperties": false
+    },
+    "DecodeMode": {
+      "type": "string",
+      "enum": [
+        "software",
+        "hardware"
+      ]
+    },
+    "EncodeConfig": {
+      "type": "object",
+      "properties": {
+        "codec": {
+          "type": "string"
+        },
+        "family": {
+          "type": "string"
+        },
+        "container": {
+          "type": "string"
+        },
+        "keepAudio": {
+          "type": "boolean"
+        },
+        "rateControl": {
+          "$ref": "#/$defs/RateControlConfig"
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "codec",
+        "family",
+        "container",
+        "keepAudio",
+        "rateControl",
+        "options"
+      ],
+      "additionalProperties": false
+    },
+    "EnvironmentCacheEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "checkedAt",
+        "fingerprint",
+        "result"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 14
+        },
+        "checkedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "fingerprint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "$ref": "#/$defs/EnvironmentCheckResult"
+        }
+      }
+    },
+    "EnvironmentCheckPayload": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "$ref": "#/$defs/EnvironmentCheckResult"
+        },
+        "source": {
+          "$ref": "#/$defs/EnvironmentCheckSource"
+        },
+        "checkedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "result",
+        "source",
+        "checkedAt"
+      ],
+      "additionalProperties": false
+    },
+    "EnvironmentCheckResult": {
+      "type": "object",
+      "properties": {
+        "ffmpeg": {
+          "$ref": "#/$defs/FfmpegInfo"
+        },
+        "gpu": {
+          "$ref": "#/$defs/GpuInfo"
+        },
+        "tensorEngines": {
+          "$ref": "#/$defs/TensorEngines"
+        },
+        "interpolationAlgorithms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AlgorithmInfo"
+          }
+        },
+        "superResolutionAlgorithms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AlgorithmInfo"
+          }
+        },
+        "runtimeMode": {
+          "$ref": "#/$defs/RuntimeMode"
+        }
+      },
+      "required": [
+        "ffmpeg",
+        "gpu",
+        "tensorEngines",
+        "interpolationAlgorithms",
+        "superResolutionAlgorithms",
+        "runtimeMode"
+      ],
+      "additionalProperties": false
+    },
+    "EnvironmentCheckSource": {
+      "type": "string",
+      "enum": [
+        "cache",
+        "probe"
+      ]
+    },
+    "FfmpegInfo": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "hwaccels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "encoderProfiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CodecProfileSpec"
+          }
+        },
+        "decoderProfiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CodecProfileSpec"
+          }
+        }
+      },
+      "required": [
+        "available",
+        "hwaccels",
+        "encoderProfiles",
+        "decoderProfiles"
+      ],
+      "additionalProperties": false
+    },
+    "FilterPipelineConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FilterStep"
+          }
+        }
+      },
+      "required": [
+        "enabled",
+        "filters"
+      ],
+      "additionalProperties": false
+    },
+    "FilterStep": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/FilterStepKind"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "kind",
+        "enabled",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    "FilterStepKind": {
+      "type": "string",
+      "enum": [
+        "scale",
+        "crop",
+        "pad",
+        "sharpen",
+        "denoise",
+        "color",
+        "anime_cleanup"
+      ]
+    },
+    "FpsMode": {
+      "type": "string",
+      "enum": [
+        "multi",
+        "target"
+      ]
+    },
+    "GpuAdapter": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "vendor": {
+          "$ref": "#/$defs/GpuVendor"
+        }
+      },
+      "required": [
+        "name",
+        "vendor"
+      ],
+      "additionalProperties": false
+    },
+    "GpuInfo": {
+      "type": "object",
+      "properties": {
+        "adapters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GpuAdapter"
+          }
+        }
+      },
+      "required": [
+        "adapters"
+      ],
+      "additionalProperties": false
+    },
+    "GpuVendor": {
+      "type": "string",
+      "enum": [
+        "nvidia",
+        "intel",
+        "amd",
+        "hygon",
+        "other"
+      ]
+    },
+    "HardwareDeviceOptionSpec": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "label"
+      ],
+      "additionalProperties": false
+    },
+    "InferenceEngine": {
+      "type": "string",
+      "enum": [
+        "cuda",
+        "tensorrt",
+        "dcu"
+      ]
+    },
+    "InputFrameMode": {
+      "type": "string",
+      "enum": [
+        "none",
+        "editable_chunk",
+        "fixed_window"
+      ]
+    },
+    "InterpolationConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "targetFps": {
+          "type": "number",
+          "format": "double",
+          "exclusiveMinimum": 0
+        },
+        "multi": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 2
+        },
+        "algorithm": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "onnxModel": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scale": {
+          "type": "number",
+          "format": "double",
+          "exclusiveMinimum": 0
+        },
+        "fp16": {
+          "type": "boolean"
+        },
+        "tensorBackend": {
+          "$ref": "#/$defs/TensorBackend"
+        },
+        "engine": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled",
+        "targetFps",
+        "multi",
+        "algorithm",
+        "model",
+        "onnxModel",
+        "scale",
+        "fp16",
+        "tensorBackend",
+        "engine"
+      ],
+      "additionalProperties": false
+    },
+    "ModelEngineMetricInfo": {
+      "type": "object",
+      "properties": {
+        "gflopsPerMegapixel": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "activationBytesPerMegapixel": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "runtimeOverheadBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "runtimeFrameCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "inputModulo": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "analysisStatus": {
+          "type": "string"
+        },
+        "analysisNotes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "gflopsPerMegapixel",
+        "activationBytesPerMegapixel",
+        "runtimeOverheadBytes",
+        "runtimeFrameCount",
+        "inputModulo",
+        "analysisStatus",
+        "analysisNotes"
+      ],
+      "additionalProperties": false
+    },
+    "ModelMetricInfo": {
+      "type": "object",
+      "properties": {
+        "parameterCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "parameterBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "gflopsPerMegapixel": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "activationBytesPerMegapixel": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "runtimeOverheadBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "runtimeFrameCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "inputModulo": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "analysisStatus": {
+          "type": "string"
+        },
+        "analysisNotes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "engineMetrics": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelEngineMetricInfo"
+          }
+        }
+      },
+      "required": [
+        "parameterCount",
+        "parameterBytes",
+        "gflopsPerMegapixel",
+        "activationBytesPerMegapixel",
+        "runtimeOverheadBytes",
+        "runtimeFrameCount",
+        "inputModulo",
+        "analysisStatus",
+        "analysisNotes",
+        "engineMetrics"
+      ],
+      "additionalProperties": false
+    },
+    "ModelVariantInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "metrics": {
+          "$ref": "#/$defs/ModelMetricInfo"
+        }
+      },
+      "required": [
+        "name",
+        "label",
+        "metrics"
+      ],
+      "additionalProperties": false
+    },
+    "OutputConfig": {
+      "type": "object",
+      "properties": {
+        "outputDir": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "openOnComplete": {
+          "type": "boolean"
+        },
+        "segmentFrames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "outputDir",
+        "openOnComplete",
+        "segmentFrames"
+      ],
+      "additionalProperties": false
+    },
+    "PostprocessConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FilterStep"
+          }
+        }
+      },
+      "required": [
+        "enabled",
+        "filters"
+      ],
+      "additionalProperties": false
+    },
+    "PreprocessConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FilterStep"
+          }
+        }
+      },
+      "required": [
+        "enabled",
+        "filters"
+      ],
+      "additionalProperties": false
+    },
+    "ProcessOrder": {
+      "type": "string",
+      "enum": [
+        "super_resolution_then_interpolation",
+        "frame_interpolation_then_super_resolution"
+      ]
+    },
+    "RateControlConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/RateControlMode"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "required": [
+        "mode",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "RateControlMode": {
+      "type": "string",
+      "enum": [
+        "crf",
+        "cq",
+        "qp",
+        "bitrate"
+      ]
+    },
+    "RateControlModeSpec": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/RateControlMode"
+        },
+        "label": {
+          "type": "string"
+        },
+        "defaultValue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "label",
+        "defaultValue",
+        "unit"
+      ],
+      "additionalProperties": false
+    },
+    "ResumeInspectionEventType": {
+      "type": "string",
+      "enum": [
+        "resume_inspection"
+      ]
+    },
+    "ResumeInspectionResult": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/ResumeInspectionEventType"
+        },
+        "pipeline_kind": {
+          "$ref": "#/$defs/ResumePipelineKind"
+        },
+        "outputPath": {
+          "type": "string"
+        },
+        "input_path": {
+          "type": "string"
+        },
+        "finalExists": {
+          "type": "boolean"
+        },
+        "sidecarExists": {
+          "type": "boolean"
+        },
+        "signatureMatch": {
+          "type": "boolean"
+        },
+        "completedChunks": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "completedOutputFrames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "nextSourceFrame": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "totalOutputFrames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "type",
+        "pipeline_kind",
+        "outputPath",
+        "input_path",
+        "finalExists",
+        "sidecarExists",
+        "signatureMatch",
+        "completedChunks",
+        "completedOutputFrames",
+        "nextSourceFrame",
+        "totalOutputFrames"
+      ],
+      "additionalProperties": false
+    },
+    "ResumeMode": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "force-fresh",
+        "force-resume"
+      ]
+    },
+    "ResumePipelineKind": {
+      "type": "string",
+      "enum": [
+        "streaming",
+        "format_conversion"
+      ]
+    },
+    "ResumeStatusPayload": {
+      "type": "object",
+      "properties": {
+        "resumed": {
+          "type": "boolean"
+        },
+        "completedChunks": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "completedOutputFrames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "startSourceFrame": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "totalOutputFrames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "resumed",
+        "completedChunks",
+        "completedOutputFrames",
+        "startSourceFrame",
+        "totalOutputFrames"
+      ],
+      "additionalProperties": false
+    },
+    "RuntimeMode": {
+      "type": "string",
+      "enum": [
+        "external",
+        "bundled",
+        "expected-bundled"
+      ]
+    },
+    "SegmentManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "signature",
+        "created_at",
+        "input_path",
+        "output_path",
+        "config_snapshot"
+      ],
+      "properties": {
+        "version": {
+          "const": 3
+        },
+        "signature": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "input_path": {
+          "type": "string"
+        },
+        "output_path": {
+          "type": "string"
+        },
+        "config_snapshot": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "ShellTaskErrorCode": {
+      "type": "string",
+      "enum": [
+        "process_failed",
+        "invalid_input",
+        "io_error",
+        "spawn_failed",
+        "runtime_panic",
+        "schema_mismatch",
+        "persistence_failed",
+        "backend_no_json",
+        "controller_unavailable",
+        "backend_probe_failed"
+      ]
+    },
+    "SuperResolutionConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "scaleFactor": {
+          "type": "number",
+          "format": "double",
+          "exclusiveMinimum": 0
+        },
+        "algorithm": {
+          "type": "string"
+        },
+        "onnxModel": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tensorBackend": {
+          "$ref": "#/$defs/TensorBackend"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "numFrames": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "enabled",
+        "scaleFactor",
+        "algorithm",
+        "onnxModel",
+        "tensorBackend",
+        "engine",
+        "numFrames"
+      ],
+      "additionalProperties": false
+    },
+    "TaskCancelledPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "details"
+      ],
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/TaskCancelledReason"
+        },
+        "details": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    "TaskCancelledReason": {
+      "type": "string",
+      "enum": [
+        "user",
+        "stalled"
+      ]
+    },
+    "TaskCompletedPayload": {
+      "type": "object",
+      "properties": {
+        "outputPath": {
+          "type": "string"
+        },
+        "processedFrames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "timeSeconds": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "outputPath",
+        "processedFrames",
+        "timeSeconds"
+      ],
+      "additionalProperties": false
+    },
+    "TaskControlKind": {
+      "type": "string",
+      "enum": [
+        "pause",
+        "resume",
+        "cancel"
+      ]
+    },
+    "TaskErrorCode": {
+      "type": "string",
+      "enum": [
+        "missing_ffmpeg",
+        "missing_model",
+        "missing_tensor_backend",
+        "missing_python_dependency",
+        "cancelled",
+        "process_failed",
+        "invalid_input",
+        "invalid_config",
+        "resume_conflict",
+        "io_error",
+        "spawn_failed",
+        "runtime_panic",
+        "schema_mismatch",
+        "persistence_failed",
+        "backend_no_json",
+        "controller_unavailable",
+        "backend_probe_failed"
+      ]
+    },
+    "TaskErrorPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/TaskErrorCode"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "details"
+      ]
+    },
+    "TaskLogPayload": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "TaskProgressPayload": {
+      "type": "object",
+      "properties": {
+        "current": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "total": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "percent": {
+          "type": "number",
+          "format": "double"
+        },
+        "stage": {
+          "type": "string"
+        },
+        "stageIndex": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "stageTotal": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "metrics": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "current",
+        "total",
+        "percent",
+        "stage",
+        "stageIndex",
+        "stageTotal"
+      ],
+      "additionalProperties": false
+    },
+    "TaskRequest": {
+      "type": "object",
+      "properties": {
+        "inputPath": {
+          "type": "string"
+        },
+        "decodeConfig": {
+          "$ref": "#/$defs/DecodeConfig"
+        },
+        "workflowConfig": {
+          "$ref": "#/$defs/WorkflowConfig"
+        },
+        "encodeConfig": {
+          "$ref": "#/$defs/EncodeConfig"
+        },
+        "outputConfig": {
+          "$ref": "#/$defs/OutputConfig"
+        },
+        "resumeMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResumeMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "inputPath",
+        "decodeConfig",
+        "workflowConfig",
+        "encodeConfig",
+        "outputConfig"
+      ],
+      "additionalProperties": false
+    },
+    "TensorBackend": {
+      "type": "string",
+      "enum": [
+        "pytorch",
+        "paddle",
+        "onnx"
+      ]
+    },
+    "TensorEngines": {
+      "type": "object",
+      "properties": {
+        "pytorch": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InferenceEngine"
+          }
+        },
+        "paddle": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InferenceEngine"
+          }
+        },
+        "onnx": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InferenceEngine"
+          }
+        }
+      },
+      "required": [
+        "pytorch",
+        "paddle",
+        "onnx"
+      ],
+      "additionalProperties": false
+    },
+    "VideoInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fps": {
+          "type": "number"
+        },
+        "width": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "height": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "videoCodec": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fps",
+        "width",
+        "height",
+        "videoCodec"
+      ]
+    },
+    "WorkbenchPreset": {
+      "type": "object",
+      "properties": {
+        "decodeConfig": {
+          "$ref": "#/$defs/DecodeConfig"
+        },
+        "workflowConfig": {
+          "$ref": "#/$defs/WorkflowConfig"
+        },
+        "encodeConfig": {
+          "$ref": "#/$defs/EncodeConfig"
+        },
+        "outputConfig": {
+          "$ref": "#/$defs/OutputConfig"
+        }
+      },
+      "required": [
+        "decodeConfig",
+        "workflowConfig",
+        "encodeConfig",
+        "outputConfig"
+      ],
+      "additionalProperties": false
+    },
+    "WorkbenchPresetEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "preset"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "preset": {
+          "$ref": "#/$defs/WorkbenchPreset"
+        }
+      }
+    },
+    "WorkflowConfig": {
+      "type": "object",
+      "properties": {
+        "fpsMode": {
+          "$ref": "#/$defs/FpsMode"
+        },
+        "processOrder": {
+          "$ref": "#/$defs/ProcessOrder"
+        },
+        "interpolation": {
+          "$ref": "#/$defs/InterpolationConfig"
+        },
+        "superResolution": {
+          "$ref": "#/$defs/SuperResolutionConfig"
+        },
+        "preprocess": {
+          "$ref": "#/$defs/PreprocessConfig"
+        },
+        "postprocess": {
+          "$ref": "#/$defs/PostprocessConfig"
+        }
+      },
+      "required": [
+        "fpsMode",
+        "processOrder",
+        "interpolation",
+        "superResolution",
+        "preprocess",
+        "postprocess"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

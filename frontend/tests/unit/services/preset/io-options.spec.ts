@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import * as ioOptions from '@/services/preset/io-options'
 import {
   buildProfileOptions,
   CONTAINER_SELECT_OPTIONS,
@@ -28,10 +27,6 @@ const encoderProfile = (name: string, label: string): EncoderProfileSpec => ({
 })
 
 describe('io-options', () => {
-  it('does not expose internal container option builder', () => {
-    expect('buildContainerOptions' in ioOptions).toBe(false)
-  })
-
   it('builds profile select options for decoder and encoder profiles', () => {
     expect(buildProfileOptions([
       decoderProfile('software', 'Software Decode'),

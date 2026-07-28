@@ -2,8 +2,8 @@
 
 The Python CLI still receives and passes camelCase JSON dictionaries at the
 wire boundaries. Internally, the orchestration layers can use the Pydantic
-models here without losing the legacy dict shape used by FFmpeg wrappers,
-resume signatures, and streaming tests.
+models here while projecting the canonical camelCase boundary shape used by
+FFmpeg adapters, resume signatures, and streaming workers.
 """
 
 from __future__ import annotations
@@ -33,10 +33,11 @@ class RuntimeConfigs:
     _expanded_sections: frozenset[_ConfigSection] = field(default_factory=frozenset, repr=False)
 
     def json_section(self, section: _ConfigSection) -> dict[str, Any]:
-        """Project one model to its legacy camelCase wire shape."""
+        """Project one model to its canonical camelCase boundary shape."""
         model = getattr(self, section)
         value = model.model_dump(
             by_alias=True,
+            mode="json",
             exclude_unset=section not in self._expanded_sections,
         )
         return _copy_json_dict(value)

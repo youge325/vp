@@ -7,16 +7,17 @@ import {
   modelOptionLabel,
 } from '@/services/model-metric-format'
 import type { ModelVariantInfo } from '@/types/protocol'
+import { createModelMetricInfo } from '../fixtures/environment'
 
 function detail(parameterCount: number | null = 5670892): ModelVariantInfo {
   return {
     name: '4.25',
     label: 'RIFE 4.25',
-    metrics: {
+    metrics: createModelMetricInfo({
       parameterCount,
       analysisStatus: 'ok',
       analysisNotes: [],
-    },
+    }),
   }
 }
 

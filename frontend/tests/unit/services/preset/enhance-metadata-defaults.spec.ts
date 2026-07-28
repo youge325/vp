@@ -4,7 +4,9 @@ import { pickDefaultInterpolationModel } from '@/services/preset/enhance-metadat
 import type { EnvironmentCheckResult } from '@/types/protocol'
 import { createEnvironmentResult } from '../../fixtures/environment'
 
-function env(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCheckResult {
+function env(
+  overrides: Parameters<typeof createEnvironmentResult>[0] = {},
+): EnvironmentCheckResult {
   return createEnvironmentResult(overrides)
 }
 
@@ -18,7 +20,7 @@ describe('enhance metadata defaults', () => {
     }), 'rife-fast')).toBe('4.26')
   })
 
-  it('keeps legacy metadata fallbacks when environment metadata is missing', () => {
+  it('uses bootstrap metadata defaults when environment metadata is missing', () => {
     expect(pickDefaultInterpolationModel(null, 'missing')).toBe('4.25')
   })
 })

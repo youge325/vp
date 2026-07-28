@@ -11,7 +11,7 @@ import torch.nn as nn
 
 from app.utils.logger import get_logger
 
-from ._model_spec import HEAD_NONE, get_spec
+from app.catalog.rife_models import HEAD_NONE, get_spec
 from .model_loader import get_model_dir, load_rife_model
 
 logger = get_logger(__name__)

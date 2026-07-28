@@ -2,74 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
+from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS, PaddleGanVsrSpec
 from app.config import settings
 from app.errors import TaskErrorCode, raise_error
-
-
-@dataclass(frozen=True, slots=True)
-class _PaddleGanVsrSpec:
-    """Metadata for one bundled PaddleGAN video super-resolution model."""
-
-    model_id: str
-    subdir: str
-    filename: str
-    sequence_mode: str
-    default_num_frames: int
-    auxiliary_filenames: tuple[str, ...] = ()
-
-
-PADDLEGAN_VSR_SPECS: dict[str, _PaddleGanVsrSpec] = {
-    "ppmsvsr": _PaddleGanVsrSpec(
-        model_id="ppmsvsr",
-        subdir="ppmsvsr",
-        filename="PP-MSVSR_reds_x4.pdparams",
-        sequence_mode="recurrent",
-        default_num_frames=10,
-        auxiliary_filenames=("modified_spynet_tiny.pdparams",),
-    ),
-    "ppmsvsr-large": _PaddleGanVsrSpec(
-        model_id="ppmsvsr-large",
-        subdir="ppmsvsr-large",
-        filename="PP-MSVSR-L_reds_x4.pdparams",
-        sequence_mode="recurrent",
-        default_num_frames=10,
-        auxiliary_filenames=("modified_spynet.pdparams",),
-    ),
-    "edvr": _PaddleGanVsrSpec(
-        model_id="edvr",
-        subdir="edvr",
-        filename="EDVR_L_w_tsa_SRx4.pdparams",
-        sequence_mode="window",
-        default_num_frames=5,
-    ),
-    "basicvsr": _PaddleGanVsrSpec(
-        model_id="basicvsr",
-        subdir="basicvsr",
-        filename="BasicVSR_reds_x4.pdparams",
-        sequence_mode="recurrent",
-        default_num_frames=10,
-        auxiliary_filenames=("spynet.pdparams",),
-    ),
-    "iconvsr": _PaddleGanVsrSpec(
-        model_id="iconvsr",
-        subdir="iconvsr",
-        filename="IconVSR_reds_x4.pdparams",
-        sequence_mode="recurrent",
-        default_num_frames=10,
-        auxiliary_filenames=("spynet.pdparams", "edvrm.pdparams"),
-    ),
-    "basicvsr-plus-plus": _PaddleGanVsrSpec(
-        model_id="basicvsr-plus-plus",
-        subdir="basicvsr-plus-plus",
-        filename="BasicVSR++_reds_x4.pdparams",
-        sequence_mode="recurrent",
-        default_num_frames=10,
-        auxiliary_filenames=("spynet.pdparams",),
-    ),
-}
 
 
 def _fixed_weight_root() -> Path:
@@ -77,7 +14,7 @@ def _fixed_weight_root() -> Path:
     return Path(settings.backend_root) / "models" / "super_resolution" / "paddlegan"
 
 
-def get_spec(model_id: str) -> _PaddleGanVsrSpec:
+def get_spec(model_id: str) -> PaddleGanVsrSpec:
     try:
         return PADDLEGAN_VSR_SPECS[model_id]
     except KeyError:

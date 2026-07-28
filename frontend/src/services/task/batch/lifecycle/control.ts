@@ -1,28 +1,109 @@
 // Pause, resume and cancel IPC operations with state rollback on failure.
 
 import { normalizeError } from '@/services/error/normalize'
-import { TASK_ERROR_CODES } from '@/types/protocol'
+import {
+  TASK_ERROR_CODES,
+  type TaskControlKind,
+} from '@/types/protocol'
+import type { BatchState } from '@/types/domain/batch'
 
 import { applyTaskCancelling, applyTaskPaused, applyTaskResumed } from '../../events'
 
 import type { createCommonHelpers } from './common'
-import type { BatchLifecycleDeps } from './types'
+import type {
+  BatchStatePort,
+  MediaRunStatePort,
+  TaskCommandPort,
+  TaskIssuePort,
+} from './types'
 
 type CommonHelpers = ReturnType<typeof createCommonHelpers>
+type ControlDeps =
+  & Pick<BatchStatePort, 'getBatch' | 'setBatch' | 'setPendingConflict'>
+  & Pick<MediaRunStatePort, 'setItemTaskState'>
+  & Pick<TaskCommandPort, 'cancelTask' | 'pauseTask' | 'resumeTask'>
+  & TaskIssuePort
+
+interface ControlAttempt {
+  kind: TaskControlKind
+  taskId: string | null
+  token: number
+}
 
 export function createControlOps(
-  deps: BatchLifecycleDeps,
+  deps: ControlDeps,
   helpers: CommonHelpers,
 ) {
+  let nextControlToken = 0
+  let activeControlToken: number | null = null
+
+  function beginControl(kind: TaskControlKind): ControlAttempt | null {
+    const batch = deps.getBatch()
+    if (!batch.isRunning || batch.isCancelling || batch.controlPending !== null) {
+      return null
+    }
+
+    const attempt = {
+      kind,
+      taskId: batch.currentId,
+      token: ++nextControlToken,
+    }
+    activeControlToken = attempt.token
+    deps.setBatch({ controlPending: kind })
+    return attempt
+  }
+
+  function isCurrentAttempt(attempt: ControlAttempt): boolean {
+    const batch = deps.getBatch()
+    return activeControlToken === attempt.token
+      && batch.isRunning
+      && batch.currentId === attempt.taskId
+      && batch.controlPending === attempt.kind
+  }
+
+  function completeAttempt(
+    attempt: ControlAttempt,
+    update: Partial<BatchState>,
+  ): boolean {
+    if (!isCurrentAttempt(attempt)) {
+      if (activeControlToken === attempt.token) {
+        activeControlToken = null
+      }
+      return false
+    }
+
+    activeControlToken = null
+    deps.setBatch({ ...update, controlPending: null })
+    return true
+  }
+
+  function reportControlFailure(
+    attempt: ControlAttempt,
+    error: unknown,
+    rollback: Partial<BatchState> = {},
+  ): boolean {
+    if (!completeAttempt(attempt, rollback)) {
+      return false
+    }
+    deps.setTaskIssue(normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
+    return true
+  }
+
   async function setPaused(paused: boolean): Promise<void> {
     const batch = deps.getBatch()
-    if (!batch.isRunning || batch.isPaused === paused || batch.isCancelling) {
+    if (batch.isPaused === paused) {
+      return
+    }
+    const attempt = beginControl(paused ? 'pause' : 'resume')
+    if (!attempt) {
       return
     }
 
     try {
       await (paused ? deps.pauseTask() : deps.resumeTask())
-      deps.setBatch({ isPaused: paused })
+      if (!completeAttempt(attempt, { isPaused: paused })) {
+        return
+      }
       const { item, runState } = helpers.getCurrentTaskContext()
       if (item && runState) {
         const nextState = paused
@@ -30,8 +111,9 @@ export function createControlOps(
           : applyTaskResumed(runState.taskState)
         deps.setItemTaskState(item.id, nextState)
       }
+      deps.setTaskIssue(null)
     } catch (error) {
-      throw normalizeError(error, TASK_ERROR_CODES.ProcessFailed)
+      reportControlFailure(attempt, error)
     }
   }
 
@@ -45,7 +127,8 @@ export function createControlOps(
 
   async function cancel(): Promise<void> {
     const batch = deps.getBatch()
-    if (!batch.isRunning || batch.isCancelling) {
+    const attempt = beginControl('cancel')
+    if (!attempt) {
       return
     }
 
@@ -67,16 +150,18 @@ export function createControlOps(
 
     try {
       await deps.cancelTask()
+      if (completeAttempt(attempt, {})) {
+        deps.setTaskIssue(null)
+      }
     } catch (error) {
-      deps.setBatch({
+      const restored = reportControlFailure(attempt, error, {
         queue: previousQueue,
         isPaused: wasPaused,
         isCancelling: false,
       })
-      if (item && previousTaskState) {
+      if (restored && item && previousTaskState) {
         deps.setItemTaskState(item.id, previousTaskState)
       }
-      throw normalizeError(error, TASK_ERROR_CODES.ProcessFailed)
     }
   }
 

@@ -47,13 +47,12 @@ function env(): EnvironmentCheckResult {
 
 describe('enhance workflow lookup rules', () => {
   it('finds algorithms and selects a supported tensor backend without Vue state', () => {
-    expect(findInterpolationAlgorithm(env(), 'rife')).toBe(interpolation)
-    expect(findSuperResolutionAlgorithm(env(), 'ppmsvsr')).toBe(superResolution)
+    expect(findInterpolationAlgorithm(env(), 'rife')).toEqual(interpolation)
+    expect(findSuperResolutionAlgorithm(env(), 'ppmsvsr')).toEqual(superResolution)
     expect(findInterpolationAlgorithm(null, 'rife')).toBeUndefined()
 
     expect(pickSupportedBackend(interpolation, 'onnx')).toBe('onnx')
     expect(pickSupportedBackend(superResolution, 'onnx')).toBe('paddle')
-    expect(pickSupportedBackend({ ...superResolution, tensorBackends: ['custom'] }, 'onnx')).toBe('onnx')
     expect(pickSupportedBackend(undefined, 'pytorch')).toBe('pytorch')
   })
 

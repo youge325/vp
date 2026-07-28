@@ -1,36 +1,17 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import { useConsoleTaskContext } from '@/composables/selectors/useTaskContext'
-import { displayTaskLogLine } from '@/services/task/events'
-import { useMediaStore } from '@/stores/media'
-import { useTaskStore } from '@/stores/task'
+import { nextTick, ref, watch } from 'vue'
+import { useTaskConsoleState } from '@/composables/selectors/useTaskConsoleState'
 
-const mediaStore = useMediaStore()
-const taskStore = useTaskStore()
-const consoleTaskContext = useConsoleTaskContext()
-const batch = taskStore.batch
+const {
+  logs,
+  resumeStatus,
+  showResumeBanner,
+  done,
+  total,
+  progressPercent,
+} = useTaskConsoleState()
 const terminalRef = ref<HTMLDivElement | null>(null)
-const consoleRunState = computed(() => consoleTaskContext.value.runState)
-const logs = computed(() => consoleRunState.value?.taskState.logs ?? [])
-const resumeStatus = computed(() => consoleRunState.value?.taskState.resumeStatus ?? null)
-const showResumeBanner = computed(() => Boolean(resumeStatus.value?.resumed))
 
-const done = computed(() => batch.completedCount)
-const total = computed(() => taskStore.batchRuntimeIds.length || mediaStore.selectedItems.length)
-const progressPercent = computed(() => {
-  if (total.value === 0) {
-    return 0
-  }
-  return Math.min(100, Math.round((done.value / total.value) * 100))
-})
-
-// Phase D.4.8 — watch length instead of the array contents. The previous
-// `deep: true` watcher fired on every progress-line replacement
-// (`[VP_PROGRESS]` updates the matching stage line roughly once per
-// backend percent tick) and forced a full panel reconcile every time.
-// Listening to `length` means we only scroll on append, which is the
-// visible behaviour the user actually cares about; progress-line tail
-// updates keep the user's scroll position intact.
 watch(
   () => logs.value.length,
   async () => {
@@ -58,7 +39,7 @@ watch(
     </div>
     <div ref="terminalRef" class="log-panel log-panel-terminal">
       <p v-for="(line, index) in logs" :key="index" class="log-line">
-        <span>{{ displayTaskLogLine(line) }}</span>
+        <span>{{ line }}</span>
       </p>
     </div>
     <div class="progress-row">

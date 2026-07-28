@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
+from tests_full_e2e.helpers import try_last_json_line
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_DIR.parent
@@ -108,15 +109,15 @@ def _run_rife_pytorch(case):
         fp16=False,
         engine=case["engine"],
     )
-    img0 = torch.rand((1, 3, TEST_SIZE, TEST_SIZE), device=solver.device, dtype=solver.dtype)
-    img1 = torch.rand((1, 3, TEST_SIZE, TEST_SIZE), device=solver.device, dtype=solver.dtype)
+    img0 = torch.rand((1, 3, TEST_SIZE, TEST_SIZE), device="cuda", dtype=torch.float32)
+    img1 = torch.rand((1, 3, TEST_SIZE, TEST_SIZE), device="cuda", dtype=torch.float32)
     started = time.perf_counter()
     output = solver.interpolate(img0, img1)
     torch.cuda.synchronize()
     return {
         "status": "passed",
-        "device": str(solver.device),
-        "dtype": str(solver.dtype),
+        "device": str(output.device),
+        "dtype": str(output.dtype),
         "outputShape": list(output.shape),
         "elapsedSeconds": round(time.perf_counter() - started, 6),
         **_torch_memory(torch),
@@ -267,7 +268,7 @@ def _run_case(case: dict[str, Any]) -> dict[str, Any]:
         timeout=WORKER_TIMEOUT_SECONDS,
         check=False,
     )
-    payload = _parse_last_json(proc.stdout)
+    payload = try_last_json_line(proc.stdout)
     if payload is None:
         payload = {
             "status": "failed",
@@ -283,15 +284,6 @@ def _run_case(case: dict[str, Any]) -> dict[str, Any]:
     if proc.stdout:
         payload["stdoutTail"] = proc.stdout[-4000:]
     return payload
-
-
-def _parse_last_json(stdout: str) -> dict[str, Any] | None:
-    for line in reversed(stdout.splitlines()):
-        try:
-            return json.loads(line)
-        except json.JSONDecodeError:
-            continue
-    return None
 
 
 def _write_reports(results: list[dict[str, Any]]) -> None:

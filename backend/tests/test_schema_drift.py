@@ -1,10 +1,4 @@
-"""Compare Python pydantic schemas against the Rust-generated JSON Schema files.
-
-These tests guard against silent field-name or type drift when one side is
-updated but the other is forgotten.  They do **not** enforce identical
-schema-metadata (e.g. ``title``, ``description``) — only the structural
-contract that matters at runtime.
-"""
+"""Generated-boundary ownership and strict decoding regression tests."""
 
 from __future__ import annotations
 
@@ -12,178 +6,140 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from app.errors import TaskErrorCode
-from app.models import (
-    DecodeConfig,
-    EncodeConfig,
-    FilterStep,
-    InterpolationConfig,
-    OutputConfig,
-    PostprocessConfig,
-    PreprocessConfig,
-    RateControlConfig,
-    SuperResolutionConfig,
-    WorkflowConfig,
-)
-from app.protocol.payloads import (
-    ResumeStatusPayload,
-    TaskCompletedPayload,
-    TaskErrorPayload,
-    TaskProgressPayload,
-)
+from app.generated import contracts as generated
+from app.models import DecodeConfig, OutputConfig, WorkflowConfig
+from app.protocol.payloads import TaskErrorPayload, TaskProgressPayload
 
-SCHEMA_DIR = Path(__file__).resolve().parents[2] / "frontend" / "src-tauri" / "schemas"
-
-_MODEL_MAP: dict[str, type] = {
-    "decode_config": DecodeConfig,
-    "encode_config": EncodeConfig,
-    "filter_step": FilterStep,
-    "interpolation_config": InterpolationConfig,
-    "output_config": OutputConfig,
-    "postprocess_config": PostprocessConfig,
-    "preprocess_config": PreprocessConfig,
-    "rate_control_config": RateControlConfig,
-    "super_resolution_config": SuperResolutionConfig,
-    "workflow_config": WorkflowConfig,
-}
-
-_PAYLOAD_MODEL_MAP: dict[str, type] = {
-    "resume_status_payload": ResumeStatusPayload,
-    "task_completed_payload": TaskCompletedPayload,
-    "task_error_payload": TaskErrorPayload,
-    "task_progress_payload": TaskProgressPayload,
-}
-
-_FREEFORM_PAYLOAD_PROPS: dict[str, set[str]] = {
-    "task_error_payload": {"details"},
-    "task_progress_payload": {"metrics"},
-}
+SCHEMA_DIR = Path(__file__).resolve().parents[2] / "contracts"
 
 
-def _collect_props(schema: dict) -> dict[str, dict]:
-    """Flatten a schema into {camelCase_property: property_schema}."""
-    props = schema.get("properties", {})
-    defs = schema.get("$defs", {})
-    # schemars nests sub-schemas under $defs; resolve $ref pointers
-    result: dict[str, dict] = {}
-    for name, prop in props.items():
-        if not isinstance(prop, dict):
-            # schemars may emit `true` for unconstrained types (e.g. serde_json::Value)
-            result[name] = {"type": "any"}
-        elif "$ref" in prop:
-            ref_name = prop["$ref"].split("/")[-1]
-            result[name] = defs.get(ref_name, {})
-        else:
-            result[name] = prop
-    return result
+def _workflow() -> dict[str, object]:
+    return {
+        "fpsMode": "multi",
+        "processOrder": "super_resolution_then_interpolation",
+        "interpolation": {
+            "enabled": False,
+            "targetFps": 60.0,
+            "multi": 2,
+            "algorithm": "rife",
+            "model": "4.25",
+            "onnxModel": None,
+            "scale": 1.0,
+            "fp16": False,
+            "tensorBackend": "pytorch",
+            "engine": "cuda",
+        },
+        "superResolution": {
+            "enabled": False,
+            "scaleFactor": 2.0,
+            "algorithm": "onnx",
+            "onnxModel": None,
+            "tensorBackend": "onnx",
+            "engine": "cuda",
+            "numFrames": 10,
+        },
+        "preprocess": {"enabled": False, "filters": []},
+        "postprocess": {"enabled": False, "filters": []},
+    }
 
 
-def _is_required(schema: dict, prop_name: str) -> bool:
-    return prop_name in schema.get("required", [])
+def test_config_models_are_generated_or_thin_domain_subclasses() -> None:
+    assert DecodeConfig is generated.DecodeConfig
+    assert WorkflowConfig is generated.WorkflowConfig
+    assert issubclass(OutputConfig, generated.OutputConfig)
+    assert OutputConfig.model_fields.keys() == generated.OutputConfig.model_fields.keys()
 
 
-def _type_token(prop_schema: dict) -> str:
-    """Return a normalised type token for drift comparison."""
-    if not prop_schema or prop_schema == {"type": "any"}:
-        return "any"
-    if "anyOf" in prop_schema:
-        types: list[str] = []
-        for branch in prop_schema["anyOf"]:
-            bt = branch.get("type")
-            if bt:
-                types.append(bt)
-        return " | ".join(sorted(types))
-    t = prop_schema.get("type")
-    if t is None:
-        return "any"
-    if isinstance(t, list):
-        return " | ".join(sorted(t))
-    if "$ref" in prop_schema:
-        return "object"
-    return str(t)
+def test_ndjson_adapters_reuse_generated_field_sets() -> None:
+    assert issubclass(TaskProgressPayload, generated.TaskProgressPayload)
+    assert TaskProgressPayload.model_fields.keys() == generated.TaskProgressPayload.model_fields.keys()
+    assert issubclass(TaskErrorPayload, generated.BackendTaskErrorPayload)
+    assert TaskErrorPayload.model_fields.keys() == generated.BackendTaskErrorPayload.model_fields.keys()
 
 
-def _enum_values(prop_schema: dict) -> set[str] | None:
-    """Return string enum values when the schema constrains a field by enum."""
-    if "enum" in prop_schema:
-        return {str(value) for value in prop_schema["enum"]}
-    if "anyOf" in prop_schema:
-        values: set[str] = set()
-        for branch in prop_schema["anyOf"]:
-            branch_values = _enum_values(branch)
-            if branch_values is not None:
-                values.update(branch_values)
-        return values or None
-    return None
+def test_generated_config_rejects_unknown_fields() -> None:
+    value = _workflow()
+    value["unexpected"] = True
+    with pytest.raises(ValidationError, match="unexpected"):
+        WorkflowConfig.model_validate(value)
 
 
-def _assert_schema_matches_python_model(
-    schema_name: str,
-    model_cls: type,
-    *,
-    freeform_props: set[str] | None = None,
-) -> None:
-    rust_path = SCHEMA_DIR / f"{schema_name}.schema.json"
-    assert rust_path.exists(), f"Rust schema missing: {rust_path}"
-
-    rust_schema = json.loads(rust_path.read_text(encoding="utf-8"))
-    py_schema = model_cls.model_json_schema()
-    freeform_props = freeform_props or set()
-
-    rust_props = _collect_props(rust_schema)
-    py_props = _collect_props(py_schema)
-
-    assert set(rust_props.keys()) == set(py_props.keys()), (
-        f"Property name mismatch for {schema_name}: rust={set(rust_props.keys())} vs py={set(py_props.keys())}"
-    )
-
-    for name in rust_props:
-        rust_req = _is_required(rust_schema, name)
-        py_req = _is_required(py_schema, name)
-        assert rust_req == py_req, f"Required mismatch for {schema_name}.{name}: rust={rust_req} vs py={py_req}"
-
-        if name in freeform_props:
-            continue
-
-        rust_type = _type_token(rust_props[name])
-        py_type = _type_token(py_props[name])
-        assert rust_type == py_type, f"Type mismatch for {schema_name}.{name}: rust={rust_type} vs py={py_type}"
-
-        rust_enum = _enum_values(rust_props[name])
-        py_enum = _enum_values(py_props[name])
-        assert rust_enum == py_enum, f"Enum mismatch for {schema_name}.{name}: rust={rust_enum} vs py={py_enum}"
+def test_generated_task_request_rejects_unknown_fields() -> None:
+    value = {
+        "inputPath": "D:/input.mp4",
+        "decodeConfig": {
+            "mode": "software",
+            "hwaccel": None,
+            "hwaccelDevice": None,
+            "decoder": None,
+            "options": {},
+        },
+        "workflowConfig": _workflow(),
+        "encodeConfig": {
+            "codec": "libx264",
+            "family": "software",
+            "container": "mp4",
+            "keepAudio": True,
+            "rateControl": {"mode": "crf", "value": 18},
+            "options": {},
+        },
+        "outputConfig": {
+            "outputDir": "D:/out",
+            "openOnComplete": False,
+            "segmentFrames": 120,
+        },
+        "resumeMode": "auto",
+        "unexpected": True,
+    }
+    with pytest.raises(ValidationError, match="unexpected"):
+        generated.TaskRequest.model_validate(value)
 
 
-@pytest.mark.parametrize("schema_name,model_cls", _MODEL_MAP.items())
-def test_property_names_and_types_match(schema_name: str, model_cls: type) -> None:
-    _assert_schema_matches_python_model(schema_name, model_cls)
+def test_generated_ndjson_payload_rejects_unknown_fields() -> None:
+    with pytest.raises(ValidationError, match="unexpected"):
+        TaskProgressPayload.model_validate(
+            {
+                "current": 1,
+                "total": 2,
+                "percent": 50.0,
+                "stage": "Encoding",
+                "stageIndex": 1,
+                "stageTotal": 1,
+                "unexpected": 0,
+            }
+        )
 
 
-@pytest.mark.parametrize("schema_name,model_cls", _PAYLOAD_MODEL_MAP.items())
-def test_ndjson_payload_schema_matches_rust(schema_name: str, model_cls: type) -> None:
-    _assert_schema_matches_python_model(
-        schema_name,
-        model_cls,
-        freeform_props=_FREEFORM_PAYLOAD_PROPS.get(schema_name),
-    )
+def test_generated_numeric_unions_preserve_integer_identity() -> None:
+    rate_control = generated.RateControlConfig.model_validate({"mode": "crf", "value": 18})
+    option = generated.CapabilityChoice.model_validate({"label": "Tile", "value": 320})
+    assert rate_control.model_dump(mode="json")["value"] == 18
+    assert isinstance(rate_control.model_dump(mode="json")["value"], int)
+    assert option.model_dump(mode="json")["value"] == 320
+    assert isinstance(option.model_dump(mode="json")["value"], int)
 
 
-def test_task_error_codes_match_rust() -> None:
-    """Python ``TaskErrorCode`` enum must contain exactly the codes Rust emits.
+def test_resume_inspection_preserves_mixed_wire_aliases() -> None:
+    raw = {
+        "type": "resume_inspection",
+        "pipeline_kind": "streaming",
+        "outputPath": "D:/out.mp4",
+        "input_path": "D:/in.mp4",
+        "finalExists": True,
+        "sidecarExists": True,
+        "signatureMatch": True,
+        "completedChunks": 2,
+        "completedOutputFrames": 120,
+        "nextSourceFrame": 60,
+        "totalOutputFrames": 240,
+    }
+    result = generated.ResumeInspectionResult.model_validate(raw)
+    assert result.model_dump(by_alias=True, mode="json") == raw
 
-    The Rust-side source of truth is ``frontend/src-tauri/src/models/task.rs``
-    where ``TaskErrorCode`` derives ``JsonSchema``; schemars writes the
-    snake_case variant strings into the generated JSON schema. This test
-    fails fast when one side adds or removes a code without the other.
-    """
-    schema_path = SCHEMA_DIR / "task_error_payload.schema.json"
-    assert schema_path.exists(), f"Rust schema missing: {schema_path}"
 
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    rust_codes = set(schema["$defs"]["TaskErrorCode"]["enum"])
-    python_codes = {code.value for code in TaskErrorCode}
-
-    assert rust_codes == python_codes, (
-        f"TaskErrorCode drift: only-in-rust={rust_codes - python_codes}, only-in-python={python_codes - rust_codes}"
-    )
+def test_task_error_codes_match_neutral_backend_contract() -> None:
+    schema = json.loads((SCHEMA_DIR / "backend-error-codes.schema.json").read_text(encoding="utf-8"))
+    assert set(schema["enum"]) == {code.value for code in TaskErrorCode}

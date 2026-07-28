@@ -9,11 +9,19 @@ on:
     branches: [main, master, develop]
     paths:
       - 'backend/**'
+      - 'contracts/**'
+      - 'scripts/**'
+      - 'ruff.toml'
+      - '.pre-commit-config.yaml'
       - '.github/workflows/test-backend.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
       - 'backend/**'
+      - 'contracts/**'
+      - 'scripts/**'
+      - 'ruff.toml'
+      - '.pre-commit-config.yaml'
       - '.github/workflows/test-backend.yml'
 
 permissions:

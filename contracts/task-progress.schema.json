@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TaskProgressPayload",
+  "type": "object",
+  "properties": {
+    "current": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "total": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "percent": {
+      "type": "number",
+      "format": "double"
+    },
+    "stage": {
+      "type": "string"
+    },
+    "stageIndex": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "stageTotal": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "metrics": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "current",
+    "total",
+    "percent",
+    "stage",
+    "stageIndex",
+    "stageTotal"
+  ],
+  "additionalProperties": false
+}

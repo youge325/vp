@@ -50,7 +50,7 @@ def test_parse_codec_profile_includes_pixel_format_option() -> None:
 def test_probe_rate_control_modes_keeps_only_verified_modes(monkeypatch) -> None:
     calls: list[list[str]] = []
 
-    def fake_run(command: list[str], *, timeout: int = 3600):
+    def fake_run(command: list[str], **_kwargs):
         calls.append(command)
         if "-cq" in command:
             raise RuntimeError("unsupported cq")
@@ -75,7 +75,7 @@ def test_probe_rate_control_modes_returns_empty_when_every_probe_fails(monkeypat
     monkeypatch.setattr(
         capability_probe,
         "run_ffmpeg_command",
-        lambda _command, *, timeout=3600: (_ for _ in ()).throw(RuntimeError("unsupported")),
+        lambda _command, **_kwargs: (_ for _ in ()).throw(RuntimeError("unsupported")),
     )
 
     assert capability_probe.probe_rate_control_modes("ffmpeg", "libx264", []) == []
@@ -84,7 +84,7 @@ def test_probe_rate_control_modes_returns_empty_when_every_probe_fails(monkeypat
 def test_probe_decoder_hardware_capabilities_verifies_devices_and_options(tmp_path, monkeypatch) -> None:
     calls: list[list[str]] = []
 
-    def fake_run(command: list[str], *, timeout: int = 3600):
+    def fake_run(command: list[str], **_kwargs):
         calls.append(command)
         if "-hwaccel" in command and command[command.index("-hwaccel") + 1] == "qsv":
             raise RuntimeError("qsv unavailable")
@@ -114,7 +114,7 @@ def test_probe_decoder_hardware_capabilities_returns_empty_without_candidates(mo
     monkeypatch.setattr(
         capability_probe,
         "run_ffmpeg_command",
-        lambda _command, *, timeout=3600: (_ for _ in ()).throw(AssertionError("unexpected probe")),
+        lambda _command, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected probe")),
     )
 
     result = capability_probe.probe_decoder_hardware_capabilities(
@@ -147,7 +147,7 @@ def test_probe_decoder_hardware_capabilities_returns_empty_without_sample_encode
 def test_standalone_decoder_probe_owns_and_cleans_temporary_workspace(monkeypatch) -> None:
     sample_paths: list[Path] = []
 
-    def fake_run(command: list[str], *, timeout: int = 3600):
+    def fake_run(command: list[str], **_kwargs):
         if "testsrc2=size=256x256:rate=1" in command:
             sample_paths.append(Path(command[-1]))
         return subprocess.CompletedProcess(command, 0, "", "")
@@ -173,7 +173,7 @@ def test_standalone_decoder_probe_owns_and_cleans_temporary_workspace(monkeypatc
 def test_decoder_probe_reuses_shared_sample_cache(tmp_path, monkeypatch) -> None:
     calls: list[list[str]] = []
 
-    def fake_run(command: list[str], *, timeout: int = 3600):
+    def fake_run(command: list[str], **_kwargs):
         calls.append(command)
         return subprocess.CompletedProcess(command, 0, "", "")
 

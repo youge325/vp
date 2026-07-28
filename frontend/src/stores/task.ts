@@ -7,10 +7,10 @@ function createInitialBatch(): BatchState {
     queue: [],
     currentId: null,
     completedCount: 0,
-    failedCount: 0,
     isRunning: false,
     isPaused: false,
     isCancelling: false,
+    controlPending: null,
   }
 }
 

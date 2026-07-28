@@ -1,7 +1,7 @@
-"""Default config factories for CLI fallback payloads.
+"""Default config factories for scalar CLI arguments.
 
 Pure functions called by both the ``process`` and ``inspect-output``
-subcommands when no explicit nested config JSON is provided.
+subcommands when stdin does not supply the corresponding config section.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ def _default_decode_config() -> dict[str, Any]:
     return {
         "mode": "software",
         "hwaccel": "",
+        "hwaccelDevice": None,
         "decoder": "software",
         "options": {},
     }
@@ -51,11 +52,13 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
             "enabled": enable_interpolation,
             "targetFps": args.target_fps,
             "multi": multi,
+            "algorithm": "rife",
             "model": model,
             "onnxModel": "",
             "scale": scale,
             "fp16": fp16,
             "tensorBackend": args.backend,
+            "engine": "cuda",
         },
         "superResolution": {
             "enabled": enable_super_resolution,
@@ -78,7 +81,7 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _default_output_config(args: argparse.Namespace) -> dict[str, Any]:
-    # Phase 18 — outputDir 强制必填,无 settings 兜底。
+    # outputDir 强制必填,无 settings 兜底。
     # 这里允许返回空串是为了"defaults 与 partial payload 合并"路径(merge
     # 后 Pydantic ``OutputConfig`` validator 会拒空,fail-loudly)。直接
     # CLI 调用如果没传 ``--output-dir`` 也会经过 validator 报 INVALID_CONFIG,

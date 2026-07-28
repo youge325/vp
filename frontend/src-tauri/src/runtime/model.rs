@@ -4,15 +4,15 @@ use std::path::{Path, PathBuf};
 
 use super::helpers::{env_path, first_existing_dir};
 
-/// Release 构建强制要求 ``$MODEL_DIR/<DEFAULT_RIFE_MODEL_FILENAME>`` 存在。
-///
-/// 文件名硬编码在原 ``runtime.rs::default_rife_model_file()`` 里,Phase C.2.1
-/// 把它提到常量以消除魔法字符串。需要切换版本时改这一处即可。
-pub(super) const DEFAULT_RIFE_MODEL_FILENAME: &str = "flownet_v4.25.pkl";
+/// Default model version, resolved into runtime configuration at startup.
+pub(super) const DEFAULT_RIFE_MODEL_VERSION: &str = "4.25";
+
+pub(super) fn rife_model_filename(version: &str) -> String {
+    format!("flownet_v{version}.pkl")
+}
 
 pub(super) fn resolve_model_dir(
     runtime_root: Option<&PathBuf>,
-    resource_dir: Option<&PathBuf>,
     workspace_root: &Path,
 ) -> Option<PathBuf> {
     let dev_model_dir = if cfg!(debug_assertions) {
@@ -23,8 +23,6 @@ pub(super) fn resolve_model_dir(
     first_existing_dir([
         env_path("VP_RIFE_MODEL_DIR"),
         runtime_root.map(|path| path.join("models")),
-        resource_dir.map(|path| path.join("models")),
-        resource_dir.map(|path| path.join("backend").join("models")),
         dev_model_dir,
     ])
 }
@@ -35,8 +33,7 @@ pub(super) fn resolve_model_dir(
 /// 1. ``VP_TENSORRT_DIR`` env variable, **if it points to an existing
 ///    directory** (handled by [`first_existing_dir`]).
 /// 2. ``$RUNTIME_ROOT/tensorrt`` (bundled location, if present).
-/// 3. ``$RESOURCE/tensorrt`` (alternate bundle layout).
-/// 4. **Phase 12 fallback** — if none of the above resolves to an
+/// 3. If neither of the above resolves to an
 ///    existing directory but ``VP_TENSORRT_DIR`` is set in the
 ///    environment with a non-empty value, we pass it through verbatim
 ///    **even if the directory does not currently exist**. Users may
@@ -49,19 +46,15 @@ pub(super) fn resolve_model_dir(
 /// resolution and ``env_map`` fallback into a single decision point.
 /// ``env_map`` now just forwards ``paths.tensorrt_dir`` to the backend
 /// when it is set, no second peek at ``std::env::var`` required.
-pub(super) fn resolve_tensorrt_dir(
-    runtime_root: Option<&PathBuf>,
-    resource_dir: Option<&PathBuf>,
-) -> Option<PathBuf> {
+pub(super) fn resolve_tensorrt_dir(runtime_root: Option<&PathBuf>) -> Option<PathBuf> {
     if let Some(existing) = first_existing_dir([
         env_path("VP_TENSORRT_DIR"),
         runtime_root.map(|path| path.join("tensorrt")),
-        resource_dir.map(|path| path.join("tensorrt")),
     ]) {
         return Some(existing);
     }
 
-    // Phase 12 — env-only fallback. ``env_path`` already filters empty
+    // Environment-only fallback. ``env_path`` already filters empty
     // values via ``env::var_os``, but we double-check here because the
     // backend treats an empty ``VP_TENSORRT_DIR`` the same as unset and
     // we don't want to spam it with a useless variable.
@@ -69,9 +62,9 @@ pub(super) fn resolve_tensorrt_dir(
 }
 
 /// 检查 ``$MODEL_DIR/<DEFAULT_RIFE_MODEL_FILENAME>`` 是否真实存在。
-pub(super) fn has_default_rife_model(model_dir: Option<&PathBuf>) -> bool {
+pub(super) fn has_rife_model(model_dir: Option<&PathBuf>, version: &str) -> bool {
     model_dir
-        .map(|path| path.join(DEFAULT_RIFE_MODEL_FILENAME))
+        .map(|path| path.join(rife_model_filename(version)))
         .and_then(|path| path.metadata().ok())
         .map(|metadata| metadata.is_file() && metadata.len() > 0)
         .unwrap_or(false)
@@ -89,12 +82,8 @@ mod tests {
     /// had before the test ran, so test ordering / parallel runs don't leak
     /// state into each other.
     ///
-    /// Phase 13.2 CI hotfix — additionally holds
-    /// [`VP_TENSORRT_DIR_LOCK`] for the duration of the test. Without it,
-    /// ``cargo test`` running these cases in parallel on multi-core CI
-    /// could read another test's ``set_var`` value before that test's
-    /// guard dropped (observed in GitHub Actions Phase 13.1 build), with
-    /// the env-only fallback never getting a chance to fire.
+    /// Holds [`VP_TENSORRT_DIR_LOCK`] so parallel tests cannot observe
+    /// each other's temporary process-environment values.
     struct EnvGuard {
         original: Option<std::ffi::OsString>,
         _lock: std::sync::MutexGuard<'static, ()>,
@@ -136,22 +125,19 @@ mod tests {
     fn resolve_tensorrt_dir_returns_none_when_unset_and_no_bundle() {
         let guard = EnvGuard::capture();
         guard.unset();
-        assert_eq!(resolve_tensorrt_dir(None, None), None);
+        assert_eq!(resolve_tensorrt_dir(None), None);
     }
 
     #[test]
     fn resolve_tensorrt_dir_passes_env_through_even_when_path_missing() {
-        // Phase 12 — the runtime/model layer is the single owner of the
-        // "trust the user's env var even if the directory doesn't exist
-        // yet" semantics. Previously this fallback lived in env_map.rs,
-        // which silently disagreed with the paths layer about whether
-        // the variable was honoured.
+        // The runtime/model layer is the single owner of the "trust the
+        // user's env var even if the directory doesn't exist yet" semantics.
         let guard = EnvGuard::capture();
         let missing = std::env::current_dir()
             .unwrap()
-            .join("__phase12_nonexistent_tensorrt__");
+            .join("__vp_nonexistent_tensorrt__");
         guard.set(missing.to_string_lossy().as_ref());
-        let resolved = resolve_tensorrt_dir(None, None);
+        let resolved = resolve_tensorrt_dir(None);
         assert_eq!(resolved.as_deref(), Some(missing.as_path()));
     }
 
@@ -164,7 +150,7 @@ mod tests {
         let guard = EnvGuard::capture();
         let real = std::env::current_dir().unwrap();
         guard.set(real.to_string_lossy().as_ref());
-        let resolved = resolve_tensorrt_dir(None, None);
+        let resolved = resolve_tensorrt_dir(None);
         assert_eq!(resolved.as_deref(), Some(real.as_path()));
     }
 
@@ -175,7 +161,7 @@ mod tests {
         // don't want a confusing env entry.
         let guard = EnvGuard::capture();
         guard.set("");
-        assert_eq!(resolve_tensorrt_dir(None, None), None);
+        assert_eq!(resolve_tensorrt_dir(None), None);
     }
 
     #[test]
@@ -183,24 +169,35 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let model_dir = temp.path().to_path_buf();
 
-        assert!(!has_default_rife_model(Some(&model_dir)));
+        assert!(!has_rife_model(
+            Some(&model_dir),
+            DEFAULT_RIFE_MODEL_VERSION
+        ));
     }
 
     #[test]
     fn has_default_rife_model_returns_false_for_empty_file() {
         let temp = tempfile::tempdir().unwrap();
         let model_dir = temp.path().to_path_buf();
-        std::fs::File::create(model_dir.join(DEFAULT_RIFE_MODEL_FILENAME)).unwrap();
+        std::fs::File::create(model_dir.join(rife_model_filename(DEFAULT_RIFE_MODEL_VERSION)))
+            .unwrap();
 
-        assert!(!has_default_rife_model(Some(&model_dir)));
+        assert!(!has_rife_model(
+            Some(&model_dir),
+            DEFAULT_RIFE_MODEL_VERSION
+        ));
     }
 
     #[test]
     fn has_default_rife_model_returns_true_for_non_empty_file() {
         let temp = tempfile::tempdir().unwrap();
         let model_dir = temp.path().to_path_buf();
-        std::fs::write(model_dir.join(DEFAULT_RIFE_MODEL_FILENAME), b"weights").unwrap();
+        std::fs::write(
+            model_dir.join(rife_model_filename(DEFAULT_RIFE_MODEL_VERSION)),
+            b"weights",
+        )
+        .unwrap();
 
-        assert!(has_default_rife_model(Some(&model_dir)));
+        assert!(has_rife_model(Some(&model_dir), DEFAULT_RIFE_MODEL_VERSION));
     }
 }

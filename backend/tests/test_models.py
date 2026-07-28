@@ -1,4 +1,4 @@
-"""Phase 18 — Pydantic ``OutputConfig`` 必填 validator 回归护栏。
+"""Pydantic ``OutputConfig`` 必填 validator 回归护栏。
 
 用户要求"强制选择输出目录,不使用默认目录"。Pydantic 是后端单点防御 ——
 前端 / Tauri wire / CLI 直调任何路径都最终经过这里,空 / 纯空白都必须
@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.models import FilterStep, OutputConfig
+from app.models import FilterStep, InterpolationConfig, OutputConfig, SuperResolutionConfig
 
 
 def _kwargs(output_dir: str) -> dict[str, object]:
@@ -50,6 +50,14 @@ def test_output_dir_accepts_relative_path() -> None:
     assert cfg.output_dir == "./out"
 
 
+def test_output_config_rejects_zero_segment_frames() -> None:
+    payload = _kwargs("D:/out")
+    payload["segmentFrames"] = 0
+
+    with pytest.raises(ValidationError, match="segmentFrames"):
+        OutputConfig.model_validate(payload)
+
+
 def test_filter_step_accepts_anime_cleanup_kind() -> None:
     step = FilterStep.model_validate(
         {
@@ -65,3 +73,60 @@ def test_filter_step_accepts_anime_cleanup_kind() -> None:
 def test_filter_step_rejects_unknown_kind() -> None:
     with pytest.raises(ValidationError):
         FilterStep.model_validate({"kind": "anime_optimization", "enabled": True, "params": {}})
+
+
+def _interpolation_kwargs(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "enabled": True,
+        "targetFps": 60.0,
+        "multi": 2,
+        "algorithm": "rife",
+        "model": "4.25",
+        "onnxModel": None,
+        "scale": 1.0,
+        "fp16": False,
+        "tensorBackend": "pytorch",
+        "engine": "cuda",
+    }
+    payload.update(overrides)
+    return payload
+
+
+@pytest.mark.parametrize(
+    "invalid_field",
+    [
+        {"targetFps": 0.0},
+        {"multi": 0},
+        {"multi": 1},
+        {"scale": 0.0},
+    ],
+)
+def test_interpolation_config_rejects_non_processing_values(invalid_field: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        InterpolationConfig.model_validate(_interpolation_kwargs(**invalid_field))
+
+
+def _super_resolution_kwargs(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "enabled": True,
+        "scaleFactor": 2.0,
+        "algorithm": "real-esrgan",
+        "onnxModel": None,
+        "tensorBackend": "onnx",
+        "engine": "cuda",
+        "numFrames": 1,
+    }
+    payload.update(overrides)
+    return payload
+
+
+@pytest.mark.parametrize(
+    "invalid_field",
+    [
+        {"scaleFactor": 0.0},
+        {"numFrames": 0},
+    ],
+)
+def test_super_resolution_config_rejects_non_processing_values(invalid_field: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        SuperResolutionConfig.model_validate(_super_resolution_kwargs(**invalid_field))

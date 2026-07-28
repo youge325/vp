@@ -15,7 +15,7 @@ from app.protocol.payloads import (
 )
 
 
-def test_progress_payload_to_wire_uses_legacy_camel_case_shape() -> None:
+def test_progress_payload_to_wire_uses_contract_camel_case_shape() -> None:
     payload = TaskProgressPayload(
         current=12,
         total=24,
@@ -37,7 +37,7 @@ def test_progress_payload_to_wire_uses_legacy_camel_case_shape() -> None:
     }
 
 
-def test_progress_payload_omits_empty_metrics_like_old_emitter() -> None:
+def test_progress_payload_omits_empty_metrics() -> None:
     payload = TaskProgressPayload(
         current=1,
         total=10,
@@ -92,6 +92,31 @@ def test_completed_error_and_resume_payloads_keep_wire_shape() -> None:
         "startSourceFrame": 50,
         "totalOutputFrames": 240,
     }
+
+
+def test_error_payload_always_emits_details_when_omitted() -> None:
+    assert TaskErrorPayload(
+        code=TaskErrorCode.PROCESS_FAILED,
+        message="boom",
+    ).to_wire() == {
+        "code": "process_failed",
+        "message": "boom",
+        "details": {},
+    }
+
+
+def test_integer_metrics_remain_integers_on_the_wire() -> None:
+    payload = TaskProgressPayload(
+        current=1,
+        total=2,
+        percent=50,
+        stage="Encoding",
+        stage_index=1,
+        stage_total=1,
+        metrics={"queueDepth": 4},
+    )
+    assert payload.to_wire()["metrics"]["queueDepth"] == 4
+    assert isinstance(payload.to_wire()["metrics"]["queueDepth"], int)
 
 
 def test_ndjson_emitter_uses_typed_payloads_without_changing_envelopes(capsys: pytest.CaptureFixture[str]) -> None:

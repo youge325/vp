@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FilterStep",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "$ref": "#/$defs/FilterStepKind"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "kind",
+    "enabled",
+    "params"
+  ],
+  "$defs": {
+    "FilterStepKind": {
+      "type": "string",
+      "enum": [
+        "scale",
+        "crop",
+        "pad",
+        "sharpen",
+        "denoise",
+        "color",
+        "anime_cleanup"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

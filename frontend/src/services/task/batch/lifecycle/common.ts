@@ -1,12 +1,21 @@
-// Shared current/console task context lookup and batch runtime cleanup.
+// Shared current/console task context lookup.
 
 import {
   resolveConsoleTaskContext,
   resolveTaskContext,
 } from '@/services/task/task-context'
-import type { BatchLifecycleDeps } from './types'
+import type {
+  BatchStatePort,
+  MediaItemPort,
+  MediaRunStatePort,
+} from './types'
 
-export function createCommonHelpers(deps: BatchLifecycleDeps) {
+type CommonDeps =
+  & Pick<BatchStatePort, 'getBatch'>
+  & Pick<MediaItemPort, 'getMediaItem' | 'getActiveItemId'>
+  & Pick<MediaRunStatePort, 'getItemRunState'>
+
+export function createCommonHelpers(deps: CommonDeps) {
   function getCurrentTaskContext() {
     return resolveTaskContext(deps, deps.getBatch().currentId)
   }
@@ -19,13 +28,8 @@ export function createCommonHelpers(deps: BatchLifecycleDeps) {
     )
   }
 
-  function clearBatchRuntimeArtifacts(): void {
-    deps.resetItemsRunState(new Set(deps.getRuntimeIds()))
-  }
-
   return {
     getCurrentTaskContext,
     getConsoleTaskContext,
-    clearBatchRuntimeArtifacts,
   }
 }

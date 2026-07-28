@@ -1,4 +1,4 @@
-import { existsSync, rmSync, statSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 
 const E2E_FILE_POLL_INTERVAL_MS = 100
 
@@ -15,24 +15,4 @@ export async function waitForNonEmptyFile(outputPath: string, maxWaitMs = 60000)
     await delay()
   }
   return false
-}
-
-export async function removeFileWhenUnlocked(outputPath: string, maxWaitMs = 15000): Promise<void> {
-  const deadline = Date.now() + maxWaitMs
-  let lastError: unknown
-
-  while (Date.now() <= deadline) {
-    if (!existsSync(outputPath)) {
-      return
-    }
-    try {
-      rmSync(outputPath)
-      return
-    } catch (error) {
-      lastError = error
-      await delay()
-    }
-  }
-
-  throw lastError
 }

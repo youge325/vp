@@ -6,7 +6,7 @@ from typing import BinaryIO
 
 import numpy as np
 
-from app.algorithms.base import IAlgorithm
+from app.algorithms.interfaces import FramePairAlgorithm, FrameSequenceAlgorithm, SingleFrameAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
 from app.processing.streaming.frame_payload import FramePayload
 from app.processing.streaming.metrics import PipelineMetrics
@@ -30,7 +30,7 @@ def run_sequence_stage(
     config: StageWorkerConfig,
     input_stream: BinaryIO,
     output_stream: BinaryIO,
-    algorithm: IAlgorithm,
+    algorithm: FrameSequenceAlgorithm,
     event_sink: EventSink,
     *,
     heartbeat_seconds: float = SEQUENCE_STAGE_HEARTBEAT_SECONDS,
@@ -80,7 +80,7 @@ def run_interpolation_stage(
     input_stream: BinaryIO,
     output_stream: BinaryIO,
     backend: ITensorBackend,
-    algorithm: IAlgorithm,
+    algorithm: FramePairAlgorithm,
     event_sink: EventSink,
     metrics: PipelineMetrics,
 ) -> None:
@@ -92,7 +92,7 @@ def run_interpolation_stage(
         event_sink(progress_event(config, 1, 1))
         return
 
-    multi = int(config.stage.algorithm_kwargs.get("multi") or algorithm.get_interpolation_multi())
+    multi = int(config.stage.algorithm_kwargs.get("multi") or 2)
     total_pairs = len(frames) - 1
     previous_payload = FramePayload.from_numpy(frames[0])
     for pair_index, current_frame in enumerate(frames[1:], start=1):
@@ -127,7 +127,7 @@ def run_single_frame_stage(
     input_stream: BinaryIO,
     output_stream: BinaryIO,
     backend: ITensorBackend | None,
-    algorithm: IAlgorithm,
+    algorithm: SingleFrameAlgorithm,
     event_sink: EventSink,
     metrics: PipelineMetrics,
 ) -> None:
@@ -153,7 +153,7 @@ def run_single_frame_stage(
 
 def _read_declared_frames(config: StageWorkerConfig, input_stream: BinaryIO) -> list[np.ndarray]:
     frames: list[np.ndarray] = []
-    for _index in range(max(config.input_frame_count, 0)):
+    for _ in range(max(config.input_frame_count, 0)):
         frame = read_rgb_frame(input_stream, width=config.input_width, height=config.input_height)
         if frame is None:
             raise RawVideoFrameError(

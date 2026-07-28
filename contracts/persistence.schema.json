@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/persistence.schema.json",
+  "title": "VP Workbench persistence envelopes",
+  "$defs": {
+    "EnvironmentCacheEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "checkedAt", "fingerprint", "result"],
+      "properties": {
+        "schemaVersion": { "const": 14 },
+        "checkedAt": { "type": "string", "format": "date-time" },
+        "fingerprint": { "type": "string", "minLength": 1 },
+        "result": {
+          "$ref": "./environment.schema.json#/$defs/EnvironmentCheckResult"
+        }
+      }
+    },
+    "WorkbenchPresetEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "preset"],
+      "properties": {
+        "schemaVersion": { "const": 2 },
+        "preset": { "$ref": "./workbench-preset.schema.json" }
+      }
+    },
+    "SegmentManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "signature",
+        "created_at",
+        "input_path",
+        "output_path",
+        "config_snapshot"
+      ],
+      "properties": {
+        "version": { "const": 3 },
+        "signature": { "type": "string", "minLength": 1 },
+        "created_at": { "type": "string", "format": "date-time" },
+        "input_path": { "type": "string" },
+        "output_path": { "type": "string" },
+        "config_snapshot": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

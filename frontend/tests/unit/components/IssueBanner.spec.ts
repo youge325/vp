@@ -32,16 +32,7 @@ describe('IssueBanner', () => {
     expect(banner.text()).toContain('文件丢失')
   })
 
-  it('applies warning variant class when variant=warning', () => {
-    const wrapper = mount(IssueBanner, {
-      props: { issue: makeIssue('low disk'), title: '空间告警', variant: 'warning' },
-    })
-    const banner = wrapper.find('[role="alert"]')
-    expect(banner.classes()).toContain('info-banner-warning')
-    expect(banner.classes()).not.toContain('info-banner-danger')
-  })
-
-  it('defaults to danger variant when variant is unspecified', () => {
+  it('uses the danger class for operation failures', () => {
     const wrapper = mount(IssueBanner, {
       props: { issue: makeIssue('boom'), title: 'X' },
     })

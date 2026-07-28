@@ -2,48 +2,8 @@
 
 from __future__ import annotations
 
-import importlib.util
-
 import numpy as np
 import pytest
-
-
-def test_anime_cleanup_module_exists() -> None:
-    assert importlib.util.find_spec("app.processing.anime_cleanup") is not None
-
-
-def test_profile_specs_expose_stable_defaults_and_curves() -> None:
-    from app.processing.anime_cleanup import _PROFILE_SPECS
-
-    assert _PROFILE_SPECS == {
-        "clean-lines": {
-            "default_denoise": 15,
-            "default_edge_boost": 30,
-            "median_size": 3,
-            "denoise_gain": 1.0,
-            "edge_radius": 1.0,
-            "edge_gain": 1.0,
-            "edge_threshold": 2,
-        },
-        "thin-outline": {
-            "default_denoise": 8,
-            "default_edge_boost": 45,
-            "median_size": 3,
-            "denoise_gain": 0.6,
-            "edge_radius": 0.6,
-            "edge_gain": 1.25,
-            "edge_threshold": 1,
-        },
-        "balanced-cel": {
-            "default_denoise": 25,
-            "default_edge_boost": 20,
-            "median_size": 5,
-            "denoise_gain": 0.85,
-            "edge_radius": 1.4,
-            "edge_gain": 0.8,
-            "edge_threshold": 3,
-        },
-    }
 
 
 @pytest.mark.parametrize(

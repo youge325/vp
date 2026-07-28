@@ -45,10 +45,10 @@ describe('taskIpc', () => {
     })
   })
 
-  it('passes cancel_task without an argument object', async () => {
+  it('passes cancel through the shared control_task command', async () => {
     await taskIpc.cancel()
 
-    expect(invokeMock).toHaveBeenCalledWith('cancel_task', undefined)
+    expect(invokeMock).toHaveBeenCalledWith('control_task', { kind: 'cancel' })
   })
 
   it('passes pause and resume through control_task kind payloads', async () => {

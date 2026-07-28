@@ -127,11 +127,13 @@ def test_command_surface_diff_reports_membership_and_argument_drift() -> None:
         manifest={"check_environment", "start_task"},
         permissions={"check_environment"},
         rust_args={"check_environment": set(), "start_task": {"request"}},
+        handlers={"check_environment", "obsolete_handler"},
         invoke_args={"check_environment", "obsolete"},
         contract_args={"check_environment": set(), "start_task": {"payload"}},
     )
 
     assert any("permissions" in issue and "start_task" in issue for issue in issues)
+    assert any("handlers" in issue and "obsolete_handler" in issue for issue in issues)
     assert any("frontend" in issue and "obsolete" in issue for issue in issues)
     assert any("args drift" in issue and "start_task" in issue for issue in issues)
 

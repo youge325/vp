@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pytest
 
-from app.planning import ResumeState, SegmentManifest, StagePlan
+from app.planning import ResumeState, SegmentManifest, StagePlan, StageProjection
+from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
@@ -14,58 +14,7 @@ from app.processing.streaming.pipeline_context import (
 )
 from app.processing.streaming.pipeline_raw import run_raw_streaming_pipeline
 from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, StreamEnd, _ENCODE_END
-
-
-class _FakeWriter:
-    def __init__(self, output_path: str, progress_callback: Any = None) -> None:
-        self.output_path = output_path
-        self.progress_callback = progress_callback
-        self.frames: list[np.ndarray] = []
-        self.output_frame_count = 0
-
-    def write_frame(self, frame: np.ndarray) -> None:
-        self.frames.append(frame.copy())
-
-    def close(self) -> None:
-        output = Path(self.output_path)
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(b"segment")
-        self.output_frame_count = len(self.frames)
-        if self.progress_callback is not None:
-            self.progress_callback(
-                {
-                    "frame": self.output_frame_count,
-                    "fps": 24.0,
-                    "speed": 1.0,
-                    "out_time_seconds": None,
-                    "progress": "end",
-                }
-            )
-
-
-class _FakeFFmpeg:
-    def __init__(self) -> None:
-        self.encoder_dimensions: list[tuple[int, int]] = []
-
-    def open_rawvideo_encoder(
-        self,
-        *,
-        output_path: str,
-        width: int,
-        height: int,
-        progress_callback: Any = None,
-        **kwargs: Any,
-    ) -> _FakeWriter:
-        del kwargs
-        self.encoder_dimensions.append((width, height))
-        return _FakeWriter(output_path, progress_callback=progress_callback)
-
-    def get_frame_count(self, _path: str) -> int:
-        return 0
-
-
-def _frame(value: int) -> np.ndarray:
-    return np.full((1, 1, 3), value, dtype=np.uint8)
+from tests.support.raw_video import FakeRawVideoMedia, frame as _frame
 
 
 def _context(
@@ -79,24 +28,26 @@ def _context(
 ) -> StreamingPipelineContext:
     manifest = manifest or SegmentManifest(str(tmp_path / "out.mp4"))
     stage_plan = StagePlan(
-        pre_steps=[],
-        interpolation_step=None,
-        post_steps=[],
-        total_encoded_frames=total_frames,
+        projection=StageProjection(()),
+        source_frames=total_frames,
+        source_duration=total_frames / 24,
+        output_fps=None,
     )
     return StreamingPipelineContext(
         ffmpeg=ffmpeg,
         input_path=str(tmp_path / "in.mp4"),
-        output_path=str(manifest.output_path),
+        output_path=str(manifest.workspace.output_path),
         decode_config={"mode": "software"},
         encode_config={"container": "mp4"},
         preflight=StreamingPipelinePreflight(
-            video_info={
-                "source_fps": 24.0,
-                "source_frames": source_frames,
-                "width": 1,
-                "height": 1,
-            },
+            video_info=VideoMetadata(
+                source_fps=24.0,
+                source_frames=source_frames,
+                width=1,
+                height=1,
+                duration=source_frames / 24,
+                has_audio=False,
+            ),
             stage_plan=stage_plan,
             signature="sig",
             config_snapshot={},
@@ -108,7 +59,6 @@ def _context(
         ),
         manifest=manifest,
         resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
-        tensor_backend_name="onnx",
         progress_callbacks=[],
         output_fps=None,
         encode_progress_callback=encode_progress_callback,
@@ -117,7 +67,7 @@ def _context(
 
 
 def test_raw_pipeline_runs_stage_worker_chain_into_segmented_encoder(tmp_path: Path, monkeypatch) -> None:
-    ffmpeg = _FakeFFmpeg()
+    ffmpeg = FakeRawVideoMedia()
     manifest = SegmentManifest(str(tmp_path / "out.mp4"))
     progress_events: list[tuple[int, str]] = []
     worker_configs = []
@@ -173,7 +123,7 @@ def test_raw_pipeline_raises_worker_error_after_encoder_shutdown(tmp_path: Path,
         run_raw_streaming_pipeline(
             context=_context(
                 tmp_path,
-                ffmpeg=_FakeFFmpeg(),  # type: ignore[arg-type]
+                ffmpeg=FakeRawVideoMedia(),  # type: ignore[arg-type]
                 total_frames=0,
                 source_frames=0,
                 manifest=manifest,
@@ -206,7 +156,7 @@ def test_raw_pipeline_stops_and_joins_encoder_when_stage_worker_raises(tmp_path:
         run_raw_streaming_pipeline(
             context=_context(
                 tmp_path,
-                ffmpeg=_FakeFFmpeg(),  # type: ignore[arg-type]
+                ffmpeg=FakeRawVideoMedia(),  # type: ignore[arg-type]
                 total_frames=1,
                 source_frames=1,
                 manifest=SegmentManifest(str(tmp_path / "out.mp4")),

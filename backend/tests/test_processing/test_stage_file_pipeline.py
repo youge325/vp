@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Any
 
 import app.processing.streaming.stage_file_pipeline as stage_file_pipeline
-from app.planning import ProcessingStep, ResumeState, SegmentManifest, build_stage_plan
+from app.planning import ProcessingStep, ResumeState, SegmentManifest, StageProjection, build_stage_plan
+from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
@@ -17,16 +18,20 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
     steps = [
         ProcessingStep(
             algorithm_type="frame_interpolation",
-            algorithm_kwargs={"multi": 2},
+            algorithm_kwargs={"multi": 2, "tensor_backend": "pytorch"},
             stage_name="01_frame_interpolation",
         ),
         ProcessingStep(
             algorithm_type="super_resolution",
-            algorithm_kwargs={"scale_factor": 4.0, "sr_algorithm": "ppmsvsr"},
+            algorithm_kwargs={
+                "scale_factor": 4.0,
+                "sr_algorithm": "ppmsvsr",
+                "tensor_backend": "paddle",
+            },
             stage_name="02_super_resolution",
         ),
     ]
-    stage_plan = build_stage_plan(steps, 5, source_duration=5 / 24, output_fps=None)
+    stage_plan = build_stage_plan(StageProjection(tuple(steps)), 5, source_duration=5 / 24, output_fps=None)
     manifest = SegmentManifest(str(tmp_path / "final.mp4"))
     manifest.prepare("sig", {"test": True}, mode="force-fresh")
     input_path = str(tmp_path / "input.mp4")
@@ -72,7 +77,14 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
         decode_config=decode_config,
         encode_config=encode_config,
         preflight=StreamingPipelinePreflight(
-            video_info={"width": 1, "height": 1, "source_fps": 24.0, "source_frames": 5},
+            video_info=VideoMetadata(
+                width=1,
+                height=1,
+                source_fps=24.0,
+                source_frames=5,
+                duration=5 / 24,
+                has_audio=False,
+            ),
             stage_plan=stage_plan,
             signature="sig",
             config_snapshot={"test": True},
@@ -84,7 +96,6 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
         ),
         manifest=manifest,
         resume_state=ResumeState(completed_output_frames=0, start_source_frame=0, completed_segments=[]),
-        tensor_backend_name="pytorch",
         progress_callbacks=[lambda *_args, **_kwargs: None, lambda *_args, **_kwargs: None],
         output_fps=None,
         encode_progress_callback=None,
@@ -110,7 +121,7 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
     assert configs[0].encode_output_fps is None
 
     assert len(finalized_outputs) == 1
-    intermediate_output_path = str(stage_calls[0]["manifest"].output_path)
+    intermediate_output_path = str(stage_calls[0]["manifest"].workspace.output_path)
     assert configs[1].input_path == intermediate_output_path
     assert stage_calls[1]["input_frame_count"] == 9
     assert stage_calls[1]["output_frame_count"] == 9
@@ -120,7 +131,7 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
     assert stage_calls[1]["manifest"] is manifest
     assert configs[1].encode_config is encode_config
     assert configs[1].encode_config["keepAudio"] is True
-    assert configs[1].tensor_backend_name == "pytorch"
+    assert configs[1].tensor_backend_name == "paddle"
 
     assert finalized_outputs == [
         {

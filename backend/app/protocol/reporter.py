@@ -58,12 +58,12 @@ def _format_progress_bar(current: int, total: int) -> str:
 class CliProgressReporter:
     """Throttled progress reporter for CLI-driven runs.
 
-    Phase C.1.3:reporter 现在维护一个 ``(stage_name, stage_index, stage_total)``
+    Reporter 维护一个 ``(stage_name, stage_index, stage_total)``
     元组,供 streaming pipeline 在切换阶段时调用 ``set_stage`` 更新。这修复
     了原来 ``stage_index`` 在 NDJSON 中永远是 1 的 bug——以前 ``process.py``
     给所有阶段同一份 callback,reporter 无从得知正在汇报的是哪个 stage。
 
-    Phase D.2.3:reporter 可选持有一个 ``PipelineMetrics`` 引用,update 时
+    Reporter 可选持有一个 ``PipelineMetrics`` 引用,update 时
     把当前 snapshot 一并塞进 NDJSON ``progress`` 帧的 ``metrics`` 字段。
     metrics 由 pipeline 在构造 reporter 时注入,reporter 不主动创建。
 
@@ -77,7 +77,7 @@ class CliProgressReporter:
         self.current_frame = 0
         self.started_at = time.time()
         self._last_reported_percent_by_stage: dict[tuple[int, str], float] = {}
-        # Phase C.1.3: stage 上下文。默认为单阶段,避免老调用方未 set_stage
+        # Stage 上下文默认为单阶段,避免调用方未 set_stage
         # 时仍能拿到合理的 NDJSON 输出。
         self._stage_name = "Encoding"
         self._stage_index = 1
@@ -86,7 +86,6 @@ class CliProgressReporter:
         self._stage_started_at = self.started_at
         self._stage_current_frames: dict[tuple[int, str], int] = {}
         self._stage_changed = True
-        # Phase D.2.3:可选 metrics 引用。
         self._metrics = metrics
 
     def set_stage(self, name: str, index: int, total: int, *, total_frames: int | None = None) -> None:

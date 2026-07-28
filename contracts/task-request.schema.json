@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TaskRequest",
+  "type": "object",
+  "properties": {
+    "inputPath": {
+      "type": "string"
+    },
+    "decodeConfig": {
+      "$ref": "./decode-config.schema.json"
+    },
+    "workflowConfig": {
+      "$ref": "./workflow-config.schema.json"
+    },
+    "encodeConfig": {
+      "$ref": "./encode-config.schema.json"
+    },
+    "outputConfig": {
+      "$ref": "./output-config.schema.json"
+    },
+    "resumeMode": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ResumeMode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "inputPath",
+    "decodeConfig",
+    "workflowConfig",
+    "encodeConfig",
+    "outputConfig"
+  ],
+  "$defs": {
+    "ResumeMode": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "force-fresh",
+        "force-resume"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

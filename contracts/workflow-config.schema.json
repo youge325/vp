@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WorkflowConfig",
+  "type": "object",
+  "properties": {
+    "fpsMode": {
+      "$ref": "#/$defs/FpsMode"
+    },
+    "processOrder": {
+      "$ref": "#/$defs/ProcessOrder"
+    },
+    "interpolation": {
+      "$ref": "./interpolation-config.schema.json"
+    },
+    "superResolution": {
+      "$ref": "./super-resolution-config.schema.json"
+    },
+    "preprocess": {
+      "$ref": "./preprocess-config.schema.json"
+    },
+    "postprocess": {
+      "$ref": "./postprocess-config.schema.json"
+    }
+  },
+  "required": [
+    "fpsMode",
+    "processOrder",
+    "interpolation",
+    "superResolution",
+    "preprocess",
+    "postprocess"
+  ],
+  "$defs": {
+    "FpsMode": {
+      "type": "string",
+      "enum": [
+        "multi",
+        "target"
+      ]
+    },
+    "ProcessOrder": {
+      "type": "string",
+      "enum": [
+        "super_resolution_then_interpolation",
+        "frame_interpolation_then_super_resolution"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/error-codes.schema.json",
+  "title": "TaskErrorCode",
+  "type": "string",
+  "enum": [
+    "missing_ffmpeg",
+    "missing_model",
+    "missing_tensor_backend",
+    "missing_python_dependency",
+    "cancelled",
+    "process_failed",
+    "invalid_input",
+    "invalid_config",
+    "resume_conflict",
+    "io_error",
+    "spawn_failed",
+    "runtime_panic",
+    "schema_mismatch",
+    "persistence_failed",
+    "backend_no_json",
+    "controller_unavailable",
+    "backend_probe_failed"
+  ]
+}

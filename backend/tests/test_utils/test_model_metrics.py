@@ -4,7 +4,7 @@ import onnx
 import pytest
 from onnx import TensorProto, helper
 
-from app.algorithms.pytorch.rife._model_spec import SUPPORTED_MODELS
+from app.catalog.rife_models import SUPPORTED_MODELS
 from app.utils.model_metrics import (
     analyze_onnx_model,
     get_paddlegan_model_detail,

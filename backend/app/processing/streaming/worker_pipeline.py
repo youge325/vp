@@ -39,7 +39,6 @@ def run_stage_worker_pipeline(
 
     plans = build_stage_worker_plans(
         stage_plan=config.stage_plan,
-        tensor_backend_name=config.tensor_backend_name,
         source_width=config.source_width,
         source_height=config.source_height,
         source_frame_count=remaining_source_frames,

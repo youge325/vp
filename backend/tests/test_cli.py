@@ -1,13 +1,15 @@
 """CLI processing-step planning tests."""
 
 import argparse
+import io
 import json
 from types import SimpleNamespace
 
 import pytest
 
 from app.cli.commands.check import cmd_check
-from app.cli.commands._process_planning import ProcessingPlan
+from app.cli.commands._process_execution import _run_format_conversion
+from app.cli.commands._process_planning import PreparedRun
 from app.cli.commands._process_validation import load_runtime_configs
 from app.cli.parser import build_parser
 from app.config import settings
@@ -15,26 +17,70 @@ from app.errors import ProcessError, TaskErrorCode
 from app.models import WorkflowConfig
 from app.planning import (
     ProcessingStep,
+    StageProjection,
+    build_stage_plan,
     build_run_identity,
-    resolve_expected_output_frames,
-    resolve_processing_steps,
 )
+from app.ports.media import VideoMetadata
+from tests.support.workflow_configs import make_workflow_config as _make_workflow_config
 
 
-class _FakeFFmpeg:
-    def __init__(self, *, frame_count: int, duration: float):
-        self._frame_count = frame_count
-        self._duration = duration
-
-    def get_frame_count(self, _input_path: str) -> int:
-        return self._frame_count
-
-    def get_duration(self, _input_path: str) -> float:
-        return self._duration
+def test_prepared_run_does_not_duplicate_derived_pipeline_facts() -> None:
+    assert "output_dir" not in PreparedRun.__dataclass_fields__
+    assert "processing_steps" not in PreparedRun.__dataclass_fields__
+    assert "final_output_fps" not in PreparedRun.__dataclass_fields__
 
 
-def test_processing_plan_does_not_store_unused_output_directory() -> None:
-    assert "output_dir" not in ProcessingPlan.__dataclass_fields__
+def test_format_conversion_forwards_projected_target_fps_to_ffmpeg(tmp_path) -> None:
+    class FakeFfmpeg:
+        def __init__(self) -> None:
+            self.transcode_kwargs = {}
+
+        def transcode_video(self, **kwargs) -> None:
+            self.transcode_kwargs = kwargs
+
+        def get_frame_count(self, _input_path: str) -> int:
+            return 24
+
+    configs = load_runtime_configs(
+        _make_runtime_args(
+            algorithm="format_conversion",
+            fps_mode="target",
+            target_fps=24.0,
+            output_dir=str(tmp_path),
+        )
+    )
+    resolved_workflow, projection, output_fps = StageProjection.resolve_workflow(
+        configs.json_section("workflow"),
+        source_fps=60.0,
+    )
+    configs = configs.with_workflow(WorkflowConfig.model_validate(resolved_workflow))
+    stage_plan = build_stage_plan(
+        projection,
+        60,
+        source_duration=1.0,
+        output_fps=output_fps,
+    )
+    assert stage_plan.steps == ()
+    assert output_fps == 24.0
+
+    prepared = PreparedRun(
+        output_path=str(tmp_path / "target-fps.mp4"),
+        runtime_configs=configs,
+        preflight=SimpleNamespace(stage_plan=stage_plan),
+    )
+    observers = SimpleNamespace(progress_reporter=SimpleNamespace(update=lambda *_args, **_kwargs: None))
+    ffmpeg = FakeFfmpeg()
+
+    _run_format_conversion(
+        ffmpeg=ffmpeg,
+        input_path="input.mp4",
+        prepared=prepared,
+        observers=observers,
+        resume_mode="auto",
+    )
+
+    assert ffmpeg.transcode_kwargs["output_fps"] == 24.0
 
 
 class _FakeCheckFFmpeg:
@@ -51,10 +97,6 @@ class _FakeCheckFFmpeg:
 def _make_runtime_args(**overrides):
     values = {
         "config_stdin": False,
-        "decode_config_json": None,
-        "workflow_config_json": None,
-        "encode_config_json": None,
-        "output_config_json": None,
         "algorithm": "frame_interpolation",
         "enable_interpolation": False,
         "enable_super_resolution": False,
@@ -78,39 +120,24 @@ def _make_runtime_args(**overrides):
     return argparse.Namespace(**values)
 
 
-def _make_workflow_config(**overrides):
-    workflow = {
-        "fpsMode": "target",
-        "processOrder": "super_resolution_then_interpolation",
-        "interpolation": {
-            "enabled": True,
-            "targetFps": 60,
-            "multi": 2,
-            "model": "4.25",
-            "scale": 1.0,
-            "fp16": False,
-            "tensorBackend": "pytorch",
-        },
-        "superResolution": {
-            "enabled": False,
-            "scaleFactor": 2.0,
-            "algorithm": "placeholder",
-        },
-    }
-    workflow.update(overrides)
-    return workflow
+def _load_stdin_configs(monkeypatch: pytest.MonkeyPatch, payload: dict, **arg_overrides):
+    monkeypatch.setattr(
+        "app.cli.commands._process_validation.sys.stdin",
+        io.StringIO(json.dumps(payload)),
+    )
+    return load_runtime_configs(_make_runtime_args(config_stdin=True, **arg_overrides))
 
 
-def test_resolve_processing_steps_interpolation_mode():
-    steps = resolve_processing_steps(_make_workflow_config())
+def test_stage_projection_builds_interpolation_mode():
+    steps = StageProjection.from_workflow(_make_workflow_config()).steps
 
     assert [step.algorithm_type for step in steps] == ["frame_interpolation"]
     assert steps[0].algorithm_kwargs["multi"] == 2
     assert steps[0].stage_name == "01_frame_interpolation"
 
 
-def test_resolve_processing_steps_combined_order():
-    steps = resolve_processing_steps(
+def test_stage_projection_builds_combined_order():
+    steps = StageProjection.from_workflow(
         _make_workflow_config(
             processOrder="frame_interpolation_then_super_resolution",
             superResolution={
@@ -119,7 +146,7 @@ def test_resolve_processing_steps_combined_order():
                 "algorithm": "placeholder",
             },
         )
-    )
+    ).steps
 
     assert [step.algorithm_type for step in steps] == [
         "frame_interpolation",
@@ -129,8 +156,8 @@ def test_resolve_processing_steps_combined_order():
     assert steps[1].algorithm_kwargs["scale_factor"] == 2.0
 
 
-def test_resolve_processing_steps_format_conversion_skips_frame_filters():
-    steps = resolve_processing_steps(
+def test_stage_projection_format_conversion_skips_frame_filters():
+    steps = StageProjection.from_workflow(
         _make_workflow_config(
             interpolation={
                 "enabled": False,
@@ -143,9 +170,9 @@ def test_resolve_processing_steps_format_conversion_skips_frame_filters():
             },
             superResolution={"enabled": False, "scaleFactor": 2.0, "algorithm": "placeholder"},
         )
-    )
+    ).steps
 
-    assert steps == []
+    assert steps == ()
 
 
 def test_processing_step_json_shape_is_stable_and_defensive():
@@ -166,6 +193,18 @@ def test_processing_step_json_shape_is_stable_and_defensive():
     assert step.algorithm_kwargs["multi"] == 2
 
 
+def test_processing_step_freezes_nested_algorithm_configuration():
+    step = ProcessingStep(
+        algorithm_type="frame_filter_chain",
+        algorithm_kwargs={"filters": [{"kind": "scale", "params": {"factor": 2}}]},
+        stage_name="01_preprocess",
+    )
+
+    with pytest.raises(TypeError):
+        step.algorithm_kwargs["filters"][0]["params"]["factor"] = 4
+    assert step.to_jsonable()["algorithm_kwargs"]["filters"][0]["params"]["factor"] == 2
+
+
 def test_load_runtime_configs_returns_typed_models_and_wire_shape():
     configs = load_runtime_configs(_make_runtime_args(output_dir="D:/typed-output"))
 
@@ -175,7 +214,7 @@ def test_load_runtime_configs_returns_typed_models_and_wire_shape():
 
     sections = configs.json_sections()
     assert sections["decode"]["mode"] == "software"
-    assert "hwaccelDevice" not in sections["decode"]
+    assert sections["decode"]["hwaccelDevice"] is None
     assert sections["encode"]["keepAudio"] is True
     assert sections["workflow"]["interpolation"]["tensorBackend"] == "pytorch"
     assert sections["output"]["outputDir"] == "D:/typed-output"
@@ -202,15 +241,30 @@ def test_load_runtime_configs_rejects_missing_output_dir():
     assert "outputDir" in exc_info.value.message
 
 
-def test_load_runtime_configs_rejects_removed_auto_download_weights_field():
-    workflow = _make_workflow_config()
-    workflow["superResolution"]["autoDownloadWeights"] = True
+def test_load_runtime_configs_rejects_invalid_stdin_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.cli.commands._process_validation.sys.stdin",
+        io.StringIO("{not json"),
+    )
 
     with pytest.raises(ProcessError) as exc_info:
-        load_runtime_configs(_make_runtime_args(workflow_config_json=json.dumps(workflow)))
+        load_runtime_configs(_make_runtime_args(config_stdin=True))
 
     assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
-    assert "autoDownloadWeights" in exc_info.value.message
+    assert "Invalid stdin JSON" in exc_info.value.message
+
+
+def test_load_runtime_configs_rejects_non_object_stdin_section(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.cli.commands._process_validation.sys.stdin",
+        io.StringIO('{"workflow": []}'),
+    )
+
+    with pytest.raises(ProcessError) as exc_info:
+        load_runtime_configs(_make_runtime_args(config_stdin=True))
+
+    assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
+    assert "workflow" in exc_info.value.message
 
 
 def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
@@ -231,12 +285,14 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
             stage_name="01_frame_interpolation",
         )
     ]
-    video_info = {
-        "width": 1280,
-        "height": 720,
-        "source_fps": 30.0,
-        "source_frames": 60,
-    }
+    video_info = VideoMetadata(
+        width=1280,
+        height=720,
+        source_fps=30.0,
+        source_frames=60,
+        duration=2.0,
+        has_audio=True,
+    )
     sections = updated.json_sections()
 
     section_signature = build_run_identity(
@@ -264,25 +320,31 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
     assert section_signature == mapping_signature
 
 
-def test_runtime_output_config_includes_segment_frames_and_json_override():
+def test_runtime_output_config_includes_segment_frames_and_stdin_override(monkeypatch: pytest.MonkeyPatch):
     default_configs = load_runtime_configs(_make_runtime_args(output_dir="D:/output"))
-    override_configs = load_runtime_configs(
-        _make_runtime_args(output_dir="D:/output", output_config_json='{"segmentFrames": 240}')
+    override_configs = _load_stdin_configs(
+        monkeypatch,
+        {"output": {"segmentFrames": 240}},
+        output_dir="D:/output",
     )
 
     assert default_configs.json_section("output")["segmentFrames"] == 1000
     assert override_configs.json_section("output")["segmentFrames"] == 240
 
 
-def test_runtime_config_uses_sparse_defaults_and_expands_explicit_sections():
+def test_runtime_config_emits_complete_defaults_for_explicit_wire_contract(monkeypatch: pytest.MonkeyPatch):
     default_configs = load_runtime_configs(_make_runtime_args(output_dir="D:/output"))
-    override_configs = load_runtime_configs(_make_runtime_args(output_dir="D:/output", decode_config_json="{}"))
+    override_configs = _load_stdin_configs(
+        monkeypatch,
+        {"decode": {}},
+        output_dir="D:/output",
+    )
 
-    assert "hwaccelDevice" not in default_configs.json_section("decode")
+    assert default_configs.json_section("decode")["hwaccelDevice"] is None
     assert override_configs.json_section("decode")["hwaccelDevice"] is None
 
 
-def test_resolve_expected_output_frames_uses_input_frames_for_format_conversion():
+def test_stage_plan_uses_input_frames_for_format_conversion():
     workflow = _make_workflow_config(
         interpolation={
             "enabled": False,
@@ -295,62 +357,44 @@ def test_resolve_expected_output_frames_uses_input_frames_for_format_conversion(
         },
         superResolution={"enabled": False, "scaleFactor": 2.0, "algorithm": "placeholder"},
     )
-    processing_steps = resolve_processing_steps(workflow)
+    projection = StageProjection.from_workflow(workflow)
 
-    total = resolve_expected_output_frames(
-        ffmpeg=_FakeFFmpeg(frame_count=240, duration=10.0),
-        input_path="demo.mp4",
-        workflow_config=workflow,
-        processing_steps=processing_steps,
-        final_output_fps=None,
+    plan = build_stage_plan(
+        projection,
+        240,
+        source_duration=10.0,
+        output_fps=None,
     )
 
-    assert total == 240
+    assert plan.total_encoded_frames == 240
 
 
-def test_resolve_expected_output_frames_uses_interpolated_output_frames_without_resample():
+def test_stage_plan_uses_interpolated_output_frames_without_resample():
     workflow = _make_workflow_config()
-    processing_steps = resolve_processing_steps(workflow)
+    projection = StageProjection.from_workflow(workflow)
 
-    total = resolve_expected_output_frames(
-        ffmpeg=_FakeFFmpeg(frame_count=240, duration=10.0),
-        input_path="demo.mp4",
-        workflow_config=workflow,
-        processing_steps=processing_steps,
-        final_output_fps=None,
+    plan = build_stage_plan(
+        projection,
+        240,
+        source_duration=10.0,
+        output_fps=None,
     )
 
-    assert total == 479
+    assert plan.total_encoded_frames == 479
 
 
-def test_resolve_expected_output_frames_uses_target_timeline_when_resampling():
+def test_stage_plan_uses_target_timeline_when_resampling():
     workflow = _make_workflow_config()
-    processing_steps = resolve_processing_steps(workflow)
+    projection = StageProjection.from_workflow(workflow)
 
-    total = resolve_expected_output_frames(
-        ffmpeg=_FakeFFmpeg(frame_count=240, duration=10.0),
-        input_path="demo.mp4",
-        workflow_config=workflow,
-        processing_steps=processing_steps,
-        final_output_fps=60.0,
+    plan = build_stage_plan(
+        projection,
+        240,
+        source_duration=10.0,
+        output_fps=60.0,
     )
 
-    assert total == 600
-
-
-def test_process_parser_rejects_removed_temp_override_flag():
-    parser = build_parser()
-    removed_flag = "--temp" + "-dir"
-
-    with pytest.raises(SystemExit):
-        parser.parse_args(["process", "--input", "demo.mp4", removed_flag, "D:/temp"])
-
-
-def test_process_parser_rejects_removed_anime_algorithm() -> None:
-    parser = build_parser()
-
-    with pytest.raises(SystemExit):
-        parser.parse_args(["process", "--input", "demo.mp4", "--algorithm", "anime_optimization"])
+    assert plan.total_encoded_frames == 600
 
 
 def test_stage_worker_parser_requires_config_json():
@@ -416,6 +460,19 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
     assert "onnxModels" not in payload
 
     rife_alg = next(a for a in payload["interpolationAlgorithms"] if a["name"] == "rife")
+    assert set(rife_alg) == {
+        "name",
+        "family",
+        "tensorBackends",
+        "models",
+        "onnxModels",
+        "modelDetails",
+        "onnxModelDetails",
+        "scaleFactors",
+        "fixedScaleFactor",
+        "defaultNumFrames",
+        "inputFrameMode",
+    }
     assert rife_alg["onnxModels"] == ["interp.onnx"]
     assert rife_alg["modelDetails"]
     assert rife_alg["modelDetails"][0]["metrics"]["parameterCount"] is not None

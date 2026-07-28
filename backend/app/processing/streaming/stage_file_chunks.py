@@ -23,7 +23,9 @@ def run_single_stage_file_chunks(
     start_chunk_index: int,
     segment_frames: int,
 ) -> int:
-    extension = os.path.splitext(str(manifest.output_path))[1] or f".{config.encode_config.get('container') or 'mp4'}"
+    extension = os.path.splitext(str(manifest.workspace.output_path))[1] or (
+        f".{config.encode_config.get('container') or 'mp4'}"
+    )
     chunks = [
         chunk
         for chunk in build_stage_chunk_plans(
@@ -44,7 +46,7 @@ def run_single_stage_file_chunks(
     for chunk in chunks:
         if chunk.written_output_frame_count <= 0:
             continue
-        tmp_path = manifest.chunk_tmp_path(extension, index=chunk_index)
+        tmp_path = manifest.workspace.chunk_tmp_path(extension, index=chunk_index)
         actual_written = stage_file_chunk_runtime.run_stage_chunk_to_file(
             config=config,
             output_path=tmp_path,
@@ -54,7 +56,7 @@ def run_single_stage_file_chunks(
         if actual_written <= 0:
             Path(tmp_path).unlink(missing_ok=True)
             continue
-        manifest.finalize_chunk(
+        manifest.workspace.finalize_chunk(
             tmp_path,
             index=chunk_index,
             start_output_frame=completed_output_frames,

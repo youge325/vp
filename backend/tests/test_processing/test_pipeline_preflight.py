@@ -1,32 +1,8 @@
 from __future__ import annotations
 
-from app.planning import ProcessingStep
+from app.planning import ProcessingStep, StageProjection
+from app.ports.media import VideoMetadata
 from app.processing.streaming.pipeline_preflight import build_streaming_pipeline_preflight
-
-
-class _FakeFFmpeg:
-    def get_video_info(self, _input_path: str) -> dict[str, object]:
-        return {
-            "streams": [
-                {
-                    "codec_type": "video",
-                    "width": 320,
-                    "height": 180,
-                }
-            ]
-        }
-
-    def get_fps(self, _input_path: str) -> float:
-        return 24.0
-
-    def get_frame_count(self, _input_path: str) -> int:
-        return 5
-
-    def get_duration(self, _input_path: str) -> float:
-        return 5 / 24
-
-    def has_audio(self, _input_path: str) -> bool:
-        return True
 
 
 def test_build_streaming_pipeline_preflight_resolves_planning_context(tmp_path) -> None:
@@ -45,27 +21,31 @@ def test_build_streaming_pipeline_preflight_resolves_planning_context(tmp_path) 
             stage_name="02_super_resolution",
         ),
     ]
+    video_info = VideoMetadata(
+        width=320,
+        height=180,
+        source_fps=24.0,
+        source_frames=5,
+        duration=5 / 24,
+        has_audio=True,
+    )
+    projection = StageProjection(tuple(steps))
 
     preflight = build_streaming_pipeline_preflight(
-        ffmpeg=_FakeFFmpeg(),
+        video_info=video_info,
         input_path=str(input_path),
         output_path=str(output_path),
         decode_config={"mode": "software"},
         encode_config={"codec": "libx265"},
         workflow_config={"fpsMode": "target"},
-        output_config={"segmentFrames": 0},
-        processing_steps=steps,
+        output_config={"segmentFrames": 1000},
+        projection=projection,
         output_fps=None,
     )
 
-    assert preflight.video_info == {
-        "width": 320,
-        "height": 180,
-        "source_fps": 24.0,
-        "source_frames": 5,
-        "duration": 5 / 24,
-        "has_audio": True,
-    }
+    assert preflight.video_info is video_info
+    assert preflight.stage_plan.projection is projection
+    assert preflight.stage_plan.steps is projection.steps
     assert preflight.stage_plan.total_encoded_frames == 9
     assert preflight.use_stage_file_pipeline is True
     assert preflight.resume_source_frames == 9

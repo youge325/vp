@@ -6,9 +6,9 @@ import { useIssueStore } from '@/stores/issue'
 import { useMediaStore } from '@/stores/media'
 import { codedError } from './errors'
 
-// Phase 15 — useMediaImport spec。
+// useMediaImport spec。
 //
-// Phase 14 把"导入失败"从 mediaRunState.setIssue(itemId, …)(Phase 13.1
+// "导入失败"从 mediaRunState.setIssue(itemId, …)(旧实现
 // 引入的 dead write) 改写到 issueStore.setIssue('input', …),InputModuleView
 // 的 useOperationIssue('input') 才能真的拿到。本 spec 锁住这条链路:
 //
@@ -47,8 +47,8 @@ describe('useMediaImport', () => {
   })
 
   it('routes inspect failures to issueStore.input so IssueBanner picks them up', async () => {
-    // Phase 14 关键回归:必须写入 issueStore('input'),而不是 mediaRunState
-    // (后者没有视图侧消费方,Phase 13.1 时的写入是 dead write)。
+    // 关键回归:必须写入 issueStore('input'),而不是 mediaRunState
+    // (后者没有视图侧消费方,原实现中的写入是 dead write)。
     inspectMock.mockRejectedValueOnce(
       codedError(TASK_ERROR_CODES.ProcessFailed, 'ffprobe spawn failed'),
     )

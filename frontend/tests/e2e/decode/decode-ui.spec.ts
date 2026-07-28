@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures'
+import { installEnvironmentFixture } from '../utils/environment'
 
 const makeOption = (name: string, defaultValue: string) => ({
   name,
@@ -58,38 +59,8 @@ async function installDecodeProfiles(
     options: {},
   },
 ): Promise<boolean> {
-  return await tauriPage.evaluate(({
-    decoderProfiles,
-    decodeConfig,
-  }: {
-    decoderProfiles: unknown[]
-    decodeConfig: Record<string, unknown>
-  }) => {
-    const root = document.querySelector('#app')
-    if (!root) return false
-    const vueApp = (root as any).__vue_app__
-    if (!vueApp) return false
-    const pinia = vueApp.config?.globalProperties?.$pinia
-    const state = pinia?.state?.value
-    if (!state?.env?.env || !state?.preset?.draftPreset) return false
-
-    state.env.env.checkResult = {
-      ffmpeg: {
-        available: true,
-        hwaccels: ['cuda', 'qsv', 'd3d11va'],
-        encoderProfiles: [],
-        decoderProfiles,
-      },
-      gpu: { adapters: [] },
-      tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-      interpolationAlgorithms: [],
-      superResolutionAlgorithms: [],
-      runtimeMode: 'external',
-    }
-
-    state.preset.draftPreset.decodeConfig = decodeConfig
-    return true
-  }, { decoderProfiles: profiles, decodeConfig })
+  void tauriPage
+  return await installEnvironmentFixture({ decoderProfiles: profiles, decodeConfig })
 }
 
 async function openDecodeModule(tauriPage: any): Promise<void> {

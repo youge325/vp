@@ -23,9 +23,7 @@ pub(super) fn resolve_python_executable(
     let bin = platform_python_binary();
     let candidates = [
         env_path("VP_PYTHON_EXECUTABLE"),
-        runtime_root.map(|path| path.join("python").join(bin)),
-        runtime_root.map(|path| path.join("bin").join(bin)),
-        runtime_root.map(|path| path.join(bin)),
+        bundled_python_path(runtime_root, bin),
     ];
 
     if let Some(path) = first_existing_file(candidates) {
@@ -34,4 +32,31 @@ pub(super) fn resolve_python_executable(
 
     find_in_system_path(bin)
         .ok_or_else(|| ShellError::RuntimeResolution(MISSING_PYTHON_MESSAGE.to_string()))
+}
+
+fn bundled_python_path(runtime_root: Option<&PathBuf>, binary: &str) -> Option<PathBuf> {
+    first_existing_file([runtime_root.map(|path| path.join("python").join(binary))])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_python_resolves_the_canonical_runtime_layout() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let runtime = temp.path().join("runtime");
+        let binary = platform_python_binary();
+        let canonical = runtime.join("python").join(binary);
+        std::fs::create_dir_all(canonical.parent().expect("python parent"))
+            .expect("create python parent");
+        std::fs::write(&canonical, b"python").expect("write python");
+
+        assert_eq!(
+            bundled_python_path(Some(&runtime), binary),
+            Some(canonical.clone())
+        );
+        std::fs::remove_file(canonical).expect("remove canonical python");
+        assert_eq!(bundled_python_path(Some(&runtime), binary), None);
+    }
 }

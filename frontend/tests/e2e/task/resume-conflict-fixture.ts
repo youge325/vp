@@ -27,12 +27,3 @@ export async function clearResumeConflict(tauriPage: TauriPage): Promise<void> {
     }
   })
 }
-
-export async function getPendingResumeConflict(tauriPage: TauriPage): Promise<unknown> {
-  return await tauriPage.evaluate(() => {
-    const root = document.querySelector('#app')
-    const vueApp = (root as any)?.__vue_app__
-    const pinia = vueApp?.config?.globalProperties?.$pinia
-    return pinia?.state?.value?.task?.pendingConflict ?? 'NULL'
-  })
-}

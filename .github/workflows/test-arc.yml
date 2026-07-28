@@ -40,7 +40,13 @@ jobs:
           npm install --include=optional --no-audit --no-fund
         working-directory: frontend
 
-      - name: Regenerate TypeScript types from Rust (ts-rs)
+      - name: Install contract quality tools
+        run: python -m pip install --disable-pip-version-check -r scripts/requirements-quality.txt
+
+      - name: Neutral contract generation check
+        run: python scripts/generate_contracts.py --check
+
+      - name: Run Rust tests
         run: |
           mkdir -p ../dist
           cargo test --lib --quiet
@@ -58,8 +64,12 @@ jobs:
         run: npm run build
         working-directory: frontend
 
-      - name: TaskErrorCode three-layer consistency check
-        run: python scripts/check_error_code_drift.py
+      - name: Frontend static quality gates
+        run: npm run check
+        working-directory: frontend
+
+      - name: Python dead-code gate
+        run: python -m vulture backend/app backend/tests backend/tests_full_e2e backend/export_all_rife_onnx.py scripts backend/vulture_whitelist.py --min-confidence 60 --exclude "backend/app/generated/,backend/app/algorithms/paddle/paddlegan_vsr/vendor/,backend/app/algorithms/pytorch/rife/ifnet_v4_"
 
       - name: Architecture contracts check
         run: python scripts/check_architecture_contracts.py

@@ -17,7 +17,8 @@ const editor = computed(() => {
 })
 
 function fieldValue(field: FilterFieldDefinition): string | number | boolean {
-  return modelValue.value.params[field.key] ?? props.entry.defaultParams[field.key] ?? ''
+  const value = modelValue.value.params[field.key] ?? props.entry.defaultParams[field.key]
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? value : ''
 }
 
 function updateNumber(field: FilterFieldDefinition, value: number): void {

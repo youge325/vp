@@ -34,7 +34,7 @@ class FFmpegWrapper:
         self.ffprobe_path = ffprobe_path or settings.FFPROBE_PATH
         self._auto_detect_paths()
         # Probe caches keyed by (abspath, mtime_ns, size); invalidates on
-        # file mutation. Phase C.1.4 added ``size`` because some build tools
+        # file mutation. ``size`` is included because some build tools
         # preserve mtime when copying — without it a content swap would
         # silently return stale probe info.
         self._video_info_cache: dict[tuple[str, int, int], dict[str, Any]] = {}

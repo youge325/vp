@@ -18,7 +18,7 @@ import { useTaskOrchestrator } from '@/composables/app/useTaskOrchestrator'
 import { useMediaStore } from '@/stores/media'
 import { createMediaItem } from '@/services/media/factory'
 import { normalizeOutputDir } from '@/services/preset/normalize'
-import type { WorkbenchPreset } from '@/types/protocol'
+import { createTestPreset } from '../../fixtures/preset'
 
 describe('useTaskOrchestrator', () => {
   beforeEach(() => {
@@ -32,27 +32,9 @@ describe('useTaskOrchestrator', () => {
   function seedItem(
     overrides: { outputDir?: string; selected?: boolean; inputPath?: string } = {},
   ) {
-    const samplePreset: WorkbenchPreset = {
-      decodeConfig: { mode: 'software', hwaccel: '', hwaccelDevice: '', decoder: 'software', options: {} },
-      workflowConfig: {
-        fpsMode: 'target',
-        processOrder: 'super_resolution_then_interpolation',
-        interpolation: { enabled: false, targetFps: 60, multi: 2, model: '4.25', onnxModel: '', scale: 1, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
-        superResolution: {
-          enabled: false,
-          scaleFactor: 2,
-          algorithm: 'placeholder',
-          onnxModel: '',
-          tensorBackend: 'onnx',
-          engine: 'cuda',
-          numFrames: 10,
-        },
-        preprocess: { enabled: false, filters: [] },
-        postprocess: { enabled: false, filters: [] },
-      },
-      encodeConfig: { codec: 'libx265', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 18 }, options: {} },
-      outputConfig: { outputDir: normalizeOutputDir(overrides.outputDir ?? ''), openOnComplete: true, segmentFrames: 1000 },
-    }
+    const samplePreset = createTestPreset({
+      outputDir: normalizeOutputDir(overrides.outputDir ?? ''),
+    })
     const mediaStore = useMediaStore()
     const item = createMediaItem(overrides.inputPath ?? '/video/a.mp4', samplePreset)
     item.selected = overrides.selected ?? true

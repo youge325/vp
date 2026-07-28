@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OutputConfig",
+  "type": "object",
+  "properties": {
+    "outputDir": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "openOnComplete": {
+      "type": "boolean"
+    },
+    "segmentFrames": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 1
+    }
+  },
+  "required": [
+    "outputDir",
+    "openOnComplete",
+    "segmentFrames"
+  ],
+  "additionalProperties": false
+}

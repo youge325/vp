@@ -5,11 +5,16 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createEnhanceOptionState } from '@/composables/forms/enhance-option-state'
 import { useEnvStore } from '@/stores/env'
 import type { EnvironmentCheckResult, ModelVariantInfo } from '@/types/protocol'
-import { createEnvironmentPayload, createEnvironmentResult } from '../../fixtures/environment'
+import {
+  createAlgorithmInfo,
+  createEnvironmentPayload,
+  createEnvironmentResult,
+  createModelVariantInfo,
+} from '../../fixtures/environment'
 
 type EnhanceOptionForm = Parameters<typeof createEnhanceOptionState>[0]
 
-const detail = (name: string): ModelVariantInfo => ({
+const detail = (name: string): ModelVariantInfo => createModelVariantInfo({
   name,
   label: name,
   metrics: {
@@ -41,7 +46,9 @@ function makeForm(): EnhanceOptionForm {
     interpolationAlgorithm: 'rife',
     interpolationModel: '4.25',
     interpolationOnnxModel: '',
-    interpolationAlgorithms: [{ name: 'rife', tensorBackends: ['pytorch'], models: ['4.25'] }],
+    interpolationAlgorithms: [
+      createAlgorithmInfo({ name: 'rife', tensorBackends: ['pytorch'], models: ['4.25'] }),
+    ],
     interpolationModels: ['4.25'],
     interpolationOnnxModels: [],
     interpolationModelDetails: [detail('4.25')],
@@ -54,12 +61,12 @@ function makeForm(): EnhanceOptionForm {
     superResolutionOnnxModel: '',
     superResolutionScale: 2,
     superResolutionAlgorithms: [
-      {
+      createAlgorithmInfo({
         name: 'placeholder',
         tensorBackends: ['onnx'],
         models: [],
         modelDetails: [detail('placeholder')],
-      },
+      }),
     ],
     superResolutionOnnxModels: ['sr.onnx'],
     superResolutionOnnxModelDetails: [detail('sr.onnx')],

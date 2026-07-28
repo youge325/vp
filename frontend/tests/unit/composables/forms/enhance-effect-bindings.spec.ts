@@ -5,52 +5,11 @@ import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/wor
 import { createEnhanceEffectBindings } from '@/composables/forms/enhance-effect-bindings'
 import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
-import { createEnvironmentResult } from '../../fixtures/environment'
-
-function makeEnv(): EnvironmentCheckResult {
-  return createEnvironmentResult({
-    ffmpeg: {
-      available: true,
-      hwaccels: [],
-      encoderProfiles: [],
-      decoderProfiles: [],
-    },
-    gpu: { adapters: [] },
-    tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda', 'tensorrt'], onnx: ['cuda', 'tensorrt'] },
-    interpolationAlgorithms: [
-      { name: 'rife', tensorBackends: ['pytorch', 'onnx'], models: ['4.25'], onnxModels: ['rife.onnx'] },
-      { name: 'rife-lite', tensorBackends: ['pytorch'], models: ['lite'], onnxModels: [] },
-    ],
-    superResolutionAlgorithms: [
-      { name: 'placeholder', tensorBackends: ['onnx'], models: [], onnxModels: ['sr.onnx'], scaleFactors: [2] },
-      {
-        name: 'ppmsvsr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        inputFrameMode: 'editable_chunk',
-        defaultNumFrames: 10,
-      },
-      {
-        name: 'edvr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        inputFrameMode: 'fixed_window',
-        defaultNumFrames: 5,
-      },
-    ],
-    runtimeMode: 'bundled',
-  })
-}
+import { createEnhanceEnvironment } from '../../fixtures/environment'
 
 function makeBindings() {
   const workflow = reactive(createDefaultWorkflowConfigForEnvironment(null)) as WorkflowConfig
-  const checkResult = ref<EnvironmentCheckResult | null>(makeEnv())
+  const checkResult = ref<EnvironmentCheckResult | null>(createEnhanceEnvironment())
   const effectBindings = createEnhanceEffectBindings({
     workflow: computed(() => workflow),
     checkResult: computed(() => checkResult.value),
@@ -78,7 +37,7 @@ describe('enhance effect bindings', () => {
     expect(workflow.interpolation.enabled).toBe(true)
     expect(workflow.interpolation.tensorBackend).toBe('onnx')
     expect(workflow.interpolation.algorithm).toBe('rife')
-    expect(workflow.interpolation.onnxModel).toBe('rife.onnx')
+    expect(workflow.interpolation.onnxModel).toBe('rife_v4.25.onnx')
     expect(workflow.superResolution.enabled).toBe(true)
     expect(workflow.superResolution.tensorBackend).toBe('paddle')
     expect(workflow.superResolution.algorithm).toBe('edvr')

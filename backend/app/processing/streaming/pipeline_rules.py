@@ -2,45 +2,37 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from app.planning import StagePlan
+from app.ports.media import VideoMetadata
 from app.processing.streaming.stage_rules import (
-    ordered_steps,
     resolve_stage_plan_output_dimensions,
-    stage_output_fps,
-    stage_output_frame_count,
     stage_requires_file_pipeline,
 )
 
 
 def should_use_stage_file_pipeline(stage_plan: StagePlan) -> bool:
-    return any(stage_requires_file_pipeline(step) for step in ordered_steps(stage_plan))
+    return any(stage_requires_file_pipeline(step) for step in stage_plan.steps)
 
 
 def stage_file_resume_source_frames(stage_plan: StagePlan, source_frames: int) -> int:
     """Return the source-frame domain used by the final staged manifest."""
-    current_frames = max(int(source_frames), 0)
-    steps = ordered_steps(stage_plan)
-    for step in steps[:-1]:
-        current_frames = stage_output_frame_count(step, current_frames)
-    return current_frames
+    return stage_plan.projection.output_frame_count(
+        max(int(source_frames), 0),
+        stop_before=max(len(stage_plan.steps) - 1, 0),
+    )
 
 
 def resolved_stream_fps(source_fps: float, stage_plan: StagePlan) -> float:
-    interpolation_step = stage_plan.interpolation_step
-    if interpolation_step is None:
-        return source_fps
-    return stage_output_fps(interpolation_step, source_fps)
+    return stage_plan.projection.output_fps(source_fps)
 
 
 def resolved_output_dimensions(
     *,
-    video_info: dict[str, Any],
+    video_info: VideoMetadata,
     stage_plan: StagePlan,
 ) -> tuple[int, int]:
-    width = int(video_info["width"])
-    height = int(video_info["height"])
+    width = video_info.width
+    height = video_info.height
     return resolve_stage_plan_output_dimensions(
         stage_plan,
         source_width=width,

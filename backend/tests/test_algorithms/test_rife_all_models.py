@@ -23,7 +23,7 @@ _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
-from app.algorithms.pytorch.rife._model_spec import (
+from app.catalog.rife_models import (
     HEAD_CUSTOM,
     HEAD_NONE,
     HEAD_SEQUENTIAL,

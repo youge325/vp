@@ -1,25 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { resolveMetricsForEngine } from '@/services/model-engine-metrics'
-import type { ModelVariantInfo } from '@/types/protocol'
+import {
+  createRifeModelDetail,
+  type ModelMetricOverrides,
+} from '../fixtures/environment'
 
-function detail(overrides: Partial<ModelVariantInfo['metrics']> = {}): ModelVariantInfo {
-  return {
-    name: '4.25',
-    label: 'RIFE 4.25',
-    metrics: {
-      parameterCount: 5670892,
-      parameterBytes: 22683568,
-      gflopsPerMegapixel: 18.5,
-      activationBytesPerMegapixel: 694_800_000,
-      runtimeOverheadBytes: 38_000_000,
-      inputModulo: 64,
-      analysisStatus: 'ok',
-      analysisNotes: [],
-      ...overrides,
-    },
-  }
-}
+const detail = (overrides: ModelMetricOverrides = {}) => createRifeModelDetail(overrides)
 
 describe('model engine metrics', () => {
   it('uses TensorRT overrides and clears CUDA memory when TensorRT is uncalibrated', () => {

@@ -1,8 +1,6 @@
 // 视图选择器 — Workbench 编辑器双轨视图(激活素材 vs 默认预设)。
 // 保持原 useEditor 的语义,但把它放进 selectors/ 命名空间。
 //
-// Phase D.4.6 — 双轨同步语义文档化:
-//
 // VP Workbench 有两套配置存储:
 //   1. **工作台预设**(``presetStore.draftPreset``):用户当前编辑的通用
 //      配置,自动持久化到本地。

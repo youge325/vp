@@ -3,15 +3,16 @@ import { describe, expect, it } from 'vitest'
 import { combinedVramMetricRows, metricRows } from '@/services/model-metric-rows'
 import type { ModelVariantInfo } from '@/types/protocol'
 import type { RuntimeMetricEstimate } from '@/types/view/model-metrics'
+import { createModelMetricInfo } from '../fixtures/environment'
 
 const detail: ModelVariantInfo = {
   name: '4.25',
   label: 'RIFE 4.25',
-  metrics: {
+  metrics: createModelMetricInfo({
     parameterCount: 5670892,
     analysisStatus: 'ok',
     analysisNotes: [],
-  },
+  }),
 }
 
 const estimate: RuntimeMetricEstimate = {

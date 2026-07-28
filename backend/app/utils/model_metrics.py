@@ -6,7 +6,7 @@ from math import prod
 from pathlib import Path
 from typing import Any
 
-from app.algorithms.pytorch.rife._model_spec import MODEL_SPECS, SUPPORTED_MODELS
+from app.catalog.rife_models import MODEL_SPECS, SUPPORTED_MODELS
 
 AnalysisStatus = str
 

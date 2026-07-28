@@ -11,14 +11,27 @@ import {
 import { createIdleTaskState } from '../../events'
 import { buildResumeConflictDescriptor } from '../../resume-classifier'
 
-import type { BatchLifecycleDeps } from './types'
+import type {
+  BatchStatePort,
+  MediaItemPort,
+  MediaRunStatePort,
+  TaskCommandPort,
+  TaskRequestFactory,
+} from './types'
 
 interface QueueInternalRefs {
   handleErrored: (error: ReturnType<typeof normalizeError>) => Promise<void>
 }
 
+type QueueDeps =
+  & Pick<BatchStatePort, 'getBatch' | 'setBatch' | 'setRuntimeIds' | 'setPendingConflict'>
+  & Pick<MediaItemPort, 'getMediaItem' | 'setActiveItem'>
+  & Pick<MediaRunStatePort, 'setItemTaskState' | 'resetItemRunState'>
+  & Pick<TaskCommandPort, 'startTask' | 'checkResume'>
+  & TaskRequestFactory
+
 export function createQueueOps(
-  deps: BatchLifecycleDeps,
+  deps: QueueDeps,
   internal: QueueInternalRefs,
 ) {
   function resetBatchRunState(ids: string[]): void {
@@ -27,10 +40,10 @@ export function createQueueOps(
       queue: [...ids],
       currentId: null,
       completedCount: 0,
-      failedCount: 0,
       isRunning: ids.length > 0,
       isPaused: false,
       isCancelling: false,
+      controlPending: null,
     })
 
     for (const id of ids) {
@@ -49,6 +62,7 @@ export function createQueueOps(
         isRunning: false,
         isPaused: false,
         isCancelling: false,
+        controlPending: null,
       })
       return
     }
@@ -64,6 +78,7 @@ export function createQueueOps(
       currentId: nextId,
       isPaused: false,
       isCancelling: false,
+      controlPending: null,
     })
     deps.setActiveItem(nextId)
     deps.setItemTaskState(nextId, {

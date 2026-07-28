@@ -6,37 +6,15 @@ import { useIssueStore } from '@/stores/issue'
 import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
 import { createMediaItem } from '@/services/media/factory'
-import type { WorkbenchPreset } from '@/types/protocol'
 import { codedError } from './errors'
+import { createTestPreset } from '../../fixtures/preset'
 
-// Phase 16 — useOutputPicker spec(IO 错误路由到 issueStore('encode'))。
+// useOutputPicker spec(IO 错误路由到 issueStore('encode'))。
 //
-// Phase 17 — 成功路径锁双轨语义:有 activeItem → 写 active + selected
+// 成功路径锁双轨语义:有 activeItem → 写 active + selected
 // items 的 outputConfig;无 activeItem → 写 preset.draftPreset.outputConfig。原先直调
 // ``presetStore.patchOutput`` 在激活素材态下是真 bug —— view 优先读
 // activeItem 的 outputDir,preset 的写入根本不可见。
-
-const samplePreset: WorkbenchPreset = {
-  decodeConfig: { mode: 'software', hwaccel: '', hwaccelDevice: '', decoder: 'software', options: {} },
-  workflowConfig: {
-    fpsMode: 'target',
-    processOrder: 'super_resolution_then_interpolation',
-    interpolation: { enabled: false, targetFps: 60, multi: 2, model: '4.25', onnxModel: '', scale: 1, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
-    superResolution: {
-      enabled: false,
-      scaleFactor: 2,
-      algorithm: 'placeholder',
-      onnxModel: '',
-      tensorBackend: 'onnx',
-      engine: 'cuda',
-      numFrames: 10,
-    },
-    preprocess: { enabled: false, filters: [] },
-    postprocess: { enabled: false, filters: [] },
-  },
-  encodeConfig: { codec: 'libx265', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 18 }, options: {} },
-  outputConfig: { outputDir: '', openOnComplete: true, segmentFrames: 1000 },
-}
 
 const pickMock = vi.fn()
 
@@ -74,14 +52,14 @@ describe('useOutputPicker', () => {
     expect(issueStore.operationIssue).toBeNull()
   })
 
-  // Phase 17 — 真 bug 回归护栏。激活素材态下点选择目录,**必须**至少写到
+  // 真 bug 回归护栏。激活素材态下点选择目录,**必须**至少写到
   // active item.outputConfig 而不是 preset.draftPreset,否则 EncodeModuleView 的
   // editorConfig.outputConfig.outputDir 优先读 item,用户看不到变化。
   it('writes the chosen path to the active item when one exists', async () => {
     pickMock.mockResolvedValueOnce('D:/out/picked-item')
     const mediaStore = useMediaStore()
     const presetStore = usePresetStore()
-    const item = createMediaItem('/video/a.mp4', samplePreset)
+    const item = createMediaItem('/video/a.mp4', createTestPreset())
     mediaStore.appendItems([item])
     mediaStore.setActive(item.id)
     const presetDirBefore = presetStore.draftPreset.outputConfig.outputDir
@@ -118,7 +96,7 @@ describe('useOutputPicker', () => {
   it('user cancel does not mutate the active item either', async () => {
     pickMock.mockResolvedValueOnce(null)
     const mediaStore = useMediaStore()
-    const item = createMediaItem('/video/a.mp4', samplePreset)
+    const item = createMediaItem('/video/a.mp4', createTestPreset())
     mediaStore.appendItems([item])
     mediaStore.setActive(item.id)
     const itemDirBefore = item.outputConfig.outputDir

@@ -15,8 +15,8 @@
 - v4.13.lite: nn.Sequential Head (3→32→4)
 - v4.13~v4.26.heavy: 自定义 Head 类(从 IFNet 文件导入)
 
-Phase C.1.2 把 36 个模型配置收到了 ``_model_spec.py`` 的 ``_VERSION_GROUPS``
-表。本文件聚焦"如何加载权重 / 构 Head / 移动到设备"这条逻辑流。
+36 个模型配置统一保存在中立的 ``app.catalog.rife_models`` 表中。
+本文件聚焦"如何加载权重 / 构 Head / 移动到设备"这条逻辑流。
 """
 
 from __future__ import annotations
@@ -26,12 +26,12 @@ import importlib.util
 import os
 from typing import TYPE_CHECKING, Optional
 
-from app.algorithms.pytorch.rife._model_spec import (
+from app.catalog.rife_models import (
     HEAD_CUSTOM as _HEAD_CUSTOM,
     HEAD_NONE as _HEAD_NONE,
     HEAD_SEQUENTIAL as _HEAD_SEQUENTIAL,
     SUPPORTED_MODELS as _SUPPORTED_MODELS,
-    RifeModelSpec as _RifeModelSpec,
+    RifeModelSpec,
     get_spec as _get_spec,
 )
 from app.utils.logger import get_logger
@@ -141,7 +141,7 @@ def _load_weights(weight_path: str) -> dict:
 
 
 def _build_head_for_spec(
-    spec: _RifeModelSpec,
+    spec: RifeModelSpec,
     mod,
     state_dict: dict,
     torch_device: "torch.device",
@@ -228,10 +228,10 @@ def load_rife_model(
     fp16: bool = False,
     model_dir: Optional[str] = None,
     engine: str = "cuda",
-) -> tuple["nn.Module", "Optional[nn.Module]", dict]:
+) -> tuple["nn.Module", "Optional[nn.Module]", RifeModelSpec]:
     """加载 RIFE 模型(IFNet + Head 编码器)。
 
-    参照 vs-rife 的 init_module 逻辑,根据 ``_model_spec`` 表中查表得到的
+    参照 vs-rife 的 init_module 逻辑,根据中立 model catalog 查表得到的
     ``RifeModelSpec``:
 
     1. 动态导入对应版本的 IFNet(和 Head,如果存在)
@@ -248,10 +248,10 @@ def load_rife_model(
         engine: 推理引擎("cuda" 或 "tensorrt",默认 "cuda")
 
     返回:
-        ``(flownet, encode, config)`` 元组:
+        ``(flownet, encode, spec)`` 元组:
         - flownet: IFNet 模型(eval 模式)
         - encode: Head 编码器(eval 模式),无 Head 时为 None
-        - config: 模型配置字典(legacy dict 形式,保留兼容字段)
+        - spec: 中立 catalog 中的不可变模型描述
 
     异常:
         FileNotFoundError: 权重文件不存在
@@ -301,14 +301,13 @@ def load_rife_model(
         if encode is not None:
             encode = _compile_with_tensorrt_if_available(encode, label=f"RIFE v{model_version} Head", fp16=fp16)
 
-    config = spec.to_dict()
     logger.info(
         f"RIFE v{model_version} 模型加载完成 "
         f"(device={torch_device}, dtype={dtype}, scale={scale}, engine={engine}, "
         f"head_type={spec.head_type}, encode={'有' if encode is not None else '无'})"
     )
 
-    return flownet, encode, config
+    return flownet, encode, spec
 
 
 # ---------------------------------------------------------------------------

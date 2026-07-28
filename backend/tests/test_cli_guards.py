@@ -7,6 +7,7 @@ import argparse
 import pytest
 
 from app.cli.commands import _guards, info
+from app.adapters import FFmpegMediaAdapter
 from app.errors import ProcessError, TaskErrorCode
 
 
@@ -52,6 +53,16 @@ def test_process_guard_rejects_invalid_input_before_constructing_ffmpeg(monkeypa
         _guards.ensure_input_and_ffmpeg(str(tmp_path / "missing.mp4"))
 
     assert exc_info.value.code == TaskErrorCode.INVALID_INPUT
+
+
+def test_process_guard_wires_ffmpeg_through_the_media_adapter(monkeypatch) -> None:
+    ffmpeg = _FakeFFmpeg()
+    monkeypatch.setattr(_guards, "validate_input_path", lambda _path: True)
+    monkeypatch.setattr(_guards, "ensure_ffmpeg_available", lambda: ffmpeg)
+
+    media = _guards.ensure_input_and_ffmpeg("input.mp4")
+
+    assert isinstance(media, FFmpegMediaAdapter)
 
 
 def test_info_keeps_existence_only_input_policy(monkeypatch) -> None:

@@ -1,60 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceRuntimeView } from '@/services/preset/enhance-runtime-view'
-import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
-import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
-
-const interpolationDetail: ModelVariantInfo = {
-  name: '4.25',
-  label: 'RIFE 4.25',
-  metrics: {
-    parameterCount: 1,
-    parameterBytes: 4,
-    gflopsPerMegapixel: 10,
-    activationBytesPerMegapixel: 1000,
-    runtimeOverheadBytes: 100,
-    inputModulo: 1,
-    analysisStatus: 'ok',
-    analysisNotes: [],
-  },
-}
-
-const superResolutionDetail: ModelVariantInfo = {
-  name: 'x4',
-  label: 'EDVR',
-  metrics: {
-    parameterCount: 2,
-    parameterBytes: 8,
-    gflopsPerMegapixel: 20,
-    activationBytesPerMegapixel: 2000,
-    runtimeOverheadBytes: 200,
-    runtimeFrameCount: 5,
-    inputModulo: 1,
-    analysisStatus: 'ok',
-    analysisNotes: [],
-  },
-}
-
-const fixedWindowAlgorithm: AlgorithmInfo = {
-  name: 'edvr',
-  family: 'paddlegan_vsr',
-  tensorBackends: ['paddle'],
-  models: ['x4'],
-  fixedScaleFactor: 4,
-  inputFrameMode: 'fixed_window',
-  defaultNumFrames: 5,
-}
+import { createRuntimeDetails, createRuntimeWorkflow } from '../../fixtures/enhance-runtime'
 
 describe('enhance runtime view', () => {
   it('builds runtime estimates, fixed-window rows, and combined VRAM rows', () => {
-    const workflow = createDefaultWorkflowConfigForEnvironment(null)
-    workflow.processOrder = 'super_resolution_then_interpolation'
-    workflow.interpolation.enabled = true
-    workflow.interpolation.scale = 1
-    workflow.interpolation.fp16 = false
-    workflow.superResolution.enabled = true
-    workflow.superResolution.scaleFactor = 4
-    workflow.superResolution.numFrames = 10
+    const workflow = createRuntimeWorkflow()
+    const {
+      fixedWindowAlgorithm,
+      interpolationDetail,
+      superResolutionDetail,
+    } = createRuntimeDetails()
 
     const view = buildEnhanceRuntimeView({
       workflow,

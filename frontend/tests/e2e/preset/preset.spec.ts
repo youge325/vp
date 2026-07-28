@@ -1,30 +1,39 @@
 import { test, expect } from '../fixtures'
+import type { WorkbenchPreset } from '@/types/protocol'
+import { invokeTauri } from '../utils/task-runtime'
 
-function buildPreset(outputDir: string) {
+function buildPreset(outputDir: string): WorkbenchPreset {
   return {
     decodeConfig: {
-      mode: 'software' as const,
+      mode: 'software',
+      hwaccel: null,
+      hwaccelDevice: null,
       decoder: 'software',
       options: {},
     },
     workflowConfig: {
-      fpsMode: 'multi' as const,
-      processOrder: 'super_resolution_then_interpolation' as const,
+      fpsMode: 'multi',
+      processOrder: 'super_resolution_then_interpolation',
       interpolation: {
         enabled: false,
         targetFps: 60,
         multi: 2,
         algorithm: 'rife',
         model: '4.25',
+        onnxModel: null,
         scale: 1.0,
         fp16: false,
-        tensorBackend: 'pytorch' as const,
+        tensorBackend: 'pytorch',
         engine: 'cuda',
       },
       superResolution: {
         enabled: false,
         scaleFactor: 2.0,
         algorithm: 'realesrgan',
+        onnxModel: null,
+        tensorBackend: 'pytorch',
+        engine: 'cuda',
+        numFrames: 10,
       },
       preprocess: { enabled: false, filters: [] },
       postprocess: { enabled: false, filters: [] },
@@ -34,7 +43,7 @@ function buildPreset(outputDir: string) {
       family: 'cpu',
       container: 'mp4',
       keepAudio: true,
-      rateControl: { mode: 'crf' as const, value: 18 },
+      rateControl: { mode: 'crf', value: 18 },
       options: {},
     },
     outputConfig: {
@@ -46,74 +55,18 @@ function buildPreset(outputDir: string) {
 }
 
 test.describe('Preset persistence', () => {
-  test('save and load preset round-trips', async ({ tauriPage }) => {
-    const outputDir = 'D:/vp-e2e-preset-test'
-    const preset = buildPreset(outputDir)
-
-    await tauriPage.evaluate(async (p) => {
-      try {
-        // @ts-expect-error __TAURI_INTERNALS__ is injected by Tauri runtime
-        await window.__TAURI_INTERNALS__.invoke('save_workbench_preset', { preset: p })
-      } catch (error: any) {
-        throw new Error(`save_workbench_preset failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
-      }
-    }, preset)
-
-    const loaded = await tauriPage.evaluate(async () => {
-      try {
-        // @ts-expect-error __TAURI_INTERNALS__ is injected by Tauri runtime
-        return await window.__TAURI_INTERNALS__.invoke('load_workbench_preset')
-      } catch (error: any) {
-        throw new Error(`load_workbench_preset failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
-      }
-    })
-
-    expect(loaded).not.toBeNull()
-    expect(loaded.decodeConfig.mode).toBe('software')
-    expect(loaded.workflowConfig.fpsMode).toBe('multi')
-    expect(loaded.workflowConfig.interpolation.algorithm).toBe('rife')
-    expect(loaded.encodeConfig.codec).toBe('libx264')
-    expect(loaded.encodeConfig.rateControl.mode).toBe('crf')
-    expect(loaded.outputConfig.segmentFrames).toBe(1000)
-    expect(loaded.outputConfig.outputDir).toBe(outputDir)
-  })
-
-  test('save overwrites existing preset', async ({ tauriPage }) => {
+  test('round-trips and atomically overwrites the persisted preset', async ({ tauriPage }) => {
     const dir1 = 'D:/vp-e2e-preset-test-v1'
     const dir2 = 'D:/vp-e2e-preset-test-v2'
 
-    // Save first version
-    await tauriPage.evaluate(async (p) => {
-      try {
-        // @ts-expect-error
-        await window.__TAURI_INTERNALS__.invoke('save_workbench_preset', { preset: p })
-      } catch (error: any) {
-        throw new Error(`save_workbench_preset v1 failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
-      }
-    }, buildPreset(dir1))
+    await invokeTauri(tauriPage, 'save_workbench_preset', { preset: buildPreset(dir1) })
+    const first = await invokeTauri<any>(tauriPage, 'load_workbench_preset')
+    expect(first.outputConfig.outputDir).toBe(dir1)
+    expect(first.encodeConfig.rateControl.value).toBe(18)
 
-    // Save second version (overwrite)
-    await tauriPage.evaluate(async (p) => {
-      try {
-        // @ts-expect-error
-        await window.__TAURI_INTERNALS__.invoke('save_workbench_preset', { preset: p })
-      } catch (error: any) {
-        throw new Error(`save_workbench_preset v2 failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
-      }
-    }, buildPreset(dir2))
-
-    // Load and verify overwrite
-    const loaded = await tauriPage.evaluate(async () => {
-      try {
-        // @ts-expect-error
-        return await window.__TAURI_INTERNALS__.invoke('load_workbench_preset')
-      } catch (error: any) {
-        throw new Error(`load_workbench_preset failed: ${JSON.stringify({ message: error?.message, code: error?.code })}`)
-      }
-    })
-
-    expect(loaded).not.toBeNull()
-    expect(loaded.outputConfig.outputDir).toBe(dir2)
-    expect(loaded.outputConfig.segmentFrames).toBe(1000)
+    await invokeTauri(tauriPage, 'save_workbench_preset', { preset: buildPreset(dir2) })
+    const overwritten = await invokeTauri<any>(tauriPage, 'load_workbench_preset')
+    expect(overwritten.outputConfig.outputDir).toBe(dir2)
+    expect(overwritten.workflowConfig.interpolation.algorithm).toBe('rife')
   })
 })

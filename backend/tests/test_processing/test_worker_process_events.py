@@ -47,10 +47,10 @@ def test_read_worker_stderr_forwards_tensorrt_lifecycle_logs_to_parent_stderr(ca
     ]
 
 
-def test_read_worker_stderr_normalizes_legacy_error_code_string() -> None:
+def test_read_worker_stderr_rejects_unknown_error_code() -> None:
     event = {
         "type": "error",
-        "code": "TaskErrorCode.MISSING_MODEL",
+        "code": "not_a_contract_code",
         "message": "missing aux weight",
         "details": {"path": "spynet.pdparams"},
     }
@@ -67,7 +67,7 @@ def test_read_worker_stderr_normalizes_legacy_error_code_string() -> None:
 
     error = error_queue.get_nowait()
     assert isinstance(error, ProcessError)
-    assert error.code == TaskErrorCode.MISSING_MODEL.value
+    assert error.code == TaskErrorCode.PROCESS_FAILED.value
     assert error.message == "missing aux weight"
     assert stop_event.is_set()
 

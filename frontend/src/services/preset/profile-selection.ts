@@ -21,8 +21,8 @@ function softwareDecodeConfig(): DecodeConfig {
 export function selectDecodeProfile(
   profile: DecoderProfileSpec | null,
   currentOptions: Record<string, CapabilityValue> = {},
-  preferredHwaccel = '',
-  preferredHwaccelDevice = '',
+  preferredHwaccel: string | null | undefined = '',
+  preferredHwaccelDevice: string | null | undefined = '',
 ): DecodeConfig {
   if (!profile || profile.family === 'software') {
     return softwareDecodeConfig()

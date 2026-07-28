@@ -1,83 +1,80 @@
 //! Structured shell-side error type for Tauri commands.
 //!
-//! Replaces the legacy `Result<T, String>` convention with a typed enum that
-//! maps to `models::TaskErrorCode`. The custom `Serialize` impl emits
-//! `{ code, message }` so the frontend can route on `code` rather than parse
-//! free-form strings.
+//! The typed enum maps to the generated shell/backend code subsets. Its custom `Serialize`
+//! impl emits `{ code, message, details? }` so the frontend can route on
+//! `code` and retain backend context instead of parsing free-form strings.
 //!
-//! Phase C.2.3 removed the catch-all `Other(String)` / `From<String>` /
-//! `From<&str>` variants. Any new failure must pick a named variant — pick
-//! `BackendExit` for controller-internal panics, `Persistence` for storage
-//! IO, etc. This keeps the wire-level `code` field meaningful for the
-//! frontend.
+//! Catch-all string conversions are intentionally absent. Any new failure
+//! must pick a named variant: runtime discovery uses `RuntimeResolution`,
+//! one-shot backend failures use `BackendProbeFailed`, process supervision
+//! uses `ProcessFailed`, and storage IO uses `Persistence`. This keeps the
+//! wire-level `code` field meaningful for the frontend.
 
 use std::fmt;
 
 use serde::{Serialize, Serializer};
 
-use crate::models::TaskErrorCode;
+use crate::models::{BackendTaskErrorCode, BackendTaskErrorPayload, ShellTaskErrorCode};
 use crate::process_control::ProcessControlError;
+
+#[derive(Clone, Copy, Serialize)]
+#[serde(untagged)]
+enum WireErrorCode {
+    Backend(BackendTaskErrorCode),
+    Shell(ShellTaskErrorCode),
+}
 
 #[derive(Debug)]
 pub(crate) enum ShellError {
     RuntimeResolution(String),
     Spawn(std::io::Error),
-    /// Phase 2.1 — CLI 成功退出(状态码 0)但未在 stdout 上输出有效 JSON。
-    /// 原 ``BackendExit("Backend CLI did not emit JSON output.")`` 的语义
-    /// 被提取为独立变体,避免与进程崩溃/信封错误混为一谈。
+    /// CLI 成功退出但未在 stdout 上输出有效 JSON。
     BackendNoJson,
-    /// Phase 2.1 — 后端返回了结构化的错误信封
-    /// ``{"type":"error", code, message, details}``。
-    /// 保留 code 字段,让前端可以直接按 ``TaskErrorCode`` 路由。
-    BackendEnvelope {
-        code: TaskErrorCode,
-        message: String,
-    },
-    /// Phase 2.1 — 向运行中的任务控制器发送控制信号时,通道已关闭或
-    /// 控制器不再响应。原 ``BackendExit("controller unavailable")`` 的语义。
+    /// 后端返回的结构化错误信封，完整保留 code/message/details。
+    BackendEnvelope(BackendTaskErrorPayload),
+    /// 向运行中的任务控制器发送控制信号时，通道已关闭或控制器不再响应。
     ControllerUnavailable,
-    /// Phase 2.1 — 一次性 CLI 命令(如 ``check``)失败且无法恢复结构化
-    /// 错误信封,只剩 stderr 摘要。原 ``FailedWithoutEnvelope`` 路径的语义。
+    /// 一次性 CLI 命令失败且无法恢复结构化错误信封，只剩 stderr 摘要。
     BackendProbeFailed(String),
     /// pause / resume 控制信号已送达控制器,但控制器调
     /// ``ProcessController::suspend/resume`` 失败,例如目标 PID 已退出、
     /// OS 拒绝权限。和 ``ControllerUnavailable``(通道断/超时)分开,
     /// 让前端可以区分"任务已结束"与"控制层崩了"。
     ProcessControl(ProcessControlError),
-    NdjsonDecode(serde_json::Error),
     SchemaValidation(String),
     Persistence(String),
     Io(std::io::Error),
     InvalidInput(String),
     NoActiveTask,
-    /// Phase 5e — dedicated variant for failures coming back from
-    /// ``open::that_detached`` (and friends). The ``open`` crate
+    /// Dedicated variant for failures coming back from
+    /// ``open::that_detached``. The ``open`` crate
     /// surfaces failures as plain ``std::io::Error`` values, so this
     /// variant wraps the same underlying type as ``Io`` but keeps the
     /// "OS file/folder handler failed to launch" classification
-    /// separate from generic filesystem IO. Previously these were
-    /// flattened into ``Io`` with a ``io::Error::new(Other, ...)``
-    /// shim that lost the original error chain.
+    /// separate from generic filesystem IO without losing the source chain.
     OpenLocation(std::io::Error),
 }
 
 impl ShellError {
-    pub(crate) fn code(&self) -> TaskErrorCode {
+    fn code(&self) -> WireErrorCode {
         match self {
-            Self::RuntimeResolution(_) => TaskErrorCode::ProcessFailed,
-            Self::Spawn(_) => TaskErrorCode::SpawnFailed,
-            Self::BackendNoJson => TaskErrorCode::BackendNoJson,
-            Self::BackendEnvelope { .. } => TaskErrorCode::BackendEnvelope,
-            Self::ControllerUnavailable => TaskErrorCode::ControllerUnavailable,
-            Self::BackendProbeFailed(_) => TaskErrorCode::BackendProbeFailed,
-            Self::ProcessControl(_) => TaskErrorCode::ProcessFailed,
-            Self::NdjsonDecode(_) => TaskErrorCode::SchemaMismatch,
-            Self::SchemaValidation(_) => TaskErrorCode::SchemaMismatch,
-            Self::Persistence(_) => TaskErrorCode::PersistenceFailed,
-            Self::Io(_) => TaskErrorCode::IoError,
-            Self::InvalidInput(_) => TaskErrorCode::InvalidInput,
-            Self::NoActiveTask => TaskErrorCode::InvalidInput,
-            Self::OpenLocation(_) => TaskErrorCode::IoError,
+            Self::RuntimeResolution(_) => WireErrorCode::Shell(ShellTaskErrorCode::ProcessFailed),
+            Self::Spawn(_) => WireErrorCode::Shell(ShellTaskErrorCode::SpawnFailed),
+            Self::BackendNoJson => WireErrorCode::Shell(ShellTaskErrorCode::BackendNoJson),
+            Self::BackendEnvelope(payload) => WireErrorCode::Backend(payload.code),
+            Self::ControllerUnavailable => {
+                WireErrorCode::Shell(ShellTaskErrorCode::ControllerUnavailable)
+            }
+            Self::BackendProbeFailed(_) => {
+                WireErrorCode::Shell(ShellTaskErrorCode::BackendProbeFailed)
+            }
+            Self::ProcessControl(_) => WireErrorCode::Shell(ShellTaskErrorCode::ProcessFailed),
+            Self::SchemaValidation(_) => WireErrorCode::Shell(ShellTaskErrorCode::SchemaMismatch),
+            Self::Persistence(_) => WireErrorCode::Shell(ShellTaskErrorCode::PersistenceFailed),
+            Self::Io(_) => WireErrorCode::Shell(ShellTaskErrorCode::IoError),
+            Self::InvalidInput(_) => WireErrorCode::Shell(ShellTaskErrorCode::InvalidInput),
+            Self::NoActiveTask => WireErrorCode::Shell(ShellTaskErrorCode::InvalidInput),
+            Self::OpenLocation(_) => WireErrorCode::Shell(ShellTaskErrorCode::IoError),
         }
     }
 }
@@ -92,8 +89,8 @@ impl fmt::Display for ShellError {
             Self::BackendNoJson => {
                 write!(f, "backend CLI did not emit JSON output")
             }
-            Self::BackendEnvelope { code, message } => {
-                write!(f, "backend error: {message} ({code:?})")
+            Self::BackendEnvelope(payload) => {
+                write!(f, "backend error: {} ({:?})", payload.message, payload.code)
             }
             Self::ControllerUnavailable => {
                 write!(f, "the running task controller is unavailable")
@@ -102,9 +99,6 @@ impl fmt::Display for ShellError {
                 write!(f, "backend probe failed: {message}")
             }
             Self::ProcessControl(error) => write!(f, "process control failed: {error}"),
-            Self::NdjsonDecode(error) => {
-                write!(f, "backend stdout was not valid NDJSON: {error}")
-            }
             Self::SchemaValidation(message) => {
                 write!(f, "schema validation failed: {message}")
             }
@@ -121,7 +115,6 @@ impl std::error::Error for ShellError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Spawn(error) | Self::Io(error) | Self::OpenLocation(error) => Some(error),
-            Self::NdjsonDecode(error) => Some(error),
             Self::ProcessControl(error) => Some(error),
             _ => None,
         }
@@ -134,24 +127,25 @@ impl From<std::io::Error> for ShellError {
     }
 }
 
-impl From<serde_json::Error> for ShellError {
-    fn from(error: serde_json::Error) -> Self {
-        Self::NdjsonDecode(error)
-    }
-}
-
 impl Serialize for ShellError {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
         struct Wire<'a> {
-            code: TaskErrorCode,
+            code: WireErrorCode,
             message: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            details: Option<&'a serde_json::Map<String, serde_json::Value>>,
         }
         let message = self.to_string();
+        let (wire_message, details) = match self {
+            Self::BackendEnvelope(payload) => (payload.message.as_str(), payload.details.as_ref()),
+            _ => (message.as_str(), None),
+        };
         Wire {
             code: self.code(),
-            message: &message,
+            message: wire_message,
+            details,
         }
         .serialize(serializer)
     }
@@ -194,17 +188,19 @@ mod tests {
     }
 
     #[test]
-    fn backend_envelope_maps_to_backend_envelope_code() {
-        let error = ShellError::BackendEnvelope {
-            code: TaskErrorCode::MissingFfmpeg,
+    fn backend_envelope_preserves_wire_fields_exactly() {
+        let error = ShellError::BackendEnvelope(BackendTaskErrorPayload {
+            code: BackendTaskErrorCode::MissingFfmpeg,
             message: "ffmpeg not found".into(),
-        };
+            details: Some(serde_json::Map::from_iter([(
+                "path".to_string(),
+                serde_json::Value::String("ffmpeg".to_string()),
+            )])),
+        });
         let value = serde_json::to_value(&error).expect("serializable");
-        assert_eq!(value["code"], "backend_envelope");
-        assert!(value["message"]
-            .as_str()
-            .unwrap()
-            .contains("ffmpeg not found"));
+        assert_eq!(value["code"], "missing_ffmpeg");
+        assert_eq!(value["message"], "ffmpeg not found");
+        assert_eq!(value["details"]["path"], "ffmpeg");
     }
 
     #[test]
@@ -239,15 +235,6 @@ mod tests {
     }
 
     #[test]
-    fn ndjson_decode_routes_to_schema_mismatch() {
-        let json_error = serde_json::from_str::<serde_json::Value>("not json")
-            .expect_err("invalid json must fail");
-        let error: ShellError = json_error.into();
-        let value = serde_json::to_value(&error).expect("serializable");
-        assert_eq!(value["code"], "schema_mismatch");
-    }
-
-    #[test]
     fn open_location_routes_to_io_code_and_keeps_message() {
         let inner = std::io::Error::new(std::io::ErrorKind::NotFound, "Explorer launcher missing");
         let error = ShellError::OpenLocation(inner);
@@ -261,11 +248,101 @@ mod tests {
 
     #[test]
     fn open_location_preserves_error_source_chain() {
-        // Phase 5e — the whole point of the dedicated variant is keeping
-        // the inner ``io::Error`` reachable via ``Error::source``.
         let inner = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
         let error = ShellError::OpenLocation(inner);
         let source = std::error::Error::source(&error).expect("source must be present");
         assert!(source.to_string().contains("denied"));
+    }
+
+    #[test]
+    fn runtime_resolution_uses_process_failed_without_details() {
+        let value = serde_json::to_value(ShellError::RuntimeResolution(
+            "runtime root is missing".to_string(),
+        ))
+        .expect("serializable");
+
+        assert_eq!(value["code"], "process_failed");
+        assert!(value["message"]
+            .as_str()
+            .expect("message")
+            .starts_with("runtime resolution failed:"));
+        assert!(value.get("details").is_none());
+    }
+
+    #[test]
+    fn schema_validation_uses_schema_mismatch_code() {
+        let value = serde_json::to_value(ShellError::SchemaValidation("unknown field".to_string()))
+            .expect("serializable");
+
+        assert_eq!(value["code"], "schema_mismatch");
+        assert!(value["message"]
+            .as_str()
+            .expect("message")
+            .contains("unknown field"));
+    }
+
+    #[test]
+    fn generic_io_error_keeps_its_source_and_wire_code() {
+        let error = ShellError::Io(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "read denied",
+        ));
+        assert!(std::error::Error::source(&error)
+            .expect("io source")
+            .to_string()
+            .contains("read denied"));
+
+        let value = serde_json::to_value(error).expect("serializable");
+        assert_eq!(value["code"], "io_error");
+    }
+
+    #[test]
+    fn spawn_error_keeps_its_source_chain() {
+        let error = ShellError::Spawn(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "backend executable missing",
+        ));
+
+        assert!(std::error::Error::source(&error)
+            .expect("spawn source")
+            .to_string()
+            .contains("backend executable missing"));
+    }
+
+    #[test]
+    fn process_control_error_keeps_source_and_process_failed_code() {
+        let error = ShellError::ProcessControl(ProcessControlError::Os(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "suspend denied",
+        )));
+        assert!(std::error::Error::source(&error).is_some());
+
+        let value = serde_json::to_value(error).expect("serializable");
+        assert_eq!(value["code"], "process_failed");
+        assert!(value["message"]
+            .as_str()
+            .expect("message")
+            .contains("suspend denied"));
+    }
+
+    #[test]
+    fn backend_envelope_without_details_omits_the_wire_property() {
+        let error = ShellError::BackendEnvelope(BackendTaskErrorPayload {
+            code: BackendTaskErrorCode::MissingModel,
+            message: "model unavailable".to_string(),
+            details: None,
+        });
+        let value = serde_json::to_value(error).expect("serializable");
+
+        assert_eq!(value["code"], "missing_model");
+        assert_eq!(value["message"], "model unavailable");
+        assert!(value.get("details").is_none());
+    }
+
+    #[test]
+    fn from_io_error_uses_the_generic_io_variant() {
+        let error: ShellError = std::io::Error::other("filesystem unavailable").into();
+
+        assert!(matches!(error, ShellError::Io(_)));
     }
 }

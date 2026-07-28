@@ -14,6 +14,28 @@ from app.utils.onnx_models import scan_onnx_model_details, scan_onnx_models
 from app.utils.system_probe import list_gpu_adapters
 
 
+def _algorithm_payload(
+    algorithm: dict[str, object],
+    *,
+    onnx_models: list[str],
+    onnx_model_details: list[dict[str, object]],
+) -> dict[str, object]:
+    """Project catalog entries onto the complete version-2 wire contract."""
+    return {
+        "name": algorithm["name"],
+        "family": algorithm["family"],
+        "tensorBackends": algorithm.get("tensorBackends", []),
+        "models": algorithm.get("models", []),
+        "onnxModels": onnx_models,
+        "modelDetails": algorithm.get("modelDetails", []),
+        "onnxModelDetails": onnx_model_details,
+        "scaleFactors": algorithm.get("scaleFactors", []),
+        "fixedScaleFactor": algorithm.get("fixedScaleFactor"),
+        "defaultNumFrames": algorithm.get("defaultNumFrames"),
+        "inputFrameMode": algorithm["inputFrameMode"],
+    }
+
+
 def cmd_check(_args: argparse.Namespace) -> None:
     ffmpeg = FFmpegWrapper()
     ffmpeg_available = ffmpeg.is_available()
@@ -33,19 +55,19 @@ def cmd_check(_args: argparse.Namespace) -> None:
     )
 
     interpolation_algorithms_payload = [
-        {
-            **alg,
-            "onnxModels": onnx_models.get("interpolation", {}).get(alg["name"], []),
-            "onnxModelDetails": onnx_model_details.get("interpolation", {}).get(alg["name"], []),
-        }
+        _algorithm_payload(
+            alg,
+            onnx_models=onnx_models.get("interpolation", {}).get(alg["name"], []),
+            onnx_model_details=onnx_model_details.get("interpolation", {}).get(alg["name"], []),
+        )
         for alg in INTERPOLATION_ALGORITHMS
     ]
     super_resolution_algorithms_payload = [
-        {
-            **alg,
-            "onnxModels": onnx_models.get("super_resolution", {}).get(alg["name"], []),
-            "onnxModelDetails": onnx_model_details.get("super_resolution", {}).get(alg["name"], []),
-        }
+        _algorithm_payload(
+            alg,
+            onnx_models=onnx_models.get("super_resolution", {}).get(alg["name"], []),
+            onnx_model_details=onnx_model_details.get("super_resolution", {}).get(alg["name"], []),
+        )
         for alg in SR_ALGORITHMS
     ]
 

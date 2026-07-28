@@ -8,7 +8,7 @@ import { findInterpolationAlgorithm, findSuperResolutionAlgorithm } from './enha
 export function fallbackInterpolationOnnxModel(
   checkResult: EnvironmentCheckResult | null,
   algorithm: string,
-  current: string | undefined,
+  current: string | null | undefined,
 ): string {
   if (current) return current
   return findInterpolationAlgorithm(checkResult, algorithm)?.onnxModels?.[0] || ''
@@ -17,7 +17,7 @@ export function fallbackInterpolationOnnxModel(
 export function fallbackSuperResolutionOnnxModel(
   checkResult: EnvironmentCheckResult | null,
   algorithm: string,
-  current: string | undefined,
+  current: string | null | undefined,
 ): string {
   if (current) return current
   return findSuperResolutionAlgorithm(checkResult, algorithm)?.onnxModels?.[0] || ''

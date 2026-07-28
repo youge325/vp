@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
+import IssueBanner from '@/components/IssueBanner.vue'
 import StepRail from '@/components/StepRail.vue'
 import { WORKBENCH_MODULE_BY_KEY } from '@/views/registry'
 import { useBootstrap } from '@/composables/app/useBootstrap'
 import { useEnvironmentChecker } from '@/composables/app/useEnvironmentChecker'
 import { useCurrentTaskStatusLabel } from '@/composables/selectors/useCurrentTaskStatusLabel'
+import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
 import { useEnvStore } from '@/stores/env'
 import type { WorkbenchModuleDefinition } from '@/types/view/modules'
 
@@ -13,6 +15,7 @@ const route = useRoute()
 const { recheckEnvironment } = useEnvironmentChecker()
 const envStore = useEnvStore()
 const taskStatusLabel = useCurrentTaskStatusLabel()
+const presetIssue = useOperationIssue('preset')
 
 useBootstrap()
 
@@ -52,6 +55,11 @@ const isBusy = computed(() => envStore.env.isBootstrapping || envStore.env.isChe
         </header>
 
         <section class="content-surface">
+          <IssueBanner
+            class="global-issue-banner"
+            :issue="presetIssue"
+            title="预设持久化失败"
+          />
           <RouterView />
         </section>
       </main>

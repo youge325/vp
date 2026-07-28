@@ -1,42 +1,96 @@
-import { test, expect } from '../fixtures'
+import { expect, test } from '../fixtures'
+import { seedMediaItems, seedTaskConsoleState } from '../utils/media'
+import { openModule } from '../utils/navigation'
 
-test.describe('Render module UI', () => {
-  test('start batch button is disabled with reason hint on fresh instance', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("渲染")')
-    await expect(tauriPage.locator('h2:has-text("批处理队列")')).toBeVisible({ timeout: 5000 })
+const renderControls = (tauriPage: any) => ({
+  start: tauriPage.locator('.render-stack .panel-actions .primary-button'),
+  pause: tauriPage.locator('.render-stack .panel-actions .ghost-button'),
+  cancel: tauriPage.locator('.render-stack .panel-actions .danger-button'),
+})
 
-    const startButton = tauriPage.locator('.panel-actions button.primary-button').filter({ hasText: '开始队列' })
-    await expect(startButton).toBeVisible()
-    await expect(startButton).toBeDisabled()
+test.describe('Render module', () => {
+  test('explains preflight blockers and enables start only for runnable media', async ({ tauriPage }) => {
+    await openModule(tauriPage, '渲染', '批处理队列')
+    const controls = renderControls(tauriPage)
+    await expect(controls.start).toBeDisabled()
+    await expect(tauriPage.locator('.start-blocked-hint')).toContainText('请先勾选要处理的素材')
 
-    // When disabled, a reason hint should be shown
-    const reasonHint = tauriPage.locator('.start-blocked-hint')
-    await expect(reasonHint).toBeVisible()
+    await seedMediaItems([{
+      id: 'missing-output',
+      displayName: 'missing-output.mp4',
+      selected: true,
+      outputDir: '',
+    }])
+    await expect(controls.start).toBeDisabled()
+    await expect(tauriPage.locator('.start-blocked-hint')).toContainText('missing-output.mp4')
+    await expect(tauriPage.locator('.start-blocked-hint')).toContainText('未填输出目录')
+
+    await seedMediaItems([{
+      id: 'ready',
+      displayName: 'ready.mp4',
+      selected: true,
+      outputDir: 'C:/tmp/output',
+    }])
+    await expect(controls.start).toBeEnabled()
+    await expect(tauriPage.locator('.start-blocked-hint')).not.toBeVisible()
   })
 
-  test('pause and interrupt buttons are disabled when no task is running', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("渲染")')
-    await expect(tauriPage.locator('h2:has-text("批处理队列")')).toBeVisible({ timeout: 5000 })
+  test('locks both controls and exposes the pending operation label', async ({ tauriPage }) => {
+    await openModule(tauriPage, '渲染', '批处理队列')
+    const controls = renderControls(tauriPage)
+    const pendingCases = [
+      { pending: 'pause' as const, paused: false, pauseLabel: '暂停中...', cancelLabel: '中断批次' },
+      { pending: 'resume' as const, paused: true, pauseLabel: '继续中...', cancelLabel: '中断批次' },
+      { pending: 'cancel' as const, paused: false, pauseLabel: '暂停队列', cancelLabel: '中断中...' },
+    ]
 
-    const pauseButton = tauriPage.locator('.panel-actions button.ghost-button').filter({ hasText: /^(暂停队列|继续队列)$/ })
-    await expect(pauseButton).toBeVisible()
-    await expect(pauseButton).toBeDisabled()
-
-    const interruptButton = tauriPage.locator('.panel-actions button.danger-button').filter({ hasText: /^(中断批次|中断中\.\.\.)$/ })
-    await expect(interruptButton).toBeVisible()
-    await expect(interruptButton).toBeDisabled()
+    for (const item of pendingCases) {
+      const ready = await seedTaskConsoleState({
+        completedCount: 0,
+        totalCount: 1,
+        isRunning: true,
+        isPaused: item.paused,
+        controlPending: item.pending,
+      })
+      test.skip(!ready, 'Cannot seed task console fixture')
+      await expect(controls.pause).toHaveText(item.pauseLabel)
+      await expect(controls.cancel).toHaveText(item.cancelLabel)
+      await expect(controls.pause).toBeDisabled()
+      await expect(controls.cancel).toBeDisabled()
+    }
   })
 
-  test('task console renders with zero progress', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("渲染")')
-    await expect(tauriPage.locator('h2:has-text("批处理队列")')).toBeVisible({ timeout: 5000 })
+  test('renders logs, resume progress and a stable completed 100% state', async ({ tauriPage }) => {
+    const ready = await seedTaskConsoleState({
+      logs: ['恢复处理', '编码第 2 段'],
+      completedCount: 1,
+      totalCount: 2,
+      isRunning: true,
+      resumeStatus: {
+        resumed: true,
+        completedChunks: 3,
+        completedOutputFrames: 150,
+        totalOutputFrames: 300,
+      },
+    })
+    test.skip(!ready, 'Cannot seed task console fixture')
+    await openModule(tauriPage, '渲染', '批处理队列')
 
-    const taskConsole = tauriPage.locator('.task-console')
-    await expect(taskConsole).toBeVisible()
+    const console = tauriPage.locator('.task-console')
+    await expect(console.locator('.log-line')).toHaveCount(2)
+    await expect(console.locator('.log-panel')).toContainText('编码第 2 段')
+    await expect(console.locator('.resume-banner')).toContainText('已完成 3 段')
+    await expect(console.locator('.progress-label')).toHaveText('1 / 2')
+    await expect(console.locator('.progress-fill')).toHaveAttribute('style', /width: 50%/)
 
-    // Progress should show 0 / 0
-    const progressLabel = taskConsole.locator('.progress-label')
-    await expect(progressLabel).toBeVisible()
-    await expect(progressLabel).toHaveText('0 / 0')
+    await seedTaskConsoleState({
+      logs: ['任务完成'],
+      completedCount: 2,
+      totalCount: 2,
+      isRunning: false,
+    })
+    await expect(console.locator('.progress-label')).toHaveText('2 / 2')
+    await expect(console.locator('.progress-fill')).toHaveAttribute('style', /width: 100%/)
+    await expect(console.locator('.resume-banner')).not.toBeVisible()
   })
 })

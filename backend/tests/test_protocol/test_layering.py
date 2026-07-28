@@ -1,4 +1,4 @@
-"""Protocol 层无反向 import 的 ast 校验测试(Phase 10)。
+"""Protocol 层无反向 import 的 AST 校验测试。
 
 ``app.protocol`` 是 NDJSON wire 协议的 leaf 层 —— 它应只被上层
 (``app.processing``、``app.cli``、``app.errors`` 等)消费,自己不可

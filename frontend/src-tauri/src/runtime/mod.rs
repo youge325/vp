@@ -4,9 +4,6 @@
 //! [`ResolvedRuntimePaths`] 给 Tauri 命令使用。子模块各自只回答一个问题
 //! (python / ffmpeg / model / env_map),本文件只做装配 + dev/release
 //! 必需性检查 + app_data 目录创建。
-//!
-//! 历史:在 Phase C.2.1 之前是一个 387 行的 ``runtime.rs``;拆分后单文件最长
-//! ``mod.rs`` ~150 行,职责一目了然。
 
 mod env_map;
 mod ffmpeg;
@@ -20,20 +17,20 @@ use tauri::{AppHandle, Manager, Runtime};
 
 use crate::error::ShellError;
 
-// 对外只导出 3 个 API,与 Phase C.2.1 之前完全兼容(builder/runner/lib/
-// persistence/services/environment_service 仍可直接 ``use crate::runtime::*``)。
 pub(crate) use env_map::build_env_map;
 use helpers::{directory_if_contains, first_existing_dir};
-use model::{has_default_rife_model, DEFAULT_RIFE_MODEL_FILENAME};
+use model::{has_rife_model, rife_model_filename, DEFAULT_RIFE_MODEL_VERSION};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedRuntimePaths {
+    pub(crate) app_data_dir: PathBuf,
     pub(crate) backend_dir: PathBuf,
     pub(crate) runtime_root: Option<PathBuf>,
     pub(crate) python_executable: PathBuf,
     pub(crate) ffmpeg_path: Option<PathBuf>,
     pub(crate) ffprobe_path: Option<PathBuf>,
     pub(crate) model_dir: Option<PathBuf>,
+    pub(crate) rife_model_version: String,
     pub(crate) tensorrt_dir: Option<PathBuf>,
     pub(crate) log_dir: PathBuf,
 }
@@ -61,18 +58,17 @@ pub(crate) fn resolve_runtime_paths<R: Runtime>(
 
     let python_executable = python::resolve_python_executable(runtime_root.as_ref())?;
 
-    let (ffmpeg_path, ffprobe_path) =
-        ffmpeg::resolve_ffmpeg_tools(runtime_root.as_deref(), resource_dir.as_deref());
-    let model_dir = model::resolve_model_dir(
-        runtime_root.as_ref(),
-        resource_dir.as_ref(),
-        &workspace_root,
-    );
-    let tensorrt_dir = model::resolve_tensorrt_dir(runtime_root.as_ref(), resource_dir.as_ref());
+    let (ffmpeg_path, ffprobe_path) = ffmpeg::resolve_ffmpeg_tools(runtime_root.as_deref());
+    let model_dir = model::resolve_model_dir(runtime_root.as_ref(), &workspace_root);
+    let tensorrt_dir = model::resolve_tensorrt_dir(runtime_root.as_ref());
+    let rife_model_version = std::env::var("VP_RIFE_MODEL_VERSION")
+        .ok()
+        .filter(|version| !version.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_RIFE_MODEL_VERSION.to_string());
 
-    require_release_bundle_artifacts(&ffmpeg_path, &ffprobe_path, &model_dir)?;
+    require_release_bundle_artifacts(&ffmpeg_path, &ffprobe_path, &model_dir, &rife_model_version)?;
 
-    // Phase 16 — ``app_local_data_dir()`` 失败的兜底按 build 模式分流:
+    // ``app_local_data_dir()`` 失败时按 build 模式分流:
     // - debug:走 ``<workspace>/.tmp/app-data``,保持开发便利(本地测试
     //   时 Tauri 还没注入 app_local_data_dir 也能跑)。
     // - release:直接报 ``RuntimeResolution`` 拒绝启动。release 跑在
@@ -103,15 +99,18 @@ pub(crate) fn resolve_runtime_paths<R: Runtime>(
     //实例指定独立的日志目录。
     let log_dir = helpers::env_path("VP_LOG_DIR").unwrap_or_else(|| app_data_dir.join("logs"));
 
+    std::fs::create_dir_all(&app_data_dir)?;
     std::fs::create_dir_all(&log_dir)?;
 
     Ok(ResolvedRuntimePaths {
+        app_data_dir,
         backend_dir,
         runtime_root,
         python_executable,
         ffmpeg_path,
         ffprobe_path,
         model_dir,
+        rife_model_version,
         tensorrt_dir,
         log_dir,
     })
@@ -154,7 +153,6 @@ fn resolve_runtime_root(frontend_dir: &Path, resource_dir: Option<&PathBuf>) -> 
     first_existing_dir([
         helpers::env_path("VP_RUNTIME_ROOT"),
         resource_dir.map(|path| path.join("resources").join("runtime")),
-        resource_dir.map(|path| path.join("runtime")),
         dev_runtime_root,
     ])
 }
@@ -167,6 +165,7 @@ fn require_release_bundle_artifacts(
     ffmpeg_path: &Option<PathBuf>,
     ffprobe_path: &Option<PathBuf>,
     model_dir: &Option<PathBuf>,
+    rife_model_version: &str,
 ) -> Result<(), ShellError> {
     if cfg!(debug_assertions) {
         return Ok(());
@@ -183,27 +182,17 @@ fn require_release_bundle_artifacts(
                 .to_string(),
         ));
     }
-    if !has_default_rife_model(model_dir.as_ref()) {
+    if !has_rife_model(model_dir.as_ref(), rife_model_version) {
+        let filename = rife_model_filename(rife_model_version);
         return Err(ShellError::RuntimeResolution(format!(
-            "Bundled RIFE model is missing. Set VP_RIFE_MODEL_DIR or include resources/runtime/models/{DEFAULT_RIFE_MODEL_FILENAME}.",
+            "Bundled RIFE model is missing. Set VP_RIFE_MODEL_DIR or include resources/runtime/models/{filename}.",
         )));
     }
     Ok(())
 }
 
-// Phase 13.2 hotfix — Phase 12A 在 ``runtime/model.rs`` 与
-// ``runtime/env_map.rs`` 各加了改写 ``VP_TENSORRT_DIR`` 的测试,但没共享
-// 互斥锁。``cargo test`` 在多核 CI(GitHub Actions Windows runner)上把
-// 这些测试并行调度时,后台的 ``*_prefers_existing_dir_over_env_fallback``
-// 把变量设成 cwd 后还没 RAII restore,前台的
-// ``*_passes_env_through_even_when_path_missing`` 已经读 env_path 进入
-// first_existing_dir 命中 cwd,fallback 路径压根没机会跑。本地单线程
-// cargo test 串行不触发,但 CI 上 100% 复现。
-//
-// 把 ``VP_TENSORRT_DIR`` 的 set/restore 串行化到这把锁后,所有 5 个
-// 改 env 的测试(4 个 model + 1 个 env_map)就互不干扰了。pub(crate)
-// 范围确保 lib 外不可见;静态 const-fn ``Mutex::new(())`` 不依赖任何
-// init order。
+// Tests that mutate VP_TENSORRT_DIR share one lock because process
+// environment mutation is global.
 #[cfg(test)]
 pub(crate) mod test_support {
     use std::sync::Mutex;

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "scripts/*.mjs",
+    "tests/unit/**/*.spec.ts",
+    "tests/e2e/**/*.spec.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx,vue}",
+    "scripts/**/*.{ts,mjs}",
+    "tests/**/*.ts",
+    "*.{ts,mjs}"
+  ],
+  "ignore": ["src/types/generated/contracts.ts"],
+  "ignoreDependencies": [
+    "@wdio/cli",
+    "@wdio/local-runner",
+    "brace-expansion",
+    "json-schema-to-typescript"
+  ],
+  "ignoreBinaries": ["rustc", "tauri-driver"]
+}

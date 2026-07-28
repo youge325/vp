@@ -4,7 +4,8 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from app.planning import ResumeState, SegmentManifest, StagePlan
+from app.planning import ResumeState, SegmentManifest, StagePlan, StageProjection
+from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
@@ -14,12 +15,19 @@ from app.processing.streaming.pipeline_context import (
 
 def test_streaming_pipeline_contexts_are_frozen_and_preserve_runtime_references(tmp_path) -> None:
     stage_plan = StagePlan(
-        pre_steps=[],
-        interpolation_step=None,
-        post_steps=[],
-        total_encoded_frames=4,
+        projection=StageProjection(()),
+        source_frames=4,
+        source_duration=4 / 24,
+        output_fps=None,
     )
-    video_info = {"source_fps": 24.0, "source_frames": 4}
+    video_info = VideoMetadata(
+        width=640,
+        height=360,
+        source_fps=24.0,
+        source_frames=4,
+        duration=4 / 24,
+        has_audio=False,
+    )
     preflight = StreamingPipelinePreflight(
         video_info=video_info,
         stage_plan=stage_plan,
@@ -44,7 +52,6 @@ def test_streaming_pipeline_contexts_are_frozen_and_preserve_runtime_references(
         preflight=preflight,
         manifest=manifest,
         resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
-        tensor_backend_name="onnx",
         progress_callbacks=[],
         output_fps=None,
         encode_progress_callback=None,
@@ -71,12 +78,19 @@ def test_process_video_streaming_reuses_one_context_for_dispatch_and_finalizatio
     import app.processing.streaming.pipeline as pipeline_module
 
     preflight = StreamingPipelinePreflight(
-        video_info={"source_fps": 24.0, "source_frames": 4},
+        video_info=VideoMetadata(
+            width=640,
+            height=360,
+            source_fps=24.0,
+            source_frames=4,
+            duration=4 / 24,
+            has_audio=False,
+        ),
         stage_plan=StagePlan(
-            pre_steps=[],
-            interpolation_step=None,
-            post_steps=[],
-            total_encoded_frames=4,
+            projection=StageProjection(()),
+            source_frames=4,
+            source_duration=4 / 24,
+            output_fps=None,
         ),
         signature="sig",
         config_snapshot={"workflow": {}},
@@ -90,11 +104,6 @@ def test_process_video_streaming_reuses_one_context_for_dispatch_and_finalizatio
     resume_state = ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[])
     observed_contexts: list[StreamingPipelineContext] = []
 
-    monkeypatch.setattr(
-        pipeline_module,
-        "build_streaming_pipeline_preflight",
-        lambda **_kwargs: preflight,
-    )
     monkeypatch.setattr(
         pipeline_module,
         "prepare_streaming_manifest",
@@ -125,10 +134,7 @@ def test_process_video_streaming_reuses_one_context_for_dispatch_and_finalizatio
         output_path=str(tmp_path / "out.mp4"),
         decode_config=decode_config,
         encode_config=encode_config,
-        workflow_config={},
-        output_config={},
-        processing_steps=[],
-        tensor_backend_name="onnx",
+        preflight=preflight,
         progress_callbacks=[],
         metrics=metrics,
     )

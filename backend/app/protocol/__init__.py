@@ -9,6 +9,8 @@ stderr and are *not* handled here.
 from __future__ import annotations
 
 import json
+import sys
+import threading
 from enum import Enum
 from typing import Any
 
@@ -20,15 +22,9 @@ from app.protocol.payloads import (
 )
 
 
-# SSOT for NDJSON wire names. Cross-language drift is gated by
-# ``scripts/check_error_code_drift.py`` (Phase 9):
-#   - Stream variants (read by ``frontend/src-tauri/src/tasks/envelope.rs``
-#     ``NdjsonEnvelope``) must round-trip both ways.
-#   - Oneshot-only variants (read by ``oneshot.rs::parse_last_json_line``
-#     as a generic ``Value``) are listed in the script's
-#     ``NDJSON_ONESHOT_WHITELIST`` constant.
-# Adding a new member here requires either a matching ``NdjsonEnvelope``
-# variant + ``readers.rs`` route, or an explicit whitelist update.
+# Stream variants are constrained by ``contracts/ndjson.schema.json``.
+# One-shot check/info/inspection envelopes are decoded only by their typed
+# command adapters and therefore are not task-stream variants.
 class NdjsonEventType(str, Enum):
     PROGRESS = "progress"
     COMPLETED = "completed"
@@ -40,15 +36,20 @@ class NdjsonEventType(str, Enum):
 
 
 class _NdjsonEmitter:
-    """Emitter for NDJSON events on stdout.
+    """Serialize complete NDJSON lines onto stdout.
 
-    Thread-safe because Python's GIL serialises ``print()`` calls and each
-    call is a single atomic write after JSON serialisation.
+    A dedicated lock covers serialization, write and flush. The GIL is not an
+    I/O atomicity guarantee because stream writes may release it.
     """
 
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+
     def _emit(self, event_type: NdjsonEventType, data: dict[str, Any]) -> None:
-        envelope = {"type": event_type.value, **data}
-        print(json.dumps(envelope, ensure_ascii=False), flush=True)
+        with self._lock:
+            envelope = {"type": event_type.value, **data}
+            sys.stdout.write(json.dumps(envelope, ensure_ascii=False) + "\n")
+            sys.stdout.flush()
 
     # --- Convenience helpers ---
 
@@ -69,9 +70,7 @@ class _NdjsonEmitter:
             stage=stage,
             stage_index=stage_index,
             stage_total=stage_total,
-            # Phase D.2.3 — pipeline observability rides along on the
-            # progress frame. Empty snapshots keep the old "field absent"
-            # wire shape.
+            # Empty snapshots keep the field absent on the wire.
             metrics=metrics if metrics else None,
         )
         self._emit(NdjsonEventType.PROGRESS, payload.to_wire())

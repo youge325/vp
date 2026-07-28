@@ -46,7 +46,6 @@ export function createIdleTaskState(): MediaTaskState {
 export function appendTaskLog(state: MediaTaskState, payload: TaskLogPayload): MediaTaskState {
   const isProgressLine = payload.message.startsWith(TERMINAL_PROGRESS_PREFIX)
   const incomingStageKey = isProgressLine ? progressStageKey(payload.message) : null
-  const lastLog = state.logs[state.logs.length - 1] ?? ''
 
   if (incomingStageKey) {
     const existingIndex = state.logs.findIndex((line) => progressStageKey(line) === incomingStageKey)
@@ -60,13 +59,6 @@ export function appendTaskLog(state: MediaTaskState, payload: TaskLogPayload): M
     return {
       ...state,
       logs: [...state.logs, payload.message].slice(-300),
-    }
-  }
-
-  if (isProgressLine && lastLog.startsWith(TERMINAL_PROGRESS_PREFIX)) {
-    return {
-      ...state,
-      logs: [...state.logs.slice(0, -1), payload.message].slice(-300),
     }
   }
 

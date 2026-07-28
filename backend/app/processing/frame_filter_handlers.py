@@ -13,7 +13,7 @@ import numpy as np
 from app.processing.anime_cleanup import apply_anime_cleanup
 from app.utils.opencv_runtime import import_cv2
 
-type _FilterParams = dict[str, Any]
+type _FilterParams = Mapping[str, Any]
 type _NumpyFilterHandler = Callable[[np.ndarray, _FilterParams], np.ndarray]
 type _TensorFilterHandler = Callable[[Any, _FilterParams], Any]
 type _TensorCapability = Callable[[_FilterParams], bool]

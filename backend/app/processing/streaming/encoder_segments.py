@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from app.utils.ffmpeg import FFmpegWrapper
-from app.utils.ffmpeg.io import RawVideoWriter
+from app.ports.media import FrameCountProbePort, RawVideoWriterPort
 
 
 def resolve_segment_output_frame_count(
-    ffmpeg: FFmpegWrapper,
-    writer: RawVideoWriter,
+    ffmpeg: FrameCountProbePort,
+    writer: RawVideoWriterPort,
     segment_path: str,
     *,
     fallback_frame_count: int,

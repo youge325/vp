@@ -8,7 +8,7 @@ from typing import Optional
 
 import torch
 
-from ._model_spec import HEAD_NONE
+from app.catalog.rife_models import HEAD_NONE
 from .model_loader import (
     load_rife_model,
     create_backwarp_grid,
@@ -51,7 +51,7 @@ class RIFESolver:
             engine: 推理引擎（"cuda" 或 "tensorrt"，默认 "cuda"）
         """
         # 加载模型
-        self._flownet, self._encode, config = load_rife_model(
+        self._flownet, self._encode, spec = load_rife_model(
             model_version=model_version,
             scale=scale,
             device=device,
@@ -62,8 +62,8 @@ class RIFESolver:
 
         self._device = next(self._flownet.parameters()).device
         self._dtype = next(self._flownet.parameters()).dtype
-        self._modulo = config["modulo"]
-        self._has_head = config["head_type"] != HEAD_NONE
+        self._modulo = spec.modulo
+        self._has_head = spec.head_type != HEAD_NONE
 
         # 缓存（同尺寸帧复用）
         self._cached_size = None

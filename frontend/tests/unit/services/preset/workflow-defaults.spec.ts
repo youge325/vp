@@ -5,7 +5,9 @@ import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/wor
 import type { EnvironmentCheckResult } from '@/types/protocol'
 import { createEnvironmentResult } from '../../fixtures/environment'
 
-function makeEnv(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCheckResult {
+function makeEnv(
+  overrides: Parameters<typeof createEnvironmentResult>[0] = {},
+): EnvironmentCheckResult {
   return createEnvironmentResult(overrides)
 }
 

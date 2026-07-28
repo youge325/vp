@@ -42,11 +42,8 @@ export function useBootstrap() {
   })
 
   onBeforeUnmount(() => {
-    // Phase 7f — full tear-down of the module-level singleton on root
-    // unmount. ``disposeRunner`` does both the listener detach (what
-    // the old ``detachTaskListeners`` call handled) AND drops the
-    // cached runner so HMR / dev-server re-mounts don't reuse a
-    // pre-existing instance bound to discarded Pinia stores.
+    // Detach listeners and drop the cached runner so a later mount
+    // cannot reuse an instance bound to discarded Pinia stores.
     disposeRunner()
   })
 }

@@ -62,7 +62,7 @@ const { targetLabel } = useEditingScope()
         <span class="tag">decoder: {{ editorConfig.decodeConfig.decoder || 'software' }}</span>
       </div>
 
-      <!-- Phase 7c — 单选/数字/字符串/布尔四分支全部委托给 CapabilityOptionField,
+      <!-- 单选/数字/字符串/布尔四分支全部委托给 CapabilityOptionField,
            ``option.type`` 一处判定即可。 -->
       <div v-if="decoderOptions.length > 0" class="field-grid field-grid-2">
         <CapabilityOptionField

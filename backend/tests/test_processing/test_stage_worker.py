@@ -19,115 +19,36 @@ from app.processing.streaming.stage_worker import (
 )
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.stage_worker_progress import STAGE_EVENT_PREFIX
+from tests.support.stage_worker import (
+    IdentityBackend as _IdentityBackend,
+    IncrementAlgorithm as _IncrementAlgorithm,
+    MidpointAlgorithm as _MidpointAlgorithm,
+    ProgressSequenceAlgorithm as _ProgressSequenceAlgorithm,
+    frame as _frame,
+    frames_from_bytes as _frames_from_bytes,
+    make_stage_worker_config as _config,
+    stream_of as _stream_of,
+)
 
 
-class _IdentityBackend:
-    def numpy_to_tensor(self, frame):
-        return {"tensor": frame.copy()}
-
-    def tensor_to_numpy(self, tensor):
-        return tensor["tensor"].copy()
-
-    def get_name(self) -> str:
-        return "identity"
-
-
-class _AlgorithmModeDefaults:
-    def needs_frame_pairs(self) -> bool:
-        return False
-
-    def needs_frame_sequence(self) -> bool:
-        return False
-
-    def get_interpolation_multi(self) -> int:
-        return 2
-
-
-class _IncrementAlgorithm(_AlgorithmModeDefaults):
-    def process_frame(self, tensor):
-        return {"tensor": tensor["tensor"] + 1}
-
-
-class _MidpointAlgorithm(_AlgorithmModeDefaults):
-    def needs_frame_pairs(self) -> bool:
-        return True
-
-    def process_frame_pair(self, frame0, frame1, *, timestep: float = 0.5):
-        prev = frame0["tensor"].astype(np.float32)
-        cur = frame1["tensor"].astype(np.float32)
-        return {"tensor": np.rint(prev + (cur - prev) * timestep).astype(np.uint8)}
-
-
-class _SequenceAlgorithm(_AlgorithmModeDefaults):
-    def needs_frame_sequence(self) -> bool:
-        return True
-
+class _SequenceAlgorithm:
     def process_frame_sequence(self, frames, **_kwargs):
         return [frame + 10 for frame in frames]
 
 
-class _SlowSequenceAlgorithm(_AlgorithmModeDefaults):
-    def needs_frame_sequence(self) -> bool:
-        return True
-
+class _SlowSequenceAlgorithm:
     def process_frame_sequence(self, frames, **_kwargs):
         time.sleep(0.05)
         return [frame + 10 for frame in frames]
 
 
-class _ProgressSequenceAlgorithm(_AlgorithmModeDefaults):
-    def needs_frame_sequence(self) -> bool:
-        return True
-
-    def process_frame_sequence(self, frames, **kwargs):
-        progress_callback = kwargs.get("progress_callback")
-        if progress_callback is not None:
-            progress_callback(len(frames), len(frames))
-        return [frame + 10 for frame in frames]
-
-
-class _SlowProgressSequenceAlgorithm(_AlgorithmModeDefaults):
-    def needs_frame_sequence(self) -> bool:
-        return True
-
+class _SlowProgressSequenceAlgorithm:
     def process_frame_sequence(self, frames, **kwargs):
         progress_callback = kwargs.get("progress_callback")
         if progress_callback is not None:
             progress_callback(2, len(frames))
         time.sleep(0.05)
         return [frame + 10 for frame in frames]
-
-
-def _frame(value: int, *, height: int = 1, width: int = 1) -> np.ndarray:
-    return np.full((height, width, 3), value, dtype=np.uint8)
-
-
-def _stream_of(frames: list[np.ndarray]) -> io.BytesIO:
-    return io.BytesIO(b"".join(np.ascontiguousarray(frame).tobytes() for frame in frames))
-
-
-def _frames_from_bytes(raw: bytes, *, count: int, height: int = 1, width: int = 1) -> list[np.ndarray]:
-    frame_bytes = height * width * 3
-    assert len(raw) == count * frame_bytes
-    return [
-        np.frombuffer(raw[index * frame_bytes : (index + 1) * frame_bytes], dtype=np.uint8).reshape((height, width, 3))
-        for index in range(count)
-    ]
-
-
-def _config(step: ProcessingStep, *, input_frame_count: int = 2) -> StageWorkerConfig:
-    return StageWorkerConfig(
-        stage=step,
-        stage_index=1,
-        stage_total=1,
-        stage_name=step.stage_name,
-        input_width=1,
-        input_height=1,
-        output_width=1,
-        output_height=1,
-        input_frame_count=input_frame_count,
-        tensor_backend_name="identity",
-    )
 
 
 def _run_worker(
@@ -147,6 +68,27 @@ def _run_worker(
             output_stream,
             event_sink=event_sink,
         )
+
+
+def _run_sequence_algorithm(algorithm) -> tuple[io.BytesIO, list[dict]]:
+    output = io.BytesIO()
+    events: list[dict] = []
+    config = _config(
+        ProcessingStep(
+            algorithm_type="super_resolution",
+            algorithm_kwargs={"sr_algorithm": "ppmsvsr"},
+            stage_name="01_super_resolution",
+        ),
+        input_frame_count=3,
+    )
+    _run_worker(
+        config,
+        _stream_of([_frame(1), _frame(2), _frame(3)]),
+        output,
+        algorithm,
+        events.append,
+    )
+    return output, events
 
 
 def test_single_frame_stage_reads_and_writes_rawvideo_frames() -> None:
@@ -201,48 +143,15 @@ def test_interpolation_stage_outputs_source_and_intermediate_frames() -> None:
 
 
 def test_sequence_stage_buffers_all_input_frames_before_writing_output() -> None:
-    output = io.BytesIO()
-    config = _config(
-        ProcessingStep(
-            algorithm_type="super_resolution",
-            algorithm_kwargs={"sr_algorithm": "ppmsvsr"},
-            stage_name="01_super_resolution",
-        ),
-        input_frame_count=3,
-    )
-
-    _run_worker(
-        config,
-        _stream_of([_frame(1), _frame(2), _frame(3)]),
-        output,
-        _SequenceAlgorithm(),
-        lambda _event: None,
-    )
+    output, _events = _run_sequence_algorithm(_SequenceAlgorithm())
 
     frames = _frames_from_bytes(output.getvalue(), count=3)
     assert [int(frame[0, 0, 0]) for frame in frames] == [11, 12, 13]
 
 
 def test_sequence_stage_emits_start_and_heartbeat_during_blocking_process(monkeypatch) -> None:
-    output = io.BytesIO()
-    events = []
     monkeypatch.setattr(stage_worker_progress, "SEQUENCE_STAGE_HEARTBEAT_SECONDS", 0.01)
-    config = _config(
-        ProcessingStep(
-            algorithm_type="super_resolution",
-            algorithm_kwargs={"sr_algorithm": "ppmsvsr"},
-            stage_name="01_super_resolution",
-        ),
-        input_frame_count=3,
-    )
-
-    _run_worker(
-        config,
-        _stream_of([_frame(1), _frame(2), _frame(3)]),
-        output,
-        _SlowSequenceAlgorithm(),
-        events.append,
-    )
+    _output, events = _run_sequence_algorithm(_SlowSequenceAlgorithm())
 
     progress_events = [event for event in events if event["type"] == "progress"]
     assert progress_events[0] == {
@@ -259,25 +168,8 @@ def test_sequence_stage_emits_start_and_heartbeat_during_blocking_process(monkey
 
 
 def test_sequence_stage_heartbeat_uses_latest_algorithm_progress(monkeypatch) -> None:
-    output = io.BytesIO()
-    events = []
     monkeypatch.setattr(stage_worker_progress, "SEQUENCE_STAGE_HEARTBEAT_SECONDS", 0.01)
-    config = _config(
-        ProcessingStep(
-            algorithm_type="super_resolution",
-            algorithm_kwargs={"sr_algorithm": "ppmsvsr"},
-            stage_name="01_super_resolution",
-        ),
-        input_frame_count=3,
-    )
-
-    _run_worker(
-        config,
-        _stream_of([_frame(1), _frame(2), _frame(3)]),
-        output,
-        _SlowProgressSequenceAlgorithm(),
-        events.append,
-    )
+    _output, events = _run_sequence_algorithm(_SlowProgressSequenceAlgorithm())
 
     heartbeat_events = [event for event in events if event.get("heartbeat") is True]
     assert heartbeat_events
@@ -286,24 +178,7 @@ def test_sequence_stage_heartbeat_uses_latest_algorithm_progress(monkeypatch) ->
 
 
 def test_sequence_stage_skips_write_progress_when_algorithm_reports_progress() -> None:
-    output = io.BytesIO()
-    events = []
-    config = _config(
-        ProcessingStep(
-            algorithm_type="super_resolution",
-            algorithm_kwargs={"sr_algorithm": "ppmsvsr"},
-            stage_name="01_super_resolution",
-        ),
-        input_frame_count=3,
-    )
-
-    _run_worker(
-        config,
-        _stream_of([_frame(1), _frame(2), _frame(3)]),
-        output,
-        _ProgressSequenceAlgorithm(),
-        events.append,
-    )
+    _output, events = _run_sequence_algorithm(_ProgressSequenceAlgorithm())
 
     progress_events = [event for event in events if event["type"] == "progress"]
     assert [event["current"] for event in progress_events] == [0, 3, 3]

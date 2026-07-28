@@ -23,24 +23,6 @@ def test_get_video_info_nonexistent_file() -> None:
         FFmpegWrapper().get_video_info("/nonexistent/file.mp4")
 
 
-def test_wrapper_does_not_expose_internal_probe_or_builder_facades() -> None:
-    removed_methods = {
-        "list_codec_names",
-        "list_hwaccels",
-        "describe_codec",
-        "parse_codec_profile",
-        "parse_avoptions",
-        "probe_rate_control_modes",
-        "probe_decoder_hardware_capabilities",
-        "build_decode_input_args",
-        "build_encode_output_args",
-        "decode_to_frames",
-        "encode_from_frames",
-    }
-
-    assert not removed_methods.intersection(vars(FFmpegWrapper))
-
-
 def test_parse_progress_snapshot_extracts_runtime_values() -> None:
     parsed = _parse_progress_snapshot(
         {

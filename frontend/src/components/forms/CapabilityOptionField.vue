@@ -1,8 +1,5 @@
 <script setup lang="ts">
-// Phase 7c — Capability-option 渲染抽象。
-//
-// 替换 DecodeModuleView / EncodeModuleView 模板里完全重复的
-// type=boolean/choice/number/fallback 四分支 switch。``option.type`` 决定
+// Capability-option 渲染抽象。``option.type`` 决定
 // 委托给哪个 ``Base*`` 控件,父组件只需要绑 ``v-model`` + 喂 ``option``。
 //
 // 把每一种 type 都收敛到对应的 Base* 控件而不是手写 input,可顺手关掉

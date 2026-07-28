@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures'
+import { installEnvironmentFixture } from '../utils/environment'
 
 const makeNumberOption = (name: string, defaultValue: number) => ({
   name,
@@ -64,44 +65,18 @@ async function installEncodeProfiles(
   tauriPage: any,
   profiles: unknown[] = CONTROLLED_PROFILES,
 ): Promise<boolean> {
-  return await tauriPage.evaluate((encoderProfiles: unknown[]) => {
-    const root = document.querySelector('#app')
-    if (!root) return false
-    const vueApp = (root as any).__vue_app__
-    if (!vueApp) return false
-    const pinia = vueApp.config?.globalProperties?.$pinia
-    const state = pinia?.state?.value
-    if (!state?.env?.env || !state?.preset?.draftPreset) return false
-
-    state.env.env.checkResult = {
-      ffmpeg: {
-        available: true,
-        hwaccels: [],
-        encoderProfiles,
-        decoderProfiles: [],
-      },
-      gpu: { adapters: [] },
-      tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-      interpolationAlgorithms: [],
-      superResolutionAlgorithms: [],
-      runtimeMode: 'external',
-    }
-
-    state.preset.draftPreset.encodeConfig = {
+  void tauriPage
+  return await installEnvironmentFixture({
+    encoderProfiles: profiles,
+    encodeConfig: {
       codec: 'libx264',
       family: 'cpu',
       container: 'mp4',
       keepAudio: true,
       rateControl: { mode: 'crf', value: 19 },
       options: {},
-    }
-    state.preset.draftPreset.outputConfig = {
-      outputDir: 'C:/tmp/output',
-      openOnComplete: false,
-      segmentFrames: 1000,
-    }
-    return true
-  }, profiles)
+    },
+  })
 }
 
 async function openEncodeModule(tauriPage: any): Promise<void> {

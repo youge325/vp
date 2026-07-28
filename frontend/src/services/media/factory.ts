@@ -14,11 +14,7 @@ function basename(path: string): string {
   return path.split(/[/\\]/).pop() ?? path
 }
 
-// Phase 13.1 — taskState / lastOutputPath 从 ``MediaItem`` 移走到
-// [[useMediaRunState]],``createMediaItem`` 不再初始化运行时投影:run
-// state 在第一次 setItemTaskState / setItemLastOutputPath 被调用时由
-// store 内部 lazy 创建。Phase 16 — issue 字段已经下线,banner 走
-// ``useIssueStore`` 的 scope-based 写入。
+// 运行时投影由 ``useMediaRunState`` 按需创建;本工厂只创建媒体实体。
 export function createMediaItem(path: string, preset: WorkbenchPreset): MediaItem {
   const snapshot = cloneWorkbenchPreset(preset)
   return {

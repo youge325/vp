@@ -3,111 +3,15 @@ import { describe, expect, it } from 'vitest'
 import { buildEnhanceViewModel } from '@/services/preset/enhance-view-model'
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
 import type { AlgorithmInfo } from '@/types/protocol'
+import {
+  createEdvrAlgorithm,
+  createPpmsvsrAlgorithm,
+  createRifeAlgorithm,
+} from '../../fixtures/environment'
 
-const rife: AlgorithmInfo = {
-  name: 'rife',
-  tensorBackends: ['pytorch', 'onnx'],
-  models: ['4.25'],
-  onnxModels: ['rife_v4.25.onnx'],
-  modelDetails: [
-    {
-      name: '4.25',
-      label: 'RIFE 4.25',
-      metrics: {
-        parameterCount: 5670892,
-        parameterBytes: 22683568,
-        gflopsPerMegapixel: 18.5,
-        activationBytesPerMegapixel: 694800000,
-        runtimeOverheadBytes: 38000000,
-        inputModulo: 64,
-        analysisStatus: 'ok',
-        analysisNotes: [],
-      },
-    },
-  ],
-  onnxModelDetails: [
-    {
-      name: 'rife_v4.25.onnx',
-      label: 'rife_v4.25.onnx',
-      metrics: {
-        parameterCount: 5670892,
-        parameterBytes: 22683568,
-        gflopsPerMegapixel: 18.5,
-        activationBytesPerMegapixel: 694800000,
-        runtimeOverheadBytes: 38000000,
-        inputModulo: 64,
-        analysisStatus: 'ok',
-        analysisNotes: [],
-      },
-    },
-  ],
-}
-
-const ppmsvsr: AlgorithmInfo = {
-  name: 'ppmsvsr',
-  family: 'paddlegan_vsr',
-  tensorBackends: ['paddle'],
-  models: ['x4'],
-  scaleFactors: [4],
-  fixedScaleFactor: 4,
-  inputFrameMode: 'editable_chunk',
-  defaultNumFrames: 10,
-  modelDetails: [
-    {
-      name: 'x4',
-      label: 'PP-MSVSR',
-      metrics: {
-        parameterCount: 1453607,
-        parameterBytes: 5814428,
-        gflopsPerMegapixel: 120,
-        activationBytesPerMegapixel: 1981031424,
-        runtimeOverheadBytes: 2391117604,
-        runtimeFrameCount: null,
-        inputModulo: 4,
-        analysisStatus: 'ok',
-        analysisNotes: [],
-        engineMetrics: {
-          tensorrt: {
-            gflopsPerMegapixel: 120,
-            activationBytesPerMegapixel: 3688504346,
-            runtimeOverheadBytes: 0,
-            runtimeFrameCount: null,
-            analysisStatus: 'ok',
-            analysisNotes: ['TensorRT calibrated'],
-          },
-        },
-      },
-    },
-  ],
-}
-
-const edvr: AlgorithmInfo = {
-  name: 'edvr',
-  family: 'paddlegan_vsr',
-  tensorBackends: ['paddle'],
-  models: ['x4'],
-  scaleFactors: [4],
-  fixedScaleFactor: 4,
-  inputFrameMode: 'fixed_window',
-  defaultNumFrames: 5,
-  modelDetails: [
-    {
-      name: 'x4',
-      label: 'EDVR',
-      metrics: {
-        parameterCount: 20633827,
-        parameterBytes: 82535308,
-        gflopsPerMegapixel: 240,
-        activationBytesPerMegapixel: 1000,
-        runtimeOverheadBytes: 100,
-        runtimeFrameCount: 5,
-        inputModulo: 4,
-        analysisStatus: 'ok',
-        analysisNotes: [],
-      },
-    },
-  ],
-}
+const rife: AlgorithmInfo = createRifeAlgorithm()
+const ppmsvsr: AlgorithmInfo = createPpmsvsrAlgorithm()
+const edvr: AlgorithmInfo = createEdvrAlgorithm()
 
 describe('enhance view-model rules', () => {
   it('resolves selected models and estimates SR-to-interpolation runtime rows', () => {

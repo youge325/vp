@@ -4,63 +4,15 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { useEncodeForm } from '@/composables/forms/useEncodeForm'
 import { useEnvStore } from '@/stores/env'
 import { usePresetStore } from '@/stores/preset'
-import type { CapabilityOptionSpec } from '@/types/protocol'
-import type { EnvironmentCheckResult } from '@/types/protocol'
-import { createEnvironmentPayload, createEnvironmentResult } from '../../fixtures/environment'
-
-const option = (
-  name: string,
-  defaultValue: string,
-  choices: Array<{ label: string; value: string }> = [],
-): CapabilityOptionSpec => ({
-  name,
-  label: name,
-  type: choices.length ? 'choice' : 'string',
-  defaultValue,
-  choices,
-  min: null,
-  max: null,
-})
-
-const makeEnv = (): EnvironmentCheckResult => createEnvironmentResult({
-  ffmpeg: {
-    available: true,
-    hwaccels: [],
-    decoderProfiles: [],
-    encoderProfiles: [
-      {
-        name: 'libx265',
-        label: 'x265',
-        family: 'software',
-        codec: 'hevc',
-        available: true,
-        hardwareDevices: [],
-        options: [option('preset', 'medium')],
-        rateControlModes: [{ mode: 'crf', label: 'CRF', defaultValue: 18, unit: 'CRF' }],
-      },
-      {
-        name: 'hevc_nvenc',
-        label: 'NVENC H.265',
-        family: 'nvidia',
-        codec: 'hevc',
-        available: true,
-        hardwareDevices: [],
-        options: [option('preset', 'p5'), option('tune', 'hq')],
-        rateControlModes: [{ mode: 'cq', label: 'CQ', defaultValue: 24, unit: 'CQ' }],
-      },
-    ],
-  },
-  gpu: { adapters: [] },
-  tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-  interpolationAlgorithms: [],
-  superResolutionAlgorithms: [],
-  runtimeMode: 'external',
-})
+import {
+  createEncodingEnvironment,
+  createEnvironmentPayload,
+} from '../../fixtures/environment'
 
 describe('useEncodeForm profile binding', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    useEnvStore().setCheckPayload(createEnvironmentPayload(makeEnv()))
+    useEnvStore().setCheckPayload(createEnvironmentPayload(createEncodingEnvironment()))
   })
 
   it('selects encoder profile through pure profile rules', () => {

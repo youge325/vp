@@ -1,4 +1,4 @@
-from app.planning import ProcessingStep, build_stage_plan
+from app.planning import ProcessingStep, StageProjection, build_stage_plan
 from app.processing.streaming.worker_plans import (
     boundary_schedule_for_stage_plan,
     build_stage_chunk_plans,
@@ -10,7 +10,7 @@ def test_worker_plans_track_dimensions_frames_and_stage_backends() -> None:
     steps = [
         ProcessingStep(
             algorithm_type="frame_interpolation",
-            algorithm_kwargs={"multi": 3},
+            algorithm_kwargs={"multi": 3, "tensor_backend": "onnx"},
             stage_name="01_frame_interpolation",
         ),
         ProcessingStep(
@@ -24,11 +24,10 @@ def test_worker_plans_track_dimensions_frames_and_stage_backends() -> None:
             stage_name="02_super_resolution",
         ),
     ]
-    stage_plan = build_stage_plan(steps, 3, source_duration=1.0, output_fps=None)
+    stage_plan = build_stage_plan(StageProjection(tuple(steps)), 3, source_duration=1.0, output_fps=None)
 
     plans = build_stage_worker_plans(
         stage_plan=stage_plan,
-        tensor_backend_name="onnx",
         source_width=2,
         source_height=3,
         source_frame_count=3,
@@ -46,20 +45,24 @@ def test_worker_plans_track_dimensions_when_super_resolution_runs_before_interpo
     steps = [
         ProcessingStep(
             algorithm_type="super_resolution",
-            algorithm_kwargs={"scale_factor": 2.0, "sr_algorithm": "placeholder", "onnx_model": "sr.onnx"},
+            algorithm_kwargs={
+                "scale_factor": 2.0,
+                "sr_algorithm": "placeholder",
+                "onnx_model": "sr.onnx",
+                "tensor_backend": "onnx",
+            },
             stage_name="01_super_resolution",
         ),
         ProcessingStep(
             algorithm_type="frame_interpolation",
-            algorithm_kwargs={"multi": 2},
+            algorithm_kwargs={"multi": 2, "tensor_backend": "onnx"},
             stage_name="02_frame_interpolation",
         ),
     ]
-    stage_plan = build_stage_plan(steps, 3, source_duration=1.0, output_fps=None)
+    stage_plan = build_stage_plan(StageProjection(tuple(steps)), 3, source_duration=1.0, output_fps=None)
 
     plans = build_stage_worker_plans(
         stage_plan=stage_plan,
-        tensor_backend_name="onnx",
         source_width=2,
         source_height=3,
         source_frame_count=3,
@@ -119,13 +122,15 @@ def test_super_resolution_chunk_plans_keep_input_frame_counts_bounded() -> None:
 
 def test_boundary_schedule_maps_output_counts_to_next_source_frame() -> None:
     stage_plan = build_stage_plan(
-        [
-            ProcessingStep(
-                algorithm_type="frame_interpolation",
-                algorithm_kwargs={"multi": 2},
-                stage_name="01_frame_interpolation",
+        StageProjection(
+            (
+                ProcessingStep(
+                    algorithm_type="frame_interpolation",
+                    algorithm_kwargs={"multi": 2},
+                    stage_name="01_frame_interpolation",
+                ),
             )
-        ],
+        ),
         4,
         source_duration=1.0,
         output_fps=None,
@@ -140,13 +145,15 @@ def test_boundary_schedule_maps_output_counts_to_next_source_frame() -> None:
 
 def test_boundary_schedule_uses_single_frame_output_groups_without_interpolation() -> None:
     stage_plan = build_stage_plan(
-        [
-            ProcessingStep(
-                algorithm_type="super_resolution",
-                algorithm_kwargs={"scale_factor": 2.0},
-                stage_name="01_super_resolution",
+        StageProjection(
+            (
+                ProcessingStep(
+                    algorithm_type="super_resolution",
+                    algorithm_kwargs={"scale_factor": 2.0},
+                    stage_name="01_super_resolution",
+                ),
             )
-        ],
+        ),
         4,
         source_duration=1.0,
         output_fps=None,

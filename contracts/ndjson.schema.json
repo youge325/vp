@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/ndjson.schema.json",
+  "title": "Backend NDJSON envelope",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "current": {
+          "$ref": "./task-progress.schema.json#/properties/current"
+        },
+        "total": {
+          "$ref": "./task-progress.schema.json#/properties/total"
+        },
+        "percent": {
+          "$ref": "./task-progress.schema.json#/properties/percent"
+        },
+        "stage": {
+          "$ref": "./task-progress.schema.json#/properties/stage"
+        },
+        "stageIndex": {
+          "$ref": "./task-progress.schema.json#/properties/stageIndex"
+        },
+        "stageTotal": {
+          "$ref": "./task-progress.schema.json#/properties/stageTotal"
+        },
+        "metrics": {
+          "$ref": "./task-progress.schema.json#/properties/metrics"
+        },
+        "type": {
+          "const": "progress"
+        }
+      },
+      "required": [
+        "current",
+        "total",
+        "percent",
+        "stage",
+        "stageIndex",
+        "stageTotal",
+        "type"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "outputPath": {
+          "$ref": "./task-completed.schema.json#/properties/outputPath"
+        },
+        "processedFrames": {
+          "$ref": "./task-completed.schema.json#/properties/processedFrames"
+        },
+        "timeSeconds": {
+          "$ref": "./task-completed.schema.json#/properties/timeSeconds"
+        },
+        "type": {
+          "const": "completed"
+        }
+      },
+      "required": [
+        "outputPath",
+        "processedFrames",
+        "timeSeconds",
+        "type"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "./backend-task-error.schema.json#/properties/code"
+        },
+        "message": {
+          "$ref": "./backend-task-error.schema.json#/properties/message"
+        },
+        "details": {
+          "$ref": "./backend-task-error.schema.json#/properties/details"
+        },
+        "type": {
+          "const": "error"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "type"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "resumed": {
+          "$ref": "./resume-status.schema.json#/properties/resumed"
+        },
+        "completedChunks": {
+          "$ref": "./resume-status.schema.json#/properties/completedChunks"
+        },
+        "completedOutputFrames": {
+          "$ref": "./resume-status.schema.json#/properties/completedOutputFrames"
+        },
+        "startSourceFrame": {
+          "$ref": "./resume-status.schema.json#/properties/startSourceFrame"
+        },
+        "totalOutputFrames": {
+          "$ref": "./resume-status.schema.json#/properties/totalOutputFrames"
+        },
+        "type": {
+          "const": "resume_status"
+        }
+      },
+      "required": [
+        "resumed",
+        "completedChunks",
+        "completedOutputFrames",
+        "startSourceFrame",
+        "totalOutputFrames",
+        "type"
+      ]
+    }
+  ]
+}

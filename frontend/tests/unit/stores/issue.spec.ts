@@ -5,12 +5,12 @@ import { useIssueStore } from '@/stores/issue'
 import { TASK_ERROR_CODES } from '@/types/protocol'
 import type { TaskError } from '@/types/domain/media'
 
-// Phase 6d — banner-surface store split out of ``useMediaStore``.
+// Banner-surface store split out of ``useMediaStore``.
 // Cover every scope so a future regression that drops or mis-routes
 // a scope tag fails loudly here instead of surfacing as a silently
 // missing banner in the UI.
 
-const allScopes = ['input', 'encode', 'output', 'task', 'preset'] as const
+const allScopes = ['input', 'encode', 'task', 'preset'] as const
 
 function makeError(message = 'something went wrong'): TaskError {
   return { code: TASK_ERROR_CODES.ProcessFailed, message, details: null }
@@ -74,7 +74,6 @@ describe('useIssueStore', () => {
     store.setIssue('task', makeError())
     expect(store.getIssue('input')).toBeNull()
     expect(store.getIssue('encode')).toBeNull()
-    expect(store.getIssue('output')).toBeNull()
     expect(store.getIssue('preset')).toBeNull()
     expect(store.getIssue('task')).not.toBeNull()
   })

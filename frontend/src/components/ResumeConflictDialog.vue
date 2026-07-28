@@ -36,7 +36,7 @@ function handle(action: ResumeConflictAction): void {
   emit('resolve', action)
 }
 
-// Phase D.5.4 — a11y polish:
+// Accessibility behavior:
 // - Esc resolves to ``cancel`` so keyboard users can dismiss a stuck
 //   dialog without mouse navigation.
 // - Overlay click (outside the dialog box) also cancels — matches the

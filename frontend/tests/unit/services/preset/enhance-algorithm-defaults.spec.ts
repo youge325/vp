@@ -7,7 +7,9 @@ import {
 import type { EnvironmentCheckResult } from '@/types/protocol'
 import { createEnvironmentResult } from '../../fixtures/environment'
 
-function env(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCheckResult {
+function env(
+  overrides: Parameters<typeof createEnvironmentResult>[0] = {},
+): EnvironmentCheckResult {
   return createEnvironmentResult(overrides)
 }
 
@@ -28,7 +30,7 @@ describe('enhance algorithm defaults', () => {
     expect(pickDefaultSuperResolutionAlgorithm(checkResult, 'paddle')).toBe('paddle-sr')
   })
 
-  it('keeps legacy hard-coded algorithm defaults when environment metadata is missing', () => {
+  it('uses bootstrap algorithm defaults when environment metadata is missing', () => {
     expect(pickDefaultInterpolationAlgorithm(null, 'onnx')).toBe('rife')
     expect(pickDefaultSuperResolutionAlgorithm(null, 'onnx')).toBe('placeholder')
   })

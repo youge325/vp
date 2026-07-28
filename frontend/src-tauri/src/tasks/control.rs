@@ -1,110 +1,112 @@
 //! Pause / resume / cancel commands against a running task.
 //!
-//! Split out of the legacy ``tasks::runner`` mod in Phase 5b so each
-//! file owns a single responsibility:
-//!   - ``oneshot.rs`` runs short-lived CLI subcommands (check / info / inspect-output)
-//!   - ``spawn.rs`` launches the long-running ``process`` subcommand
-//!   - ``readers.rs`` drains stdout/stderr into Tauri events
-//!   - ``control.rs`` (this file) issues control signals to the running task
-//!
-//! Phase 5d wired these into the new [`TaskState`] state machine:
-//! ``cancel_running_task`` goes through ``begin_cancel`` (Running →
+//! Cancel goes through [`TaskState::begin_cancel`] (Running →
 //! Cancelling) so a second cancel call is rejected at the state-machine
 //! layer instead of relying on cancellation-token idempotency alone.
 
 use tokio::sync::oneshot;
+use tokio::time::{timeout, Duration};
 
-use crate::error::ShellError;
 use crate::tasks::cancellation::CancelReason;
-use crate::tasks::{TaskControlKind, TaskControlMessage, TaskState};
+use crate::tasks::{
+    ProcessControlKind, TaskApplicationError, TaskControlKind, TaskControlMessage, TaskState,
+};
 
-pub(crate) async fn cancel_running_task(state: &TaskState) -> Result<(), ShellError> {
-    // Phase 5d — atomic Running → Cancelling. ``begin_cancel`` rejects
-    // duplicate calls (Cancelling → Cancelling) and bare-Idle cancels
-    // (no task) on its own, replacing the bespoke checks the old code
-    // performed against ``Mutex<Option<TaskHandle>>``.
-    let handle = state.begin_cancel().await?;
-    // Cancellation is fire-and-forget. The controller will react via its
-    // ``cancel_token.cancelled()`` branch, resume the child if it was
-    // paused, kill it, and emit ``task-cancelled`` once the process exits.
-    handle.cancel(CancelReason::User);
+const CONTROL_TIMEOUT: Duration = Duration::from_secs(5);
+
+async fn cancel_running_task(state: &TaskState) -> Result<(), TaskApplicationError> {
+    // The lifecycle transition and first cancellation reason are installed
+    // under one state lock, including when cancellation races startup.
+    state.begin_cancel(CancelReason::User).await?;
     Ok(())
 }
 
 pub(crate) async fn send_task_control(
     state: &TaskState,
     kind: TaskControlKind,
-) -> Result<(), ShellError> {
-    // Phase 5d — ``current_handle`` returns the active handle even in
-    // the ``Cancelling`` phase so an in-flight pause/resume from the
-    // UI lands cleanly during the cancel window; the early reject for
-    // "already cancelling" lives below.
+) -> Result<(), TaskApplicationError> {
+    let process_kind = match kind {
+        TaskControlKind::Cancel => return cancel_running_task(state).await,
+        TaskControlKind::Pause => ProcessControlKind::Pause,
+        TaskControlKind::Resume => ProcessControlKind::Resume,
+    };
     let handle = state.current_handle().await?;
 
     if handle.cancel_token.is_cancelled() {
-        return Err(ShellError::InvalidInput(
-            "The task is already being cancelled.".to_string(),
-        ));
+        return Err(crate::tasks::TaskStateError::AlreadyCancelling.into());
     }
 
     let (response_tx, response_rx) = oneshot::channel();
-    handle
-        .control_tx
-        .send(TaskControlMessage {
-            kind,
+    timeout(
+        CONTROL_TIMEOUT,
+        handle.control_tx.send(TaskControlMessage {
+            kind: process_kind,
             response: response_tx,
-        })
-        .await
-        .map_err(|_| ShellError::ControllerUnavailable)?;
+        }),
+    )
+    .await
+    .map_err(|_| crate::error::ShellError::ControllerUnavailable)?
+    .map_err(|_| crate::error::ShellError::ControllerUnavailable)?;
 
-    // Phase 5a — the controller now replies with a typed
-    // [`ProcessControlError`](crate::process_control::ProcessControlError).
-    // Phase A —  ``ProcessControlError`` 通过专用 ``ShellError::ProcessControl``
-    // 变体向上抛,语义自描述,前端按 ``ProcessFailed`` code 路由。
-    // 通道/超时失败仍走 ``ControllerUnavailable``,两条路径在前端表现一致。
-    match response_rx.await {
-        Ok(result) => result.map_err(ShellError::ProcessControl),
-        Err(_) => Err(ShellError::ControllerUnavailable),
+    match timeout(CONTROL_TIMEOUT, response_rx).await {
+        Err(_) => Err(crate::error::ShellError::ControllerUnavailable.into()),
+        Ok(Ok(result)) => result
+            .map_err(crate::error::ShellError::ProcessControl)
+            .map_err(Into::into),
+        Ok(Err(_)) => Err(crate::error::ShellError::ControllerUnavailable.into()),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tasks::cancellation::{CancelReason, CancellationToken};
-    use crate::tasks::handle::TaskHandle;
+    use crate::tasks::cancellation::CancelReason;
+    use std::sync::Arc;
     use tokio::sync::mpsc;
 
-    fn make_handle() -> TaskHandle {
+    async fn start(state: &TaskState) -> crate::tasks::handle::TaskHandle {
         let (tx, _rx) = mpsc::channel(1);
-        TaskHandle::new(tx, CancellationToken::new())
+        let lease = state.reserve_start().await.expect("reserve");
+        state.activate(&lease, tx).await.expect("activate");
+        state.current_handle().await.expect("handle")
     }
 
     #[tokio::test]
     async fn cancel_running_task_rejects_when_idle() {
         let state = TaskState::default();
         let result = cancel_running_task(&state).await;
-        assert!(matches!(result, Err(ShellError::NoActiveTask)));
+        assert!(matches!(
+            result,
+            Err(TaskApplicationError::State(
+                crate::tasks::TaskStateError::NoActiveTask
+            ))
+        ));
     }
 
     #[tokio::test]
-    async fn cancel_running_task_fires_token_and_transitions_state() {
+    async fn unified_cancel_control_fires_token_and_transitions_state() {
         // The cancel path is fire-and-forget: it flips the
         // cancellation token (which the controller observes via
         // ``cancel_token.cancelled()``) and atomically moves the state
         // machine into ``Cancelling``. A second cancel call must fail
         // because ``begin_cancel`` rejects the duplicate transition.
         let state = TaskState::default();
-        let handle = make_handle();
+        let handle = start(&state).await;
         let token = handle.cancel_token.clone();
-        state.try_start(handle).await.expect("start ok");
 
-        cancel_running_task(&state).await.expect("first cancel ok");
+        send_task_control(&state, TaskControlKind::Cancel)
+            .await
+            .expect("first cancel ok");
         assert!(token.is_cancelled(), "cancel must fire the token");
 
-        let second = cancel_running_task(&state).await;
+        let second = send_task_control(&state, TaskControlKind::Cancel).await;
         assert!(
-            matches!(second, Err(ShellError::InvalidInput(_))),
+            matches!(
+                second,
+                Err(TaskApplicationError::State(
+                    crate::tasks::TaskStateError::AlreadyCancelling
+                ))
+            ),
             "duplicate cancel must be rejected, got: {second:?}",
         );
     }
@@ -113,24 +115,30 @@ mod tests {
     async fn pause_running_task_rejects_when_idle() {
         let state = TaskState::default();
         let result = send_task_control(&state, TaskControlKind::Pause).await;
-        assert!(matches!(result, Err(ShellError::NoActiveTask)));
+        assert!(matches!(
+            result,
+            Err(TaskApplicationError::State(
+                crate::tasks::TaskStateError::NoActiveTask
+            ))
+        ));
     }
 
     #[tokio::test]
     async fn pause_running_task_rejects_when_token_already_cancelled() {
-        // The state machine is still ``Running`` but the cancellation
-        // token has been fired (a previous ``cancel_running_task``
-        // call's effect outside this test). Pause / resume should be
-        // refused so the UI surfaces a clear "already being cancelled"
-        // message instead of silently no-oping.
+        // The state machine is still ``Running`` but cancellation has won
+        // the atomic transition. Pause / resume must surface that state.
         let state = TaskState::default();
-        let handle = make_handle();
-        handle.cancel(CancelReason::User);
-        state.try_start(handle).await.expect("start ok");
+        let handle = start(&state).await;
+        handle.cancel_token.cancel(CancelReason::User);
 
         let result = send_task_control(&state, TaskControlKind::Pause).await;
         assert!(
-            matches!(result, Err(ShellError::InvalidInput(_))),
+            matches!(
+                result,
+                Err(TaskApplicationError::State(
+                    crate::tasks::TaskStateError::AlreadyCancelling
+                ))
+            ),
             "cancelled token must block pause, got: {result:?}",
         );
     }
@@ -138,11 +146,114 @@ mod tests {
     #[tokio::test]
     async fn resume_running_task_also_rejects_when_token_already_cancelled() {
         let state = TaskState::default();
-        let handle = make_handle();
-        handle.cancel(CancelReason::User);
-        state.try_start(handle).await.expect("start ok");
+        let handle = start(&state).await;
+        handle.cancel_token.cancel(CancelReason::User);
 
         let result = send_task_control(&state, TaskControlKind::Resume).await;
-        assert!(matches!(result, Err(ShellError::InvalidInput(_))));
+        assert!(matches!(
+            result,
+            Err(TaskApplicationError::State(
+                crate::tasks::TaskStateError::AlreadyCancelling
+            ))
+        ));
+    }
+
+    async fn start_with_receiver(
+        state: &TaskState,
+    ) -> mpsc::Receiver<crate::tasks::TaskControlMessage> {
+        let (tx, rx) = mpsc::channel(1);
+        let lease = state.reserve_start().await.expect("reserve");
+        state.activate(&lease, tx).await.expect("activate");
+        rx
+    }
+
+    async fn dispatch_control(
+        kind: TaskControlKind,
+    ) -> (
+        tokio::task::JoinHandle<Result<(), TaskApplicationError>>,
+        crate::tasks::TaskControlMessage,
+    ) {
+        let state = Arc::new(TaskState::default());
+        let mut rx = start_with_receiver(&state).await;
+        let request = tokio::spawn(async move { send_task_control(&state, kind).await });
+        let message = rx.recv().await.expect("control request");
+        (request, message)
+    }
+
+    #[tokio::test]
+    async fn pause_is_forwarded_and_waits_for_a_successful_reply() {
+        let (request, message) = dispatch_control(TaskControlKind::Pause).await;
+        assert_eq!(message.kind, ProcessControlKind::Pause);
+        message.response.send(Ok(())).expect("reply");
+        request.await.expect("request task").expect("pause result");
+    }
+
+    #[tokio::test]
+    async fn resume_is_forwarded_with_the_distinct_process_control_kind() {
+        let (request, message) = dispatch_control(TaskControlKind::Resume).await;
+        assert_eq!(message.kind, ProcessControlKind::Resume);
+        message.response.send(Ok(())).expect("reply");
+        request.await.expect("request task").expect("resume result");
+    }
+
+    #[tokio::test]
+    async fn dropped_control_reply_maps_to_controller_unavailable() {
+        let (request, message) = dispatch_control(TaskControlKind::Pause).await;
+        drop(message.response);
+        let result = request.await.expect("request task");
+        assert!(matches!(
+            result,
+            Err(TaskApplicationError::Shell(
+                crate::error::ShellError::ControllerUnavailable
+            ))
+        ));
+    }
+
+    #[tokio::test]
+    async fn process_control_reply_preserves_the_typed_os_failure() {
+        let (request, message) = dispatch_control(TaskControlKind::Pause).await;
+        message
+            .response
+            .send(Err(crate::process_control::ProcessControlError::NotFound))
+            .expect("reply");
+        let result = request.await.expect("request task");
+        assert!(matches!(
+            result,
+            Err(TaskApplicationError::Shell(
+                crate::error::ShellError::ProcessControl(
+                    crate::process_control::ProcessControlError::NotFound
+                )
+            ))
+        ));
+    }
+
+    #[tokio::test]
+    async fn closed_control_channel_maps_to_controller_unavailable() {
+        let state = TaskState::default();
+        let rx = start_with_receiver(&state).await;
+        drop(rx);
+
+        let result = send_task_control(&state, TaskControlKind::Pause).await;
+        assert!(matches!(
+            result,
+            Err(TaskApplicationError::Shell(
+                crate::error::ShellError::ControllerUnavailable
+            ))
+        ));
+    }
+
+    #[tokio::test]
+    async fn pause_while_starting_reports_the_domain_state() {
+        let state = TaskState::default();
+        let lease = state.reserve_start().await.expect("reserve");
+
+        let result = send_task_control(&state, TaskControlKind::Pause).await;
+        assert!(matches!(
+            result,
+            Err(TaskApplicationError::State(
+                crate::tasks::TaskStateError::StillStarting
+            ))
+        ));
+        state.rollback_start(&lease).await;
     }
 }

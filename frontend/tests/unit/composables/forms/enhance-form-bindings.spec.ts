@@ -5,90 +5,11 @@ import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/wor
 import { createEnhanceFormBindings } from '@/composables/forms/enhance-form-bindings'
 import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
-import { createEnvironmentResult } from '../../fixtures/environment'
-
-function makeEnv(): EnvironmentCheckResult {
-  return createEnvironmentResult({
-    ffmpeg: {
-      available: true,
-      hwaccels: [],
-      encoderProfiles: [],
-      decoderProfiles: [],
-    },
-    gpu: { adapters: [] },
-    tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda', 'tensorrt'], onnx: ['cuda', 'tensorrt'] },
-    interpolationAlgorithms: [
-      {
-        name: 'rife',
-        tensorBackends: ['pytorch', 'onnx'],
-        models: ['4.25'],
-        onnxModels: ['rife.onnx'],
-        modelDetails: [
-          {
-            name: '4.25',
-            label: 'RIFE 4.25',
-            metrics: {
-              parameterCount: 5670892,
-              parameterBytes: 22683568,
-              gflopsPerMegapixel: 18.5,
-              activationBytesPerMegapixel: 694800000,
-              runtimeOverheadBytes: 38000000,
-              inputModulo: 64,
-              analysisStatus: 'ok',
-              analysisNotes: [],
-            },
-          },
-        ],
-      },
-      { name: 'rife-lite', tensorBackends: ['pytorch'], models: ['lite'], onnxModels: [] },
-    ],
-    superResolutionAlgorithms: [
-      { name: 'placeholder', tensorBackends: ['onnx'], models: [], onnxModels: ['sr.onnx'], scaleFactors: [2] },
-      {
-        name: 'ppmsvsr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        inputFrameMode: 'editable_chunk',
-        defaultNumFrames: 10,
-      },
-      {
-        name: 'edvr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        inputFrameMode: 'fixed_window',
-        defaultNumFrames: 5,
-        modelDetails: [
-          {
-            name: 'x4',
-            label: 'EDVR',
-            metrics: {
-              parameterCount: 20633827,
-              parameterBytes: 82535308,
-              gflopsPerMegapixel: 240,
-              activationBytesPerMegapixel: 1000,
-              runtimeOverheadBytes: 100,
-              runtimeFrameCount: 5,
-              inputModulo: 4,
-              analysisStatus: 'ok',
-              analysisNotes: [],
-            },
-          },
-        ],
-      },
-    ],
-    runtimeMode: 'bundled',
-  })
-}
+import { createEnhanceEnvironment } from '../../fixtures/environment'
 
 function makeBindings() {
   const workflow = reactive(createDefaultWorkflowConfigForEnvironment(null)) as WorkflowConfig
-  const checkResult = ref<EnvironmentCheckResult | null>(makeEnv())
+  const checkResult = ref<EnvironmentCheckResult | null>(createEnhanceEnvironment())
   const activeVideoDimensions = ref({ width: 640, height: 288 })
   const form = createEnhanceFormBindings({
     workflow: computed(() => workflow),
@@ -116,7 +37,7 @@ describe('enhance form bindings', () => {
     form.interpolationBackend = 'onnx'
     expect(workflow.interpolation.tensorBackend).toBe('onnx')
     expect(form.isInterpolationOnnxBackend).toBe(true)
-    expect(form.interpolationOnnxModel).toBe('rife.onnx')
+    expect(form.interpolationOnnxModel).toBe('rife_v4.25.onnx')
 
     form.superResolutionBackend = 'paddle'
     form.superResolutionAlgorithm = 'edvr'

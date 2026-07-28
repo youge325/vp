@@ -7,194 +7,26 @@ import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
 import { createMediaItem } from '@/services/media/factory'
 import { buildTaskRequest } from '@/services/task/request-builder'
-import type { EnvironmentCheckResult } from '@/types/protocol'
-import { createEnvironmentPayload, createEnvironmentResult } from '../../fixtures/environment'
+import type { WorkflowConfig } from '@/types/protocol'
+import {
+  createEnhanceEnvironment,
+  createEnvironmentPayload,
+} from '../../fixtures/environment'
 
-function makeEnv(): EnvironmentCheckResult {
-  return createEnvironmentResult({
-    ffmpeg: {
-      available: true,
-      hwaccels: [],
-      encoderProfiles: [],
-      decoderProfiles: [],
-    },
-    gpu: { adapters: [] },
-    tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda', 'tensorrt'], onnx: ['cuda', 'tensorrt'] },
-    interpolationAlgorithms: [
-      {
-        name: 'rife',
-        family: 'rife',
-        tensorBackends: ['pytorch', 'onnx'],
-        models: ['4.25'],
-        inputFrameMode: 'none',
-        onnxModels: ['rife_v4.25.onnx'],
-        modelDetails: [
-          {
-            name: '4.25',
-            label: 'RIFE 4.25',
-            metrics: {
-              parameterCount: 5670892,
-              parameterBytes: 22683568,
-              gflopsPerMegapixel: 18.5,
-              activationBytesPerMegapixel: 694800000,
-              runtimeOverheadBytes: 38000000,
-              inputModulo: 64,
-              analysisStatus: 'ok',
-              analysisNotes: [],
-            },
-          },
-        ],
-        onnxModelDetails: [
-          {
-            name: 'rife_v4.25.onnx',
-            label: 'rife_v4.25.onnx',
-            metrics: {
-              parameterCount: 5670892,
-              parameterBytes: 22683568,
-              gflopsPerMegapixel: 18.5,
-              activationBytesPerMegapixel: 694800000,
-              runtimeOverheadBytes: 38000000,
-              inputModulo: 64,
-              analysisStatus: 'ok',
-              analysisNotes: [],
-            },
-          },
-        ],
-      },
-      {
-        name: 'rife-lite',
-        family: 'rife',
-        tensorBackends: ['pytorch'],
-        models: ['lite'],
-        onnxModels: [],
-        inputFrameMode: 'none',
-      },
-    ],
-    superResolutionAlgorithms: [
-      { name: 'placeholder', tensorBackends: ['onnx'], models: [], onnxModels: ['sr_x2.onnx'] },
-      {
-        name: 'ppmsvsr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        defaultNumFrames: 10,
-        inputFrameMode: 'editable_chunk',
-        modelDetails: [
-          {
-            name: 'x4',
-            label: 'PP-MSVSR',
-            metrics: {
-              parameterCount: 1453607,
-              parameterBytes: 5814428,
-              gflopsPerMegapixel: 120,
-              activationBytesPerMegapixel: 1981031424,
-              runtimeOverheadBytes: 2391117604,
-              runtimeFrameCount: null,
-              inputModulo: 4,
-              analysisStatus: 'ok',
-              analysisNotes: [],
-              engineMetrics: {
-                tensorrt: {
-                  gflopsPerMegapixel: 120,
-                  activationBytesPerMegapixel: 3688504346,
-                  runtimeOverheadBytes: 0,
-                  runtimeFrameCount: null,
-                  analysisStatus: 'ok',
-                  analysisNotes: ['TensorRT calibrated'],
-                },
-              },
-            },
-          },
-        ],
-      },
-      {
-        name: 'edvr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        defaultNumFrames: 5,
-        inputFrameMode: 'fixed_window',
-        modelDetails: [
-          {
-            name: 'x4',
-            label: 'EDVR',
-            metrics: {
-              parameterCount: 20633827,
-              parameterBytes: 82535308,
-              gflopsPerMegapixel: 240,
-              activationBytesPerMegapixel: 1000,
-              runtimeOverheadBytes: 100,
-              runtimeFrameCount: 5,
-              inputModulo: 4,
-              analysisStatus: 'ok',
-              analysisNotes: [],
-            },
-          },
-        ],
-      },
-      {
-        name: 'custom-vsr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        inputFrameMode: 'editable_chunk',
-        defaultNumFrames: 8,
-      },
-      {
-        name: 'ppmsvsr-large',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        defaultNumFrames: 10,
-        inputFrameMode: 'editable_chunk',
-      },
-      {
-        name: 'basicvsr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        defaultNumFrames: 10,
-        inputFrameMode: 'editable_chunk',
-      },
-      {
-        name: 'iconvsr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        defaultNumFrames: 10,
-        inputFrameMode: 'editable_chunk',
-      },
-      {
-        name: 'basicvsr-plus-plus',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        defaultNumFrames: 10,
-        inputFrameMode: 'editable_chunk',
-      },
-    ],
-    runtimeMode: 'bundled',
-  })
+function seedSelectedPair(configure: (workflow: WorkflowConfig) => void) {
+  const mediaStore = useMediaStore()
+  const presetStore = usePresetStore()
+  presetStore.patchWorkflow(configure)
+  const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
+  const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
+  mediaStore.appendItems([first, second])
+  return { first, second, presetStore }
 }
 
 describe('useEnhanceForm PaddleGAN super-resolution', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    useEnvStore().setCheckPayload(createEnvironmentPayload(makeEnv()))
+    useEnvStore().setCheckPayload(createEnvironmentPayload(createEnhanceEnvironment()))
   })
 
   it('keeps super-resolution backend independent and applies PaddleGAN defaults', () => {
@@ -254,7 +86,7 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     expect(form.superResolutionNumFrames).toBe(10)
   })
 
-  it('uses PaddleGAN capability metadata for algorithms outside the old hard-coded name list', () => {
+  it('uses PaddleGAN capability metadata for every advertised algorithm', () => {
     const presetStore = usePresetStore()
     presetStore.patchWorkflow((workflow) => {
       workflow.superResolution.enabled = true
@@ -326,18 +158,13 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
   })
 
   it('applies recurrent input frame edits to every selected media item before task start', () => {
-    const mediaStore = useMediaStore()
-    const presetStore = usePresetStore()
-    presetStore.patchWorkflow((workflow) => {
+    const { first, second } = seedSelectedPair((workflow) => {
       workflow.superResolution.enabled = true
       workflow.superResolution.tensorBackend = 'paddle'
       workflow.superResolution.algorithm = 'ppmsvsr'
       workflow.superResolution.scaleFactor = 4
       workflow.superResolution.numFrames = 10
     })
-    const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
-    const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
-    mediaStore.appendItems([first, second])
 
     const form = useEnhanceForm()
     form.superResolutionNumFrames = 5
@@ -348,9 +175,7 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
   })
 
   it('persists all enhance page edits while applying them to every selected media item', () => {
-    const mediaStore = useMediaStore()
-    const presetStore = usePresetStore()
-    presetStore.patchWorkflow((workflow) => {
+    const { first, second, presetStore } = seedSelectedPair((workflow) => {
       workflow.interpolation.enabled = false
       workflow.interpolation.tensorBackend = 'pytorch'
       workflow.interpolation.engine = 'cuda'
@@ -371,9 +196,6 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       workflow.superResolution.numFrames = 10
       workflow.processOrder = 'super_resolution_then_interpolation'
     })
-    const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
-    const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
-    mediaStore.appendItems([first, second])
 
     const form = useEnhanceForm()
     form.interpolationEnabled = true
@@ -444,14 +266,9 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
   })
 
   it('persists process order while applying it to every selected media item', () => {
-    const mediaStore = useMediaStore()
-    const presetStore = usePresetStore()
-    presetStore.patchWorkflow((workflow) => {
+    const { first, second, presetStore } = seedSelectedPair((workflow) => {
       workflow.processOrder = 'super_resolution_then_interpolation'
     })
-    const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
-    const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
-    mediaStore.appendItems([first, second])
 
     const form = useEnhanceForm()
     form.processOrder = 'frame_interpolation_then_super_resolution'
@@ -462,18 +279,13 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
   })
 
   it('applies EDVR fixed window defaults to every selected media item', () => {
-    const mediaStore = useMediaStore()
-    const presetStore = usePresetStore()
-    presetStore.patchWorkflow((workflow) => {
+    const { first, second, presetStore } = seedSelectedPair((workflow) => {
       workflow.superResolution.enabled = true
       workflow.superResolution.tensorBackend = 'paddle'
       workflow.superResolution.algorithm = 'ppmsvsr'
       workflow.superResolution.scaleFactor = 4
       workflow.superResolution.numFrames = 10
     })
-    const first = createMediaItem('/video/first.mp4', presetStore.draftPreset)
-    const second = createMediaItem('/video/second.mp4', presetStore.draftPreset)
-    mediaStore.appendItems([first, second])
 
     const form = useEnhanceForm()
     form.superResolutionAlgorithm = 'edvr'

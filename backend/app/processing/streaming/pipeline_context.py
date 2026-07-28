@@ -6,15 +6,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.planning import ResumeState, SegmentManifest, StagePlan
+from app.ports.media import EncodeProgressCallback, MediaRuntimePort, VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_worker_progress import StageProgressCallback
-from app.utils.ffmpeg import FFmpegWrapper
-from app.utils.ffmpeg._progress import EncodeProgressCallback
 
 
 @dataclass(frozen=True, slots=True)
 class StreamingPipelinePreflight:
-    video_info: dict[str, Any]
+    video_info: VideoMetadata
     stage_plan: StagePlan
     signature: str
     config_snapshot: dict[str, Any]
@@ -27,7 +26,7 @@ class StreamingPipelinePreflight:
 
 @dataclass(frozen=True, slots=True)
 class StreamingPipelineContext:
-    ffmpeg: FFmpegWrapper
+    ffmpeg: MediaRuntimePort
     input_path: str
     output_path: str
     decode_config: dict[str, Any]
@@ -35,7 +34,6 @@ class StreamingPipelineContext:
     preflight: StreamingPipelinePreflight
     manifest: SegmentManifest
     resume_state: ResumeState
-    tensor_backend_name: str
     progress_callbacks: list[StageProgressCallback]
     output_fps: float | None
     encode_progress_callback: EncodeProgressCallback | None

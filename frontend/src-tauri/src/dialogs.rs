@@ -45,9 +45,6 @@ pub(crate) async fn open_output_location(path: String) -> Result<(), ShellError>
     } else {
         path_buf.parent().map(PathBuf::from).unwrap_or(path_buf)
     };
-    // Phase 5e — route ``open::that_detached`` failures into the
-    // dedicated [`ShellError::OpenLocation`] variant so the original
-    // ``io::Error`` survives in the source chain instead of being
-    // re-wrapped inside a synthetic ``io::Error::new(Other, ...)``.
+    // Preserve the original I/O source for the IPC error adapter.
     open::that_detached(target).map_err(ShellError::OpenLocation)
 }

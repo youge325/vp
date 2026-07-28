@@ -16,11 +16,8 @@ from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
-from app.algorithms.paddle.paddlegan_vsr.weights import (
-    PADDLEGAN_VSR_SPECS,
-    ensure_paddlegan_vsr_weights,
-    get_spec,
-)
+from app.algorithms.paddle.paddlegan_vsr.weights import ensure_paddlegan_vsr_weights, get_spec
+from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
 from app.protocol.process_markers import TENSORRT_LOG_PREFIX as _TENSORRT_LOG_PREFIX
 from app.utils.logger import get_logger
 

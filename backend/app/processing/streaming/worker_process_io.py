@@ -10,16 +10,16 @@ from typing import Any, BinaryIO, Iterator
 
 from app.planning import StagePlan
 from app.planning.manifest import ResumeState
+from app.ports.media import RawVideoPort
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import EncodeQueue, EncodedFrame, SegmentBoundary, _queue_put
 from app.processing.streaming.stage_worker_io import read_rgb_frame, write_rgb_frame
 from app.processing.streaming.worker_plans import StageWorkerPlan, boundary_schedule_for_stage_plan
-from app.utils.ffmpeg import FFmpegWrapper
 
 
 @dataclass(frozen=True, slots=True)
 class DecodedFrameWriterConfig:
-    ffmpeg: FFmpegWrapper
+    ffmpeg: RawVideoPort
     input_path: str
     decode_config: dict[str, Any]
     width: int
