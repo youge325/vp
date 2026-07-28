@@ -1977,6 +1977,18 @@ FORBIDDEN_PATTERN_RULES = (
 
 REQUIRED_PATTERN_RULES = (
     _require(
+        "windows-e2e-runtime-python-export",
+        "scripts/setup-ci-runtime-env.ps1",
+        r'Add-GitHubEnv\s+-Name\s+["\']VP_RELEASE_PYTHON_EXE["\']\s+-Value\s+\$pythonSource\.Exe[\s\S]{0,240}Add-GitHubEnv\s+-Name\s+["\']VP_PYTHON_EXECUTABLE["\']\s+-Value\s+\$pythonSource\.Exe',
+        "Windows E2E setup must export the resolved Python as both release source and runtime executable",
+    ),
+    _require(
+        "windows-e2e-runtime-setup-trigger",
+        ".github/workflows/e2e.yml",
+        r"(?s)push:.*?paths:.*?scripts/setup-ci-runtime-env\.ps1.*?pull_request:.*?paths:.*?scripts/setup-ci-runtime-env\.ps1",
+        "Windows E2E workflow must run when its shared runtime setup script changes",
+    ),
+    _require(
         "e2e-coverage-working-directory",
         "frontend/tests/e2e/config/coverage.ts",
         r"E2E_COVERAGE_DIRECTORY\s*=\s*[\"']\.nyc_output[\"'][\s\S]*resolve\(cwd,\s*E2E_COVERAGE_DIRECTORY\)",

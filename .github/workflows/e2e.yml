@@ -10,12 +10,14 @@ on:
     paths:
       - 'backend/app/**'
       - 'frontend/**'
+      - 'scripts/setup-ci-runtime-env.ps1'
       - '.github/workflows/e2e.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
       - 'backend/app/**'
       - 'frontend/**'
+      - 'scripts/setup-ci-runtime-env.ps1'
       - '.github/workflows/e2e.yml'
 
 permissions:

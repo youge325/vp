@@ -197,6 +197,7 @@ $ffmpegSource = Resolve-FfmpegSource
 
 Add-GitHubEnv -Name "VP_RELEASE_PYTHON_ROOT" -Value $pythonSource.Root
 Add-GitHubEnv -Name "VP_RELEASE_PYTHON_EXE" -Value $pythonSource.Exe
+Add-GitHubEnv -Name "VP_PYTHON_EXECUTABLE" -Value $pythonSource.Exe
 Add-GitHubEnv -Name "VP_RELEASE_MODEL_DIR" -Value $modelDir
 Add-GitHubEnv -Name "VP_RIFE_MODEL_DIR" -Value $modelDir
 Add-GitHubEnv -Name "VP_RELEASE_FFMPEG_DIR" -Value $ffmpegSource.Dir

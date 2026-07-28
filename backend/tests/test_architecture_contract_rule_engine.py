@@ -656,6 +656,21 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
     ("rule_id", "source"),
     [
         (
+            "windows-e2e-runtime-python-export",
+            'Add-GitHubEnv -Name "VP_RELEASE_PYTHON_EXE" -Value $pythonSource.Exe\n'
+            'Add-GitHubEnv -Name "VP_PYTHON_EXECUTABLE" -Value $pythonSource.Exe\n',
+        ),
+        (
+            "windows-e2e-runtime-setup-trigger",
+            "on:\n"
+            "  push:\n"
+            "    paths:\n"
+            "      - 'scripts/setup-ci-runtime-env.ps1'\n"
+            "  pull_request:\n"
+            "    paths:\n"
+            "      - 'scripts/setup-ci-runtime-env.ps1'\n",
+        ),
+        (
             "shared-ffmpeg-encode-progress-adapter",
             "EncodeProgressCallback = Callable[[int], None]\n"
             "def make_encode_progress_callback(callback, *, frame_offset: int = 0):\n    pass\n",
