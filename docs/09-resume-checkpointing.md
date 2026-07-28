@@ -1,214 +1,175 @@
 # 断点续传机制
 
-## 设计目标
+## 职责拆分
 
-VP Workbench 的断点续传遵循三个核心设计原则：
+恢复系统由四个对象协作：
 
-1. **不依赖数据库**：续传状态存储在文件系统本身，无需外部依赖
-2. **文件名自描述**：片段文件名编码帧范围信息，人类可读且机器可解析
-3. **连续前缀保证一致性**：只承认连续前缀内的片段为有效，非连续片段自动清理
+| 对象 | 文件 | 职责 |
+|------|------|------|
+| `ResumePolicy` | [`resume_policy.py`](../backend/app/planning/resume_policy.py) | 纯函数决定 conflict/fresh/resume |
+| `SegmentWorkspace` | [`segment_workspace.py`](../backend/app/planning/segment_workspace.py) | sidecar 路径、chunk rename、清理和隔离 |
+| `ManifestRepository` | [`manifest_store.py`](../backend/app/planning/manifest_store.py) | v3 JSON 校验与原子读写 |
+| `SegmentManifest` | [`manifest.py`](../backend/app/planning/manifest.py) | 协调策略、workspace、repository 和连续前缀 |
 
-## SegmentManifest 目录结构
+计划层不依赖 FFmpeg 具体实现；执行和收尾通过 consumer-owned media ports 工作。
 
-当任务启用分段输出时，在输出目录旁创建 `.vp_segments/` 子目录：
+## Sidecar 布局
 
+最终输出 `D:/renders/output.mp4` 对应同目录 sidecar：
+
+```text
+D:/renders/
+├── output.mp4
+└── output.mp4.vp_segments/
+    ├── manifest.json
+    ├── chunk-0001-out00000000-00000499-src00000500.mp4
+    ├── chunk-0002-out00000500-00000999-src00001000.mp4
+    └── stages/
 ```
-output.mp4
-.vp_segments/
-├── manifest.json              # 续传元数据
-├── chunk-0001-out0-499-src500.mp4    # 第 1 段：输出帧 0-499，下一源帧 500
-├── chunk-0002-out500-999-src1000.mp4 # 第 2 段：输出帧 500-999，下一源帧 1000
-└── chunk-0003-out1000-1499-src1500.mp4 # 第 3 段：输出帧 1000-1499，下一源帧 1500
+
+sidecar 名是 `<完整输出文件名>.vp_segments`，不是输出目录共用的 `.vp_segments/`。这样不同输出
+不会共享恢复状态。
+
+### Chunk 文件名
+
+```text
+chunk-{index:04d}-out{start:08d}-{end:08d}-src{next_source:08d}.{ext}
 ```
 
-### 片段文件名编码规范
-
-```
-chunk-{序号}-out{起始输出帧}-{结束输出帧}-src{下一源帧}.{扩展名}
-```
-
-| 字段 | 说明 |
+| 字段 | 含义 |
 |------|------|
-| `序号` | 片段序号，4 位零填充 |
-| `起始输出帧` | 该片段第一帧在整体输出中的位置 |
-| `结束输出帧` | 该片段最后一帧在整体输出中的位置 |
-| `下一源帧` | 处理完该片段后，源视频应继续的帧位置 |
-| `扩展名` | 与最终输出相同的容器格式 |
+| `index` | 从 1 开始的片段序号 |
+| `start/end` | 该片段覆盖的闭区间输出帧 |
+| `next_source` | 下一个应读取的源帧 |
+| `ext` | 输出容器扩展名 |
 
-### manifest.json 内容
+临时文件使用 `chunk-tmp[-NNNN].<ext>`。编码器完整关闭后，
+`SegmentWorkspace.finalize_chunk()` 才通过 `os.replace()` 原子改名为最终 chunk。
+
+## v3 manifest
+
+`manifest.json` 只保存运行身份，不复制可从 chunk 文件名恢复的进度：
 
 ```json
 {
-  "signature": "sha256_hash_of_config",
-  "completed_segments": [
-    {"index": 1, "frame_count": 500, "start_output_frame": 0, "end_output_frame": 499},
-    {"index": 2, "frame_count": 500, "start_output_frame": 500, "end_output_frame": 999}
-  ],
-  "completed_output_frames": 1000,
-  "start_source_frame": 1000
+  "version": 3,
+  "signature": "sha256...",
+  "created_at": "2026-07-28T08:00:00Z",
+  "input_path": "D:/input.mp4",
+  "output_path": "D:/renders/output.mp4",
+  "config_snapshot": {
+    "input_path": "D:/input.mp4"
+  }
 }
 ```
 
-## 配置签名
+必填字段由 [`contracts/persistence.schema.json`](../contracts/persistence.schema.json) 定义。
+repository 使用由该 schema 生成的 `SegmentManifest` Pydantic contract 严格解码未知/缺失字段；
+`ManifestRepository.write()` 在同目录写 `manifest.json.tmp`、flush/fsync 后再 `os.replace()`。
 
-[`backend/app/planning/run_identity.py`](../backend/app/planning/run_identity.py) 的 `build_run_identity()`
-先构造将写入 sidecar 的配置快照，再以该快照和以下输入文件元数据计算 SHA-256：
+任何非 v3、破损或缺字段 manifest 都不可恢复。执行准备时整个 sidecar 会改名为
+`output.mp4.vp_segments.incompatible[-N]`，随后按当前 schema 重建；应用不迁移、解析或回退读取
+v2 数据。
 
-- 输入文件绝对路径
-- 输入文件大小和修改时间
-- 输出文件绝对路径
-- 解码配置（decode_config）
-- 编码配置（encode_config）
-- 工作流配置（workflow_config）
-- 输出配置（output_config）
-- 处理步骤列表（processing_steps）
-- 视频元信息（宽度、高度、源 fps、源帧数）
+## 运行身份与签名
 
-签名用途：
-- **续传时判断配置是否变更**：若签名与 sidecar 中的签名不匹配，说明用户修改了配置，不能续传
-- **防止误续传**：避免不同视频或不同配置使用相同输出路径时错误续传
+[`backend/app/planning/run_identity.py`](../backend/app/planning/run_identity.py) 先生成一份
+`config_snapshot`，再用同一内容及输入元数据计算 SHA-256。身份覆盖：
 
-## 续传决策矩阵
+- 输入绝对路径、大小和修改时间；
+- 最终输出绝对路径；
+- decode/workflow/encode/output 配置；
+- 冻结的 processing step 序列；
+- 宽、高、源 FPS、源帧数等探测结果。
 
-[`backend/app/planning/manifest.py`](../backend/app/planning/manifest.py) 的 `prepare()` 方法根据三个因素做决策：
+manifest 写入和签名计算共享同一 snapshot，避免两套字段漂移。签名不匹配的 sidecar 不会续传。
 
-`SegmentManifest` 不直接解析或写入 JSON；[`backend/app/planning/manifest_store.py`](../backend/app/planning/manifest_store.py)
-集中处理 manifest 版本校验、UTC 创建时间和 `.tmp` 文件原子替换。续传进度仍由 chunk 文件名恢复，
-JSON 中不维护可漂移的片段列表。
+## 连续前缀
+
+恢复进度只来自 chunk 文件名：
+
+1. 匹配严格文件名格式并按 index 排序。
+2. 第一个 chunk 必须为 index 1、输出起点 0。
+3. 后续 index 必须递增 1，`start` 必须等于前一个 `end + 1`。
+4. 首个缺口或非法范围终止前缀。
+5. 前缀后的 chunk 视为 stranded，不计入恢复。
+
+例如：
+
+```text
+chunk-0001-out00000000-00000499-src00000250.mp4  # 有效
+chunk-0002-out00000500-00000999-src00000500.mp4  # 有效
+chunk-0004-out00001500-00001999-src00001000.mp4  # 无效：缺少 0003
+```
+
+`ResumeState` 由最后一个有效 chunk 派生 `completed_output_frames` 和
+`start_source_frame`，不从 JSON 中读取平行计数。
+
+## 恢复策略
+
+`ResumePolicy.decide_output_action()` 的输入只有：
+
+`final_exists / sidecar_exists / signature_match / has_progress / mode`。
+
+| Mode/状态 | 决策 |
+|-----------|------|
+| `auto` 且最终文件存在 | `conflict`，交给 UI |
+| `force-fresh` | `fresh` |
+| sidecar 不存在或签名不匹配 | `fresh` |
+| 有合法连续进度 | `resume` |
+| 无进度 | `fresh` |
+
+`force-fresh` 会删除当前 sidecar，并在最终文件存在时删除最终文件。`force-resume` 忽略最终文件冲突，
+但仍要求当前 schema、签名和连续前缀有效；否则安全地从 fresh 开始。
+
+### 准备流程
 
 ```mermaid
-graph TD
-    A[启动任务] --> B{resume_mode}
-
-    B -->|force-fresh| C[强制重新开始]
-    B -->|force-resume| D[强制续传]
-    B -->|auto| E{输出文件是否存在?}
-
-    E -->|否| C
-    E -->|是| F{.vp_segments/ 是否存在?}
-
-    F -->|否| G[ResumeConflictError<br/>final_exists_only]
-    F -->|是| H{manifest.json 是否存在?}
-
-    H -->|否| G
-    H -->|是| I{签名匹配?}
-
-    I -->|否| G
-    I -->|是| J{有未完成片段?}
-
-    J -->|否| K[ResumeConflictError<br/>final_exists_with_resume]
-    J -->|是| L[返回续传状态]
+flowchart TD
+    A["SegmentManifest.prepare"] --> B{"sidecar schema 合法?"}
+    B -->|"否，目录存在"| C["整体隔离 sidecar"]
+    B -->|"是"| D["清理临时文件"]
+    C --> E["空恢复状态"]
+    D --> F{"签名匹配?"}
+    F -->|"是"| G["扫描连续 chunk 前缀"]
+    F -->|"否"| E
+    G --> H["ResumePolicy"]
+    E --> H
+    H -->|"conflict"| I["返回冲突，不覆盖输出"]
+    H -->|"resume"| J["返回 ResumeState"]
+    H -->|"fresh"| K["按模式清理并写 v3 manifest"]
 ```
 
-### 决策结果类型
+## 前端预检与用户选择
 
-| 结果 | 说明 | 用户交互 |
-|------|------|---------|
-| `fresh` | 全新开始，无输出文件 | 直接启动 |
-| `resume` | 有匹配的 sidecar，可续传 | 提示续传进度，用户确认后启动 |
-| `conflict_final_exists` | 输出存在但无 sidecar / 签名不匹配 | 展示冲突对话框，用户选择覆盖或跳过 |
-| `conflict_final_exists_with_resume` | 输出存在且 sidecar 匹配，但已全部完成 | 提示任务已完成 |
+`check_resume_state` 运行 `python -m app inspect-output`，返回 schema 类型化的
+`ResumeInspectionResult`：最终文件/sidecar 是否存在、签名是否匹配、已完成 chunk/帧数和总帧数。
+inspection 使用纯 `_read_resume_state`，不会删除临时文件、清理 stranded chunk、隔离目录或改写
+manifest；目录内容在预检前后逐字节不变。只有执行期 `prepare()` 可以做 workspace mutation。
+前端立即投影为最小领域结构：
 
-## 片段扫描
+- `final_exists_only`：没有可用连续进度；
+- `final_exists_with_resume`：签名匹配且有连续进度。
 
-### 连续前缀算法
+`ResumeConflictDialog` 的动作：
 
-[`backend/app/planning/manifest.py`](../backend/app/planning/manifest.py) 的 `scan_completed_chunks()`：
+| 动作 | 行为 |
+|------|------|
+| `resume` | 显式以 `force-resume` 重启当前项 |
+| `fresh` | 显式以 `force-fresh` 重启当前项 |
+| `skip` | 跳过当前项并推进队列 |
+| `cancel` | 清空队列并终止批次 |
 
-1. 按文件名排序列出 `.vp_segments/` 中的所有 `chunk-*` 文件
-2. 验证文件名格式和帧范围连续性
-3. 找到最长的连续前缀（如 chunk-0001, chunk-0002 连续，但 chunk-0004 不连续，则前缀为 2）
-4. 超出连续前缀的片段视为无效，标记为待清理
+确认后的启动不使用默认 `auto`，因此不会重新进入同一个冲突。预检后文件仍可能被外部修改；
+执行期的 `ResumeConflictError` 仍以 `resume_conflict` 原样穿过 Rust，并由同一对话框处理。
 
-```python
-# 示例
-chunk-0001-out0-499-src500.mp4      # 有效，连续前缀内
-chunk-0002-out500-999-src1000.mp4   # 有效，连续前缀内
-chunk-0004-out1500-1999-src2000.mp4 # 无效，chunk-0003 缺失
-```
+## 最终化
 
-### 非连续片段清理
+所有片段完成后，finalization port：
 
-启动新任务前，`prepare()` 自动清理非连续片段，防止碎片累积。
+1. 使用 FFmpeg concat 拼接 chunk；
+2. 按 `keepAudio` 提取并合并原音频；
+3. 写入调用方指定的最终输出；无音频合并路径用 `os.replace()` 提交 concat 临时文件；
+4. 仅在全部成功后删除 `<output>.vp_segments`。
 
-## 片段生命周期
-
-```mermaid
-sequenceDiagram
-    participant Encoder as encoder_worker
-    participant Tmp as 临时文件
-    participant FS as 文件系统
-    participant Manifest as SegmentManifest
-
-    Encoder->>Tmp: 写入 chunk-tmp 片段
-    Encoder->>FS: os.replace(tmp, final)
-    FS-->>Encoder: 原子重命名完成
-    Encoder->>Manifest: 记录片段元数据
-    Manifest->>FS: 更新 manifest.json
-
-    Note over Encoder,Manifest: 所有片段完成后
-
-    Encoder->>FS: ffmpeg concat 拼接
-    FS-->>Encoder: 最终输出文件
-    Encoder->>FS: 合并音频（可选）
-    Encoder->>Manifest: cleanup()
-    Manifest->>FS: 删除 .vp_segments/ 目录
-```
-
-### 原子重命名
-
-`finalize_chunk()` 使用 `os.replace()`（POSIX）或 `MoveFileEx`（Windows）实现原子重命名：
-
-1. 先写入临时文件（`chunk-NNNN-tmp.{ext}`）
-2. 片段完整写入后，原子重命名为最终文件名
-3. 确保即使进程在写入过程中崩溃，也不会留下不完整的片段文件
-
-### 最终拼接
-
-所有片段完成后，`_finalize_segmented_output()`：
-
-1. 生成 concat 列表文件（FFmpeg concat demuxer 格式）
-2. 调用 FFmpeg 拼接视频片段
-3. 若 `keepAudio=true`，从原始视频提取音频并合并
-4. 清理 `.vp_segments/` 目录和 sidecar 文件
-
-## 前端续传 UX
-
-### 预检查流程
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Frontend as RenderModuleView
-    participant Rust as check_resume_state
-    participant Python as inspect-output
-
-    User->>Frontend: 点击渲染
-    Frontend->>Rust: check_resume_state(request)
-    Rust->>Python: python -m app inspect-output ...
-    Python-->>Rust: NDJSON resume_inspection
-
-    alt 无冲突
-        Rust-->>Frontend: 直接启动
-    else 有冲突
-        Rust-->>Frontend: 冲突信息
-        Frontend->>User: ResumeConflictDialog
-        User->>Frontend: 选择覆盖/跳过/续传
-        Frontend-->>Rust: start_task(request, resumeMode)
-    end
-```
-
-### 冲突分类
-
-[`frontend/src/services/task/resume-classifier.ts`](../frontend/src/services/task/resume-classifier.ts)：
-
-| 分类 | 说明 | 用户选项 |
-|------|------|---------|
-| `final_exists_only` | 输出存在但无有效 sidecar | 覆盖 / 跳过 |
-| `final_exists_with_resume` | 输出存在且 sidecar 匹配 | 覆盖 / 跳过 / 续传 |
-
-[`frontend/src/components/ResumeConflictDialog.vue`](../frontend/src/components/ResumeConflictDialog.vue) 展示冲突信息和用户决策选项。
-
-### 运行时冲突处理
-
-即使预检查通过，任务执行过程中仍可能遇到续传冲突（如文件被外部修改）。此时 Python 抛出 `ResumeConflictError`，通过 NDJSON error 事件传播到前端，前端展示冲突对话框让用户决策。
+任何收尾失败都会保留 sidecar 和完整 chunk，下一次任务可继续恢复。

@@ -1,68 +1,56 @@
 # 错误处理体系
 
-## 设计哲学
+## 原则
 
-VP Workbench 采用**结构化错误**替代字符串错误，核心原则：
+VP Workbench 的错误边界遵循四条规则：
 
-1. **具名 variant 优于 catch-all**：每个失败场景对应一个具体的错误变体，便于前端按码路由
-2. **三层同名枚举保证可路由性**：Python `TaskErrorCode`、Rust `TaskErrorCode`、ts-rs 生成的 TypeScript `TaskErrorCode` union 使用相同的 snake_case 字符串；`TASK_ERROR_CODES` 只保留前端实际使用的运行时别名
-3. **保留 error source chain**：Rust 的 `ShellError` 保留原始 `io::Error` / `serde_json::Error`，不丢失上下文
+1. 生产者只生成自己负责的错误码子集。
+2. Python 的 `code / message / details` 穿过 Rust 时保持原样。
+3. 领域错误只在命令 adapter 映射为 IPC `ShellError`。
+4. JSON、schema、持久化、进程控制和 OS IO 失败按发生上下文分类，不用字符串 catch-all。
 
-## Rust 层：ShellError
+## 中立错误契约
 
-[`frontend/src-tauri/src/error.rs`](../frontend/src-tauri/src/error.rs) 定义 10 个具名 variant（无 catch-all）：
+[`contracts/backend-error-codes.schema.json`](../contracts/backend-error-codes.schema.json) 定义 Python
+可发出的 10 个码：
 
-```rust
-pub enum ShellError {
-    RuntimeResolution(String),      // 运行时资源解析失败
-    Spawn(std::io::Error),          // 子进程 spawn 失败
-    BackendExit(String),            // Python 崩溃 / 非正常退出
-    NdjsonDecode(serde_json::Error), // stdout 不是有效 NDJSON
-    SchemaValidation(String),       // schema 校验失败
-    Persistence(String),            // 本地持久化失败
-    Io(std::io::Error),             // 通用 IO 失败
-    InvalidInput(String),           // 输入参数无效
-    NoActiveTask,                   // 没有运行中的任务
-    OpenLocation(std::io::Error),   // 打开文件/目录失败
-}
-```
+| Code | 典型来源 |
+|------|----------|
+| `missing_ffmpeg` | FFmpeg/FFprobe 不可用 |
+| `missing_model` | 模型权重不存在 |
+| `missing_tensor_backend` | 请求的推理后端不可用 |
+| `missing_python_dependency` | Python 包缺失 |
+| `cancelled` | CLI 自身收到取消 |
+| `process_failed` | 后端处理失败 |
+| `invalid_input` | 输入路径或参数无效 |
+| `invalid_config` | 配置校验/工作流组合无效 |
+| `resume_conflict` | 输出和恢复状态需要用户决策 |
+| `io_error` | 后端文件系统或媒体 IO |
 
-Phase C.2.3 移除了 `Other(String)` / `From<String>` / `From<&str>` 变体，任何新失败必须选择具名 variant。
+[`contracts/shell-error-codes.schema.json`](../contracts/shell-error-codes.schema.json) 定义 Rust 壳可生成
+的 10 个码：
 
-### 自定义 Serialize
+| Code | 典型来源 |
+|------|----------|
+| `process_failed` | 运行时解析或进程控制失败 |
+| `invalid_input` | 命令参数或 task state 不允许该操作 |
+| `io_error` | 壳文件系统/打开位置失败 |
+| `spawn_failed` | 子进程创建失败 |
+| `runtime_panic` | 子进程异常退出且无 backend error |
+| `schema_mismatch` | NDJSON/one-shot/持久化 schema 漂移 |
+| `persistence_failed` | 原子读写或隔离失败 |
+| `backend_no_json` | one-shot 成功退出但无合法 envelope |
+| `controller_unavailable` | 控制 channel/reply 关闭或超时 |
+| `backend_probe_failed` | one-shot 非零退出且无 backend error |
 
-```rust
-impl Serialize for ShellError {
-    fn serialize<S: Serializer>(&self, serializer: S
-    ) -> Result<S::Ok, S::Error> {
-        Wire {
-            code: self.code(),
-            message: &self.to_string(),
-        }.serialize(serializer)
-    }
-}
-```
+三个码在两组中重叠，因此
+[`contracts/error-codes.schema.json`](../contracts/error-codes.schema.json) 的完整前端联合为 17 个
+值。生成器断言完整集合严格等于两个子集的并集。
 
-序列化输出结构：`{ "code": "spawn_failed", "message": "backend spawn failed: ..." }`，前端可直接按 `code` 路由。
+## Python：ProcessError
 
-### code() 映射
-
-| ShellError | TaskErrorCode |
-|-----------|---------------|
-| `RuntimeResolution` | `process_failed` |
-| `Spawn` | `spawn_failed` |
-| `BackendExit` | `runtime_panic` |
-| `NdjsonDecode` | `schema_mismatch` |
-| `SchemaValidation` | `schema_mismatch` |
-| `Persistence` | `persistence_failed` |
-| `Io` | `io_error` |
-| `InvalidInput` | `invalid_input` |
-| `NoActiveTask` | `invalid_input` |
-| `OpenLocation` | `io_error` |
-
-## Python 层：ProcessError
-
-[`backend/app/errors/__init__.py`](../backend/app/errors/__init__.py)：
+[`backend/app/errors/__init__.py`](../backend/app/errors/__init__.py) 的 `ProcessError` 是 Python
+跨进程失败的标准形式：
 
 ```python
 class ProcessError(Exception):
@@ -70,173 +58,149 @@ class ProcessError(Exception):
         self,
         code: TaskErrorCode,
         message: str,
-        details: dict | None = None,
-    ): ...
-
-    @classmethod
-    def from_exception(cls, exc: Exception) -> ProcessError:
-        # 按异常类型推断错误码
+        details: dict[str, Any] | None = None,
+    ) -> None: ...
 ```
 
-- `from_exception` 工厂方法根据异常类型自动推断错误码
-- `ImportError` → `missing_python_dependency`
-- `FileNotFoundError` → `io_error`
-- `ResumeConflictError` → `resume_conflict`
+`TaskErrorCode` 直接来自生成边界；`ProcessError.from_exception()` 按异常类型归类。
+`ResumeConflictError` 预置 `resume_conflict` 及结构化 details。
 
-### 双层兜底
+[`backend/app/__main__.py`](../backend/app/__main__.py) 有两个防御边界：
 
-[`backend/app/__main__.py`](../backend/app/__main__.py)：
+- 导入期：在完整 app 包尚不可用时，用唯一允许的 bootstrap 手写 error envelope 报告依赖错误；
+- 运行期：把未处理异常转为 `ProcessError`，通过模块级 `ndjson.error()` 发出。
 
-```python
-try:
-    from app.cli import main  # 导入期兜底
-except Exception as exc:
-    # 推断错误码，输出 NDJSON error
-    sys.exit(1)
+正常 CLI 代码不能自行拼装 `{"type": "error"}`；架构门禁要求手写 error envelope 只剩 bootstrap
+这一处。
 
-try:
-    main()  # 运行期兜底
-except Exception as exc:
-    # 包装为 ProcessError，输出 NDJSON error
-    sys.exit(1)
-```
+## Rust：领域错误与 ShellError
 
-即使 Python 环境不完整（如缺失依赖），Rust 层仍能收到结构化错误信息。
+任务状态层返回 `TaskStateError`：
 
-## TypeScript 层：InvokeError
+`AlreadyRunning`、`StartLeaseExpired`、`NoActiveTask`、`StillStarting`、
+`AlreadyCancelling`。
 
-[`frontend/src/lib/ipc/client.ts`](../frontend/src/lib/ipc/client.ts)：
+只有 [`frontend/src-tauri/src/tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) 将这些
+领域状态映射为 `ShellError::InvalidInput` 或 `ShellError::NoActiveTask`。状态机和 supervisor
+内部不依赖 IPC 错误。
 
-```typescript
-export class InvokeError extends Error {
-  readonly code: string
-  readonly details: Record<string, unknown> | null
+[`frontend/src-tauri/src/error.rs`](../frontend/src-tauri/src/error.rs) 当前壳错误为：
 
-  constructor(
-    code: string,
-    message: string,
-    details: Record<string, unknown> | null = null,
-  ) {
-    super(message)
-    this.name = 'InvokeError'
-    this.code = code
-    this.details = details
-  }
+```rust
+enum ShellError {
+    RuntimeResolution(String),
+    Spawn(std::io::Error),
+    BackendNoJson,
+    BackendEnvelope(BackendTaskErrorPayload),
+    ControllerUnavailable,
+    BackendProbeFailed(String),
+    ProcessControl(ProcessControlError),
+    SchemaValidation(String),
+    Persistence(String),
+    Io(std::io::Error),
+    InvalidInput(String),
+    NoActiveTask,
+    OpenLocation(std::io::Error),
 }
 ```
 
-`normalizeInvokeError()` 处理两类错误：
-1. Tauri ACL 权限拒绝（`not allowed` / `Command not found`）— 附加开发者提示
-2. 通用错误 — 通过 `normalizeError()` 提取 `{ code, message, details }`
+不存在 `From<String>` 或通用 `Other(String)`。`Spawn / ProcessControl / Io / OpenLocation` 保留
+原始 source chain。自定义 `Serialize` 输出 `{ code, message, details? }`：
 
-## 14 个错误码完整对照
+- `BackendEnvelope` 的 code 属于 backend 子集，message/details 原样透传；
+- 其他 variant 映射到 shell 子集；
+- 没有 details 的壳错误不会伪造空 details。
 
-| 错误码 | 触发场景 | 典型 details | Python 定义 | Rust 定义 | TS 定义 |
-|--------|---------|-------------|------------|-----------|---------|
-| `missing_ffmpeg` | FFmpeg/FFprobe 未找到 | 搜索路径 | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `missing_model` | 模型文件未找到 | 模型路径 | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `missing_tensor_backend` | PyTorch/Paddle/ONNX 未安装 | 后端名 | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `missing_python_dependency` | pip 包缺失 | 包名 | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `cancelled` | 用户取消任务 | — | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `process_failed` | 运行时解析失败 | 路径 | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `spawn_failed` | 子进程 spawn 失败 | io::Error | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `runtime_panic` | Python 崩溃 / 未预期退出 | stderr 内容 | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `invalid_input` | 输入参数无效 | 字段名 | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `invalid_config` | 配置校验失败 | 字段名 | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `resume_conflict` | 续传冲突 | 冲突详情 | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `io_error` | 文件系统 IO 失败 | 路径 | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `schema_mismatch` | NDJSON 解析失败 / schema 漂移 | 原始行 | `_codes.py` | `models/task.rs` | `errors.ts` |
-| `persistence_failed` | 本地存储失败 | 路径 | `_codes.py` | `models/task.rs` | `errors.ts` |
+主要映射：
 
-## 跨层错误传播
+| ShellError | Wire code |
+|------------|-----------|
+| `RuntimeResolution`、`ProcessControl` | `process_failed` |
+| `Spawn` | `spawn_failed` |
+| `BackendNoJson` | `backend_no_json` |
+| `ControllerUnavailable` | `controller_unavailable` |
+| `BackendProbeFailed` | `backend_probe_failed` |
+| `SchemaValidation` | `schema_mismatch` |
+| `Persistence` | `persistence_failed` |
+| `Io`、`OpenLocation` | `io_error` |
+| `InvalidInput`、`NoActiveTask` | `invalid_input` |
 
-### 正常路径
+## TypeScript：InvokeError 与领域投影
 
-```mermaid
-sequenceDiagram
-    participant Python as Python 异常
-    participant E as ProcessError
-    participant N as NdjsonEmitter
-    participant R as Rust stdout reader
-    participant T as Tauri event
-    participant F as 前端
+[`frontend/src/lib/ipc/client.ts`](../frontend/src/lib/ipc/client.ts) 的 `safeInvoke()` 把 Tauri reject
+规范化为 `InvokeError`。前端完整错误码类型来自生成 `TaskErrorCode`；运行时
+`TASK_ERROR_CODES` 只为实际分支使用的 code 提供经 `satisfies` 校验的别名，不复制整份枚举。
 
-    Python->>E: raise ProcessError(code, message, details)
-    E->>N: ndjson.error(code, message, details)
-    N->>R: stdout: {"type":"error",...}
-    R->>R: NdjsonEnvelope::Error
-    R->>T: emit("task-error", payload)
-    T->>F: InvokeError(code, message, details)
-```
+`services/error/normalize.ts` 把未知 JS/Tauri 错误投影为前端 `TaskError`。环境探测由 env store
+持有错误；其他操作由 issue store 按 scope 路由：
 
-### 兜底路径：Python 崩溃
+- environment issue 由环境面展示；
+- task/input/encode issue 由对应工作流展示；
+- preset issue 由 App 根部全局 `IssueBanner` 展示。
+
+损坏或非 v2 预设被 Rust 隔离后返回 `schema_mismatch`；`usePresetSync()` 重置默认草稿、显示
+banner，并立即保存 schema 2 默认替代。替代保存成功不清除不兼容提示；替代写入失败改为展示
+具体 `persistence_failed`。常规保存使用 generation latest-wins，过期失败不能覆盖新的成功状态。
+
+## TaskSupervisor 终态错误
+
+长任务的 stdout/stderr reader 不发送终态，只把 observation 交给 supervisor：
 
 ```mermaid
 sequenceDiagram
-    participant Python as Python 进程
-    participant S as StderrCapture
-    participant R as Rust controller
-    participant T as Tauri event
-    participant F as 前端
+    participant Python
+    participant Reader
+    participant Supervisor
+    participant State
+    participant Frontend
 
-    Python->>Python: 未捕获异常
-    Python->>S: Traceback (stderr)
-    Python->xR: 进程退出（无 NDJSON）
-    S->>R: 读取滚动缓冲
-    R->>R: ShellError::BackendExit(stderr)
-    R->>T: emit("task-error", {code:"runtime_panic"})
-    T->>F: InvokeError("runtime_panic", message)
+    Python->>Reader: NDJSON / stderr
+    Reader->>Supervisor: typed payload / schema mismatch / pipe failure
+    Supervisor->>Supervisor: arbitrate with exit status and cancel reason
+    Supervisor->>Supervisor: drain readers
+    Supervisor->>State: finish_once(lease, emit)
+    State->>Frontend: exactly one terminal event
 ```
 
-[`frontend/src-tauri/src/tasks/stderr.rs`](../frontend/src-tauri/src/tasks/stderr.rs) 维护滚动缓冲（400 行 / 8KB），这是崩溃后唯一的信息来源。
+优先级：
 
-## 编译期一致性保证
+1. cancellation token 的首次原因生成 cancelled；
+2. 第一个 supervisor/protocol error 保持 sticky；
+3. 类型化 backend error 保留并优先于非零退出；
+4. completed 仅在成功退出且 reader 排空后有效；
+5. 无 terminal、重复 terminal、schema mismatch、pipe failure 和 wait/kill/drain 超时生成壳 error。
 
-### ts-rs 类型生成
+Python 未发 error 就异常退出时，Rust 生成 `runtime_panic`，把已排空的 stderr 滚动缓冲放入
+`details.traceback`。
 
-Rust 模型使用 `#[derive(TS)]` 宏，编译时自动生成 TypeScript 类型。`cargo build` 是类型同步的触发点。
+## One-shot 错误
 
-### satisfies 约束
+`check`、`info`、`inspect-output` 从 stdout 尾部逆序找最后一个 schema 合法的目标 envelope：
 
-[`frontend/src/types/protocol/events.ts`](../frontend/src/types/protocol/events.ts)：
+- 合法 backend error → `BackendEnvelope`；
+- 合法 success + exit 0 → 返回类型化结果；
+- exit 0 但无合法结果 → `BackendNoJson`；
+- 非零退出且无合法 backend error → `BackendProbeFailed`；
+- 只有目标类型的坏 schema 候选 → `SchemaValidation`。
 
-```typescript
-export const TASK_EVENT_NAMES = {
-  TaskProgress: 'task-progress',
-  // ...
-} as const satisfies Record<string, TaskEventName>
+## 持久化错误分类
 
-type _VariantsCovered = TaskEventName extends _ValuesOf<typeof TASK_EVENT_NAMES> ? true : never
-const _COVERAGE_CHECK: _VariantsCovered = true
-```
+当前版本为环境缓存 14、工作台预设 2、分段 manifest 3：
 
-若 Rust 新增 `TaskEventName` variant 但未同步到 `TASK_EVENT_NAMES`，`_VariantsCovered` 变为 `never`，`tsc` 编译失败。
+- 文件不存在是正常 miss；
+- JSON/版本不兼容数据改名隔离，不迁移或回退读取；
+- 环境缓存损坏/过期后重新探测；
+- 预设损坏/版本不匹配返回 `schema_mismatch`，隔离失败或读写失败返回
+  `persistence_failed`；
+- v3 分段 manifest 无效时执行准备会隔离整个 sidecar，恢复检查只把它视为不可用。
 
-### 形状反向锁
+## 一致性门禁
 
-[`frontend/src/types/protocol/_contract_check.ts`](../frontend/src/types/protocol/_contract_check.ts) 对核心 IPC 类型做额外形状校验，防止字段增删导致的类型漂移。
-
-### schema drift 测试
-
-Python 测试 `test_schema_drift.py` 自动比对 `TaskErrorCode` 的字符串值：
-
-```python
-def test_error_codes_match_rust_schema():
-    rust_codes = load_ts_generated_codes()
-    for code in TaskErrorCode:
-        assert code.value in rust_codes, f"{code.value} missing in Rust"
-```
-
-### CI 与 pre-commit
-
-- `test.yml` GitHub Actions 工作流运行三层一致性检查
-- `.pre-commit-config.yaml` 的自定义钩子在提交前检查 `TaskErrorCode`
-
-## 错误码演进历史
-
-| 阶段 | 时间 | 变更 |
-|------|------|------|
-| Phase A | 早期 | 字符串自由匹配，无结构化错误 |
-| Phase B | 2026 起 | Tauri 命令返回 `Result<T, ShellError>`，前端通过 `InvokeError` 路由 |
-| Phase C | Refactor | 具名 `ShellError` variant，移除 catch-all |
-| Phase D | 当前 | 三层枚举对齐 + 编译期约束（`satisfies` + `_contract_check.ts` + `test_schema_drift.py`）|
+- `python scripts/generate_contracts.py --check`：验证 schema、外部 `$ref`、错误码并集和所有生成物
+  的逐字节 freshness。
+- `python scripts/check_architecture_contracts.py`：验证 typed error emission、命令面、依赖方向和
+  未消费导出。
+- Rust 单测：覆盖 backend error 原样透传、ShellError 映射、schema mismatch kill、stderr 排空和
+  终态恰好一次。
+- Python schema drift 测试：覆盖生成模型、未知字段拒绝和 wire alias。
+- 前端单测：覆盖 InvokeError、preset banner 和过期异步回复不会覆盖新状态。

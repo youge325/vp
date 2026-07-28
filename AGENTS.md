@@ -34,7 +34,7 @@ Rust crate 对外源码面只保留 `run()` 与 `models::config`/`models::task` 
 
 ## Commit 与 Pull Request 规范
 
-近期提交使用简短祈使句主题，通常为英文句首大写，例如 `Fix benchmark model directory fallback`、`Add backend benchmark regression system`。保持每个 commit 聚焦于单一层面或单一问题。开发时直接在 `main` 分支提交并推送；不要创建新分支，也不要创建 PR。本地验证通过后再推送，并在提交说明或交付说明中列出已执行的验证命令。涉及 UI 的改动需提供截图或录屏。单独说明生成文件变更，尤其是 Tauri schema 和 ts-rs 生成的 TypeScript 类型。
+近期提交使用简短祈使句主题，通常为英文句首大写，例如 `Fix benchmark model directory fallback`、`Add backend benchmark regression system`。保持每个 commit 聚焦于单一层面或单一问题。开发时直接在 `main` 分支提交并推送；不要创建新分支，也不要创建 PR。本地验证通过后再推送，并在提交说明或交付说明中列出已执行的验证命令。涉及 UI 的改动需提供截图或录屏。单独说明由根级中立契约生成的 Python、TypeScript 与 Rust 绑定变更。
 
 ## 安全与配置提示
 

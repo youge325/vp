@@ -1,320 +1,193 @@
 # IPC 通信协议
 
-## 通信分层
+## 通信边界
 
-VP Workbench 的跨层通信分为两个区间：
+VP Workbench 只有两个跨层通信区间：
 
-1. **前端 ↔ Rust**：通过 Tauri 的 IPC 机制（`invoke()` + `listen()`）
-2. **Rust ↔ Python**：通过子进程 stdout 的 NDJSON 行协议
+1. Vue 前端与 Rust 桌面壳通过 Tauri `invoke()` 和事件通信。
+2. Rust 与 Python CLI 通过 stdin JSON、stdout NDJSON 和 stderr 日志通信。
 
 ```mermaid
 graph LR
-    A[前端 Vue] --"Tauri invoke / event"--> B[Rust Shell]
-    B --"子进程 spawn + stdin JSON"--> C[Python CLI]
-    C --"stdout NDJSON 行"--> B
-    B --"Tauri event emit"--> A
+    A["Vue UI"] -- "typed invoke / event" --> B["Rust shell"]
+    B -- "spawn + stdin JSON" --> C["Python CLI"]
+    C -- "stdout NDJSON" --> B
+    C -- "stderr diagnostics" --> B
 ```
 
-## 前端 ↔ Rust：Tauri Command
+前端不启动或探测 Python；Python 不感知 Tauri 或 UI。Rust 是唯一 IPC 网关和进程监管者。
 
-### Command 清单
+## 单一契约来源
 
-| Command | Rust 签名 | 职责 |
-|---------|-----------|------|
-| `pick_inputs` | `async fn() -> Result<Vec<String>, ShellError>` | 多选视频文件 |
-| `pick_output_directory` | `async fn() -> Result<Option<String>, ShellError>` | 选择输出目录 |
-| `check_environment` | `async fn(bool) -> Result<EnvironmentCheckPayload, ShellError>` | 环境检查（带缓存） |
-| `load_workbench_preset` | `async fn() -> Result<Option<WorkbenchPreset>, ShellError>` | 加载预设 |
-| `save_workbench_preset` | `async fn(WorkbenchPreset) -> Result<(), ShellError>` | 保存预设 |
-| `inspect_video` | `async fn(String) -> Result<VideoInfo, ShellError>` | 视频元数据探测 |
-| `check_resume_state` | `async fn(TaskRequest) -> Result<Value, ShellError>` | 续传预检 |
-| `start_task` | `async fn(TaskRequest) -> Result<(), ShellError>` | 启动处理任务 |
-| `cancel_task` | `async fn() -> Result<(), ShellError>` | 取消任务 |
-| `control_task` | `async fn(TaskControlKind) -> Result<(), ShellError>` | 暂停或恢复任务（`kind: "pause" | "resume"`） |
-| `open_output_location` | `async fn(String) -> Result<(), ShellError>` | 打开输出目录 |
+根目录 [`contracts/`](../contracts/) 中的 JSON Schema 2020-12 文档定义配置、任务请求、环境检查、
+NDJSON、错误码和持久化边界。源 schema 使用本地外部 `$ref` 复用结构，并为每个对象显式声明
+`additionalProperties`。
 
-所有命令体均为 `async fn`；对话框命令使用 `rfd::AsyncFileDialog` 避免阻塞 tokio runtime。
+[`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) 是命令名、参数、返回值和事件名的
+唯一清单。`python scripts/generate_contracts.py` 会：
 
-### 权限清单
+- 校验所有 schema、外部 `$ref`/JSON Pointer、manifest 唯一性和错误码集合；
+- 生成并跟踪 `contracts/boundary.schema.json`；
+- 用 `datamodel-code-generator` 生成 Python Pydantic 边界；
+- 用 `json-schema-to-typescript` 生成 TypeScript 边界；
+- 生成前端 invoke/事件适配器，以及 Rust manifest、事件和持久化版本适配器；
+- 让 Rust 的私有 Typify 模块在编译期消费同一聚合 schema。
 
-Tauri v2 的权限系统要求每个 command 在 ACL 中显式声明。权限文件 [`frontend/src-tauri/permissions/default.toml`](../frontend/src-tauri/permissions/default.toml) 中对应每个命令都有 `allow-<command>` 条目。
+`python scripts/generate_contracts.py --check` 对上述生成物执行逐字节 freshness 检查。Rust
+`build.rs` 只把已生成 manifest 接入 Tauri build，不在 Cargo build 中生成或改写跨语言文件。
 
-`lib.rs::tests` 模块通过 `include_str!` 反向断言：
-- 所有活跃命令都出现在默认权限中
-- 已移除的旧命令（`pick-input`、`pick-output`、`open-file-or-directory`、`resolved-runtime`）不出现在权限清单中
-- `gen/schemas/acl-manifests.json` 与 `permissions/default.toml` 同源
+## 前端 ↔ Rust：10 个 Tauri Command
 
-### 前端封装：safeInvoke 与 InvokeError
+| Command | 参数 | 返回 | 职责 |
+|---------|------|------|------|
+| `pick_inputs` | — | `string[]` | 选择多个输入视频 |
+| `pick_output_directory` | — | `string \| null` | 选择输出目录 |
+| `check_environment` | `forceRefresh: boolean` | `EnvironmentCheckPayload` | 环境检查或读取缓存 |
+| `load_workbench_preset` | — | `WorkbenchPreset \| null` | 加载预设 |
+| `save_workbench_preset` | `preset: WorkbenchPreset` | `void` | 保存预设 |
+| `inspect_video` | `inputPath: string` | `VideoInfo` | 探测视频元数据 |
+| `check_resume_state` | `request: TaskRequest` | `ResumeInspectionResult` | 续传预检 |
+| `start_task` | `request: TaskRequest` | `void` | 启动长任务 |
+| `control_task` | `kind: pause \| resume \| cancel` | `void` | 统一任务控制 |
+| `open_output_location` | `path: string` | `void` | 打开输出位置 |
 
-[`frontend/src/lib/ipc/client.ts`](../frontend/src/lib/ipc/client.ts)：
+不存在独立的暂停、恢复或取消 command。生成的
+[`frontend/src/lib/ipc/contract.ts`](../frontend/src/lib/ipc/contract.ts) 将命令名绑定到参数和结果：
 
 ```typescript
-export type IpcCommand = keyof IpcCommandArgs
-
-export class InvokeError extends Error {
-  readonly code: string
-  readonly details: Record<string, unknown> | null
-}
-
 export async function safeInvoke<C extends IpcCommand>(
   command: C,
   ...args: IpcInvokeArgs<C> extends undefined ? [] : [args: IpcInvokeArgs<C>]
 ): Promise<IpcInvokeResult<C>>
 ```
 
-`frontend/src/lib/ipc/contract.ts` 是前端命令契约表：命令名、参数对象和返回类型在
-TypeScript 编译期绑定，`scripts/check_architecture_contracts.py` 会把它与 Rust
-`commands_manifest.rs`、Tauri permissions 和 endpoint 层 `safeInvoke()` 调用一起比对。
+[`frontend/src/lib/ipc/endpoints/`](../frontend/src/lib/ipc/endpoints/) 是业务调用方的唯一入口。
+`safeInvoke()` 把 Rust 序列化的 `{ code, message, details? }` 规范化为 `InvokeError`；上层按 code
+处理，不解析错误字符串。
 
-调用方按 `code` 路由：
+### 注册和权限一致性
 
-```typescript
-try {
-  await taskIpc.start(request)
-} catch (error) {
-  if (error instanceof InvokeError && error.code === 'schema_mismatch') {
-    // 表单字段与 Rust 模型漂移，提示重置草稿
-  } else if (error instanceof InvokeError && error.code === 'persistence_failed') {
-    // 落盘失败，记到 operation issue
-  }
-}
-```
+命令面由两组门禁锁定：
 
-## Rust ↔ Python：NDJSON 行协议
+- `scripts/check_architecture_contracts.py` 比对 manifest、Rust `#[tauri::command]` 参数、
+  `generate_handler!` 可达面、前端 endpoint 调用、生成 contract 和 `permissions/default.toml`。
+- Rust 单测比对生成 manifest、默认 permissions、Tauri ACL schema，并断言 command 精确为 10 个。
 
-### 通信模式
+[`frontend/src-tauri/capabilities/default.json`](../frontend/src-tauri/capabilities/default.json) 只把这些
+权限授予本地 `main` 窗口，不授权任何远程 origin。
 
-Rust 通过 `command_group::AsyncCommand::spawn()` 启动 Python 子进程，将配置以 JSON 形式写入 stdin。Python 处理过程中通过 stdout 每行输出一个 JSON 对象，Rust 的 stdout reader 即时解析。
+## Rust ↔ Python：任务流 NDJSON
 
-```mermaid
-sequenceDiagram
-    participant Rust as Rust Shell
-    participant Python as Python CLI
+Rust 以进程组启动
+`python -m app process --input <path> --config-stdin [--resume-mode <mode>]`。输入路径和恢复模式
+使用窄 CLI 参数，stdin 只传 `{ decode, workflow, encode, output }` 四段类型化配置。Python 的
+stdout 只承载结构化 task envelope；普通诊断写到 stderr。
 
-    Rust->>Python: spawn("python -m app process ...")
-    Rust->>Python: write stdin JSON
-    Python->>Python: 解析配置，开始处理
-    loop 处理过程中
-        Python->>Rust: stdout: {"type":"progress",...}
-        Python->>Rust: stdout: {"type":"log",...}
-    end
-    alt 成功完成
-        Python->>Rust: stdout: {"type":"completed",...}
-    else 发生错误
-        Python->>Rust: stdout: {"type":"error",...}
-    else 续传状态
-        Python->>Rust: stdout: {"type":"resume_status",...}
-    end
-```
-
-### NDJSON Envelope
-
-[`frontend/src-tauri/src/tasks/envelope.rs`](../frontend/src-tauri/src/tasks/envelope.rs)：
+任务流只允许四种 NDJSON envelope：
 
 ```rust
-#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum NdjsonEnvelope {
-    #[serde(rename = "progress")]
+enum NdjsonEnvelope {
     Progress(TaskProgressPayload),
     Completed(TaskCompletedPayload),
-    Error(TaskErrorPayload),
+    Error(BackendTaskErrorPayload),
     ResumeStatus(ResumeStatusPayload),
 }
 ```
 
-使用 serde 的 **internally tagged enum** 模式，`"type"` 字段作为 discriminant。
+其中：
 
-[`backend/app/protocol/__init__.py`](../backend/app/protocol/__init__.py)：
+- `progress` 包含 `current / total / percent / stage / stageIndex / stageTotal` 和可选 metrics；
+- `completed` 包含 `outputPath / processedFrames / timeSeconds`；
+- `error` 只接受 backend 错误码子集，并携带 `message` 与可选 `details`；
+- `resume_status` 包含已完成片段、输出帧数、下一源帧和总输出帧数。
 
-```python
-class NdjsonEventType(str, Enum):
-    PROGRESS = "progress"
-    COMPLETED = "completed"
-    ERROR = "error"
-    RESUME_STATUS = "resume_status"
-    RESUME_INSPECTION = "resume_inspection"
-    INFO = "info"
-    CHECK = "check"
-```
+[`frontend/src-tauri/src/tasks/envelope.rs`](../frontend/src-tauri/src/tasks/envelope.rs) 的
+`classify_line()` 是生产 reader 和测试共用的唯一 classifier：
 
-### 事件载荷结构
+- 合法 envelope 只解析一次并返回类型化 payload；
+- 普通文本、JSON scalar 或 array 作为日志；
+- 对象形 JSON、未知 `type`、缺少必填字段，或以 `{` 开头的破损 JSON，均成为 fatal
+  `schema_mismatch`；
+- supervisor 收到 fatal 分类后终止进程组，不继续消费漂移协议。
 
-#### Progress
+Python 的所有结构化 task 输出都经
+[`backend/app/protocol/__init__.py`](../backend/app/protocol/__init__.py) 的模块级 `ndjson`
+发射器；它用专用锁覆盖序列化、整行 write 和 flush，并发 reporter 不会交错行。正常运行路径
+不自行拼装 error 对象。
 
-```rust
-pub struct TaskProgressPayload {
-    pub current: u64,
-    pub total: u64,
-    pub percent: f64,
-    pub stage: String,
-    pub stage_index: u64,
-    pub stage_total: u64,
-    pub metrics: Option<serde_json::Value>,  // 可选流水线指标
-}
-```
+## One-shot CLI Envelope
 
-`metrics` 字段携带流水线可观测性数据（队列深度、处理帧数、实测 fps、耗时等），自由格式以便 schema 演进。
+`check`、`info` 和 `inspect-output` 是短命令。Rust 的
+[`tasks/oneshot.rs`](../frontend/src-tauri/src/tasks/oneshot.rs) 从 stdout 末尾逆序查找最后一个
+schema 合法且类型匹配的 success 或 backend error envelope：
 
-#### Completed
+- `check` 与 `info` 在 DTO 解码前移除 transport-only `type`；
+- `resume_inspection.type` 是公共结果的一部分，保持不变；
+- 后端 error 原样转为 `ShellError::BackendEnvelope`；
+- 没有合法候选时，成功退出映射为 `backend_no_json`，非零退出映射为
+  `backend_probe_failed`；
+- 若只找到类型匹配但 schema 错误的候选，则返回 `schema_mismatch`。
 
-```rust
-pub struct TaskCompletedPayload {
-    pub output_path: String,
-    pub processed_frames: u64,
-    pub time_seconds: f64,
-}
-```
+这避免了日志尾行、较早出现的合法 envelope 或无关事件影响结果选择。
 
-#### Error
+## Tauri 任务事件
 
-```rust
-pub struct TaskErrorPayload {
-    pub code: TaskErrorCode,
-    pub message: String,
-    pub details: Option<serde_json::Value>,
-}
-```
+| 事件名 | 来源 | Payload |
+|--------|------|---------|
+| `task-progress` | `progress` | `TaskProgressPayload` |
+| `task-completed` | 终态仲裁后的 `completed` | `TaskCompletedPayload` |
+| `task-error` | backend 或 supervisor error | `TaskErrorPayload` |
+| `task-cancelled` | 用户取消或 watchdog | `TaskCancelledPayload` |
+| `task-log` | stdout 普通文本或 stderr | `TaskLogPayload` |
+| `task-resume-status` | `resume_status` | `ResumeStatusPayload` |
 
-#### Resume Status
+名称和 payload 映射从 manifest 生成到
+[`frontend/src/types/protocol/events.ts`](../frontend/src/types/protocol/events.ts) 和
+[`frontend/src-tauri/src/generated/task_events.rs`](../frontend/src-tauri/src/generated/task_events.rs)。
 
-```rust
-pub struct ResumeStatusPayload {
-    pub resumed: bool,
-    pub completed_chunks: u64,
-    pub completed_output_frames: u64,
-    pub start_source_frame: u64,
-    pub total_output_frames: u64,
-}
-```
+## 错误码按生产者分层
 
-### Tauri 事件名称
+Backend 子集有 10 个：
 
-Rust 解析 NDJSON 后，通过 `app_handle.emit()` 推送 Tauri 事件给前端：
+`missing_ffmpeg`、`missing_model`、`missing_tensor_backend`、`missing_python_dependency`、
+`cancelled`、`process_failed`、`invalid_input`、`invalid_config`、`resume_conflict`、`io_error`。
 
-| Rust 事件名 | 字符串值 | 来源 NDJSON 类型 | Payload 类型 |
-|------------|---------|-----------------|-------------|
-| `TaskProgress` | `task-progress` | `progress` | `TaskProgressPayload` |
-| `TaskCompleted` | `task-completed` | `completed` | `TaskCompletedPayload` |
-| `TaskError` | `task-error` | `error` | `TaskErrorPayload` |
-| `TaskCancelled` | `task-cancelled` | 终止时构造 | `TaskCancelledPayload` |
-| `TaskLog` | `task-log` | 非 JSON 行 | `TaskLogPayload` |
-| `TaskResumeStatus` | `task-resume-status` | `resume_status` | `ResumeStatusPayload` |
+Shell 子集有 10 个：
 
-定义在 [`frontend/src-tauri/src/protocol.rs`](../frontend/src-tauri/src/protocol.rs)：
+`process_failed`、`invalid_input`、`io_error`、`spawn_failed`、`runtime_panic`、
+`schema_mismatch`、`persistence_failed`、`backend_no_json`、`controller_unavailable`、
+`backend_probe_failed`。
 
-```rust
-#[serde(rename_all = "kebab-case")]
-pub enum TaskEventName {
-    TaskProgress,
-    TaskCompleted,
-    TaskError,
-    TaskCancelled,
-    TaskLog,
-    TaskResumeStatus,
-}
-```
+三个公共码重叠，因此前端的完整 `TaskErrorCode` 联合共有 17 个值。生成器要求完整集合严格等于
+两个生产者子集的并集。Python 只能发 backend 子集；Rust 自己生成 shell 子集，但收到
+`BackendTaskErrorPayload` 时会保留原始 `code / message / details`，不会改写成信息更少的壳错误。
 
-## 错误码体系
-
-### 三层一致的 TaskErrorCode
-
-| 错误码 | Python 枚举 | Rust 枚举 | TS generated union |
-|--------|------------|-----------|---------|
-| `missing_ffmpeg` | `MISSING_FFMPEG` | `MissingFfmpeg` | `"missing_ffmpeg"` |
-| `missing_model` | `MISSING_MODEL` | `MissingModel` | `"missing_model"` |
-| `missing_tensor_backend` | `MISSING_TENSOR_BACKEND` | `MissingTensorBackend` | `"missing_tensor_backend"` |
-| `missing_python_dependency` | `MISSING_PYTHON_DEPENDENCY` | `MissingPythonDependency` | `"missing_python_dependency"` |
-| `cancelled` | `CANCELLED` | `Cancelled` | `"cancelled"` |
-| `process_failed` | `PROCESS_FAILED` | `ProcessFailed` | `"process_failed"` |
-| `spawn_failed` | `SPAWN_FAILED` | `SpawnFailed` | `"spawn_failed"` |
-| `runtime_panic` | `RUNTIME_PANIC` | `RuntimePanic` | `"runtime_panic"` |
-| `invalid_input` | `INVALID_INPUT` | `InvalidInput` | `"invalid_input"` |
-| `invalid_config` | `INVALID_CONFIG` | `InvalidConfig` | `"invalid_config"` |
-| `resume_conflict` | `RESUME_CONFLICT` | `ResumeConflict` | `"resume_conflict"` |
-| `io_error` | `IO_ERROR` | `IoError` | `"io_error"` |
-| `schema_mismatch` | `SCHEMA_MISMATCH` | `SchemaMismatch` | `"schema_mismatch"` |
-| `persistence_failed` | `PERSISTENCE_FAILED` | `PersistenceFailed` | `"persistence_failed"` |
-| `backend_no_json` | `BACKEND_NO_JSON` | `BackendNoJson` | `"backend_no_json"` |
-| `backend_envelope` | `BACKEND_ENVELOPE` | `BackendEnvelope` | `"backend_envelope"` |
-| `controller_unavailable` | `CONTROLLER_UNAVAILABLE` | `ControllerUnavailable` | `"controller_unavailable"` |
-| `backend_probe_failed` | `BACKEND_PROBE_FAILED` | `BackendProbeFailed` | `"backend_probe_failed"` |
-
-### Rust ShellError → TaskErrorCode 映射
-
-[`frontend/src-tauri/src/error.rs`](../frontend/src-tauri/src/error.rs)：
-
-| ShellError variant | TaskErrorCode |
-|-------------------|---------------|
-| `RuntimeResolution` | `ProcessFailed` |
-| `Spawn` | `SpawnFailed` |
-| `BackendExit` | `RuntimePanic` |
-| `NdjsonDecode` | `SchemaMismatch` |
-| `SchemaValidation` | `SchemaMismatch` |
-| `Persistence` | `PersistenceFailed` |
-| `Io` | `IoError` |
-| `InvalidInput` | `InvalidInput` |
-| `NoActiveTask` | `InvalidInput` |
-| `OpenLocation` | `IoError` |
-
-## 跨层错误传播
-
-### 正常路径
+## 终态与错误传播
 
 ```mermaid
 sequenceDiagram
-    participant Python as Python 异常
-    participant Emitter as NdjsonEmitter
-    participant Rust as Rust stdout reader
-    participant Event as Tauri Event
-    participant Frontend as 前端
+    participant Python
+    participant Reader as Rust readers
+    participant Supervisor as TaskSupervisor
+    participant State as TaskState
+    participant UI as Vue
 
-    Python->>Emitter: ProcessError(code, message, details)
-    Emitter->>Rust: stdout: {"type":"error",...}
-    Rust->>Rust: NdjsonEnvelope::Error
-    Rust->>Event: emit("task-error", payload)
-    Event->>Frontend: InvokeError(code, message, details)
+    Python->>Reader: stdout NDJSON / stderr
+    Reader->>Supervisor: ClassifiedLine / PipeFailure
+    Supervisor->>Supervisor: 记录 terminal candidate
+    Supervisor->>Supervisor: 等待进程退出并排空 readers
+    Supervisor->>State: finish_once(lease, emit)
+    State->>UI: 恰好一个 completed / error / cancelled
 ```
 
-### 兜底路径：Python 崩溃
+仲裁优先级：
 
-```mermaid
-sequenceDiagram
-    participant Python as Python 进程
-    participant Stderr as StderrCapture
-    participant Rust as Rust controller
-    participant Event as Tauri Event
-    participant Frontend as 前端
+1. 取消 token 的第一个原因生成 `task-cancelled`。
+2. 第一个 supervisor/protocol 错误保持 sticky。
+3. 类型化 backend error 保留并优先于 exit status。
+4. completed 只有在进程成功退出、reader 排空且无协议错误时成立。
+5. 无 terminal、重复 terminal、schema mismatch、pipe failure 或 terminal 后不退出都成为壳错误。
 
-    Python->>Python: 未捕获异常 / segfault
-    Python->>Stderr: Traceback / 崩溃信息
-    Python->xRust: 进程退出（无 NDJSON error）
-    Stderr->>Rust: 读取滚动缓冲
-    Rust->>Rust: BackendExit(stderr_content)
-    Rust->>Event: emit("task-error", {code:"runtime_panic",...})
-    Event->>Frontend: InvokeError("runtime_panic", ...)
-```
-
-[`frontend/src-tauri/src/tasks/stderr.rs`](../frontend/src-tauri/src/tasks/stderr.rs) 维护滚动缓冲（400 行 / 8KB），即使 Python 在发出 NDJSON 终止事件前崩溃，stderr 内容也能到达前端。
-
-## 任务终止事件区分
-
-Controller 根据三个信号的组合决定终止事件类型：
-
-| 场景 | cancel_token.reason | exit_status | terminal_sent | 终止事件 |
-|------|---------------------|-------------|---------------|---------|
-| 用户取消 | `User` | 任意 | — | `task-cancelled` {reason: "user"} |
-| Watchdog 超时 | `Stalled` | 任意 | — | `task-cancelled` {reason: "stalled"} |
-| Python 正常完成 | `None` | 0 | false | `task-completed` |
-| Python 错误退出 | `None` | 非 0 | false | `task-error` |
-| Python 崩溃 | `None` | 非 0 / signal | false | `task-error` {runtime_panic} |
-
-## 跨层契约的同源机制
-
-| 契约项 | 单一真相源 | 派生目标 | 校验方式 |
-|--------|-----------|---------|---------|
-| Tauri Command 清单 | `commands_manifest.rs` | `lib.rs` handler + `permissions/default.toml` | `lib.rs::tests` 反向断言 |
-| 事件名 | Rust `TaskEventName` | TS `TASK_EVENT_NAMES` | `satisfies Record<string, TaskEventName>` |
-| 错误码 | Rust `TaskErrorCode` | generated TS union + Python `TaskErrorCode` | `check_error_code_drift.py` + `test_schema_drift.py` |
-| 配置模型 | Rust `models/*.rs` | TS `types/generated/*.ts` | `ts-rs` 编译时生成 + `cargo build` |
-| ACL 清单 | `permissions/default.toml` | `gen/schemas/acl-manifests.json` | `lib.rs::tests` 反向断言 |
+stderr 使用 400 行/8KB 滚动缓冲。Python 未发结构化 error 就异常退出时，Rust 生成
+`runtime_panic`，并把缓冲内容放在 `details.traceback`；reader 排空发生在最终事件前。

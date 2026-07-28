@@ -35,8 +35,9 @@ At runtime the app resolves dependencies in this priority order:
 
 1. Environment variable overrides (`VP_PYTHON_EXECUTABLE`, `VP_FFMPEG_PATH`, etc.)
 2. Bundled resources under `resources/runtime/`
-3. System `PATH` lookup (for Python, FFmpeg, and FFprobe)
+3. System `PATH` lookup for Python only
 
 Release builds no longer require bundled Python. If Python is not bundled and not
 explicitly configured, the app will search for `python.exe` (Windows) or `python3`
-(Linux/macOS) in the system `PATH`.
+(Linux/macOS) in the system `PATH`. FFmpeg and FFprobe must come from explicit
+overrides or the canonical bundled runtime in release builds.

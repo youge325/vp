@@ -1,251 +1,180 @@
 # 任务生命周期与状态机
 
-## TaskStatePhase 状态机
+## 四状态生命周期
 
-[`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) 定义三阶段状态机：
+[`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) 用一个
+`Mutex<TaskStatePhase>` 管理单任务槽：
 
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
-    Idle --> Running: try_start(handle)
-    Running --> Cancelling: begin_cancel()
-    Running --> Idle: finish()
-    Cancelling --> Idle: finish()
+    Idle --> Starting: reserve_start()
+    Starting --> Running: activate(lease)
+    Starting --> Cancelling: cancel 已记录后 activate(lease)
+    Starting --> Idle: rollback_start(lease)
+    Running --> Cancelling: begin_cancel(reason)
+    Running --> Idle: finish_once(lease)
+    Cancelling --> Idle: finish_once(lease)
 ```
 
-### 三阶段说明
+| 状态 | 所有权 | 合法行为 |
+|------|--------|----------|
+| `Idle` | 无 | `reserve_start()` |
+| `Starting { lease }` | 启动租约和取消 token | activate、按 lease 回滚、记录首次取消 |
+| `Running { lease, handle }` | 租约、控制通道、取消 token | pause、resume、cancel、终结 |
+| `Cancelling { lease, handle }` | 同一任务仍持有槽位 | 等待 supervisor 回收并终结 |
 
-| 阶段 | 说明 | 合法转换 |
-|------|------|---------|
-| `Idle` | 无任务运行 | `try_start`（转入 Running） |
-| `Running { handle }` | 任务正常运行 | `begin_cancel`（转入 Cancelling）或 `finish`（回到 Idle） |
-| `Cancelling { handle }` | 取消请求已接受，等待子进程退出 | `finish`（回到 Idle） |
+`reserve_start()` 在任何命令构建或 spawn 副作用前执行。第二个 start 在 `Starting` 阶段就被拒绝，
+不会出现“子进程已创建但任务未登记”的窗口。
 
-### 原子转换
+## StartLease 规则
 
-所有转换在 `Mutex<TaskStatePhase>` 保护下执行：
+每个 `StartLease` 包含单调 id 和该任务唯一的 `CancellationToken`：
 
-```rust
-pub async fn try_start(&self, handle: TaskHandle
-) -> Result<(), ShellError>
+- `activate()` 只接受当前 lease，并在 child、pipe 和 root pid 均已取得后发布 `TaskHandle`。
+- 任一启动失败都先杀死并回收已创建的进程组，再调用 `rollback_start(lease)`。
+- startup 期间到达的 cancel 直接写入 lease token；activate 后状态成为 `Cancelling`。
+- `cancel_owned()` 让 watchdog 只能取消自己监管的 lease。
+- `finish_once()` 只接受当前运行 lease。回调在状态锁内先提交终态，再把槽位置为 `Idle`；
+  过期 supervisor 不能终结新任务，也不能重复发终态。
 
-pub async fn begin_cancel(&self
-) -> Result<TaskHandle, ShellError>
+状态层只返回 `TaskStateError`。`tasks/commands.rs` 是唯一把
+`AlreadyRunning / StartLeaseExpired / NoActiveTask / StillStarting / AlreadyCancelling`
+映射为 `ShellError` 的命令 adapter。
 
-pub async fn finish(&self)
-```
-
-- `try_start` 拒绝双启动：若当前不是 Idle，返回 `InvalidInput`
-- `begin_cancel` 拒绝重复取消：若已在 Cancelling，返回 `"already being cancelled"`
-- `finish` 可从任何阶段回到 Idle，是清理的统一出口
-
-### 测试覆盖
-
-`state.rs` 包含 7 个异步单元测试，覆盖所有状态转换路径：
-- 新鲜状态为 Idle
-- try_start Idle → Running
-- try_start 拒绝重复启动
-- begin_cancel Running → Cancelling
-- begin_cancel 拒绝重复取消
-- current_handle 在 Cancelling 阶段可读
-- finish 从 Running / Cancelling 回到 Idle
-
-## spawn_task 启动流程
+## 启动流程
 
 ```mermaid
 sequenceDiagram
-    participant Frontend
-    participant Rust as Rust spawn_task
+    participant UI as Vue
+    participant Spawn as spawn_task
     participant State as TaskState
-    participant Builder as CommandBuilder
-    participant Child as Python 子进程
-    participant Stdout as stdout reader
-    participant Stderr as stderr reader
-    participant Controller as TaskController
+    participant Child as Python process group
+    participant Supervisor as TaskSupervisor
 
-    Frontend->>Rust: start_task(request)
-    Rust->>Builder: build_process_command()
-    Rust->>Child: spawn + write stdin JSON payload
-    Rust->>State: try_start(handle) 原子转换
-    alt 已有任务运行
-        Rust->>Child: kill()
-        State-->>Rust: Err(InvalidInput)
-        Rust-->>Frontend: 拒绝
-    else
-        Rust->>Stdout: spawn_stdout_reader()
-        Rust->>Stderr: spawn_stderr_reader()
-        Rust->>Controller: spawn_task_controller(session)
-        Rust-->>Frontend: Ok(())
-    end
+    UI->>Spawn: start_task(request)
+    Spawn->>State: reserve_start()
+    Spawn->>Spawn: build_process_command()
+    Spawn->>Child: spawn()
+    Spawn->>Spawn: take stdin/stdout/stderr + root pid
+    Spawn->>State: activate(lease, control_tx)
+    Spawn->>Spawn: start stdout/stderr readers
+    Spawn->>Spawn: start bounded stdin writer
+    Spawn->>Supervisor: TaskSupervisorSession
+    Spawn-->>UI: Ok
 ```
 
-### 关键设计决策
+`command-group` 让 kill 作用于整个进程组；Windows spawn 使用无控制台窗口标志。stdout/stderr
+reader 在写入潜在的大 stdin payload 前启动，避免三 pipe 死锁；stdin 写入超时为 10 秒。
 
-- **进程组管理**：使用 `command-group` crate 的 `AsyncGroupChild`，确保子进程及其所有后代都被正确管理
-- **Windows 无窗口**：通过 `CREATE_NO_WINDOW` 标志隐藏 Python 控制台窗口
-- **stdin 立即写入**：spawn 后立即写入 JSON payload，避免 Python 阻塞等待 stdin
+## TaskSupervisor 结构化所有权
 
-## Controller 并发模型
+[`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 的
+`TaskSupervisorSession` 一次接管：
 
-[`frontend/src-tauri/src/tasks/spawn.rs`](../frontend/src-tauri/src/tasks/spawn.rs) 启动 stdout/stderr reader，并把 child、控制通道、终态标志、stderr capture、取消 token 和 progress beat 收进一个 `TaskControllerSession`。[`controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 消费该会话并启动三个运行单元：
+- backend child 进程组和 root pid；
+- start lease；
+- control/output channel；
+- stdin writer、stdout reader、stderr reader；
+- `StderrCapture`；
+- cancellation token；
+- progress beat 与 watchdog。
+
+reader 只负责观察和分类，不直接发送终态。supervisor 在同一个 `tokio::select!` 循环中等待
+reader 消息、进程退出、取消、暂停/恢复结果、watchdog 和各类 deadline。supervisor 被 abort 或
+panic 时，child 的 kill-on-drop owner 仍会终止进程组。
+
+## NDJSON 与终态仲裁
+
+`TerminalState` 保存一个 candidate：
+
+- `Completed(TaskCompletedPayload)`
+- `BackendError(TaskErrorPayload)`
+- `SupervisorError(TaskErrorPayload)`
+
+仲裁规则：
+
+1. 第一个 supervisor/protocol 错误保持 sticky。
+2. 第二个 completed/error envelope 是协议违规，升级为 `schema_mismatch` 并 kill。
+3. backend error 原样保留，优先于进程非零 exit status。
+4. completed 只有在进程成功退出时有效。
+5. 成功退出但无 terminal envelope 是 `schema_mismatch`；非零退出且无 backend error 是
+   `runtime_panic`；wait 失败是 `process_failed`。
+6. schema mismatch、pipe failure、terminal 后 5 秒仍不退出都会触发进程组 kill。
+7. 进程退出后，supervisor 最多等待 5 秒排空 reader，再 join 三个 pipe task；排空或 join 失败
+   会覆盖先前 completed。
+8. 最终通过 `TaskState.finish_once(lease, emit)` 发送恰好一个事件，然后才释放任务槽。
+
+stderr 使用 400 行/8KB 滚动缓冲。无结构化 backend error 的崩溃会把缓冲写入
+`task-error.details.traceback`。
+
+## 取消状态
+
+[`frontend/src-tauri/src/tasks/cancellation.rs`](../frontend/src-tauri/src/tasks/cancellation.rs) 使用
+一个 `AtomicU8` 同时表达“未取消 / User / Stalled”，不维护独立布尔值：
 
 ```mermaid
-graph TB
-    A[spawn_task] --> B[stdout NDJSON reader]
-    A --> C[stderr reader]
-    A --> D[TaskControllerSession]
-    D --> E[child wait task]
-    D --> F[控制与终态 actor]
-    D --> G[可选 Watchdog]
-    F --> H[暂停/恢复]
-    H --> I[ProcessController]
-    G --> J[超时检测]
-    J --> K[cancel_token.cancel]
+stateDiagram-v2
+    [*] --> NotCancelled
+    NotCancelled --> User: compare_exchange
+    NotCancelled --> Stalled: compare_exchange
+    User --> User: first reason wins
+    Stalled --> Stalled: first reason wins
 ```
 
-控制与终态 actor 通过 `tokio::select!` 等待：
+CAS 胜者写入首个原因并通过 `Notify` 唤醒所有 waiter；后续原因不能覆盖它。用户 cancel 在
+`TaskState` 锁内同时完成生命周期转换和原因写入，supervisor 观察 token 后终止并回收进程组。
+取消原因最终优先于其他 terminal candidate：
 
-```rust
-loop {
-    tokio::select! {
-        // 1. 收到暂停/恢复消息
-        msg = control_rx.recv() => { ... }
-        // 2. cancel_token 被取消
-        _ = cancel_token.notified() => { ... }
-        // 3. child wait task 返回退出状态
-        status = exit_rx => { ... }
-    }
-}
-```
+- `User` → `task-cancelled { reason: "user" }`
+- `Stalled` → `task-cancelled { reason: "stalled", details? }`
 
-### 终止事件分发
+## 暂停与恢复
 
-Controller 根据三个信号决定终止事件：
-
-| 信号 | 来源 | 说明 |
-|------|------|------|
-| `cancel_token.reason` | 用户 / Watchdog | 取消原因 |
-| `child.wait()` 结果 | 子进程 | 退出状态码 |
-| `terminal_sent` | Controller 自身 | 是否已发送终止事件 |
-
-终止事件类型：
-- `cancel_token.reason == Some(User)` → `task-cancelled` {reason: "user"}
-- `cancel_token.reason == Some(Stalled)` → `task-cancelled` {reason: "stalled"}
-- 退出码 0 且无取消 → `task-completed`
-- 退出码非 0 且无取消 → `task-error`
-- stdout 解析器失败 → `task-error` {schema_mismatch}
-
-### progress_beat 更新
-
-stdout 解析器每解析到一行有效 NDJSON 时更新共享的 `ProgressBeat = Arc<Mutex<Instant>>`。Watchdog 轮询时读取 `Instant::elapsed()` 判断是否超时。
-
-## Watchdog Stall 检测
-
-```mermaid
-graph LR
-    A[Watchdog Config] --> B{VP_TASK_STALL_TIMEOUT_SECS}
-    B -->|0| C[禁用]
-    B -->|>0| D[启用]
-    D --> E[默认 600s]
-
-    F[每 5 秒轮询] --> G[读取 progress_beat]
-    G --> H{超时?}
-    H -->|是| I[cancel_token.cancel(Stalled)]
-    H -->|否| F
-    I --> J[Controller 终止]
-    J --> K[emit task-cancelled<br/>{reason:"stalled"}]
-```
-
-[`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 在 controller 边界读取 `VP_TASK_STALL_TIMEOUT_SECS`：默认 600 秒，`0` 表示禁用，非法值回退默认值。轮询间隔固定为 5 秒，不通过 spawn 参数或额外配置对象传递。
-
-## 取消流程
+`control_task({ kind: "pause" | "resume" })` 取得当前 task-bound `TaskHandle`，通过容量为 8 的
+control channel 发送 `TaskControlMessage`，并等待 typed oneshot reply：
 
 ```mermaid
 sequenceDiagram
-    participant Frontend
-    participant Rust as cancel_task
-    participant State as TaskState
-    participant Token as CancellationToken
-    participant Controller as TaskController
-    participant Python as Python 子进程
+    participant UI as Vue
+    participant Command as control_task
+    participant Supervisor as TaskSupervisor
+    participant Worker as blocking executor
+    participant OS as ProcessController
 
-    Frontend->>Rust: cancel_task()
-    Rust->>State: begin_cancel()
-    alt 无运行任务
-        State-->>Rust: Err(NoActiveTask)
-        Rust-->>Frontend: 错误
-    else 已在取消中
-        State-->>Rust: Err(InvalidInput)
-        Rust-->>Frontend: 错误
-    else
-        State-->>Rust: Ok(handle)
-        Rust->>Token: cancel_with_reason(User)
-        Token-->>Controller: Notify
-        Controller->>Python: kill 子进程
-        Python-->>Controller: 进程退出
-        Controller->>State: finish()
-        Controller-->>Frontend: task-cancelled {reason:"user"}
-    end
+    UI->>Command: pause / resume
+    Command->>Supervisor: bounded send + oneshot
+    Supervisor->>Worker: spawn_blocking
+    Worker->>OS: suspend / resume task root
+    OS-->>Worker: typed result
+    Worker-->>Supervisor: result
+    Supervisor-->>Command: bounded reply
+    Command-->>UI: Ok / structured error
 ```
 
-### CancelReason
+- command 发送与 reply 各有 5 秒上限；
+- supervisor 内 OS 操作有 4 秒上限，保留 1 秒给 reply 传递；
+- Windows 使用 task-local 线程枚举/恢复缓存；
+- POSIX 使用 `kill(-pgid, SIGSTOP/SIGCONT)`，控制整个进程组；
+- OS 扫描在 `spawn_blocking` 执行，取消观察不会被同步系统调用阻塞；
+- pause/resume 对 supervisor 当前 pause 状态幂等，取消后拒绝新控制。
 
-[`frontend/src-tauri/src/tasks/cancellation.rs`](../frontend/src-tauri/src/tasks/cancellation.rs)：
+## Watchdog
 
-```rust
-pub enum CancelReason {
-    User,    // 用户按下取消按钮
-    Stalled, // Watchdog 检测到 stdout 超时
-}
-```
+stdout reader 只在收到合法 `progress` envelope 时更新共享 `Instant`。supervisor 默认每 5 秒检查：
 
-CancellationToken 是手实现的（非 tokio_util），包含：
-- `reason: Option<CancelReason>` — 取消原因
-- `notify: Notify` — 异步通知
+- `VP_TASK_STALL_TIMEOUT_SECS` 未设置或非法：600 秒；
+- 值为 `0`：禁用；
+- 超时：以当前 lease 调用 `cancel_owned(..., Stalled)` 并 kill 进程组。
 
-## 暂停/恢复流程
+如果 lease 已失效，watchdog 不能影响新任务。
 
-```mermaid
-sequenceDiagram
-    participant Frontend
-    participant Rust as control_task
-    participant State as TaskState
-    participant Handle as TaskHandle
-    participant Control as control_tx
-    participant Process as ProcessController
-    participant Python as Python 子进程
+## 前端控制请求生命周期
 
-    Frontend->>Rust: control_task({kind:"pause"})
-    Rust->>State: current_handle()
-    State-->>Rust: Ok(handle)
-    Rust->>Control: 发送 TaskControlMessage {kind: Pause}
-    Control-->>Process: SuspendThread (Win32)
-    Process-->>Rust: Ok(())
-    Rust-->>Frontend: Ok(())
+前端 `BatchState.controlPending` 保存未决的 `pause | resume | cancel`。每个控制 attempt 记录单调
+token 和开始时的 `currentId`；异步回复只有在 token、任务 ID、运行态和 pending kind 仍匹配时
+才能提交或回滚。过期回复不会覆盖新任务，也不会清空更新的控制状态。终态 reducer 随后把
+`controlPending`、pause/cancelling 标记和当前任务上下文统一清理。
 
-    Frontend->>Rust: control_task({kind:"resume"})
-    Rust->>Control: 发送 TaskControlMessage {kind: Resume}
-    Control-->>Process: ResumeThread (Win32)
-    Process-->>Rust: Ok(())
-    Rust-->>Frontend: Ok(())
-```
-
-### 控制消息通道
-
-Phase 5a 引入 typed reply channel：
-
-```rust
-pub struct TaskControlMessage {
-    pub kind: TaskControlKind,  // Pause / Resume
-    pub response: oneshot::Sender<Result<(), ProcessControlError>>,
-}
-```
-
-替代了之前的 `Result<(), String>`，保留原始 `io::Error` source chain，使 `ShellError` 转换和前端 `TaskErrorCode` 路由更精确。
-
-### 暂停状态下取消
-
-若用户在暂停状态下请求取消：
-1. `current_handle()` 在 Cancelling 阶段仍返回 handle（Phase 5d 设计）
-2. Controller 的 `cancel_token.cancelled()` select 分支与 pause/resume 请求竞争
-3. 无论哪个先到达，最终都走向 kill 路径
+续传冲突的用户选择也使用显式模式：`resume` 重新启动时发送 `force-resume`，`fresh` 发送
+`force-fresh`；`skip` 只推进队列，`cancel` 终止批次。不会用默认 `auto` 再次进入同一冲突。

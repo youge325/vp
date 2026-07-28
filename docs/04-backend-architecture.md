@@ -2,7 +2,7 @@
 
 ## CLI 入口
 
-后端提供 5 个 CLI 子命令：
+后端提供 5 个面向桌面壳/开发者的子命令，以及 1 个仅由流水线拉起的内部 worker 子命令：
 
 | 子命令 | 职责 | 对应 Tauri Command |
 |--------|------|-------------------|
@@ -11,6 +11,7 @@
 | `python -m app process --input <video> ...` | 执行处理流水线 | `start_task` |
 | `python -m app inspect-output --input <video> ...` | 续传预检 | `check_resume_state` |
 | `python -m app benchmark ...` | 端到端补帧性能回归检查 | GitHub Actions / 本地开发 |
+| `python -m app stage-worker --config-json ...` | 执行单个隔离算法 stage | 仅由 Python 流水线内部拉起 |
 
 ### 双层兜底
 
@@ -36,14 +37,22 @@ graph TD
 
 这种设计确保即使 Python 环境不完整，Rust 层仍能收到结构化错误信息而非静默失败。
 
-### process 子命令三段式拆分
+### process / inspect-output 共享预检
 
-[`backend/app/cli/commands/process.py`](../backend/app/cli/commands/process.py) 拆分为三个阶段：
-1. `_process_validation.py` — 输入验证与配置解析
-2. `_process_planning.py` — 处理步骤规划与签名构建
-3. `_process_execution.py` — 流式流水线执行
+CLI composition root 将职责拆成以下边界：
+
+1. `_process_validation.py` — 输入验证与生成配置模型解析
+2. `_pipeline_preparation.py` — 构造不可变 `PreparedRun`
+3. `_process_planning.py` — 组合 `PreparedRun` 与运行期 observers
+4. `_process_execution.py` — 执行与完成事件
+
+`process` 与 `inspect-output` 都调用 `prepare_pipeline_preflight()`，因此视频探测、工作流解析、
+步骤顺序、输出 FPS、签名和 stage plan 只有一套实现。`PreparedRun` 只保存输出路径、类型化配置、
+冻结步骤 tuple 和 preflight；reporter、callback、metrics 放在单独的 `RunObservers`，不进入静态计划。
 
 ## 配置体系
+
+配置与 NDJSON payload 的字段、别名和枚举均由 `contracts/boundary.schema.json` 生成到 `backend/app/generated/contracts.py`。`app.models` 只增加输出路径等领域校验，`app.protocol.payloads` 只增加 camelCase wire 投影；两者不重复声明边界字段。
 
 ### pydantic-settings
 
@@ -53,21 +62,13 @@ graph TD
 - 通过 `.env` 文件或系统环境变量注入
 - 类型安全：字符串、整数、路径自动转换
 
-### Pydantic 模型
+### 生成模型与领域校验
 
-[`backend/app/models/`](../backend/app/models/) 定义 IPC 数据结构，均继承自 `_CamelBase`（自动将 snake_case 字段序列化为 camelCase）：
-
-```python
-class DecodeConfig(_CamelBase):
-    hwAccel: str | None = None
-    decoder: str | None = None
-    # ...
-```
-
-模型用于：
-- stdin JSON 反序列化（Rust → Python）
-- 内部配置传递
-- 类型提示
+[`backend/app/generated/contracts.py`](../backend/app/generated/contracts.py) 是
+`datamodel-code-generator` 产出的唯一边界字段定义。`app.models` 直接 re-export 生成类型，只在
+`OutputConfig` 上增加非空路径领域校验；`app.protocol.payloads` 只提供 wire 投影，不重声明字段。
+`RuntimeConfigs` 保存校验后的 Pydantic 模型，并按需生成防御性 camelCase JSON 副本供签名、adapter
+和 worker 使用。
 
 ## 处理步骤规划
 
@@ -76,13 +77,13 @@ class DecodeConfig(_CamelBase):
 [`backend/app/planning/stage_plan.py`](../backend/app/planning/stage_plan.py) 的 `StagePlan` 描述完整的处理步骤序列：
 
 ```python
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class StagePlan:
-    pre_steps: list[ProcessingStep]
-    interpolation_step: ProcessingStep | None
-    post_steps: list[ProcessingStep]
-    total_encoded_frames: int
+    steps: tuple[ProcessingStep, ...]
+    projection: StageProjection
 ```
+
+插值位置、输出帧数与 FPS 均从有序步骤和同一个 `StageProjection` 派生，不保存可互相矛盾的平行状态。输出尺寸由 preflight 对同一 `StagePlan` 应用 stage 尺寸规则得到。
 
 ### 配置签名
 
@@ -93,17 +94,30 @@ class StagePlan:
 
 ### SegmentManifest
 
-[`backend/app/planning/manifest.py`](../backend/app/planning/manifest.py) 负责续传决策、片段路径和 sidecar 生命周期；
-[`backend/app/planning/manifest_store.py`](../backend/app/planning/manifest_store.py) 负责 `manifest.json` 的版本校验与原子持久化：
+续传由纯 `ResumePolicy`、文件系统 `SegmentWorkspace` 和 `ManifestRepository` 协作；
+repository 负责 v3 `manifest.json` 的版本校验、不兼容数据隔离与原子持久化：
 
-- 在输出目录旁创建 `.vp_segments/` 子目录
+- 为 `output.mp4` 创建同目录 sidecar `output.mp4.vp_segments/`
 - 片段文件名编码帧范围：`chunk-NNNN-out{start}-{end}-src{next}.{ext}`
 - 已完成进度从片段文件名扫描恢复
 - `manifest.json` 只记录配置签名、配置快照和路径元数据
 
+`ResumePolicy` 只做纯冲突决策，`SegmentWorkspace` 只拥有路径、清理、隔离和原子 rename，
+`ManifestRepository` 使用生成的 `SegmentManifest` Pydantic contract 严格读写 v3 JSON；
+`SegmentManifest` 负责协调三者。损坏或非 v3 sidecar 整体
+改名为 `.incompatible[-N]`，应用不迁移或回读。
+
+## 媒体消费方端口
+
+[`backend/app/ports/media.py`](../backend/app/ports/media.py) 由消费方定义
+`MediaProbePort`、`RawVideoPort`、`EncodePort`、`FinalizationPort` 及更窄组合。规划、分段编码和
+收尾模块只接收自己所需的 Protocol；`MediaRuntimePort` 只存在于 composition root。
+[`backend/app/adapters/ffmpeg_media.py`](../backend/app/adapters/ffmpeg_media.py) 是 FFmpeg wrapper
+到这些端口的唯一 adapter，raw ffprobe 结构不会进入规划领域。
+
 ## 流式执行器
 
-### 三线程流水线
+### stage-worker 流式流水线
 
 [`backend/app/processing/streaming/pipeline.py`](../backend/app/processing/streaming/pipeline.py):
 
@@ -125,13 +139,14 @@ graph LR
     O[stop_event] --> P[协作式终止]
 ```
 
-[`backend/app/planning/workflow_steps.py`](../backend/app/planning/workflow_steps.py) 的
-`resolve_processing_steps(workflow_config)` 只消费已经校验的 workflow。插帧、超分与处理顺序
-全部由 workflow 自身决定，不接受第二套 algorithm override，也不为 CLI 构造备用 stage。
+[`backend/app/planning/stage_projection.py`](../backend/app/planning/stage_projection.py) 的
+`StageProjection.resolve_workflow()` 在 composition root 对已校验 workflow 只投影一次。插帧、
+超分与处理顺序全部由 workflow 自身决定；同一不可变 projection 直接下传 `StagePlan`，不接受
+第二套 algorithm override，也不为 CLI 构造备用 stage。
 
 `process_video_streaming()` 在 preflight 和 manifest 准备完成后只构造一次不可变的
-`StreamingPipelineContext`。dispatch、raw/stage-file runtime 与最终 lifecycle 共享同一对象，
-不再逐层展开 FFmpeg、路径、配置、resume state、回调和 metrics；preflight 派生结果由同一对象持有。
+`StreamingPipelineContext`。dispatch、raw/stage-file runtime 与最终 lifecycle 共享同一对象；
+preflight 派生结果由同一对象持有。
 
 rawvideo 路径由 stage-worker 子进程链执行算法，主进程只保留编码队列和生命周期编排：
 
@@ -140,8 +155,7 @@ raw pipeline 在流 FPS 确定后创建一次不可变的 `EncoderRuntimeConfig`
 同一 composition root 还创建一次不可变的 `WorkerPipelineRuntimeConfig`，集中 FFmpeg、输入、
 decode config、stage plan、backend、进度回调、源尺寸/帧数、resume state 与 metrics。
 `worker_pipeline` 和 `worker_chain_runtime` 传递同一对象；派生 worker plans、queues、error queue
-和 stop event 仍归各自运行时层所有。`PipelineMetrics` 必须由 processing plan 显式提供，
-streaming entry 不再为测试调用方隐式创建。
+和 stop event 仍归各自运行时层所有。`PipelineMetrics` 必须由 processing plan 显式提供。
 
 进程边界使用明确的 `StageProgressCallback`、`EncodeQueue`、`BinaryIO`、`threading.Event`
 与 worker handle protocol；只有 JSON 配置和算法 tensor 保留动态类型。decoder writer、
@@ -186,27 +200,25 @@ stage-file 路径在每个 stage 规划完成后创建一次不可变的 `StageF
 2. 合并原始音频（若 `keepAudio=true`）
 3. 将结果写入调用方提供的最终输出路径
 
-该 helper 是写入调用方指定 `output_path` 的命令并返回 `None`。音频提取仅返回成功布尔值，音频合并同样是无返回值命令；pipeline lifecycle 和 stage-file runtime 始终继续使用自身已持有的输出路径。只有最终输出成功后，pipeline lifecycle 才清理 `.vp_segments/` 和 sidecar；finalize 失败时保留现场用于续传。
+该 helper 是写入调用方指定 `output_path` 的命令并返回 `None`。音频提取仅返回成功布尔值，音频合并同样是无返回值命令；pipeline lifecycle 和 stage-file runtime 始终继续使用自身已持有的输出路径。只有最终输出成功后，pipeline lifecycle 才清理 `<output>.vp_segments` sidecar；finalize 失败时保留现场用于续传。
 
 ## 算法层
 
-### IAlgorithm 接口
+### 窄算法端口
 
-[`backend/app/algorithms/base.py`](../backend/app/algorithms/base.py):
+[`backend/app/algorithms/interfaces.py`](../backend/app/algorithms/interfaces.py) 按实际消费模式定义三个 Protocol：
 
 ```python
-class IAlgorithm(ABC):
-    @abstractmethod
-    def process_frame(self, frame: np.ndarray) -> np.ndarray: ...
-
-    @abstractmethod
-    def process_frame_pair(
-        self, frame_a: np.ndarray, frame_b: np.ndarray, timestep: float
-    ) -> np.ndarray: ...
+class SingleFrameAlgorithm(Protocol): ...
+class FramePairAlgorithm(Protocol): ...
+class FrameSequenceAlgorithm(Protocol): ...
 ```
 
-- `process_frame` — 单帧处理（超分辨率、降噪等）
-- `process_frame_pair` — 帧对处理（插帧，在 `frame_a` 和 `frame_b` 之间生成中间帧）
+stage descriptor 明确声明 single / pair / sequence 模式，执行器只接收对应窄端口；不存在恒等实现或跨模式默认回退。
+
+`ProcessingStep` 是不可变 descriptor，`execution_mode` 在算法实例创建前就确定。ONNX 单帧超分由
+`OnnxSuperResolution` 实现，PaddleGAN 视频超分由 `PaddleGanVideoSuperResolution` 实现；
+stage-worker factory 按 descriptor 显式选择，不用同一类兼容两种消费模式。
 
 ### Stage Worker 算法装配
 
@@ -218,9 +230,8 @@ class IAlgorithm(ABC):
 - interpolation 与 super-resolution 复用规划层过滤后的 kwargs 和已创建 backend
 - 未支持的 stage 类型在装配边界立即失败
 
-factory、stage runtime 和 execution loop 共享 `IAlgorithm`、`ITensorBackend` 与
-`StageWorkerConfig` 类型契约。算法模式直接调用基类提供的 sequence/pair/multi 能力，filter
-chain 通过私有窄 protocol 校验一次后执行，不为测试 double 保留动态 `getattr` fallback。
+factory、stage runtime 和 execution loop 共享 `Algorithm` union、`ITensorBackend` 与
+`StageWorkerConfig` 类型契约，并按 descriptor 的模式做一次结构化 Protocol 校验。
 `FramePayload` 的 host/device 转换必须显式接收同一 `PipelineMetrics`，确保生产和测试路径都
 记录一致的传输指标。
 
@@ -230,9 +241,9 @@ chain 通过私有窄 protocol 校验一次后执行，不为测试 double 保�
 
 ### RIFE 补帧家族
 
-[`backend/app/algorithms/rife/`](../backend/app/algorithms/rife/) 实现 RIFE（Real-Time Intermediate Flow Estimation）补帧算法：
+[`backend/app/algorithms/pytorch/rife/`](../backend/app/algorithms/pytorch/rife/) 实现 RIFE 补帧算法：
 
-- `_model_spec.py` — 36 个版本（v4.0 ~ v4.26）的模型规格表
+- `app/catalog/rife_models.py` — 与算法实现解耦的 36 个版本模型规格
 - `model_loader.py` — PyTorch 权重加载与 Head 构建
 - `solver.py` — PyTorch 推理求解器
 - `onnx_solver.py` — ONNX Runtime 推理求解器
@@ -288,7 +299,8 @@ class ProcessError(Exception):
 
 ### ResumeConflictError
 
-专门处理输出已存在时的用户决策需求。Rust 层捕获后包装为 `ShellError::InvalidInput`，前端展示 `ResumeConflictDialog`。
+专门处理输出已存在时的用户决策需求。Python 发出 backend 子集中的 `resume_conflict` envelope；
+Rust 原样保留 `code / message / details`，前端再把 details 投影为 `ResumeConflictDialog` 所需领域结构。
 
 ### 错误码推断
 
@@ -299,21 +311,23 @@ class ProcessError(Exception):
 
 ## 进度上报
 
-### NdjsonEmitter
+### NDJSON emitter
 
-[`backend/app/protocol/__init__.py`](../backend/app/protocol/__init__.py) 提供单例发射器：
+[`backend/app/protocol/__init__.py`](../backend/app/protocol/__init__.py) 提供唯一模块级 `ndjson`
+发射器；生产代码不自行拼装 task envelope：
 
 ```python
-class NdjsonEmitter:
+class _NdjsonEmitter:
     def progress(self, current, total, percent, stage, stage_index, stage_total, metrics=None): ...
     def completed(self, output_path, processed_frames, time_seconds): ...
     def error(self, code, message, details=None): ...
     def resume_status(self, resumed, completed_chunks, ...): ...
 ```
 
-- 线程安全：Python GIL 序列化 `print()` 调用
+- 所有结构化 stdout 输出集中在同一 emitter；专用锁覆盖序列化、整行 write 与 flush，保证并发
+  reporter 不会交错 NDJSON 行
 - 普通日志和终端进度条继续输出到 stderr，不经过此处
 
 ### Reporter
 
-[`backend/app/protocol/reporter.py`](../backend/app/protocol/reporter.py) 在终端显示人类可读的进度条，同时通过 `NdjsonEmitter` 输出结构化事件。两者独立，终端用户看进度条，Rust 层解析 NDJSON。
+[`backend/app/protocol/reporter.py`](../backend/app/protocol/reporter.py) 在 stderr 显示人类可读的进度条，同时通过 `ndjson` 输出结构化事件。两者独立，终端用户看进度条，Rust 层解析 stdout NDJSON。
