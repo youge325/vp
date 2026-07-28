@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::models::{TaskCancelledPayload, TaskCancelledReason, TaskErrorCode, TaskErrorPayload};
-use crate::process_control::{self, ProcessControlError, ProcessController};
+use crate::process_control::{DefaultProcessController, ProcessControlError, ProcessController};
 use crate::protocol::TaskEventName;
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
 use crate::tasks::readers::ProgressBeat;
@@ -44,7 +44,7 @@ pub(super) fn spawn_task_controller<R: Runtime + 'static>(session: TaskControlle
         cancel_token,
         progress_beat,
     } = session;
-    let controller = process_control::default_controller();
+    let controller = DefaultProcessController::default();
 
     // Oneshot kill signal to the wait task — single-use, never dropped silently.
     let (kill_tx, kill_rx) = oneshot::channel::<()>();
@@ -108,7 +108,7 @@ pub(super) fn spawn_task_controller<R: Runtime + 'static>(session: TaskControlle
                         continue;
                     };
                     let result = handle_pause_resume(
-                        &*controller,
+                        &controller,
                         root_pid,
                         message.kind,
                         &mut is_paused,

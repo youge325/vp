@@ -23,7 +23,7 @@ graph TD
         P1["argparse process 子命令"]
         P2["load_runtime_configs()"]
         P3["Pydantic 模型校验"]
-        P4["_resolve_processing_steps()"]
+        P4["resolve_processing_steps()"]
         P5["StagePlan"]
     end
 
@@ -116,7 +116,7 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 
 ### 处理步骤规划
 
-`_resolve_processing_steps()` 解析工作流配置，生成处理步骤列表：
+`resolve_processing_steps(workflow_config)` 只根据已校验的工作流配置生成处理步骤列表：
 
 - 预处理步骤（`pre_steps`）：滤镜链（裁剪、缩放、降噪、锐化、色彩调整、填充、Anime 清理）
 - 插帧步骤（`interpolation_step`）：可选，RIFE 补帧

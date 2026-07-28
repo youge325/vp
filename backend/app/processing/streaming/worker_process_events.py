@@ -4,12 +4,22 @@ from __future__ import annotations
 
 import json
 import queue
+import subprocess
 import sys
-from typing import Any
+import threading
+from collections import deque
+from typing import Any, Protocol, Sequence
 
 from app.errors import ProcessError, TaskErrorCode, error_code_to_wire
 from app.protocol.process_markers import TENSORRT_LOG_PREFIX as _TENSORRT_LOG_PREFIX
-from app.processing.streaming.stage_worker_progress import STAGE_EVENT_PREFIX
+from app.processing.streaming.stage_worker_progress import STAGE_EVENT_PREFIX, StageProgressCallback
+from app.processing.streaming.worker_plans import StageWorkerPlan
+
+
+class _WorkerEventHandle(Protocol):
+    process: subprocess.Popen[bytes]
+    plan: StageWorkerPlan
+    stderr_tail: deque[str]
 
 
 def _parse_stage_event_line(line: str) -> dict[str, Any] | None:
@@ -24,10 +34,10 @@ def _parse_stage_event_line(line: str) -> dict[str, Any] | None:
 
 
 def read_worker_stderr(
-    handle: Any,
-    progress_callbacks: list[Any],
+    handle: _WorkerEventHandle,
+    progress_callbacks: Sequence[StageProgressCallback | None],
     error_queue: queue.Queue[BaseException],
-    stop_event: Any,
+    stop_event: threading.Event,
 ) -> None:
     stderr = handle.process.stderr
     if stderr is None:

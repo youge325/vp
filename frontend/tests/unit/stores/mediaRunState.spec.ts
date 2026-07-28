@@ -62,7 +62,7 @@ describe('useMediaRunState', () => {
     expect(store.getByItemId('b')?.taskState.status).toBe('completed')
   })
 
-  it('resetItemRunState restores idle defaults and clears logs by default', () => {
+  it('resetItemRunState restores idle defaults and clears logs', () => {
     const store = useMediaRunState()
     store.setTaskState('a', sampleTaskState({
       status: 'completed',
@@ -78,20 +78,6 @@ describe('useMediaRunState', () => {
     expect(entry?.lastOutputPath).toBe('')
   })
 
-  it('resetItemRunState preserves logs when asked', () => {
-    const store = useMediaRunState()
-    store.setTaskState('a', sampleTaskState({
-      status: 'completed',
-      logs: ['line-1', 'line-2'],
-    }))
-
-    store.resetItemRunState('a', true)
-
-    const entry = store.getByItemId('a')
-    expect(entry?.taskState.status).toBe('idle')
-    expect(entry?.taskState.logs).toEqual(['line-1', 'line-2'])
-  })
-
   it('resetItemRunState materialises a fresh entry for ids that were never set', () => {
     // 启动批处理时会一次性 reset 所有 runtime ids,即使其中某些 id 还没被
     // task state 触碰过 —— 必须能 idempotently 把它们移到 idle defaults。
@@ -103,16 +89,18 @@ describe('useMediaRunState', () => {
     expect(entry?.lastOutputPath).toBe('')
   })
 
-  it('resetItemsRunState resets every id in the set', () => {
+  it('resetItemsRunState resets every id while preserving batch logs', () => {
     const store = useMediaRunState()
-    store.setTaskState('a', sampleTaskState({ status: 'completed' }))
-    store.setTaskState('b', sampleTaskState({ status: 'error' }))
+    store.setTaskState('a', sampleTaskState({ status: 'completed', logs: ['a-log'] }))
+    store.setTaskState('b', sampleTaskState({ status: 'error', logs: ['b-log'] }))
     store.setTaskState('c', sampleTaskState({ status: 'completed' }))
 
     store.resetItemsRunState(new Set(['a', 'b']))
 
     expect(store.getByItemId('a')?.taskState.status).toBe('idle')
     expect(store.getByItemId('b')?.taskState.status).toBe('idle')
+    expect(store.getByItemId('a')?.taskState.logs).toEqual(['a-log'])
+    expect(store.getByItemId('b')?.taskState.logs).toEqual(['b-log'])
     // 不在 set 里的 id 状态保持不变
     expect(store.getByItemId('c')?.taskState.status).toBe('completed')
   })

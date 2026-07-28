@@ -7,13 +7,20 @@ import threading
 
 from app.processing.streaming.encoder_runtime_config import EncoderRuntimeConfig
 from app.processing.streaming.encoder_segment_writer import EncoderSegmentWriter
-from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, StreamEnd, _ENCODE_END, _queue_get
+from app.processing.streaming.queues import (
+    EncodeQueue,
+    EncodedFrame,
+    SegmentBoundary,
+    StreamEnd,
+    _ENCODE_END,
+    _queue_get,
+)
 
 
 def run_encoder_worker(
     *,
     config: EncoderRuntimeConfig,
-    encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object],
+    encode_queue: EncodeQueue,
     error_queue: queue.Queue[BaseException],
     stop_event: threading.Event,
 ) -> None:

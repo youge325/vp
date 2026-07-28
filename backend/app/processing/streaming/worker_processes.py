@@ -12,9 +12,10 @@ import subprocess
 import sys
 import tempfile
 import threading
-from typing import Any, Iterator
+from typing import Iterator, Sequence
 
 from app.errors import ProcessError, TaskErrorCode
+from app.processing.streaming.stage_worker_progress import StageProgressCallback
 from app.processing.streaming.worker_process_events import read_worker_stderr
 from app.processing.streaming.worker_process_io import close_pipe
 from app.processing.streaming.worker_plans import StageWorkerPlan
@@ -92,9 +93,9 @@ def _wait_for_workers(handles: list[_WorkerHandle], error_queue: queue.Queue[Bas
 def stage_worker_session(
     plans: list[StageWorkerPlan],
     *,
-    progress_callbacks: list[Any],
+    progress_callbacks: Sequence[StageProgressCallback | None],
     error_queue: queue.Queue[BaseException],
-    stop_event: Any,
+    stop_event: threading.Event,
 ) -> Iterator[list[_WorkerHandle]]:
     with tempfile.TemporaryDirectory(prefix="vp-stage-workers-") as config_dir:
         handles = _spawn_stage_workers(

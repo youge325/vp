@@ -22,14 +22,9 @@ export function normalizeDecodeConfig(
   config: DecodeConfig,
   checkResult: EnvironmentCheckResult | null,
   videoCodec: string,
-  preferDefaults = false,
 ): DecodeConfig {
   const visibleProfiles = getVisibleDecoderProfiles(checkResult, videoCodec)
   const allProfiles = getVisibleDecoderProfiles(checkResult, '')
-
-  if (preferDefaults) {
-    return createDefaultDecodeConfig(checkResult, videoCodec)
-  }
 
   const selectedName = config.mode === 'software' ? 'software' : config.decoder
   const matchedVisible = visibleProfiles.find((profile) => profile.name === selectedName) ?? null
@@ -62,16 +57,14 @@ export function normalizeDecodeConfig(
 export function normalizeEncodeConfig(
   config: EncodeConfig,
   checkResult: EnvironmentCheckResult | null,
-  preferDefaults = false,
 ): EncodeConfig {
   const profiles = getVisibleEncoderProfiles(checkResult)
   const matchedProfile = profiles.find((profile) => profile.name === config.codec) ?? null
 
-  if (preferDefaults || !matchedProfile) {
+  if (!matchedProfile) {
     const fallbackProfile = profiles.find((profile) => profile.family === config.family) ?? null
     const defaults = createDefaultEncodeConfig(checkResult)
-    const candidate = preferDefaults ? null : fallbackProfile
-    if (!candidate) {
+    if (!fallbackProfile) {
       return {
         ...defaults,
         container: config.container || defaults.container,
@@ -79,8 +72,8 @@ export function normalizeEncodeConfig(
       }
     }
 
-    const family = encoderFamilyFromProfile(candidate.family)
-    return selectEncodeProfile(candidate, config, defaultRateControlValue(family)) ?? config
+    const family = encoderFamilyFromProfile(fallbackProfile.family)
+    return selectEncodeProfile(fallbackProfile, config, defaultRateControlValue(family)) ?? config
   }
 
   const normalizedRateControl =

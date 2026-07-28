@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+
+import numpy as np
 
 from app.processing.streaming.encoder_runtime_config import EncoderRuntimeConfig
 from app.processing.streaming.encoder_segments import resolve_segment_output_frame_count
 from app.utils.ffmpeg._progress import make_encode_progress_callback
+from app.utils.ffmpeg.io import RawVideoWriter
 
 
 class EncoderSegmentWriter:
@@ -17,13 +19,13 @@ class EncoderSegmentWriter:
         self._extension = (
             os.path.splitext(config.output_path)[1] or f".{config.encode_config.get('container') or 'mp4'}"
         )
-        self._writer: Any | None = None
+        self._writer: RawVideoWriter | None = None
         self._segment_index = len(config.resume_state.completed_segments) + 1
         self._current_segment_start = config.resume_state.completed_output_frames
         self._current_segment_input_frames = 0
         self._tmp_path = ""
 
-    def write_frame(self, frame: Any) -> None:
+    def write_frame(self, frame: np.ndarray) -> None:
         if self._writer is None:
             self._open_segment()
         assert self._writer is not None

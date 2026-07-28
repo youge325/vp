@@ -4,22 +4,21 @@ from __future__ import annotations
 
 import queue
 import threading
-from typing import Any
 
 from app.processing.streaming.worker_chain_runtime import run_worker_chain_runtime
-from app.processing.streaming.queues import StreamEnd, _ENCODE_END, _queue_put, _queue_put_nowait
+from app.processing.streaming.queues import EncodeQueue, StreamEnd, _ENCODE_END, _queue_put, _queue_put_nowait
 from app.processing.streaming.worker_plans import build_stage_worker_plans
 from app.processing.streaming.worker_runtime_config import WorkerPipelineRuntimeConfig
 
 
-def _enqueue_stream_end(*, encode_queue: queue.Queue[Any], stop_event: threading.Event, source_frames: int) -> None:
+def _enqueue_stream_end(*, encode_queue: EncodeQueue, stop_event: threading.Event, source_frames: int) -> None:
     _queue_put(encode_queue, StreamEnd(next_source_frame=int(source_frames)), stop_event)
 
 
 def run_stage_worker_pipeline(
     *,
     config: WorkerPipelineRuntimeConfig,
-    encode_queue: queue.Queue[Any],
+    encode_queue: EncodeQueue,
     error_queue: queue.Queue[BaseException],
     stop_event: threading.Event,
 ) -> None:

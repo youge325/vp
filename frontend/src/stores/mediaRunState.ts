@@ -58,17 +58,20 @@ export const useMediaRunState = defineStore('mediaRunState', () => {
     ensure(id).lastOutputPath = path
   }
 
-  function resetItemRunState(id: string, preserveLogs = false): void {
-    const existingLogs = preserveLogs ? state[id]?.taskState.logs ?? [] : []
+  function setIdleRunState(id: string, logs: string[]): void {
     state[id] = {
-      taskState: { ...createIdleTaskState(), logs: existingLogs },
+      taskState: { ...createIdleTaskState(), logs },
       lastOutputPath: '',
     }
   }
 
-  function resetItemsRunState(ids: Set<string>, preserveLogs = false): void {
+  function resetItemRunState(id: string): void {
+    setIdleRunState(id, [])
+  }
+
+  function resetItemsRunState(ids: Set<string>): void {
     for (const id of ids) {
-      resetItemRunState(id, preserveLogs)
+      setIdleRunState(id, state[id]?.taskState.logs ?? [])
     }
   }
 

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import queue
-from typing import Any
+import threading
 
+from app.processing.streaming.queues import EncodeQueue
 from app.processing.streaming.worker_plans import StageWorkerPlan
 from app.processing.streaming.worker_process_io import (
     DecodedFrameWriterConfig,
@@ -19,9 +20,9 @@ def run_worker_chain_runtime(
     *,
     config: WorkerPipelineRuntimeConfig,
     plans: list[StageWorkerPlan],
-    encode_queue: queue.Queue[Any],
+    encode_queue: EncodeQueue,
     error_queue: queue.Queue[BaseException],
-    stop_event: Any,
+    stop_event: threading.Event,
 ) -> None:
     start_source_frame = int(config.resume_state.start_source_frame)
     with stage_worker_session(

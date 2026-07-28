@@ -9,6 +9,7 @@ from typing import Any
 from app.processing.streaming.stage_file_chunk_encoding import encode_stage_worker_output
 from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
+from app.processing.streaming.stage_worker_progress import StageProgressCallback
 from app.processing.streaming.worker_plans import StageChunkPlan, StageWorkerPlan
 from app.processing.streaming.worker_process_io import DecodedFrameWriterConfig, decoded_frame_writer_session
 from app.processing.streaming.worker_processes import stage_worker_session
@@ -38,7 +39,7 @@ def run_stage_chunk_to_file(
     error_queue: queue.Queue[BaseException] = queue.Queue()
     stop_event = threading.Event()
 
-    callbacks: list[Any | None] = []
+    callbacks: list[StageProgressCallback | None] = []
     if config.progress_callback is not None:
 
         def adapt_progress(current: int, *_worker_progress: Any, **kwargs: Any) -> None:
