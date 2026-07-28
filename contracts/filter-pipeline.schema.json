@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FilterPipelineConfig",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "filters": {
+      "type": "array",
+      "items": {
+        "$ref": "./filter-step.schema.json"
+      }
+    }
+  },
+  "required": [
+    "enabled",
+    "filters"
+  ],
+  "additionalProperties": false
+}

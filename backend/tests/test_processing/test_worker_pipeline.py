@@ -4,7 +4,7 @@ import queue
 import threading
 
 import app.processing.streaming.worker_pipeline as worker_pipeline
-from app.planning import ProcessingStep, build_stage_plan
+from app.planning import ProcessingStep, StageProjection, build_stage_plan
 from app.planning.manifest import ResumeState
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import StreamEnd, _ENCODE_END
@@ -17,7 +17,6 @@ def _runtime_config(stage_plan, *, start_source_frame: int = 0) -> WorkerPipelin
         input_path="input.mp4",
         decode_config={"mode": "software"},
         stage_plan=stage_plan,
-        tensor_backend_name="onnx",
         progress_callbacks=[],
         source_width=1,
         source_height=1,
@@ -31,13 +30,17 @@ def _runtime_config(stage_plan, *, start_source_frame: int = 0) -> WorkerPipelin
     )
 
 
-def test_worker_pipeline_delegates_runtime_and_emits_stream_end(monkeypatch) -> None:
+def _super_resolution_plan():
     step = ProcessingStep(
         algorithm_type="super_resolution",
-        algorithm_kwargs={"scale_factor": 1.0},
+        algorithm_kwargs={"scale_factor": 1.0, "tensor_backend": "onnx"},
         stage_name="01_super_resolution",
     )
-    stage_plan = build_stage_plan([step], 3, source_duration=1.0, output_fps=None)
+    return build_stage_plan(StageProjection((step,)), 3, source_duration=1.0, output_fps=None)
+
+
+def test_worker_pipeline_delegates_runtime_and_emits_stream_end(monkeypatch) -> None:
+    stage_plan = _super_resolution_plan()
     encode_queue: queue.Queue = queue.Queue()
     runtime_calls: list[dict] = []
 
@@ -63,12 +66,7 @@ def test_worker_pipeline_delegates_runtime_and_emits_stream_end(monkeypatch) -> 
 
 
 def test_worker_pipeline_enqueues_encode_end_when_runtime_reports_error(monkeypatch) -> None:
-    step = ProcessingStep(
-        algorithm_type="super_resolution",
-        algorithm_kwargs={"scale_factor": 1.0},
-        stage_name="01_super_resolution",
-    )
-    stage_plan = build_stage_plan([step], 3, source_duration=1.0, output_fps=None)
+    stage_plan = _super_resolution_plan()
     encode_queue: queue.Queue = queue.Queue()
     error_queue: queue.Queue[BaseException] = queue.Queue()
 
@@ -89,12 +87,7 @@ def test_worker_pipeline_enqueues_encode_end_when_runtime_reports_error(monkeypa
 
 
 def test_worker_pipeline_emits_stream_end_without_starting_workers_when_input_is_complete(monkeypatch) -> None:
-    step = ProcessingStep(
-        algorithm_type="super_resolution",
-        algorithm_kwargs={"scale_factor": 1.0},
-        stage_name="01_super_resolution",
-    )
-    stage_plan = build_stage_plan([step], 3, source_duration=1.0, output_fps=None)
+    stage_plan = _super_resolution_plan()
     encode_queue: queue.Queue = queue.Queue()
     runtime_calls: list[dict] = []
     monkeypatch.setattr(

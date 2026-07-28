@@ -1,0 +1,24 @@
+{
+  "$schema": "./ipc-manifest.schema.json",
+  "schemaVersion": 1,
+  "commands": [
+    { "name": "pick_inputs", "args": {}, "result": "string[]" },
+    { "name": "pick_output_directory", "args": {}, "result": "string|null" },
+    { "name": "check_environment", "args": { "forceRefresh": "boolean" }, "result": "EnvironmentCheckPayload" },
+    { "name": "load_workbench_preset", "args": {}, "result": "WorkbenchPreset|null" },
+    { "name": "save_workbench_preset", "args": { "preset": "WorkbenchPreset" }, "result": "void" },
+    { "name": "inspect_video", "args": { "inputPath": "string" }, "result": "VideoInfo" },
+    { "name": "check_resume_state", "args": { "request": "TaskRequest" }, "result": "ResumeInspectionResult" },
+    { "name": "start_task", "args": { "request": "TaskRequest" }, "result": "void" },
+    { "name": "control_task", "args": { "kind": "TaskControlKind" }, "result": "void" },
+    { "name": "open_output_location", "args": { "path": "string" }, "result": "void" }
+  ],
+  "events": [
+    { "name": "task-progress", "payload": "TaskProgressPayload" },
+    { "name": "task-completed", "payload": "TaskCompletedPayload" },
+    { "name": "task-error", "payload": "TaskErrorPayload" },
+    { "name": "task-cancelled", "payload": "TaskCancelledPayload" },
+    { "name": "task-log", "payload": "TaskLogPayload" },
+    { "name": "task-resume-status", "payload": "ResumeStatusPayload" }
+  ]
+}

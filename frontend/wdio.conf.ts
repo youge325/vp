@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawnSync } from 'node:child_process'
+import { browser } from '@wdio/globals'
 import { randomUUID } from 'node:crypto'
 import net from 'node:net'
 import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'

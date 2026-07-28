@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/task-control.schema.json",
+  "title": "TaskControlKind",
+  "type": "string",
+  "enum": [
+    "pause",
+    "resume",
+    "cancel"
+  ]
+}

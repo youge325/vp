@@ -11,9 +11,13 @@ import {
   buildOnnxModelOptions,
 } from '@/services/preset/enhance-options'
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
+import {
+  createAlgorithmInfo,
+  createModelVariantInfo,
+} from '../../fixtures/environment'
 
 function detail(name: string, parameterCount: number | null = 5670892): ModelVariantInfo {
-  return {
+  return createModelVariantInfo({
     name,
     label: name,
     metrics: {
@@ -21,7 +25,7 @@ function detail(name: string, parameterCount: number | null = 5670892): ModelVar
       analysisStatus: 'ok',
       analysisNotes: [],
     },
-  }
+  })
 }
 
 describe('enhance option rules', () => {
@@ -50,8 +54,13 @@ describe('enhance option rules', () => {
 
   it('builds algorithm options without view-local mapping rules', () => {
     const algorithms: AlgorithmInfo[] = [
-      { name: 'rife', tensorBackends: ['pytorch'], models: ['4.25'] },
-      { name: 'ppmsvsr', tensorBackends: ['paddle'], models: ['x4'], modelDetails: [detail('x4')] },
+      createAlgorithmInfo({ name: 'rife', tensorBackends: ['pytorch'], models: ['4.25'] }),
+      createAlgorithmInfo({
+        name: 'ppmsvsr',
+        tensorBackends: ['paddle'],
+        models: ['x4'],
+        modelDetails: [detail('x4')],
+      }),
     ]
 
     expect(buildAlgorithmOptions(algorithms, 'name')).toEqual([

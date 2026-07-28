@@ -4,6 +4,7 @@ import hashlib
 import json
 
 from app.planning import ProcessingStep, build_run_identity
+from app.ports.media import VideoMetadata
 
 
 def test_run_identity_uses_the_persisted_snapshot_as_signature_source(tmp_path) -> None:
@@ -23,15 +24,16 @@ def test_run_identity_uses_the_persisted_snapshot_as_signature_source(tmp_path) 
         decode_config=decode_config,
         encode_config={"codec": "libx264"},
         workflow_config={"fpsMode": "multi"},
-        output_config={"segmentFrames": 0, "ignored": True},
+        output_config={"segmentFrames": 1000, "ignored": True},
         processing_steps=[step],
-        video_info={
-            "width": 320,
-            "height": 180,
-            "source_fps": 24.0,
-            "source_frames": 5,
-            "duration": 5 / 24,
-        },
+        video_info=VideoMetadata(
+            width=320,
+            height=180,
+            source_fps=24.0,
+            source_frames=5,
+            duration=5 / 24,
+            has_audio=True,
+        ),
     )
 
     assert identity.config_snapshot == {

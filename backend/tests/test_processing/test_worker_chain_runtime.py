@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any
 
-from app.planning import ProcessingStep, ResumeState, build_stage_plan
+from app.planning import ProcessingStep, ResumeState, StageProjection, build_stage_plan
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
 from app.processing.streaming.worker_chain_runtime import run_worker_chain_runtime
@@ -20,7 +20,7 @@ def _stage_plan_and_worker_plan() -> tuple[Any, StageWorkerPlan]:
         algorithm_kwargs={"scale_factor": 1.0},
         stage_name="01_super_resolution",
     )
-    stage_plan = build_stage_plan([step], 3, source_duration=1.0, output_fps=None)
+    stage_plan = build_stage_plan(StageProjection((step,)), 3, source_duration=1.0, output_fps=None)
     worker_plan = StageWorkerPlan(
         config=StageWorkerConfig(
             stage=step,
@@ -53,7 +53,7 @@ def test_worker_chain_runtime_runs_decode_and_drain_inside_worker_session(monkey
     calls: list[tuple[str, Any]] = []
 
     @contextmanager
-    def fake_session(plans, **kwargs):
+    def fake_session(plans, **_kwargs):
         calls.append(("session", plans))
         yield [handle]
         calls.append(("session_closed", len(plans)))
@@ -96,7 +96,6 @@ def test_worker_chain_runtime_runs_decode_and_drain_inside_worker_session(monkey
         input_path="input.mp4",
         decode_config={"mode": "software"},
         stage_plan=stage_plan,
-        tensor_backend_name="onnx",
         progress_callbacks=[lambda current, total, **_kwargs: progress_calls.append((current, total))],
         source_width=1,
         source_height=1,

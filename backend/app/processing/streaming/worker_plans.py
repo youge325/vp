@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.planning import ProcessingStep, StagePlan
+from app.planning import ProcessingStep, StagePlan, StageProjection
 from app.processing.streaming.stage_rules import (
-    ordered_steps,
     stage_output_dimensions,
-    stage_output_frame_count,
     stage_tensor_backend_name,
 )
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
@@ -37,25 +35,27 @@ class StageChunkPlan:
 def build_stage_worker_plans(
     *,
     stage_plan: StagePlan,
-    tensor_backend_name: str,
     source_width: int,
     source_height: int,
     source_frame_count: int,
 ) -> list[StageWorkerPlan]:
     """Build sequential stage-worker configs from a resolved ``StagePlan``."""
-    steps = ordered_steps(stage_plan)
+    steps = stage_plan.steps
     plans: list[StageWorkerPlan] = []
     input_width = source_width
     input_height = source_height
-    input_frame_count = source_frame_count
 
-    for index, step in enumerate(steps, start=1):
+    projected_stages = stage_plan.projection.stages(source_frames=source_frame_count)
+    for projected_stage in projected_stages:
+        index = projected_stage.position
+        step = projected_stage.step
+        input_frame_count = projected_stage.input_frames
         output_width, output_height = stage_output_dimensions(
             step,
             input_width=input_width,
             input_height=input_height,
         )
-        output_frame_count = stage_output_frame_count(step, input_frame_count)
+        output_frame_count = projected_stage.output_frames
         plans.append(
             StageWorkerPlan(
                 config=StageWorkerConfig(
@@ -68,7 +68,7 @@ def build_stage_worker_plans(
                     output_width=output_width,
                     output_height=output_height,
                     input_frame_count=input_frame_count,
-                    tensor_backend_name=stage_tensor_backend_name(step, tensor_backend_name),
+                    tensor_backend_name=stage_tensor_backend_name(step),
                     output_frame_count=output_frame_count,
                 ),
                 output_frame_count=output_frame_count,
@@ -76,7 +76,6 @@ def build_stage_worker_plans(
         )
         input_width = output_width
         input_height = output_height
-        input_frame_count = output_frame_count
 
     return plans
 
@@ -117,7 +116,7 @@ def build_stage_chunk_plans(
         logical_count = min(chunk_size, total_frames - start)
         has_lookahead = start + logical_count < total_frames
         read_count = logical_count + (1 if has_lookahead else 0)
-        raw_output_count = stage_output_frame_count(step, read_count)
+        raw_output_count = StageProjection.project_frame_count(step, read_count)
         skip_output_frames = 1 if start > 0 and raw_output_count > 0 else 0
         chunks.append(
             StageChunkPlan(
@@ -148,7 +147,7 @@ def boundary_schedule_for_stage_plan(
             schedule[emitted_count] = next_source_frame
         return schedule
 
-    multi = int(stage_plan.interpolation_step.algorithm_kwargs.get("multi") or 2)
+    multi = int(stage_plan.interpolation_step.algorithm_kwargs["multi"])
     for next_source_frame in range(start_source_frame + 1, source_frames):
         emitted_count = (next_source_frame - start_source_frame) * multi
         schedule[emitted_count] = next_source_frame

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
 import { applySuperResolutionAlgorithmDefaults } from '@/services/preset/enhance-super-resolution-defaults'
-import type { EnvironmentCheckResult } from '@/types/protocol'
+import {
+  createAlgorithmInfo,
+  createEnvironmentResult,
+} from '../../fixtures/environment'
 
 describe('super-resolution algorithm defaults', () => {
   it('applies PaddleGAN VSR fixed backend, scale, ONNX, and frame defaults', () => {
@@ -13,7 +16,7 @@ describe('super-resolution algorithm defaults', () => {
 
     applySuperResolutionAlgorithmDefaults(
       workflow,
-      {
+      createAlgorithmInfo({
         name: 'custom-vsr',
         family: 'paddlegan_vsr',
         tensorBackends: ['paddle'],
@@ -21,7 +24,7 @@ describe('super-resolution algorithm defaults', () => {
         fixedScaleFactor: 4,
         defaultNumFrames: 8,
         inputFrameMode: 'editable_chunk',
-      },
+      }),
       null,
     )
 
@@ -37,7 +40,7 @@ describe('super-resolution algorithm defaults', () => {
     workflow.superResolution.algorithm = 'sr'
     workflow.superResolution.scaleFactor = 2
     workflow.superResolution.onnxModel = ''
-    const env = {
+    const env = createEnvironmentResult({
       superResolutionAlgorithms: [
         {
           name: 'sr',
@@ -47,7 +50,7 @@ describe('super-resolution algorithm defaults', () => {
           scaleFactors: [4],
         },
       ],
-    } as EnvironmentCheckResult
+    })
 
     applySuperResolutionAlgorithmDefaults(workflow, env.superResolutionAlgorithms?.[0], env)
 

@@ -1,9 +1,9 @@
 mod dialogs;
 mod error;
+mod generated;
 pub mod models;
 mod persistence;
 mod process_control;
-mod protocol;
 mod runtime;
 mod services;
 mod tasks;
@@ -25,14 +25,7 @@ pub fn run() {
         .manage(TaskState::default())
         .setup(|app| {
             let app_handle = app.handle();
-            // Phase D.1.4 — surface runtime-resolution failures instead of
-            // dropping them on the floor. Without ffmpeg / a Python runtime
-            // every invoke would later fail with a generic error; aborting
-            // setup gives the user a single clear startup error.
-            //
-            // Phase D.3.6 — resolve once at startup and stash the result in
-            // managed state. Previous code re-ran ``resolve_runtime_paths``
-            // (which does ~10 filesystem stats) inside every Tauri command.
+            // Resolve once and surface startup failures before any invoke.
             let paths = match resolve_runtime_paths(app_handle) {
                 Ok(paths) => paths,
                 Err(error) => {
@@ -43,9 +36,8 @@ pub fn run() {
             app.manage(paths);
 
             if let Ok(resource_dir) = app_handle.path().resource_dir() {
-                // Was previously an Emitter call that fired before any
-                // frontend listener could be attached — make it a stderr
-                // breadcrumb so it survives into release-build console logs.
+                // Startup diagnostics use stderr because frontend listeners are
+                // not attached during setup.
                 eprintln!("VP Workbench resource-dir={}", resource_dir.display());
             }
 
@@ -76,7 +68,6 @@ pub fn run() {
             tasks::commands::inspect_video,
             tasks::commands::start_task,
             tasks::commands::check_resume_state,
-            tasks::commands::cancel_task,
             tasks::commands::control_task,
             persistence::commands::load_workbench_preset,
             persistence::commands::save_workbench_preset,
@@ -91,10 +82,13 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    include!("commands_manifest.rs");
+    include!("generated/ipc_manifest.rs");
+    use std::collections::BTreeSet;
 
     const DEFAULT_PERMISSIONS: &str = include_str!("../permissions/default.toml");
     const ACL_MANIFESTS: &str = include_str!("../gen/schemas/acl-manifests.json");
+    const DEFAULT_CAPABILITY: &str = include_str!("../capabilities/default.json");
+    const TAURI_CONFIG: &str = include_str!("../tauri.conf.json");
 
     fn allow_token(command_name: &str) -> String {
         format!("allow-{}", command_name.replace('_', "-"))
@@ -123,25 +117,106 @@ mod tests {
     }
 
     #[test]
-    fn default_permissions_exclude_removed_legacy_commands() {
-        // Stale tokens that pre-date Phase A; if they ever come back through
-        // ACL generation it usually means a renamed command was added without
-        // updating the manifest.
-        let legacy = [
-            "\"allow-pick-input\",",
-            "\"allow-pick-output\",",
-            "\"allow-open-file-or-directory\",",
-            "\"allow-resolved-runtime\",",
-            // Phase A — pause_task / resume_task 合并为 control_task,
-            // 旧 token 必须从 default.toml 中清除。
-            "\"allow-pause-task\",",
-            "\"allow-resume-task\",",
-        ];
-        for token in legacy {
-            assert!(
-                !DEFAULT_PERMISSIONS.lines().any(|line| line.trim() == token),
-                "permissions/default.toml still mentions legacy `{token}`",
-            );
+    fn default_capability_is_local_only() {
+        let capability: serde_json::Value =
+            serde_json::from_str(DEFAULT_CAPABILITY).expect("valid capability JSON");
+        assert_eq!(capability["local"], true);
+        assert!(
+            capability.get("remote").is_none(),
+            "remote web origins must not receive desktop command permissions"
+        );
+        assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    }
+
+    #[test]
+    fn tauri_config_enables_only_the_local_capability_and_a_restrictive_csp() {
+        let config: serde_json::Value =
+            serde_json::from_str(TAURI_CONFIG).expect("valid Tauri config JSON");
+        let security = &config["app"]["security"];
+        assert_eq!(security["capabilities"], serde_json::json!(["default"]));
+        let csp = security["csp"].as_str().expect("CSP string");
+        for directive in [
+            "script-src 'self'",
+            "object-src 'none'",
+            "frame-src 'none'",
+            "base-uri 'self'",
+        ] {
+            assert!(csp.contains(directive), "CSP is missing `{directive}`");
         }
+        assert!(!csp.contains("localhost:1420"));
+        assert!(!csp.contains("127.0.0.1:1420"));
+    }
+
+    #[test]
+    fn command_manifest_contains_exactly_ten_unique_commands() {
+        let unique = APP_COMMAND_NAMES.iter().copied().collect::<BTreeSet<_>>();
+
+        assert_eq!(APP_COMMAND_NAMES.len(), 10);
+        assert_eq!(unique.len(), APP_COMMAND_NAMES.len());
+    }
+
+    #[test]
+    fn default_permission_tokens_exactly_match_the_command_manifest() {
+        let expected = APP_COMMAND_NAMES
+            .iter()
+            .map(|command| allow_token(command))
+            .collect::<BTreeSet<_>>();
+        let actual = DEFAULT_PERMISSIONS
+            .lines()
+            .map(str::trim)
+            .filter(|line| line.starts_with("\"allow-"))
+            .map(|line| line.trim_matches(&['"', ','][..]).to_string())
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn default_capability_grants_only_core_and_application_permissions() {
+        let capability: serde_json::Value =
+            serde_json::from_str(DEFAULT_CAPABILITY).expect("valid capability JSON");
+
+        assert_eq!(capability["identifier"], "default");
+        assert_eq!(
+            capability["permissions"],
+            serde_json::json!(["core:default", "default"])
+        );
+    }
+
+    #[test]
+    fn csp_connect_sources_are_limited_to_tauri_ipc() {
+        let config: serde_json::Value =
+            serde_json::from_str(TAURI_CONFIG).expect("valid Tauri config JSON");
+        let csp = config["app"]["security"]["csp"]
+            .as_str()
+            .expect("CSP string");
+        let connect = csp
+            .split(';')
+            .map(str::trim)
+            .find(|directive| directive.starts_with("connect-src "))
+            .expect("connect-src directive");
+
+        assert_eq!(connect, "connect-src ipc: http://ipc.localhost");
+        assert!(!connect.contains("https:"));
+        assert!(!connect.contains("ws:"));
+    }
+
+    #[test]
+    fn csp_script_object_and_frame_sources_are_exact() {
+        let config: serde_json::Value =
+            serde_json::from_str(TAURI_CONFIG).expect("valid Tauri config JSON");
+        let csp = config["app"]["security"]["csp"]
+            .as_str()
+            .expect("CSP string");
+        let directives = csp
+            .split(';')
+            .map(str::trim)
+            .filter(|directive| !directive.is_empty())
+            .collect::<BTreeSet<_>>();
+
+        assert!(directives.contains("script-src 'self'"));
+        assert!(directives.contains("object-src 'none'"));
+        assert!(directives.contains("frame-src 'none'"));
+        assert!(!csp.contains("'unsafe-eval'"));
     }
 }

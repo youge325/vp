@@ -15,16 +15,15 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 command-group = { version = "5.0.1", features = ["with-tokio"] }
+chrono = { version = "0.4", features = ["serde"] }
 open = "5.3.2"
 rfd = "0.15.4"
-schemars = { version = "1.2", features = ["preserve_order"] }
 serde = { version = "1", features = ["derive"] }
 tempfile = "3"
 serde_json = "1"
 tauri = { version = "2.11.1", features = [] }
-time = { version = "0.3.44", features = ["formatting"] }
 tokio = { version = "1.48.0", features = ["io-util", "macros", "process", "rt-multi-thread", "sync", "time"] }
-ts-rs = { version = "11", features = ["serde-json-impl"] }
+typify = "0.7"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
@@ -33,7 +32,3 @@ libc = "0.2"
 [[bin]]
 name = "vp-workbench"
 path = "src/main.rs"
-
-[[bin]]
-name = "dump_schema"
-path = "src/bin/dump_schema.rs"

@@ -7,50 +7,7 @@ import {
   applySuperResolutionScale,
 } from '@/services/preset/enhance-workflow'
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
-import type { EnvironmentCheckResult } from '@/types/protocol'
-import { createEnvironmentResult } from '../../fixtures/environment'
-
-function makeEnv(): EnvironmentCheckResult {
-  return createEnvironmentResult({
-    ffmpeg: {
-      available: true,
-      hwaccels: [],
-      encoderProfiles: [],
-      decoderProfiles: [],
-    },
-    gpu: { adapters: [] },
-    tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda', 'tensorrt'], onnx: ['cuda', 'tensorrt'] },
-    interpolationAlgorithms: [
-      { name: 'rife', tensorBackends: ['pytorch', 'onnx'], models: ['4.25'], onnxModels: ['rife.onnx'] },
-      { name: 'rife-lite', tensorBackends: ['pytorch'], models: ['lite'], onnxModels: [] },
-      { name: 'onnx-only', tensorBackends: ['onnx'], models: ['onnx'], onnxModels: ['onnx-only.onnx'] },
-    ],
-    superResolutionAlgorithms: [
-      { name: 'placeholder', tensorBackends: ['onnx'], models: [], onnxModels: ['sr.onnx'], scaleFactors: [2] },
-      {
-        name: 'ppmsvsr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        inputFrameMode: 'editable_chunk',
-        defaultNumFrames: 10,
-      },
-      {
-        name: 'edvr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        inputFrameMode: 'fixed_window',
-        defaultNumFrames: 5,
-      },
-    ],
-    runtimeMode: 'bundled',
-  })
-}
+import { createEnhanceEnvironment } from '../../fixtures/environment'
 
 describe('enhance workflow mutation rules', () => {
   it('keeps interpolation on ONNX when Paddle super-resolution is enabled', () => {
@@ -60,16 +17,16 @@ describe('enhance workflow mutation rules', () => {
     workflow.superResolution.enabled = true
     workflow.superResolution.tensorBackend = 'paddle'
 
-    applySuperResolutionEnabled(workflow, true, makeEnv())
+    applySuperResolutionEnabled(workflow, true, createEnhanceEnvironment())
 
     expect(workflow.interpolation.tensorBackend).toBe('onnx')
     expect(workflow.interpolation.algorithm).toBe('rife')
     expect(workflow.interpolation.model).toBe('4.25')
-    expect(workflow.interpolation.onnxModel).toBe('rife.onnx')
+    expect(workflow.interpolation.onnxModel).toBe('rife_v4.25.onnx')
   })
 
   it('clamps fixed PaddleGAN scale and frame window edits', () => {
-    const env = makeEnv()
+    const env = createEnhanceEnvironment()
     const workflow = createDefaultWorkflowConfigForEnvironment(null)
 
     workflow.superResolution.algorithm = 'edvr'
@@ -83,8 +40,8 @@ describe('enhance workflow mutation rules', () => {
   it('keeps simple toggles as workflow-only mutations', () => {
     const workflow = createDefaultWorkflowConfigForEnvironment(null)
 
-    applyInterpolationEnabled(workflow, false, makeEnv())
-    applySuperResolutionEnabled(workflow, false, makeEnv())
+    applyInterpolationEnabled(workflow, false, createEnhanceEnvironment())
+    applySuperResolutionEnabled(workflow, false, createEnhanceEnvironment())
 
     expect(workflow.interpolation.enabled).toBe(false)
     expect(workflow.superResolution.enabled).toBe(false)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.processing.streaming.encoder_segments import resolve_segment_output_frame_count
+from tests.support.frame_count_probe import FakeFrameCountProbe
 
 
 class _FakeWriter:
@@ -8,18 +9,8 @@ class _FakeWriter:
         self.output_frame_count = output_frame_count
 
 
-class _FakeFFmpeg:
-    def __init__(self, frame_count: int | None) -> None:
-        self.frame_count = frame_count
-        self.counted_path: str | None = None
-
-    def get_frame_count(self, path: str) -> int | None:
-        self.counted_path = path
-        return self.frame_count
-
-
 def test_resolve_segment_output_frame_count_prefers_writer_counter() -> None:
-    ffmpeg = _FakeFFmpeg(frame_count=9)
+    ffmpeg = FakeFrameCountProbe(frame_count=9)
 
     result = resolve_segment_output_frame_count(
         ffmpeg,
@@ -34,13 +25,13 @@ def test_resolve_segment_output_frame_count_prefers_writer_counter() -> None:
 
 def test_resolve_segment_output_frame_count_falls_back_to_probe_then_written_count() -> None:
     probed = resolve_segment_output_frame_count(
-        _FakeFFmpeg(frame_count=6),
+        FakeFrameCountProbe(frame_count=6),
         _FakeWriter(output_frame_count=0),
         "segment.mp4",
         fallback_frame_count=2,
     )
     fallback = resolve_segment_output_frame_count(
-        _FakeFFmpeg(frame_count=0),
+        FakeFrameCountProbe(frame_count=0),
         _FakeWriter(output_frame_count=0),
         "segment.mp4",
         fallback_frame_count=2,

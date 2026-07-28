@@ -5,12 +5,9 @@ Stage-worker runtimes push processed frame packets into bounded
 dataclasses and terminal sentinel, while queue helpers centralize
 stop-event polling.
 
-Phase D.2.2 — the previous polling interval was 100 ms, which woke queue
-consumers ten times per second just to re-check ``stop_event``. Polling
-can't be removed entirely (``queue.Queue`` doesn't compose with external
-``Event``), but bumping the timeout to one second cuts the wake-up rate
-by 10× while keeping the worst-case cancellation latency inside the
-watchdog window managed by the Rust shell
+Polling remains necessary because ``queue.Queue`` does not compose with an
+external ``Event``. A one-second timeout bounds wake-up overhead and keeps the
+worst-case cancellation latency inside the watchdog window managed by the Rust shell
 (``VP_TASK_STALL_TIMEOUT_SECS`` defaults to 600 s).
 """
 
@@ -22,7 +19,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-# Phase D.2.2 — see module docstring. Worst-case cancellation latency is
+# See module docstring. Worst-case cancellation latency is
 # bounded by the watchdog (default 600 s) and the FFmpeg child's own
 # response to SIGTERM, so a 1 s timeout is comfortable.
 _QUEUE_POLL_INTERVAL_SECONDS = 1.0

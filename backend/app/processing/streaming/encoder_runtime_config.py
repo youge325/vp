@@ -6,16 +6,15 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.planning import ResumeState, SegmentManifest
+from app.ports.media import EncodeProgressCallback, EncodingMediaPort
 from app.processing.streaming.metrics import PipelineMetrics
-from app.utils.ffmpeg import FFmpegWrapper
-from app.utils.ffmpeg._progress import EncodeProgressCallback
 
 
 @dataclass(frozen=True, slots=True)
 class EncoderRuntimeConfig:
     """Static encoder state shared by the raw pipeline, worker, and writer."""
 
-    ffmpeg: FFmpegWrapper
+    ffmpeg: EncodingMediaPort
     encode_config: dict[str, Any]
     manifest: SegmentManifest
     width: int

@@ -110,9 +110,8 @@ RUN vp-direct /opt/vp/venv/bin/pip install -r /tmp/backend-requirements.txt pyte
 COPY backend/models /opt/vp/models
 COPY frontend/src-tauri/Cargo.toml frontend/src-tauri/Cargo.lock /tmp/vp-src-tauri/
 
-RUN mkdir -p /tmp/vp-src-tauri/src/bin \
+RUN mkdir -p /tmp/vp-src-tauri/src \
     && printf 'fn main() {}\n' > /tmp/vp-src-tauri/src/main.rs \
-    && printf 'fn main() {}\n' > /tmp/vp-src-tauri/src/bin/dump_schema.rs \
     && touch /tmp/vp-src-tauri/src/lib.rs \
     && chown -R runner:runner /opt/vp /home/runner /tmp/vp-src-tauri \
     && chmod -R a+rX /opt/vp/models

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
 
-from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
 from app.processing.frame_filter_handlers import (
     apply_numpy_filter,
@@ -16,21 +16,23 @@ from app.processing.frame_filter_handlers import (
 )
 
 
-class FrameFilterChainAlgorithm(IAlgorithm):
+class FrameFilterChainAlgorithm:
     """Apply configured frame filters in order with tensor fallback when needed."""
 
     def __init__(self, tensor_backend: ITensorBackend | None = None, **kwargs: Any):
         self._tensor_backend = tensor_backend
-        self._filters: list[dict[str, Any]] = kwargs.get("filters") or []
+        self._filters: Sequence[Mapping[str, Any]] = kwargs.get("filters") or ()
         self._validate_filters()
 
     def _validate_filters(self) -> None:
         for step in self._filters:
+            if not isinstance(step, Mapping):
+                raise ValueError("Filter step must be a mapping.")
             kind = step.get("kind")
             if not isinstance(kind, str) or not is_supported_filter_kind(kind):
                 raise ValueError(f"Unknown filter kind: {kind}")
-            if not isinstance(step.get("params"), dict):
-                raise ValueError(f"Filter step '{kind}' missing params dict.")
+            if not isinstance(step.get("params"), Mapping):
+                raise ValueError(f"Filter step '{kind}' missing params mapping.")
 
     def process_frame(self, frame: Any, **_kwargs: Any) -> Any:
         if self._tensor_backend is not None and self.can_process_tensor(self._tensor_backend):
@@ -61,6 +63,3 @@ class FrameFilterChainAlgorithm(IAlgorithm):
             if step.get("enabled", True):
                 tensor = apply_tensor_filter(step["kind"], tensor, step["params"])
         return tensor
-
-    def get_name(self) -> str:
-        return "帧级滤镜链"

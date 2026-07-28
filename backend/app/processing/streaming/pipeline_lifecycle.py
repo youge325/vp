@@ -25,7 +25,7 @@ def prepare_streaming_manifest(
     decision = manifest.prepare(signature, config_snapshot, mode=resume_mode)
     if decision.kind == "conflict_final_exists":
         raise ResumeConflictError(
-            output_path=str(manifest.output_path),
+            output_path=str(manifest.workspace.output_path),
             completed_chunks=len(decision.state.completed_segments),
             completed_output_frames=decision.state.completed_output_frames,
             sidecar_signature_match=decision.sidecar_signature_match,
@@ -63,7 +63,7 @@ def finalize_streaming_output(
         strict_total_frames=context.output_fps is None,
     )
 
-    context.manifest.cleanup()
+    context.manifest.workspace.cleanup()
     processed_frames = context.ffmpeg.get_frame_count(context.output_path)
     return {
         "output_path": context.output_path,

@@ -18,7 +18,7 @@ passes:
    ``FileNotFoundError`` / ``PermissionError`` → ``IO_ERROR``,
    ``ValueError`` / ``TypeError`` → ``INVALID_INPUT``.
 
-Phase 11 — ``MISSING_MODEL`` 的关键字从单字符串 ``"model"`` 缩窄到
+``MISSING_MODEL`` 的关键字从单字符串 ``"model"`` 缩窄到
 ``"flownet_v" / "model file" / "model weight" / "missing model"``。原来
 任意 message 含 "model" 都会被归类 MISSING_MODEL,导致 Pydantic
 ValidationError 文本里的字段名(如 ``"model_x has invalid type"``)被误

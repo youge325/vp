@@ -3,17 +3,8 @@ import { defineStore } from 'pinia'
 import type { DecodeConfig, EncodeConfig, OutputConfig, VideoInfo, WorkflowConfig } from '@/types/protocol'
 import type { MediaItem } from '@/types/domain/media'
 
-// Phase 6d — ``operationIssue`` / ``setOperationIssue`` /
-// ``clearOperationIssue`` moved to the dedicated ``useIssueStore``
-// (``@/stores/issue``). Media item state and global error-banner
-// state used to share this file; splitting them keeps the media
-// store focused on the media list itself.
-//
-// Phase 13.1 — ``taskState`` / ``issue`` / ``lastOutputPath`` 的写入路径
-// 进一步迁出到 [[useMediaRunState]]。``useMediaStore`` 现在就是"list
-// CRUD + 激活/选中 + info inspection"四件事,batch lifecycle 与 IPC
-// 事件改往 ``mediaRunState`` 写入,视图侧读取也按 itemId 二级查找。
-// 这样 batch-runner 注入函数从 13 个降到 8 个,store 关注点从 5 个降到 1 个。
+// 只管理媒体列表、激活项、选中项与探测结果。运行状态和用户可见错误
+// 分别由 ``useMediaRunState`` 与 ``useIssueStore`` 管理。
 
 export const useMediaStore = defineStore('media', () => {
   const mediaItems = ref<MediaItem[]>([])
@@ -40,11 +31,6 @@ export const useMediaStore = defineStore('media', () => {
     }
     return targetIds
   }
-
-  // Phase 17 — ``forEachEditableItem`` 下线(原来 grep 全仓 0 production callers,
-  // 只有 ``getEditableTargetIds`` 真在用)。若将来需要遍历 editable items,
-  // 直接在 caller 里写 `mediaItems.filter((item) => targetIds.has(item.id))`,
-  // 不需要在 store 上暴露 callback 接口。
 
   function appendItems(items: MediaItem[]): void {
     if (items.length === 0) {

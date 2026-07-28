@@ -45,13 +45,19 @@ jobs:
           }
         working-directory: frontend
 
+      - name: Install contract quality tools
+        run: python -m pip install --disable-pip-version-check -r scripts/requirements-quality.txt
+
       - name: Setup CI runtime environment
         run: ./scripts/setup-ci-runtime-env.ps1
 
       - name: Prepare bundled Windows runtime
         run: ./scripts/prepare-windows-runtime.ps1 -SkipPython
 
-      - name: Regenerate TypeScript types from Rust (ts-rs)
+      - name: Neutral contract generation check
+        run: python scripts/generate_contracts.py --check
+
+      - name: Run Rust tests
         run: |
           New-Item -ItemType Directory -Force -Path "../dist" | Out-Null
           cargo test --lib --quiet

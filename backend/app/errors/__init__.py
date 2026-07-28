@@ -8,7 +8,7 @@ normalized into a ``ProcessError`` so the Rust host can emit a typed
 from __future__ import annotations
 
 import traceback as _traceback
-from typing import Any
+from typing import Any, Never
 
 from app.errors._bootstrap import infer_error_code
 from app.errors._codes import TaskErrorCode, error_code_to_wire
@@ -47,7 +47,7 @@ class ProcessError(Exception):
         :func:`app.errors._bootstrap.infer_error_code` — the single source
         of truth shared with ``__main__``'s import-time fallback. The
         exception object (not just its message) is forwarded so the
-        resolver can apply the Phase 4.1 ``isinstance`` dispatch when no
+        resolver can apply its ``isinstance`` dispatch when no
         keyword in the message gives a more specific answer.
         """
         if isinstance(exc, ProcessError):
@@ -105,12 +105,12 @@ def raise_error(
     message: str,
     *,
     details: dict[str, Any] | None = None,
-) -> None:
+) -> Never:
     """Raise a ``ProcessError`` with the given code and optional details.
 
     Convenience wrapper used by CLI command handlers to fail-fast. The
-    function never returns; the ``None`` return type is for type-checker
-    flow analysis at the call site.
+    The ``Never`` return type lets type checkers narrow control flow without
+    unreachable compensation statements at call sites.
     """
     raise ProcessError(code, message, details=details or {})
 

@@ -26,7 +26,7 @@ describe('task context resolver', () => {
     }, item.id)).toEqual({ item, runState })
   })
 
-  it('does not expose an orphan run state when the media id is stale', () => {
+  it('returns null when the media id is stale', () => {
     const getItemRunState = vi.fn(() => createRunState('stale'))
 
     expect(resolveTaskContext({

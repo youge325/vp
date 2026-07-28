@@ -517,19 +517,6 @@ function Copy-ModelFiles {
     }
     Write-Step "model $($pytorchModel.Name) complete: $(Format-ByteSize $pytorchModel.Length), $result"
 
-    # Copy top-level ONNX models (legacy layout)
-    $onnxModels = Get-ChildItem -LiteralPath $SourceDir -Filter "*.onnx" -File
-    foreach ($model in $onnxModels) {
-        $result = Copy-FileFast -Source $model.FullName -Destination (Join-Path $DestinationDir $model.Name)
-        $bytes += [int64]$model.Length
-        if ($result -eq "linked") {
-            $linked += 1
-        } else {
-            $copied += 1
-        }
-        Write-Step "model $($model.Name) complete: $(Format-ByteSize $model.Length), $result"
-    }
-
     foreach ($subdirName in @("interpolation", "super_resolution")) {
         $sourceSubdir = Join-Path $SourceDir $subdirName
         if (-not (Test-Path -LiteralPath $sourceSubdir -PathType Container)) {

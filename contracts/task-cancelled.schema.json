@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/task-cancelled.schema.json",
+  "title": "TaskCancelledPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reason",
+    "details"
+  ],
+  "properties": {
+    "reason": {
+      "$ref": "#/$defs/TaskCancelledReason"
+    },
+    "details": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "TaskCancelledReason": {
+      "type": "string",
+      "enum": [
+        "user",
+        "stalled"
+      ]
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/video-info.schema.json",
+  "title": "VideoInfo",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "fps": {
+      "type": "number"
+    },
+    "width": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "height": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "videoCodec": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "fps",
+    "width",
+    "height",
+    "videoCodec"
+  ]
+}

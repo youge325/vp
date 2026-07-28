@@ -6,15 +6,13 @@ chunk/decision records.
 
 from __future__ import annotations
 
-import os
-import re
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from app.planning.manifest_store import MANIFEST_VERSION as CURRENT_MANIFEST_VERSION
-from app.planning.manifest_store import load_manifest, write_manifest
+from app.planning.manifest_store import ManifestRepository
+from app.planning.resume_policy import ResumeMode, decide_output_action
+from app.planning.segment_workspace import SegmentWorkspace
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -53,9 +51,6 @@ class _ResumeDecision:
     sidecar_signature_match: bool = False
 
 
-ResumeMode = Literal["auto", "force-fresh", "force-resume"]
-
-
 class SegmentManifest:
     """Filesystem-as-state sidecar manager for resumable encoding.
 
@@ -69,21 +64,20 @@ class SegmentManifest:
     crash the sentinel remains and is purged at the start of the next run.
     """
 
-    MANIFEST_VERSION = CURRENT_MANIFEST_VERSION
-    CHUNK_PATTERN = re.compile(
-        r"^chunk-(?P<index>\d{4})-out(?P<start>\d{8})-(?P<end>\d{8})-src(?P<next_src>\d{8})\."
-        r"(?P<ext>[^.]+)$"
-    )
-    TMP_PATTERN = re.compile(r"^chunk-tmp(?:-\d{4})?\.[^.]+$")
-    TMP_PREFIX = "chunk-tmp"
-    AUDIO_FILE_NAME = "source_audio.aac"
-    CONCAT_BASENAME = "concat_noaudio"
-
-    def __init__(self, output_path: str):
-        output = Path(output_path)
-        self.output_path = output.resolve()
-        self.sidecar_dir = self.output_path.with_name(f"{self.output_path.name}.vp_segments")
-        self.manifest_path = self.sidecar_dir / "manifest.json"
+    def __init__(
+        self,
+        output_path: str | Path | None = None,
+        *,
+        workspace: SegmentWorkspace | None = None,
+    ) -> None:
+        if workspace is None:
+            if output_path is None:
+                raise TypeError("output_path or workspace is required")
+            workspace = SegmentWorkspace.for_output(output_path)
+        elif output_path is not None:
+            raise TypeError("pass output_path or workspace, not both")
+        self.workspace = workspace
+        self.repository = ManifestRepository(workspace)
 
     # ------------------------------------------------------------------ prepare
     def prepare(
@@ -105,38 +99,46 @@ class SegmentManifest:
         """
         config_snapshot = config_snapshot or {}
 
-        # Always purge a leftover in-flight sentinel before doing anything
-        # else; whatever was being written last time is unrecoverable.
-        self._cleanup_partial()
+        manifest_data = self.repository.load()
+        if self.workspace.sidecar_dir.is_dir() and manifest_data is None:
+            self._quarantine_sidecar()
+        else:
+            # A leftover in-flight sentinel belongs to the current schema and
+            # can be discarded; incompatible state is quarantined intact above.
+            self._cleanup_partial()
+        signature_match = bool(manifest_data and manifest_data.signature == signature)
 
-        manifest_data = load_manifest(self.manifest_path)
-        signature_match = bool(manifest_data and manifest_data.get("signature") == signature)
+        state = self._prepare_resume_state() if signature_match else self._empty_state()
+        action = decide_output_action(
+            final_exists=self.workspace.output_path.exists(),
+            sidecar_exists=self.workspace.manifest_path.is_file(),
+            signature_match=signature_match,
+            has_progress=state.completed_output_frames > 0,
+            mode=mode,
+        )
+        if action == "conflict":
+            return _ResumeDecision(
+                kind="conflict_final_exists",
+                state=state,
+                sidecar_signature_match=signature_match,
+            )
+        if action == "resume":
+            return self._resume_decision(state)
+        delete_final = self.workspace.output_path.exists() and mode == "force-fresh"
+        if self.workspace.manifest_path.is_file() and not signature_match:
+            return self._prepare_changed_signature(
+                signature,
+                config_snapshot,
+                delete_final=delete_final,
+            )
+        return self._prepare_fresh(
+            signature,
+            config_snapshot,
+            delete_final=delete_final,
+        )
 
-        if self.output_path.exists():
-            if mode == "auto":
-                state = self._scan_resume_state() if signature_match else self._empty_state()
-                return _ResumeDecision(
-                    kind="conflict_final_exists",
-                    state=state,
-                    sidecar_signature_match=signature_match,
-                )
-            if mode == "force-fresh":
-                return self._prepare_fresh(signature, config_snapshot, delete_final=True)
-            if mode == "force-resume":
-                if not signature_match:
-                    return self._prepare_changed_signature(signature, config_snapshot)
-                return self._resume_decision()
-
-        if not self.manifest_path.is_file():
-            return self._prepare_fresh(signature, config_snapshot)
-
-        if not signature_match:
-            return self._prepare_changed_signature(signature, config_snapshot)
-
-        return self._resume_decision()
-
-    def _resume_decision(self) -> _ResumeDecision:
-        state = self._scan_resume_state()
+    def _resume_decision(self, state: ResumeState | None = None) -> _ResumeDecision:
+        state = state or self._prepare_resume_state()
         return _ResumeDecision(
             kind="resume" if state.completed_output_frames > 0 else "fresh",
             state=state,
@@ -147,8 +149,15 @@ class SegmentManifest:
         self,
         signature: str,
         config_snapshot: dict[str, Any],
+        *,
+        delete_final: bool,
     ) -> _ResumeDecision:
-        decision = self._prepare_fresh(signature, config_snapshot)
+        self._quarantine_sidecar()
+        decision = self._prepare_fresh(
+            signature,
+            config_snapshot,
+            delete_final=delete_final,
+        )
         logger.info("Configuration changed; previous progress invalidated.")
         return decision
 
@@ -160,18 +169,18 @@ class SegmentManifest:
         total_output_frames: int = 0,
     ) -> dict[str, Any]:
         """Read-only probe of the sidecar state used by ``inspect-output``."""
-        manifest_data = load_manifest(self.manifest_path)
-        signature_match = bool(manifest_data and manifest_data.get("signature") == signature)
+        manifest_data = self.repository.load()
+        signature_match = bool(manifest_data and manifest_data.signature == signature)
 
         if signature_match:
-            state = self._scan_resume_state()
+            state = self._read_resume_state()
         else:
             state = self._empty_state()
 
         return {
-            "outputPath": str(self.output_path),
-            "finalExists": self.output_path.exists(),
-            "sidecarExists": self.manifest_path.is_file(),
+            "outputPath": str(self.workspace.output_path),
+            "finalExists": self.workspace.output_path.exists(),
+            "sidecarExists": self.workspace.manifest_path.is_file(),
             "signatureMatch": signature_match,
             "completedChunks": len(state.completed_segments),
             "completedOutputFrames": state.completed_output_frames,
@@ -179,75 +188,17 @@ class SegmentManifest:
             "totalOutputFrames": total_output_frames,
         }
 
-    # ---------------------------------------------------------- chunk filenames
-    def chunk_tmp_path(self, extension: str, *, index: int | None = None) -> str:
-        """Return the in-flight sentinel path for the encoder.
-
-        A per-chunk index suffix (``chunk-tmp-NNNN.{ext}``) is used so that a
-        previously-renamed sentinel cannot collide with the new ffmpeg process
-        on Windows where rapid same-path reuse can wedge the stdin pipe.
-        """
-        resolved_extension = extension if extension.startswith(".") else f".{extension}"
-        self.sidecar_dir.mkdir(parents=True, exist_ok=True)
-        suffix = f"-{index:04d}" if index is not None else ""
-        return str(self.sidecar_dir / f"{self.TMP_PREFIX}{suffix}{resolved_extension}")
-
-    def _chunk_final_path(
-        self,
-        *,
-        index: int,
-        start_output_frame: int,
-        end_output_frame: int,
-        next_source_frame: int,
-        extension: str,
-    ) -> str:
-        """Compute the deterministic final filename for a sealed chunk."""
-        resolved_extension = extension if extension.startswith(".") else f".{extension}"
-        name = (
-            f"chunk-{index:04d}"
-            f"-out{start_output_frame:08d}-{end_output_frame:08d}"
-            f"-src{next_source_frame:08d}{resolved_extension}"
-        )
-        self.sidecar_dir.mkdir(parents=True, exist_ok=True)
-        return str(self.sidecar_dir / name)
-
-    def finalize_chunk(
-        self,
-        tmp_path: str,
-        *,
-        index: int,
-        start_output_frame: int,
-        end_output_frame: int,
-        next_source_frame: int,
-    ) -> None:
-        """Atomically rename the sentinel file to its canonical chunk name."""
-        extension = Path(tmp_path).suffix
-        final_path = self._chunk_final_path(
-            index=index,
-            start_output_frame=start_output_frame,
-            end_output_frame=end_output_frame,
-            next_source_frame=next_source_frame,
-            extension=extension,
-        )
-        os.replace(tmp_path, final_path)
-
-    def concat_temp_path(self, extension: str) -> str:
-        """Return the temporary concat output path inside the sidecar directory."""
-        resolved_extension = extension if extension.startswith(".") else f".{extension}"
-        self.sidecar_dir.mkdir(parents=True, exist_ok=True)
-        return str(self.sidecar_dir / f"{self.CONCAT_BASENAME}{resolved_extension}")
-
     # ------------------------------------------------------------------ state
     def scan_completed_chunks(self) -> list[_SegmentRecord]:
         """Return chunks that form a contiguous prefix from output frame 0."""
-        if not self.sidecar_dir.is_dir():
+        if not self.workspace.sidecar_dir.is_dir():
             return []
 
         candidates: list[_SegmentRecord] = []
-        for entry in self.sidecar_dir.iterdir():
+        for entry in self.workspace.sidecar_dir.iterdir():
             if not entry.is_file():
                 continue
-            match = self.CHUNK_PATTERN.match(entry.name)
+            match = self.workspace.CHUNK_PATTERN.match(entry.name)
             if match is None:
                 continue
             candidates.append(
@@ -281,52 +232,52 @@ class SegmentManifest:
 
     def _cleanup_partial(self) -> None:
         """Remove in-flight sentinel files and stranded non-contiguous chunks."""
-        if not self.sidecar_dir.is_dir():
+        if not self.workspace.sidecar_dir.is_dir():
             return
 
-        for entry in self.sidecar_dir.iterdir():
-            if entry.is_file() and self.TMP_PATTERN.match(entry.name):
-                try:
-                    entry.unlink()
-                except OSError:
-                    logger.warning("Failed to remove stale sentinel %s", entry)
+        for entry in self.workspace.sidecar_dir.iterdir():
+            if entry.is_file() and self.workspace.TMP_PATTERN.match(entry.name):
+                entry.unlink()
 
     def _cleanup_stale_chunks(self, keep: list[_SegmentRecord]) -> None:
         """Delete chunk files past the contiguous prefix, plus stale auxiliaries."""
-        if not self.sidecar_dir.is_dir():
+        if not self.workspace.sidecar_dir.is_dir():
             return
 
         keep_names = {record.path for record in keep}
-        keep_names.add(self.manifest_path.name)
+        keep_names.add(self.workspace.manifest_path.name)
 
-        for entry in self.sidecar_dir.iterdir():
+        for entry in self.workspace.sidecar_dir.iterdir():
             if entry.name in keep_names:
                 continue
-            if self.TMP_PATTERN.match(entry.name):
+            if self.workspace.TMP_PATTERN.match(entry.name):
                 # already handled by cleanup_partial; keep idempotent
-                try:
-                    entry.unlink()
-                except OSError:
-                    pass
+                entry.unlink()
                 continue
-            if self.CHUNK_PATTERN.match(entry.name):
-                try:
-                    entry.unlink()
-                    logger.info("Discarded non-contiguous chunk %s", entry.name)
-                except OSError:
-                    logger.warning("Failed to remove stale chunk %s", entry)
+            if self.workspace.CHUNK_PATTERN.match(entry.name):
+                entry.unlink()
+                logger.info("Discarded non-contiguous chunk %s", entry.name)
 
-    def cleanup(self) -> None:
-        """Delete the sidecar directory after a successful run."""
-        if self.sidecar_dir.is_dir():
-            shutil.rmtree(self.sidecar_dir, ignore_errors=True)
+    def _quarantine_sidecar(self) -> Path | None:
+        """Move incompatible progress aside without keeping a read fallback."""
+        destination = self.workspace.quarantine()
+        if destination is not None:
+            logger.info("Quarantined incompatible progress at %s", destination)
+        return destination
 
     # ------------------------------------------------------------- internals
-    def _scan_resume_state(self) -> ResumeState:
+    def _prepare_resume_state(self) -> ResumeState:
         chunks = self.scan_completed_chunks()
         self._cleanup_stale_chunks(chunks)
+        return self._state_from_chunks(chunks)
+
+    def _read_resume_state(self) -> ResumeState:
+        return self._state_from_chunks(self.scan_completed_chunks())
+
+    @classmethod
+    def _state_from_chunks(cls, chunks: list[_SegmentRecord]) -> ResumeState:
         if not chunks:
-            return self._empty_state()
+            return cls._empty_state()
         last = chunks[-1]
         return ResumeState(
             start_source_frame=last.next_source_frame,
@@ -349,17 +300,11 @@ class SegmentManifest:
         *,
         delete_final: bool = False,
     ) -> _ResumeDecision:
-        self.cleanup()
+        self.workspace.cleanup()
         if delete_final:
-            self._delete_final_output()
-        write_manifest(
-            self.manifest_path,
+            self.workspace.delete_final_output()
+        self.repository.write(
             signature=signature,
-            output_path=self.output_path,
             config_snapshot=config_snapshot,
         )
         return _ResumeDecision(kind="fresh", state=self._empty_state())
-
-    def _delete_final_output(self) -> None:
-        if self.output_path.is_file():
-            self.output_path.unlink()

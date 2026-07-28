@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EncodeConfig",
+  "type": "object",
+  "properties": {
+    "codec": {
+      "type": "string"
+    },
+    "family": {
+      "type": "string"
+    },
+    "container": {
+      "type": "string"
+    },
+    "keepAudio": {
+      "type": "boolean"
+    },
+    "rateControl": {
+      "$ref": "./rate-control-config.schema.json"
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "codec",
+    "family",
+    "container",
+    "keepAudio",
+    "rateControl",
+    "options"
+  ],
+  "additionalProperties": false
+}

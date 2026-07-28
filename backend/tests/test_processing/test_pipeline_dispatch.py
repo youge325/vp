@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from app.planning import ProcessingStep, ResumeState, SegmentManifest, StagePlan
+from app.planning import ProcessingStep, ResumeState, SegmentManifest, StagePlan, StageProjection
+from app.ports.media import VideoMetadata
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
     StreamingPipelinePreflight,
@@ -11,16 +12,18 @@ from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline
 
 def _stage_plan() -> StagePlan:
     return StagePlan(
-        pre_steps=[
-            ProcessingStep(
-                algorithm_type="super_resolution",
-                algorithm_kwargs={"scale_factor": 2.0, "sr_algorithm": "placeholder"},
-                stage_name="01_super_resolution",
+        projection=StageProjection(
+            (
+                ProcessingStep(
+                    algorithm_type="super_resolution",
+                    algorithm_kwargs={"scale_factor": 2.0, "sr_algorithm": "placeholder"},
+                    stage_name="01_super_resolution",
+                ),
             )
-        ],
-        interpolation_step=None,
-        post_steps=[],
-        total_encoded_frames=4,
+        ),
+        source_frames=4,
+        source_duration=4 / 24,
+        output_fps=None,
     )
 
 
@@ -37,7 +40,14 @@ def _context(tmp_path, *, use_stage_file_pipeline: bool) -> StreamingPipelineCon
         decode_config={"mode": "software"},
         encode_config={"codec": "libx264"},
         preflight=StreamingPipelinePreflight(
-            video_info={"source_fps": 24.0, "source_frames": 4},
+            video_info=VideoMetadata(
+                width=640,
+                height=360,
+                source_fps=24.0,
+                source_frames=4,
+                duration=4 / 24,
+                has_audio=False,
+            ),
             stage_plan=stage_plan,
             signature="sig",
             config_snapshot={},
@@ -49,7 +59,6 @@ def _context(tmp_path, *, use_stage_file_pipeline: bool) -> StreamingPipelineCon
         ),
         manifest=SegmentManifest(str(tmp_path / "out.mp4")),
         resume_state=_resume_state(),
-        tensor_backend_name="onnx",
         progress_callbacks=[],
         output_fps=None,
         encode_progress_callback=None,

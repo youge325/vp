@@ -1,24 +1,23 @@
-use tauri::{AppHandle, Runtime};
+use tauri::State;
 
 use crate::error::ShellError;
 use crate::models::WorkbenchPreset;
 use crate::persistence::{
-    app_data_dir, load_workbench_preset as load_preset, save_workbench_preset as save_preset,
+    load_workbench_preset as load_preset, save_workbench_preset as save_preset,
 };
+use crate::runtime::ResolvedRuntimePaths;
 
 #[tauri::command]
-pub(crate) async fn load_workbench_preset<R: Runtime>(
-    app: AppHandle<R>,
+pub(crate) async fn load_workbench_preset(
+    paths: State<'_, ResolvedRuntimePaths>,
 ) -> Result<Option<WorkbenchPreset>, ShellError> {
-    let data_dir = app_data_dir(&app).await?;
-    Ok(load_preset(&data_dir).await)
+    load_preset(&paths.app_data_dir).await
 }
 
 #[tauri::command]
-pub(crate) async fn save_workbench_preset<R: Runtime>(
-    app: AppHandle<R>,
+pub(crate) async fn save_workbench_preset(
+    paths: State<'_, ResolvedRuntimePaths>,
     preset: WorkbenchPreset,
 ) -> Result<(), ShellError> {
-    let data_dir = app_data_dir(&app).await?;
-    save_preset(&data_dir, &preset).await
+    save_preset(&paths.app_data_dir, &preset).await
 }

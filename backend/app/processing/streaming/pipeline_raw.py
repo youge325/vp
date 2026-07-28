@@ -26,7 +26,7 @@ def run_raw_streaming_pipeline(
     error_queue: queue.Queue[BaseException] = queue.Queue()
     stop_event = threading.Event()
     stream_fps = resolved_stream_fps(
-        context.preflight.video_info["source_fps"],
+        context.preflight.video_info.source_fps,
         context.preflight.stage_plan,
     )
     encoder_config = EncoderRuntimeConfig(
@@ -48,11 +48,10 @@ def run_raw_streaming_pipeline(
         input_path=context.input_path,
         decode_config=context.decode_config,
         stage_plan=context.preflight.stage_plan,
-        tensor_backend_name=context.tensor_backend_name,
         progress_callbacks=context.progress_callbacks,
-        source_width=int(context.preflight.video_info["width"]),
-        source_height=int(context.preflight.video_info["height"]),
-        source_frames=int(context.preflight.video_info["source_frames"]),
+        source_width=context.preflight.video_info.width,
+        source_height=context.preflight.video_info.height,
+        source_frames=context.preflight.video_info.source_frames,
         resume_state=context.resume_state,
         metrics=context.metrics,
     )

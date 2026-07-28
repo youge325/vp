@@ -1,50 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceRuntimeEstimates } from '@/services/preset/enhance-runtime-estimates'
-import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
-import type { ModelVariantInfo } from '@/types/protocol'
-
-const interpolationDetail: ModelVariantInfo = {
-  name: '4.25',
-  label: 'RIFE 4.25',
-  metrics: {
-    parameterCount: 1,
-    parameterBytes: 4,
-    gflopsPerMegapixel: 10,
-    activationBytesPerMegapixel: 1000,
-    runtimeOverheadBytes: 100,
-    inputModulo: 1,
-    analysisStatus: 'ok',
-    analysisNotes: [],
-  },
-}
-
-const superResolutionDetail: ModelVariantInfo = {
-  name: 'x4',
-  label: 'EDVR',
-  metrics: {
-    parameterCount: 2,
-    parameterBytes: 8,
-    gflopsPerMegapixel: 20,
-    activationBytesPerMegapixel: 2000,
-    runtimeOverheadBytes: 200,
-    runtimeFrameCount: 5,
-    inputModulo: 1,
-    analysisStatus: 'ok',
-    analysisNotes: [],
-  },
-}
+import { createRuntimeDetails, createRuntimeWorkflow } from '../../fixtures/enhance-runtime'
 
 describe('enhance runtime estimates', () => {
   it('scales interpolation input after super-resolution and combines peak VRAM', () => {
-    const workflow = createDefaultWorkflowConfigForEnvironment(null)
-    workflow.processOrder = 'super_resolution_then_interpolation'
-    workflow.interpolation.enabled = true
-    workflow.interpolation.scale = 1
-    workflow.interpolation.fp16 = false
-    workflow.superResolution.enabled = true
-    workflow.superResolution.scaleFactor = 4
-    workflow.superResolution.numFrames = 10
+    const workflow = createRuntimeWorkflow()
+    const { interpolationDetail, superResolutionDetail } = createRuntimeDetails()
 
     const estimates = buildEnhanceRuntimeEstimates({
       workflow,

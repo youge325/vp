@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, BinaryIO
 
+from app.algorithms.interfaces import FramePairAlgorithm, FrameSequenceAlgorithm, SingleFrameAlgorithm
 from app.processing.streaming import stage_worker_progress
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_worker_execution import (
@@ -38,7 +39,9 @@ def run_stage_worker_stream(
     algorithm = create_algorithm(config.stage, backend)
     metrics = PipelineMetrics()
 
-    if algorithm.needs_frame_sequence():
+    if config.stage.execution_mode == "sequence":
+        if not isinstance(algorithm, FrameSequenceAlgorithm):
+            raise RuntimeError("Sequence stage factory returned an incompatible algorithm.")
         run_sequence_stage(
             config,
             input_stream,
@@ -47,11 +50,15 @@ def run_stage_worker_stream(
             event_sink,
             heartbeat_seconds=stage_worker_progress.SEQUENCE_STAGE_HEARTBEAT_SECONDS,
         )
-    elif algorithm.needs_frame_pairs():
+    elif config.stage.execution_mode == "pair":
+        if not isinstance(algorithm, FramePairAlgorithm):
+            raise RuntimeError("Pair stage factory returned an incompatible algorithm.")
         if backend is None:
             raise RuntimeError("Frame interpolation stage requires a tensor backend.")
         run_interpolation_stage(config, input_stream, output_stream, backend, algorithm, event_sink, metrics)
     else:
+        if not isinstance(algorithm, SingleFrameAlgorithm):
+            raise RuntimeError("Single-frame stage factory returned an incompatible algorithm.")
         run_single_frame_stage(config, input_stream, output_stream, backend, algorithm, event_sink, metrics)
 
     output_stream.flush()

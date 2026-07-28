@@ -37,9 +37,9 @@ def _manifest_with_chunk(tmp_path: Path, *, output_name: str = "out.mp4") -> Seg
     output_path = tmp_path / output_name
     manifest = SegmentManifest(str(output_path))
     manifest.prepare("sig", {"test": True}, mode="force-fresh")
-    tmp_chunk = manifest.chunk_tmp_path(".mp4", index=1)
+    tmp_chunk = manifest.workspace.chunk_tmp_path(".mp4", index=1)
     Path(tmp_chunk).write_bytes(b"segment")
-    manifest.finalize_chunk(
+    manifest.workspace.finalize_chunk(
         tmp_chunk,
         index=1,
         start_output_frame=0,
@@ -66,7 +66,7 @@ def test_finalize_segmented_output_concats_segments_without_audio(tmp_path: Path
     )
 
     assert Path(output_path).read_bytes() == b"concat"
-    assert ffmpeg.concat_calls[0][0] == [str(manifest.sidecar_dir / manifest.scan_completed_chunks()[0].path)]
+    assert ffmpeg.concat_calls[0][0] == [str(manifest.workspace.sidecar_dir / manifest.scan_completed_chunks()[0].path)]
     assert ffmpeg.merged is None
 
 

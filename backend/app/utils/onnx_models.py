@@ -73,7 +73,7 @@ def resolve_onnx_model_path(
 def _is_basename_only(name: str) -> bool:
     """True when ``name`` is a single path segment — no separators, no traversal, no drive.
 
-    Phase 17 — 抽出 ``is_safe_onnx_basename`` 与 ``is_safe_algorithm_name``
+    ``is_safe_onnx_basename`` 与 ``is_safe_algorithm_name`` 共享
     重复的"basename-only"验证(空 / `.` / `..` / posix split / windows
     split / drive / root 检查),两个公开函数现在只差 ``.onnx`` 后缀。
     """
@@ -148,13 +148,9 @@ def _scan_kind_details(kind_dir: Path) -> dict[str, list[dict[str, Any]]]:
 def _select_onnx_providers(engine: str, ort_module: Any) -> list[str]:
     """Pick the provider list for the requested engine, refusing silent CPU fallback.
 
-    The previous behaviour mirrored the ONNX Runtime default, which silently
-    drops a requested provider (e.g. ``CUDAExecutionProvider``) when the
-    matching shared library is missing — it then keeps the session running on
-    ``CPUExecutionProvider`` while telling the user nothing. That made GPU
-    misconfigurations look like algorithm slowness. This helper instead checks
-    ``ort.get_available_providers()`` up front and raises with a precise
-    message if the requested accelerator is unavailable.
+    ONNX Runtime can silently drop an unavailable requested provider and run on
+    CPU. Check ``ort.get_available_providers()`` first so accelerator
+    misconfiguration becomes a precise error.
     """
     available = list(ort_module.get_available_providers())
     if engine == "auto" or engine not in _ENGINE_PROVIDER_PRIORITY:

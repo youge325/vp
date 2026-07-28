@@ -1,263 +1,113 @@
-import { test, expect } from '../fixtures'
+import { expect, test } from '../fixtures'
+import { setDeterministicEnhanceMetricState } from '../utils/pinia'
+import { saveE2EScreenshot } from '../utils/screenshots'
 
-const readInterpolationFieldLabels = async (tauriPage: any): Promise<string[]> => {
-  return await tauriPage.evaluate(() => {
-    const section = Array.from(document.querySelectorAll('section.panel-surface'))
-      .find((candidate) => candidate.querySelector('h2')?.textContent?.includes('补帧'))
-    if (!section) {
-      return []
-    }
-    return Array.from(section.querySelectorAll('label.field > span'))
-      .map((label) => label.textContent?.trim() ?? '')
-      .filter(Boolean)
+async function openWorkflow(tauriPage: any) {
+  await tauriPage.click('.rail-link:has-text("增强")')
+  await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible()
+}
+
+const workflowSection = (tauriPage: any, heading: string) =>
+  tauriPage.locator('section.panel-surface').filter({
+    has: tauriPage.locator('h2', { hasText: heading }),
   })
-}
-
-const waitForInterpolationFields = async (
-  tauriPage: any,
-  expectedPresent: string[],
-  expectedAbsent: string[] = [],
-) => {
-  await tauriPage.waitForFunction(({ present, absent }) => {
-    const section = Array.from(document.querySelectorAll('section.panel-surface'))
-      .find((candidate) => candidate.querySelector('h2')?.textContent?.includes('补帧'))
-    if (!section) {
-      return false
-    }
-    const labels = Array.from(section.querySelectorAll('label.field > span'))
-      .map((label) => label.textContent?.trim() ?? '')
-      .filter(Boolean)
-    return present.every((label) => labels.includes(label))
-      && absent.every((label) => !labels.includes(label))
-  }, { present: expectedPresent, absent: expectedAbsent }, { timeout: 5000 })
-}
 
 test.describe('Workflow module UI', () => {
-  test('enabling interpolation reveals interpolation config panel', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("增强")')
-    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
-
-    // Use `has: h2` to avoid matching the super-resolution section whose
-    // "process order" option contains the substring "补帧".
-    const section = tauriPage.locator('section.panel-surface').filter({
-      has: tauriPage.locator('h2', { hasText: '补帧' }),
-    })
-    // Use .first() — panel-head may contain multiple toggles (main enable + FP16)
-    const toggle = section.locator('.panel-head label.toggle-chip input[type="checkbox"]').first()
-    await expect(toggle).toBeVisible()
-
-    // Ensure interpolation is off before enabling (preset may have it on)
-    if (await toggle.isChecked()) {
+  test('enables both stages and reveals their bound controls', async ({ tauriPage }) => {
+    await openWorkflow(tauriPage)
+    for (const stage of [
+      { heading: '补帧', field: '后端' },
+      { heading: '超分', field: '倍率' },
+    ]) {
+      const section = workflowSection(tauriPage, stage.heading)
+      const toggle = section.locator('.panel-head input[type="checkbox"]').first()
+      if (await toggle.isChecked()) {
+        await toggle.click()
+      }
       await toggle.click()
-      await expect(toggle).not.toBeChecked()
+      await expect(toggle).toBeChecked()
+      await expect(section.locator('label.field').filter({
+        hasText: stage.field,
+      }).locator('select').first()).toBeVisible()
+      await expect(section.locator('label.field').filter({
+        hasText: '算法',
+      }).locator('select').first()).toBeVisible()
     }
-
-    await toggle.click()
-    await expect(toggle).toBeChecked()
-
-    const backendSelect = section.locator('label.field').filter({ hasText: '后端' }).locator('select')
-    await expect(backendSelect).toBeVisible({ timeout: 5000 })
-
-    const algorithmSelect = section.locator('label.field').filter({ hasText: '算法' }).locator('select').first()
-    await expect(algorithmSelect).toBeVisible({ timeout: 5000 })
   })
 
-  test('enabling superResolution reveals superResolution config panel', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("增强")')
-    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
+  test('renders all model projections through the shared metric grid', async ({ tauriPage }) => {
+    const ready = await setDeterministicEnhanceMetricState()
+    test.skip(!ready, 'Cannot seed deterministic model metrics')
+    await openWorkflow(tauriPage)
 
-    // Use `has: h2` for precise section matching.
-    const section = tauriPage.locator('section.panel-surface').filter({
-      has: tauriPage.locator('h2', { hasText: '超分' }),
-    })
-    const toggle = section.locator('.panel-head label.toggle-chip input[type="checkbox"]').first()
-    await expect(toggle).toBeVisible()
-
-    // Ensure superResolution is off before enabling
-    if (await toggle.isChecked()) {
-      await toggle.click()
-      await expect(toggle).not.toBeChecked()
-    }
-
-    await toggle.click()
-    await expect(toggle).toBeChecked()
-
-    const scaleSelect = section.locator('label.field').filter({ hasText: '倍率' }).locator('select').first()
-    await expect(scaleSelect).toBeVisible({ timeout: 5000 })
-
-    const algorithmSelect = section.locator('label.field').filter({ hasText: '算法' }).locator('select').first()
-    await expect(algorithmSelect).toBeVisible({ timeout: 5000 })
+    const interpolation = tauriPage.locator(
+      '.model-metric-grid[aria-label="补帧模型指标"]',
+    )
+    const superResolution = tauriPage.locator(
+      '.model-metric-grid[aria-label="超分模型指标"]',
+    )
+    const combined = tauriPage.locator(
+      '.model-metric-grid[aria-label="增强流程组合显存峰值"]',
+    )
+    await expect(tauriPage.locator('.model-metric-grid')).toHaveCount(3)
+    await expect(interpolation.locator('.model-metric-item')).toHaveCount(3)
+    await expect(superResolution.locator('.model-metric-item')).toHaveCount(3)
+    await expect(combined.locator('.model-metric-item')).toHaveCount(1)
+    await expect(interpolation).toContainText('1.25M')
+    await expect(superResolution).toContainText('7.50M')
+    await expect(combined).toContainText('组合峰值')
+    await superResolution.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+    await saveE2EScreenshot('model-metrics')
   })
 
-  test('switching fpsMode swaps between targetFps input and multi select', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("增强")')
-    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
-
-    const section = tauriPage.locator('section.panel-surface').filter({
-      has: tauriPage.locator('h2', { hasText: '补帧' }),
-    })
-
-    const fpsModeSelect = section.locator('label.field').filter({ hasText: '帧率模式' }).locator('select')
-    await expect(fpsModeSelect).toBeVisible()
-
-    // The interpolation "倍率" select has options '2x' / '4x', which uniquely
-    // distinguishes it from the "帧率模式" select (options '目标 FPS' / '倍率').
-    const multiSelect = section.locator('label.field').filter({
+  test('switches between target FPS and interpolation multiplier inputs', async ({ tauriPage }) => {
+    await openWorkflow(tauriPage)
+    const section = workflowSection(tauriPage, '补帧')
+    const mode = section.locator('label.field').filter({ hasText: '帧率模式' }).locator('select')
+    const target = section.locator('label.field').filter({ hasText: '目标 FPS' }).locator('input')
+    const multiplier = section.locator('label.field').filter({
       has: tauriPage.locator('option', { hasText: '2x' }),
     }).locator('select')
-    const targetFpsInput = section.locator('label.field').filter({ hasText: '目标 FPS' }).locator('input')
 
-    // Detect current mode by checking which conditional field is visible.
-    const isMultiVisible = await multiSelect.isVisible().catch(() => false)
-
-    if (isMultiVisible) {
-      // Currently multi mode — switch to target
-      await fpsModeSelect.selectOption({ label: '目标 FPS' })
-      await expect(targetFpsInput).toBeVisible({ timeout: 5000 })
-      await expect(multiSelect).not.toBeVisible()
-
-      // Switch back to multi
-      await fpsModeSelect.selectOption({ label: '倍率' })
-      await expect(multiSelect).toBeVisible({ timeout: 5000 })
-      await expect(targetFpsInput).not.toBeVisible()
-    } else {
-      // Currently target mode — switch to multi
-      await fpsModeSelect.selectOption({ label: '倍率' })
-      await expect(multiSelect).toBeVisible({ timeout: 5000 })
-      await expect(targetFpsInput).not.toBeVisible()
-
-      // Switch back to target
-      await fpsModeSelect.selectOption({ label: '目标 FPS' })
-      await expect(targetFpsInput).toBeVisible({ timeout: 5000 })
-      await expect(multiSelect).not.toBeVisible()
+    await mode.selectOption({ label: '倍率' })
+    await expect(multiplier).toBeVisible()
+    await expect(target).not.toBeVisible()
+    const choices = await multiplier.locator('option').allTextContents()
+    if (choices.length > 1) {
+      await multiplier.selectOption({ index: 1 })
+      expect(await multiplier.inputValue()).toBeTruthy()
     }
+
+    await mode.selectOption({ label: '目标 FPS' })
+    await expect(target).toBeVisible()
+    await expect(multiplier).not.toBeVisible()
   })
 
-  test('switching backend to onnx reveals onnx model select and hides regular model', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("增强")')
-    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
+  test('switches ONNX backend to its dedicated model selector', async ({ tauriPage }) => {
+    await openWorkflow(tauriPage)
+    const section = workflowSection(tauriPage, '补帧')
+    const backend = section.locator('label.field').filter({ hasText: '后端' }).locator('select')
+    const choices = await backend.locator('option').allTextContents()
+    const onnx = choices.find((choice) => choice.toLowerCase().includes('onnx'))
+    test.skip(!onnx, 'ONNX interpolation backend is unavailable')
+    await backend.selectOption({ label: onnx! })
 
-    const section = tauriPage.locator('section.panel-surface').filter({
-      has: tauriPage.locator('h2', { hasText: '补帧' }),
-    })
-
-    const backendSelect = section.locator('label.field').filter({ hasText: '后端' }).locator('select')
-    await expect(backendSelect).toBeVisible()
-
-    const options = await backendSelect.locator('option').allTextContents()
-    const onnxOption = options.find((o) => o.toLowerCase().includes('onnx'))
-    if (!onnxOption) {
-      test.skip()
-      return
-    }
-
-    // Ensure we start from a non-ONNX backend so the swap is observable
-    const nonOnnxOption = options.find((o) => !o.toLowerCase().includes('onnx'))
-    if (nonOnnxOption) {
-      await backendSelect.selectOption({ label: nonOnnxOption })
-      await waitForInterpolationFields(tauriPage, ['模型'], ['ONNX 补帧模型'])
-    }
-
-    // Switch to ONNX backend
-    await backendSelect.selectOption({ label: onnxOption })
-    await waitForInterpolationFields(tauriPage, ['ONNX 补帧模型'], ['模型'])
-
-    const onnxModelSelect = section.locator('label.field').filter({ hasText: 'ONNX 补帧模型' }).locator('select')
-    await onnxModelSelect.waitFor({ state: 'attached', timeout: 5000 })
-
-    const labels = await readInterpolationFieldLabels(tauriPage)
-    expect(labels).toContain('ONNX 补帧模型')
-    expect(labels).not.toContain('模型')
+    const onnxModel = section.locator('label.field')
+      .filter({ hasText: 'ONNX 补帧模型' })
+      .locator('select')
+    await expect(onnxModel).toBeVisible()
+    await expect(section.locator('label.field').filter({ hasText: /^模型$/ })).not.toBeVisible()
   })
 
-  test('switching processOrder select updates the selected value', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("增强")')
-    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
-
-    const section = tauriPage.locator('section.panel-surface').filter({
-      has: tauriPage.locator('h2', { hasText: '超分' }),
-    })
-
-    const processOrderSelect = section.locator('label.field').filter({ hasText: '处理顺序' }).locator('select')
-    await expect(processOrderSelect).toBeVisible()
-
-    const options = await processOrderSelect.locator('option').allTextContents()
-    expect(options.length).toBeGreaterThanOrEqual(2)
-
-    // Select the second option and verify
-    await processOrderSelect.selectOption({ index: 1 })
-    const selectedValue = await processOrderSelect.inputValue()
-    const optionValues = await processOrderSelect.locator('option').all()
-    expect(selectedValue).toBe(await optionValues[1].getAttribute('value'))
-
-    // Switch back to first option
-    await processOrderSelect.selectOption({ index: 0 })
-    const newValue = await processOrderSelect.inputValue()
-    expect(newValue).toBe(await optionValues[0].getAttribute('value'))
-  })
-
-  test('switching superResolution scale select updates the selected value', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("增强")')
-    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
-
-    const section = tauriPage.locator('section.panel-surface').filter({
-      has: tauriPage.locator('h2', { hasText: '超分' }),
-    })
-
-    const scaleSelect = section.locator('label.field').filter({ hasText: '倍率' }).locator('select').first()
-    await expect(scaleSelect).toBeVisible()
-
-    const options = await scaleSelect.locator('option').allTextContents()
-    if (options.length < 2) {
-      test.skip()
-      return
+  test('binds process order and super-resolution scale choices', async ({ tauriPage }) => {
+    await openWorkflow(tauriPage)
+    const section = workflowSection(tauriPage, '超分')
+    for (const label of ['处理顺序', '倍率']) {
+      const select = section.locator('label.field').filter({ hasText: label }).locator('select').first()
+      const options = await select.locator('option').all()
+      test.skip(options.length < 2, `${label} has fewer than two choices`)
+      await select.selectOption({ index: 1 })
+      expect(await select.inputValue()).toBe(await options[1].getAttribute('value'))
     }
-
-    // Switch to second option
-    await scaleSelect.selectOption({ index: 1 })
-    const selectedValue = await scaleSelect.inputValue()
-    expect(selectedValue).toBeTruthy()
-
-    // Switch back to first option
-    await scaleSelect.selectOption({ index: 0 })
-    const newValue = await scaleSelect.inputValue()
-    expect(newValue).toBeTruthy()
-    expect(newValue).not.toBe(selectedValue)
-  })
-
-  test('switching interpolation multi select updates the selected value', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("增强")')
-    await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible({ timeout: 5000 })
-
-    const section = tauriPage.locator('section.panel-surface').filter({
-      has: tauriPage.locator('h2', { hasText: '补帧' }),
-    })
-
-    // Ensure fpsMode is 'multi' so the "倍率" select is visible
-    const fpsModeSelect = section.locator('label.field').filter({ hasText: '帧率模式' }).locator('select')
-    await expect(fpsModeSelect).toBeVisible()
-    await fpsModeSelect.selectOption({ label: '倍率' })
-
-    const multiSelect = section.locator('label.field').filter({
-      has: tauriPage.locator('option', { hasText: '2x' }),
-    }).locator('select')
-    await expect(multiSelect).toBeVisible({ timeout: 5000 })
-
-    const options = await multiSelect.locator('option').allTextContents()
-    if (options.length < 2) {
-      test.skip()
-      return
-    }
-
-    // Switch to second option
-    await multiSelect.selectOption({ index: 1 })
-    const selectedValue = await multiSelect.inputValue()
-    expect(selectedValue).toBeTruthy()
-
-    // Switch back to first option
-    await multiSelect.selectOption({ index: 0 })
-    const newValue = await multiSelect.inputValue()
-    expect(newValue).toBeTruthy()
-    expect(newValue).not.toBe(selectedValue)
   })
 })

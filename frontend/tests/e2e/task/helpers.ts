@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 
 const sanitize = (value: string) => value.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '')
 
@@ -11,8 +11,4 @@ export const createTaskOutputDir = (label: string) => {
   const dir = resolve(root, `${sanitize(label)}-${process.pid}-${randomUUID()}`)
   mkdirSync(dir, { recursive: true })
   return dir
-}
-
-export const taskOutputPath = (outputDir: string, extension = 'mp4') => {
-  return join(outputDir, `vp-e2e-test_processed.${extension.replace(/^\./, '')}`)
 }

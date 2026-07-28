@@ -11,7 +11,7 @@ export const taskIpc = {
     return safeInvoke('check_resume_state', { request })
   },
   cancel(): Promise<void> {
-    return safeInvoke('cancel_task')
+    return safeInvoke('control_task', { kind: 'cancel' })
   },
   pause(): Promise<void> {
     return safeInvoke('control_task', { kind: 'pause' })

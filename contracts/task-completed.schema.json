@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TaskCompletedPayload",
+  "type": "object",
+  "properties": {
+    "outputPath": {
+      "type": "string"
+    },
+    "processedFrames": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "timeSeconds": {
+      "type": "number",
+      "format": "double"
+    }
+  },
+  "required": [
+    "outputPath",
+    "processedFrames",
+    "timeSeconds"
+  ],
+  "additionalProperties": false
+}

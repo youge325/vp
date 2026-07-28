@@ -18,6 +18,7 @@ import pytest
 
 from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
 from app.utils.model_metrics import get_paddlegan_model_detail
+from tests_full_e2e.helpers import try_last_json_line
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 WORKER_TIMEOUT_SECONDS = int(os.environ.get("VP_TENSORRT_METRICS_CASE_TIMEOUT", "900"))
@@ -115,7 +116,7 @@ def _run_case(case: dict[str, Any], tmp_path: Path) -> dict[str, Any]:
         timeout=WORKER_TIMEOUT_SECONDS,
         check=False,
     )
-    payload = _parse_last_json(proc.stdout)
+    payload = try_last_json_line(proc.stdout)
     if payload is None:
         payload = {
             "status": "failed",
@@ -128,15 +129,6 @@ def _run_case(case: dict[str, Any], tmp_path: Path) -> dict[str, Any]:
     if proc.stderr:
         payload["stderrTail"] = proc.stderr[-3000:]
     return payload
-
-
-def _parse_last_json(stdout: str) -> dict[str, Any] | None:
-    for line in reversed(stdout.splitlines()):
-        try:
-            return json.loads(line)
-        except json.JSONDecodeError:
-            continue
-    return None
 
 
 def _expected_vram_bytes(model_id: str, *, width: int, height: int, num_frames: int) -> float:

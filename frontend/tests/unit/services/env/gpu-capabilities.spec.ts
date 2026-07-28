@@ -1,15 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import * as gpuCapabilities from '@/services/env/gpu-capabilities'
 import { getAvailableEngines, getVisibleBackends, shouldShowEngineSelector } from '@/services/env/gpu-capabilities'
 import { createEnvironmentResult as env } from '../../fixtures/environment'
 
 describe('GPU capabilities', () => {
-  it('keeps legacy vendor and support helpers out of the public surface', () => {
-    expect('inferGpuVendor' in gpuCapabilities).toBe(false)
-    expect('getBackendDeviceSupport' in gpuCapabilities).toBe(false)
-  })
-
   it('shows no checked backend without explicit engine metadata', () => {
     expect(getVisibleBackends(null)).toEqual(['pytorch', 'paddle', 'onnx'])
     expect(getVisibleBackends(env({}))).toEqual([])

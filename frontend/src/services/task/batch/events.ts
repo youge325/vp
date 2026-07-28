@@ -20,12 +20,11 @@ import {
 import type { createConflictResolver } from './conflict'
 import type { createCommonHelpers } from './lifecycle/common'
 import type { createFinalizeOps } from './lifecycle/finalize'
-import type { BatchLifecycleDeps } from './lifecycle/types'
+import type { MediaRunStatePort, TaskIssuePort } from './lifecycle/types'
 
-type EventHandlersDeps = Pick<
-  BatchLifecycleDeps,
-  'setItemTaskState' | 'setItemLastOutputPath' | 'setTaskIssue'
->
+type EventHandlersDeps =
+  & Pick<MediaRunStatePort, 'setItemTaskState' | 'setItemLastOutputPath'>
+  & TaskIssuePort
 type EventLifecycle = Pick<
   ReturnType<typeof createCommonHelpers>,
   'getConsoleTaskContext' | 'getCurrentTaskContext'
@@ -74,18 +73,17 @@ export function createEventHandlers(
     await lifecycle.handleErrored(error)
   }
 
-  async function onCancelled(payload?: TaskCancelledPayload | null): Promise<void> {
+  async function onCancelled(payload: TaskCancelledPayload): Promise<void> {
     const { item, runState } = lifecycle.getCurrentTaskContext()
     if (item && runState) {
       deps.setItemTaskState(item.id, applyTaskCancelled(runState.taskState))
     }
     // A watchdog stall is exceptional; user cancellation remains silent.
-    const reason = payload?.reason ?? 'user'
-    if (reason === 'stalled') {
+    if (payload.reason === 'stalled') {
       const stalledError: TaskError = {
         code: TASK_ERROR_CODES.ProcessFailed,
         message: '后端进程在配置的超时时间内无任何进度,任务已被中止。',
-        details: payload?.details ?? null,
+        details: payload.details,
       }
       deps.setTaskIssue(stalledError)
     } else {

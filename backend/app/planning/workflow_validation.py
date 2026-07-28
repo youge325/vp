@@ -1,163 +1,175 @@
-"""Workflow validation helpers shared by CLI planning tests and commands."""
+"""Per-stage backend compatibility and model availability validation."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Literal
 
+from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
 from app.config import settings
 from app.errors import TaskErrorCode, raise_error
 from app.planning.processing_steps import ProcessingStep
-from app.planning.workflow_steps import processing_needs_interpolation
 from app.utils.onnx_models import resolve_onnx_model_path
 
-
-def _get_onnx_model_name(config: dict[str, Any]) -> str | None:
-    return config.get("onnxModel") or config.get("onnx_model")
+_OnnxKind = Literal["interpolation", "super_resolution"]
 
 
-def _interpolation_model_path(model_version: str | None = None) -> Path:
-    version = model_version or settings.RIFE_MODEL_VERSION
-    return Path(settings.RIFE_MODEL_DIR) / f"flownet_v{version}.pkl"
+def _required_string(step: ProcessingStep, key: str) -> str:
+    value = step.algorithm_kwargs.get(key)
+    if not isinstance(value, str) or not value:
+        raise_error(
+            TaskErrorCode.INVALID_CONFIG,
+            f"Stage '{step.stage_name}' requires a non-empty '{key}' value.",
+            details={"stage": step.stage_name, "field": key},
+        )
+    return value
 
 
-def _validate_onnx_models_for_workflow(
-    workflow_config: dict[str, Any],
-    processing_steps: list[ProcessingStep],
-    tensor_backend_name: str,
+def _required_float(step: ProcessingStep, key: str) -> float:
+    value = step.algorithm_kwargs.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise_error(
+            TaskErrorCode.INVALID_CONFIG,
+            f"Stage '{step.stage_name}' requires a numeric '{key}' value.",
+            details={"stage": step.stage_name, "field": key},
+        )
+    return float(value)
+
+
+def _missing_onnx_model(
+    *,
+    step: ProcessingStep,
+    backend_name: str,
+    algorithm: str,
+    kind: _OnnxKind,
+    model_name: str | None,
 ) -> None:
-    if tensor_backend_name != "onnx":
+    try:
+        resolve_onnx_model_path(
+            kind,
+            algorithm,
+            model_name,
+            model_root=settings.RIFE_MODEL_DIR,
+        )
+    except FileNotFoundError as exc:
+        raise_error(
+            TaskErrorCode.MISSING_MODEL,
+            str(exc),
+            details={
+                "stage": step.stage_name,
+                "algorithm": algorithm,
+                "tensor_backend": backend_name,
+                "model_root": settings.RIFE_MODEL_DIR,
+            },
+        )
+
+
+def _validate_interpolation(step: ProcessingStep) -> None:
+    backend_name = _required_string(step, "tensor_backend")
+    algorithm = _required_string(step, "algorithm")
+    if algorithm != "rife":
+        raise_error(
+            TaskErrorCode.INVALID_CONFIG,
+            f"Unsupported interpolation algorithm: '{algorithm}'.",
+            details={"stage": step.stage_name, "algorithm": algorithm},
+        )
+    if backend_name not in {"pytorch", "onnx"}:
+        backend_label = "Paddle" if backend_name == "paddle" else f"'{backend_name}'"
+        raise_error(
+            TaskErrorCode.INVALID_CONFIG,
+            f"RIFE interpolation does not support the {backend_label} tensor backend.",
+            details={
+                "stage": step.stage_name,
+                "algorithm": algorithm,
+                "tensor_backend": backend_name,
+            },
+        )
+
+    if backend_name == "onnx":
+        model_name = step.algorithm_kwargs.get("onnx_model")
+        _missing_onnx_model(
+            step=step,
+            backend_name=backend_name,
+            algorithm=algorithm,
+            kind="interpolation",
+            model_name=model_name if isinstance(model_name, str) else None,
+        )
         return
 
-    for step in processing_steps:
-        if step.algorithm_type == "frame_interpolation":
-            model_name = _get_onnx_model_name(workflow_config["interpolation"])
-            algorithm = workflow_config["interpolation"].get("algorithm", "rife")
-            resolve_onnx_model_path("interpolation", algorithm, model_name, model_root=settings.RIFE_MODEL_DIR)
-        elif step.algorithm_type == "super_resolution":
-            model_name = _get_onnx_model_name(workflow_config["superResolution"])
-            algorithm = workflow_config["superResolution"].get("algorithm", "placeholder")
-            resolve_onnx_model_path("super_resolution", algorithm, model_name, model_root=settings.RIFE_MODEL_DIR)
+    model_version = _required_string(step, "model_version")
+    model_path = Path(settings.RIFE_MODEL_DIR) / f"flownet_v{model_version}.pkl"
+    if not model_path.is_file() or model_path.stat().st_size == 0:
+        raise_error(
+            TaskErrorCode.MISSING_MODEL,
+            f"Interpolation model is missing: {model_path}",
+            details={
+                "stage": step.stage_name,
+                "algorithm": algorithm,
+                "tensor_backend": backend_name,
+                "model_path": str(model_path),
+                "model_version": model_version,
+            },
+        )
 
 
-def verify_model_availability(
-    workflow_config: dict[str, Any],
-    processing_steps: list[ProcessingStep],
-    tensor_backend_name: str,
-) -> None:
-    """Per-backend model existence guard."""
-    from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS, ensure_paddlegan_vsr_weights
+def _validate_super_resolution(step: ProcessingStep) -> None:
+    from app.algorithms.paddle.paddlegan_vsr.weights import ensure_paddlegan_vsr_weights
 
-    for step in processing_steps:
-        if step.algorithm_type != "super_resolution":
-            continue
-        sr_algorithm = str(step.algorithm_kwargs.get("sr_algorithm") or "")
-        if sr_algorithm in PADDLEGAN_VSR_SPECS:
-            ensure_paddlegan_vsr_weights(sr_algorithm)
-
-    if processing_needs_interpolation(processing_steps):
-        if tensor_backend_name == "onnx":
-            try:
-                _validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
-            except FileNotFoundError as exc:
-                raise_error(
-                    TaskErrorCode.MISSING_MODEL,
-                    str(exc),
-                    details={
-                        "tensor_backend": tensor_backend_name,
-                        "model_root": settings.RIFE_MODEL_DIR,
-                    },
-                )
-        else:
-            model_version = workflow_config["interpolation"]["model"]
-            model_path = _interpolation_model_path(model_version)
-            if not model_path.is_file() or model_path.stat().st_size == 0:
-                raise_error(
-                    TaskErrorCode.MISSING_MODEL,
-                    f"Default interpolation model is missing: {model_path}",
-                    details={
-                        "model_path": str(model_path),
-                        "model_version": model_version,
-                    },
-                )
-    elif tensor_backend_name == "onnx":
-        try:
-            _validate_onnx_models_for_workflow(workflow_config, processing_steps, tensor_backend_name)
-        except FileNotFoundError as exc:
-            raise_error(
-                TaskErrorCode.MISSING_MODEL,
-                str(exc),
-                details={
-                    "tensor_backend": tensor_backend_name,
-                    "model_root": settings.RIFE_MODEL_DIR,
-                },
-            )
-
-
-def verify_super_resolution_backend(
-    workflow_config: dict[str, Any],
-    tensor_backend_name: str,
-) -> None:
-    """Reject unsupported SR/backend combinations before execution."""
-    super_resolution = workflow_config.get("superResolution", {})
-    if not super_resolution.get("enabled"):
-        return
-    algorithm = str(super_resolution.get("algorithm") or "placeholder")
-    sr_backend = str(
-        super_resolution.get("tensorBackend") or super_resolution.get("tensor_backend") or tensor_backend_name
-    )
-
-    from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
-
+    backend_name = _required_string(step, "tensor_backend")
+    algorithm = _required_string(step, "sr_algorithm")
     if algorithm in PADDLEGAN_VSR_SPECS:
-        scale_factor = float(super_resolution.get("scaleFactor") or super_resolution.get("scale_factor") or 1.0)
+        scale_factor = _required_float(step, "scale_factor")
         if scale_factor != 4.0:
             raise_error(
                 TaskErrorCode.INVALID_CONFIG,
                 f"PaddleGAN VSR models are fixed 4x super-resolution models; got {scale_factor:g}x.",
-                details={"algorithm": algorithm, "scale_factor": scale_factor},
-            )
-        if sr_backend != "paddle":
-            raise_error(
-                TaskErrorCode.INVALID_CONFIG,
-                f"PaddleGAN VSR requires the Paddle tensor backend; got '{sr_backend}'.",
-                details={"algorithm": algorithm, "tensor_backend": sr_backend},
-            )
-        interpolation = workflow_config.get("interpolation", {})
-        interpolation_backend = str(
-            interpolation.get("tensorBackend") or interpolation.get("tensor_backend") or tensor_backend_name
-        )
-        if interpolation.get("enabled") and interpolation_backend == "paddle":
-            raise_error(
-                TaskErrorCode.INVALID_CONFIG,
-                (
-                    "RIFE interpolation does not support the Paddle tensor backend. "
-                    "Use PyTorch or ONNX for interpolation when combining it with PaddleGAN VSR."
-                ),
                 details={
-                    "super_resolution_backend": "paddle",
-                    "interpolation_backend": interpolation_backend,
+                    "stage": step.stage_name,
+                    "algorithm": algorithm,
+                    "scale_factor": scale_factor,
                 },
             )
+        if backend_name != "paddle":
+            raise_error(
+                TaskErrorCode.INVALID_CONFIG,
+                f"PaddleGAN VSR requires the Paddle tensor backend; got '{backend_name}'.",
+                details={
+                    "stage": step.stage_name,
+                    "algorithm": algorithm,
+                    "tensor_backend": backend_name,
+                },
+            )
+        ensure_paddlegan_vsr_weights(algorithm)
         return
 
-    if sr_backend == "onnx":
-        return
-    raise_error(
-        TaskErrorCode.INVALID_CONFIG,
-        (
-            "Super-resolution requires the ONNX tensor backend; "
-            f"got '{sr_backend}'. Switch the tensor backend to onnx "
-            "or disable super-resolution."
-        ),
-        details={
-            "tensor_backend": sr_backend,
-            "super_resolution_enabled": True,
-        },
+    if backend_name != "onnx":
+        raise_error(
+            TaskErrorCode.INVALID_CONFIG,
+            f"ONNX super-resolution does not support the '{backend_name}' tensor backend.",
+            details={
+                "stage": step.stage_name,
+                "algorithm": algorithm,
+                "tensor_backend": backend_name,
+            },
+        )
+    model_name = step.algorithm_kwargs.get("onnx_model")
+    _missing_onnx_model(
+        step=step,
+        backend_name=backend_name,
+        algorithm=algorithm,
+        kind="super_resolution",
+        model_name=model_name if isinstance(model_name, str) else None,
     )
 
 
-__all__ = [
-    "verify_model_availability",
-    "verify_super_resolution_backend",
-]
+def validate_workflow_requirements(processing_steps: Sequence[ProcessingStep]) -> None:
+    """Validate every executable stage against its own backend and model."""
+    for step in processing_steps:
+        if step.algorithm_type == "frame_interpolation":
+            _validate_interpolation(step)
+        elif step.algorithm_type == "super_resolution":
+            _validate_super_resolution(step)
+
+
+__all__ = ["validate_workflow_requirements"]

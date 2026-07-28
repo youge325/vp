@@ -7,6 +7,7 @@ import { useEditingScope } from '@/composables/selectors/useWorkbenchEditor'
 import BaseNumber from '@/components/forms/BaseNumber.vue'
 import BaseSelect from '@/components/forms/BaseSelect.vue'
 import BaseToggle from '@/components/forms/BaseToggle.vue'
+import ModelMetricGrid from '@/components/ModelMetricGrid.vue'
 
 const form = useEnhanceForm()
 const options = reactive({
@@ -118,12 +119,7 @@ const { targetLabel } = useEditingScope()
         />
       </div>
 
-      <div class="model-metric-grid" aria-label="补帧模型指标">
-        <div v-for="row in form.interpolationMetricRows" :key="row.label" class="model-metric-item">
-          <span>{{ row.label }}</span>
-          <strong>{{ row.value }}</strong>
-        </div>
-      </div>
+      <ModelMetricGrid label="补帧模型指标" :rows="form.interpolationMetricRows" />
     </section>
 
     <section class="panel-surface">
@@ -195,34 +191,17 @@ const { targetLabel } = useEditingScope()
         />
       </div>
 
-      <div
-        v-if="form.superResolutionFixedWindowRows.length"
-        class="model-metric-grid model-metric-grid-compact"
-        aria-label="超分固定窗口"
-      >
-        <div v-for="row in form.superResolutionFixedWindowRows" :key="row.label" class="model-metric-item">
-          <span>{{ row.label }}</span>
-          <strong>{{ row.value }}</strong>
-        </div>
-      </div>
-
-      <div class="model-metric-grid" aria-label="超分模型指标">
-        <div v-for="row in form.superResolutionMetricRows" :key="row.label" class="model-metric-item">
-          <span>{{ row.label }}</span>
-          <strong>{{ row.value }}</strong>
-        </div>
-      </div>
-
-      <div
-        v-if="form.combinedVramMetricRows.length"
-        class="model-metric-grid model-metric-grid-compact"
-        aria-label="增强流程组合显存峰值"
-      >
-        <div v-for="row in form.combinedVramMetricRows" :key="row.label" class="model-metric-item">
-          <span>{{ row.label }}</span>
-          <strong>{{ row.value }}</strong>
-        </div>
-      </div>
+      <ModelMetricGrid
+        label="超分固定窗口"
+        :rows="form.superResolutionFixedWindowRows"
+        compact
+      />
+      <ModelMetricGrid label="超分模型指标" :rows="form.superResolutionMetricRows" />
+      <ModelMetricGrid
+        label="增强流程组合显存峰值"
+        :rows="form.combinedVramMetricRows"
+        compact
+      />
     </section>
 
   </div>

@@ -1,4 +1,4 @@
-"""Phase 8 — 验证 ``SUPPORTED_ALGORITHMS`` 元数据携带的 ``tensorBackends`` 字段。
+"""验证 ``SUPPORTED_ALGORITHMS`` 元数据携带的 ``tensorBackends`` 字段。
 
 前端的算法下拉过滤完全依赖该字段:每个算法必须显式声明它在哪些
 tensor backend 下有实现。漏声明 = 算法在 UI 上消失;声明错误 = UI 会
@@ -60,7 +60,7 @@ def test_rife_declares_pytorch_and_onnx_but_not_paddle():
     assert "onnx" in backends
     assert "paddle" not in backends, (
         "RIFE declared paddle support but there is no paddle implementation; "
-        "this would re-introduce the very bug Phase 8 fixed."
+        "this would re-introduce the fixed metadata-contract bug."
     )
 
 

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SuperResolutionConfig",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "scaleFactor": {
+      "type": "number",
+      "format": "double",
+      "exclusiveMinimum": 0
+    },
+    "algorithm": {
+      "type": "string"
+    },
+    "onnxModel": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tensorBackend": {
+      "$ref": "#/$defs/TensorBackend"
+    },
+    "engine": {
+      "type": "string"
+    },
+    "numFrames": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 1
+    }
+  },
+  "required": [
+    "enabled",
+    "scaleFactor",
+    "algorithm",
+    "onnxModel",
+    "tensorBackend",
+    "engine",
+    "numFrames"
+  ],
+  "$defs": {
+    "TensorBackend": {
+      "type": "string",
+      "enum": [
+        "pytorch",
+        "paddle",
+        "onnx"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

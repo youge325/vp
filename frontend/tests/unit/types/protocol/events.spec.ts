@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { TASK_EVENT_NAMES, TERMINAL_PROGRESS_PREFIX } from '@/types/protocol/events'
-import type { TaskEventName } from '@/types/generated/TaskEventName'
+import {
+  TASK_EVENT_NAMES,
+  TERMINAL_PROGRESS_PREFIX,
+  type TaskEventName,
+} from '@/types/protocol/events'
 
 const EXPECTED_VARIANTS: readonly TaskEventName[] = [
   'task-progress',
@@ -30,7 +33,7 @@ describe('TASK_EVENT_NAMES', () => {
     }
   })
 
-  it('exports TERMINAL_PROGRESS_PREFIX matching Rust protocol.rs', () => {
+  it('exports the backend stderr progress prefix', () => {
     expect(TERMINAL_PROGRESS_PREFIX).toBe('[VP_PROGRESS]')
   })
 })

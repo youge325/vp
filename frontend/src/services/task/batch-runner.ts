@@ -6,20 +6,17 @@ import { createCommonHelpers } from './batch/lifecycle/common'
 import { createControlOps } from './batch/lifecycle/control'
 import { createFinalizeOps } from './batch/lifecycle/finalize'
 import { createQueueOps } from './batch/lifecycle/queue'
-import type { BatchLifecycleDeps } from './batch/lifecycle/types'
+import type { BatchRunnerDeps } from './batch/lifecycle/types'
 import { createConflictResolver } from './batch/conflict'
 import { createEventHandlers } from './batch/events'
 
-export function createBatchRunner(deps: BatchLifecycleDeps) {
+export function createBatchRunner(deps: BatchRunnerDeps) {
   const helpers = createCommonHelpers(deps)
-  let finalizeOps: ReturnType<typeof createFinalizeOps>
-  let queueOps: ReturnType<typeof createQueueOps>
-
-  queueOps = createQueueOps(deps, {
-    handleErrored: (error) => finalizeOps.handleErrored(error),
-  })
-  finalizeOps = createFinalizeOps(deps, helpers, {
+  const finalizeOps = createFinalizeOps(deps, helpers, {
     runNextQueuedItem: () => queueOps.runNextQueuedItem(),
+  })
+  const queueOps = createQueueOps(deps, {
+    handleErrored: (error) => finalizeOps.handleErrored(error),
   })
   const controlOps = createControlOps(deps, helpers)
   const operations = { ...helpers, ...queueOps, ...finalizeOps }

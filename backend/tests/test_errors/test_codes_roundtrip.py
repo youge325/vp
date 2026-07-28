@@ -50,7 +50,7 @@ def test_infer_error_code_routes_paddle_to_missing_tensor_backend() -> None:
 def test_infer_error_code_routes_pyav_to_missing_python_dependency() -> None:
     """Non-tensor missing modules must map to the new MISSING_PYTHON_DEPENDENCY code.
 
-    Before Phase A this returned the bare string ``"missing_python_dependency"`` even
+    Previously this returned the bare string ``"missing_python_dependency"`` even
     though the enum had no such value (SSOT drift). This test pins the fix.
     """
     assert infer_error_code(ImportError("no module named 'pyav'")) == TaskErrorCode.MISSING_PYTHON_DEPENDENCY.value
@@ -79,13 +79,11 @@ def test_infer_error_code_defaults_to_process_failed() -> None:
     [
         (TaskErrorCode.MISSING_MODEL, TaskErrorCode.MISSING_MODEL.value),
         (TaskErrorCode.MISSING_MODEL.value, TaskErrorCode.MISSING_MODEL.value),
-        ("TaskErrorCode.MISSING_MODEL", TaskErrorCode.MISSING_MODEL.value),
         ("not_a_real_code", TaskErrorCode.PROCESS_FAILED.value),
         (None, TaskErrorCode.PROCESS_FAILED.value),
     ],
 )
-def test_error_code_to_wire_normalizes_enums_values_and_legacy_strings(raw_code: object, expected_code: str) -> None:
-    """Wire serialization must never leak ``TaskErrorCode.NAME`` to Rust."""
+def test_error_code_to_wire_accepts_only_current_contract_values(raw_code: object, expected_code: str) -> None:
     assert error_code_to_wire(raw_code) == expected_code
 
 
@@ -93,7 +91,6 @@ def test_error_code_to_wire_normalizes_enums_values_and_legacy_strings(raw_code:
     ("raw_code", "expected_code"),
     [
         (TaskErrorCode.MISSING_MODEL, TaskErrorCode.MISSING_MODEL.value),
-        ("TaskErrorCode.MISSING_MODEL", TaskErrorCode.MISSING_MODEL.value),
         ("not_a_real_code", TaskErrorCode.PROCESS_FAILED.value),
     ],
 )
@@ -126,22 +123,7 @@ def test_all_inferred_codes_are_in_enum() -> None:
         assert code in TASK_ERROR_CODES, f"infer_error_code({message!r}) -> {code!r} is not a real TaskErrorCode value"
 
 
-def test_phase_a_new_codes_are_present() -> None:
-    """Sanity: Phase A explicitly adds 6 new codes."""
-    new_codes = {
-        TaskErrorCode.MISSING_PYTHON_DEPENDENCY.value,
-        TaskErrorCode.SPAWN_FAILED.value,
-        TaskErrorCode.RUNTIME_PANIC.value,
-        TaskErrorCode.IO_ERROR.value,
-        TaskErrorCode.SCHEMA_MISMATCH.value,
-        TaskErrorCode.PERSISTENCE_FAILED.value,
-    }
-    assert new_codes.issubset(TASK_ERROR_CODES)
-
-
-# ---------------------------------------------------------------------------
-# Phase B — verify the three error-code entry points agree.
-# ---------------------------------------------------------------------------
+# Verify the three backend error-code entry points agree.
 # After collapsing the old ``_infer_code_from_exception`` wrapper, the only
 # legitimate entry points are:
 #   1. ``ProcessError.from_exception``           (application code path)
@@ -192,7 +174,7 @@ def test_three_entry_points_agree(exc: BaseException, expected_code: str) -> Non
     """``ProcessError.from_exception``, ``infer_error_code``, and the
     ``__main__`` bootstrap fallback all yield the same code for the same
     exception. This is the test that catches drift between the entry
-    points after the Phase B consolidation."""
+    points after consolidation."""
     from_exception_code = ProcessError.from_exception(exc).code
     bootstrap_code = infer_error_code(exc)
     main_code = app_main._bootstrap_error_code(exc)
@@ -211,7 +193,7 @@ def test_main_bootstrap_uses_shared_inference_when_available() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 4.1 — stdlib type dispatch fallback.
+# stdlib type dispatch fallback.
 # ---------------------------------------------------------------------------
 # When the exception message has no recognised keyword, the resolver should
 # fall through to coarse ``isinstance`` buckets so common stdlib errors get a
@@ -276,11 +258,11 @@ def test_message_match_wins_over_type_dispatch() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 11 — MISSING_MODEL 关键字收窄。
+# MISSING_MODEL 关键字收窄。
 # ---------------------------------------------------------------------------
 # 原来 ``"model" in message`` 关键字太宽,任何含 "model" 字的消息都会被
 # 归类为 MISSING_MODEL —— 包括 Pydantic ValidationError 里携带字段名的
-# 字符串(如 ``"model_x has invalid type"``)。Phase 11 把关键字白名单
+# 字符串(如 ``"model_x has invalid type"``)。关键字白名单
 # 收紧到 ``"flownet_v" / "model file" / "model weight" / "missing model"``,
 # message-first 优先级保持不变(否则 ``FileNotFoundError("ffmpeg")`` 会
 # 落到 IO_ERROR 而不是 MISSING_FFMPEG)。
@@ -289,7 +271,7 @@ def test_message_match_wins_over_type_dispatch() -> None:
 def test_pydantic_validation_error_with_model_word_is_invalid_input() -> None:
     """Pydantic ValidationError 文本含 'model_x' 字段名 → 不再误归 MISSING_MODEL。
 
-    Phase 11 收窄关键字后,普通的 'model' 字提及不再触发 MISSING_MODEL,
+    关键字收窄后,普通的 'model' 字提及不再触发 MISSING_MODEL,
     而是按 type-dispatch fallback 走到 INVALID_INPUT(ValueError 桶)。
     """
     exc = ValueError("model_x must be one of ['4.6', '4.25']")

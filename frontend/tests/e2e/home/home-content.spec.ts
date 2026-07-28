@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures'
+import { seedMediaItems } from '../utils/media'
 import type { TauriPage } from '../utils/wdio-tauri'
 
 const waitForHomeProbe = async (tauriPage: TauriPage) => {
@@ -64,4 +65,15 @@ test.describe('Home module content', () => {
     }
   })
 
+  test('updates the imported-media statistic in the production dashboard', async ({ tauriPage }) => {
+    const ready = await seedMediaItems([
+      { id: 'home-one', displayName: 'home-one.mp4' },
+      { id: 'home-two', displayName: 'home-two.mp4' },
+      { id: 'home-three', displayName: 'home-three.mp4' },
+    ])
+    test.skip(!ready, 'Cannot seed media fixtures')
+
+    const imported = tauriPage.locator('.stat-card').filter({ hasText: '已导入素材' })
+    await expect(imported.locator('strong')).toHaveText('3')
+  })
 })

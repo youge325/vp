@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/backend-task-error.schema.json",
+  "title": "BackendTaskErrorPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "code": {
+      "$ref": "./backend-error-codes.schema.json"
+    },
+    "message": {
+      "type": "string"
+    },
+    "details": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "code",
+    "message"
+  ]
+}

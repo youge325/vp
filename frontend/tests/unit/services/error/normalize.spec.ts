@@ -16,9 +16,9 @@ describe('normalizeError', () => {
     })
   })
 
-  it('wraps an unknown value with a custom fallback code', () => {
-    expect(normalizeError('oops', 'custom_code')).toEqual({
-      code: 'custom_code',
+  it('wraps an unknown value with an explicit fallback code', () => {
+    expect(normalizeError('oops', 'persistence_failed')).toEqual({
+      code: 'persistence_failed',
       message: 'oops',
       details: null,
     })

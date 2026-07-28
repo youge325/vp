@@ -13,41 +13,12 @@ from app.planning import ProcessingStep
 from app.processing.streaming.metrics import PipelineMetrics
 import app.processing.streaming.stage_file_chunk_runtime as runtime
 from app.processing.streaming.stage_file_chunk_runtime import run_stage_chunk_to_file
-from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 from app.processing.streaming.worker_plans import StageChunkPlan
-
-
-def _frame(value: int) -> np.ndarray:
-    return np.full((1, 1, 3), value, dtype=np.uint8)
-
-
-class _FakeWriter:
-    def __init__(self, output_path: str) -> None:
-        self.output_path = output_path
-        self.frames: list[np.ndarray] = []
-        self.output_frame_count = 0
-        self.closed = False
-
-    def write_frame(self, frame: np.ndarray) -> None:
-        self.frames.append(frame.copy())
-
-    def close(self) -> None:
-        self.closed = True
-        self.output_frame_count = len(self.frames)
-        Path(self.output_path).write_bytes(b"encoded")
-
-
-class _FakeFFmpeg:
-    def __init__(self) -> None:
-        self.writer: _FakeWriter | None = None
-
-    def open_rawvideo_encoder(self, *, output_path: str, **kwargs: Any) -> _FakeWriter:
-        del kwargs
-        self.writer = _FakeWriter(output_path)
-        return self.writer
-
-    def get_frame_count(self, _path: str) -> int:
-        return 0
+from tests.support.raw_video import (
+    FakeRawVideoMedia,
+    frame as _frame,
+    make_stage_file_runtime_config,
+)
 
 
 def _run_chunk(
@@ -58,23 +29,11 @@ def _run_chunk(
     chunk: StageChunkPlan,
     progress_callback: Any = None,
 ) -> int:
-    config = StageFileRuntimeConfig(
-        ffmpeg=ffmpeg,
-        input_path="input.mp4",
-        decode_config={},
-        encode_config={"container": "mp4"},
+    config = make_stage_file_runtime_config(
+        ffmpeg,
+        PipelineMetrics(),
         step=step,
-        stage_index=1,
-        stage_total=1,
-        tensor_backend_name="paddle",
         progress_callback=progress_callback,
-        input_width=1,
-        input_height=1,
-        output_width=1,
-        output_height=1,
-        output_fps=24.0,
-        encode_output_fps=None,
-        metrics=PipelineMetrics(),
     )
     return run_stage_chunk_to_file(
         config=config,
@@ -117,7 +76,7 @@ def test_stage_chunk_runtime_writes_unskipped_worker_frames(monkeypatch, tmp_pat
     monkeypatch.setattr(runtime, "stage_worker_session", fake_session)
     monkeypatch.setattr(runtime, "decoded_frame_writer_session", fake_decoded_frame_writer_session)
 
-    ffmpeg = _FakeFFmpeg()
+    ffmpeg = FakeRawVideoMedia(payload=b"encoded")
     output_path = tmp_path / "chunk.mp4"
 
     encoded_frames = _run_chunk(

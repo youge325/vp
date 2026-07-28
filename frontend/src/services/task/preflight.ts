@@ -1,10 +1,5 @@
 // pure: no Vue / no Pinia / no Tauri
-// Phase A — 批处理启动前置校验。原本散落在 ``useTaskOrchestrator`` 的
-// ``canStartBatch`` / ``cannotStartReason`` 两个 computed 是纯业务规则
-// (无响应式以外的副作用),与 ``services/task`` 同层职责重叠。下沉到
-// 这里后,composable 只做 ``computed(() => evaluateStartReadiness(...))``
-// 投影,view / form / orchestrator 三层不再各自重复推 disabled 原因。
-//
+// 批处理启动前置校验的唯一业务规则入口。
 // 输入是简化的"批处理项视图":只关心是否选中、inputPath 是否就绪、
 // outputDir 是否填写,而不直接耦合 ``MediaItem`` / Pinia store。让规则
 // 与具体 store 形状解耦,未来加新校验项时不会牵动 store schema。

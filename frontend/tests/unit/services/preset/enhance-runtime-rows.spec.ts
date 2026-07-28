@@ -1,50 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildEnhanceRuntimeFrameState, buildEnhanceRuntimeRows } from '@/services/preset/enhance-runtime-rows'
-import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
-import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
 import type { RuntimeMetricEstimate } from '@/types/view/model-metrics'
-
-const interpolationDetail: ModelVariantInfo = {
-  name: '4.25',
-  label: 'RIFE 4.25',
-  metrics: {
-    parameterCount: 1,
-    parameterBytes: 4,
-    gflopsPerMegapixel: 10,
-    activationBytesPerMegapixel: 1000,
-    runtimeOverheadBytes: 100,
-    inputModulo: 1,
-    analysisStatus: 'ok',
-    analysisNotes: [],
-  },
-}
-
-const superResolutionDetail: ModelVariantInfo = {
-  name: 'x4',
-  label: 'EDVR',
-  metrics: {
-    parameterCount: 2,
-    parameterBytes: 8,
-    gflopsPerMegapixel: 20,
-    activationBytesPerMegapixel: 2000,
-    runtimeOverheadBytes: 200,
-    runtimeFrameCount: 5,
-    inputModulo: 1,
-    analysisStatus: 'ok',
-    analysisNotes: [],
-  },
-}
-
-const fixedWindowAlgorithm: AlgorithmInfo = {
-  name: 'edvr',
-  family: 'paddlegan_vsr',
-  tensorBackends: ['paddle'],
-  models: ['x4'],
-  fixedScaleFactor: 4,
-  inputFrameMode: 'fixed_window',
-  defaultNumFrames: 5,
-}
+import { createRuntimeDetails, createRuntimeWorkflow } from '../../fixtures/enhance-runtime'
 
 const estimate: RuntimeMetricEstimate = {
   effectiveWidth: 10,
@@ -56,10 +14,12 @@ const estimate: RuntimeMetricEstimate = {
 
 describe('enhance runtime rows', () => {
   it('builds fixed-window, metric, and combined VRAM rows', () => {
-    const workflow = createDefaultWorkflowConfigForEnvironment(null)
-    workflow.interpolation.enabled = true
-    workflow.superResolution.enabled = true
-    workflow.superResolution.numFrames = 10
+    const workflow = createRuntimeWorkflow()
+    const {
+      fixedWindowAlgorithm,
+      interpolationDetail,
+      superResolutionDetail,
+    } = createRuntimeDetails()
 
     const rows = buildEnhanceRuntimeRows({
       workflow,

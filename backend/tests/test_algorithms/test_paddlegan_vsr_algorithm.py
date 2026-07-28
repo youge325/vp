@@ -6,12 +6,7 @@ import pytest
 
 from app.algorithms.paddle.paddlegan_vsr import runner as runner_module
 from app.algorithms.paddle.paddlegan_vsr.runner import PaddleGanVsrRunner
-from app.processing.super_resolution import SUPPORTED_ALGORITHMS, SuperResolutionAlgorithm
-
-
-class _PaddleBackend:
-    def get_name(self) -> str:
-        return "paddle"
+from app.processing.super_resolution import PaddleGanVideoSuperResolution, SUPPORTED_ALGORITHMS
 
 
 class _NoGradPaddle:
@@ -51,15 +46,13 @@ def test_paddlegan_super_resolution_delegates_to_sequence_runner(monkeypatch):
 
     monkeypatch.setattr("app.processing.super_resolution.PaddleGanVsrRunner", _Runner)
 
-    algorithm = SuperResolutionAlgorithm(
-        tensor_backend=_PaddleBackend(),
+    algorithm = PaddleGanVideoSuperResolution(
         sr_algorithm="ppmsvsr",
         scale_factor=4,
         num_frames=6,
         engine="tensorrt",
     )
 
-    assert algorithm.needs_frame_sequence()
     progress_calls = []
     output = algorithm.process_frame_sequence(
         frames,
@@ -277,10 +270,28 @@ def test_paddlegan_tensorrt_predictor_pads_and_crops_short_chunks(monkeypatch):
     assert output.shape == (1, 3, 3, 512, 512)
 
 
-def test_paddlegan_tensorrt_predictor_logs_build_save_cache_and_ready(tmp_path, monkeypatch, caplog):
+def _ensure_tensorrt_predictor(monkeypatch, caplog, *, prefix: Path, paddle):
     from app.algorithms.paddle.paddlegan_vsr.runner import _PaddleGanTensorRtPredictor
 
     caplog.set_level(logging.INFO, logger=runner_module.__name__)
+    predictor = _PaddleGanTensorRtPredictor(
+        paddle=paddle,
+        model="model",
+        model_id="ppmsvsr",
+        sequence_mode="recurrent",
+        num_frames=5,
+    )
+    monkeypatch.setattr(runner_module, "_tensorrt_model_prefix", lambda *_args, **_kwargs: prefix)
+    monkeypatch.setattr(
+        runner_module,
+        "_create_tensorrt_predictor",
+        lambda **_kwargs: ("predictor", "input", ["output"]),
+    )
+    predictor._ensure_predictor([1, 5, 3, 288, 640])
+    return [record.getMessage() for record in caplog.records if record.name == runner_module.__name__]
+
+
+def test_paddlegan_tensorrt_predictor_logs_build_save_cache_and_ready(tmp_path, monkeypatch, caplog):
     saved_prefixes = []
     prefix = tmp_path / "ppmsvsr" / "t5_h288_w640" / "model"
 
@@ -309,27 +320,7 @@ def test_paddlegan_tensorrt_predictor_logs_build_save_cache_and_ready(tmp_path, 
         static = _Static()
         jit = _Jit()
 
-    predictor = _PaddleGanTensorRtPredictor(
-        paddle=_Paddle(),
-        model="model",
-        model_id="ppmsvsr",
-        sequence_mode="recurrent",
-        num_frames=5,
-    )
-    monkeypatch.setattr(
-        runner_module,
-        "_tensorrt_model_prefix",
-        lambda model_id, max_frames, height, width: prefix,
-    )
-    monkeypatch.setattr(
-        runner_module,
-        "_create_tensorrt_predictor",
-        lambda **_kwargs: ("predictor", "input", ["output"]),
-    )
-
-    predictor._ensure_predictor([1, 5, 3, 288, 640])
-
-    messages = [record.getMessage() for record in caplog.records if record.name == runner_module.__name__]
+    messages = _ensure_tensorrt_predictor(monkeypatch, caplog, prefix=prefix, paddle=_Paddle())
     assert saved_prefixes == [str(prefix)]
     assert "[VP_TRT] TensorRT BUILD PaddleGAN ppmsvsr shape=1x5x3x288x640" in messages
     assert any(message.startswith("[VP_TRT] TensorRT SAVE static_model=") for message in messages)
@@ -338,9 +329,6 @@ def test_paddlegan_tensorrt_predictor_logs_build_save_cache_and_ready(tmp_path, 
 
 
 def test_paddlegan_tensorrt_predictor_logs_load_when_static_files_exist(tmp_path, monkeypatch, caplog):
-    from app.algorithms.paddle.paddlegan_vsr.runner import _PaddleGanTensorRtPredictor
-
-    caplog.set_level(logging.INFO, logger=runner_module.__name__)
     prefix = tmp_path / "ppmsvsr" / "t5_h288_w640" / "model"
     prefix.parent.mkdir(parents=True, exist_ok=True)
     Path(f"{prefix}.json").write_text("model", encoding="utf-8")
@@ -353,27 +341,7 @@ def test_paddlegan_tensorrt_predictor_logs_load_when_static_files_exist(tmp_path
     class _Paddle:
         jit = _Jit()
 
-    predictor = _PaddleGanTensorRtPredictor(
-        paddle=_Paddle(),
-        model="model",
-        model_id="ppmsvsr",
-        sequence_mode="recurrent",
-        num_frames=5,
-    )
-    monkeypatch.setattr(
-        runner_module,
-        "_tensorrt_model_prefix",
-        lambda model_id, max_frames, height, width: prefix,
-    )
-    monkeypatch.setattr(
-        runner_module,
-        "_create_tensorrt_predictor",
-        lambda **_kwargs: ("predictor", "input", ["output"]),
-    )
-
-    predictor._ensure_predictor([1, 5, 3, 288, 640])
-
-    messages = [record.getMessage() for record in caplog.records if record.name == runner_module.__name__]
+    messages = _ensure_tensorrt_predictor(monkeypatch, caplog, prefix=prefix, paddle=_Paddle())
     assert any(message.startswith("[VP_TRT] TensorRT LOAD static_model=") for message in messages)
     assert any(message.startswith("[VP_TRT] TensorRT CACHE dir=") for message in messages)
     assert "[VP_TRT] TensorRT READY outputs=output" in messages

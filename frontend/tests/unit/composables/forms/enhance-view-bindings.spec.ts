@@ -5,57 +5,10 @@ import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/wor
 import { createEnhanceViewBindings } from '@/composables/forms/enhance-view-bindings'
 import type { AlgorithmInfo } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
+import { createEdvrAlgorithm, createRifeAlgorithm } from '../../fixtures/environment'
 
-const rife: AlgorithmInfo = {
-  name: 'rife',
-  tensorBackends: ['pytorch', 'onnx'],
-  models: ['4.25'],
-  onnxModels: ['rife.onnx'],
-  modelDetails: [
-    {
-      name: '4.25',
-      label: 'RIFE 4.25',
-      metrics: {
-        parameterCount: 5670892,
-        parameterBytes: 22683568,
-        gflopsPerMegapixel: 18.5,
-        activationBytesPerMegapixel: 694800000,
-        runtimeOverheadBytes: 38000000,
-        inputModulo: 64,
-        analysisStatus: 'ok',
-        analysisNotes: [],
-      },
-    },
-  ],
-}
-
-const edvr: AlgorithmInfo = {
-  name: 'edvr',
-  family: 'paddlegan_vsr',
-  tensorBackends: ['paddle'],
-  models: ['x4'],
-  scaleFactors: [4],
-  fixedScaleFactor: 4,
-  inputFrameMode: 'fixed_window',
-  defaultNumFrames: 5,
-  modelDetails: [
-    {
-      name: 'x4',
-      label: 'EDVR',
-      metrics: {
-        parameterCount: 20633827,
-        parameterBytes: 82535308,
-        gflopsPerMegapixel: 240,
-        activationBytesPerMegapixel: 1000,
-        runtimeOverheadBytes: 100,
-        runtimeFrameCount: 5,
-        inputModulo: 4,
-        analysisStatus: 'ok',
-        analysisNotes: [],
-      },
-    },
-  ],
-}
+const rife: AlgorithmInfo = createRifeAlgorithm()
+const edvr: AlgorithmInfo = createEdvrAlgorithm()
 
 function makeBindings() {
   const workflow = reactive(createDefaultWorkflowConfigForEnvironment(null)) as WorkflowConfig
@@ -65,7 +18,6 @@ function makeBindings() {
   workflow.superResolution.enabled = true
   workflow.superResolution.tensorBackend = 'paddle'
   workflow.superResolution.algorithm = 'edvr'
-  workflow.superResolution.model = 'x4'
   workflow.superResolution.numFrames = 10
 
   const bindings = createEnhanceViewBindings({

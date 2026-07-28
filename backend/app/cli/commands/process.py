@@ -1,8 +1,8 @@
 """``python -m app process`` handler — orchestration only.
 
-Phase C.1.1 拆分:本文件保留为薄入口,串联 3 个子阶段:
-1. ``_process_validation`` 校验输入并加载 4 个 config dict
-2. ``_process_planning``  生成 ``ProcessingPlan``(stage 列表 / 输出路径 / fps / 进度回调)
+本文件保留为薄入口,串联 3 个子阶段:
+1. ``_process_validation`` 加载并校验类型化 runtime config
+2. ``_process_planning`` 生成不可变 ``PreparedRun`` 与运行期 ``RunObservers``
 3. ``_process_execution`` 跑 streaming pipeline 或 fast-path,emit ``ndjson.completed``
 
 顶层 try/except 把 KeyboardInterrupt / ResumeConflictError / 其它 Exception
@@ -26,7 +26,7 @@ def cmd_process(args: argparse.Namespace) -> None:
     ffmpeg = ensure_input_and_ffmpeg(input_path)
     configs = load_runtime_configs(args)
 
-    plan = build_plan(
+    prepared, observers = build_plan(
         args=args,
         input_path=input_path,
         ffmpeg=ffmpeg,
@@ -37,10 +37,17 @@ def cmd_process(args: argparse.Namespace) -> None:
         result, elapsed = execute_plan(
             ffmpeg=ffmpeg,
             input_path=input_path,
-            plan=plan,
+            prepared=prepared,
+            observers=observers,
             resume_mode=resume_mode,
         )
-        finalize_and_emit(ffmpeg=ffmpeg, plan=plan, result=result, elapsed=elapsed)
+        finalize_and_emit(
+            ffmpeg=ffmpeg,
+            prepared=prepared,
+            observers=observers,
+            result=result,
+            elapsed=elapsed,
+        )
     except KeyboardInterrupt:
         raise ProcessError(
             TaskErrorCode.CANCELLED,
@@ -48,8 +55,7 @@ def cmd_process(args: argparse.Namespace) -> None:
             details={"input_path": input_path},
         )
     except ResumeConflictError as exc:
-        # Phase A — ResumeConflictError 已继承 ProcessError 并预置 code+details;
-        # 这里只需把 input_path 注入 details,保持对上层 NDJSON 的对外契约。
+        # ResumeConflictError 已继承 ProcessError 并预置 code+details。
         exc.details.setdefault("input_path", input_path)
         raise
     except Exception as exc:  # pragma: no cover - defensive boundary
@@ -59,9 +65,9 @@ def cmd_process(args: argparse.Namespace) -> None:
         pe.details.update(
             {
                 "input_path": input_path,
-                "output_path": plan.output_path,
-                "algorithm": resolve_primary_algorithm(plan.runtime_configs.json_section("workflow")),
-                "processing_steps": [step.algorithm_type for step in plan.processing_steps],
+                "output_path": prepared.output_path,
+                "algorithm": resolve_primary_algorithm(prepared.runtime_configs.json_section("workflow")),
+                "processing_steps": [step.algorithm_type for step in prepared.processing_steps],
             }
         )
         raise pe

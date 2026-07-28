@@ -2,25 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { estimateCombinedPeakVram, estimateModelRuntimeMetrics } from '@/services/model-runtime-estimates'
 import { formatBytes } from '@/services/model-metric-format'
-import type { ModelVariantInfo } from '@/types/protocol'
+import {
+  createRifeModelDetail,
+  type ModelMetricOverrides,
+} from '../fixtures/environment'
 
-function detail(overrides: Partial<ModelVariantInfo['metrics']> = {}): ModelVariantInfo {
-  return {
-    name: '4.25',
-    label: 'RIFE 4.25',
-    metrics: {
-      parameterCount: 5670892,
-      parameterBytes: 22683568,
-      gflopsPerMegapixel: 18.5,
-      activationBytesPerMegapixel: 694_800_000,
-      runtimeOverheadBytes: 38_000_000,
-      inputModulo: 64,
-      analysisStatus: 'ok',
-      analysisNotes: [],
-      ...overrides,
-    },
-  }
-}
+const detail = (overrides: ModelMetricOverrides = {}) => createRifeModelDetail(overrides)
 
 describe('model runtime estimates', () => {
   it('uses padded scaled resolution, precision, temporal frames, and peak VRAM', () => {
@@ -41,6 +28,9 @@ describe('model runtime estimates', () => {
       { width: 640, height: 288 },
       { scale: 1, precisionBytes: 4, temporalFrames: 10, runtimeFrameCount: 5 },
     )
+    if (!estimate || !windowEstimate) {
+      throw new Error('expected runtime estimates for complete model metrics')
+    }
 
     expect(estimate.effectiveHeight).toBe(320)
     expect(estimate.gflops).toBeCloseTo(3.79, 2)

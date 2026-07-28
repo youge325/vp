@@ -5,16 +5,26 @@ import type { TaskError } from '@/types/domain/media'
 import { applyTaskError } from '../../events'
 
 import type { createCommonHelpers } from './common'
-import type { BatchLifecycleDeps } from './types'
+import type {
+  BatchStatePort,
+  MediaRunStatePort,
+  OutputLocationPort,
+  TaskIssuePort,
+} from './types'
 
 type CommonHelpers = ReturnType<typeof createCommonHelpers>
+type FinalizeDeps =
+  & Pick<BatchStatePort, 'getBatch' | 'setBatch'>
+  & Pick<MediaRunStatePort, 'setItemTaskState'>
+  & TaskIssuePort
+  & OutputLocationPort
 
 interface FinalizeInternalRefs {
   runNextQueuedItem: () => Promise<void>
 }
 
 export function createFinalizeOps(
-  deps: BatchLifecycleDeps,
+  deps: FinalizeDeps,
   helpers: CommonHelpers,
   internal: FinalizeInternalRefs,
 ) {
@@ -23,10 +33,8 @@ export function createFinalizeOps(
       isRunning: false,
       isPaused: false,
       isCancelling: false,
+      controlPending: null,
     })
-    helpers.clearBatchRuntimeArtifacts()
-    deps.setBatch({ completedCount: 0, failedCount: 0 })
-    deps.setRuntimeIds([])
   }
 
   async function finalizeCurrent(state: 'completed' | 'error' | 'cancelled'): Promise<void> {
@@ -55,17 +63,16 @@ export function createFinalizeOps(
       const batch = deps.getBatch()
       if (state === 'completed') {
         deps.setBatch({ completedCount: batch.completedCount + 1 })
-      } else {
-        deps.setBatch({ failedCount: batch.failedCount + 1 })
       }
-    } else {
-      const batch = deps.getBatch()
-      deps.setBatch({ failedCount: batch.failedCount + 1 })
     }
 
     deps.setBatch({ currentId: null })
     if (deps.getBatch().queue.length > 0) {
-      deps.setBatch({ isPaused: false, isCancelling: false })
+      deps.setBatch({
+        isPaused: false,
+        isCancelling: false,
+        controlPending: null,
+      })
       await internal.runNextQueuedItem()
       return
     }

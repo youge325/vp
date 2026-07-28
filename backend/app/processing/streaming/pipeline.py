@@ -10,9 +10,9 @@ from __future__ import annotations
 from typing import Any
 
 from app.planning import (
-    ProcessingStep,
     ResumeMode,
 )
+from app.ports.media import EncodeProgressCallback, MediaRuntimePort
 from app.processing.streaming.pipeline_lifecycle import (
     finalize_streaming_output,
     prepare_streaming_manifest,
@@ -20,23 +20,18 @@ from app.processing.streaming.pipeline_lifecycle import (
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import StreamingPipelineContext
 from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline
-from app.processing.streaming.pipeline_preflight import build_streaming_pipeline_preflight
+from app.processing.streaming.pipeline_context import StreamingPipelinePreflight
 from app.processing.streaming.stage_worker_progress import StageProgressCallback
-from app.utils.ffmpeg import FFmpegWrapper
-from app.utils.ffmpeg._progress import EncodeProgressCallback
 
 
 def process_video_streaming(
     *,
-    ffmpeg: FFmpegWrapper,
+    ffmpeg: MediaRuntimePort,
     input_path: str,
     output_path: str,
     decode_config: dict[str, Any],
     encode_config: dict[str, Any],
-    workflow_config: dict[str, Any],
-    output_config: dict[str, Any],
-    processing_steps: list[ProcessingStep],
-    tensor_backend_name: str,
+    preflight: StreamingPipelinePreflight,
     progress_callbacks: list[StageProgressCallback],
     metrics: PipelineMetrics,
     output_fps: float | None = None,
@@ -44,18 +39,6 @@ def process_video_streaming(
     resume_mode: ResumeMode = "auto",
 ) -> dict[str, Any]:
     """Process a video through the selected streaming runtime."""
-    preflight = build_streaming_pipeline_preflight(
-        ffmpeg=ffmpeg,
-        input_path=input_path,
-        output_path=output_path,
-        decode_config=decode_config,
-        encode_config=encode_config,
-        workflow_config=workflow_config,
-        output_config=output_config,
-        processing_steps=processing_steps,
-        output_fps=output_fps,
-    )
-
     manifest, resume_state = prepare_streaming_manifest(
         output_path=output_path,
         signature=preflight.signature,
@@ -71,7 +54,6 @@ def process_video_streaming(
         preflight=preflight,
         manifest=manifest,
         resume_state=resume_state,
-        tensor_backend_name=tensor_backend_name,
         progress_callbacks=progress_callbacks,
         output_fps=output_fps,
         encode_progress_callback=encode_progress_callback,

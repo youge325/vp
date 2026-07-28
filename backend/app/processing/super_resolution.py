@@ -4,12 +4,10 @@ from typing import Any
 
 import numpy as np
 
-from app.algorithms.base import IAlgorithm
 from app.algorithms.paddle.paddlegan_vsr.runner import PaddleGanVsrRunner
-from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
+from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
 from app.utils.onnx_models import create_onnx_session, resolve_onnx_model_path
 from app.utils.model_metrics import get_paddlegan_model_detail
-from app.algorithms.tensor_backend import ITensorBackend
 
 
 SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
@@ -45,41 +43,20 @@ SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
 ]
 
 
-class SuperResolutionAlgorithm(IAlgorithm):
-    """
-    超分辨率算法。
+class OnnxSuperResolution:
+    """Single-frame ONNX image-to-image super-resolution."""
 
-    - ONNX backend:运行 NCHW RGB float32 image-to-image 推理,按 scale_factor 验证输出尺寸。
-    - Paddle backend:通过 ``process_frame_sequence`` 运行 PaddleGAN VSR。
-    - 不支持的 backend/algorithm 组合由 planning 层提前拦截；不支持的逐帧路径抛出
-      ``NotImplementedError``。
-
-    未来计划:Real-ESRGAN 等其它算法、多倍率(2x/4x)、Tensor 后端实现。
-    """
-
-    def __init__(self, tensor_backend: ITensorBackend = None, **kwargs):
-        self._tensor_backend = tensor_backend
+    def __init__(self, **kwargs: Any):
         self._scale_factor = kwargs.get("scale_factor", 2.0)
         self._algorithm_name = kwargs.get("sr_algorithm", "placeholder")
         self._onnx_model = kwargs.get("onnx_model")
         self._model_dir = kwargs.get("model_dir", "")
         self._engine = kwargs.get("engine", "cuda")
-        self._num_frames = int(kwargs.get("num_frames") or kwargs.get("numFrames") or 10)
         self._session = None
         self._input_name = ""
         self._output_name = ""
-        self._paddlegan_runner = None
 
     def process_frame(self, frame: Any, **_kwargs) -> Any:
-        """处理单帧；ONNX 后端运行 image-to-image 超分，其它后端拒绝执行。"""
-        if self._is_paddlegan_vsr():
-            raise NotImplementedError("PaddleGAN VSR requires frame-sequence processing.")
-        if self._backend_name() != "onnx":
-            raise NotImplementedError(
-                "Super-resolution is only implemented on the ONNX tensor backend; "
-                f"got '{self._backend_name()}'. This should have been caught at planning time."
-            )
-
         session = self._ensure_onnx_session()
         input_tensor = np.asarray(frame, dtype=np.float32)
         if input_tensor.ndim != 4 or input_tensor.shape[0] != 1 or input_tensor.shape[1] != 3:
@@ -129,35 +106,36 @@ class SuperResolutionAlgorithm(IAlgorithm):
                 f"expected {(expected_h, expected_w)}, got {tuple(output_tensor.shape[2:4])}."
             )
 
-    def _backend_name(self) -> str:
-        return self._tensor_backend.get_name() if self._tensor_backend is not None else "numpy"
 
-    def _is_paddlegan_vsr(self) -> bool:
-        return self._algorithm_name in PADDLEGAN_VSR_SPECS
+class PaddleGanVideoSuperResolution:
+    """Frame-sequence PaddleGAN video super-resolution."""
 
-    def _ensure_paddlegan_runner(self):
-        if self._paddlegan_runner is None:
-            self._paddlegan_runner = PaddleGanVsrRunner(
+    def __init__(self, **kwargs: Any):
+        self._algorithm_name = str(kwargs.get("sr_algorithm") or "")
+        if self._algorithm_name not in PADDLEGAN_VSR_SPECS:
+            raise ValueError(f"Unknown PaddleGAN VSR algorithm: {self._algorithm_name}")
+        self._num_frames = int(kwargs.get("num_frames") or kwargs.get("numFrames") or 10)
+        self._engine = str(kwargs.get("engine") or "cuda")
+        self._runner: PaddleGanVsrRunner | None = None
+
+    def _ensure_runner(self) -> PaddleGanVsrRunner:
+        if self._runner is None:
+            self._runner = PaddleGanVsrRunner(
                 model_id=self._algorithm_name,
                 num_frames=self._num_frames,
                 engine=self._engine,
             )
-        return self._paddlegan_runner
+        return self._runner
 
-    def needs_frame_sequence(self) -> bool:
-        return self._is_paddlegan_vsr()
-
-    def process_frame_sequence(self, frames: list[Any], **kwargs) -> list[Any]:
-        if not self._is_paddlegan_vsr():
-            return super().process_frame_sequence(frames, **kwargs)
-        return self._ensure_paddlegan_runner().process_frames(
+    def process_frame_sequence(self, frames: list[Any], **kwargs: Any) -> list[Any]:
+        return self._ensure_runner().process_frames(
             frames,
             progress_callback=kwargs.get("progress_callback"),
         )
 
-    def get_name(self) -> str:
-        if self._is_paddlegan_vsr():
-            return f"视频超分辨率算法(PaddleGAN {self._algorithm_name})"
-        if self._backend_name() == "onnx":
-            return f"超分辨率算法(ONNX {self._onnx_model or '未选择'})"
-        return "超分辨率算法(占位)"
+
+__all__ = [
+    "OnnxSuperResolution",
+    "PaddleGanVideoSuperResolution",
+    "SUPPORTED_ALGORITHMS",
+]

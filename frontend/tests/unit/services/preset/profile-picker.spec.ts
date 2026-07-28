@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import * as profilePicker from '@/services/preset/profile-picker'
 import {
   getVisibleEncoderProfiles,
   getVisibleDecoderProfiles,
-  pickPreferredEncoderProfile,
   pickPreferredDecoderProfile,
 } from '@/services/preset/profile-picker'
 import type { EnvironmentCheckResult } from '@/types/protocol'
@@ -13,13 +11,34 @@ function makeEnv(overrides: Partial<EnvironmentCheckResult> = {}): EnvironmentCh
   return createEnvironmentResult(overrides)
 }
 
-describe('profile-picker public surface', () => {
-  it('does not expose internal raw profile and codec helpers', () => {
-    expect('getEncoderProfiles' in profilePicker).toBe(false)
-    expect('getDecoderProfiles' in profilePicker).toBe(false)
-    expect('normalizeCodec' in profilePicker).toBe(false)
+type DecoderProfile = EnvironmentCheckResult['ffmpeg']['decoderProfiles'][number]
+
+function decoderProfile(
+  name: string,
+  family: DecoderProfile['family'],
+  codec: string,
+  hardwareDevices: string[] = [],
+): DecoderProfile {
+  return {
+    name,
+    available: true,
+    family,
+    codec,
+    label: name,
+    hardwareDevices,
+    options: [],
+  }
+}
+
+function decoderEnvironment(decoderProfiles: DecoderProfile[]): EnvironmentCheckResult {
+  return createEnvironmentResult({
+    ffmpeg: {
+      decoderProfiles,
+      encoderProfiles: [],
+      hwaccels: ['cuda'],
+    },
   })
-})
+}
 
 describe('getVisibleEncoderProfiles', () => {
   it('filters out unavailable profiles', () => {
@@ -57,33 +76,11 @@ describe('getVisibleDecoderProfiles', () => {
   })
 
   it('filters out hardware decoder profiles without verified hardware devices', () => {
-    const env = makeEnv({
-      ffmpeg: {
-        decoderProfiles: [
-          { name: 'software', available: true, family: 'software', codec: 'any', label: 'Software', options: [] },
-          {
-            name: 'hevc_cuvid',
-            available: true,
-            family: 'nvidia',
-            codec: 'hevc',
-            label: 'NVDEC HEVC',
-            hardwareDevices: [],
-            options: [],
-          },
-          {
-            name: 'h264_cuvid',
-            available: true,
-            family: 'nvidia',
-            codec: 'h264',
-            label: 'NVDEC H264',
-            hardwareDevices: ['cuda'],
-            options: [],
-          },
-        ],
-        encoderProfiles: [],
-        hwaccels: ['cuda'],
-      },
-    } as any)
+    const env = decoderEnvironment([
+      decoderProfile('software', 'software', 'any'),
+      decoderProfile('hevc_cuvid', 'nvidia', 'hevc'),
+      decoderProfile('h264_cuvid', 'nvidia', 'h264', ['cuda']),
+    ])
 
     expect(getVisibleDecoderProfiles(env, 'hevc').map((profile) => profile.name)).toEqual(['software'])
     expect(getVisibleDecoderProfiles(env, 'h264').map((profile) => profile.name)).toEqual([
@@ -93,24 +90,10 @@ describe('getVisibleDecoderProfiles', () => {
   })
 
   it('falls back to software when the matching hardware decoder has no verified devices', () => {
-    const env = makeEnv({
-      ffmpeg: {
-        decoderProfiles: [
-          { name: 'software', available: true, family: 'software', codec: 'any', label: 'Software', options: [] },
-          {
-            name: 'hevc_cuvid',
-            available: true,
-            family: 'nvidia',
-            codec: 'hevc',
-            label: 'NVDEC HEVC',
-            hardwareDevices: [],
-            options: [],
-          },
-        ],
-        encoderProfiles: [],
-        hwaccels: ['cuda'],
-      },
-    } as any)
+    const env = decoderEnvironment([
+      decoderProfile('software', 'software', 'any'),
+      decoderProfile('hevc_cuvid', 'nvidia', 'hevc'),
+    ])
 
     expect(pickPreferredDecoderProfile(env, 'hevc')?.name).toBe('software')
   })

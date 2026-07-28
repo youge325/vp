@@ -63,7 +63,7 @@ const encodeIssue = useOperationIssue('encode')
       </div>
 
       <div class="field-grid field-grid-2">
-        <!-- Phase 18 — outputDir 必填。空时 BaseField 显示红色 error 提示,
+        <!-- outputDir 必填。空时 BaseField 显示红色 error 提示,
              input 加 input-error class 显示红边;canStartBatch 已经在 store
              层 disabled 启动按钮,这里只做即时视觉反馈。 -->
         <BaseField
@@ -149,7 +149,7 @@ const encodeIssue = useOperationIssue('encode')
         </div>
       </div>
 
-      <!-- Phase 7c — 编码器探测出的 capability options 走与 decode 视图相同的
+      <!-- 编码器探测出的 capability options 走与 decode 视图相同的
            ``CapabilityOptionField``,boolean/choice/number/string 由组件内部一处
            switch 决定,模板不再重复四分支结构。 -->
       <div class="field-grid field-grid-2">
@@ -166,7 +166,7 @@ const encodeIssue = useOperationIssue('encode')
 </template>
 
 <style scoped>
-/* Phase 18 — 输出目录必填时的红边样式。 */
+/* 输出目录必填时的红边样式。 */
 .input-error {
   border-color: var(--danger, #d6433a) !important;
   outline-color: var(--danger, #d6433a);

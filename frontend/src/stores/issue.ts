@@ -1,11 +1,5 @@
 // Pinia store — cross-scope operation issue surface.
-//
-// Phase 6d — relocated out of ``useMediaStore`` so a single store
-// dedicated to user-facing error banners owns the ``operationIssue``
-// state across all five scopes (``input / encode / output / task /
-// preset``). The previous home in ``useMediaStore`` conflated media
-// item state with banner state, which made unit tests for either
-// concept import a transitive dependency on the other.
+// A single store owns user-facing error banners across operation scopes.
 
 import { ref } from 'vue'
 import { defineStore } from 'pinia'

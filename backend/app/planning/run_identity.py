@@ -7,9 +7,10 @@ import json
 import os
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Sequence
 
 from app.planning.processing_steps import ProcessingStep
+from app.ports.media import VideoMetadata
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,8 +29,8 @@ def build_run_identity(
     encode_config: dict[str, Any],
     workflow_config: dict[str, Any],
     output_config: dict[str, Any],
-    processing_steps: list[ProcessingStep],
-    video_info: dict[str, Any],
+    processing_steps: Sequence[ProcessingStep],
+    video_info: VideoMetadata,
 ) -> _RunIdentity:
     """Build the exact sidecar snapshot and its deterministic SHA-256 signature."""
     config_snapshot = deepcopy(
@@ -40,14 +41,14 @@ def build_run_identity(
             "encode_config": encode_config,
             "workflow_config": workflow_config,
             "output_config": {
-                "segmentFrames": max(1, int(output_config.get("segmentFrames") or 1000)),
+                "segmentFrames": int(output_config["segmentFrames"]),
             },
             "processing_steps": [step.to_jsonable() for step in processing_steps],
             "video_info": {
-                "width": video_info["width"],
-                "height": video_info["height"],
-                "source_fps": video_info["source_fps"],
-                "source_frames": video_info["source_frames"],
+                "width": video_info.width,
+                "height": video_info.height,
+                "source_fps": video_info.source_fps,
+                "source_frames": video_info.source_frames,
             },
         }
     )

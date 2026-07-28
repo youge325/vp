@@ -8,50 +8,7 @@ import {
   resolveSuperResolutionNumFrames,
   resolveSuperResolutionScale,
 } from '@/services/preset/enhance-workflow-selection'
-import type { EnvironmentCheckResult } from '@/types/protocol'
-import { createEnvironmentResult } from '../../fixtures/environment'
-
-function makeEnv(): EnvironmentCheckResult {
-  return createEnvironmentResult({
-    ffmpeg: {
-      available: true,
-      hwaccels: [],
-      encoderProfiles: [],
-      decoderProfiles: [],
-    },
-    gpu: { adapters: [] },
-    tensorEngines: { pytorch: ['cuda', 'tensorrt'], paddle: ['cuda'], onnx: ['cuda', 'tensorrt'] },
-    interpolationAlgorithms: [
-      { name: 'rife', tensorBackends: ['pytorch', 'onnx'], models: ['4.25'], onnxModels: ['rife.onnx'] },
-      { name: 'rife-lite', tensorBackends: ['pytorch'], models: ['lite'], onnxModels: [] },
-      { name: 'onnx-only', tensorBackends: ['onnx'], models: ['onnx'], onnxModels: ['onnx-only.onnx'] },
-    ],
-    superResolutionAlgorithms: [
-      { name: 'placeholder', tensorBackends: ['onnx'], models: [], onnxModels: ['sr.onnx'], scaleFactors: [2] },
-      {
-        name: 'ppmsvsr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        inputFrameMode: 'editable_chunk',
-        defaultNumFrames: 10,
-      },
-      {
-        name: 'edvr',
-        family: 'paddlegan_vsr',
-        tensorBackends: ['paddle'],
-        models: ['x4'],
-        scaleFactors: [4],
-        fixedScaleFactor: 4,
-        inputFrameMode: 'fixed_window',
-        defaultNumFrames: 5,
-      },
-    ],
-    runtimeMode: 'bundled',
-  })
-}
+import { createEnhanceEnvironment } from '../../fixtures/environment'
 
 describe('enhance workflow selection rules', () => {
   it('repairs interpolation algorithm/model and ONNX model when backend changes', () => {
@@ -60,13 +17,13 @@ describe('enhance workflow selection rules', () => {
     workflow.interpolation.model = 'lite'
     workflow.interpolation.onnxModel = ''
 
-    applyInterpolationBackendSelectionDefaults(workflow, 'onnx', makeEnv())
+    applyInterpolationBackendSelectionDefaults(workflow, 'onnx', createEnhanceEnvironment())
 
     expect(workflow.interpolation.tensorBackend).toBe('onnx')
     expect(workflow.interpolation.engine).toBe('cuda')
     expect(workflow.interpolation.algorithm).toBe('rife')
     expect(workflow.interpolation.model).toBe('4.25')
-    expect(workflow.interpolation.onnxModel).toBe('rife.onnx')
+    expect(workflow.interpolation.onnxModel).toBe('rife_v4.25.onnx')
   })
 
   it('moves pytorch interpolation to ONNX when Paddle super-resolution is active', () => {
@@ -76,12 +33,12 @@ describe('enhance workflow selection rules', () => {
     workflow.superResolution.enabled = true
     workflow.superResolution.tensorBackend = 'paddle'
 
-    preferOnnxInterpolationForPaddleSuperResolution(workflow, makeEnv())
+    preferOnnxInterpolationForPaddleSuperResolution(workflow, createEnhanceEnvironment())
 
     expect(workflow.interpolation.tensorBackend).toBe('onnx')
     expect(workflow.interpolation.algorithm).toBe('rife')
     expect(workflow.interpolation.model).toBe('4.25')
-    expect(workflow.interpolation.onnxModel).toBe('rife.onnx')
+    expect(workflow.interpolation.onnxModel).toBe('rife_v4.25.onnx')
   })
 
   it('applies supported backend and fixed PaddleGAN value rules', () => {
@@ -91,13 +48,14 @@ describe('enhance workflow selection rules', () => {
     workflow.superResolution.numFrames = 3
     workflow.superResolution.onnxModel = 'stale.onnx'
 
-    applySuperResolutionAlgorithmSelectionDefaults(workflow, 'edvr', makeEnv())
+    const environment = createEnhanceEnvironment()
+    applySuperResolutionAlgorithmSelectionDefaults(workflow, 'edvr', environment)
 
     expect(workflow.superResolution.algorithm).toBe('edvr')
     expect(workflow.superResolution.tensorBackend).toBe('paddle')
     expect(workflow.superResolution.engine).toBe('cuda')
     expect(workflow.superResolution.onnxModel).toBe('')
-    expect(resolveSuperResolutionScale(workflow, 2, makeEnv())).toBe(4)
-    expect(resolveSuperResolutionNumFrames(workflow, 3, makeEnv())).toBe(5)
+    expect(resolveSuperResolutionScale(workflow, 2, environment)).toBe(4)
+    expect(resolveSuperResolutionNumFrames(workflow, 3, environment)).toBe(5)
   })
 })

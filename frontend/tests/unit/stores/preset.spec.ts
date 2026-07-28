@@ -1,31 +1,7 @@
 import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { usePresetStore } from '@/stores/preset'
-import type { WorkbenchPreset } from '@/types/protocol'
-
-function defaultPreset(): WorkbenchPreset {
-  return {
-    decodeConfig: { mode: 'software', hwaccel: '', hwaccelDevice: '', decoder: 'software', options: {} },
-    workflowConfig: {
-      fpsMode: 'target',
-      processOrder: 'super_resolution_then_interpolation',
-      interpolation: { enabled: false, targetFps: 60, multi: 2, model: '4.25', onnxModel: '', scale: 1, fp16: false, tensorBackend: 'pytorch', engine: 'cuda' },
-      superResolution: {
-        enabled: false,
-        scaleFactor: 2,
-        algorithm: 'placeholder',
-        onnxModel: '',
-        tensorBackend: 'onnx',
-        engine: 'cuda',
-        numFrames: 10,
-      },
-      preprocess: { enabled: false, filters: [] },
-      postprocess: { enabled: false, filters: [] },
-    },
-    encodeConfig: { codec: 'libx265', family: 'cpu', container: 'mp4', keepAudio: true, rateControl: { mode: 'crf', value: 18 }, options: {} },
-    outputConfig: { outputDir: '', openOnComplete: true, segmentFrames: 1000 },
-  }
-}
+import { createTestPreset } from '../fixtures/preset'
 
 describe('usePresetStore', () => {
   beforeEach(() => {
@@ -34,7 +10,7 @@ describe('usePresetStore', () => {
 
   it('replaceDraftPreset deep-clones the input', () => {
     const store = usePresetStore()
-    const incoming = defaultPreset()
+    const incoming = createTestPreset()
     incoming.encodeConfig.codec = 'libx264'
 
     store.replaceDraftPreset(incoming)
@@ -77,14 +53,4 @@ describe('usePresetStore', () => {
     expect(store.presetPersistenceReady).toBe(true)
   })
 
-  // Phase 17 — ``setDecode / setEncode / setWorkflow / setOutput`` 4 个
-  // 直接替换型 setter 全是 dead exports(grep 0 production callers),
-  // callsite 全部走 ``patchX(mutator)`` 路径。
-  it('does not expose direct setters after Phase 17', () => {
-    const store = usePresetStore()
-    expect('setDecode' in store).toBe(false)
-    expect('setEncode' in store).toBe(false)
-    expect('setWorkflow' in store).toBe(false)
-    expect('setOutput' in store).toBe(false)
-  })
 })

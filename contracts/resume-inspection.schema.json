@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ResumeInspectionResult",
+  "type": "object",
+  "properties": {
+    "type": {
+      "$ref": "#/$defs/ResumeInspectionEventType"
+    },
+    "pipeline_kind": {
+      "$ref": "#/$defs/ResumePipelineKind"
+    },
+    "outputPath": {
+      "type": "string"
+    },
+    "input_path": {
+      "type": "string"
+    },
+    "finalExists": {
+      "type": "boolean"
+    },
+    "sidecarExists": {
+      "type": "boolean"
+    },
+    "signatureMatch": {
+      "type": "boolean"
+    },
+    "completedChunks": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "completedOutputFrames": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "nextSourceFrame": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "totalOutputFrames": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "type",
+    "pipeline_kind",
+    "outputPath",
+    "input_path",
+    "finalExists",
+    "sidecarExists",
+    "signatureMatch",
+    "completedChunks",
+    "completedOutputFrames",
+    "nextSourceFrame",
+    "totalOutputFrames"
+  ],
+  "$defs": {
+    "ResumeInspectionEventType": {
+      "type": "string",
+      "enum": [
+        "resume_inspection"
+      ]
+    },
+    "ResumePipelineKind": {
+      "type": "string",
+      "enum": [
+        "streaming",
+        "format_conversion"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

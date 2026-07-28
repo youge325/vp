@@ -66,4 +66,18 @@ describe('TaskConsole TensorRT logs', () => {
     expect(wrapper.text()).toContain('active log')
     expect(wrapper.text()).not.toContain('stale log')
   })
+
+  it('keeps a completed batch visible as N/N at 100 percent', () => {
+    const taskStore = useTaskStore()
+    taskStore.setRuntimeIds(['a', 'b'])
+    taskStore.setBatch({
+      completedCount: 2,
+      isRunning: false,
+    })
+
+    const wrapper = mount(TaskConsole)
+
+    expect(wrapper.get('.progress-label').text()).toBe('2 / 2')
+    expect(wrapper.get('.progress-fill').attributes('style')).toContain('width: 100%')
+  })
 })

@@ -1,116 +1,34 @@
-"""Pydantic models mirroring the Rust IPC schema (frontend/src-tauri/src/models.rs).
+"""Domain-facing access to generated configuration boundary models.
 
-These models validate incoming JSON from the Tauri layer and guarantee that
-field names, types and defaults stay in sync with the Rust source of truth.
+The field sets and wire aliases live only in ``app.generated.contracts``.
+This module may add domain validation, but must not redeclare boundary fields.
 """
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from pydantic import field_validator
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from pydantic.alias_generators import to_camel
-
-
-class _CamelBase(BaseModel):
-    """Base with camelCase alias support so Tauri JSON payloads are accepted."""
-
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-        extra="forbid",
-    )
-
-
-DecodeModeValue = Literal["software", "hardware"]
-FpsModeValue = Literal["multi", "target"]
-ProcessOrderValue = Literal[
-    "super_resolution_then_interpolation",
-    "frame_interpolation_then_super_resolution",
-]
-TensorBackendValue = Literal["pytorch", "paddle", "onnx"]
-RateControlModeValue = Literal["crf", "cq", "qp", "bitrate"]
-FilterStepKindValue = Literal["scale", "crop", "pad", "sharpen", "denoise", "color", "anime_cleanup"]
+from app.generated.contracts import (
+    DecodeConfig,
+    EncodeConfig,
+    FilterStep,
+    FilterStepKind,
+    FpsMode,
+    InterpolationConfig,
+    PostprocessConfig,
+    PreprocessConfig,
+    ProcessOrder,
+    RateControlConfig,
+    RateControlMode,
+    SuperResolutionConfig,
+    TensorBackend,
+    WorkflowConfig,
+)
+from app.generated.contracts import OutputConfig as _GeneratedOutputConfig
 
 
-class DecodeConfig(_CamelBase):
-    mode: DecodeModeValue
-    hwaccel: str | None = None
-    hwaccel_device: str | None = None
-    decoder: str | None = None
-    options: dict[str, Any] = Field(default_factory=dict)
-
-
-class InterpolationConfig(_CamelBase):
-    enabled: bool
-    target_fps: float
-    multi: int
-    algorithm: str = "rife"
-    model: str
-    onnx_model: str | None = None
-    scale: float
-    fp16: bool
-    tensor_backend: TensorBackendValue
-    engine: str = "cuda"
-
-
-class SuperResolutionConfig(_CamelBase):
-    enabled: bool
-    scale_factor: float
-    algorithm: str
-    onnx_model: str | None = None
-    tensor_backend: TensorBackendValue = "onnx"
-    engine: str = "cuda"
-    num_frames: int = 10
-
-
-class FilterStep(_CamelBase):
-    kind: FilterStepKindValue
-    enabled: bool
-    params: dict[str, Any] = Field(default_factory=dict)
-
-
-class PreprocessConfig(_CamelBase):
-    enabled: bool
-    filters: list[FilterStep] = Field(default_factory=list)
-
-
-class PostprocessConfig(_CamelBase):
-    enabled: bool
-    filters: list[FilterStep] = Field(default_factory=list)
-
-
-class WorkflowConfig(_CamelBase):
-    fps_mode: FpsModeValue
-    process_order: ProcessOrderValue
-    interpolation: InterpolationConfig
-    super_resolution: SuperResolutionConfig
-    preprocess: PreprocessConfig = Field(default_factory=lambda: PreprocessConfig(enabled=False, filters=[]))
-    postprocess: PostprocessConfig = Field(default_factory=lambda: PostprocessConfig(enabled=False, filters=[]))
-
-
-class RateControlConfig(_CamelBase):
-    mode: RateControlModeValue
-    value: Any
-
-
-class EncodeConfig(_CamelBase):
-    codec: str
-    family: str
-    container: str
-    keep_audio: bool
-    rate_control: RateControlConfig
-    options: dict[str, Any] = Field(default_factory=dict)
-
-
-class OutputConfig(_CamelBase):
-    # Phase 18.C — 与 Rust ``Option<String>`` 同步。wire 上的 ``null`` 表示
-    # "未填",在 backend 入口由 ``min_length=1`` + validator 拒掉。
-    # ``str | None`` 允许 Pydantic 接收 ``null`` 并在验证层 fail-loudly,
-    # 而不是在反序列化时抛出晦涩的 ``ValidationError``。
-    output_dir: str | None = Field(default=None, min_length=1)
-    open_on_complete: bool
-    segment_frames: int
+class OutputConfig(_GeneratedOutputConfig):
+    """Generated output boundary plus the non-blank path domain invariant."""
 
     @field_validator("output_dir")
     @classmethod
@@ -118,3 +36,22 @@ class OutputConfig(_CamelBase):
         if value is not None and not value.strip():
             raise ValueError("output_dir must not be empty or whitespace-only")
         return value
+
+
+__all__ = [
+    "DecodeConfig",
+    "EncodeConfig",
+    "FilterStep",
+    "FilterStepKind",
+    "FpsMode",
+    "InterpolationConfig",
+    "OutputConfig",
+    "PostprocessConfig",
+    "PreprocessConfig",
+    "ProcessOrder",
+    "RateControlConfig",
+    "RateControlMode",
+    "SuperResolutionConfig",
+    "TensorBackend",
+    "WorkflowConfig",
+]

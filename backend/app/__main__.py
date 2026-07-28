@@ -61,18 +61,10 @@ def _wire_error_code(code: object) -> str:
         "missing_python_dependency",
         "cancelled",
         "process_failed",
-        "spawn_failed",
-        "runtime_panic",
         "invalid_input",
         "invalid_config",
         "resume_conflict",
         "io_error",
-        "schema_mismatch",
-        "persistence_failed",
-        "backend_no_json",
-        "backend_envelope",
-        "controller_unavailable",
-        "backend_probe_failed",
     }:
         return code
     return "process_failed"
@@ -84,7 +76,7 @@ def _bootstrap_error_code(exc: BaseException) -> str:
     The primary path delegates to :func:`app.errors._bootstrap.infer_error_code`
     which is the single source of truth for code inference. The full
     exception object is forwarded so the bootstrap-mode resolver can run
-    its Phase 4.1 ``isinstance`` dispatch even before the rest of ``app``
+    its ``isinstance`` dispatch even before the rest of ``app``
     is importable. Only when the bootstrap module itself fails to import
     (catastrophic dependency error before the package finishes loading)
     do we fall back to a minimal inline pattern set. Keep this inline list

@@ -12,7 +12,7 @@ import numpy as np
 from app.utils.logger import get_logger
 from app.utils.onnx_models import create_onnx_session, resolve_onnx_model_path
 
-from ._model_spec import get_spec
+from app.catalog.rife_models import get_spec
 from .model_loader import get_model_dir
 
 

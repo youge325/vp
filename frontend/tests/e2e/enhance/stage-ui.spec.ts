@@ -1,51 +1,26 @@
-import { test, expect } from '../fixtures'
+import { expect, test } from '../fixtures'
+import { saveE2EScreenshot } from '../utils/screenshots'
 
 test.describe('Stage module UI', () => {
-  test('enabling preprocess toggle reveals filter section', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("预处理")')
-    await expect(tauriPage.locator('h2:has-text("预处理")')).toBeVisible({ timeout: 5000 })
-
-    // Locate the toggle inside a toggle-field label
-    const toggle = tauriPage.locator('label.field.toggle-field').filter({ hasText: '启用预处理' }).locator('input[type="checkbox"]')
-    await expect(toggle).toBeVisible()
-
-    // Ensure toggle is off before testing
-    if (await toggle.isChecked()) {
-      await toggle.click()
+  test('uses the shared toggle field for both processing stages', async ({ tauriPage }) => {
+    for (const stage of ['预处理', '后处理']) {
+      await tauriPage.click(`.rail-link:has-text("${stage}")`)
+      const toggle = tauriPage.locator('label.field.toggle-field')
+        .filter({ hasText: `启用${stage}` })
+        .locator('input[type="checkbox"]')
+      const filterSection = tauriPage.locator('.filter-section')
+      if (await toggle.isChecked()) {
+        await toggle.click()
+      }
       await expect(toggle).not.toBeChecked()
-    }
-
-    // Filter section should not be visible yet
-    const filterSection = tauriPage.locator('.filter-section')
-    await expect(filterSection).not.toBeVisible()
-
-    // Enable and verify filter section appears
-    await toggle.click()
-    await expect(toggle).toBeChecked()
-    await expect(filterSection).toBeVisible({ timeout: 5000 })
-
-    await expect(tauriPage.locator('.filter-section .panel-caption')).toHaveCount(0)
-  })
-
-  test('enabling postprocess toggle reveals filter section', async ({ tauriPage }) => {
-    await tauriPage.click('.rail-link:has-text("后处理")')
-    await expect(tauriPage.locator('h2:has-text("后处理")')).toBeVisible({ timeout: 5000 })
-
-    const toggle = tauriPage.locator('label.field.toggle-field').filter({ hasText: '启用后处理' }).locator('input[type="checkbox"]')
-    await expect(toggle).toBeVisible()
-
-    if (await toggle.isChecked()) {
+      await expect(filterSection).not.toBeVisible()
       await toggle.click()
-      await expect(toggle).not.toBeChecked()
+      await expect(toggle).toBeChecked()
+      await expect(filterSection).toBeVisible()
+      await expect(filterSection.locator('.panel-caption')).toHaveCount(0)
+      if (stage === '预处理') {
+        await saveE2EScreenshot('toggle')
+      }
     }
-
-    const filterSection = tauriPage.locator('.filter-section')
-    await expect(filterSection).not.toBeVisible()
-
-    await toggle.click()
-    await expect(toggle).toBeChecked()
-    await expect(filterSection).toBeVisible({ timeout: 5000 })
-
-    await expect(tauriPage.locator('.filter-section .panel-caption')).toHaveCount(0)
   })
 })

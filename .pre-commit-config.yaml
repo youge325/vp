@@ -17,7 +17,7 @@ repos:
 
   # Python 格式化: ruff format（兼容 black，但更快）
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.8
+    rev: v0.15.13
     hooks:
       - id: ruff-format
       - id: ruff
@@ -30,25 +30,36 @@ repos:
       - id: check-ast
       - id: check-builtin-literals
 
-  # 本仓库自定义:三层 TaskErrorCode 漂移检测 + Phase 9 NdjsonEnvelope/EventType 漂移检测
-  # 在 Rust enum / Python enum / ts-rs 生成的 TS union 之间比对成员集合
+  # 中立 JSON Schema 是跨语言契约的唯一事实源。
   - repo: local
     hooks:
-      - id: check-error-code-drift
-        name: TaskErrorCode 三层一致性 + NdjsonEnvelope 跨语言契约
-        entry: python scripts/check_error_code_drift.py
+      - id: check-generated-contracts
+        name: 中立契约校验与生成物 freshness
+        entry: python scripts/generate_contracts.py --check
         language: system
         pass_filenames: false
-        files: '^(frontend/src-tauri/src/models/task\.rs|frontend/src-tauri/src/tasks/envelope\.rs|backend/app/.*\.py|frontend/src/types/generated/TaskErrorCode\.ts|scripts/check_error_code_drift\.py)$'
+        files: '^(contracts/.*\.json|backend/app/generated/contracts\.py|frontend/src/types/generated/contracts\.ts|frontend/src/types/protocol/events\.ts|frontend/src/lib/ipc/contract\.ts|frontend/src-tauri/src/generated/(?:ipc_manifest|task_events|persistence_versions)\.rs|scripts/(?:generate_contracts\.py|requirements-quality\.txt))$'
       - id: check-architecture-contracts
         name: 前后端架构边界与命令面一致性
         entry: python scripts/check_architecture_contracts.py
         language: system
         pass_filenames: false
-        files: '^(AGENTS\.md|README\.md|ruff\.toml|docs/.*\.md|\.github/workflows/.+\.ya?ml|backend/(?:app|tests|tests_full_e2e)/.*\.py|frontend/(?:src|tests)/.+\.(ts|vue)|frontend/(?:vitest\.config\.ts|vite\.config\.ts|wdio\.conf\.ts|tsconfig(?:\.app|\.wdio)?\.json|scripts/.+\.mjs)|frontend/src-tauri/src/.+\.rs|frontend/src-tauri/permissions/default\.toml|scripts/setup-ci-runtime-env\.ps1|scripts/check_architecture_contracts\.py|scripts/architecture_contracts/.+\.py)$'
+        files: '^(AGENTS\.md|README\.md|ruff\.toml|docs/.*\.md|\.github/workflows/.+\.ya?ml|backend/(?:app|tests|tests_full_e2e)/.*\.py|backend/requirements(?:-dev)?\.txt|backend/export_all_rife_onnx\.py|frontend/(?:src|tests)/.+\.(ts|vue)|frontend/(?:package(?:-lock)?\.json|vitest\.config\.ts|vite\.config\.ts|wdio\.conf\.ts|tsconfig(?:\.[^.]+)?\.json|knip\.json|\.jscpd\.json|scripts/.+\.mjs)|frontend/src-tauri/(?:Cargo\.toml|build\.rs|src/.+\.rs|permissions/default\.toml)|scripts/.+\.(?:py|ps1)|scripts/requirements-quality\.txt)$'
+      - id: check-frontend-static-quality
+        name: 前端静态质量与全仓重复检测
+        entry: npm --prefix frontend run check
+        language: system
+        pass_filenames: false
+        files: '^frontend/(?:src|tests|scripts|packages)/.+\.(?:ts|tsx|vue|js|mjs|cjs)$|^frontend/(?:package(?:-lock)?\.json|eslint\.config\.js|knip\.json|\.jscpd\.json|tsconfig.*\.json|(?:vite|vitest|wdio)\.config\.ts)$|^contracts/.*\.json$|^backend/(?:app|tests|tests_full_e2e)/.*\.py$|^backend/export_all_rife_onnx\.py$'
+      - id: check-python-dead-code
+        name: Python dead-code zero-findings
+        entry: python -m vulture backend/app backend/tests backend/tests_full_e2e backend/export_all_rife_onnx.py scripts backend/vulture_whitelist.py --min-confidence 60 --exclude backend/app/generated/,backend/app/algorithms/paddle/paddlegan_vsr/vendor/,backend/app/algorithms/pytorch/rife/ifnet_v4_
+        language: system
+        pass_filenames: false
+        files: '^(?:backend/(?:app|tests|tests_full_e2e)/.*|backend/export_all_rife_onnx|scripts/.+)\.py$|^backend/vulture_whitelist\.py$'
 
-# 跳过 Tauri 生成的 schema 文件，避免 pre-commit 反复检查自动生成产物
-exclude: ^frontend/src-tauri/(gen/schemas|schemas)/.*\.json$
+# Tauri 自身生成的 ACL schema 不是应用层中立契约。
+exclude: ^frontend/src-tauri/gen/schemas/.*\.json$
 
 # ruff 全局配置（pre-commit 和 CLI 共享）
 ci:

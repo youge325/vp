@@ -21,8 +21,18 @@ const {
 
 const taskIssue = useOperationIssue('task')
 
-const pauseButtonLabel = computed(() => (batch.isPaused ? '继续队列' : '暂停队列'))
-const interruptButtonLabel = computed(() => (batch.isCancelling ? '中断中...' : '中断批次'))
+const pauseButtonLabel = computed(() => {
+  if (batch.controlPending === 'pause') {
+    return '暂停中...'
+  }
+  if (batch.controlPending === 'resume') {
+    return '继续中...'
+  }
+  return batch.isPaused ? '继续队列' : '暂停队列'
+})
+const interruptButtonLabel = computed(
+  () => batch.isCancelling || batch.controlPending === 'cancel' ? '中断中...' : '中断批次',
+)
 
 function handleResolveConflict(action: ResumeConflictAction): void {
   void resolveConflict(action)
@@ -48,14 +58,14 @@ function handleResolveConflict(action: ResumeConflictAction): void {
           </button>
           <button
             class="ghost-button"
-            :disabled="!batch.isRunning || batch.isCancelling"
+            :disabled="!batch.isRunning || batch.isCancelling || batch.controlPending !== null"
             @click="batch.isPaused ? resumeCurrentTask() : pauseCurrentTask()"
           >
             {{ pauseButtonLabel }}
           </button>
           <button
             class="danger-button"
-            :disabled="!batch.isRunning || batch.isCancelling"
+            :disabled="!batch.isRunning || batch.isCancelling || batch.controlPending !== null"
             @click="interruptBatch()"
           >
             {{ interruptButtonLabel }}
@@ -63,7 +73,7 @@ function handleResolveConflict(action: ResumeConflictAction): void {
         </div>
       </div>
 
-      <!-- Phase 18 — 启动按钮 disabled 时显式说明原因(未选素材 / 缺输出目录 / etc),
+      <!-- 启动按钮 disabled 时显式说明原因(未选素材 / 缺输出目录 / etc),
            避免用户对着"灰色按钮"猜测。``cannotStartReason`` 在 useTaskOrchestrator
            单点封装,所有 disabled 文案共享同一来源。 -->
       <p v-if="cannotStartReason" class="start-blocked-hint">{{ cannotStartReason }}</p>
@@ -82,7 +92,7 @@ function handleResolveConflict(action: ResumeConflictAction): void {
 </template>
 
 <style scoped>
-/* Phase 18 — 启动按钮 disabled 原因提示。颜色与全局 muted text 一致,
+/* 启动按钮 disabled 原因提示。颜色与全局 muted text 一致,
    字号略小,避免视觉抢占主操作。 */
 .start-blocked-hint {
   margin: 0.5rem 0 0;

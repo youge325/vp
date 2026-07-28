@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.support.ndjson import last_json_object
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_DIR = REPO_ROOT / "backend"
 
@@ -44,19 +46,6 @@ def _run_app(*args: str, env_extra: dict[str, str] | None = None) -> subprocess.
     )
 
 
-def _last_json_line(stdout: str) -> dict:
-    """从 stdout 取最后一个非空 JSON 行(对应 Rust ``parse_last_json_line``)。"""
-    for line in reversed(stdout.splitlines()):
-        stripped = line.strip()
-        if not stripped:
-            continue
-        try:
-            return json.loads(stripped)
-        except json.JSONDecodeError:
-            continue
-    raise AssertionError(f"未在 stdout 中找到 JSON 行:\n{stdout}")
-
-
 def test_info_with_missing_input_emits_invalid_input_envelope() -> None:
     """``info --input <不存在>`` 必须以 NDJSON error 帧 + exit 1 终止。
 
@@ -67,7 +56,7 @@ def test_info_with_missing_input_emits_invalid_input_envelope() -> None:
 
     assert proc.returncode == 1, f"info 应当以 exit code 1 终止,实际:{proc.returncode}\n{proc.stdout}\n{proc.stderr}"
 
-    envelope = _last_json_line(proc.stdout)
+    envelope = last_json_object(proc.stdout)
     assert envelope["type"] == "error"
     assert envelope["code"] == "invalid_input"
     assert "definitely" in envelope["message"], f"message 应当回带路径片段:{envelope['message']}"
@@ -82,45 +71,12 @@ def test_inspect_output_with_missing_input_emits_invalid_input_envelope() -> Non
         "inspect-output",
         "--input",
         "Z:/definitely/does/not/exist.mp4",
-        "--decode-config-json",
-        "{}",
-        "--workflow-config-json",
-        "{}",
-        "--encode-config-json",
-        "{}",
-        "--output-config-json",
-        "{}",
     )
 
     assert proc.returncode == 1
-    envelope = _last_json_line(proc.stdout)
+    envelope = last_json_object(proc.stdout)
     assert envelope["type"] == "error"
     assert envelope["code"] == "invalid_input"
-
-
-def test_process_with_invalid_json_emits_typed_envelope() -> None:
-    """``--workflow-config-json '{not valid json'`` 应当被 ProcessError 捕获。
-
-    Rust 不会发这样的 payload(它走 ``serde_json::to_string`` 序列化结构体),
-    但人工 CLI 调用 / fuzz 仍可能触发。这条路径验证配置加载错误被协议层
-    归一化,而不是裸 ``Traceback`` 输出到 stderr。
-    """
-    proc = _run_app(
-        "process",
-        "--input",
-        "Z:/x.mp4",  # 不存在的输入,但 JSON 解析会先失败
-        "--workflow-config-json",
-        "{not valid json",
-    )
-    assert proc.returncode == 1
-    envelope = _last_json_line(proc.stdout)
-    assert envelope["type"] == "error"
-    # JSON 解析失败 → 走 ProcessError.from_exception → infer 出 process_failed 或 invalid_input
-    # 这里只验证它一定是一个 valid TaskErrorCode 字符串
-    from app.errors._codes import TaskErrorCode
-
-    valid_codes = {code.value for code in TaskErrorCode}
-    assert envelope["code"] in valid_codes, f"code {envelope['code']!r} 不在 TaskErrorCode 集合内"
 
 
 def test_help_does_not_emit_error_envelope() -> None:

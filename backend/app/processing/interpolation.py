@@ -6,12 +6,11 @@
 from __future__ import annotations
 
 from app.utils.logger import get_logger
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 
-from app.algorithms.base import IAlgorithm
 from app.algorithms.tensor_backend import ITensorBackend
-from app.algorithms.pytorch.rife._model_spec import SUPPORTED_MODELS as _RIFE_MODELS
+from app.catalog.rife_models import SUPPORTED_MODELS as _RIFE_MODELS
 from app.algorithms.pytorch.rife.onnx_solver import RIFEONNXSolver
 from app.utils.model_metrics import get_rife_model_details
 
@@ -22,10 +21,7 @@ logger = get_logger(__name__)
 
 SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
     {
-        # Phase 8 — ``tensorBackends`` 显式声明该算法支持的 tensor
-        # 后端集合。RIFE 同时提供 PyTorch 实现 (algorithms/pytorch/rife/)
-        # 与 ONNX 推理路径,因此两者都列出;paddle 暂无实现,前端切到
-        # paddle 后该算法不会出现在下拉列表里。
+        # RIFE 同时提供 PyTorch 与 ONNX 推理路径。
         "name": "rife",
         "family": "rife",
         "tensorBackends": ["pytorch", "onnx"],
@@ -36,7 +32,7 @@ SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
 ]
 
 
-class FrameInterpolationAlgorithm(IAlgorithm):
+class FrameInterpolationAlgorithm:
     """
     视频补帧算法 — 使用 RIFE 模型进行帧对插值。
 
@@ -45,15 +41,13 @@ class FrameInterpolationAlgorithm(IAlgorithm):
     2. RIFE 模型推理生成中间帧
     3. 支持可配置的插值倍率（2x, 4x 等）
 
-    使用方式：
-    - needs_frame_pairs() 返回 True，通知流式处理器使用帧对处理模式
-    - process_frame_pair() 实现帧对插值推理
-    - process_frame() 保留兼容但标记为不支持（补帧需要帧对）
+    The stage descriptor declares pair mode; this implementation only exposes
+    the pair operation required by that mode.
     """
 
     def __init__(
         self,
-        tensor_backend: Optional[ITensorBackend] = None,
+        tensor_backend: ITensorBackend,
         **kwargs,
     ):
         """
@@ -67,7 +61,11 @@ class FrameInterpolationAlgorithm(IAlgorithm):
                 - device: 推理设备，默认自动选择
                 - model_dir: 模型权重目录，默认空字符串
         """
+        backend_name = tensor_backend.get_name()
+        if backend_name not in {"pytorch", "onnx"}:
+            raise ValueError(f"RIFE interpolation does not support the '{backend_name}' tensor backend.")
         self._tensor_backend = tensor_backend
+        self._backend_name = backend_name
         self._multi = kwargs.get("multi", 2)
         self._model_version = kwargs.get("model_version", "4.25")
         self._scale = kwargs.get("scale", 1.0)
@@ -78,16 +76,14 @@ class FrameInterpolationAlgorithm(IAlgorithm):
         self._engine = kwargs.get("engine", "cuda")
 
         # 延迟初始化 RIFESolver
-        self._solver: Optional[RIFESolver] = None
+        self._solver: RIFESolver | RIFEONNXSolver | None = None
 
     def _ensure_solver(self):
         """延迟初始化 RIFE 推理器。"""
         if self._solver is not None:
             return self._solver
 
-        backend_name = self._tensor_backend.get_name() if self._tensor_backend is not None else "numpy"
-
-        if backend_name == "onnx":
+        if self._backend_name == "onnx":
             logger.info(f"初始化 RIFE ONNX 推理器: v{self._model_version}, engine={self._engine}")
             self._solver = RIFEONNXSolver(
                 model_version=self._model_version,
@@ -112,30 +108,6 @@ class FrameInterpolationAlgorithm(IAlgorithm):
             )
         return self._solver
 
-    # ------------------------------------------------------------------
-    # IAlgorithm 接口实现
-    # ------------------------------------------------------------------
-
-    def process_frame(self, frame: Any, **_kwargs) -> Any:
-        """
-        单帧处理（补帧算法不适用，直接返回原帧）。
-
-        补帧需要帧对输入；如果流式处理链在单帧回退路径上调用这里，
-        则仅原样返回输入帧。
-        """
-        return frame
-
-    def get_name(self) -> str:
-        return f"补帧算法(RIFE v{self._model_version}, {self._multi}x)"
-
-    # ------------------------------------------------------------------
-    # 帧对处理接口
-    # ------------------------------------------------------------------
-
-    def needs_frame_pairs(self) -> bool:
-        """补帧算法需要帧对处理模式。"""
-        return True
-
     def process_frame_pair(self, frame0: Any, frame1: Any, timestep: float = 0.5, **_kwargs) -> Any:
         """
         使用 RIFE 模型对帧对进行插值，生成中间帧。
@@ -149,36 +121,4 @@ class FrameInterpolationAlgorithm(IAlgorithm):
             中间帧 Tensor（由当前 tensor_backend 转换）
         """
         solver = self._ensure_solver()
-        backend_name = self._tensor_backend.get_name() if self._tensor_backend is not None else "numpy"
-
-        # PyTorch backend: 直接传递 torch tensor（零开销）
-        if backend_name == "pytorch":
-            return solver.interpolate(frame0, frame1, timestep=timestep)
-
-        # ONNX backend: 直接传递 numpy ndarray（零开销）
-        if backend_name == "onnx":
-            return solver.interpolate(frame0, frame1, timestep=timestep)
-
-        # 其他 backend: 做 numpy 桥接
-        import numpy as np
-        import torch
-
-        np0 = frame0 if self._tensor_backend is None else self._tensor_backend.tensor_to_numpy(frame0)
-        np1 = frame1 if self._tensor_backend is None else self._tensor_backend.tensor_to_numpy(frame1)
-
-        t0 = torch.from_numpy(np.transpose(np0, (2, 0, 1)).copy()).unsqueeze(0).float() / 255.0
-        t1 = torch.from_numpy(np.transpose(np1, (2, 0, 1)).copy()).unsqueeze(0).float() / 255.0
-        if torch.cuda.is_available():
-            t0 = t0.cuda()
-            t1 = t1.cuda()
-
-        result = solver.interpolate(t0, t1, timestep=timestep)
-        result_np = (result[0] * 255.0).byte().cpu().numpy().transpose(1, 2, 0)
-
-        if self._tensor_backend is not None:
-            return self._tensor_backend.numpy_to_tensor(result_np)
-        return result_np
-
-    def get_interpolation_multi(self) -> int:
-        """返回补帧倍率。"""
-        return self._multi
+        return solver.interpolate(frame0, frame1, timestep=timestep)

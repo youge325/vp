@@ -1,17 +1,12 @@
-"""Stage 1 — input validation & config loading for ``cmd_process``.
+"""Input validation and config loading for ``cmd_process``.
 
 只负责"把 args 翻译成已校验的运行时配置",**不做** stage planning / 模型路径
 解析 / 流水线执行。这一层保证之后的 planning / execution 拿到的 dict 是
 Pydantic 校验过、camelCase、已合并默认值的形状。
 
-Phase C.1.1 将原 ``process.py`` 中的 297 行单文件拆为
-validation / planning / execution / orchestrator 四段,本文件为第一段。
-
-Phase D.3.1 — ``load_configs`` 现在支持两种 wire 格式:
-- ``--config-stdin``:Tauri host 把 ``{decode, workflow, encode, output}``
-  作为单个 JSON 对象写入 stdin。规避 Windows 32 KiB 命令行上限。
-- ``--*-config-json``(传统):每段配置走独立命令行参数。手动 CLI 与测试
-  仍走这条,保持兼容。
+``--config-stdin`` 接收 Tauri host 写入的中立
+``{decode, workflow, encode, output}`` 对象；未设置时仅使用正式标量 CLI
+参数构建默认配置。
 """
 
 from __future__ import annotations
@@ -46,24 +41,17 @@ def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, An
 
 
 def _validate_config_section(
-    raw_value: str | None,
+    raw_value: dict[str, Any] | None,
     default: dict[str, Any],
     model_cls: type[_ConfigModel],
 ) -> _ConfigModel:
-    """Parse + deep-merge + Pydantic-validate one config section.
+    """Deep-merge and validate one config section.
 
     RuntimeConfigs later projects default sections sparsely and explicit
     sections as complete camelCase dictionaries.
     """
-    has_override = bool(raw_value)
-    if has_override:
-        try:
-            payload = json.loads(raw_value)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid JSON payload: {exc}") from exc
-        if not isinstance(payload, dict):
-            raise ValueError("JSON payload must be an object.")
-        merged = _deep_merge(default, payload)
+    if raw_value is not None:
+        merged = _deep_merge(default, raw_value)
     else:
         merged = copy.deepcopy(default)
 
@@ -72,19 +60,17 @@ def _validate_config_section(
     except Exception as exc:
         raise ValueError(f"Config validation failed for {model_cls.__name__}: {exc}") from exc
 
-    if isinstance(validated, OutputConfig) and not validated.output_dir:
+    if isinstance(validated, OutputConfig) and (validated.output_dir is None or not validated.output_dir.strip()):
         raise ValueError("Config validation failed for OutputConfig: outputDir is required.")
 
     return validated
 
 
-def _read_stdin_config_sections() -> dict[str, str | None]:
+def _read_stdin_config_sections() -> dict[str, dict[str, Any] | None]:
     """Read the four config sections from stdin as a single JSON object.
 
-    Returns a ``{decode, workflow, encode, output}`` dict where each value
-    is a JSON string (or ``None`` if the section is missing). Reusing the
-    string form lets ``load_runtime_configs`` validate stdin and CLI paths
-    through the same section loader, including the deep-merge + Pydantic round-trip.
+    Missing sections use scalar CLI defaults; present sections must themselves
+    be objects and are validated after deep-merging those defaults.
     """
     raw = sys.stdin.read()
     if not raw.strip():
@@ -105,11 +91,16 @@ def _read_stdin_config_sections() -> dict[str, str | None]:
             "Stdin payload must be a JSON object with decode/workflow/encode/output keys.",
         )
 
-    def _section(key: str) -> str | None:
+    def _section(key: str) -> dict[str, Any] | None:
         value = container.get(key)
         if value is None:
             return None
-        return json.dumps(value)
+        if not isinstance(value, dict):
+            raise_error(
+                TaskErrorCode.INVALID_CONFIG,
+                f"Stdin config section '{key}' must be a JSON object.",
+            )
+        return value
 
     return {
         "decode": _section("decode"),
@@ -119,27 +110,8 @@ def _read_stdin_config_sections() -> dict[str, str | None]:
     }
 
 
-def _collect_config_sections(args: argparse.Namespace) -> dict[str, str | None]:
-    """Choose between the stdin and CLI-flag wire formats.
-
-    Returns the same ``{decode, workflow, encode, output}`` shape so that
-    ``load_runtime_configs`` and ``cmd_inspect_output`` can stay format-agnostic.
-    ``--config-stdin`` takes precedence; the four ``--*-config-json``
-    flags are ignored when it's set (the parser still accepts them so
-    older tooling doesn't break, but the documentation calls this out).
-    """
-    if args.config_stdin:
-        return _read_stdin_config_sections()
-    return {
-        "decode": args.decode_config_json,
-        "workflow": args.workflow_config_json,
-        "encode": args.encode_config_json,
-        "output": args.output_config_json,
-    }
-
-
 def load_runtime_configs(args: argparse.Namespace) -> RuntimeConfigs:
-    """Materialise typed runtime configs from CLI JSON args or stdin.
+    """Materialise typed runtime configs from scalar CLI args or stdin.
 
     The returned bundle carries Pydantic models for internal code and records
     which sections were explicit so wire projections preserve their shape.
@@ -147,7 +119,16 @@ def load_runtime_configs(args: argparse.Namespace) -> RuntimeConfigs:
     as ``INVALID_CONFIG`` so the frontend sees a typed error rather than a
     stack trace.
     """
-    sections = _collect_config_sections(args)
+    sections: dict[str, dict[str, Any] | None]
+    if args.config_stdin:
+        sections = _read_stdin_config_sections()
+    else:
+        sections = {
+            "decode": None,
+            "workflow": None,
+            "encode": None,
+            "output": None,
+        }
     try:
         decode = _validate_config_section(sections["decode"], _default_decode_config(), DecodeConfig)
         encode = _validate_config_section(
@@ -167,7 +148,6 @@ def load_runtime_configs(args: argparse.Namespace) -> RuntimeConfigs:
         )
     except ValueError as exc:
         raise_error(TaskErrorCode.INVALID_CONFIG, str(exc))
-        raise  # unreachable; appeases the type-checker
 
     return RuntimeConfigs(
         decode=decode,
@@ -175,6 +155,6 @@ def load_runtime_configs(args: argparse.Namespace) -> RuntimeConfigs:
         workflow=workflow,
         output=output,
         _expanded_sections=frozenset(
-            section for section in ("decode", "encode", "workflow", "output") if sections[section]
+            section for section in ("decode", "encode", "workflow", "output") if sections[section] is not None
         ),
     )

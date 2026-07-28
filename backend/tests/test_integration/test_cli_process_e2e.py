@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.support.ndjson import last_json_object
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_DIR = REPO_ROOT / "backend"
 
@@ -56,19 +58,6 @@ def _run_app(*args: str, env_extra: dict[str, str] | None = None) -> subprocess.
         timeout=120,
         check=False,
     )
-
-
-def _last_json_line(stdout: str) -> dict:
-    """从 stdout 取最后一个非空 JSON 行。"""
-    for line in reversed(stdout.splitlines()):
-        stripped = line.strip()
-        if not stripped:
-            continue
-        try:
-            return json.loads(stripped)
-        except json.JSONDecodeError:
-            continue
-    raise AssertionError(f"未在 stdout 中找到 JSON 行:\n{stdout}")
 
 
 def _all_json_lines(stdout: str) -> list[dict]:
@@ -127,7 +116,7 @@ class TestCheckCommand:
 
     def test_check_includes_tensor_engines(self) -> None:
         proc = _run_app("check")
-        envelope = _last_json_line(proc.stdout)
+        envelope = last_json_object(proc.stdout)
         tensor_engines = envelope.get("tensorEngines", {})
         assert set(tensor_engines) == {"pytorch", "paddle", "onnx"}
         assert all(isinstance(engines, list) for engines in tensor_engines.values())
@@ -140,7 +129,7 @@ class TestInfoCommand:
         proc = _run_app("info", "--input", e2e_input)
         assert proc.returncode == 0, f"info 失败:\n{proc.stderr}"
 
-        envelope = _last_json_line(proc.stdout)
+        envelope = last_json_object(proc.stdout)
         assert envelope.get("type") == "info"
         assert envelope.get("fps", 0) > 0, "fps 应 > 0"
         assert envelope.get("width", 0) > 0, "width 应 > 0"
@@ -210,7 +199,7 @@ class TestProcessFormatConversion:
         )
         assert second.returncode != 0, "第二次 process 应以非 0 退出"
 
-        envelope = _last_json_line(second.stdout)
+        envelope = last_json_object(second.stdout)
         assert envelope.get("type") == "error"
         assert envelope.get("code") == "resume_conflict"
 
@@ -242,5 +231,5 @@ class TestProcessFormatConversion:
         )
         assert proc.returncode == 0, f"不传默认值时应仍能成功:\n{proc.stderr}\n{proc.stdout}"
 
-        envelope = _last_json_line(proc.stdout)
+        envelope = last_json_object(proc.stdout)
         assert envelope.get("type") == "completed"

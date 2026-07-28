@@ -29,11 +29,11 @@ const matchesPattern = (path: string, pattern: string) => {
 describe('E2E spec grouping', () => {
   it('covers every native spec exactly once in no more than ten sessions', () => {
     const specFiles = listSpecFiles(e2eRoot)
-    expect(specFiles).toHaveLength(79)
+    expect(specFiles).toHaveLength(23)
     expect(specFiles.reduce((count, specFile) => {
       const source = readFileSync(resolve(process.cwd(), specFile), 'utf8')
       return count + (source.match(/\btest\(/g)?.length ?? 0)
-    }, 0)).toBe(266)
+    }, 0)).toBe(57)
     expect(E2E_SPEC_GROUPS.length).toBeLessThanOrEqual(10)
     for (const specFile of specFiles) {
       const matchingGroups = E2E_SPEC_GROUPS.filter((group) =>

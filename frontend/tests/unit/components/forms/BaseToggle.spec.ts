@@ -10,6 +10,8 @@ describe('BaseToggle', () => {
     })
     expect(wrapper.text()).toContain('启用补帧')
     expect(wrapper.text()).toContain('FP16')
+    expect(wrapper.findAll('label')).toHaveLength(1)
+    expect(wrapper.find('label').classes()).toContain('toggle-field')
   })
 
   it('defaults chip text to "启用" when not provided', () => {

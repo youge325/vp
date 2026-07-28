@@ -48,8 +48,15 @@ class StageWorkerConfig:
     output_width: int
     output_height: int
     input_frame_count: int
-    tensor_backend_name: str
+    tensor_backend_name: str | None
     output_frame_count: int | None = None
+
+    def __post_init__(self) -> None:
+        needs_backend = self.stage.algorithm_type in {"frame_interpolation", "super_resolution"}
+        if needs_backend and not self.tensor_backend_name:
+            raise ValueError(f"Stage '{self.stage_name}' requires a tensor backend.")
+        if self.stage.algorithm_type == "frame_filter_chain" and self.tensor_backend_name is not None:
+            raise ValueError(f"Filter stage '{self.stage_name}' must not consume a tensor backend.")
 
     @classmethod
     def from_json_file(cls, path: str | Path) -> "StageWorkerConfig":
@@ -58,21 +65,24 @@ class StageWorkerConfig:
         if not isinstance(payload, Mapping):
             raise ValueError("Stage worker config must be a JSON object.")
 
-        def value(camel: str, snake: str) -> Any:
-            return payload[camel] if camel in payload else payload[snake]
+        backend_name = payload["tensorBackendName"]
+        if backend_name is not None and (not isinstance(backend_name, str) or not backend_name):
+            raise ValueError("tensorBackendName must be a non-empty string or null.")
 
         return cls(
             stage=_parse_processing_step(payload["stage"]),
-            stage_index=int(value("stageIndex", "stage_index")),
-            stage_total=int(value("stageTotal", "stage_total")),
-            stage_name=str(value("stageName", "stage_name")),
-            input_width=int(value("inputWidth", "input_width")),
-            input_height=int(value("inputHeight", "input_height")),
-            output_width=int(value("outputWidth", "output_width")),
-            output_height=int(value("outputHeight", "output_height")),
-            input_frame_count=int(value("inputFrameCount", "input_frame_count")),
-            tensor_backend_name=str(value("tensorBackendName", "tensor_backend_name")),
-            output_frame_count=int(payload.get("outputFrameCount") or payload.get("output_frame_count") or 0) or None,
+            stage_index=int(payload["stageIndex"]),
+            stage_total=int(payload["stageTotal"]),
+            stage_name=str(payload["stageName"]),
+            input_width=int(payload["inputWidth"]),
+            input_height=int(payload["inputHeight"]),
+            output_width=int(payload["outputWidth"]),
+            output_height=int(payload["outputHeight"]),
+            input_frame_count=int(payload["inputFrameCount"]),
+            tensor_backend_name=backend_name,
+            output_frame_count=(
+                int(payload["outputFrameCount"]) if payload.get("outputFrameCount") is not None else None
+            ),
         )
 
     def to_jsonable(self) -> dict[str, Any]:

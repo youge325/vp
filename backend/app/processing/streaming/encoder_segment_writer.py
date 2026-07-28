@@ -9,8 +9,7 @@ import numpy as np
 
 from app.processing.streaming.encoder_runtime_config import EncoderRuntimeConfig
 from app.processing.streaming.encoder_segments import resolve_segment_output_frame_count
-from app.utils.ffmpeg._progress import make_encode_progress_callback
-from app.utils.ffmpeg.io import RawVideoWriter
+from app.ports.media import RawVideoWriterPort
 
 
 class EncoderSegmentWriter:
@@ -19,7 +18,7 @@ class EncoderSegmentWriter:
         self._extension = (
             os.path.splitext(config.output_path)[1] or f".{config.encode_config.get('container') or 'mp4'}"
         )
-        self._writer: RawVideoWriter | None = None
+        self._writer: RawVideoWriterPort | None = None
         self._segment_index = len(config.resume_state.completed_segments) + 1
         self._current_segment_start = config.resume_state.completed_output_frames
         self._current_segment_input_frames = 0
@@ -60,7 +59,7 @@ class EncoderSegmentWriter:
 
     def _open_segment(self) -> None:
         config = self._config
-        self._tmp_path = config.manifest.chunk_tmp_path(self._extension, index=self._segment_index)
+        self._tmp_path = config.manifest.workspace.chunk_tmp_path(self._extension, index=self._segment_index)
         self._writer = config.ffmpeg.open_rawvideo_encoder(
             output_path=self._tmp_path,
             width=config.width,
@@ -68,10 +67,8 @@ class EncoderSegmentWriter:
             fps=config.fps,
             output_fps=config.output_fps,
             encode_config=config.encode_config,
-            progress_callback=make_encode_progress_callback(
-                config.encode_progress_callback,
-                frame_offset=self._current_segment_start,
-            ),
+            progress_callback=config.encode_progress_callback,
+            progress_frame_offset=self._current_segment_start,
         )
 
     def _seal_segment(self, next_source_frame: int) -> None:
@@ -93,7 +90,7 @@ class EncoderSegmentWriter:
             self._current_segment_input_frames = 0
             self._tmp_path = ""
             return
-        self._config.manifest.finalize_chunk(
+        self._config.manifest.workspace.finalize_chunk(
             tmp_path,
             index=self._segment_index,
             start_output_frame=self._current_segment_start,

@@ -1,62 +1,48 @@
 use std::env;
+use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::UNIX_EPOCH;
 
-use serde::{Deserialize, Serialize};
+use chrono::{SecondsFormat, Utc};
+use serde::Serialize;
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager, Runtime};
-use time::format_description::well_known::Rfc3339;
-use time::OffsetDateTime;
 use tokio::fs;
 
 use crate::error::ShellError;
-use crate::models::WorkbenchPreset;
+use crate::generated::{ENVIRONMENT_CACHE_SCHEMA_VERSION, WORKBENCH_PRESET_SCHEMA_VERSION};
+use crate::models::{
+    EnvironmentCacheEntry, EnvironmentCheckResult, WorkbenchPreset, WorkbenchPresetEntry,
+};
 use crate::runtime::ResolvedRuntimePaths;
 
-// Schema 13 removes virtual display adapters from GPU capabilities. Older
-// cache entries must be re-probed so stale adapters do not remain visible.
-const ENVIRONMENT_CACHE_SCHEMA_VERSION: u32 = 13;
-const WORKBENCH_PRESET_SCHEMA_VERSION: u32 = 1;
 const ENVIRONMENT_CACHE_FILE: &str = "environment-cache.json";
 const WORKBENCH_PRESET_FILE: &str = "workbench-preset.json";
-const DEFAULT_RIFE_MODEL_VERSION: &str = "4.25";
+static QUARANTINE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct EnvironmentCacheEntry {
-    pub(crate) schema_version: u32,
-    pub(crate) checked_at: String,
-    pub(crate) fingerprint: String,
-    pub(crate) result: Value,
+enum QuarantineReason {
+    Corrupt,
+    InvalidVersion,
+    Version(u64),
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct WorkbenchPresetEntry {
-    pub(crate) schema_version: u32,
-    pub(crate) preset: WorkbenchPreset,
+impl QuarantineReason {
+    fn from_version(value: &Value) -> Self {
+        value
+            .as_u64()
+            .map(Self::Version)
+            .unwrap_or(Self::InvalidVersion)
+    }
 }
 
-/// 解析并创建应用本地数据目录。
-///
-/// Phase C.2.2:从 ``std::fs::create_dir_all`` 改为 ``tokio::fs``,避免
-/// ``#[tauri::command] async fn`` 在 tokio runtime 上阻塞。
-pub(crate) async fn app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, ShellError> {
-    let dir = env::var_os("VP_APP_DATA_DIR")
-        .map(PathBuf::from)
-        .map(Ok)
-        .unwrap_or_else(|| {
-            app.path().app_local_data_dir().map_err(|error| {
-                ShellError::Persistence(format!("Unable to resolve app data directory: {error}"))
-            })
-        })?;
-    fs::create_dir_all(&dir).await.map_err(|error| {
-        ShellError::Persistence(format!(
-            "Unable to create app data directory {}: {error}",
-            dir.display()
-        ))
-    })?;
-    Ok(dir)
+impl fmt::Display for QuarantineReason {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Corrupt => formatter.write_str("corrupt"),
+            Self::InvalidVersion => formatter.write_str("corrupt-version"),
+            Self::Version(version) => write!(formatter, "v{version}"),
+        }
+    }
 }
 
 fn environment_cache_path(base_dir: &Path) -> PathBuf {
@@ -67,10 +53,22 @@ fn workbench_preset_path(base_dir: &Path) -> PathBuf {
     base_dir.join(WORKBENCH_PRESET_FILE)
 }
 
-pub(crate) fn current_timestamp() -> Result<String, ShellError> {
-    OffsetDateTime::now_utc()
-        .format(&Rfc3339)
-        .map_err(|error| ShellError::Persistence(format!("Unable to format timestamp: {error}")))
+async fn read_optional_bytes(
+    path: &Path,
+    description: &str,
+) -> Result<Option<Vec<u8>>, ShellError> {
+    match fs::read(path).await {
+        Ok(raw) => Ok(Some(raw)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(ShellError::Persistence(format!(
+            "Unable to read {description} {}: {error}",
+            path.display()
+        ))),
+    }
+}
+
+pub(crate) fn current_timestamp() -> String {
+    Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
 /// 构造环境检查的指纹字符串,用于决定缓存命中。
@@ -79,12 +77,10 @@ pub(crate) fn current_timestamp() -> Result<String, ShellError> {
 pub(crate) async fn build_environment_fingerprint(
     paths: &ResolvedRuntimePaths,
 ) -> Result<String, ShellError> {
-    let model_version = env::var("VP_RIFE_MODEL_VERSION")
-        .unwrap_or_else(|_| DEFAULT_RIFE_MODEL_VERSION.to_string());
     let default_model_path = paths
         .model_dir
         .as_ref()
-        .map(|path| path.join(format!("flownet_v{model_version}.pkl")));
+        .map(|path| path.join(format!("flownet_v{}.pkl", paths.rife_model_version)));
     serde_json::to_string(&json!({
         "host": resolve_host_identifier(),
         "backendDir": paths.backend_dir.to_string_lossy().to_string(),
@@ -94,80 +90,63 @@ pub(crate) async fn build_environment_fingerprint(
         "ffprobe": describe_path(paths.ffprobe_path.as_deref()).await,
         "modelDir": describe_path(paths.model_dir.as_deref()).await,
         "defaultModel": describe_path(default_model_path.as_deref()).await,
-        "modelVersion": model_version,
+        "modelVersion": paths.rife_model_version,
+        "tensorrtDir": describe_path(paths.tensorrt_dir.as_deref()).await,
     }))
-    .map_err(ShellError::from)
+    .map_err(|error| {
+        ShellError::SchemaValidation(format!("Unable to encode environment fingerprint: {error}"))
+    })
 }
 
 pub(crate) async fn load_environment_cache(
     base_dir: &Path,
     fingerprint: &str,
     force_refresh: bool,
-) -> Option<(String, Value)> {
+) -> Result<Option<(String, EnvironmentCheckResult)>, ShellError> {
     if force_refresh {
-        return None;
+        return Ok(None);
     }
 
-    let raw = fs::read_to_string(environment_cache_path(base_dir))
-        .await
-        .ok()?;
-    let entry = serde_json::from_str::<EnvironmentCacheEntry>(&raw).ok()?;
+    let path = environment_cache_path(base_dir);
+    let Some(raw) = read_optional_bytes(&path, "environment cache").await? else {
+        return Ok(None);
+    };
+    let entry = match serde_json::from_slice::<EnvironmentCacheEntry>(&raw) {
+        Ok(entry) => entry,
+        Err(_) => {
+            quarantine_file(&path, QuarantineReason::Corrupt).await?;
+            return Ok(None);
+        }
+    };
     if entry.schema_version != ENVIRONMENT_CACHE_SCHEMA_VERSION {
-        return None;
+        quarantine_file(&path, QuarantineReason::from_version(&entry.schema_version)).await?;
+        return Ok(None);
     }
-    if entry.fingerprint != fingerprint {
-        return None;
+    if entry.fingerprint.to_string() != fingerprint {
+        return Ok(None);
     }
-    Some((entry.checked_at, entry.result))
+    Ok(Some((
+        entry.checked_at.to_rfc3339_opts(SecondsFormat::Secs, true),
+        entry.result,
+    )))
 }
 
 /// 原子地把序列化结果写入文件。
 ///
-/// ``tempfile::NamedTempFile::persist`` 在所有平台上都是同步 syscall(Windows 走
-/// ``MoveFileEx``,POSIX 走 ``rename``),Phase C.2.2 把这一段包到
-/// ``tokio::task::spawn_blocking`` 避免阻塞 tokio worker。
+/// ``tempfile::NamedTempFile::persist`` 是同步 syscall，因此在 blocking
+/// worker 中执行，避免阻塞 Tokio worker。
 ///
-/// Phase D.3.7 — Windows 上 OneDrive / 其它云盘代理偶尔会让 ``persist`` 拿
-/// 到 ``Access Denied``。我们退到 ``%TEMP%/vp-workbench/<basename>``,用同样
-/// 的原子写入语义重试一次。fallback 触发时 ``eprintln!`` 记一条 breadcrumb,
-/// 避免静默吞掉问题(Tauri 没法在 storage 层直接 emit ``task-log``,因为
-/// AppHandle 没参数到这里;若未来 caller 需要可视化,可以把
-/// ``actual_path`` 返回出去)。
 async fn atomic_write_json<T>(path: &Path, value: &T) -> Result<(), ShellError>
 where
     T: Serialize,
 {
-    let data = serde_json::to_vec_pretty(value)?;
-    match atomic_write_bytes(path, &data).await {
-        Ok(()) => Ok(()),
-        Err(primary_error) => {
-            let fallback_path = fallback_persistence_path(path);
-            if fallback_path == path {
-                // No usable fallback location — propagate the original error.
-                return Err(primary_error);
-            }
-            match atomic_write_bytes(&fallback_path, &data).await {
-                Ok(()) => {
-                    eprintln!(
-                        "VP Workbench persistence fell back to {} (primary {} failed: {})",
-                        fallback_path.display(),
-                        path.display(),
-                        primary_error,
-                    );
-                    Ok(())
-                }
-                Err(_) => Err(primary_error),
-            }
-        }
-    }
-}
-
-fn fallback_persistence_path(path: &Path) -> PathBuf {
-    let basename = path
-        .file_name()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("vp-workbench.json"));
-    env::temp_dir().join("vp-workbench").join(basename)
+    let data = serde_json::to_vec_pretty(value).map_err(|error| {
+        ShellError::Persistence(format!(
+            "Unable to serialize persistence payload for {}: {error}",
+            path.display()
+        ))
+    })?;
+    atomic_write_bytes(path, &data).await
 }
 
 async fn atomic_write_bytes(path: &Path, data: &[u8]) -> Result<(), ShellError> {
@@ -217,37 +196,84 @@ pub(crate) async fn save_environment_cache(
     base_dir: &Path,
     checked_at: &str,
     fingerprint: &str,
-    result: &Value,
+    result: &EnvironmentCheckResult,
 ) -> Result<(), ShellError> {
-    let entry = EnvironmentCacheEntry {
-        schema_version: ENVIRONMENT_CACHE_SCHEMA_VERSION,
-        checked_at: checked_at.to_string(),
-        fingerprint: fingerprint.to_string(),
-        result: result.clone(),
-    };
+    let entry = serde_json::from_value::<EnvironmentCacheEntry>(json!({
+        "schemaVersion": ENVIRONMENT_CACHE_SCHEMA_VERSION,
+        "checkedAt": checked_at,
+        "fingerprint": fingerprint,
+        "result": result,
+    }))
+    .map_err(|error| {
+        ShellError::SchemaValidation(format!(
+            "Unable to construct environment cache contract: {error}"
+        ))
+    })?;
     atomic_write_json(&environment_cache_path(base_dir), &entry).await
 }
 
-pub(crate) async fn load_workbench_preset(base_dir: &Path) -> Option<WorkbenchPreset> {
-    let raw = fs::read_to_string(workbench_preset_path(base_dir))
-        .await
-        .ok()?;
-    let entry = serde_json::from_str::<WorkbenchPresetEntry>(&raw).ok()?;
+pub(crate) async fn load_workbench_preset(
+    base_dir: &Path,
+) -> Result<Option<WorkbenchPreset>, ShellError> {
+    let path = workbench_preset_path(base_dir);
+    let Some(raw) = read_optional_bytes(&path, "workbench preset").await? else {
+        return Ok(None);
+    };
+    let entry = match serde_json::from_slice::<WorkbenchPresetEntry>(&raw) {
+        Ok(entry) => entry,
+        Err(error) => {
+            quarantine_file(&path, QuarantineReason::Corrupt).await?;
+            return Err(ShellError::SchemaValidation(format!(
+                "Workbench preset is corrupt and was quarantined: {error}"
+            )));
+        }
+    };
     if entry.schema_version != WORKBENCH_PRESET_SCHEMA_VERSION {
-        return None;
+        quarantine_file(&path, QuarantineReason::from_version(&entry.schema_version)).await?;
+        return Err(ShellError::SchemaValidation(format!(
+            "Workbench preset schema {} is incompatible with schema {} and was quarantined.",
+            entry.schema_version, WORKBENCH_PRESET_SCHEMA_VERSION
+        )));
     }
-    Some(entry.preset)
+    Ok(Some(entry.preset))
 }
 
 pub(crate) async fn save_workbench_preset(
     base_dir: &Path,
     preset: &WorkbenchPreset,
 ) -> Result<(), ShellError> {
-    let entry = WorkbenchPresetEntry {
-        schema_version: WORKBENCH_PRESET_SCHEMA_VERSION,
-        preset: preset.clone(),
-    };
+    let entry = serde_json::from_value::<WorkbenchPresetEntry>(json!({
+        "schemaVersion": WORKBENCH_PRESET_SCHEMA_VERSION,
+        "preset": preset,
+    }))
+    .map_err(|error| {
+        ShellError::SchemaValidation(format!(
+            "Unable to construct workbench preset contract: {error}"
+        ))
+    })?;
     atomic_write_json(&workbench_preset_path(base_dir), &entry).await
+}
+
+async fn quarantine_file(path: &Path, reason: QuarantineReason) -> Result<PathBuf, ShellError> {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let sequence = QUARANTINE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("vp-workbench.json");
+    let backup = path.with_file_name(format!(
+        "{file_name}.incompatible-{reason}-{timestamp}-{sequence}.bak"
+    ));
+    fs::rename(path, &backup).await.map_err(|error| {
+        ShellError::Persistence(format!(
+            "Unable to quarantine incompatible persistence file {}: {error}",
+            path.display()
+        ))
+    })?;
+    Ok(backup)
 }
 
 fn resolve_host_identifier() -> String {
@@ -296,13 +322,14 @@ mod tests {
     use super::{
         build_environment_fingerprint, environment_cache_path, load_environment_cache,
         load_workbench_preset, save_environment_cache, save_workbench_preset,
-        workbench_preset_path, EnvironmentCacheEntry, WorkbenchPresetEntry,
+        workbench_preset_path, QuarantineReason,
     };
     use crate::models::config::{
         DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig, OutputConfig,
-        PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig, RateControlMode,
+        PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig,
         SuperResolutionConfig, TensorBackend, WorkbenchPreset, WorkflowConfig,
     };
+    use crate::models::EnvironmentCheckResult;
     use crate::runtime::ResolvedRuntimePaths;
     use serde_json::json;
     use std::path::PathBuf;
@@ -313,16 +340,20 @@ mod tests {
 
     #[tokio::test]
     async fn environment_fingerprint_excludes_output_path_state() {
+        // jscpd:ignore-start -- explicit path fixture mirrors env_map coverage.
         let paths = ResolvedRuntimePaths {
+            app_data_dir: PathBuf::from("data"),
             backend_dir: PathBuf::from("backend"),
             runtime_root: Some(PathBuf::from("runtime")),
             python_executable: PathBuf::from("python"),
             ffmpeg_path: Some(PathBuf::from("ffmpeg")),
             ffprobe_path: Some(PathBuf::from("ffprobe")),
             model_dir: Some(PathBuf::from("models")),
+            rife_model_version: "4.25".to_string(),
             tensorrt_dir: None,
             log_dir: PathBuf::from("logs"),
         };
+        // jscpd:ignore-end
 
         let encoded = build_environment_fingerprint(&paths)
             .await
@@ -347,6 +378,7 @@ mod tests {
         dir
     }
 
+    // jscpd:ignore-start -- wire-complete preset is declarative test fixture data.
     fn sample_preset() -> WorkbenchPreset {
         WorkbenchPreset {
             decode_config: DecodeConfig {
@@ -378,7 +410,7 @@ mod tests {
                     onnx_model: None,
                     tensor_backend: TensorBackend::Onnx,
                     engine: "cuda".to_string(),
-                    num_frames: 10,
+                    num_frames: 10.try_into().expect("positive frame window"),
                 },
                 preprocess: PreprocessConfig {
                     enabled: false,
@@ -394,18 +426,60 @@ mod tests {
                 family: "nvidia".to_string(),
                 container: "mp4".to_string(),
                 keep_audio: true,
-                rate_control: RateControlConfig {
-                    mode: RateControlMode::Cq,
-                    value: json!(23),
-                },
+                rate_control: serde_json::from_value::<RateControlConfig>(json!({
+                    "mode": "cq",
+                    "value": 23
+                }))
+                .expect("rate control contract"),
                 options: Default::default(),
             },
             output_config: OutputConfig {
                 output_dir: Some("D:/output".to_string()),
                 open_on_complete: true,
-                segment_frames: 1000,
+                segment_frames: 1000.try_into().expect("positive segment size"),
             },
         }
+    }
+    // jscpd:ignore-end
+
+    fn sample_environment_result() -> EnvironmentCheckResult {
+        serde_json::from_value(json!({
+            "ffmpeg": {
+                "available": true,
+                "hwaccels": [],
+                "encoderProfiles": [],
+                "decoderProfiles": []
+            },
+            "gpu": { "adapters": [] },
+            "tensorEngines": { "pytorch": [], "paddle": [], "onnx": [] },
+            "interpolationAlgorithms": [],
+            "superResolutionAlgorithms": [],
+            "runtimeMode": "external"
+        }))
+        .expect("sample environment result")
+    }
+
+    fn has_quarantined_file(dir: &PathBuf, prefix: &str) -> bool {
+        fs::read_dir(dir).expect("read test dir").any(|entry| {
+            entry
+                .ok()
+                .and_then(|entry| entry.file_name().into_string().ok())
+                .is_some_and(|name| name.starts_with(prefix) && name.ends_with(".bak"))
+        })
+    }
+
+    #[test]
+    fn invalid_schema_versions_use_a_path_safe_quarantine_reason() {
+        for version in [json!("../escape"), json!({"nested": true}), json!(-1)] {
+            assert_eq!(
+                QuarantineReason::from_version(&version).to_string(),
+                "corrupt-version"
+            );
+        }
+        assert_eq!(
+            QuarantineReason::from_version(&json!(12)).to_string(),
+            "v12"
+        );
     }
 
     #[tokio::test]
@@ -415,16 +489,20 @@ mod tests {
             &dir,
             "2026-04-23T11:00:00Z",
             "fingerprint-a",
-            &json!({"type":"check"}),
+            &sample_environment_result(),
         )
         .await
         .expect("write env cache");
 
         let (checked_at, result) = load_environment_cache(&dir, "fingerprint-a", false)
             .await
+            .expect("read cache")
             .expect("cache hit");
         assert_eq!(checked_at, "2026-04-23T11:00:00Z");
-        assert_eq!(result["type"], "check");
+        assert_eq!(
+            serde_json::to_value(result).expect("serialize cached result")["runtimeMode"],
+            "external"
+        );
     }
 
     #[tokio::test]
@@ -434,29 +512,37 @@ mod tests {
             &dir,
             "2026-04-23T11:00:00Z",
             "fingerprint-a",
-            &json!({"type":"check"}),
+            &sample_environment_result(),
         )
         .await
         .expect("write env cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-b", false).await;
+        let entry = load_environment_cache(&dir, "fingerprint-b", false)
+            .await
+            .expect("read cache");
         assert!(entry.is_none());
     }
 
     #[tokio::test]
     async fn invalidates_environment_cache_with_schema_version_twelve() {
         let dir = temp_dir("env-schema-v12");
-        let payload = serde_json::to_vec_pretty(&EnvironmentCacheEntry {
-            schema_version: 12,
-            checked_at: "2026-07-11T12:00:00Z".to_string(),
-            fingerprint: "fingerprint-a".to_string(),
-            result: json!({"type":"check", "runtimeMode":"bundled"}),
-        })
+        let payload = serde_json::to_vec_pretty(&json!({
+            "schemaVersion": 12,
+            "checkedAt": "2026-07-11T12:00:00Z",
+            "fingerprint": "fingerprint-a",
+            "result": sample_environment_result(),
+        }))
         .expect("serialize env cache");
         fs::write(environment_cache_path(&dir), payload).expect("write env cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
+        let entry = load_environment_cache(&dir, "fingerprint-a", false)
+            .await
+            .expect("read cache");
         assert!(entry.is_none());
+        assert!(has_quarantined_file(
+            &dir,
+            "environment-cache.json.incompatible-v12-"
+        ));
     }
 
     #[tokio::test]
@@ -464,8 +550,30 @@ mod tests {
         let dir = temp_dir("env-damaged");
         fs::write(environment_cache_path(&dir), "{not-json").expect("write invalid cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-a", false).await;
+        let entry = load_environment_cache(&dir, "fingerprint-a", false)
+            .await
+            .expect("read cache");
         assert!(entry.is_none());
+        assert!(has_quarantined_file(
+            &dir,
+            "environment-cache.json.incompatible-corrupt-"
+        ));
+    }
+
+    #[tokio::test]
+    async fn quarantines_non_utf8_environment_cache() {
+        let dir = temp_dir("env-non-utf8");
+        fs::write(environment_cache_path(&dir), [0xff, 0xfe]).expect("write invalid cache");
+
+        let entry = load_environment_cache(&dir, "fingerprint-a", false)
+            .await
+            .expect("read cache");
+
+        assert!(entry.is_none());
+        assert!(has_quarantined_file(
+            &dir,
+            "environment-cache.json.incompatible-corrupt-"
+        ));
     }
 
     #[tokio::test]
@@ -475,12 +583,14 @@ mod tests {
             &dir,
             "2026-04-23T11:00:00Z",
             "fingerprint-a",
-            &json!({"type":"check"}),
+            &sample_environment_result(),
         )
         .await
         .expect("write env cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-a", true).await;
+        let entry = load_environment_cache(&dir, "fingerprint-a", true)
+            .await
+            .expect("read cache");
         assert!(entry.is_none());
     }
 
@@ -493,22 +603,49 @@ mod tests {
             .await
             .expect("save preset");
 
-        let loaded = load_workbench_preset(&dir).await.expect("load preset");
+        let loaded = load_workbench_preset(&dir)
+            .await
+            .expect("read preset")
+            .expect("load preset");
         assert_eq!(loaded.decode_config.decoder.as_deref(), Some("hevc_cuvid"));
         assert_eq!(loaded.encode_config.codec, "hevc_nvenc");
     }
 
     #[tokio::test]
-    async fn ignores_workbench_preset_with_unknown_schema_version() {
+    async fn quarantines_workbench_preset_with_unknown_schema_version() {
         let dir = temp_dir("preset-schema");
-        let payload = serde_json::to_vec_pretty(&WorkbenchPresetEntry {
-            schema_version: 999,
-            preset: sample_preset(),
-        })
+        let payload = serde_json::to_vec_pretty(&json!({
+            "schemaVersion": 999,
+            "preset": sample_preset(),
+        }))
         .expect("serialize preset");
         fs::write(workbench_preset_path(&dir), payload).expect("write preset");
 
         let loaded = load_workbench_preset(&dir).await;
-        assert!(loaded.is_none());
+        assert!(matches!(
+            loaded,
+            Err(crate::error::ShellError::SchemaValidation(_))
+        ));
+        assert!(has_quarantined_file(
+            &dir,
+            "workbench-preset.json.incompatible-v999-"
+        ));
+    }
+
+    #[tokio::test]
+    async fn quarantines_non_utf8_workbench_preset_as_a_schema_error() {
+        let dir = temp_dir("preset-non-utf8");
+        fs::write(workbench_preset_path(&dir), [0xff, 0xfe]).expect("write invalid preset");
+
+        let loaded = load_workbench_preset(&dir).await;
+
+        assert!(matches!(
+            loaded,
+            Err(crate::error::ShellError::SchemaValidation(_))
+        ));
+        assert!(has_quarantined_file(
+            &dir,
+            "workbench-preset.json.incompatible-corrupt-"
+        ));
     }
 }

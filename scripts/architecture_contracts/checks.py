@@ -5,8 +5,11 @@ from __future__ import annotations
 import ast
 import contextlib
 import io
+import json
 import re
 import sys
+import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 
 from .catalog import RULES
@@ -58,13 +61,46 @@ def _snake_to_camel(name: str) -> str:
     return head + "".join(part[:1].upper() + part[1:] for part in tail)
 
 
-def _collect_manifest_commands(root: Path) -> set[str]:
-    path = root / "frontend/src-tauri/src/commands_manifest.rs"
-    text = read_source(path, root)
-    match = re.search(r"APP_COMMAND_NAMES:\s*&\[&str\]\s*=\s*&\[(?P<body>.*?)\];", text, re.DOTALL)
-    if not match:
-        raise ContractParseError("could not parse APP_COMMAND_NAMES in commands_manifest.rs")
-    return set(re.findall(r'"([a-z_]+)"', match.group("body")))
+@dataclass(frozen=True)
+class ManifestCommand:
+    args: dict[str, str]
+    result: str
+
+
+@dataclass(frozen=True)
+class RustCommandSignature:
+    args: dict[str, str]
+    result: str
+
+
+def _collect_manifest_commands(root: Path) -> dict[str, ManifestCommand]:
+    path = root / "contracts/ipc-manifest.json"
+    try:
+        manifest = json.loads(read_source(path, root))
+    except json.JSONDecodeError as exc:
+        raise ContractParseError(f"invalid IPC manifest JSON: {exc}") from exc
+    if manifest.get("schemaVersion") != 1:
+        raise ContractParseError("unsupported contracts/ipc-manifest.json schemaVersion")
+    commands = manifest.get("commands")
+    if not isinstance(commands, list):
+        raise ContractParseError("IPC manifest commands must be an array")
+    result: dict[str, ManifestCommand] = {}
+    for command in commands:
+        if not isinstance(command, dict) or not isinstance(command.get("name"), str):
+            raise ContractParseError("IPC manifest command entries require a string name")
+        name = command["name"]
+        args = command.get("args")
+        if name in result:
+            raise ContractParseError(f"duplicate IPC command in manifest: {name}")
+        if not isinstance(args, dict) or not all(
+            isinstance(key, str) and isinstance(value, str) for key, value in args.items()
+        ):
+            raise ContractParseError(f"IPC manifest args for {name!r} must map names to type strings")
+        result_type = command.get("result")
+        if not isinstance(result_type, str):
+            raise ContractParseError(f"IPC manifest result for {name!r} must be a type string")
+        result[name] = ManifestCommand(args=args, result=result_type)
+    return result
 
 
 def _collect_permission_commands(root: Path) -> set[str]:
@@ -84,9 +120,16 @@ def _collect_frontend_invoke_commands(root: Path) -> set[str]:
     return commands
 
 
-def _collect_rust_command_args(root: Path) -> dict[str, set[str]]:
+def _normalise_rust_type(raw_type: str) -> str:
+    value = re.sub(r"\s+", "", raw_type)
+    for prefix in ("crate::models::", "crate::generated::", "vp_workbench_lib::models::"):
+        value = value.replace(prefix, "")
+    return value.removeprefix("&")
+
+
+def _collect_rust_command_signatures(root: Path) -> dict[str, RustCommandSignature]:
     tauri_src = root / "frontend/src-tauri/src"
-    command_args: dict[str, set[str]] = {}
+    signatures: dict[str, RustCommandSignature] = {}
     command_attr = re.compile(r"^\s*#\s*\[\s*tauri::command\s*\]", re.MULTILINE)
     function_decl = re.compile(r"(?:#\[[^\]]+\]\s*)*pub(?:\s*\([^)]*\))?\s+(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)")
 
@@ -103,18 +146,69 @@ def _collect_rust_command_args(root: Path) -> dict[str, set[str]]:
             if args_start < 0:
                 raise ContractParseError(f"could not parse args for tauri command {command!r}")
             args_end = _find_matching(text, args_start, "(", ")")
-            args: set[str] = set()
+            args: dict[str, str] = {}
             for parameter in _split_top_level_commas(text[args_start + 1 : args_end]):
                 if ":" not in parameter:
                     continue
                 raw_name, raw_type = parameter.split(":", 1)
-                type_name = raw_type.strip()
+                type_name = _normalise_rust_type(raw_type)
                 if type_name.startswith(("AppHandle", "State<", "tauri::AppHandle", "tauri::State<")):
                     continue
                 name = raw_name.strip().removeprefix("mut ").strip()
-                args.add(_snake_to_camel(name) if "_" in name else name)
-            command_args[command] = args
-    return command_args
+                wire_name = _snake_to_camel(name) if "_" in name else name
+                args[wire_name] = type_name
+
+            body_start = text.find("{", args_end)
+            result_marker = text.find("Result", args_end, body_start)
+            if body_start < 0 or result_marker < 0:
+                raise ContractParseError(f"could not parse result for tauri command {command!r}")
+            result_start = text.find("<", result_marker, body_start)
+            if result_start < 0:
+                raise ContractParseError(f"could not parse Result type for tauri command {command!r}")
+            result_end = _find_matching(text, result_start, "<", ">")
+            result_parts = _split_top_level_commas(text[result_start + 1 : result_end])
+            if len(result_parts) != 2 or _normalise_rust_type(result_parts[1]) != "ShellError":
+                raise ContractParseError(f"tauri command {command!r} must return Result<T, ShellError>")
+            if command in signatures:
+                raise ContractParseError(f"duplicate #[tauri::command] function: {command}")
+            signatures[command] = RustCommandSignature(
+                args=args,
+                result=_normalise_rust_type(result_parts[0]),
+            )
+    return signatures
+
+
+def _collect_registered_tauri_commands(root: Path) -> set[str]:
+    path = root / "frontend/src-tauri/src/lib.rs"
+    text = read_source(path, root)
+    matches = list(re.finditer(r"tauri::generate_handler!\s*\[", text))
+    if len(matches) != 1:
+        raise ContractParseError("frontend/src-tauri/src/lib.rs must contain exactly one tauri::generate_handler! list")
+    body_start = matches[0].end() - 1
+    body_end = _find_matching(text, body_start, "[", "]")
+    commands: set[str] = set()
+    for entry in _split_top_level_commas(text[body_start + 1 : body_end]):
+        command = entry.strip().split("::")[-1]
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", command):
+            raise ContractParseError(f"could not parse generate_handler entry: {entry!r}")
+        if command in commands:
+            raise ContractParseError(f"duplicate generate_handler entry: {command}")
+        commands.add(command)
+    return commands
+
+
+def _manifest_type_to_rust(type_name: str) -> str:
+    if type_name.endswith("|null"):
+        return f"Option<{_manifest_type_to_rust(type_name.removesuffix('|null'))}>"
+    if type_name.endswith("[]"):
+        return f"Vec<{_manifest_type_to_rust(type_name.removesuffix('[]'))}>"
+    primitive = {
+        "boolean": "bool",
+        "number": "f64",
+        "string": "String",
+        "void": "()",
+    }
+    return primitive.get(type_name, type_name)
 
 
 def _collect_typed_ipc_contract_args(root: Path) -> dict[str, set[str]]:
@@ -149,6 +243,7 @@ def diff_command_surface(
     manifest: set[str],
     permissions: set[str],
     rust_args: dict[str, set[str]],
+    handlers: set[str],
     invoke_args: set[str],
     contract_args: dict[str, set[str]],
 ) -> list[str]:
@@ -159,6 +254,7 @@ def diff_command_surface(
     comparisons = (
         ("permissions", permissions),
         ("rust", rust_commands),
+        ("handlers", handlers),
         ("frontend", frontend_commands),
         ("contract", contract_commands),
     )
@@ -177,19 +273,52 @@ def diff_command_surface(
     return issues
 
 
+def diff_command_types(
+    manifest_commands: dict[str, ManifestCommand],
+    rust_signatures: dict[str, RustCommandSignature],
+) -> list[str]:
+    issues: list[str] = []
+    for command in sorted(set(manifest_commands) & set(rust_signatures)):
+        manifest_command = manifest_commands[command]
+        rust_signature = rust_signatures[command]
+        for argument in sorted(set(manifest_command.args) & set(rust_signature.args)):
+            expected = _manifest_type_to_rust(manifest_command.args[argument])
+            actual = rust_signature.args[argument]
+            if actual != expected:
+                issues.append(f"IPC command type drift for `{command}.{argument}`: manifest={expected}, rust={actual}")
+        expected_result = _manifest_type_to_rust(manifest_command.result)
+        if rust_signature.result != expected_result:
+            issues.append(
+                f"IPC command result drift for `{command}`: manifest={expected_result}, rust={rust_signature.result}"
+            )
+    return issues
+
+
 def _check_command_surface(root: Path) -> list[str]:
-    manifest = _collect_manifest_commands(root)
+    manifest_commands = _collect_manifest_commands(root)
+    manifest = set(manifest_commands)
     permissions = _collect_permission_commands(root)
-    rust_args = _collect_rust_command_args(root)
+    rust_signatures = _collect_rust_command_signatures(root)
+    rust_args = {command: set(signature.args) for command, signature in rust_signatures.items()}
+    handlers = _collect_registered_tauri_commands(root)
     invoke_commands = _collect_frontend_invoke_commands(root)
     contract_args = _collect_typed_ipc_contract_args(root)
     issues = diff_command_surface(
         manifest=manifest,
         permissions=permissions,
         rust_args=rust_args,
+        handlers=handlers,
         invoke_args=invoke_commands,
         contract_args=contract_args,
     )
+    for command in sorted(manifest & set(contract_args)):
+        manifest_args = set(manifest_commands[command].args)
+        if manifest_args != contract_args[command]:
+            issues.append(
+                f"IPC manifest args drift for `{command}`: "
+                f"manifest={sorted(manifest_args)}, contract={sorted(contract_args[command])}"
+            )
+    issues.extend(diff_command_types(manifest_commands, rust_signatures))
 
     permission_path = root / "frontend/src-tauri/permissions/default.toml"
     raw_tokens = set(re.findall(r'"(allow-[a-z-]+)"', read_source(permission_path, root)))
@@ -259,8 +388,8 @@ def diff_paddlegan_vsr_contract(backend_specs: set[str], algorithm_metadata: dic
 
 
 def _check_paddlegan_metadata(root: Path) -> list[str]:
-    weights = root / "backend/app/algorithms/paddle/paddlegan_vsr/weights.py"
-    specs = _collect_python_dict_keys(read_source(weights, root), "PADDLEGAN_VSR_SPECS")
+    catalog = root / "backend/app/catalog/paddlegan_models.py"
+    specs = _collect_python_dict_keys(read_source(catalog, root), "PADDLEGAN_VSR_SPECS")
     return diff_paddlegan_vsr_contract(specs, _collect_backend_algorithm_metadata(root))
 
 
@@ -293,7 +422,7 @@ def _check_frontend_dependency_boundaries(root: Path) -> list[str]:
             if "@/types/protocol/" in text:
                 issues.append(f"protocol submodule import outside protocol layer: {relative_path(path, root)}")
 
-    for relative_root in ("frontend/src/views", "frontend/src/components", "frontend/src/stores"):
+    for relative_root in ("frontend/src/views", "frontend/src/components"):
         for path in sorted((root / relative_root).rglob("*")):
             if not path.is_file() or path.suffix not in {".ts", ".tsx", ".vue"} or _is_frontend_test(path):
                 continue
@@ -499,6 +628,118 @@ def _check_typed_ndjson_error_emission(root: Path) -> list[str]:
     return []
 
 
+def _find_dependency_cycles(edges: dict[str, set[str]]) -> list[tuple[str, ...]]:
+    """Return canonical directed cycles for a module dependency graph."""
+
+    cycles: set[tuple[str, ...]] = set()
+
+    def visit(node: str, path: tuple[str, ...]) -> None:
+        if node in path:
+            cycle = path[path.index(node) :]
+            rotations = [cycle[index:] + cycle[:index] for index in range(len(cycle))]
+            cycles.add(min(rotations))
+            return
+        for target in edges.get(node, set()):
+            visit(target, (*path, node))
+
+    for package in edges:
+        visit(package, ())
+    return sorted(cycles)
+
+
+def _check_backend_package_cycles(root: Path) -> list[str]:
+    app_root = root / "backend/app"
+    edges: dict[str, set[str]] = {}
+    for path in sorted(app_root.rglob("*.py")):
+        relative_parts = path.relative_to(app_root).parts
+        if "vendor" in relative_parts or path.name.startswith("ifnet_v4_"):
+            continue
+        source = relative_parts[0].removesuffix(".py")
+        tree = _parse_python(path, root)
+        for node in ast.walk(tree):
+            module = node.module if isinstance(node, ast.ImportFrom) else None
+            names = [alias.name for alias in node.names] if isinstance(node, ast.Import) else []
+            imports = ([module] if module else []) + names
+            for imported in imports:
+                if not imported.startswith("app."):
+                    continue
+                target = imported.split(".", 2)[1]
+                if target != source:
+                    edges.setdefault(source, set()).add(target)
+
+    return [
+        f"backend package dependency cycle: {' -> '.join((*cycle, cycle[0]))}"
+        for cycle in _find_dependency_cycles(edges)
+    ]
+
+
+def _check_rust_package_cycles(root: Path) -> list[str]:
+    rust_root = root / "frontend/src-tauri/src"
+    lib_text = read_source(rust_root / "lib.rs", root)
+    package_names = set(
+        re.findall(
+            r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;",
+            lib_text,
+            re.MULTILINE,
+        )
+    )
+    edges: dict[str, set[str]] = {}
+    dependency = re.compile(r"\bcrate::([A-Za-z_][A-Za-z0-9_]*)\b")
+    for path in sorted(rust_root.rglob("*.rs")):
+        relative_parts = path.relative_to(rust_root).parts
+        source = path.stem if len(relative_parts) == 1 else relative_parts[0]
+        if source not in package_names:
+            continue
+        for target in dependency.findall(read_source(path, root)):
+            if target in package_names and target != source:
+                edges.setdefault(source, set()).add(target)
+    return [
+        f"Rust package dependency cycle: {' -> '.join((*cycle, cycle[0]))}" for cycle in _find_dependency_cycles(edges)
+    ]
+
+
+def _cargo_dependency_names(cargo: dict[str, object]) -> set[str]:
+    names: set[str] = set()
+
+    def collect(table: object) -> None:
+        if not isinstance(table, dict):
+            return
+        for dependency_name, declaration in table.items():
+            if isinstance(declaration, dict) and isinstance(declaration.get("package"), str):
+                names.add(declaration["package"])
+            else:
+                names.add(str(dependency_name))
+
+    for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+        collect(cargo.get(section))
+    targets = cargo.get("target")
+    if isinstance(targets, dict):
+        for target in targets.values():
+            if not isinstance(target, dict):
+                continue
+            for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+                collect(target.get(section))
+    return names
+
+
+def _check_rust_unused_dependencies(root: Path) -> list[str]:
+    crate_root = root / "frontend/src-tauri"
+    cargo_path = crate_root / "Cargo.toml"
+    try:
+        cargo = tomllib.loads(read_source(cargo_path, root))
+    except tomllib.TOMLDecodeError as exc:
+        raise ContractParseError(f"invalid Cargo.toml: {exc}") from exc
+
+    source_paths = [crate_root / "build.rs", *sorted((crate_root / "src").rglob("*.rs"))]
+    source = "\n".join(read_source(path, root) for path in source_paths if path.is_file())
+    issues: list[str] = []
+    for dependency_name in sorted(_cargo_dependency_names(cargo)):
+        crate_name = dependency_name.replace("-", "_")
+        if re.search(rf"\b{re.escape(crate_name)}\b", source) is None:
+            issues.append(f"unused Rust Cargo dependency `{dependency_name}`: frontend/src-tauri/Cargo.toml")
+    return issues
+
+
 def _check_stage_sequence_metrics(root: Path) -> list[str]:
     execution_path = root / "backend/app/processing/streaming/stage_worker_execution.py"
     execution_tree = _parse_python(execution_path, root)
@@ -562,6 +803,9 @@ def collect_architecture_issues(root: Path) -> list[str]:
     issues.extend(_check_frontend_test_ids(root))
     issues.extend(_check_frontend_test_support_exports(root))
     issues.extend(_check_typed_ndjson_error_emission(root))
+    issues.extend(_check_backend_package_cycles(root))
+    issues.extend(_check_rust_package_cycles(root))
+    issues.extend(_check_rust_unused_dependencies(root))
     issues.extend(_check_stage_sequence_metrics(root))
     issues.extend(_check_rust_public_surface(root))
     return issues

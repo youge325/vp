@@ -1,8 +1,7 @@
 """Shared FFmpeg subprocess invocation helper.
 
-Phase D.2.6 — was previously duplicated verbatim in ``encode.py`` and
-the media and capability probes; collapse to a single source so timeout / encoding / hidden
-window behaviour can never drift between encode and probe paths.
+Encode, media-probe, and capability-probe paths share this helper so timeout,
+encoding, and hidden-window behaviour cannot drift.
 """
 
 from __future__ import annotations

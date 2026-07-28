@@ -3,64 +3,12 @@ import { describe, expect, it } from 'vitest'
 
 import { createDefaultEncodeConfig, createDefaultWorkbenchPreset } from '@/services/preset/defaults'
 import { createEncodeFormBindings } from '@/composables/forms/encode-form-bindings'
-import type { CapabilityOptionSpec } from '@/types/protocol'
 import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { EncodeConfig, OutputConfig, WorkbenchPreset } from '@/types/protocol'
-import { createEnvironmentResult } from '../../fixtures/environment'
-
-const option = (
-  name: string,
-  defaultValue: string,
-  choices: Array<{ label: string; value: string }> = [],
-): CapabilityOptionSpec => ({
-  name,
-  label: name,
-  type: choices.length ? 'choice' : 'string',
-  defaultValue,
-  choices,
-  min: null,
-  max: null,
-})
-
-function makeEnv(): EnvironmentCheckResult {
-  return createEnvironmentResult({
-    ffmpeg: {
-      available: true,
-      hwaccels: [],
-      decoderProfiles: [],
-      encoderProfiles: [
-        {
-          name: 'libx265',
-          label: 'x265',
-          family: 'software',
-          codec: 'hevc',
-          available: true,
-          hardwareDevices: [],
-          options: [option('preset', 'medium')],
-          rateControlModes: [{ mode: 'crf', label: 'CRF', defaultValue: 18, unit: 'CRF' }],
-        },
-        {
-          name: 'hevc_nvenc',
-          label: 'NVENC H.265',
-          family: 'nvidia',
-          codec: 'hevc',
-          available: true,
-          hardwareDevices: [],
-          options: [option('preset', 'p5'), option('tune', 'hq')],
-          rateControlModes: [{ mode: 'cq', label: 'CQ', defaultValue: 24, unit: 'CQ' }],
-        },
-      ],
-    },
-    gpu: { adapters: [] },
-    tensorEngines: { pytorch: [], paddle: [], onnx: [] },
-    interpolationAlgorithms: [],
-    superResolutionAlgorithms: [],
-    runtimeMode: 'external',
-  })
-}
+import { createEncodingEnvironment } from '../../fixtures/environment'
 
 function makeBindings() {
-  const checkResult = ref<EnvironmentCheckResult | null>(makeEnv())
+  const checkResult = ref<EnvironmentCheckResult | null>(createEncodingEnvironment())
   const editorConfig = reactive({
     encodeConfig: createDefaultEncodeConfig(checkResult.value),
     outputConfig: createDefaultWorkbenchPreset(null).outputConfig,

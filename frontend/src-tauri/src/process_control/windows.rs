@@ -1,9 +1,6 @@
 //! Windows ToolHelp-based suspend/resume of an entire process tree.
 //!
-//! Split out of the legacy ``process_control.rs`` mod in Phase 5a so the
-//! mod root only sees the trait + factory; the platform impl details
-//! live here behind the same ``set_process_tree_suspended`` entry point
-//! that ``DefaultProcessController`` calls into.
+//! Platform details live behind narrow suspend/resume entry points.
 
 use std::collections::BTreeSet;
 use std::io;
@@ -20,73 +17,59 @@ use windows_sys::Win32::System::Threading::{
 
 use super::ProcessControlError;
 
-/// Suspend / resume a process tree.
-///
-/// ``cached_threads`` (Phase C.2.6):
-/// - ``None`` — full scan: enumerate every process and thread via ToolHelp,
-///   filter to ``root_pid``'s descendant tree, and Suspend/Resume each
-///   thread individually. The returned ``Vec`` is the set of thread IDs
-///   actually touched so the caller can cache it for next time.
-/// - ``Some(threads)`` — fast path: skip enumeration and call
-///   Suspend/ResumeThread on the cached IDs directly. If all of them
-///   fail (cache stale because threads died), automatically fall back
-///   to a full scan.
-///
-/// Phase D.3.3 — the suspend direction makes a second pass after the
+/// The suspend direction makes a second pass after the
 /// first round of ``SuspendThread`` calls to catch grandchildren that
 /// spawned between the snapshot and the first freeze. ``resume`` runs
 /// against an already-frozen tree, so one pass is sufficient and the
 /// rollback bookkeeping is unnecessary there.
 ///
-/// Phase 12 — the second pass previously called ``SuspendThread`` on
-/// *every* thread under ``root_pid``'s tree, including the ones the
-/// first pass had already frozen. That bumped their suspend-count from
-/// 1 to 2, and the matching ``ResumeThread`` (which only walks the
-/// cached thread IDs once) could only knock it back down to 1, leaving
-/// the task frozen forever. Now the second pass receives an explicit
-/// exclude-set of already-touched thread IDs and short-circuits before
-/// calling ``SuspendThread`` on them, so each tid has its suspend-count
-/// raised at most once per ``set_process_tree_suspended`` invocation.
-pub(crate) fn set_process_tree_suspended(
-    root_pid: u32,
-    suspend: bool,
-    cached_threads: Option<Vec<u32>>,
-) -> Result<Vec<u32>, ProcessControlError> {
-    if let Some(threads) = cached_threads {
-        if !threads.is_empty() {
-            let (touched, last_error) = set_specific_threads_suspended(&threads, suspend);
-            if touched > 0 {
-                return Ok(threads);
-            }
-            // Every cached thread is gone: drop to a full scan to find
-            // the new (or remaining) workers.
-            let _ = last_error;
-        }
-    }
-
+/// The second pass excludes threads already suspended in the first pass.
+/// Its explicit exclude-set ensures each thread's suspend count is raised at
+/// most once per suspend invocation, so a single matching resume releases it.
+pub(crate) fn suspend_process_tree(root_pid: u32) -> Result<Vec<u32>, ProcessControlError> {
     let pids = collect_process_tree(root_pid)?;
-    let (touched_threads, mut threads) = set_threads_suspended(&pids, suspend, None)?;
-    if touched_threads == 0 {
-        return Err(ProcessControlError::NotFound);
-    }
+    let (_, mut threads) = set_threads_suspended(&pids, true, None)?;
 
-    if suspend {
-        let already = threads.iter().copied().collect::<BTreeSet<_>>();
-        let pids_after = collect_process_tree(root_pid)?;
-        // Phase 12 — pass ``already`` as the exclude-set so threads we
-        // already froze in the first pass are NOT re-suspended (which
-        // would push their suspend-count to 2 and trap the task on the
-        // subsequent ``ResumeThread`` that only knocks it down by 1).
-        if let Ok((_, new_threads)) = set_threads_suspended(&pids_after, suspend, Some(&already)) {
+    let already = threads.iter().copied().collect::<BTreeSet<_>>();
+    let pids_after = collect_process_tree(root_pid)?;
+    match set_threads_suspended(&pids_after, true, Some(&already)) {
+        Ok((_, new_threads)) => {
             for tid in new_threads {
                 if !already.contains(&tid) {
                     threads.push(tid);
                 }
             }
         }
+        Err(error) => {
+            let _ = set_specific_threads_suspended(&threads, false);
+            return Err(error);
+        }
     }
 
     Ok(threads)
+}
+
+/// Resume a process tree. Cached thread IDs avoid a full scan when every
+/// suspended thread is still live; a partial cached result falls
+/// back to a complete tree scan so no live thread remains frozen.
+pub(crate) fn resume_process_tree(
+    root_pid: u32,
+    cached_threads: Option<Vec<u32>>,
+) -> Result<(), ProcessControlError> {
+    if let Some(threads) = cached_threads {
+        if !threads.is_empty() {
+            let touched = set_specific_threads_suspended(&threads, false);
+            if cached_threads_are_complete(touched, threads.len()) {
+                return Ok(());
+            }
+            // A partial cached resume can leave live threads suspended. Always
+            // perform a full scan unless every cached id was handled.
+        }
+    }
+
+    let pids = collect_process_tree(root_pid)?;
+    set_threads_suspended(&pids, false, None)?;
+    Ok(())
 }
 
 fn collect_process_tree(root_pid: u32) -> Result<BTreeSet<u32>, ProcessControlError> {
@@ -111,6 +94,10 @@ fn collect_process_tree(root_pid: u32) -> Result<BTreeSet<u32>, ProcessControlEr
         let _ = CloseHandle(snapshot);
     }
 
+    if !entries.iter().any(|(pid, _)| *pid == root_pid) {
+        return Err(ProcessControlError::NotFound);
+    }
+
     let mut pids = BTreeSet::from([root_pid]);
     let mut changed = true;
     while changed {
@@ -129,17 +116,17 @@ fn collect_process_tree(root_pid: u32) -> Result<BTreeSet<u32>, ProcessControlEr
 /// ``pids``, and Suspend/Resume each. Returns ``(touched_count, thread_ids)``
 /// so the caller can cache the IDs for the next ``resume()`` call.
 ///
-/// Phase D.3.3 — on suspend, a partial failure triggers a rollback that
+/// On suspend, a partial failure triggers a rollback that
 /// Resume's every thread we already froze, preventing a half-frozen
 /// process tree. Resume mode never rolls back: the goal there is to
 /// let threads run, so a partial success is still better than nothing.
 ///
-/// Phase 12 — ``exclude_tids`` lets the caller skip Suspend/ResumeThread
+/// ``exclude_tids`` lets the caller skip Suspend/ResumeThread
 /// for thread IDs whose state was already manipulated in an earlier call
-/// (specifically, the D.3.3 second pass passes the first pass's touched
-/// IDs so they don't get a second SuspendThread that would lift their
-/// suspend-count to 2). Excluded tids are NOT returned in ``touched_ids``
-/// either, since the cache already covers them.
+/// (the retry pass receives the first pass's touched IDs so they do not get
+/// a second SuspendThread that would lift their suspend-count to 2). Excluded
+/// tids are not returned in ``touched_ids`` either, since the caller already
+/// owns that state.
 fn set_threads_suspended(
     pids: &BTreeSet<u32>,
     suspend: bool,
@@ -150,7 +137,6 @@ fn set_threads_suspended(
         return Err(ProcessControlError::Os(io::Error::last_os_error()));
     }
 
-    let mut touched_threads = 0usize;
     let mut last_error: Option<ProcessControlError> = None;
     let mut touched_ids: Vec<u32> = Vec::new();
     let mut entry = THREADENTRY32 {
@@ -168,7 +154,6 @@ fn set_threads_suspended(
         ) {
             match set_thread_suspended(entry.th32ThreadID, suspend) {
                 Ok(()) => {
-                    touched_threads += 1;
                     touched_ids.push(entry.th32ThreadID);
                 }
                 Err(error) => {
@@ -194,26 +179,36 @@ fn set_threads_suspended(
         let _ = CloseHandle(snapshot);
     }
 
-    if touched_threads == 0 {
-        return Err(last_error.unwrap_or(ProcessControlError::NoControllableThreads));
-    }
-
-    Ok((touched_threads, touched_ids))
+    finish_thread_pass(touched_ids, last_error, exclude_tids.is_some())
 }
 
-fn set_specific_threads_suspended(
-    thread_ids: &[u32],
-    suspend: bool,
-) -> (usize, Option<ProcessControlError>) {
+fn finish_thread_pass(
+    touched_ids: Vec<u32>,
+    last_error: Option<ProcessControlError>,
+    empty_is_valid: bool,
+) -> Result<(usize, Vec<u32>), ProcessControlError> {
+    if touched_ids.is_empty() {
+        if empty_is_valid {
+            return Ok((0, touched_ids));
+        }
+        return Err(last_error.unwrap_or(ProcessControlError::NoControllableThreads));
+    }
+    let touched = touched_ids.len();
+    Ok((touched, touched_ids))
+}
+
+fn set_specific_threads_suspended(thread_ids: &[u32], suspend: bool) -> usize {
     let mut touched = 0usize;
-    let mut last_error = None;
     for &tid in thread_ids {
-        match set_thread_suspended(tid, suspend) {
-            Ok(()) => touched += 1,
-            Err(error) => last_error = Some(error),
+        if set_thread_suspended(tid, suspend).is_ok() {
+            touched += 1;
         }
     }
-    (touched, last_error)
+    touched
+}
+
+fn cached_threads_are_complete(touched: usize, expected: usize) -> bool {
+    expected > 0 && touched == expected
 }
 
 fn set_thread_suspended(thread_id: u32, suspend: bool) -> Result<(), ProcessControlError> {
@@ -240,7 +235,7 @@ fn set_thread_suspended(thread_id: u32, suspend: bool) -> Result<(), ProcessCont
 }
 
 /// Pure-decision helper extracted from ``set_threads_suspended`` so the
-/// Phase 12 second-pass exclude logic can be unit-tested without a real
+/// The second-pass exclude logic can be unit-tested without a real
 /// process tree.
 ///
 /// Returns ``true`` iff the thread (``thread_id`` owned by ``owner_pid``)
@@ -283,11 +278,7 @@ mod tests {
 
     #[test]
     fn second_pass_skips_threads_already_suspended_in_first_pass() {
-        // Phase 12 — this is the regression guard against the D.3.3
-        // second-pass double-suspend bug: a tid in the exclude set must
-        // NOT be touched, otherwise its SuspendThread call would push
-        // its suspend-count to 2 and the subsequent ResumeThread (which
-        // only runs once over the cached IDs) leaves the task frozen.
+        // A tid in the exclude set must not be suspended twice.
         let pids = pid_set(&[100]);
         let already_touched = pid_set(&[7777, 8888]);
         assert!(!thread_should_be_touched(
@@ -309,7 +300,7 @@ mod tests {
         // After the first SuspendThread pass, a grandchild may spawn a
         // new thread that isn't in the exclude set. Catching it is the
         // entire reason the second pass exists in the first place; the
-        // Phase 12 fix must NOT throw the baby out with the bathwater.
+        // The exclude set must still allow newly-created threads.
         let pids = pid_set(&[100]);
         let already_touched = pid_set(&[7777]);
         assert!(thread_should_be_touched(
@@ -328,5 +319,48 @@ mod tests {
         // having no matches.
         let pids = pid_set(&[]);
         assert!(!thread_should_be_touched(&pids, None, 100, 7777));
+    }
+
+    #[test]
+    fn partial_cached_resume_requires_a_full_scan() {
+        assert!(cached_threads_are_complete(3, 3));
+        assert!(!cached_threads_are_complete(2, 3));
+        assert!(!cached_threads_are_complete(0, 3));
+        assert!(!cached_threads_are_complete(0, 0));
+    }
+
+    #[test]
+    fn partial_full_scan_resume_keeps_successful_thread_updates() {
+        let result = finish_thread_pass(
+            vec![10, 20],
+            Some(ProcessControlError::Os(io::Error::other(
+                "one thread exited during the snapshot",
+            ))),
+            false,
+        )
+        .expect("a partial resume is still useful");
+
+        assert_eq!(result, (2, vec![10, 20]));
+    }
+
+    #[test]
+    fn full_scan_with_no_controllable_threads_returns_the_last_error() {
+        let result = finish_thread_pass(
+            Vec::new(),
+            Some(ProcessControlError::Os(io::Error::other(
+                "all threads exited",
+            ))),
+            false,
+        );
+
+        assert!(matches!(result, Err(ProcessControlError::Os(_))));
+    }
+
+    #[test]
+    fn missing_root_pid_is_reported_as_not_found() {
+        assert!(matches!(
+            collect_process_tree(u32::MAX),
+            Err(ProcessControlError::NotFound)
+        ));
     }
 }

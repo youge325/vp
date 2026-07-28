@@ -5,10 +5,7 @@
     'Microsoft YaHei UI',
     sans-serif;
   color: #edf4ff;
-  background:
-    radial-gradient(circle at top left, rgba(67, 110, 198, 0.2), transparent 24%),
-    radial-gradient(circle at 84% 10%, rgba(32, 171, 156, 0.12), transparent 20%),
-    linear-gradient(180deg, #071018 0%, #0a1420 50%, #08111a 100%);
+  background: var(--app-background);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -28,6 +25,10 @@
   --success: #56ca98;
   --warning: #f4c16f;
   --danger: #ed7f8e;
+  --app-background:
+    radial-gradient(circle at top left, rgba(67, 110, 198, 0.2), transparent 24%),
+    radial-gradient(circle at 84% 10%, rgba(32, 171, 156, 0.12), transparent 20%),
+    linear-gradient(180deg, #071018 0%, #0a1420 50%, #08111a 100%);
 
   --radius-sm: 14px;
   --radius-md: 20px;
@@ -80,10 +81,7 @@ body,
 body {
   min-height: 100vh;
   overflow: hidden;
-  background:
-    radial-gradient(circle at top left, rgba(67, 110, 198, 0.2), transparent 24%),
-    radial-gradient(circle at 84% 10%, rgba(32, 171, 156, 0.12), transparent 20%),
-    linear-gradient(180deg, #071018 0%, #0a1420 50%, #08111a 100%);
+  background: var(--app-background);
 }
 
 button,
@@ -518,6 +516,11 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.global-issue-banner {
+  flex: 0 0 auto;
+  margin-bottom: 20px;
 }
 
 .info-banner p,

@@ -1,3 +1,5 @@
+import type { Browser as WdioBrowser, Element as WdioElement } from 'webdriverio'
+
 type TextMatcher = string | RegExp
 
 interface LocatorOptions {
@@ -32,14 +34,12 @@ export interface TauriPage {
   }
 }
 
-type WdioElement = WebdriverIO.Element
-
 const locatorBrand = Symbol('wdio-tauri-locator')
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 const getBrowser = () => {
-  const wdioBrowser = (globalThis as { browser?: WebdriverIO.Browser }).browser
+  const wdioBrowser = (globalThis as { browser?: WdioBrowser }).browser
   if (!wdioBrowser) {
     throw new Error('WebDriverIO browser is not available')
   }
@@ -126,13 +126,86 @@ const waitUntil = async (predicate: () => Promise<boolean>, timeout = 5000, mess
   throw new Error(`${message}${suffix}`)
 }
 
+interface SerializedBrowserError {
+  message: string
+  stack?: string
+  name?: string
+}
+
+type SerializedBrowserResult =
+  | { ok: true; value: unknown }
+  | { ok: false; error: SerializedBrowserError }
+
+const executeSerializedCallback = (
+  source: string,
+  args: unknown[],
+  done: (payload?: unknown) => void,
+) => {
+  const serializeError = (error: unknown): SerializedBrowserError => {
+    if (
+      error instanceof Error
+      || (
+        typeof error === 'object'
+        && error !== null
+        && typeof (error as { message?: unknown }).message === 'string'
+      )
+    ) {
+      const value = error as { message: string; stack?: string; name?: string }
+      return {
+        message: value.message,
+        stack: value.stack,
+        name: value.name,
+      }
+    }
+    const message = typeof error === 'object' && error !== null
+      ? JSON.stringify(error)
+      : String(error)
+    return { message }
+  }
+
+  try {
+    const callback = (0, eval)(`(${source})`) as (...values: unknown[]) => unknown
+    Promise.resolve(callback(...args)).then(
+      (value) => done({ ok: true, value }),
+      (error) => done({ ok: false, error: serializeError(error) }),
+    )
+  } catch (error) {
+    done({ ok: false, error: serializeError(error) })
+  }
+}
+
+const unwrapBrowserResult = <T>(result: SerializedBrowserResult): T => {
+  if (result.ok === true) {
+    return result.value as T
+  }
+
+  const error = new Error(result.error.message)
+  error.name = result.error.name ?? error.name
+  error.stack = result.error.stack ?? error.stack
+  throw error
+}
+
+const evaluateBrowserCallback = async <T>(
+  callback: (...args: any[]) => unknown,
+  ...args: unknown[]
+): Promise<T> => {
+  const result = await getBrowser().executeAsync(
+    executeSerializedCallback,
+    callback.toString(),
+    args,
+  ) as SerializedBrowserResult
+  return unwrapBrowserResult<T>(result)
+}
+
 export class LocatorAdapter {
   readonly [locatorBrand] = true
+  private readonly segments: LocatorSegment[]
+  private readonly index?: number
 
-  constructor(
-    private readonly segments: LocatorSegment[],
-    private readonly index?: number,
-  ) {}
+  constructor(segments: LocatorSegment[], index?: number) {
+    this.segments = segments
+    this.index = index
+  }
 
   locator(selector: string, options?: LocatorOptions) {
     return new LocatorAdapter([...this.segmentsWithAppliedIndex(), toSegment(selector, options)])
@@ -248,42 +321,7 @@ export class LocatorAdapter {
 
   async evaluate<T = unknown, A = unknown>(fn: (element: Element, arg: A) => T | Promise<T>, arg?: A) {
     const element = await this.element()
-    const result = (await getBrowser().executeAsync(
-      (node: Element, source: string, value: unknown, done: (payload: unknown) => void) => {
-        const serializeError = (error: unknown) => {
-          if (error instanceof Error) {
-            return {
-              message: error.message,
-              stack: error.stack,
-              name: error.name,
-            }
-          }
-          return { message: String(error) }
-        }
-
-        try {
-          const callback = (0, eval)(`(${source})`) as (element: Element, value: unknown) => unknown
-          Promise.resolve(callback(node, value)).then(
-            (evaluated) => done({ ok: true, value: evaluated }),
-            (error) => done({ ok: false, error: serializeError(error) }),
-          )
-        } catch (error) {
-          done({ ok: false, error: serializeError(error) })
-        }
-      },
-      element,
-      fn.toString(),
-      arg,
-    )) as { ok: true; value: unknown } | { ok: false; error: { message: string; stack?: string; name?: string } }
-
-    if (!result.ok) {
-      const failed = result as { ok: false; error: { message: string; stack?: string; name?: string } }
-      const error = new Error(failed.error.message)
-      error.name = failed.error.name ?? error.name
-      error.stack = failed.error.stack ?? error.stack
-      throw error
-    }
-    return result.value as Awaited<ReturnType<typeof fn>>
+    return await evaluateBrowserCallback<Awaited<ReturnType<typeof fn>>>(fn, element, arg)
   }
 
   async selectOption(option: string | { label?: string; value?: string; index?: number }) {
@@ -348,7 +386,7 @@ export class LocatorAdapter {
     return this.segments.map((segment) => segment.selector).join(' >> ')
   }
 
-  private async resolveFrom(roots: Array<WebdriverIO.Browser | WdioElement>, applyIndex: boolean) {
+  private async resolveFrom(roots: Array<WdioBrowser | WdioElement>, applyIndex: boolean) {
     let current: WdioElement[] = []
     let activeRoots = roots
 
@@ -357,8 +395,9 @@ export class LocatorAdapter {
       for (const root of activeRoots) {
         let elements: WdioElement[]
         try {
+          const pendingElements = root.$$(segment.selector) as unknown as PromiseLike<ArrayLike<WdioElement>>
           elements = Array.from(
-            (await root.$$(segment.selector)) as unknown as ArrayLike<WdioElement>,
+            await pendingElements,
           )
         } catch {
           continue
@@ -426,41 +465,7 @@ export const createTauriPage = (): TauriPage => ({
     await new LocatorAdapter([toSegment(selector)]).click()
   },
   evaluate: async (fn, arg) => {
-    const result = (await getBrowser().executeAsync(
-      (source: string, value: unknown, done: (payload: unknown) => void) => {
-        const serializeError = (error: unknown) => {
-          if (error instanceof Error) {
-            return {
-              message: error.message,
-              stack: error.stack,
-              name: error.name,
-            }
-          }
-          return { message: String(error) }
-        }
-
-        try {
-          const callback = (0, eval)(`(${source})`) as (value: unknown) => unknown
-          Promise.resolve(callback(value)).then(
-            (evaluated) => done({ ok: true, value: evaluated }),
-            (error) => done({ ok: false, error: serializeError(error) }),
-          )
-        } catch (error) {
-          done({ ok: false, error: serializeError(error) })
-        }
-      },
-      fn.toString(),
-      arg,
-    )) as { ok: true; value: unknown } | { ok: false; error: { message: string; stack?: string; name?: string } }
-
-    if (!result.ok) {
-      const failed = result as { ok: false; error: { message: string; stack?: string; name?: string } }
-      const error = new Error(failed.error.message)
-      error.name = failed.error.name ?? error.name
-      error.stack = failed.error.stack ?? error.stack
-      throw error
-    }
-    return result.value as Awaited<ReturnType<typeof fn>>
+    return await evaluateBrowserCallback<Awaited<ReturnType<typeof fn>>>(fn, arg)
   },
   waitForFunction: async (fn, argOrOptions, options) => {
     const maybeOptions = options ?? (isWaitForOptions(argOrOptions) ? argOrOptions : undefined)
@@ -526,40 +531,55 @@ export const waitForAppBootstrap = async (timeout = 60000) => {
   )
 }
 
-export const captureAppStateBaseline = async () => {
-  const result = await getBrowser().execute(() => {
-    try {
-      const root = document.querySelector('#app') as HTMLElement & { __vue_app__?: unknown } | null
-      const vueApp = root?.__vue_app__ as {
-        config?: { globalProperties?: { $pinia?: { state?: { value?: Record<string, unknown> } } } }
-      } | undefined
-      const state = vueApp?.config?.globalProperties?.$pinia?.state?.value
-      if (!state) {
-        return { ok: false, error: 'Pinia state is not available' }
-      }
+interface AppStateWindow extends Window {
+  __VP_E2E_INITIAL_PINIA_STATE?: Record<string, unknown>
+  __E2E_EVENTS?: unknown[]
+  __E2E_UNLISTENERS?: Array<() => Promise<void> | void>
+}
 
-      const clone = (value: unknown) => JSON.parse(JSON.stringify(value))
-      const win = window as typeof window & {
-        __VP_E2E_INITIAL_PINIA_STATE?: Record<string, unknown>
-        __E2E_EVENTS?: unknown[]
-        __E2E_UNLISTENERS?: unknown[]
-      }
-      win.__VP_E2E_INITIAL_PINIA_STATE = clone(state) as Record<string, unknown>
-      win.__E2E_EVENTS = []
-      win.__E2E_UNLISTENERS = []
-      return { ok: true }
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }) as { ok: boolean; error?: string }
-
-  if (!result.ok) {
-    throw new Error(result.error ?? 'failed to capture app state baseline')
+const runPiniaStateOperation = async (
+  source: string,
+  argument: unknown,
+) => {
+  const root = document.querySelector('#app') as HTMLElement & { __vue_app__?: unknown } | null
+  const vueApp = root?.__vue_app__ as {
+    config?: { globalProperties?: { $pinia?: { state?: { value?: Record<string, unknown> } } } }
+  } | undefined
+  const state = vueApp?.config?.globalProperties?.$pinia?.state?.value
+  if (!state) {
+    throw new Error('Pinia state is not available')
   }
+
+  const operation = (0, eval)(`(${source})`) as (
+    value: Record<string, unknown>,
+    win: AppStateWindow,
+    argument: unknown,
+  ) => unknown
+  return await operation(state, window as AppStateWindow, argument)
+}
+
+export const withPiniaState = async <T, A = undefined>(
+  operation: (
+    state: Record<string, unknown>,
+    win: AppStateWindow,
+    argument: A,
+  ) => T | Promise<T>,
+  argument?: A,
+): Promise<T> => {
+  return await evaluateBrowserCallback<T>(runPiniaStateOperation, operation.toString(), argument)
+}
+
+export const captureAppStateBaseline = async () => {
+  await withPiniaState((state, win) => {
+    const clone = (value: unknown) => JSON.parse(JSON.stringify(value))
+    win.__VP_E2E_INITIAL_PINIA_STATE = clone(state) as Record<string, unknown>
+    win.__E2E_EVENTS = []
+    win.__E2E_UNLISTENERS = []
+  })
 }
 
 export const resetAppState = async () => {
-  await getBrowser().executeAsync((done: (payload: { ok: boolean; error?: string }) => void) => {
+  await withPiniaState(async (state, win) => {
     const clone = (value: unknown) => JSON.parse(JSON.stringify(value))
     const restore = (target: unknown, source: unknown): unknown => {
       if (Array.isArray(source)) {
@@ -591,46 +611,24 @@ export const resetAppState = async () => {
       return source
     }
 
-    const finish = () => {
-      try {
-        const root = document.querySelector('#app') as HTMLElement & { __vue_app__?: unknown } | null
-        const vueApp = root?.__vue_app__ as { config?: { globalProperties?: { $pinia?: { state?: { value?: Record<string, unknown> } } } } } | undefined
-        const state = vueApp?.config?.globalProperties?.$pinia?.state?.value
-        if (!state) {
-          done({ ok: false, error: 'Pinia state is not available' })
-          return
-        }
+    const unlisteners = win.__E2E_UNLISTENERS ?? []
+    await Promise.allSettled(unlisteners.map((unlisten) => Promise.resolve().then(unlisten)))
 
-        const win = window as typeof window & { __VP_E2E_INITIAL_PINIA_STATE?: Record<string, unknown>; __E2E_EVENTS?: unknown[]; __E2E_UNLISTENERS?: unknown[] }
-        if (!win.__VP_E2E_INITIAL_PINIA_STATE) {
-          done({ ok: false, error: 'Pinia state baseline is not available' })
-          return
-        }
-        const initial = clone(win.__VP_E2E_INITIAL_PINIA_STATE) as Record<string, unknown>
+    if (!win.__VP_E2E_INITIAL_PINIA_STATE) {
+      throw new Error('Pinia state baseline is not available')
+    }
+    const initial = clone(win.__VP_E2E_INITIAL_PINIA_STATE) as Record<string, unknown>
 
-        for (const key of Object.keys(state)) {
-          if (!(key in initial)) {
-            delete state[key]
-          }
-        }
-        for (const [key, value] of Object.entries(initial)) {
-          state[key] = restore(state[key], value)
-        }
-        win.__E2E_EVENTS = []
-        win.__E2E_UNLISTENERS = []
-        done({ ok: true })
-      } catch (error) {
-        done({ ok: false, error: error instanceof Error ? error.message : String(error) })
+    for (const key of Object.keys(state)) {
+      if (!(key in initial)) {
+        delete state[key]
       }
     }
-
-    const win = window as typeof window & { __E2E_UNLISTENERS?: Array<() => Promise<void> | void> }
-    const unlisteners = win.__E2E_UNLISTENERS ?? []
-    Promise.allSettled(unlisteners.map((unlisten) => unlisten())).finally(finish)
-  }).then((result) => {
-    if (!result.ok) {
-      throw new Error(result.error ?? 'failed to reset app state')
+    for (const [key, value] of Object.entries(initial)) {
+      state[key] = restore(state[key], value)
     }
+    win.__E2E_EVENTS = []
+    win.__E2E_UNLISTENERS = []
   })
 }
 

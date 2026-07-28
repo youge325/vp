@@ -1,9 +1,47 @@
 import type {
   AlgorithmInfo,
+  CapabilityOptionSpec,
   EnvironmentCheckPayload,
   EnvironmentCheckResult,
+  ModelVariantInfo,
 } from '@/types/protocol'
+import type {
+  ModelEngineMetricInfo,
+  ModelMetricInfo,
+} from '@/types/generated/contracts'
 
+type ModelEngineMetricOverrides = Partial<ModelEngineMetricInfo>
+export type ModelMetricOverrides = Omit<Partial<ModelMetricInfo>, 'engineMetrics'> & {
+  engineMetrics?: { [key: string]: ModelEngineMetricOverrides | undefined }
+}
+
+function createCapabilityOption(
+  name: string,
+  defaultValue: string,
+  choices: Array<{ label: string; value: string }> = [],
+): CapabilityOptionSpec {
+  return {
+    name,
+    label: name,
+    type: choices.length ? 'choice' : 'string',
+    defaultValue,
+    choices,
+    min: null,
+    max: null,
+  }
+}
+type ModelVariantOverrides =
+  | ModelVariantInfo
+  | (Omit<Partial<ModelVariantInfo>, 'metrics'> & { metrics?: ModelMetricOverrides })
+type AlgorithmOverrides =
+  | AlgorithmInfo
+  | (
+    & Omit<Partial<AlgorithmInfo>, 'modelDetails' | 'onnxModelDetails'>
+    & {
+      modelDetails?: ModelVariantOverrides[]
+      onnxModelDetails?: ModelVariantOverrides[]
+    }
+  )
 type EnvironmentOverrides = Omit<
   Partial<EnvironmentCheckResult>,
   'ffmpeg' | 'gpu' | 'tensorEngines' | 'interpolationAlgorithms' | 'superResolutionAlgorithms'
@@ -11,45 +49,97 @@ type EnvironmentOverrides = Omit<
   ffmpeg?: Partial<EnvironmentCheckResult['ffmpeg']>
   gpu?: Partial<EnvironmentCheckResult['gpu']>
   tensorEngines?: Partial<EnvironmentCheckResult['tensorEngines']>
-  interpolationAlgorithms?: Array<Partial<AlgorithmInfo>>
-  superResolutionAlgorithms?: Array<Partial<AlgorithmInfo>>
+  interpolationAlgorithms?: AlgorithmOverrides[]
+  superResolutionAlgorithms?: AlgorithmOverrides[]
 }
 
-export function createAlgorithmInfo(overrides: Partial<AlgorithmInfo> = {}): AlgorithmInfo {
+function createModelEngineMetricInfo(
+  overrides: ModelEngineMetricOverrides = {},
+): ModelEngineMetricInfo {
+  return {
+    gflopsPerMegapixel: null,
+    activationBytesPerMegapixel: null,
+    runtimeOverheadBytes: null,
+    runtimeFrameCount: null,
+    inputModulo: null,
+    analysisStatus: 'unknown',
+    analysisNotes: [],
+    ...overrides,
+  }
+}
+
+export function createModelMetricInfo(overrides: ModelMetricOverrides = {}): ModelMetricInfo {
+  const engineMetrics = Object.fromEntries(
+    Object.entries(overrides.engineMetrics ?? {}).map(([engine, metrics]) => [
+      engine,
+      createModelEngineMetricInfo(metrics),
+    ]),
+  )
+  return {
+    parameterCount: null,
+    parameterBytes: null,
+    gflopsPerMegapixel: null,
+    activationBytesPerMegapixel: null,
+    runtimeOverheadBytes: null,
+    runtimeFrameCount: null,
+    inputModulo: null,
+    analysisStatus: 'unknown',
+    analysisNotes: [],
+    ...overrides,
+    engineMetrics,
+  }
+}
+
+export function createModelVariantInfo(overrides: ModelVariantOverrides = {}): ModelVariantInfo {
+  return {
+    name: 'placeholder',
+    label: 'Placeholder',
+    ...overrides,
+    metrics: createModelMetricInfo(overrides.metrics),
+  }
+}
+
+export function createRifeModelDetail(
+  overrides: ModelMetricOverrides = {},
+  identity: Partial<Pick<ModelVariantInfo, 'name' | 'label'>> = {},
+): ModelVariantInfo {
+  return createModelVariantInfo({
+    name: '4.25',
+    label: 'RIFE 4.25',
+    ...identity,
+    metrics: {
+      parameterCount: 5670892,
+      parameterBytes: 22683568,
+      gflopsPerMegapixel: 18.5,
+      activationBytesPerMegapixel: 694800000,
+      runtimeOverheadBytes: 38000000,
+      inputModulo: 64,
+      analysisStatus: 'ok',
+      analysisNotes: [],
+      ...overrides,
+    },
+  })
+}
+
+export function createAlgorithmInfo(overrides: AlgorithmOverrides = {}): AlgorithmInfo {
   return {
     name: 'placeholder',
     family: 'onnx_super_resolution',
     tensorBackends: ['onnx'],
     models: [],
     onnxModels: [],
-    modelDetails: [],
-    onnxModelDetails: [],
     scaleFactors: [],
     fixedScaleFactor: null,
     defaultNumFrames: null,
     inputFrameMode: 'none',
     ...overrides,
+    modelDetails: (overrides.modelDetails ?? []).map(createModelVariantInfo),
+    onnxModelDetails: (overrides.onnxModelDetails ?? []).map(createModelVariantInfo),
   }
 }
 
-const ALGORITHM_FIELDS: Array<keyof AlgorithmInfo> = [
-  'name',
-  'family',
-  'tensorBackends',
-  'models',
-  'onnxModels',
-  'modelDetails',
-  'onnxModelDetails',
-  'scaleFactors',
-  'fixedScaleFactor',
-  'defaultNumFrames',
-  'inputFrameMode',
-]
-
-function hydrateAlgorithmInfo(value: Partial<AlgorithmInfo>): AlgorithmInfo {
-  return ALGORITHM_FIELDS.every((field) => Object.hasOwn(value, field))
-    ? value as AlgorithmInfo
-    : createAlgorithmInfo(value)
+function hydrateAlgorithmInfo(value: AlgorithmOverrides): AlgorithmInfo {
+  return createAlgorithmInfo(value)
 }
 
 export function createEnvironmentResult(overrides: EnvironmentOverrides = {}): EnvironmentCheckResult {
@@ -90,4 +180,181 @@ export function createEnvironmentPayload(
     checkedAt: '2026-07-11T00:00:00Z',
     ...overrides,
   }
+}
+
+export function createEncodingEnvironment(): EnvironmentCheckResult {
+  return createEnvironmentResult({
+    ffmpeg: {
+      available: true,
+      hwaccels: [],
+      decoderProfiles: [],
+      encoderProfiles: [
+        {
+          name: 'libx265',
+          label: 'x265',
+          family: 'software',
+          codec: 'hevc',
+          available: true,
+          hardwareDevices: [],
+          options: [createCapabilityOption('preset', 'medium')],
+          rateControlModes: [{ mode: 'crf', label: 'CRF', defaultValue: 18, unit: 'CRF' }],
+        },
+        {
+          name: 'hevc_nvenc',
+          label: 'NVENC H.265',
+          family: 'nvidia',
+          codec: 'hevc',
+          available: true,
+          hardwareDevices: [],
+          options: [
+            createCapabilityOption('preset', 'p5'),
+            createCapabilityOption('tune', 'hq'),
+          ],
+          rateControlModes: [{ mode: 'cq', label: 'CQ', defaultValue: 24, unit: 'CQ' }],
+        },
+      ],
+    },
+  })
+}
+
+export function createRifeAlgorithm(): AlgorithmInfo {
+  return createAlgorithmInfo({
+    name: 'rife',
+    family: 'rife',
+    tensorBackends: ['pytorch', 'onnx'],
+    models: ['4.25'],
+    onnxModels: ['rife_v4.25.onnx'],
+    modelDetails: [createRifeModelDetail()],
+    onnxModelDetails: [
+      createRifeModelDetail({}, {
+        name: 'rife_v4.25.onnx',
+        label: 'rife_v4.25.onnx',
+      }),
+    ],
+  })
+}
+
+export function createEdvrAlgorithm(): AlgorithmInfo {
+  return createAlgorithmInfo({
+    name: 'edvr',
+    family: 'paddlegan_vsr',
+    tensorBackends: ['paddle'],
+    models: ['x4'],
+    scaleFactors: [4],
+    fixedScaleFactor: 4,
+    inputFrameMode: 'fixed_window',
+    defaultNumFrames: 5,
+    modelDetails: [{
+      name: 'x4',
+      label: 'EDVR',
+      metrics: {
+        parameterCount: 20633827,
+        parameterBytes: 82535308,
+        gflopsPerMegapixel: 240,
+        activationBytesPerMegapixel: 1000,
+        runtimeOverheadBytes: 100,
+        runtimeFrameCount: 5,
+        inputModulo: 4,
+        analysisStatus: 'ok',
+        analysisNotes: [],
+      },
+    }],
+  })
+}
+
+export function createPpmsvsrAlgorithm(): AlgorithmInfo {
+  return createAlgorithmInfo({
+    name: 'ppmsvsr',
+    family: 'paddlegan_vsr',
+    tensorBackends: ['paddle'],
+    models: ['x4'],
+    scaleFactors: [4],
+    fixedScaleFactor: 4,
+    inputFrameMode: 'editable_chunk',
+    defaultNumFrames: 10,
+    modelDetails: [{
+      name: 'x4',
+      label: 'PP-MSVSR',
+      metrics: {
+        parameterCount: 1453607,
+        parameterBytes: 5814428,
+        gflopsPerMegapixel: 120,
+        activationBytesPerMegapixel: 1981031424,
+        runtimeOverheadBytes: 2391117604,
+        runtimeFrameCount: null,
+        inputModulo: 4,
+        analysisStatus: 'ok',
+        analysisNotes: [],
+        engineMetrics: {
+          tensorrt: {
+            gflopsPerMegapixel: 120,
+            activationBytesPerMegapixel: 3688504346,
+            runtimeOverheadBytes: 0,
+            runtimeFrameCount: null,
+            analysisStatus: 'ok',
+            analysisNotes: ['TensorRT calibrated'],
+          },
+        },
+      },
+    }],
+  })
+}
+
+export function createEnhanceEnvironment(): EnvironmentCheckResult {
+  return createEnvironmentResult({
+    tensorEngines: {
+      pytorch: ['cuda', 'tensorrt'],
+      paddle: ['cuda', 'tensorrt'],
+      onnx: ['cuda', 'tensorrt'],
+    },
+    interpolationAlgorithms: [
+      createRifeAlgorithm(),
+      createAlgorithmInfo({
+        name: 'rife-lite',
+        family: 'rife',
+        tensorBackends: ['pytorch'],
+        models: ['lite'],
+      }),
+      createAlgorithmInfo({
+        name: 'onnx-only',
+        family: 'rife',
+        tensorBackends: ['onnx'],
+        models: ['onnx'],
+        onnxModels: ['onnx-only.onnx'],
+      }),
+    ],
+    superResolutionAlgorithms: [
+      createAlgorithmInfo({
+        name: 'placeholder',
+        tensorBackends: ['onnx'],
+        onnxModels: ['sr_x2.onnx'],
+        scaleFactors: [2],
+      }),
+      createPpmsvsrAlgorithm(),
+      createEdvrAlgorithm(),
+      createAlgorithmInfo({
+        name: 'custom-vsr',
+        family: 'paddlegan_vsr',
+        tensorBackends: ['paddle'],
+        models: ['x4'],
+        scaleFactors: [4],
+        fixedScaleFactor: 4,
+        inputFrameMode: 'editable_chunk',
+        defaultNumFrames: 8,
+      }),
+      ...['ppmsvsr-large', 'basicvsr', 'iconvsr', 'basicvsr-plus-plus'].map(name =>
+        createAlgorithmInfo({
+          name,
+          family: 'paddlegan_vsr',
+          tensorBackends: ['paddle'],
+          models: ['x4'],
+          scaleFactors: [4],
+          fixedScaleFactor: 4,
+          inputFrameMode: 'editable_chunk',
+          defaultNumFrames: 10,
+        }),
+      ),
+    ],
+    runtimeMode: 'bundled',
+  })
 }

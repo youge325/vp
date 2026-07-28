@@ -1,6 +1,6 @@
 """Unit tests for ``app.processing.streaming.metrics``.
 
-Phase C.1.3 — verify queue-depth tracking, timed-stage accumulation, and
+Verify queue-depth tracking, timed-stage accumulation, and
 the ``snapshot()`` output shape consumed by the NDJSON progress frame.
 """
 

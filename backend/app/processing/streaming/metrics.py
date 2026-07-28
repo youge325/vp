@@ -1,6 +1,6 @@
 """Lightweight metrics container for the streaming pipeline.
 
-Phase C.1.3 引入。目标:
+职责:
 1. 给队列水位 / 实测 fps / tensor transfer 提供线程安全的存储,
    避免每个 caller 自己 hack 一个 dict + Lock。
 2. 让 NDJSON ``progress`` 帧能可选地携带这些字段(向后兼容,前端忽略未知字段)。

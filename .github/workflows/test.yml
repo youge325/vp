@@ -8,16 +8,26 @@ on:
   push:
     branches: [main, master, develop]
     paths:
-      - 'backend/app/**'
+      - 'backend/**'
+      - 'contracts/**'
       - 'frontend/**'
-      - '!frontend/tests/e2e/**'
+      - 'scripts/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'ruff.toml'
+      - '.pre-commit-config.yaml'
       - '.github/workflows/test.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
-      - 'backend/app/**'
+      - 'backend/**'
+      - 'contracts/**'
       - 'frontend/**'
-      - '!frontend/tests/e2e/**'
+      - 'scripts/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'ruff.toml'
+      - '.pre-commit-config.yaml'
       - '.github/workflows/test.yml'
 
 permissions:
@@ -53,20 +63,16 @@ jobs:
           }
         working-directory: frontend
 
-      # Phase D.5.2 — generated TS types are .gitignore'd; ts-rs only
-      # produces them when ``cargo test`` runs. Without this step, a PR
-      # that renames or adds a Rust IPC type would still pass ``npm run
-      # test`` (vitest only treats type imports as elidable), and the
-      # drift would only surface during the much-later Build job.
-      #
-      # NOTE: ``tauri::generate_context!()`` (which the lib pulls in via
-      # ``tauri::Builder::default().run(generate_context!())``) eagerly
-      # validates the configured ``frontendDist`` (``../dist``) at compile
-      # time. We haven't actually built the frontend yet, so create an
-      # empty placeholder directory just to satisfy the macro — the
-      # contents don't matter for ``cargo test --lib``. Same trick the
-      # Build workflow uses.
-      - name: Regenerate TypeScript types from Rust (ts-rs)
+      - name: Install contract quality tools
+        run: python -m pip install --disable-pip-version-check -r scripts/requirements-quality.txt
+
+      # ``tauri::generate_context!()`` validates ``frontendDist`` at compile
+      # time, so an empty placeholder satisfies the macro before the frontend
+      # build exists.
+      - name: Neutral contract generation check
+        run: python scripts/generate_contracts.py --check
+
+      - name: Run Rust tests
         run: |
           New-Item -ItemType Directory -Force -Path "../dist" | Out-Null
           cargo test --lib --quiet
@@ -80,19 +86,16 @@ jobs:
         run: npm run test -- --coverage
         working-directory: frontend
 
-      # ``npm run build`` runs ``vue-tsc`` first, which is the strictest
-      # type check we have. Putting it after ts-rs regeneration means a
-      # mismatched Rust ↔ TS schema will fail here in the CI rather than
-      # in the Build workflow that runs much later.
       - name: Type-check frontend (vue-tsc + vite build)
         run: npm run build
         working-directory: frontend
 
-      # Phase D.5.1 — TaskErrorCode 三层一致性 already runs as a
-      # pre-commit hook; surface the same check in CI so PR authors
-      # who skip hooks (--no-verify) can't sneak drift in.
-      - name: TaskErrorCode three-layer consistency check
-        run: python scripts/check_error_code_drift.py
+      - name: Frontend static quality gates
+        run: npm run check
+        working-directory: frontend
+
+      - name: Python dead-code gate
+        run: python -m vulture backend/app backend/tests backend/tests_full_e2e backend/export_all_rife_onnx.py scripts backend/vulture_whitelist.py --min-confidence 60 --exclude "backend/app/generated/,backend/app/algorithms/paddle/paddlegan_vsr/vendor/,backend/app/algorithms/pytorch/rife/ifnet_v4_"
 
       - name: Architecture contracts check
         run: python scripts/check_architecture_contracts.py

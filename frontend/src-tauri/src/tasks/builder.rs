@@ -13,12 +13,8 @@ const CREATE_NO_WINDOW: u32 = windows_sys::Win32::System::Threading::CREATE_NO_W
 
 /// Single source of truth for spawning the Python backend.
 ///
-/// Phase 5c — both [`build_process_command`] and the one-shot runner
-/// (``tasks::oneshot``) used to inline the exact same four lines for
-/// ``Command::new(python).args(["-m","app",sub]).current_dir(...).envs(...)``.
-/// Centralising the bootstrap here means a future change to (say) the
-/// ``-m app`` module path, the working directory convention, or the
-/// environment map only needs to land in one place.
+/// Long-running and one-shot commands share this bootstrap so the module,
+/// working-directory and environment conventions cannot drift.
 ///
 /// The returned ``Command`` has only the executable, the subcommand,
 /// the working directory and the env map set. Callers are expected to
@@ -34,11 +30,9 @@ pub(crate) fn backend_command(paths: &ResolvedRuntimePaths, subcommand: &str) ->
 
 /// Serialize the four config sections as a single JSON object.
 ///
-/// Phase D.3.1 — the Tauri host now feeds backend config through stdin
-/// as ``{decode, workflow, encode, output}`` instead of four separate
-/// ``--*-config-json`` command line arguments. The previous wire format
-/// risked overflowing the Windows command-line limit (~32 KiB) once the
-/// user added more than a couple of preprocess / postprocess filters.
+/// The Tauri host feeds backend config through stdin
+/// as ``{decode, workflow, encode, output}``, keeping the process command
+/// short even when a workflow contains many filters.
 fn build_config_stdin_payload(request: &TaskRequest) -> Result<String, serde_json::Error> {
     serde_json::to_string(&json!({
         "decode": &request.decode_config,
@@ -95,12 +89,18 @@ pub(crate) fn apply_no_window(_command: &mut Command) {}
 
 #[cfg(windows)]
 pub(crate) fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChild> {
-    command.group().creation_flags(CREATE_NO_WINDOW).spawn()
+    command.kill_on_drop(true);
+    command
+        .group()
+        .kill_on_drop(true)
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
 }
 
 #[cfg(not(windows))]
 pub(crate) fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChild> {
-    command.group_spawn()
+    command.kill_on_drop(true);
+    command.group().kill_on_drop(true).spawn()
 }
 
 #[cfg(test)]
@@ -108,7 +108,7 @@ mod tests {
     use super::*;
     use crate::models::config::{
         DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig, OutputConfig,
-        PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig, RateControlMode,
+        PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig,
         SuperResolutionConfig, TensorBackend, WorkflowConfig,
     };
     use serde_json::json;
@@ -145,7 +145,7 @@ mod tests {
                     onnx_model: None,
                     tensor_backend: TensorBackend::Onnx,
                     engine: "cuda".to_string(),
-                    num_frames: 10,
+                    num_frames: 10.try_into().expect("positive frame window"),
                 },
                 preprocess: PreprocessConfig {
                     enabled: false,
@@ -161,16 +161,17 @@ mod tests {
                 family: "cpu".to_string(),
                 container: "mp4".to_string(),
                 keep_audio: true,
-                rate_control: RateControlConfig {
-                    mode: RateControlMode::Crf,
-                    value: json!(18),
-                },
+                rate_control: serde_json::from_value::<RateControlConfig>(json!({
+                    "mode": "crf",
+                    "value": 18
+                }))
+                .expect("rate control contract"),
                 options: Default::default(),
             },
             output_config: OutputConfig {
                 output_dir: Some("D:/out".to_string()),
                 open_on_complete: true,
-                segment_frames: 1000,
+                segment_frames: 1000.try_into().expect("positive segment size"),
             },
             resume_mode: Some(crate::models::task::ResumeMode::Auto),
         }
@@ -183,17 +184,9 @@ mod tests {
         assert_eq!(args[0], "inspect-output");
         assert_eq!(args[1], "--input");
         assert_eq!(args[2], "D:/in.mp4");
-        // Phase D.3.1 — `--config-stdin` replaces the four `--*-config-json`
-        // flags as the wire format. Config payload now travels through stdin.
-        assert!(
-            args.iter().any(|arg| arg == "--config-stdin"),
-            "expected --config-stdin flag in {:?}",
+        assert_eq!(
             args,
-        );
-        assert!(
-            !args.iter().any(|arg| arg.ends_with("-config-json")),
-            "legacy --*-config-json flags should not appear in stdin mode: {:?}",
-            args,
+            ["inspect-output", "--input", "D:/in.mp4", "--config-stdin"],
         );
     }
 
@@ -237,12 +230,14 @@ mod tests {
         // spawning a process.
         let request = sample_request();
         let paths = ResolvedRuntimePaths {
+            app_data_dir: std::path::PathBuf::from("."),
             backend_dir: std::path::PathBuf::from("."),
             runtime_root: None,
             python_executable: std::path::PathBuf::from("python"),
             ffmpeg_path: None,
             ffprobe_path: None,
             model_dir: None,
+            rife_model_version: "4.25".to_string(),
             tensorrt_dir: None,
             log_dir: std::path::PathBuf::from("."),
         };

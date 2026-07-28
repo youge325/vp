@@ -2,7 +2,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 
-// Phase D.4.9 — vitest harness consolidated:
+// Shared Vitest harness:
 // - ``globals: true`` removes the need to ``import { describe, it, expect }``
 //   in every spec; rely on the ambient definitions from ``vitest/globals``.
 // - ``setupFiles`` points at a shared bootstrap so future Tauri / Pinia /

@@ -14,10 +14,8 @@ export function useEnvironmentChecker() {
     try {
       envStore.setCheckPayload(await envIpc.check(forceRefresh))
     } catch (error) {
-      // Phase 6c — fallback narrowed from the legacy magic string
-      // ``'check_failed'`` to the enum value. Real failure codes
-      // come from the Rust ShellError envelope; this path only
-      // triggers when the error has no ``code`` field at all.
+      // Structured shell errors retain their code; unknown failures
+      // use the canonical process error fallback.
       envStore.setIssue(normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
     } finally {
       envStore.setChecking(false)

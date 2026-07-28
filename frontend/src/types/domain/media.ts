@@ -12,11 +12,7 @@ import type {
 
 type TaskStatus = 'idle' | 'running' | 'paused' | 'cancelling' | 'completed' | 'error' | 'cancelled'
 
-/// Phase 6b — `TaskError` 不再单独维护,而是 generated `TaskErrorPayload`
-/// 的 type alias。这让 `code` 字段从开放的 `string` 收紧为 generated
-/// `TaskErrorCode` union,避免与 Rust ↔ Python ↔ TS 三层 SSOT 漂移。
-/// 旧 `code: string` 形状下,callsite 在 fallback 路径上可以传任意字符串
-/// (如 `'pause_failed'`),那是 Phase 6c 一起清理掉的 magic string。
+// 错误载荷直接复用生成协议,避免维护第二套错误码。
 export type TaskError = TaskErrorPayload
 
 export type OperationIssueScope = 'input' | 'encode' | 'task' | 'preset'
@@ -26,19 +22,7 @@ export interface OperationIssue {
   error: TaskError
 }
 
-// Phase 16 — ``error: TaskError | null`` 字段移除。Phase 13.1 拆分后这个
-// 字段在视图 / batch 任何地方都没有 reader,reducer 链路写入是纯 dead
-// write;真正展示任务错误的链路是 ``useIssueStore.setIssue('task', …)``
-// (见 [[finalize.ts]] ``handleErrored`` 与 [[batch/events.ts]]
-// ``onCancelled`` 的 stalled 分支)。
-//
-// Phase 17 — 大幅瘦身:删 11 个 dead 字段(percent / current / total /
-// stage / stageIndex / stageTotal / processedFrames / timeSeconds /
-// outputPath / startedAt / finishedAt)。这些在视图 / component /
-// composable 中 **零 reader**(grep 验证):reducer 之间仅做 transfer,
-// spec 测试有断言但实际不驱动 UI。视图侧只读 ``status / logs /
-// resumeStatus`` 三个字段,batch 粒度的进度条使用 ``batch.completedCount``
-// 与 runtime/selected item 数量(见 [[TaskConsole.vue]])。
+// 只保留视图实际消费的任务投影;批次级进度由 ``BatchState`` 管理。
 export interface MediaTaskState {
   status: TaskStatus
   logs: string[]
@@ -58,16 +42,7 @@ export interface MediaItem {
   outputConfig: OutputConfig
 }
 
-// Phase 13.1 — 运行时投影,从 ``MediaItem`` 拆出到独立的
-// ``useMediaRunState`` store。``MediaItem`` 现在只描述列表实体(身份 +
-// 配置),不再承载会跨多个写入者(batch lifecycle / IPC 事件)持续刷新
-// 的字段。
-//
-// Phase 16 — ``issue: TaskError | null`` 字段移除。Phase 14 后唯一 writer
-// 是 [[finalize.ts]] ``handleErrored``,但视图侧没有任何 reader 读
-// ``mediaRunState.getByItemId(id)?.issue``。任务错误现在统一写入
-// ``useIssueStore.setIssue('task', …)``,IssueBanner 通过
-// ``useOperationIssue('task')`` 直接消费。
+// 运行时状态与媒体实体分离,避免任务事件持续改写列表实体。
 export interface MediaRunState {
   taskState: MediaTaskState
   lastOutputPath: string

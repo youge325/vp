@@ -75,9 +75,9 @@ def test_stage_file_stage_context_prepares_intermediate_stage_manifest(tmp_path)
 
     assert context.output_path == str(tmp_path / "stages" / "stage-01-01_frame_interpolation.mp4")
     assert context.manifest is not final_manifest
-    assert context.manifest.output_path.name == "stage-01-01_frame_interpolation.mp4"
-    assert context.manifest.manifest_path.is_file()
-    manifest_payload = json.loads(context.manifest.manifest_path.read_text(encoding="utf-8"))
+    assert context.manifest.workspace.output_path.name == "stage-01-01_frame_interpolation.mp4"
+    assert context.manifest.workspace.manifest_path.is_file()
+    manifest_payload = json.loads(context.manifest.workspace.manifest_path.read_text(encoding="utf-8"))
     assert json.loads(manifest_payload["signature"]) == {
         "stage": 1,
         "step": step.to_jsonable(),

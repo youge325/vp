@@ -6,14 +6,16 @@ import type { ResumeConflictAction } from '@/types/domain/batch'
 import type { createCommonHelpers } from './lifecycle/common'
 import type { createFinalizeOps } from './lifecycle/finalize'
 import type { createQueueOps } from './lifecycle/queue'
-import type { BatchLifecycleDeps } from './lifecycle/types'
+import type {
+  BatchStatePort,
+  MediaItemPort,
+} from './lifecycle/types'
 import { buildResumeConflictDescriptorFromError } from '../resume-classifier'
 import { TASK_ERROR_CODES, type ResumeMode } from '@/types/protocol'
 
-type ConflictResolverDeps = Pick<
-  BatchLifecycleDeps,
-  'getBatch' | 'setBatch' | 'getMediaItem' | 'setPendingConflict'
->
+type ConflictResolverDeps =
+  & Pick<BatchStatePort, 'getBatch' | 'setBatch' | 'setPendingConflict'>
+  & Pick<MediaItemPort, 'getMediaItem'>
 type ConflictLifecycle = Pick<ReturnType<typeof createCommonHelpers>, 'getCurrentTaskContext'> &
   Pick<ReturnType<typeof createQueueOps>, 'launchCurrentItem'> &
   Pick<ReturnType<typeof createFinalizeOps>, 'finalizeCurrent'>
@@ -45,7 +47,7 @@ export function createConflictResolver(
       return
     }
 
-    const mode: ResumeMode | undefined = action === 'fresh' ? 'force-fresh' : undefined
+    const mode: ResumeMode = action === 'fresh' ? 'force-fresh' : 'force-resume'
     await lifecycle.launchCurrentItem(conflictItem, mode)
   }
 

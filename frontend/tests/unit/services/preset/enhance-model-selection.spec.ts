@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { buildEnhanceModelSelection } from '@/services/preset/enhance-model-selection'
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
 import type { AlgorithmInfo } from '@/types/protocol'
+import { createAlgorithmInfo } from '../../fixtures/environment'
 
-const interpolationAlgorithm: AlgorithmInfo = {
+const interpolationAlgorithm: AlgorithmInfo = createAlgorithmInfo({
   name: 'rife',
   tensorBackends: ['pytorch', 'onnx'],
   models: ['4.25'],
@@ -33,9 +34,9 @@ const interpolationAlgorithm: AlgorithmInfo = {
       },
     },
   ],
-}
+})
 
-const superResolutionAlgorithm: AlgorithmInfo = {
+const superResolutionAlgorithm: AlgorithmInfo = createAlgorithmInfo({
   name: 'ppmsvsr',
   tensorBackends: ['paddle'],
   models: ['x4'],
@@ -51,8 +52,6 @@ const superResolutionAlgorithm: AlgorithmInfo = {
         analysisNotes: [],
         engineMetrics: {
           tensorrt: {
-            parameterCount: 31,
-            parameterBytes: 124,
             runtimeFrameCount: 7,
             analysisStatus: 'ok',
             analysisNotes: ['TensorRT override'],
@@ -61,7 +60,7 @@ const superResolutionAlgorithm: AlgorithmInfo = {
       },
     },
   ],
-}
+})
 
 describe('enhance model selection', () => {
   it('selects model lists, current model details, and engine runtime details', () => {

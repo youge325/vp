@@ -101,7 +101,7 @@ class TestRIFEONNXExport:
         import torch
         import onnxruntime as ort
 
-        from app.algorithms.pytorch.rife._model_spec import get_spec
+        from app.catalog.rife_models import get_spec
         from app.algorithms.pytorch.rife.model_loader import create_backwarp_grid, create_flow_div, load_rife_model
 
         # 加载 PyTorch 模型
@@ -145,7 +145,7 @@ class TestRIFEONNXExport:
     def test_onnx_dynamic_shape(self, onnx_path):
         """ONNX 模型支持动态尺寸（使用 modulo 倍数尺寸验证）。"""
         import onnxruntime as ort
-        from app.algorithms.pytorch.rife._model_spec import get_spec
+        from app.catalog.rife_models import get_spec
 
         session = ort.InferenceSession(onnx_path)
         modulo = get_spec("4.25").modulo
@@ -177,7 +177,7 @@ class TestRIFEONNXSolver:
     """测试 RIFEONNXSolver 端到端推理。"""
 
     @pytest.fixture(scope="class")
-    def solver(self, tmp_path_factory):
+    def solver(self):
         """导出 ONNX 并创建 Solver。"""
         from app.algorithms.pytorch.rife.onnx_export import export_rife_to_onnx
         from app.algorithms.pytorch.rife.onnx_solver import RIFEONNXSolver
@@ -212,7 +212,7 @@ class TestFrameInterpolationAlgorithmONNX:
     """测试 FrameInterpolationAlgorithm + OnnxBackend 端到端。"""
 
     @pytest.fixture(scope="class")
-    def algorithm(self, tmp_path_factory):
+    def algorithm(self):
         """导出 ONNX 并创建算法实例。"""
         from app.algorithms.pytorch.rife.onnx_export import export_rife_to_onnx
         from app.algorithms.pytorch.rife.onnx_solver import RIFEONNXSolver

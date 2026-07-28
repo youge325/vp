@@ -50,12 +50,6 @@ describe('appendTaskLog', () => {
     expect(logs).toEqual(['regular log', tensorRtLog, progress])
   })
 
-  it('keeps legacy unkeyed progress replacement behavior', () => {
-    const logs = appendLine(['regular log', '[VP_PROGRESS] 10%'], '[VP_PROGRESS] 20%')
-
-    expect(logs).toEqual(['regular log', '[VP_PROGRESS] 20%'])
-  })
-
   it('keeps TensorRT lifecycle logs as ordinary append-only lines', () => {
     const buildLine =
       '22:03:13 [INFO] app.algorithms.paddle.paddlegan_vsr.runner: ' +

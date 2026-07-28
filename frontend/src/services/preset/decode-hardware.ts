@@ -2,12 +2,14 @@ import type { HardwareDeviceOptionSpec } from '@/types/protocol'
 
 type DecoderHardwareProfile = {
   hardwareDevices?: readonly string[]
-  hardwareDeviceOptions?: Readonly<Record<string, readonly HardwareDeviceOptionSpec[] | undefined>>
+  hardwareDeviceOptions?:
+    | Readonly<Record<string, readonly HardwareDeviceOptionSpec[] | undefined>>
+    | null
 } | null
 
 export function resolveDecoderHwaccel(
   profile: DecoderHardwareProfile,
-  preferred = '',
+  preferred: string | null | undefined = '',
 ): string {
   const devices = profile?.hardwareDevices ?? []
   if (preferred && devices.includes(preferred)) {
@@ -29,7 +31,7 @@ export function getDecoderHwaccelDeviceOptions(
 export function resolveDecoderHwaccelDevice(
   profile: DecoderHardwareProfile,
   hwaccel: string,
-  preferred = '',
+  preferred: string | null | undefined = '',
 ): string {
   const options = getDecoderHwaccelDeviceOptions(profile, hwaccel)
   if (preferred && options.some((option) => option.value === preferred)) {

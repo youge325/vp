@@ -1,0 +1,4 @@
+datamodel-code-generator==0.71.0
+jsonschema==4.26.0
+ruff==0.15.13
+vulture==2.16

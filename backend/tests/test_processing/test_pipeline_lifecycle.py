@@ -5,7 +5,8 @@ from typing import Any
 import pytest
 
 from app.errors import ResumeConflictError
-from app.planning import ResumeState, SegmentManifest, StagePlan
+from app.planning import ResumeState, SegmentManifest, StagePlan, StageProjection
+from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
@@ -16,16 +17,7 @@ from app.processing.streaming.pipeline_lifecycle import (
     finalize_streaming_output,
     prepare_streaming_manifest,
 )
-
-
-class _FakeFFmpeg:
-    def __init__(self, frame_count: int | None) -> None:
-        self.frame_count = frame_count
-        self.counted_path: str | None = None
-
-    def get_frame_count(self, path: str) -> int | None:
-        self.counted_path = path
-        return self.frame_count
+from tests.support.frame_count_probe import FakeFrameCountProbe
 
 
 def _context(
@@ -36,19 +28,26 @@ def _context(
     encode_config: dict[str, Any],
 ) -> StreamingPipelineContext:
     stage_plan = StagePlan(
-        pre_steps=[],
-        interpolation_step=None,
-        post_steps=[],
-        total_encoded_frames=12,
+        projection=StageProjection(()),
+        source_frames=12,
+        source_duration=0.5,
+        output_fps=None,
     )
     return StreamingPipelineContext(
         ffmpeg=ffmpeg,
         input_path=str(tmp_path / "input.mp4"),
-        output_path=str(manifest.output_path),
+        output_path=str(manifest.workspace.output_path),
         decode_config={},
         encode_config=encode_config,
         preflight=StreamingPipelinePreflight(
-            video_info={"source_fps": 24.0, "source_frames": 12},
+            video_info=VideoMetadata(
+                width=1,
+                height=1,
+                source_fps=24.0,
+                source_frames=12,
+                duration=0.5,
+                has_audio=False,
+            ),
             stage_plan=stage_plan,
             signature="sig",
             config_snapshot={},
@@ -60,7 +59,6 @@ def _context(
         ),
         manifest=manifest,
         resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
-        tensor_backend_name="onnx",
         progress_callbacks=[],
         output_fps=None,
         encode_progress_callback=None,
@@ -115,7 +113,7 @@ def test_emit_resume_status_event_uses_existing_ndjson_payload(monkeypatch) -> N
 def test_finalize_streaming_output_cleans_sidecar_after_success_and_builds_result(monkeypatch, tmp_path) -> None:
     output_path = tmp_path / "out.mp4"
     manifest = SegmentManifest(str(output_path))
-    manifest.sidecar_dir.mkdir(parents=True)
+    manifest.workspace.sidecar_dir.mkdir(parents=True)
     calls: dict[str, object] = {}
 
     def fake_finalize(**kwargs):
@@ -125,7 +123,7 @@ def test_finalize_streaming_output_cleans_sidecar_after_success_and_builds_resul
         "app.processing.streaming.pipeline_lifecycle.finalize_segmented_output",
         fake_finalize,
     )
-    ffmpeg = _FakeFFmpeg(frame_count=0)
+    ffmpeg = FakeFrameCountProbe(frame_count=0)
     context = _context(
         tmp_path,
         ffmpeg=ffmpeg,
@@ -146,13 +144,13 @@ def test_finalize_streaming_output_cleans_sidecar_after_success_and_builds_resul
     assert ffmpeg.counted_path == str(output_path)
     assert calls["manifest"] is manifest
     assert calls["strict_total_frames"] is True
-    assert not manifest.sidecar_dir.exists()
+    assert not manifest.workspace.sidecar_dir.exists()
 
 
 def test_finalize_streaming_output_preserves_sidecar_when_finalize_fails(monkeypatch, tmp_path) -> None:
     output_path = tmp_path / "out.mp4"
     manifest = SegmentManifest(str(output_path))
-    manifest.sidecar_dir.mkdir(parents=True)
+    manifest.workspace.sidecar_dir.mkdir(parents=True)
 
     def fail_finalize(**kwargs):
         del kwargs
@@ -167,11 +165,11 @@ def test_finalize_streaming_output_preserves_sidecar_when_finalize_fails(monkeyp
         finalize_streaming_output(
             context=_context(
                 tmp_path,
-                ffmpeg=_FakeFFmpeg(frame_count=0),
+                ffmpeg=FakeFrameCountProbe(frame_count=0),
                 manifest=manifest,
                 encode_config={"keepAudio": True},
             ),
             completed_output_frames=12,
         )
 
-    assert manifest.sidecar_dir.exists()
+    assert manifest.workspace.sidecar_dir.exists()

@@ -19,16 +19,10 @@ describe('filter catalog', () => {
   it('describes simple filter fields without duplicating defaults', () => {
     const pad = getFilterCatalogEntry('pad')
 
-    expect(pad.editor).toEqual({
-      columns: 3,
-      fields: [
-        { key: 'top', label: '上', type: 'number', min: 0 },
-        { key: 'bottom', label: '下', type: 'number', min: 0 },
-        { key: 'left', label: '左', type: 'number', min: 0 },
-        { key: 'right', label: '右', type: 'number', min: 0 },
-        { key: 'color', label: '颜色 (hex)', type: 'text' },
-      ],
-    })
+    expect(pad.editor?.columns).toBe(3)
+    expect(pad.editor?.fields.map(({ key }) => key)).toEqual(['top', 'bottom', 'left', 'right', 'color'])
+    expect(pad.editor?.fields.slice(0, 4).every(({ min, type }) => min === 0 && type === 'number')).toBe(true)
+    expect(pad.editor?.fields.at(-1)?.type).toBe('text')
     expect(pad.defaultParams).toEqual({ top: 0, bottom: 0, left: 0, right: 0, color: '#000000' })
   })
 

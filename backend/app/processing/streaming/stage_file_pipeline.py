@@ -8,10 +8,7 @@ from app.processing.streaming.stage_file_chunks import run_single_stage_file_chu
 from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 from app.processing.streaming.stage_file_stage_context import build_stage_file_stage_context
 from app.processing.streaming.stage_rules import (
-    ordered_steps,
     stage_output_dimensions,
-    stage_output_fps,
-    stage_output_frame_count,
     stage_tensor_backend_name,
 )
 
@@ -21,28 +18,34 @@ def run_stage_file_pipeline(
     context: StreamingPipelineContext,
 ) -> int:
     """Run each algorithm stage as segmented files instead of one rawvideo chain."""
-    steps = ordered_steps(context.preflight.stage_plan)
+    stage_plan = context.preflight.stage_plan
+    steps = stage_plan.steps
     if not steps:
         raise RuntimeError("Stage file pipeline requires at least one processing stage.")
 
-    stage_root = context.manifest.sidecar_dir / "stages"
+    stage_root = context.manifest.workspace.stages_dir
     stage_root.mkdir(parents=True, exist_ok=True)
 
     current_path = context.input_path
-    current_width = int(context.preflight.video_info["width"])
-    current_height = int(context.preflight.video_info["height"])
-    current_fps = float(context.preflight.video_info["source_fps"])
-    current_frame_count = int(context.preflight.video_info["source_frames"])
+    current_width = context.preflight.video_info.width
+    current_height = context.preflight.video_info.height
+    projected_stages = stage_plan.projection.stages(
+        source_frames=context.preflight.video_info.source_frames,
+        source_fps=context.preflight.video_info.source_fps,
+    )
 
-    for stage_position, step in enumerate(steps, start=1):
+    for projected_stage in projected_stages:
+        stage_position = projected_stage.position
+        step = projected_stage.step
         is_final_stage = stage_position == len(steps)
+        current_frame_count = projected_stage.input_frames
         output_width, output_height = stage_output_dimensions(
             step,
             input_width=current_width,
             input_height=current_height,
         )
-        stage_output_frames = stage_output_frame_count(step, current_frame_count)
-        stage_fps = stage_output_fps(step, current_fps)
+        stage_output_frames = projected_stage.output_frames
+        stage_fps = float(projected_stage.output_fps)
 
         stage_context = build_stage_file_stage_context(
             is_final_stage=is_final_stage,
@@ -67,7 +70,7 @@ def run_stage_file_pipeline(
             step=step,
             stage_index=stage_position,
             stage_total=len(steps),
-            tensor_backend_name=stage_tensor_backend_name(step, context.tensor_backend_name),
+            tensor_backend_name=stage_tensor_backend_name(step),
             progress_callback=context.progress_callbacks[stage_position - 1]
             if stage_position - 1 < len(context.progress_callbacks)
             else None,
@@ -103,12 +106,10 @@ def run_stage_file_pipeline(
             total_output_frames=stage_output_frames,
             strict_total_frames=True,
         )
-        stage_context.manifest.cleanup()
+        stage_context.manifest.workspace.cleanup()
         current_path = stage_context.output_path
         current_width = output_width
         current_height = output_height
-        current_fps = stage_fps
-        current_frame_count = stage_output_frames
 
 
 __all__ = [

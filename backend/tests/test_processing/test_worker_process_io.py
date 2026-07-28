@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from app.planning import ProcessingStep, build_stage_plan
+from app.planning import ProcessingStep, StageProjection, build_stage_plan
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import EncodedFrame
 from app.processing.streaming.stage_worker_config import StageWorkerConfig
@@ -102,7 +102,7 @@ def test_drain_final_worker_output_stops_after_expected_frame_count() -> None:
         algorithm_kwargs={"scale_factor": 1.0},
         stage_name="01_super_resolution",
     )
-    stage_plan = build_stage_plan([step], 1, source_duration=1.0, output_fps=None)
+    stage_plan = build_stage_plan(StageProjection((step,)), 1, source_duration=1.0, output_fps=None)
     final_plan = StageWorkerPlan(
         config=StageWorkerConfig(
             stage=step,
