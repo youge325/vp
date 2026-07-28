@@ -2,9 +2,13 @@
 
 ## Tauri Command 面
 
-Rust 层通过 `#[tauri::command]` 暴露 11 个命令，前端通过 `@tauri-apps/api/core` 的 `invoke()` 调用。
+Rust 层通过 `#[tauri::command]` 暴露 10 个命令，前端通过 `@tauri-apps/api/core` 的 `invoke()` 调用。
 
-Rust crate 对外源码面只保留 `run()`、`models::config` 和 `models::task`。Tauri 命令及 `tasks`、`runtime`、`persistence`、`services`、`process_control`、`protocol`、`error`、环境探测模型均为 crate 内部接口；命令是否可由前端调用由 Tauri handler 与权限清单决定，不依赖 Rust `pub` 可见性。
+Rust crate 对外源码面只保留 `run()`、`models::config` 和 `models::task`。Tauri 命令及
+`tasks`、`runtime`、`persistence`、`services`、`process_control`、`error` 和环境探测模型均为
+crate 内部接口；命令是否可由前端调用由 Tauri handler 与权限清单决定，不依赖 Rust `pub` 可见性。
+
+配置、任务和环境边界类型由 `models` 内的私有 Typify 模块从 `contracts/boundary.schema.json` 生成；`models::config`、`models::task` 只精确 re-export 对外 schema，环境与壳内部类型保持 `pub(crate)`。
 
 ### Command 清单
 
@@ -18,27 +22,16 @@ Rust crate 对外源码面只保留 `run()`、`models::config` 和 `models::task
 | `inspect_video` | `(inputPath: String) -> Result<VideoInfo, ShellError>` | 探测输入视频元数据 | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
 | `check_resume_state` | `(request: TaskRequest) -> Result<ResumeInspectionResult, ShellError>` | 预检查输出文件和续传 sidecar 状态 | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
 | `start_task` | `(request: TaskRequest) -> Result<(), ShellError>` | 启动 Python 处理子进程 | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
-| `cancel_task` | `() -> Result<(), ShellError>` | 取消当前运行任务（协作式） | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
-| `control_task` | `(kind: TaskControlKind) -> Result<(), ShellError>` | 暂停或恢复当前运行任务（`pause` / `resume`） | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
+| `control_task` | `(kind: TaskControlKind) -> Result<(), ShellError>` | 统一暂停、恢复或取消当前任务 | [`tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) |
 | `open_output_location` | `(path: String) -> Result<(), ShellError>` | 用系统默认程序打开输出目录 | [`dialogs.rs`](../frontend/src-tauri/src/dialogs.rs) |
 
 所有命令体均为 `async fn`；对话框命令使用 `rfd::AsyncFileDialog` 避免阻塞 tokio runtime。
 
-### 命令契约清单：commands_manifest.rs
+### 命令契约清单
 
-[`frontend/src-tauri/src/commands_manifest.rs`](../frontend/src-tauri/src/commands_manifest.rs) 是权限生成与契约校验使用的私有命令清单：
+根目录 `contracts/ipc-manifest.json` 是命令名、参数、返回值和事件名的唯一清单。生成脚本产出 Rust build manifest 与前端类型化 invoke 映射；架构门禁再与 `generate_handler!` 和 Tauri permissions 比对。
 
-```rust
-const APP_COMMAND_NAMES: &[&str] = &[
-    "pick_inputs",
-    "pick_output_directory",
-    // ... 11 个命令
-];
-```
-
-该私有片段被 `build.rs` 与 `lib.rs::tests` 直接 include，用于生成和验证权限清单。架构契约脚本还会把它与 `tauri::generate_handler![...]`、前端 IPC endpoint 和类型化参数表做集合比对，防止任一入口漂移。
-
-**新增命令的 checklist：** 实现函数 → 加入 `commands_manifest.rs` → 注册到 `generate_handler!` → 更新 `permissions/default.toml`。
+**新增命令的 checklist：** 修改中立 manifest → 重新生成绑定 → 实现并注册 handler → 更新 permission → 运行契约门禁。
 
 ## 运行时资源解析
 
@@ -57,15 +50,20 @@ graph LR
     F --> F5[tensorrt_dir]
 ```
 
-[`frontend/src-tauri/src/runtime/mod.rs`](../frontend/src-tauri/src/runtime/mod.rs) 在 `lib.rs::setup` 中调用一次，结果存入 managed state。后续所有命令通过 `app.state::<ResolvedRuntimePaths>()` 读取，避免每次 invoke 重复执行约 10 次文件系统 stat。
+[`frontend/src-tauri/src/runtime/mod.rs`](../frontend/src-tauri/src/runtime/mod.rs) 在 `lib.rs::setup`
+中调用一次，结果存入 managed state。后续命令读取同一个 `ResolvedRuntimePaths`，不在每次
+invoke 时重复探测文件系统。
 
 解析优先级：
 1. 显式环境变量覆盖，例如 `VP_FFMPEG_PATH`、`VP_PYTHON_EXECUTABLE`
-2. `frontend/src-tauri/resources/` 内打包资源
+2. canonical `$RUNTIME_ROOT`（bundle/debug 均为 `resources/runtime/`）下的 Python、
+   `ffmpeg/bin`、`models` 和可选 `tensorrt`
 3. 开发环境下的工作区源码布局
 4. 系统级 PATH 兜底
 
-环境变量通过 `build_env_map` 构建后完整透传给 Python 子进程，Python 端无需重复解析。
+`ResolvedRuntimePaths` 在 composition root 解析一次并作为 managed state 注入。`build_env_map`
+只投影这份类型化结果，不重复读取环境变量；TensorRT 目录同时进入环境指纹。应用数据目录解析
+失败时 release 构建直接报错，不使用临时目录伪装持久化成功。
 
 ## 进程管理（tasks/ 模块）
 
@@ -77,7 +75,7 @@ graph TB
     A --> E[builder.rs 后端命令构建]
     A --> F[state.rs 任务状态机]
     A --> G[handle.rs TaskHandle]
-    A --> H[controller.rs 控制器 + Watchdog]
+    A --> H[controller.rs TaskSupervisor + Watchdog]
     A --> I[cancellation.rs CancellationToken]
     A --> J[readers.rs stdout 读取器]
     A --> K[envelope.rs NDJSON 信封解析]
@@ -100,27 +98,35 @@ graph TB
 [`frontend/src-tauri/src/tasks/oneshot.rs`](../frontend/src-tauri/src/tasks/oneshot.rs) 通过
 `run_single_cli_command<T>()` 直接返回 schema 校验后的 `Result<T, ShellError>`。结构化错误信封
 映射为 `BackendEnvelope`，无信封的非零退出映射为 `BackendProbeFailed`，成功但没有 JSON 映射为
-`BackendNoJson`。command 和 environment service 只声明预期类型与 payload 名称，不再重复接收
-`Value` 后执行第二次成功 payload 适配；环境缓存仍在 persistence/service 边界独立反序列化。
+`BackendNoJson`。解析器从 stdout 末尾逆序寻找最后一个 schema 合法、类型匹配的 success 或
+backend error envelope；较新的无关日志/事件不会遮住合法结果，只有不存在合法候选时才报告最新
+schema mismatch。`check`/`info` 的 transport-only `type` 在反序列化前移除，
+`resume_inspection.type` 则保留为公共结果字段。
 
-### 任务状态机
+### 任务状态机与启动租约
 
-[`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) 定义三阶段状态机：
+[`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) 定义四状态生命周期：
 
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
-    Idle --> Running: try_start(handle)
-    Running --> Cancelling: begin_cancel()
-    Running --> Idle: finish()
-    Cancelling --> Idle: finish()
+    Idle --> Starting: reserve_start()
+    Starting --> Running: activate(lease, control_tx)
+    Starting --> Cancelling: cancel reason recorded, then activate()
+    Starting --> Idle: rollback_start(lease)
+    Running --> Cancelling: begin_cancel(reason)
+    Running --> Idle: finish_once(lease)
+    Cancelling --> Idle: finish_once(lease)
 ```
 
-- `Idle` — 无任务运行，`try_start` 是唯一合法转换
-- `Running { handle }` — 任务正常运行，`begin_cancel` 或 `finish`
-- `Cancelling { handle }` — 取消请求已发出，等待子进程退出，`finish` 是唯一合法转换
-
-所有转换在 `Mutex` 保护下原子执行，消除 "read-then-write" 竞态窗口。`try_start` 拒绝双启动，`begin_cancel` 拒绝重复取消。
+- `Starting { lease }` 在任何命令构建或进程创建前占用唯一任务槽，第二个 start 不会创建子进程。
+- `StartLease` 同时携带单调 lease id 与取消 token；启动期间到达的 cancel 会先记录原因，
+  `activate()` 随后直接发布 `Cancelling` handle。
+- 所有 activate、rollback、supervisor cancel 和 finish 都校验 lease。过期 supervisor 的清理不能
+  清空或取消新任务。
+- `finish_once()` 在持有生命周期锁时先提交终态回调，再释放任务槽，保证终态恰好一次且先于下一次启动。
+- 状态层返回领域 `TaskStateError`；只有 `tasks/commands.rs` 的 Tauri adapter 将其映射为
+  `ShellError`。
 
 ### 启动流程
 
@@ -130,20 +136,40 @@ stateDiagram-v2
 sequenceDiagram
     participant Frontend
     participant Rust as Rust spawn_task
+    participant State as TaskState
     participant Python as Python CLI
+    participant Supervisor as TaskSupervisor
 
     Frontend->>Rust: start_task(request)
-    Rust->>Rust: state.try_start(handle) 原子检查
-    Rust->>Rust: build_process_command() 构建命令
-    Rust->>Rust: 写 stdin JSON payload
+    Rust->>State: reserve_start()
+    Rust->>Rust: build_process_command()
     Rust->>Python: command_group::AsyncCommand::spawn()
-    Rust->>Rust: spawn_stdout_reader()
-    Rust->>Rust: spawn_stderr_reader()
-    Rust->>Rust: spawn_task_controller()
+    Rust->>Rust: 取得 stdin/stdout/stderr 和 root pid
+    Rust->>State: activate(lease, control_tx)
+    Rust->>Rust: 启动 stdin writer 与 stdout/stderr reader
+    Rust->>Supervisor: spawn_task_supervisor(session)
     Rust-->>Frontend: Ok(())
 ```
 
-`spawn_task` 先启动 stdout NDJSON reader 与 stderr reader，再构造一个 `TaskControllerSession` 交给 controller。`spawn_task_controller` 从该会话启动 child wait task、可选 Watchdog 和控制/终态 actor，并为该任务直接构造一个 `DefaultProcessController::default()`。控制器作为 actor 的具体值持有，不经过单消费者工厂或 `Arc<dyn ProcessController>`；`ProcessController` trait 仅保留为暂停/恢复策略边界与测试 seam。
+任一启动失败路径都会终止并回收已创建的进程组，再用同一 lease 回滚 `Starting`。reader 在 stdin
+writer 前启动，避免三条 pipe 互相填满形成死锁；stdin 写入也有 10 秒上限。
+
+### TaskSupervisor 与终态仲裁
+
+[`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 的
+`TaskSupervisorSession` 是运行任务的结构化 owner，持有 child、lease、控制/输出通道、三个 pipe
+task、stderr capture、取消 token 和 progress beat。只有 supervisor 能发送终态。
+
+supervisor 在一个 `tokio::select!` 循环中并发处理 reader 消息、进程退出、取消、watchdog 和
+暂停/恢复结果。终态规则如下：
+
+- 第一个 supervisor/protocol 错误保持 sticky；重复 terminal envelope 升级为 `schema_mismatch`。
+- backend 的类型化 error 保留原始 `code / message / details`，优先于非零 exit status。
+- completed 只有与成功 exit 同时成立才有效；成功退出但无 terminal envelope 也是
+  `schema_mismatch`。
+- schema mismatch、pipe failure、terminal 后进程不退出都会触发进程组 kill。
+- 退出后先在 5 秒内排空 stdout/stderr，再 join reader；排空失败覆盖先前 completed。
+- 取消原因优先生成 `task-cancelled`；最终事件通过 `finish_once(lease, callback)` 恰好提交一次。
 
 ### NDJSON 信封解析
 
@@ -156,43 +182,63 @@ pub(crate) enum NdjsonEnvelope {
     #[serde(rename = "progress")]
     Progress(TaskProgressPayload),
     Completed(TaskCompletedPayload),
-    Error(TaskErrorPayload),
+    Error(BackendTaskErrorPayload),
     ResumeStatus(ResumeStatusPayload),
 }
 ```
 
-使用 serde 的 **internally tagged enum** 模式，`"type"` 字段作为 discriminant。任务 stdout reader
-与 one-shot CLI 共用这套协议；`error_payload_from_value()` 只提取 `NdjsonEnvelope::Error`，
-不再维护第二套 error envelope 结构。任务流解析失败时升级为 `SchemaMismatch`；one-shot 的普通
-非零退出和成功无 JSON 仍分别映射为 `BackendProbeFailed` 与 `BackendNoJson`，成功 payload 的
-类型漂移由 generic one-shot 边界统一映射为 `SchemaMismatch`。
+`classify_line()` 是生产 reader 与测试共同覆盖的唯一 classifier。合法 envelope 被解析为类型化
+payload；普通非 JSON 文本作为日志；对象形 JSON、未知 `type`、缺字段或以 `{` 开头的破损 JSON
+都视为 fatal `schema_mismatch`。supervisor 收到该分类后立即杀死子进程，避免在漂移协议上继续处理。
 
 ### stderr 兜底
 
-[`frontend/src-tauri/src/tasks/stderr.rs`](../frontend/src-tauri/src/tasks/stderr.rs) 维护一个滚动缓冲（400 行 / 8KB）。当 Python 在发出 NDJSON 终止事件前崩溃时，stderr 内容通过 `StderrCapture` 捕获，包装为 `BackendExit` 错误推送给前端。这是错误传播的兜底路径。
+[`frontend/src-tauri/src/tasks/stderr.rs`](../frontend/src-tauri/src/tasks/stderr.rs) 维护滚动缓冲
+（400 行 / 8KB）。Python 未发类型化 error 就异常退出时，supervisor 生成 `runtime_panic`，并把
+缓冲内容放进 `details.traceback`；reader 会先排空，因此进程退出前最后写入的 stderr 不会丢失。
 
 ## 进程控制
 
 [`frontend/src-tauri/src/process_control/`](../frontend/src-tauri/src/process_control/) 实现任务暂停/恢复：
 
-- `mod.rs` — `ProcessController` trait 定义
+- `mod.rs` — 任务绑定的 `ProcessController` 与测试用 `ProcessControl` trait
 - `windows.rs` — Win32 `SuspendThread` / `ResumeThread` 实现
-- `posix.rs` — SIGSTOP / SIGCONT 实现（占位）
+- `posix.rs` — `kill(-pgid, SIGSTOP/SIGCONT)` 的进程组实现
 
-控制消息通过 `tokio::sync::mpsc` 通道发送，响应通过 `oneshot` 通道返回结构化错误，并保留原始 `io::Error` source chain。
+控制消息和 reply 都有有界超时。Windows 线程枚举与 POSIX 系统调用通过 `spawn_blocking` 离开
+Tokio worker；一个 task-bound controller 只控制自己的 root pid，Windows 恢复缓存也只属于该任务，
+POSIX 不维护无意义的线程缓存。结构化错误保留原始 `io::Error` source chain。
 
 ## 本地持久化
 
 [`frontend/src-tauri/src/persistence/`](../frontend/src-tauri/src/persistence/):
 
-- `storage.rs` — 缓存/预设读写，使用 `tempfile` + `os.replace` 实现原子写入
+- `storage.rs` — 缓存/预设读写，使用 `tempfile::NamedTempFile::persist` 原子提交
 - `commands.rs` — `load_workbench_preset` / `save_workbench_preset` 命令体
 
 持久化数据包括：
-- **环境检查缓存**（`environment-cache.json`）— 带 fingerprint 策略，避免每次启动重复探测
-- **工作台预设**（`workbench-preset.json`）— 用户当前编辑的完整配置快照
+- **环境检查缓存 schema 14**（`environment-cache.json`）— 带包含 TensorRT 的 fingerprint
+- **工作台预设 schema 2**（`workbench-preset.json`）— 用户当前编辑的完整配置快照
 
-各平台路径差异由 Tauri 的 `app_handle.path()` API 自动处理。
+两个 envelope 类型由 `contracts/persistence.schema.json` 经 Typify 生成，版本常量由
+`generated/persistence_versions.rs` 生成；storage 不维护手写镜像结构或平行版本数字。
+
+其他版本或损坏文件会改名为 `*.incompatible-<reason>-*.bak` 后重建，不做字段迁移、其他版本解析或
+回退读取。环境缓存失效后重新探测；预设失效返回 `schema_mismatch`，由前端重置默认值并展示
+全局 banner，再立即保存 schema 2 默认替代。JSON 序列化、路径 IO 和 schema 失败分别在发生
+上下文中映射为结构化错误。
+
+## 构建接入与桌面安全
+
+[`frontend/src-tauri/build.rs`](../frontend/src-tauri/build.rs) 只读取已生成的
+`generated/ipc_manifest.rs` 并调用确定性的 `tauri_build`。跨语言生成和漂移检查属于显式仓库
+门禁，不在 Cargo build 中隐式改写工作树。
+
+[`frontend/src-tauri/capabilities/default.json`](../frontend/src-tauri/capabilities/default.json)
+仅授权本地 `main` 窗口，不声明远程 origin。`tauri.conf.json` 只启用该 capability，关闭全局
+Tauri 对象，并使用最小 CSP：`script-src 'self'`，`connect-src` 仅 Tauri IPC，
+`object-src 'none'`、`frame-src 'none'`；asset/blob/data 只为现有本地资源用途开放。Rust 单测和
+桌面 E2E 同时锁定这些约束。
 
 ## 环境检查服务
 
@@ -201,7 +247,7 @@ pub(crate) enum NdjsonEnvelope {
 - 缓存优先策略：若 fingerprint（运行时路径哈希）未变，直接返回缓存结果
 - 首次或强制刷新时，通过 `oneshot.rs` 运行 `python -m app check` 子命令
 - 输出结构仅包含 UI 消费的 FFmpeg 能力、GPU adapter `name/vendor`、三个 backend 的实际 `tensorEngines`、算法能力元数据和 `runtimeMode`；Windows 虚拟显示适配器在 Python 系统探测边界过滤，UI 与 FFmpeg 能力探测共享同一结果
-- 环境缓存使用 schema 13；旧 schema、fingerprint 变化、损坏缓存和 force refresh 都会触发重新探测
+- 环境缓存使用 schema 14；版本不匹配或损坏缓存会隔离，fingerprint 变化或 force refresh 会重新探测
 
 ```mermaid
 sequenceDiagram

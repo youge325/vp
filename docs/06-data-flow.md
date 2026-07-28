@@ -16,15 +16,16 @@ graph TD
     subgraph RS["Rust Tauri 层"]
         R1["start_task command"]
         R2["build_process_command()"]
-        R3["stdin JSON payload"]
+        R3["stdin 四段配置 JSON"]
     end
 
     subgraph PY["Python CLI 层"]
         P1["argparse process 子命令"]
         P2["load_runtime_configs()"]
         P3["Pydantic 模型校验"]
-        P4["resolve_processing_steps()"]
-        P5["StagePlan"]
+        P4["prepare_pipeline_preflight()"]
+        P5["PreparedRun + StagePlan"]
+        P6["StageProjection"]
     end
 
     subgraph EX["流式执行器"]
@@ -35,9 +36,11 @@ graph TD
         E5["encoder_worker"]
     end
 
-    subgraph FF["FFmpeg Wrapper"]
-        FFD["build_rawvideo_decode_command()"]
-        FFE["build_rawvideo_encode_command()"]
+    subgraph FF["Consumer ports + FFmpeg adapter"]
+        FFP["MediaProbePort"]
+        FFR["RawVideoPort"]
+        FFE["EncodePort / FinalizationPort"]
+        FFA["FFmpegMediaAdapter"]
     end
 
     F1 --> F3
@@ -51,14 +54,22 @@ graph TD
     P2 --> P3
     P3 --> P4
     P4 --> P5
+    P5 --> P6
     P5 --> E1
     E1 --> E2
     E2 --> E3
     E3 --> E4
     E3 --> E5
-    E4 --> FFD
-    E5 --> FFE
+    P4 --> FFP
+    E3 --> FFR
+    E3 --> FFE
+    FFP --> FFA
+    FFR --> FFA
+    FFE --> FFA
 ```
+
+`stage-worker` 只消费 stdin rawvideo、输出 stdout rawvideo 并在 stderr 上报内部事件；FFmpeg
+decoder/encoder 与 finalization port 由父流水线消费，worker 不穿透 adapter。
 
 ## 前端层：配置构建
 
@@ -86,7 +97,7 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 }
 ```
 
-`TaskRequest` 结构由 Rust `models/task.rs` 定义，通过 `ts-rs` 生成 TypeScript 类型。
+`TaskRequest` 结构由 `contracts/task-request.schema.json` 定义，各语言只在边界使用生成或校验后的类型。
 
 ## Rust 层：序列化与命令构建
 
@@ -95,8 +106,9 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 [`frontend/src-tauri/src/tasks/builder.rs`](../frontend/src-tauri/src/tasks/builder.rs) 构建启动 Python 子进程的命令：
 
 1. 解析 `ResolvedRuntimePaths` 获取 Python 可执行文件路径
-2. 构建命令行：`python -m app process --input <path> ...`
-3. 将 `TaskRequest` 序列化为 JSON，通过 stdin 传递给 Python
+2. 构建命令行：`python -m app process --input <path> --config-stdin`，可选追加
+   `--resume-mode`
+3. 从 `TaskRequest` 提取 `{ decode, workflow, encode, output }` 四段配置并序列化到 stdin
 
 关键设计：spawn 后立即写 stdin，避免 Python 等待 stdin 输入而阻塞。stdin 写入在单独的异步 task 中完成，与 stdout reader 并发执行。
 
@@ -111,60 +123,65 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 [`backend/app/cli/commands/process.py`](../backend/app/cli/commands/process.py)：
 
 1. 从 stdin 读取 JSON payload
-2. 使用 Pydantic 模型反序列化（`DecodeConfig`、`WorkflowConfig`、`EncodeConfig`、`OutputConfig`）
-3. 字段名自动转换：Pydantic 的 `alias_generator` 将 camelCase 转为 snake_case
+2. 使用 `datamodel-code-generator` 生成的 Pydantic 模型严格反序列化
+3. `RuntimeConfigs` 保存类型化配置，只在 adapter/signature/worker 边界投影 camelCase JSON
 
 ### 处理步骤规划
 
-`resolve_processing_steps(workflow_config)` 只根据已校验的工作流配置生成处理步骤列表：
+`StageProjection.resolve_workflow()` 先统一计算 target FPS 对应的插帧倍数，再以唯一顺序构造不可变
+投影，并同时返回已解析 workflow、该投影与可选编码 FPS。`prepare_pipeline_preflight()` 将同一个
+`StageProjection` 直接传给 `StagePlan`，不再从 workflow 或 steps 重建第二份投影。投影包含：
 
-- 预处理步骤（`pre_steps`）：滤镜链（裁剪、缩放、降噪、锐化、色彩调整、填充、Anime 清理）
-- 插帧步骤（`interpolation_step`）：可选，RIFE 补帧
-- 后处理步骤（`post_steps`）：滤镜链
+- 可选预处理滤镜链
+- 按 `processOrder` 排列的插帧和超分辨率步骤
+- 可选后处理滤镜链
 
 ### StagePlan 构建
 
-[`backend/app/planning/stage_plan.py`](../backend/app/planning/stage_plan.py) 的 `build_stage_plan()`：
-
-1. 计算总输出帧数（考虑插帧倍数）
-2. 计算总编码帧数
-3. 计算插帧对数
-4. 返回 `StagePlan` 结构
+[`backend/app/planning/stage_plan.py`](../backend/app/planning/stage_plan.py) 的 `StagePlan` 保存冻结的
+投影、源帧数/时长和可选输出 FPS，并让 `steps` 直接引用 `projection.steps`。步骤顺序、每阶段
+输入/输出帧数、最终 FPS、编码帧数和插帧索引均由该投影派生：
 
 ```python
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class StagePlan:
-    pre_steps: list[dict]
-    interpolation_step: dict | None
-    post_steps: list[dict]
-    total_output_frames: int
-    total_encoded_frames: int
-    total_pairs: int
+    projection: StageProjection
+    source_frames: int
+    source_duration: float
+    output_fps: float | None
+    steps: tuple[ProcessingStep, ...] = field(init=False)
+    processed_output_frames: int = field(init=False)
+    total_encoded_frames: int = field(init=False)
+    interpolation_index: int | None = field(init=False)
 ```
 
-## 参数四层映射
+`prepare_pipeline_preflight()` 将它与输出路径、签名和恢复预检一起封装为不可变 `PreparedRun`；
+`PreparedRun.processing_steps` 和 `final_output_fps` 只投影 `StagePlan` 中的事实，不重复存储。
+`process` 和 `inspect-output` 共享这份准备结果。reporter、callback 和 metrics 属于运行期 observers，
+不进入静态计划。
+
+## 边界字段与执行映射
 
 ### 解码参数
 
-| 前端字段 | Rust 字段 | Python 字段 | FFmpeg 参数 |
-|----------|-----------|-------------|-------------|
-| `hwAccel` | `hw_accel` | `hw_accel` | `-hwaccel` |
-| `decoder` | `decoder` | `decoder` | `-c:v` (解码器) |
-| `pixFmt` | `pix_fmt` | `pix_fmt` | `-pix_fmt` |
-| `startFrame` | `start_frame` | `start_frame` | `-ss` |
-| `endFrame` | `end_frame` | `end_frame` | `-to` |
+| JSON Schema 字段 | Rust/Python 领域字段 | FFmpeg 作用 |
+|------------------|----------------------|-------------|
+| `mode` | `mode` | 选择软件/硬件解码 profile |
+| `hwaccel` | `hwaccel` | `-hwaccel` |
+| `hwaccelDevice` | `hwaccel_device` | `-hwaccel_device` |
+| `decoder` | `decoder` | 输入 `-c:v` |
+| `options` | `options` | profile 允许的附加参数 |
 
 ### 编码参数
 
-| 前端字段 | Rust 字段 | Python 字段 | FFmpeg 参数 |
-|----------|-----------|-------------|-------------|
-| `encoder` | `encoder` | `encoder` | `-c:v` |
-| `crf` | `crf` | `crf` | `-crf` |
-| `preset` | `preset` | `preset` | `-preset` |
-| `bitrate` | `bitrate` | `bitrate` | `-b:v` |
-| `fps` | `fps` | `fps` | `-r` |
-| `keepAudio` | `keep_audio` | `keep_audio` | 音频流处理 |
-| `audioCodec` | `audio_codec` | `audio_codec` | `-c:a` |
+| JSON Schema 字段 | Rust/Python 领域字段 | FFmpeg 作用 |
+|------------------|----------------------|-------------|
+| `codec` | `codec` | 输出 `-c:v` |
+| `family` | `family` | 选择编码能力 profile |
+| `container` | `container` | 输出容器/扩展名 |
+| `keepAudio` | `keep_audio` | 最终音频提取与合并 |
+| `rateControl` | `rate_control` | `crf / cq / qp / bitrate` |
+| `options` | `options` | profile 允许的附加参数 |
 
 ### 工作流参数
 
@@ -172,43 +189,48 @@ class StagePlan:
 |----------|-----------|-------------|---------|
 | `interpolation.enabled` | `interpolation.enabled` | `interpolation.enabled` | 启用 RIFE 插帧 |
 | `interpolation.multi` | `interpolation.multi` | `interpolation.multi` | 插帧倍数（2/3/4） |
-| `interpolation.modelVersion` | `interpolation.model_version` | `interpolation.model_version` | RIFE 模型版本 |
+| `interpolation.model` | `interpolation.model` | `interpolation.model` | RIFE 模型版本 |
+| `interpolation.tensorBackend` | `tensor_backend` | `tensor_backend` | PyTorch/Paddle/ONNX 后端 |
+| `interpolation.engine` | `engine` | `engine` | cuda/tensorrt/dcu |
 | `superResolution.enabled` | `super_resolution.enabled` | `super_resolution.enabled` | 启用超分辨率 |
 | `superResolution.scaleFactor` | `super_resolution.scale_factor` | `super_resolution.scale_factor` | 放大倍数 |
 | `superResolution.onnxModel` | `super_resolution.onnx_model` | `super_resolution.onnx_model` | ONNX 模型路径 |
+| `superResolution.numFrames` | `super_resolution.num_frames` | `super_resolution.num_frames` | PaddleGAN 帧序列窗口/块大小 |
 
 ### 输出参数
 
 | 前端字段 | Rust 字段 | Python 字段 | 作用 |
 |----------|-----------|-------------|------|
-| `outputDirectory` | `output_directory` | `output_directory` | 输出目录 |
-| `filenamePattern` | `filename_pattern` | `filename_pattern` | 文件名模板 |
-| `containerFormat` | `container_format` | `container_format` | 容器格式（mp4/mkv/mov） |
+| `outputDir` | `output_dir` | `output_dir` | 输出目录 |
+| `openOnComplete` | `open_on_complete` | `open_on_complete` | 完成后打开输出位置 |
 | `segmentFrames` | `segment_frames` | `segment_frames` | 分段帧数阈值 |
-| `resumeMode` | `resume_mode` | `resume_mode` | 续传模式（auto/force-fresh/force-resume） |
+| `TaskRequest.resumeMode` | `resume_mode` | `resume_mode` | `auto / force-fresh / force-resume` |
 
 ## 续传状态流转
 
 ```mermaid
 graph TD
     A[用户点击渲染] --> B[前端 check_resume_state]
-    B --> C[Rust inspect_output]
+    B --> C[Rust check_resume_state]
     C --> D[Python inspect-output 子命令]
     D --> E{输出是否存在?}
 
     E -->|否| F[直接启动任务]
     E -->|是| G{sidecar 签名匹配?}
 
-    G -->|否| H[ResumeConflictError<br/>final_exists_only]
-    G -->|是| I{有未完成片段?}
+    G -->|否| H[final_exists_only]
+    G -->|是| I{连续片段前缀 > 0?}
 
-    I -->|否| J[ResumeConflictError<br/>final_exists_with_resume]
-    I -->|是| K[返回续传状态]
+    I -->|否| H
+    I -->|是| J[final_exists_with_resume]
 
-    H --> L[前端 ResumeConflictDialog]
-    J --> L
-    K --> M[前端提示续传]
+    H --> K[前端 ResumeConflictDialog]
+    J --> K
+    K --> L[选择 fresh / resume / skip / cancel]
 ```
+
+用户选择 `resume` 时前端显式发送 `force-resume`，选择 `fresh` 时发送 `force-fresh`；默认
+`auto` 只用于首次预检后的普通启动，不会被用来重放已确认的冲突。
 
 ## 进度数据流
 
@@ -228,23 +250,21 @@ graph LR
 
 ### 多阶段进度
 
-进度报告包含 `stage_index` 和 `stage_total`，前端据此显示当前阶段和总阶段数。典型流程：
-
-1. Stage 1: 解码 / 预处理
-2. Stage 2: 增强（插帧/超分）
-3. Stage 3: 编码 / 后处理
+进度报告包含 `stage_index` 和 `stage_total`，前端据此显示当前处理步骤及步骤总数。规划出的每个
+preprocess filter chain、插帧、超分和 postprocess filter chain 各占一个 stage；顺序与
+`StagePlan.steps` 完全一致。解码与编码是这些 stage 的 I/O 边界，不另维护一套阶段序号。
 
 ## Watchdog 数据流
 
 ```mermaid
 graph LR
     A[stdout reader] --> B[progress_beat 更新]
-    B --> C[Arc<AtomicU64>]
-    D[Watchdog] --每秒轮询--> C
+    B --> C[Arc Mutex Instant]
+    D[Watchdog] --每 5 秒轮询--> C
     D --> E{超时?}
     E -->|是| F[cancel_token.cancel(Stalled)]
     E -->|否| G[继续轮询]
-    F --> H[Controller 终止任务]
+    F --> H[TaskSupervisor 终止进程组]
 ```
 
 Watchdog 配置：

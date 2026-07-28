@@ -9,7 +9,7 @@
 | 1 | 显式环境变量（`VP_*`） | 最高优先级，覆盖所有其他来源 |
 | 2 | 打包资源目录 | `frontend/src-tauri/resources/runtime/` |
 | 3 | 开发环境源码布局 | 工作区根目录下的 `backend/` |
-| 4 | 系统级 PATH | 系统 PATH 中的可执行文件 |
+| 4 | 系统级 PATH | 仅 Python 等允许系统安装的可执行文件 |
 
 [`frontend/src-tauri/src/runtime/mod.rs`](../frontend/src-tauri/src/runtime/mod.rs) 在 `lib.rs::setup` 中调用一次 `resolve_runtime_paths()`，结果存入 managed state，后续命令直接读取。
 
@@ -20,14 +20,15 @@
 2. 打包目录中的 bundled Python（`resources/runtime/python/python.exe`）
 3. 系统 PATH 中的 `python.exe`（Windows）或 `python3`（Linux/macOS）
 
-Release 构建默认不再打包 Python 运行时。若系统 PATH 中已存在兼容的 Python（3.12+），无需额外配置。
+Release 构建默认不打包 Python 运行时。若系统 PATH 中已存在兼容的 Python（3.12+），无需额外配置。
 
 **FFmpeg / FFprobe**：
 1. `VP_FFMPEG_PATH` / `VP_FFPROBE_PATH` 环境变量
-2. runtime root 下的 `ffmpeg/bin/ffmpeg.exe` 与 `ffmpeg/bin/ffprobe.exe`
-3. Tauri resource 下的 `ffmpeg/bin/ffmpeg.exe`；旧 bundle 的 FFprobe 保持 `ffprobe/bin/ffprobe.exe`
+2. `$RUNTIME_ROOT/ffmpeg/bin/ffmpeg[.exe]` 与 `$RUNTIME_ROOT/ffmpeg/bin/ffprobe[.exe]`
 
-Rust 通过一次 `resolve_ffmpeg_tools()` 调用解析这对工具。开发模式未解析到显式路径时，Python FFmpeg wrapper 仍可回退系统 PATH；release bundle 缺少工具时拒绝启动。
+Rust 通过一次 `resolve_ffmpeg_tools()` 调用解析这对工具。bundle 只使用上述 canonical runtime
+布局，不直接从 Tauri resource 根查找二进制。开发模式未解析到显式路径时，Python FFmpeg
+wrapper 仍可回退系统 PATH；release bundle 缺少工具时拒绝启动。
 
 **模型目录**：
 1. `VP_RIFE_MODEL_DIR` 环境变量
@@ -36,21 +37,46 @@ Rust 通过一次 `resolve_ffmpeg_tools()` 调用解析这对工具。开发模�
 
 **TensorRT（可选）**：
 1. `VP_TENSORRT_DIR` 环境变量
-2. 未设置时自动降级到 CUDA EP
+2. `$RUNTIME_ROOT/tensorrt/`
+3. 未解析到目录时自动降级到 CUDA EP
 
-桌面外壳通过 `build_env_map` 将所有解析到的路径和环境变量透传给 Python 子进程。Python 端 [`backend/app/utils/dll_paths.py`](../backend/app/utils/dll_paths.py) 在创建 ONNX session 前自动将 `<dir>/bin` 注册到 DLL 搜索路径，无需手动修改系统 PATH。
+桌面外壳在 composition root 只解析一次 `ResolvedRuntimePaths`，后续 `build_env_map` 只投影这份
+类型化结果，不重复读取第二份环境状态。TensorRT 目录进入环境缓存 fingerprint。Python 端
+[`backend/app/utils/dll_paths.py`](../backend/app/utils/dll_paths.py) 在创建 ONNX session 前自动将
+`<dir>/bin` 注册到 DLL 搜索路径，无需手动修改系统 PATH。
 
-## 环境变量完整清单
+## 应用运行时环境变量
 
 | 变量名 | Rust 读取 | Python 读取 | 说明 |
 |--------|----------|------------|------|
-| `VP_FFMPEG_PATH` | ✅ | — | FFmpeg 可执行文件路径 |
-| `VP_FFPROBE_PATH` | ✅ | — | FFprobe 可执行文件路径 |
-| `VP_PYTHON_EXECUTABLE` | ✅ | — | Python 可执行文件路径 |
+| `VP_APP_DATA_DIR` | ✅ | — | 显式覆盖应用数据目录（主要用于 CI/E2E） |
+| `VP_BACKEND_DIR` | ✅ | — | Python backend 根目录 |
+| `VP_FFMPEG_PATH` | ✅ | ✅ | FFmpeg 可执行文件路径 |
+| `VP_FFPROBE_PATH` | ✅ | ✅ | FFprobe 可执行文件路径 |
+| `VP_LOG_DIR` | ✅ | ✅ | 日志目录 |
+| `VP_PYTHON_EXECUTABLE` | ✅ | ✅ | Python 可执行文件路径 |
 | `VP_RIFE_MODEL_DIR` | ✅ | ✅ | RIFE 模型目录 |
-| `VP_RUNTIME_ROOT` | ✅ | — | 运行时资源根目录 |
+| `VP_RIFE_MODEL_VERSION` | ✅ | ✅ | 默认 RIFE checkpoint 版本 |
+| `VP_RUNTIME_ROOT` | ✅ | ✅ | canonical 运行时资源根目录 |
 | `VP_TENSORRT_DIR` | ✅ | ✅ | TensorRT 安装目录 |
 | `VP_TASK_STALL_TIMEOUT_SECS` | ✅ | — | Watchdog 超时秒数（0 禁用） |
+
+Python 层还接受以下有明确作用域的覆盖项；通用配置由 `_Settings` 读取，OpenCV/PaddleGAN
+专用项由对应 runtime adapter 读取：
+
+| 变量名 | 说明 |
+|--------|------|
+| `VP_DEBUG` | Python 日志级别开关 |
+| `VP_APP_ROOT` | Python 资源解析根目录 |
+| `VP_LOG_FILE_MAX_BYTES` | 单个轮转日志文件大小上限 |
+| `VP_LOG_FILE_BACKUP_COUNT` | 轮转日志备份数量 |
+| `VP_LOG_STARTUP_FILE_KEEP_COUNT` | 启动日志文件保留数量 |
+| `VP_RIFE_SCALE` | CLI 未显式传值时的 RIFE scale |
+| `VP_RIFE_FP16` | CLI 未显式传值时的 RIFE FP16 开关 |
+| `VP_RIFE_DEFAULT_MULTI` | CLI 未显式传值时的插帧倍率 |
+| `VP_OPENCV_BIN_DIR` / `VP_OPENCV_DIR` | Windows OpenCV DLL 搜索目录或安装根 |
+| `VP_PADDLEGAN_TRT_CACHE_DIR` | PaddleGAN TensorRT engine 缓存目录 |
+| `VP_PADDLEGAN_VSR_TRACE_PATH` | PaddleGAN VSR 诊断 trace 输出路径 |
 
 ## 本地持久化路径
 
@@ -58,9 +84,13 @@ Tauri 的 `app_handle.path()` API 自动处理各平台差异：
 
 | 数据 | Windows | Linux | macOS |
 |------|---------|-------|-------|
-| 环境缓存 | `%APPDATA%/com.lenovo.vp.workbench/` | `~/.config/com.lenovo.vp.workbench/` | `~/Library/Application Support/com.lenovo.vp.workbench/` |
+| 应用数据目录 | `%LOCALAPPDATA%/com.lenovo.vp.workbench/` | Tauri `app_local_data_dir` | Tauri `app_local_data_dir` |
 | 文件名 | `environment-cache.json` | 同上 | 同上 |
 | 预设文件 | `workbench-preset.json` | 同上 | 同上 |
+
+环境缓存 schema 为 14，预设 schema 为 2。损坏或其他版本文件会改名为
+`*.incompatible-<reason>-*.bak` 后重建，不做迁移或回退读取。release 无法解析应用数据目录时
+直接启动失败；不会退到 `%TEMP%` 或安装目录伪装持久化成功。
 
 ## 开发环境启动
 
@@ -149,12 +179,18 @@ ONNX 引擎默认走 CUDA EP。启用 TensorRT EP：
   },
   "app": {
     "windows": [{
+      "label": "main",
       "title": "VP Workbench",
       "width": 1280,
       "height": 860,
       "minWidth": 1040,
       "minHeight": 760
-    }]
+    }],
+    "security": {
+      "capabilities": ["default"],
+      "csp": "default-src 'self' customprotocol: asset:; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'"
+    },
+    "withGlobalTauri": false
   },
   "bundle": {
     "active": false,
@@ -171,23 +207,41 @@ ONNX 引擎默认走 CUDA EP。启用 TensorRT EP：
 
 | 工作流 | 触发条件 | 职责 |
 |--------|----------|------|
-| `e2e.yml` | push/PR 修改 backend/app/ 或 frontend/ | Windows CLI smoke + 完整原生 WebView E2E |
+| `e2e.yml` | push/PR 修改 backend/app、contracts、frontend 或 scripts | Windows CLI smoke + 完整原生 WebView E2E |
 | `e2e-arc.yml` | 手工 `workflow_dispatch` | Linux ARC CLI smoke + 完整原生 WebView E2E |
 | `release.yml` | push v* 标签 | 构建并发布到 GitHub Release |
-| `test-backend.yml` | push/PR 修改 backend/ | PyTorch 和 Paddle 后端测试 |
-| `test.yml` | push/PR 修改 backend/app/ 或 frontend/ | 前端测试 + 类型检查 + 错误码一致性检查 |
+| `test-backend.yml` | push/PR 修改 backend、contracts 或 scripts | 以独立进程运行 PyTorch 与 Paddle 后端测试 |
+| `test.yml` | push/PR 修改代码、契约、脚本或当前文档 | 契约 freshness、Rust test/clippy、前端测试/构建/静态门禁、Vulture 与全仓架构检查 |
 
-E2E release 构建启用 Istanbul 插桩。79 个 spec 按领域分成最多 10 个串行 Tauri WebView session，每个 session 只在结束时把 renderer 内序列化的 coverage JSON 写到 `frontend/.nyc_output/`。CI 会先清空旧 coverage，并在生成 `nyc` 报告前校验 JSON 数量为 1 至 10，避免旧文件掩盖覆盖率采集失败。
+对应的 `test-arc.yml`、`test-backend-arc.yml`、`release-arc.yml`、`benchmark-arc.yml` 和
+`arc-linux-smoke.yml` 覆盖 Linux ARC、发布与性能回归路径。
 
-Windows 与 Linux 各自在同一个 job 内安装依赖、构建一次插桩应用并运行完整套件，不再为 task 分组重复构建或传递制品。测试媒体由 `frontend/scripts/generate-e2e-fixture.mjs` 统一生成，规格为 `320x180`、`10fps`、`0.5s` 且带音频。EdgeDriver 和两个 Rust launcher 使用 `VP_E2E_CACHE_DIR` 的持久缓存。WebDriver launcher 只在其子进程环境中移除代理变量，父 shell 和其他 `VP_*` 运行配置保持不变。
+E2E release 构建启用 Istanbul 插桩。当前 spec 按领域分组，在最多 10 个串行 Tauri WebView
+session 内运行；每个 session 只在结束时把 renderer 内序列化的 coverage JSON 写到
+`frontend/.nyc_output/`。WDIO `onPrepare` 会先清空残留 coverage，并在生成 `nyc` 报告前校验
+JSON 数量为 1 至 10，避免残留文件掩盖覆盖率采集失败。`app/security.spec.ts` 校验 CSP 与本地
+capability。
+
+Windows 与 Linux 的 UI E2E job 都只构建一次插桩应用，随后让全部领域分组共享该构建。测试媒体由
+`frontend/scripts/generate-e2e-fixture.mjs` 统一生成，规格为 `320x180`、`10fps`、`0.5s` 且带
+音频。EdgeDriver 和两个 Rust launcher 使用 `VP_E2E_CACHE_DIR` 的持久缓存。WebDriver launcher
+只在其子进程环境中移除代理变量，父 shell 和其他 `VP_*` 运行配置保持不变。
 
 ## 平台差异
 
 | 功能 | Windows | Linux | macOS |
 |------|---------|-------|-------|
 | 桌面窗口 | ✅ 完整支持 | ✅ | ✅ |
-| 进程暂停/恢复 | ✅ Win32 API | ❌ SIGSTOP/SIGCONT（占位） | ❌ 占位 |
+| 进程暂停/恢复 | ✅ Win32 API | ✅ 进程组 SIGSTOP/SIGCONT | ✅ 进程组 SIGSTOP/SIGCONT |
 | FFmpeg 打包 | ✅ | ✅ | ✅ |
 | Python 打包 | ✅ 可选 | ✅ 可选 | ✅ 可选 |
 
-当前主要开发和测试平台为 Windows。Linux/macOS 的进程暂停/恢复功能尚未实现，但其他功能完整可用。
+当前主要开发和测试平台为 Windows。POSIX 暂停/恢复通过 `kill(-pgid, SIGSTOP/SIGCONT)` 控制
+整个 backend 进程组；平台 CI 仍负责验证各自的系统调用和打包路径。
+
+## 桌面安全配置
+
+[`frontend/src-tauri/capabilities/default.json`](../frontend/src-tauri/capabilities/default.json) 设置
+`local: true` 且只匹配 `windows: ["main"]`，没有 remote origin。CSP 只允许自身脚本、Tauri IPC
+连接、本地 asset/font、blob/data 图片和现有内联样式所需来源；禁止任意外网连接、`object`、
+`frame` 和 `unsafe-eval`。Rust 配置测试与原生 WebView E2E 会共同阻止权限/CSP 回退。

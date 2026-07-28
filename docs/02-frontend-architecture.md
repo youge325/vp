@@ -5,19 +5,19 @@
 | 技术 | 版本 | 用途 |
 |------|------|------|
 | Vue | ^3.5.32 | 框架与响应式系统 |
-| Vite | ^8.0.9 | 构建工具 |
+| Vite | ^8.0.16 | 构建工具 |
 | TypeScript | ~6.0.2 | 类型系统 |
 | Pinia | ^3.0.3 | 状态管理 |
 | Vue Router | ^4.6.3 | 路由与懒加载 |
-| @tauri-apps/api | ^2.10.1 | Tauri 前端 API |
-| Vitest | ^3.2.4 | 单元测试 |
+| @tauri-apps/api | ^2.11.0 | Tauri 前端 API |
+| Vitest | ^4.1.8 | 单元测试 |
 
 ## 目录结构与模块依赖
 
 ```mermaid
 graph TB
     subgraph "视图层"
-        V1[views/ 8 个模块视图]
+        V1[views/ 8 个模块路由 / 7 个组件]
         V2[components/ 通用组件]
     end
 
@@ -33,9 +33,10 @@ graph TB
         S3[stores/preset.ts]
         S4[stores/task.ts]
         S5[stores/issue.ts]
+        S6[stores/mediaRunState.ts]
     end
 
-    subgraph "服务层 (纯函数)"
+    subgraph "服务层（领域规则与编排）"
         SV1[services/env/]
         SV2[services/error/]
         SV3[services/format/]
@@ -52,7 +53,7 @@ graph TB
 
     subgraph "类型层"
         T1[types/domain/]
-        T2[types/generated/ ~40 文件]
+        T2[types/generated/contracts.ts]
         T3[types/protocol/]
         T4[types/view/]
     end
@@ -63,15 +64,19 @@ graph TB
     C1 --> S2
     C1 --> S3
     C1 --> S4
+    C1 --> S5
+    C1 --> S6
     C2 --> S3
     C3 --> S1
     C3 --> S2
     C3 --> S4
+    C3 --> S6
     S1 --> SV1
     S2 --> SV4
     S3 --> SV5
     S4 --> SV6
     S5 --> SV2
+    S6 --> SV6
     SV6 --> I3
     SV1 --> I3
     I3 --> I1
@@ -136,7 +141,7 @@ export async function safeInvoke<C extends IpcCommand>(
 ): Promise<IpcInvokeResult<C>>
 ```
 
-- `contract.ts` 集中声明 11 个命令的参数与返回类型，endpoint 调用按命令名自动推导
+- 生成的 `contract.ts` 精确声明 10 个命令的参数与返回类型，endpoint 调用按命令名自动推导
 - `isTauriRuntime()` 检测 `window.__TAURI_INTERNALS__`，区分桌面运行和浏览器预览模式
 - `normalizeInvokeError()` 处理 Rust 序列化的 `{ code, message }`，包装为 `InvokeError`
 - Tauri 权限拒绝错误（`not allowed` / `Command not found`）会附加开发者提示
@@ -150,7 +155,7 @@ export async function safeInvoke<C extends IpcCommand>(
 | `env.ts` | `check_environment` |
 | `media.ts` | `pick_inputs` / `inspect_video` |
 | `preset.ts` | `load_workbench_preset` / `save_workbench_preset` / `pick_output_directory` |
-| `task.ts` | `start_task` / `cancel_task` / `control_task`（`kind: "pause" | "resume"`）/ `check_resume_state` / `open_output_location` |
+| `task.ts` | `start_task` / `control_task`（`pause | resume | cancel`）/ `check_resume_state` / `open_output_location` |
 
 ### 事件监听
 
@@ -158,14 +163,14 @@ export async function safeInvoke<C extends IpcCommand>(
 
 | 事件名 | 来源 | 说明 |
 |--------|------|------|
-| `task-progress` | Rust `protocol.rs` | 进度更新 |
-| `task-completed` | Rust `protocol.rs` | 任务完成 |
-| `task-error` | Rust `protocol.rs` | 任务错误 |
-| `task-cancelled` | Rust `protocol.rs` | 任务取消（区分 User / Stalled） |
-| `task-log` | Rust `protocol.rs` | 日志输出 |
-| `task-resume-status` | Rust `protocol.rs` | 续传状态 |
+| `task-progress` | IPC manifest | 进度更新 |
+| `task-completed` | IPC manifest | 任务完成 |
+| `task-error` | IPC manifest | 任务错误 |
+| `task-cancelled` | IPC manifest | 任务取消（区分 User / Stalled） |
+| `task-log` | IPC manifest | 日志输出 |
+| `task-resume-status` | IPC manifest | 续传状态 |
 
-事件名定义在 [`frontend/src/types/protocol/events.ts`](../frontend/src/types/protocol/events.ts)，使用 `satisfies` 约束确保覆盖 Rust `TaskEventName` 的所有 variant。
+事件名及 payload 映射由 [`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) 生成到 [`frontend/src/types/protocol/events.ts`](../frontend/src/types/protocol/events.ts)；Rust 枚举来自同一清单。
 
 ## 任务状态机（纯函数 Reducer）
 
@@ -219,20 +224,46 @@ graph LR
 active item。conflict、events、control 和 finalize 每次操作只读取一次 context。
 
 单项开始时的 `resetItemRunState()` 固定清空日志，批次终结时的
-`resetItemsRunState()` 固定保留各项日志。两种语义由 `mediaRunState` 的两个明确命令表达，
-不再把 `preserveLogs` 策略参数穿过 store、runtime 或 lifecycle。
+`resetItemsRunState()` 固定保留各项日志。两种语义由 `mediaRunState` 的两个明确命令表达。
 
 `conflict.ts` 和 `events.ts` 只接收各自需要的 lifecycle capability；内部 queue/finalize 方法不会成为 BatchRunner 的公共返回字段。
 
 `ResumeInspectionResult` 只存在于 IPC 边界。进入任务状态前，`resume-classifier.ts` 将它或运行时 error details 投影为 `{ kind, outputPath, progress }`；对话框不保存输入路径、pipeline kind、sidecar 标记等未消费 wire 字段。
 
+`BatchRunnerDeps` 由 `TaskCommandPort`、`MediaItemPort`、`MediaRunStatePort`、
+`BatchStatePort`、`TaskIssuePort`、`OutputLocationPort` 和 `TaskRequestFactory` 等窄 capability
+组合而成。每个 lifecycle 模块再用 `Pick` 只接收自己消费的方法；只有
+`batch-runner.ts` composition root 看见完整依赖集合。
+
+### 控制请求的 owner-attempt 语义
+
+`BatchState.controlPending` 保存当前 `pause | resume | cancel` 请求。`control.ts` 为请求分配单调
+token，并记录开始时的 `currentId`；回复只有在 token、任务 ID、运行态和 `controlPending`
+仍匹配时才能提交。这样过期回复既不能覆盖新任务状态，也不能清掉更新的控制请求。控制按钮在
+请求未决时禁用，失败回滚也只由该请求的 owner 执行。
+
 ### Task orchestrator runtime 单例
 
 [`frontend/src/composables/app/taskOrchestratorRuntime.ts`](../frontend/src/composables/app/taskOrchestratorRuntime.ts) 缓存 `BatchRunner` 并连接 Pinia、IPC 与事件监听。`useBootstrap()` 直接负责监听器注册和卸载；`useTaskOrchestrator()` 只投影 Render 页消费的状态并把启动、取消、暂停、恢复和冲突处理命令发送给同一 runner，不暴露 listener lifecycle 或 console 专用读模型。`TaskConsole` 直接消费 task/media stores 与 `useConsoleTaskContext()`。
 
+[`frontend/src/composables/selectors/useTaskConsoleState.ts`](../frontend/src/composables/selectors/useTaskConsoleState.ts)
+是 TaskConsole 的唯一视图投影，统一日志格式、续传 banner 和批次完成百分比。模型指标展示统一由
+[`frontend/src/components/ModelMetricGrid.vue`](../frontend/src/components/ModelMetricGrid.vue) 渲染；
+[`frontend/src/components/forms/BaseToggle.vue`](../frontend/src/components/forms/BaseToggle.vue) 使用
+`BaseField` 的 toggle 模式，因此表单语义只保留一个外层 `label`。
+
+### 预设持久化可见性与 latest-wins
+
+[`frontend/src/composables/app/usePresetSync.ts`](../frontend/src/composables/app/usePresetSync.ts) 为每次
+debounced save 分配 generation。只有最新 generation 的成功或失败能清理或设置 `preset` issue，
+过期回复不会覆盖较新的结果。损坏或版本不匹配的预设会重置为默认值，并通过 App 根部的全局
+`IssueBanner` 显示；随后立即保存 schema 2 默认替代，成功也保留本次不兼容提示。替代写入或
+后续保存失败会在同一可见错误面显示具体持久化错误。
+
 ## 视图与路由
 
-[`frontend/src/router/index.ts`](../frontend/src/router/index.ts) 使用 `createWebHashHistory`，8 个模块视图全部懒加载：
+[`frontend/src/router/index.ts`](../frontend/src/router/index.ts) 使用 `createWebHashHistory`。
+8 个模块路由全部懒加载，其中 preprocess/postprocess 复用 `StageModuleView`：
 
 ```mermaid
 graph LR
@@ -263,42 +294,36 @@ graph LR
 
 ## 类型生成机制
 
-### ts-rs 自动生成
+### JSON Schema 自动生成
 
-Rust 模型在 [`frontend/src-tauri/src/models/`](../frontend/src-tauri/src/models/) 中定义，使用 `#[derive(TS)]` + `#[ts(export)]` 宏。`cargo build` 时自动生成 TypeScript 类型到 `frontend/src/types/generated/`（约 40 个文件）。
-
-示例（[`frontend/src-tauri/src/models/task.rs`](../frontend/src-tauri/src/models/task.rs)）：
-
-```rust
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "../../src/types/generated/")]
-pub struct TaskRequest {
-    pub input_path: String,
-    pub decode_config: DecodeConfig,
-    // ...
-}
-```
+根目录 [`contracts/`](../contracts/) 是 JSON Schema 2020-12 中立边界。源 schema 通过外部 `$ref`
+复用公共结构；生成器验证引用目标和每个对象显式的 `additionalProperties`，再生成聚合
+`boundary.schema.json`。Python 使用 `datamodel-code-generator`，TypeScript 使用
+`json-schema-to-typescript`，Rust 在编译期通过 Typify 消费聚合 schema；同一生成器还产出
+IPC 命令与事件适配器。`python scripts/generate_contracts.py --check` 对所有跟踪生成物执行
+逐字节 freshness 检查。
 
 ### 类型扩展层
 
 生成文件禁止前端代码直接深路径引用。`types/protocol/index.ts` 统一 re-export 所有 generated 类型：
 
 ```typescript
-export * from '@/types/generated/DecodeConfig'
-export * from '@/types/generated/EncodeConfig'
-// ... 约 40 个文件
+export type {
+  DecodeConfig,
+  EncodeConfig,
+  TaskRequest,
+} from '@/types/generated/contracts'
 ```
 
 前端自定义领域模型在 `types/domain/` 中定义（如 `MediaItem`、`BatchState`、`OperationIssue`），与生成类型互补。
 
 ## 编译期协议一致性
 
-这是前端最重要的设计决策之一。通过 TypeScript 类型系统实现零运行时成本的协议覆盖检查：
+这是前端最重要的设计决策之一：名称和 payload 关系直接由清单生成，避免手写镜像。
 
 ### 事件名覆盖检查
 
-[`frontend/src/types/protocol/events.ts`](../frontend/src/types/protocol/events.ts):
+[`frontend/src/types/protocol/events.ts`](../frontend/src/types/protocol/events.ts) 是生成文件：
 
 ```typescript
 export const TASK_EVENT_NAMES = {
@@ -308,19 +333,22 @@ export const TASK_EVENT_NAMES = {
   TaskCancelled: 'task-cancelled',
   TaskLog: 'task-log',
   TaskResumeStatus: 'task-resume-status',
-} as const satisfies Record<string, TaskEventName>
+} as const
 
-// 编译期校验：必须覆盖所有 variant
-type _VariantsCovered = TaskEventName extends _ValuesOf<typeof TASK_EVENT_NAMES> ? true : never
-const _COVERAGE_CHECK: _VariantsCovered = true
+export type TaskEventName =
+  (typeof TASK_EVENT_NAMES)[keyof typeof TASK_EVENT_NAMES]
+
+export interface TaskEventPayloadMap {
+  'task-progress': TaskProgressPayload
+  // ...
+}
 ```
 
-- 若 Rust 新增 `TaskEventName` variant 但未同步到 `TASK_EVENT_NAMES`，`_VariantsCovered` 变为 `never`，`tsc` 报错
-- 若 `TASK_EVENT_NAMES` 的值不是合法的 `TaskEventName`（如 typo），`satisfies` 直接报错
+修改事件时只编辑 `ipc-manifest.json`，然后重新生成；freshness 门禁拒绝任何漏生成或手改。
 
 ### 错误码类型检查
 
-完整错误码集合由 ts-rs 生成的 `TaskErrorCode` union 提供；运行时代码只为实际需要比较或构造的错误码维护别名：
+完整错误码集合由中立 schema 生成的 `TaskErrorCode` union 提供；运行时代码只为实际需要比较或构造的错误码维护别名：
 
 ```typescript
 export const TASK_ERROR_CODES = {
@@ -332,8 +360,13 @@ export const TASK_ERROR_CODES = {
 } as const satisfies Record<string, TaskErrorCode>
 ```
 
-完整性由 Rust/Python/generated TypeScript 三层漂移检查负责；运行时别名表不复制未被前端消费的枚举成员。
+完整性由 `generate_contracts.py --check` 与架构门禁负责；运行时别名表不复制未被前端消费的枚举成员。
 
-### 形状反向锁
+## 依赖方向与静态门禁
 
-[`frontend/src/types/protocol/_contract_check.ts`](../frontend/src/types/protocol/_contract_check.ts) 对核心 IPC 类型做额外的形状校验，防止字段增删导致的类型漂移。
+组件和视图只进入 composables 与 stores；composition-root composables 将 stores、纯 services
+和 IPC adapter 组合起来。stores 可以消费纯 services，但不编排 IPC；`services` 与 `lib/ipc`
+是互不依赖的叶子层，前者不依赖 Vue、Pinia 或 Tauri。组件和视图只能经
+`@/types/protocol` 公共入口使用生成协议。Python 架构门禁维护层级规则，前端图扫描只负责全图
+环检测，避免两套规则源漂移。`npm run check` 顺序执行 ESLint、生产/测试 typecheck、依赖环
+检测、Knip 未使用导出/依赖检查，以及零阈值 jscpd 克隆扫描。
