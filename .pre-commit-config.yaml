@@ -45,7 +45,7 @@ repos:
         entry: python scripts/check_architecture_contracts.py
         language: system
         pass_filenames: false
-        files: '^(AGENTS\.md|README\.md|ruff\.toml|docs/.*\.md|\.github/workflows/.+\.ya?ml|backend/(?:app|tests|tests_full_e2e)/.*\.py|frontend/(?:src|tests)/.+\.(ts|vue)|frontend/(?:vitest\.config\.ts|vite\.config\.ts|wdio\.conf\.ts|tsconfig(?:\.app|\.wdio)?\.json|scripts/.+\.mjs)|frontend/src-tauri/src/.+\.rs|frontend/src-tauri/permissions/default\.toml|scripts/check_architecture_contracts\.py|scripts/architecture_contracts/.+\.py)$'
+        files: '^(AGENTS\.md|README\.md|ruff\.toml|docs/.*\.md|\.github/workflows/.+\.ya?ml|backend/(?:app|tests|tests_full_e2e)/.*\.py|frontend/(?:src|tests)/.+\.(ts|vue)|frontend/(?:vitest\.config\.ts|vite\.config\.ts|wdio\.conf\.ts|tsconfig(?:\.app|\.wdio)?\.json|scripts/.+\.mjs)|frontend/src-tauri/src/.+\.rs|frontend/src-tauri/permissions/default\.toml|scripts/setup-ci-runtime-env\.ps1|scripts/check_architecture_contracts\.py|scripts/architecture_contracts/.+\.py)$'
 
 # 跳过 Tauri 生成的 schema 文件，避免 pre-commit 反复检查自动生成产物
 exclude: ^frontend/src-tauri/(gen/schemas|schemas)/.*\.json$
