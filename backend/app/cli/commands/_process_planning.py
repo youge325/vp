@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from app.cli.runtime_configs import RuntimeConfigs
 from app.config import settings
@@ -26,9 +26,10 @@ from app.planning import (
     verify_super_resolution_backend,
 )
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.stage_worker_progress import StageProgressCallback
 from app.protocol.reporter import CliProgressReporter
 from app.utils.ffmpeg import FFmpegWrapper
-from app.utils.file_utils import get_output_path
+from app.utils.file_utils import prepare_default_output_path
 
 
 @dataclass
@@ -42,7 +43,7 @@ class ProcessingPlan:
     final_output_fps: float | None
     expected_output_frames: int
     progress_reporter: CliProgressReporter
-    progress_callbacks: list[Callable[[int, int], None]]
+    progress_callbacks: list[StageProgressCallback]
     metrics: PipelineMetrics
 
 
@@ -52,7 +53,7 @@ def _make_stage_progress_callback(
     stage_index: int,
     stage_total: int,
     stage_name: str,
-) -> Callable[..., None]:
+) -> StageProgressCallback:
     """Build a progress callback that pins this stage's identity into the reporter.
 
     Phase C.1.3 — each step gets its own closure so the reporter knows
@@ -94,7 +95,7 @@ def _resolve_output_paths(
         output_path = args.output
         Path(output_path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
     else:
-        output_path = get_output_path(input_path, output_dir, extension=f".{container}")
+        output_path = prepare_default_output_path(input_path, output_dir, container)
     return output_path
 
 
@@ -139,7 +140,7 @@ def build_plan(
     # Phase C.1.3:per-stage 独立闭包,每次 update 前先 set_stage,
     # 让 NDJSON `progress.stageIndex/stageTotal` 真实反映当前阶段位置。
     # 原代码中所有 stage 共用同一份 lambda,导致前端永远只看到 stage_index=1。
-    progress_callbacks: list[Callable[[int, int], None]] = [
+    progress_callbacks: list[StageProgressCallback] = [
         _make_stage_progress_callback(
             reporter=progress_reporter,
             stage_index=stage_index,

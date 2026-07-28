@@ -128,7 +128,7 @@ def _collect_config_sections(args: argparse.Namespace) -> dict[str, str | None]:
     flags are ignored when it's set (the parser still accepts them so
     older tooling doesn't break, but the documentation calls this out).
     """
-    if getattr(args, "config_stdin", False):
+    if args.config_stdin:
         return _read_stdin_config_sections()
     return {
         "decode": args.decode_config_json,

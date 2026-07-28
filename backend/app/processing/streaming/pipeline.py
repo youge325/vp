@@ -7,7 +7,7 @@ segmented output. Public entry point: :func:`process_video_streaming`.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 from app.planning import (
     ProcessingStep,
@@ -21,6 +21,7 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import StreamingPipelineContext
 from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline
 from app.processing.streaming.pipeline_preflight import build_streaming_pipeline_preflight
+from app.processing.streaming.stage_worker_progress import StageProgressCallback
 from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.ffmpeg._progress import EncodeProgressCallback
 
@@ -36,7 +37,7 @@ def process_video_streaming(
     output_config: dict[str, Any],
     processing_steps: list[ProcessingStep],
     tensor_backend_name: str,
-    progress_callbacks: list[Callable[[int, int], None]],
+    progress_callbacks: list[StageProgressCallback],
     metrics: PipelineMetrics,
     output_fps: float | None = None,
     encode_progress_callback: EncodeProgressCallback | None = None,

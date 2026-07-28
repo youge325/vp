@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from app.planning import ResumeState, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.stage_worker_progress import StageProgressCallback
 from app.utils.ffmpeg import FFmpegWrapper
 
 
@@ -19,7 +20,7 @@ class WorkerPipelineRuntimeConfig:
     decode_config: dict[str, Any]
     stage_plan: StagePlan
     tensor_backend_name: str
-    progress_callbacks: list[Callable[[int, int], None]]
+    progress_callbacks: list[StageProgressCallback]
     source_width: int
     source_height: int
     source_frames: int

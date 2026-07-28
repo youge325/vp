@@ -532,6 +532,43 @@ def test_source_rule_raises_parse_error_for_missing_file(tmp_path: Path) -> None
             "resetItemsRunState: (ids, preserveLogs) => store.resetItemsRunState(ids, preserveLogs)\n",
         ),
         (
+            "preset-normalize-default-strategy",
+            "function normalizeDecodeConfig(config, preferDefaults = false) {}\n",
+        ),
+        (
+            "preset-output-default-forwarder",
+            "function createDefaultOutputConfig() { return {} }\n",
+        ),
+        (
+            "media-run-reset-log-policy",
+            "function resetItemRunState(id: string, preserveLogs = false) {}\n",
+        ),
+        (
+            "workflow-step-algorithm-override",
+            "def resolve_processing_steps(workflow_config: dict, algorithm: AlgorithmType | None = None):\n"
+            "    return []\n",
+        ),
+        (
+            "cli-process-resume-mode-fallback",
+            'resume_mode = getattr(args, "resume_mode", "auto")\n',
+        ),
+        (
+            "cli-config-stdin-fallback",
+            'if getattr(args, "config_stdin", False):\n    pass\n',
+        ),
+        (
+            "obsolete-default-output-path-helper",
+            "def get_output_path(input_path, output_dir, suffix='_processed'):\n    pass\n",
+        ),
+        (
+            "wide-worker-runtime-types",
+            "encode_queue: queue.Queue[Any]\n",
+        ),
+        (
+            "rust-controller-forwarding-factory",
+            "fn default_controller() { DefaultProcessController::new(); }\n",
+        ),
+        (
             "streaming-optional-metrics",
             "def process_video_streaming(*, metrics: PipelineMetrics | None = None):\n"
             "    if metrics is None:\n"
@@ -708,7 +745,77 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
         (
             "fixed-batch-reset-log-policy",
             "resetItemRunState: (id) => mediaRunState.resetItemRunState(id),\n"
-            "resetItemsRunState: (ids) => mediaRunState.resetItemsRunState(ids, true),\n",
+            "resetItemsRunState: (ids) => mediaRunState.resetItemsRunState(ids),\n",
+        ),
+        (
+            "explicit-media-run-reset-semantics",
+            "function resetItemRunState(id: string): void {\n"
+            "  setIdleRunState(id, [])\n"
+            "}\n"
+            "function resetItemsRunState(ids: Set<string>): void {\n"
+            "  for (const id of ids) {\n"
+            "    setIdleRunState(id, state[id]?.taskState.logs ?? [])\n"
+            "  }\n"
+            "}\n",
+        ),
+        (
+            "workflow-only-step-planning",
+            "def _resolve_algorithm_types(workflow_config: dict[str, Any]) -> list[AlgorithmType]:\n"
+            "    return []\n"
+            "def resolve_processing_steps(workflow_config: dict[str, Any]) -> list[ProcessingStep]:\n"
+            "    algorithm_types = _resolve_algorithm_types(workflow_config)\n",
+        ),
+        (
+            "direct-cli-parser-fields",
+            "resume_mode = args.resume_mode\n",
+        ),
+        (
+            "direct-config-stdin-field",
+            "if args.config_stdin:\n    return _read_stdin_config_sections()\n",
+        ),
+        (
+            "default-output-path-contract",
+            "def prepare_default_output_path(\n"
+            "    input_path: str,\n"
+            "    output_dir: str,\n"
+            "    container: str,\n"
+            ") -> str:\n"
+            "    os.makedirs(output_dir, exist_ok=True)\n"
+            "    extension = container\n"
+            '    return f"{input_path}_processed{extension}"\n',
+        ),
+        (
+            "typed-stage-progress-callback",
+            "class StageProgressCallback(Protocol):\n"
+            "    def __call__(self, current: int, total: int, **metadata: Any) -> None: ...\n",
+        ),
+        (
+            "typed-encode-queue-contract",
+            "class _EncodeEnd:\n"
+            "    pass\n"
+            "type EncodeQueueItem = EncodedFrame | SegmentBoundary | StreamEnd | _EncodeEnd\n"
+            "type EncodeQueue = queue.Queue[EncodeQueueItem]\n",
+        ),
+        (
+            "typed-worker-process-io",
+            "class DecodedFrameWriterConfig:\n"
+            "    ffmpeg: FFmpegWrapper\n"
+            "    worker_stdin: BinaryIO | None\n"
+            "    stop_event: threading.Event\n"
+            "def drain_final_worker_output(*, encode_queue: EncodeQueue):\n"
+            "    pass\n",
+        ),
+        (
+            "typed-worker-event-handle",
+            "class _WorkerEventHandle(Protocol):\n"
+            "    process: subprocess.Popen[bytes]\n"
+            "    plan: StageWorkerPlan\n"
+            "def read_worker_stderr(progress_callbacks: Sequence[StageProgressCallback | None]):\n"
+            "    pass\n",
+        ),
+        (
+            "typed-encoder-segment-writer",
+            "self._writer: RawVideoWriter | None = None\ndef write_frame(self, frame: np.ndarray) -> None:\n    pass\n",
         ),
         (
             "typed-stage-worker-factory-contract",
@@ -958,8 +1065,7 @@ def test_critical_catalog_rules_reject_reintroduced_sources(tmp_path: Path, rule
         ),
         (
             "rust-controller-owned-runtime-policy",
-            "let controller = process_control::default_controller();\n"
-            "if let Some(timeout) = parse_stall_timeout() {}\n",
+            "let controller = DefaultProcessController::default();\nif let Some(timeout) = parse_stall_timeout() {}\n",
         ),
         (
             "rust-shared-ffmpeg-tool-resolver",

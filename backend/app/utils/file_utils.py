@@ -25,13 +25,12 @@ def validate_input_path(input_path: str) -> bool:
     return ext.lower() in _SUPPORTED_EXTENSIONS
 
 
-def get_output_path(
+def prepare_default_output_path(
     input_path: str,
     output_dir: str,
-    suffix: str = "_processed",
-    extension: str = ".mp4",
+    container: str,
 ) -> str:
     basename = os.path.splitext(os.path.basename(input_path))[0]
     os.makedirs(output_dir, exist_ok=True)
-    resolved_extension = extension if extension.startswith(".") else f".{extension}"
-    return os.path.join(output_dir, f"{basename}{suffix}{resolved_extension}")
+    extension = container if container.startswith(".") else f".{container}"
+    return os.path.join(output_dir, f"{basename}_processed{extension}")

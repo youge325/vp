@@ -143,7 +143,7 @@ sequenceDiagram
     Rust-->>Frontend: Ok(())
 ```
 
-`spawn_task` 先启动 stdout NDJSON reader 与 stderr reader，再构造一个 `TaskControllerSession` 交给 controller。`spawn_task_controller` 从该会话启动 child wait task、可选 Watchdog 和控制/终态 actor；默认 `ProcessController` 与 Watchdog 环境策略由 controller 边界内部创建，不由 spawn 层逐项传递。
+`spawn_task` 先启动 stdout NDJSON reader 与 stderr reader，再构造一个 `TaskControllerSession` 交给 controller。`spawn_task_controller` 从该会话启动 child wait task、可选 Watchdog 和控制/终态 actor，并为该任务直接构造一个 `DefaultProcessController::default()`。控制器作为 actor 的具体值持有，不经过单消费者工厂或 `Arc<dyn ProcessController>`；`ProcessController` trait 仅保留为暂停/恢复策略边界与测试 seam。
 
 ### NDJSON 信封解析
 

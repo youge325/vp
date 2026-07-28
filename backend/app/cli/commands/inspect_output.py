@@ -28,7 +28,7 @@ from app.planning import (
     resolve_workflow_and_output_fps,
 )
 from app.protocol import ndjson
-from app.utils.file_utils import get_output_path
+from app.utils.file_utils import prepare_default_output_path
 
 
 def cmd_inspect_output(args: argparse.Namespace) -> None:
@@ -47,7 +47,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     if args.output:
         output_path = args.output
     else:
-        output_path = get_output_path(input_path, output_dir, extension=f".{container}")
+        output_path = prepare_default_output_path(input_path, output_dir, container)
 
     workflow_config, final_output_fps = resolve_workflow_and_output_fps(
         workflow_config,

@@ -19,12 +19,8 @@ from __future__ import annotations
 import queue
 import threading
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
-
-# Terminal sentinel signals end-of-stream to the encoder worker.
-_ENCODE_END = object()
 
 # Phase D.2.2 — see module docstring. Worst-case cancellation latency is
 # bounded by the watchdog (default 600 s) and the FFmpeg child's own
@@ -53,7 +49,16 @@ class StreamEnd:
     next_source_frame: int
 
 
-def _queue_put(target_queue: queue.Queue[Any], item: Any, stop_event: threading.Event) -> None:
+class _EncodeEnd:
+    __slots__ = ()
+
+
+_ENCODE_END = _EncodeEnd()
+type EncodeQueueItem = EncodedFrame | SegmentBoundary | StreamEnd | _EncodeEnd
+type EncodeQueue = queue.Queue[EncodeQueueItem]
+
+
+def _queue_put(target_queue: EncodeQueue, item: EncodeQueueItem, stop_event: threading.Event) -> None:
     while not stop_event.is_set():
         try:
             target_queue.put(item, timeout=_QUEUE_POLL_INTERVAL_SECONDS)
@@ -62,14 +67,14 @@ def _queue_put(target_queue: queue.Queue[Any], item: Any, stop_event: threading.
             continue
 
 
-def _queue_put_nowait(target_queue: queue.Queue[Any], item: Any) -> None:
+def _queue_put_nowait(target_queue: EncodeQueue, item: EncodeQueueItem) -> None:
     try:
         target_queue.put_nowait(item)
     except queue.Full:
         pass
 
 
-def _queue_get(source_queue: queue.Queue[Any], stop_event: threading.Event) -> Any | None:
+def _queue_get(source_queue: EncodeQueue, stop_event: threading.Event) -> EncodeQueueItem | None:
     while not stop_event.is_set():
         try:
             return source_queue.get(timeout=_QUEUE_POLL_INTERVAL_SECONDS)

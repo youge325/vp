@@ -32,7 +32,7 @@ def cmd_process(args: argparse.Namespace) -> None:
         ffmpeg=ffmpeg,
         configs=configs,
     )
-    resume_mode = getattr(args, "resume_mode", "auto")
+    resume_mode = args.resume_mode
     try:
         result, elapsed = execute_plan(
             ffmpeg=ffmpeg,

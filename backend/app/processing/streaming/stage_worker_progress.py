@@ -6,12 +6,18 @@ from dataclasses import dataclass
 import json
 import sys
 import threading
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
+
+from app.processing.streaming.stage_worker_config import StageWorkerConfig
 
 STAGE_EVENT_PREFIX = "VP_STAGE_EVENT "
 SEQUENCE_STAGE_HEARTBEAT_SECONDS = 30.0
 
 EventSink = Callable[[dict[str, Any]], None]
+
+
+class StageProgressCallback(Protocol):
+    def __call__(self, current: int, total: int, **metadata: Any) -> None: ...
 
 
 @dataclass(slots=True)
@@ -26,7 +32,7 @@ def emit_stage_event(event: dict[str, Any]) -> None:
 
 
 def progress_event(
-    config: Any,
+    config: StageWorkerConfig,
     current: int,
     total: int,
     *,
@@ -49,7 +55,7 @@ def progress_event(
 
 
 def start_sequence_stage_heartbeat(
-    config: Any,
+    config: StageWorkerConfig,
     event_sink: EventSink,
     total: int,
     progress_state: StageProgressState,
@@ -80,6 +86,7 @@ __all__ = [
     "EventSink",
     "SEQUENCE_STAGE_HEARTBEAT_SECONDS",
     "STAGE_EVENT_PREFIX",
+    "StageProgressCallback",
     "StageProgressState",
     "emit_stage_event",
     "progress_event",

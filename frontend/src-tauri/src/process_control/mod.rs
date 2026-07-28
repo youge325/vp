@@ -1,7 +1,7 @@
 //! Platform-agnostic process control surface used by the task runner.
 //!
 //! Phase 5a split the previous single-file ``process_control.rs`` into:
-//! - this ``mod.rs`` — trait, error type, controller struct, factory
+//! - this ``mod.rs`` — trait, error type, and default controller
 //! - ``windows.rs`` — Win32 ToolHelp suspend/resume implementation
 //! - ``posix.rs`` — ``kill(-pgid, SIGSTOP/SIGCONT)`` implementation
 //!
@@ -14,7 +14,6 @@
 use std::error::Error;
 use std::fmt;
 use std::io;
-use std::sync::Arc;
 
 #[cfg(not(target_os = "windows"))]
 mod posix;
@@ -101,12 +100,6 @@ pub(crate) struct DefaultProcessController {
     cached_threads: std::sync::Mutex<std::collections::HashMap<u32, Vec<u32>>>,
 }
 
-impl DefaultProcessController {
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-}
-
 impl ProcessController for DefaultProcessController {
     fn suspend(&self, root_pid: u32) -> Result<(), ProcessControlError> {
         let threads = imp::set_process_tree_suspended(root_pid, true, None)?;
@@ -150,10 +143,6 @@ impl DefaultProcessController {
 // 不再调用 ``store_thread_cache`` / ``take_thread_cache``(通过 ``#[cfg]``
 // 条件编译),因此无需保留无意义的方法。
 
-pub(crate) fn default_controller() -> Arc<dyn ProcessController> {
-    Arc::new(DefaultProcessController::new())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,7 +179,7 @@ mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     fn take_thread_cache_is_consume_once_after_phase_16() {
-        let controller = DefaultProcessController::new();
+        let controller = DefaultProcessController::default();
         controller.store_thread_cache(1234, vec![10, 20, 30]);
 
         let first = controller.take_thread_cache(1234);

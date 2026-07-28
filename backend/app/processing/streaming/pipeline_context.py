@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from app.planning import ResumeState, SegmentManifest, StagePlan
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.stage_worker_progress import StageProgressCallback
 from app.utils.ffmpeg import FFmpegWrapper
 from app.utils.ffmpeg._progress import EncodeProgressCallback
 
@@ -35,7 +36,7 @@ class StreamingPipelineContext:
     manifest: SegmentManifest
     resume_state: ResumeState
     tensor_backend_name: str
-    progress_callbacks: list[Callable[[int, int], None]]
+    progress_callbacks: list[StageProgressCallback]
     output_fps: float | None
     encode_progress_callback: EncodeProgressCallback | None
     metrics: PipelineMetrics

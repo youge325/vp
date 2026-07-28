@@ -125,6 +125,10 @@ graph LR
     O[stop_event] --> P[协作式终止]
 ```
 
+[`backend/app/planning/workflow_steps.py`](../backend/app/planning/workflow_steps.py) 的
+`resolve_processing_steps(workflow_config)` 只消费已经校验的 workflow。插帧、超分与处理顺序
+全部由 workflow 自身决定，不接受第二套 algorithm override，也不为 CLI 构造备用 stage。
+
 `process_video_streaming()` 在 preflight 和 manifest 准备完成后只构造一次不可变的
 `StreamingPipelineContext`。dispatch、raw/stage-file runtime 与最终 lifecycle 共享同一对象，
 不再逐层展开 FFmpeg、路径、配置、resume state、回调和 metrics；preflight 派生结果由同一对象持有。
@@ -139,6 +143,11 @@ decode config、stage plan、backend、进度回调、源尺寸/帧数、resume 
 和 stop event 仍归各自运行时层所有。`PipelineMetrics` 必须由 processing plan 显式提供，
 streaming entry 不再为测试调用方隐式创建。
 
+进程边界使用明确的 `StageProgressCallback`、`EncodeQueue`、`BinaryIO`、`threading.Event`
+与 worker handle protocol；只有 JSON 配置和算法 tensor 保留动态类型。decoder writer、
+stderr event reader、raw chain 和 stage-file chunk 因此共享同一静态契约，而不改变线程与
+pipe 的所有权。
+
 stage-file 路径在每个 stage 规划完成后创建一次不可变的 `StageFileRuntimeConfig`，chunk 编排、单 chunk runtime 和 worker-output encoder 共享同一对象。manifest、resume state、segment size 和 chunk boundary 仍由各自生命周期层持有，不进入静态 runtime config。
 
 | 模块 | 职责 |
@@ -149,6 +158,8 @@ stage-file 路径在每个 stage 规划完成后创建一次不可变的 `StageF
 | [`worker_pipeline.py`](../backend/app/processing/streaming/worker_pipeline.py) | 构建 stage-worker chain 并把处理后帧写入 `encode_queue` |
 | [`worker_runtime_config.py`](../backend/app/processing/streaming/worker_runtime_config.py) | 保存 raw worker pipeline 与 chain runtime 共享的不可变静态配置 |
 | [`worker_chain_runtime.py`](../backend/app/processing/streaming/worker_chain_runtime.py) | 管理 worker session、decode writer 与最终 worker stdout drain |
+| [`worker_process_io.py`](../backend/app/processing/streaming/worker_process_io.py) | 使用 typed pipe/queue/event 契约管理 decode writer 与最终 stdout |
+| [`worker_process_events.py`](../backend/app/processing/streaming/worker_process_events.py) | 解析 worker stderr 事件并写入 typed progress/error 边界 |
 | [`stage_file_pipeline.py`](../backend/app/processing/streaming/stage_file_pipeline.py) | 为每个 stage 构造一次 runtime config，并编排 stage 间的 finalize |
 | [`stage_file_runtime_config.py`](../backend/app/processing/streaming/stage_file_runtime_config.py) | 保存 stage-file chunk 编排与执行共享的不可变静态配置 |
 | [`stage_file_chunks.py`](../backend/app/processing/streaming/stage_file_chunks.py) | 规划 chunk、推进 manifest，并复用同一 stage runtime config |
@@ -163,6 +174,10 @@ stage-file 路径在每个 stage 规划完成后创建一次不可变的 `StageF
 - `EncodedFrame` — stage-worker 输出的处理后帧（传递给编码器）
 - `SegmentBoundary` — 分段边界信号
 - `StreamEnd` — 流结束哨兵
+- `_EncodeEnd` — encoder 线程内部终止信号；只通过 `EncodeQueueItem` 私有联合类型流转
+
+`EncodeQueue = queue.Queue[EncodeQueueItem]` 是 raw pipeline、worker chain 与 encoder worker
+共享的唯一队列契约。
 
 ### 最终拼接
 

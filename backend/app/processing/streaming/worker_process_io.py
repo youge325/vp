@@ -6,27 +6,28 @@ from contextlib import contextmanager
 import queue
 import threading
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any, BinaryIO, Iterator
 
 from app.planning import StagePlan
 from app.planning.manifest import ResumeState
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, _queue_put
+from app.processing.streaming.queues import EncodeQueue, EncodedFrame, SegmentBoundary, _queue_put
 from app.processing.streaming.stage_worker_io import read_rgb_frame, write_rgb_frame
 from app.processing.streaming.worker_plans import StageWorkerPlan, boundary_schedule_for_stage_plan
+from app.utils.ffmpeg import FFmpegWrapper
 
 
 @dataclass(frozen=True, slots=True)
 class DecodedFrameWriterConfig:
-    ffmpeg: Any
+    ffmpeg: FFmpegWrapper
     input_path: str
     decode_config: dict[str, Any]
     width: int
     height: int
     start_source_frame: int
-    worker_stdin: Any
+    worker_stdin: BinaryIO | None
     error_queue: queue.Queue[BaseException]
-    stop_event: Any
+    stop_event: threading.Event
     frame_count: int | None = None
 
 
@@ -90,14 +91,14 @@ def decoded_frame_writer_session(
 
 def drain_final_worker_output(
     *,
-    final_stdout: Any,
+    final_stdout: BinaryIO | None,
     final_plan: StageWorkerPlan,
     stage_plan: StagePlan,
     resume_state: ResumeState,
     source_frames: int,
-    encode_queue: queue.Queue[Any],
+    encode_queue: EncodeQueue,
     error_queue: queue.Queue[BaseException],
-    stop_event: Any,
+    stop_event: threading.Event,
     metrics: PipelineMetrics,
 ) -> None:
     if final_stdout is None:
@@ -136,7 +137,7 @@ def drain_final_worker_output(
         error_queue.put(exc)
 
 
-def close_pipe(pipe: Any) -> None:
+def close_pipe(pipe: BinaryIO | None) -> None:
     if pipe is None:
         return
     try:

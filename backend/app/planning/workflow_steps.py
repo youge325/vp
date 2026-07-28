@@ -68,7 +68,7 @@ def _build_algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: Alg
     return {}
 
 
-def _resolve_algorithm_types(workflow_config: dict[str, Any], algorithm: AlgorithmType) -> list[AlgorithmType]:
+def _resolve_algorithm_types(workflow_config: dict[str, Any]) -> list[AlgorithmType]:
     enable_interpolation = bool(workflow_config["interpolation"]["enabled"])
     enable_super_resolution = bool(workflow_config["superResolution"]["enabled"])
 
@@ -78,9 +78,7 @@ def _resolve_algorithm_types(workflow_config: dict[str, Any], algorithm: Algorit
         return ["frame_interpolation"]
     if enable_super_resolution:
         return ["super_resolution"]
-    if algorithm == "format_conversion":
-        return []
-    return [algorithm]
+    return []
 
 
 def _compose_filter_chain(workflow_config: dict[str, Any], kind: str, existing_count: int) -> ProcessingStep | None:
@@ -94,10 +92,8 @@ def _compose_filter_chain(workflow_config: dict[str, Any], kind: str, existing_c
     )
 
 
-def resolve_processing_steps(
-    workflow_config: dict[str, Any], algorithm: AlgorithmType | None = None
-) -> list[ProcessingStep]:
-    algorithm_types = _resolve_algorithm_types(workflow_config, algorithm or resolve_primary_algorithm(workflow_config))
+def resolve_processing_steps(workflow_config: dict[str, Any]) -> list[ProcessingStep]:
+    algorithm_types = _resolve_algorithm_types(workflow_config)
     steps: list[ProcessingStep] = []
 
     preprocess = _compose_filter_chain(workflow_config, "preprocess", len(steps))

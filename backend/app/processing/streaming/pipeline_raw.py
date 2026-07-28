@@ -10,9 +10,7 @@ from app.processing.streaming.pipeline_context import StreamingPipelineContext
 from app.processing.streaming.pipeline_raw_encoder import start_raw_encoder_thread
 from app.processing.streaming.pipeline_rules import resolved_stream_fps
 from app.processing.streaming.queues import (
-    EncodedFrame,
-    SegmentBoundary,
-    StreamEnd,
+    EncodeQueue,
     _ENCODE_END,
     _queue_put_nowait,
 )
@@ -24,7 +22,7 @@ def run_raw_streaming_pipeline(
     *,
     context: StreamingPipelineContext,
 ) -> int:
-    encode_queue: queue.Queue[EncodedFrame | SegmentBoundary | StreamEnd | object] = queue.Queue(maxsize=8)
+    encode_queue: EncodeQueue = queue.Queue(maxsize=8)
     error_queue: queue.Queue[BaseException] = queue.Queue()
     stop_event = threading.Event()
     stream_fps = resolved_stream_fps(

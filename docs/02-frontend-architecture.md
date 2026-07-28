@@ -218,8 +218,9 @@ graph LR
 当 `currentId` 已失效时，current context 不携带孤立 run-state，console context 会整体回退到
 active item。conflict、events、control 和 finalize 每次操作只读取一次 context。
 
-单项开始时的 runtime reset 固定清空日志，批次终结时的批量 reset 固定保留日志。该策略在
-`taskOrchestratorRuntime.ts` 的依赖装配处确定，不再作为 `preserveLogs` 参数穿过 lifecycle。
+单项开始时的 `resetItemRunState()` 固定清空日志，批次终结时的
+`resetItemsRunState()` 固定保留各项日志。两种语义由 `mediaRunState` 的两个明确命令表达，
+不再把 `preserveLogs` 策略参数穿过 store、runtime 或 lifecycle。
 
 `conflict.ts` 和 `events.ts` 只接收各自需要的 lifecycle capability；内部 queue/finalize 方法不会成为 BatchRunner 的公共返回字段。
 
