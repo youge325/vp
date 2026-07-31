@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import time
 from typing import BinaryIO
 
+from app.generated.protocol_constants import TERMINATION_REAP_TIMEOUT_MS
+from app.processing.streaming.encoder_segment_writer import EncoderWriterOwner
 from app.processing.streaming.encoder_segments import resolve_segment_output_frame_count
 from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 from app.processing.streaming.stage_worker_io import read_rgb_frame
 from app.processing.streaming.worker_plans import StageChunkPlan
+from app.utils.late_cleanup import late_cleanup_coordinator
 
 
 def encode_stage_worker_output(
@@ -18,6 +22,7 @@ def encode_stage_worker_output(
     chunk: StageChunkPlan,
 ) -> int:
     writer = None
+    writer_owner = EncoderWriterOwner()
     written_frames = 0
     try:
         writer = config.ffmpeg.open_rawvideo_encoder(
@@ -28,6 +33,8 @@ def encode_stage_worker_output(
             output_fps=config.encode_output_fps,
             encode_config=config.encode_config,
         )
+        if not writer_owner.attach(writer):  # pragma: no cover - no concurrent shutdown in this owner
+            raise RuntimeError("Stage chunk writer was created after shutdown began.")
         active_writer = writer
         for raw_index in range(chunk.raw_output_frame_count):
             frame = read_rgb_frame(
@@ -43,6 +50,7 @@ def encode_stage_worker_output(
             written_frames += 1
             config.metrics.record_processed_frames(1)
         active_writer.close()
+        writer_owner.detach(active_writer)
         writer = None
         encoded_frames = resolve_segment_output_frame_count(
             config.ffmpeg,
@@ -60,8 +68,12 @@ def encode_stage_worker_output(
         if writer is not None:
             try:
                 writer.close()
-            except Exception:
-                pass
+            except BaseException:
+                deadline = time.monotonic() + TERMINATION_REAP_TIMEOUT_MS / 1000
+                if not writer_owner.terminate_and_reap(deadline=deadline):
+                    late_cleanup_coordinator.submit(writer_owner)
+            else:
+                writer_owner.detach(writer)
 
 
 __all__ = ["encode_stage_worker_output"]

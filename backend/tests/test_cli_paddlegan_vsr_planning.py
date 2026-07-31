@@ -1,18 +1,19 @@
-import json
-
 import pytest
 
 from app.adapters.model_availability import LocalModelAvailability
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
-from app.planning import (
-    ProcessingStep,
-    StageProjection,
-    build_stage_plan,
-    validate_workflow_requirements,
-)
-from app.processing.streaming.stage_worker_config import StageWorkerConfig
+from app.planning.processing_steps import ProcessingStep
+from app.planning.stage_plan import build_stage_plan
+from app.planning.stage_projection import StageProjection
+from app.planning.workflow_validation import validate_workflow_requirements
+from app.processing.streaming.stage_worker_config import load_stage_worker_config
 from app.processing.streaming.worker_plans import build_stage_worker_plans
+
+
+class _UnexpectedAvailability:
+    def validate(self, _step: ProcessingStep) -> None:
+        raise AssertionError("model availability must not run for an invalid descriptor")
 
 
 def _super_resolution_step(
@@ -28,6 +29,8 @@ def _super_resolution_step(
             "sr_algorithm": algorithm,
             "onnx_model": None,
             "tensor_backend": backend,
+            "engine": "cuda",
+            "num_frames": 5 if algorithm == "edvr" else 10,
         },
         stage_name="01_super_resolution",
     )
@@ -66,6 +69,7 @@ def test_paddlegan_vsr_rejects_paddle_interpolation_backend_combination():
             "algorithm": "rife",
             "model_version": "4.25",
             "tensor_backend": "paddle",
+            "engine": "cuda",
         },
         stage_name="01_frame_interpolation",
     )
@@ -76,6 +80,39 @@ def test_paddlegan_vsr_rejects_paddle_interpolation_backend_combination():
     assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
     assert "RIFE" in exc_info.value.message
     assert "Paddle" in exc_info.value.message
+
+
+def test_planning_rejects_unknown_rife_version_before_model_probe() -> None:
+    step = ProcessingStep(
+        algorithm_type="frame_interpolation",
+        algorithm_kwargs={
+            "algorithm": "rife",
+            "model_version": "99.0",
+            "tensor_backend": "pytorch",
+            "engine": "cuda",
+        },
+        stage_name="01_frame_interpolation",
+    )
+
+    with pytest.raises(ProcessError, match="Unsupported RIFE model version"):
+        validate_workflow_requirements([step], _UnexpectedAvailability())
+
+
+def test_edvr_rejects_noncanonical_fixed_window_before_model_probe() -> None:
+    step = ProcessingStep(
+        algorithm_type="super_resolution",
+        algorithm_kwargs={
+            "scale_factor": 4.0,
+            "sr_algorithm": "edvr",
+            "num_frames": 7,
+            "tensor_backend": "paddle",
+            "engine": "cuda",
+        },
+        stage_name="01_super_resolution",
+    )
+
+    with pytest.raises(ProcessError, match="fixed 5-frame window"):
+        validate_workflow_requirements([step], _UnexpectedAvailability())
 
 
 def test_restored_paddlegan_vsr_models_are_accepted_by_backend_planning(monkeypatch):
@@ -100,6 +137,8 @@ def test_paddlegan_vsr_missing_auxiliary_weight_is_rejected_before_stage_worker(
                 "scale_factor": 4.0,
                 "sr_algorithm": "ppmsvsr",
                 "tensor_backend": "paddle",
+                "engine": "cuda",
+                "num_frames": 10,
             },
             stage_name="01_super_resolution",
         )
@@ -122,6 +161,7 @@ def test_onnx_super_resolution_model_is_checked_from_its_stage_backend(tmp_path,
                 "sr_algorithm": "real-esrgan",
                 "onnx_model": None,
                 "tensor_backend": "onnx",
+                "engine": "cuda",
             },
             stage_name="01_super_resolution",
         )
@@ -146,6 +186,7 @@ def test_mixed_pytorch_interpolation_and_onnx_sr_checks_both_stage_models(tmp_pa
                 "algorithm": "rife",
                 "model_version": "4.25",
                 "tensor_backend": "pytorch",
+                "engine": "cuda",
             },
             stage_name="01_frame_interpolation",
         ),
@@ -155,6 +196,7 @@ def test_mixed_pytorch_interpolation_and_onnx_sr_checks_both_stage_models(tmp_pa
                 "sr_algorithm": "real-esrgan",
                 "onnx_model": None,
                 "tensor_backend": "onnx",
+                "engine": "cuda",
             },
             stage_name="02_super_resolution",
         ),
@@ -175,6 +217,7 @@ def test_rife_paddle_backend_is_rejected_in_planning():
                 "algorithm": "rife",
                 "model_version": "4.25",
                 "tensor_backend": "paddle",
+                "engine": "cuda",
             },
             stage_name="01_frame_interpolation",
         )
@@ -226,13 +269,13 @@ def test_paddlegan_vsr_step_carries_super_resolution_runtime_fields():
         "num_frames": 8,
     }
     stage_plan = build_stage_plan(projection, 12, source_duration=1.0, output_fps=None)
-    worker_plan = build_stage_worker_plans(
+    worker_config = build_stage_worker_plans(
         stage_plan=stage_plan,
         source_width=64,
         source_height=64,
         source_frame_count=12,
     )[0]
-    assert worker_plan.config.stage.algorithm_kwargs["engine"] == "tensorrt"
+    assert worker_config.stage.algorithm_kwargs.engine == "tensorrt"
 
 
 def test_pytorch_interpolation_plus_paddlegan_super_resolution_builds_isolated_stage_backends():
@@ -266,7 +309,7 @@ def test_pytorch_interpolation_plus_paddlegan_super_resolution_builds_isolated_s
     projection = StageProjection.from_workflow(workflow)
     steps = projection.steps
     stage_plan = build_stage_plan(projection, 3, source_duration=1.0, output_fps=None)
-    worker_plans = build_stage_worker_plans(
+    worker_configs = build_stage_worker_plans(
         stage_plan=stage_plan,
         source_width=64,
         source_height=64,
@@ -276,10 +319,10 @@ def test_pytorch_interpolation_plus_paddlegan_super_resolution_builds_isolated_s
     assert [step.algorithm_type for step in steps] == ["frame_interpolation", "super_resolution"]
     assert steps[0].algorithm_kwargs["tensor_backend"] == "pytorch"
     assert steps[1].algorithm_kwargs["tensor_backend"] == "paddle"
-    assert [plan.config.tensor_backend_name for plan in worker_plans] == ["pytorch", "paddle"]
-    assert [plan.output_frame_count for plan in worker_plans] == [5, 5]
-    assert (worker_plans[-1].config.output_width, worker_plans[-1].config.output_height) == (256, 256)
-    assert worker_plans[-1].config.stage.algorithm_kwargs["num_frames"] == 8
+    assert [config.tensor_backend_name for config in worker_configs] == ["pytorch", "paddle"]
+    assert [config.output_frame_count for config in worker_configs] == [5, 5]
+    assert (worker_configs[-1].output_width, worker_configs[-1].output_height) == (256, 256)
+    assert worker_configs[-1].stage.algorithm_kwargs.num_frames == 8
 
 
 def test_paddlegan_num_frames_survives_stage_worker_config_roundtrip(tmp_path):
@@ -290,11 +333,12 @@ def test_paddlegan_num_frames_survives_stage_worker_config_roundtrip(tmp_path):
             "sr_algorithm": "ppmsvsr",
             "tensor_backend": "paddle",
             "num_frames": 5,
+            "engine": "cuda",
         },
         stage_name="01_super_resolution",
     )
     stage_plan = build_stage_plan(StageProjection((step,)), 12, source_duration=1.0, output_fps=None)
-    worker_plan = build_stage_worker_plans(
+    worker_config = build_stage_worker_plans(
         stage_plan=stage_plan,
         source_width=64,
         source_height=64,
@@ -302,7 +346,7 @@ def test_paddlegan_num_frames_survives_stage_worker_config_roundtrip(tmp_path):
     )[0]
 
     config_path = tmp_path / "stage-worker.json"
-    config_path.write_text(json.dumps(worker_plan.config.to_jsonable()), encoding="utf-8")
-    parsed = StageWorkerConfig.from_json_file(config_path)
+    config_path.write_text(worker_config.model_dump_json(by_alias=True), encoding="utf-8")
+    parsed = load_stage_worker_config(config_path)
 
-    assert parsed.stage.algorithm_kwargs["num_frames"] == 5
+    assert parsed.stage.algorithm_kwargs.num_frames == 5

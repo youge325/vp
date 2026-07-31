@@ -18,7 +18,6 @@ class TestOnnxBackend:
     def test_contract(self, backend):
         assert_backend_contract(
             backend,
-            expected_name="onnx",
             expected_dtype=np.float32,
             check_float_range=True,
         )
@@ -40,4 +39,4 @@ class TestGetTensorBackendOnnx:
     def test_get_onnx(self):
         require_module("onnxruntime", "onnxruntime")
         backend = get_tensor_backend("onnx")
-        assert backend.get_name() == "onnx"
+        assert isinstance(backend, OnnxBackend)

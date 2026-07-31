@@ -1,6 +1,6 @@
 """Tests for projection with preprocess/postprocess filter chains."""
 
-from app.planning import StageProjection
+from app.planning.stage_projection import StageProjection
 from tests.support.workflow_configs import make_workflow_config as _make_workflow_config
 
 

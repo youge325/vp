@@ -1,4 +1,6 @@
-from app.planning import ProcessingStep, StageProjection, build_stage_plan
+from app.planning.processing_steps import ProcessingStep
+from app.planning.stage_plan import build_stage_plan
+from app.planning.stage_projection import StageProjection
 from app.processing.streaming.worker_plans import (
     boundary_schedule_for_stage_plan,
     build_stage_chunk_plans,
@@ -10,7 +12,16 @@ def test_worker_plans_track_dimensions_frames_and_stage_backends() -> None:
     steps = [
         ProcessingStep(
             algorithm_type="frame_interpolation",
-            algorithm_kwargs={"multi": 3, "tensor_backend": "onnx"},
+            algorithm_kwargs={
+                "multi": 3,
+                "algorithm": "rife",
+                "model_version": "4.25",
+                "scale": 1.0,
+                "fp16": False,
+                "onnx_model": None,
+                "engine": "cuda",
+                "tensor_backend": "onnx",
+            },
             stage_name="01_frame_interpolation",
         ),
         ProcessingStep(
@@ -19,7 +30,8 @@ def test_worker_plans_track_dimensions_frames_and_stage_backends() -> None:
                 "scale_factor": 2.0,
                 "sr_algorithm": "placeholder",
                 "onnx_model": "sr.onnx",
-                "tensor_backend": "paddle",
+                "engine": "cuda",
+                "tensor_backend": "onnx",
             },
             stage_name="02_super_resolution",
         ),
@@ -33,12 +45,12 @@ def test_worker_plans_track_dimensions_frames_and_stage_backends() -> None:
         source_frame_count=3,
     )
 
-    assert [plan.config.stage_name for plan in plans] == ["01_frame_interpolation", "02_super_resolution"]
-    assert [plan.config.input_frame_count for plan in plans] == [3, 7]
+    assert [config.stage_name for config in plans] == ["01_frame_interpolation", "02_super_resolution"]
+    assert [config.input_frame_count for config in plans] == [3, 7]
     assert [plan.output_frame_count for plan in plans] == [7, 7]
-    assert plans[1].config.input_width == 2
-    assert plans[1].config.output_width == 4
-    assert plans[1].config.tensor_backend_name == "paddle"
+    assert plans[1].input_width == 2
+    assert plans[1].output_width == 4
+    assert plans[1].tensor_backend_name == "onnx"
 
 
 def test_worker_plans_track_dimensions_when_super_resolution_runs_before_interpolation() -> None:
@@ -49,13 +61,23 @@ def test_worker_plans_track_dimensions_when_super_resolution_runs_before_interpo
                 "scale_factor": 2.0,
                 "sr_algorithm": "placeholder",
                 "onnx_model": "sr.onnx",
+                "engine": "cuda",
                 "tensor_backend": "onnx",
             },
             stage_name="01_super_resolution",
         ),
         ProcessingStep(
             algorithm_type="frame_interpolation",
-            algorithm_kwargs={"multi": 2, "tensor_backend": "onnx"},
+            algorithm_kwargs={
+                "multi": 2,
+                "algorithm": "rife",
+                "model_version": "4.25",
+                "scale": 1.0,
+                "fp16": False,
+                "onnx_model": None,
+                "engine": "cuda",
+                "tensor_backend": "onnx",
+            },
             stage_name="02_frame_interpolation",
         ),
     ]
@@ -69,11 +91,11 @@ def test_worker_plans_track_dimensions_when_super_resolution_runs_before_interpo
     )
 
     assert [plan.output_frame_count for plan in plans] == [3, 5]
-    assert plans[0].config.input_width == 2
-    assert plans[0].config.output_width == 4
-    assert plans[0].config.output_height == 6
-    assert plans[1].config.input_width == 4
-    assert plans[1].config.input_frame_count == 3
+    assert plans[0].input_width == 2
+    assert plans[0].output_width == 4
+    assert plans[0].output_height == 6
+    assert plans[1].input_width == 4
+    assert plans[1].input_frame_count == 3
 
 
 def test_interpolation_chunk_plans_use_lookahead_and_skip_duplicate_boundaries() -> None:

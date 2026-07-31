@@ -10,23 +10,17 @@ from typing import Any, Callable
 
 import numpy as np
 
+from app.catalog.filter_geometry import crop_slices, padding, scale_output_dimensions
 from app.processing.anime_cleanup import apply_anime_cleanup
 from app.utils.opencv_runtime import import_cv2
 
 type _FilterParams = Mapping[str, Any]
 type _NumpyFilterHandler = Callable[[np.ndarray, _FilterParams], np.ndarray]
-type _TensorFilterHandler = Callable[[Any, _FilterParams], Any]
-type _TensorCapability = Callable[[_FilterParams], bool]
 
 
 @dataclass(frozen=True, slots=True)
 class _FilterHandler:
     numpy: _NumpyFilterHandler
-    tensor: _TensorFilterHandler | None = None
-    tensor_capability: _TensorCapability | None = None
-
-    def can_apply_tensor(self, params: _FilterParams) -> bool:
-        return self.tensor is not None and (self.tensor_capability is None or self.tensor_capability(params))
 
 
 _INTERP_MAP: dict[str, int] = {}
@@ -61,44 +55,15 @@ def _parse_hex_color(color_str: str) -> tuple[int, int, int]:
     )
 
 
-def _crop_slices(
-    params: _FilterParams,
-    *,
-    frame_width: int,
-    frame_height: int,
-) -> tuple[slice, slice]:
-    x = max(0, int(params.get("x", 0)))
-    y = max(0, int(params.get("y", 0)))
-    width = int(params.get("width", frame_width))
-    height = int(params.get("height", frame_height))
-    return (
-        slice(y, min(frame_height, y + height)),
-        slice(x, min(frame_width, x + width)),
-    )
-
-
-def _padding(params: _FilterParams) -> tuple[int, int, int, int]:
-    return (
-        int(params.get("top", 0)),
-        int(params.get("bottom", 0)),
-        int(params.get("left", 0)),
-        int(params.get("right", 0)),
-    )
-
-
 def _apply_numpy_scale(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
     _ensure_cv2()
     cv2 = import_cv2()
-    mode = params.get("mode", "factor")
     interpolation = _INTERP_MAP.get(params.get("interpolation", "lanczos4"), cv2.INTER_LANCZOS4)
-    if mode == "factor":
-        factor = float(params.get("factor", 1.0))
-        if factor == 1.0:
-            return frame
-        return cv2.resize(frame, None, fx=factor, fy=factor, interpolation=interpolation)
-
-    width = int(params.get("width", frame.shape[1]))
-    height = int(params.get("height", frame.shape[0]))
+    width, height = scale_output_dimensions(
+        params,
+        input_width=frame.shape[1],
+        input_height=frame.shape[0],
+    )
     if width == frame.shape[1] and height == frame.shape[0]:
         return frame
     return cv2.resize(frame, (width, height), interpolation=interpolation)
@@ -106,13 +71,13 @@ def _apply_numpy_scale(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
 
 def _apply_numpy_crop(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
     frame_height, frame_width = frame.shape[:2]
-    rows, columns = _crop_slices(params, frame_width=frame_width, frame_height=frame_height)
+    rows, columns = crop_slices(params, frame_width=frame_width, frame_height=frame_height)
     return frame[rows, columns]
 
 
 def _apply_numpy_pad(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
     cv2 = import_cv2()
-    top, bottom, left, right = _padding(params)
+    top, bottom, left, right = padding(params)
     if top == bottom == left == right == 0:
         return frame
     return cv2.copyMakeBorder(
@@ -174,129 +139,14 @@ def _apply_numpy_anime_cleanup(frame: np.ndarray, params: _FilterParams) -> np.n
     )
 
 
-def _apply_tensor_scale(tensor: Any, params: _FilterParams) -> Any:
-    import torch.nn.functional as functional
-
-    mode = params.get("mode", "factor")
-    height = int(tensor.shape[-2])
-    width = int(tensor.shape[-1])
-    if mode == "factor":
-        factor = float(params.get("factor", 1.0))
-        if factor == 1.0:
-            return tensor
-        target_size = (max(1, int(round(height * factor))), max(1, int(round(width * factor))))
-    else:
-        target_size = (int(params.get("height", height)), int(params.get("width", width)))
-        if target_size == (height, width):
-            return tensor
-
-    torch_mode = {
-        "area": "area",
-        "linear": "bilinear",
-        "cubic": "bicubic",
-        "lanczos4": "bicubic",
-    }.get(params.get("interpolation", "lanczos4"), "bicubic")
-    if torch_mode == "area":
-        return functional.interpolate(tensor, size=target_size, mode=torch_mode)
-    return functional.interpolate(tensor, size=target_size, mode=torch_mode, align_corners=False).clamp(0.0, 1.0)
-
-
-def _apply_tensor_crop(tensor: Any, params: _FilterParams) -> Any:
-    frame_height = int(tensor.shape[-2])
-    frame_width = int(tensor.shape[-1])
-    rows, columns = _crop_slices(params, frame_width=frame_width, frame_height=frame_height)
-    return tensor[:, :, rows, columns]
-
-
-def _apply_tensor_pad(tensor: Any, params: _FilterParams) -> Any:
-    import torch
-
-    top, bottom, left, right = _padding(params)
-    if top == bottom == left == right == 0:
-        return tensor
-
-    batch, channels, height, width = tensor.shape
-    output = torch.empty(
-        (batch, channels, height + top + bottom, width + left + right),
-        dtype=tensor.dtype,
-        device=tensor.device,
-    )
-    color = _parse_hex_color(params.get("color", "#000000"))
-    fill = torch.tensor(color[:channels], dtype=tensor.dtype, device=tensor.device).view(1, channels, 1, 1) / 255.0
-    output.copy_(fill.expand_as(output))
-    output[:, :, top : top + height, left : left + width] = tensor
-    return output
-
-
-def _apply_tensor_sharpen(tensor: Any, params: _FilterParams) -> Any:
-    import torch
-    import torch.nn.functional as functional
-
-    amount = float(params.get("amount", 0.5))
-    if amount <= 0:
-        return tensor
-
-    sigma = 3.0
-    radius = int(round(sigma * 3))
-    coordinates = torch.arange(-radius, radius + 1, dtype=tensor.dtype, device=tensor.device)
-    kernel_1d = torch.exp(-(coordinates**2) / (2 * sigma * sigma))
-    kernel_1d = kernel_1d / kernel_1d.sum()
-    channels = int(tensor.shape[1])
-    kernel_h = kernel_1d.view(1, 1, 1, -1).expand(channels, 1, 1, -1)
-    kernel_v = kernel_1d.view(1, 1, -1, 1).expand(channels, 1, -1, 1)
-    blurred = functional.conv2d(
-        functional.pad(tensor, (radius, radius, 0, 0), mode="replicate"),
-        kernel_h,
-        groups=channels,
-    )
-    blurred = functional.conv2d(
-        functional.pad(blurred, (0, 0, radius, radius), mode="replicate"),
-        kernel_v,
-        groups=channels,
-    )
-    return (tensor * (1.0 + amount) - blurred * amount).clamp(0.0, 1.0)
-
-
-def _apply_tensor_denoise(tensor: Any, params: _FilterParams) -> Any:
-    strength = float(params.get("strength", 10))
-    color_strength = float(params.get("colorStrength", 10))
-    if strength <= 0 and color_strength <= 0:
-        return tensor
-    raise RuntimeError("frame_filter_chain denoise does not support tensor processing.")
-
-
-def _can_apply_tensor_denoise(params: _FilterParams) -> bool:
-    return float(params.get("strength", 10)) <= 0 and float(params.get("colorStrength", 10)) <= 0
-
-
-def _apply_tensor_color(tensor: Any, params: _FilterParams) -> Any:
-    import torch
-
-    brightness = float(params.get("brightness", 0.0))
-    contrast = float(params.get("contrast", 1.0))
-    saturation = float(params.get("saturation", 1.0))
-    if brightness != 0.0 or contrast != 1.0:
-        tensor = (tensor * contrast + brightness * 0.5).clamp(0.0, 1.0)
-    if saturation != 1.0:
-        weights = torch.tensor([0.299, 0.587, 0.114], dtype=tensor.dtype, device=tensor.device).view(1, 3, 1, 1)
-        gray = (tensor[:, :3] * weights).sum(dim=1, keepdim=True)
-        rgb = (gray + (tensor[:, :3] - gray) * saturation).clamp(0.0, 1.0)
-        tensor = rgb if tensor.shape[1] == 3 else torch.cat([rgb, tensor[:, 3:]], dim=1)
-    return tensor.clamp(0.0, 1.0)
-
-
 _FILTER_HANDLERS: Mapping[str, _FilterHandler] = MappingProxyType(
     {
-        "scale": _FilterHandler(_apply_numpy_scale, _apply_tensor_scale),
-        "crop": _FilterHandler(_apply_numpy_crop, _apply_tensor_crop),
-        "pad": _FilterHandler(_apply_numpy_pad, _apply_tensor_pad),
-        "sharpen": _FilterHandler(_apply_numpy_sharpen, _apply_tensor_sharpen),
-        "denoise": _FilterHandler(
-            _apply_numpy_denoise,
-            _apply_tensor_denoise,
-            _can_apply_tensor_denoise,
-        ),
-        "color": _FilterHandler(_apply_numpy_color, _apply_tensor_color),
+        "scale": _FilterHandler(_apply_numpy_scale),
+        "crop": _FilterHandler(_apply_numpy_crop),
+        "pad": _FilterHandler(_apply_numpy_pad),
+        "sharpen": _FilterHandler(_apply_numpy_sharpen),
+        "denoise": _FilterHandler(_apply_numpy_denoise),
+        "color": _FilterHandler(_apply_numpy_color),
         "anime_cleanup": _FilterHandler(_apply_numpy_anime_cleanup),
     }
 )
@@ -313,21 +163,7 @@ def apply_numpy_filter(kind: str, frame: np.ndarray, params: _FilterParams) -> n
     return handler.numpy(frame, params)
 
 
-def can_apply_tensor_filter(kind: str, params: _FilterParams) -> bool:
-    handler = _FILTER_HANDLERS.get(kind)
-    return handler is not None and handler.can_apply_tensor(params)
-
-
-def apply_tensor_filter(kind: str, tensor: Any, params: _FilterParams) -> Any:
-    handler = _FILTER_HANDLERS.get(kind)
-    if handler is None or handler.tensor is None:
-        raise ValueError(f"Unsupported filter kind: {kind}")
-    return handler.tensor(tensor, params)
-
-
 __all__ = [
     "apply_numpy_filter",
-    "apply_tensor_filter",
-    "can_apply_tensor_filter",
     "is_supported_filter_kind",
 ]

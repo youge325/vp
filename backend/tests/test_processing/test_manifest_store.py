@@ -9,7 +9,7 @@ import pytest
 
 import app.planning.manifest_store as manifest_store
 from app.errors import ProcessError, TaskErrorCode
-from app.planning import SegmentManifest
+from tests.support.streaming_runtime import create_test_manifest
 from app.planning.segment_workspace import SegmentWorkspace
 
 
@@ -77,7 +77,7 @@ def test_manifest_read_error_is_not_misclassified_or_quarantined(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    manifest = SegmentManifest(tmp_path / "output.mp4")
+    manifest = create_test_manifest(str(tmp_path / "output.mp4"))
     manifest.workspace.ensure()
     manifest.workspace.manifest_path.write_text("keep", encoding="utf-8")
     original_read_bytes = Path.read_bytes

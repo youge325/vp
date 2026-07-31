@@ -4,13 +4,16 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from app.planning import ResumeState, SegmentManifest, StagePlan, StageProjection
+from app.planning.manifest import ResumeState
+from app.planning.stage_plan import StagePlan
+from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
     StreamingPipelinePreflight,
 )
+from tests.support.streaming_runtime import create_test_manifest, ignore_resume_status, ignore_worker_log
 
 
 def test_streaming_pipeline_contexts_are_frozen_and_preserve_runtime_references(tmp_path) -> None:
@@ -42,7 +45,7 @@ def test_streaming_pipeline_contexts_are_frozen_and_preserve_runtime_references(
     decode_config = {"mode": "software"}
     encode_config = {"codec": "libx264"}
     metrics = PipelineMetrics()
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     context = StreamingPipelineContext(
         ffmpeg=object(),  # type: ignore[arg-type]
         input_path=str(tmp_path / "input.mp4"),
@@ -56,6 +59,9 @@ def test_streaming_pipeline_contexts_are_frozen_and_preserve_runtime_references(
         output_fps=None,
         encode_progress_callback=None,
         metrics=metrics,
+        manifest_factory=create_test_manifest,
+        resume_status_sink=ignore_resume_status,
+        worker_log_sink=ignore_worker_log,
     )
 
     assert context.preflight is preflight
@@ -100,7 +106,7 @@ def test_process_video_streaming_reuses_one_context_for_dispatch_and_finalizatio
         output_height=360,
         segment_frames=1000,
     )
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     resume_state = ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[])
     observed_contexts: list[StreamingPipelineContext] = []
 
@@ -137,6 +143,9 @@ def test_process_video_streaming_reuses_one_context_for_dispatch_and_finalizatio
         preflight=preflight,
         progress_callbacks=[],
         metrics=metrics,
+        manifest_factory=create_test_manifest,
+        resume_status_sink=ignore_resume_status,
+        worker_log_sink=ignore_worker_log,
     )
 
     assert result == {"processed_frames": 4}

@@ -98,9 +98,6 @@ class FFmpegMediaAdapter:
             progress_callback=make_encode_progress_callback(progress_callback),
         )
 
-    def has_audio(self, input_path: str) -> bool:
-        return self._ffmpeg.has_audio(input_path)
-
     def concat_videos(self, inputs: list[str], output_path: str) -> None:
         self._ffmpeg.concat_videos(inputs, output_path)
 

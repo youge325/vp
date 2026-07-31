@@ -5,10 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.planning import ResumeState, StagePlan
+from app.planning.manifest import ResumeState
+from app.planning.stage_plan import StagePlan
 from app.ports.media import RawVideoPort
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_worker_progress import StageProgressCallback
+from app.processing.streaming.runtime_ports import WorkerLogSink
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +27,7 @@ class WorkerPipelineRuntimeConfig:
     source_frames: int
     resume_state: ResumeState
     metrics: PipelineMetrics
+    worker_log_sink: WorkerLogSink
 
 
 __all__ = ["WorkerPipelineRuntimeConfig"]

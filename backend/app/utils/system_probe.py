@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 
+from app.generated.contracts import GpuAdapter, GpuVendor
 from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
 
@@ -53,14 +54,14 @@ def _is_virtual_gpu_adapter(name: str, compatibility: str, pnp_device_id: str) -
     )
 
 
-def list_gpu_adapters() -> list[dict[str, str]]:
-    """Return normalized GPU adapters for the current host."""
+def list_gpu_adapters() -> list[GpuAdapter]:
+    """Return validated GPU adapter wire models for the current host."""
     if sys.platform.startswith("win"):
         return _list_windows_gpu_adapters()
     return []
 
 
-def _list_windows_gpu_adapters() -> list[dict[str, str]]:
+def _list_windows_gpu_adapters() -> list[GpuAdapter]:
     script = (
         "Get-CimInstance Win32_VideoController | "
         "Select-Object Name,AdapterCompatibility,PNPDeviceID | ConvertTo-Json -Compress"
@@ -88,7 +89,7 @@ def _list_windows_gpu_adapters() -> list[dict[str, str]]:
         return []
 
     rows = payload if isinstance(payload, list) else [payload]
-    adapters: list[dict[str, str]] = []
+    adapters: list[GpuAdapter] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
@@ -99,10 +100,5 @@ def _list_windows_gpu_adapters() -> list[dict[str, str]]:
         pnp_device_id = str(row.get("PNPDeviceID") or "").strip()
         if _is_virtual_gpu_adapter(name, compatibility, pnp_device_id):
             continue
-        adapters.append(
-            {
-                "name": name,
-                "vendor": _classify_gpu_vendor(name, compatibility),
-            }
-        )
+        adapters.append(GpuAdapter(name=name, vendor=GpuVendor(_classify_gpu_vendor(name, compatibility))))
     return adapters

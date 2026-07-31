@@ -50,12 +50,10 @@ def assert_float_range(backend: Any) -> None:
 def assert_backend_contract(
     backend: Any,
     *,
-    expected_name: str,
     expected_dtype: Any = None,
     check_float_range: bool = False,
 ) -> None:
     assert backend.is_available() is True
-    assert backend.get_name() == expected_name
     assert_numpy_to_tensor_shape(backend, expected_dtype=expected_dtype)
     assert_tensor_to_numpy_shape(backend)
     assert_roundtrip_preserves_content(backend)

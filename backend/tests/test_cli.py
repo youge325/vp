@@ -3,26 +3,30 @@
 import argparse
 import io
 import json
+import os
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
 
-from app.generated.contracts import FfmpegInfo
+from app.catalog.model_metrics import ModelMetricSpec
+from app.generated.protocol_constants import NDJSON_LINE_LIMIT_BYTES
+from app.generated.contracts import FfmpegInfo, GpuAdapter, GpuVendor, TensorEngines, WorkflowConfig
 from app.cli.commands.check import cmd_check
 from app.cli.commands._process_execution import _run_format_conversion
 from app.cli.commands._process_planning import PreparedRun
 from app.cli.commands._process_validation import load_runtime_configs
 from app.cli.parser import build_parser
+from app.cli.runtime_configs import runtime_config_section, runtime_config_sections, with_workflow
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
-from app.models import WorkflowConfig
-from app.planning import (
-    ProcessingStep,
-    StageProjection,
-    build_stage_plan,
-    build_run_identity,
-)
+from app.planning.processing_steps import ProcessingStep
+from app.planning.run_identity import build_run_identity
+from app.planning.stage_plan import build_stage_plan
+from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
+from app.utils.onnx_models import OnnxModelCatalog
 from tests.support.workflow_configs import make_workflow_config as _make_workflow_config
 
 
@@ -52,10 +56,10 @@ def test_format_conversion_forwards_projected_target_fps_to_ffmpeg(tmp_path) -> 
         )
     )
     resolved_workflow, projection, output_fps = StageProjection.resolve_workflow(
-        configs.json_section("workflow"),
+        runtime_config_section(configs, "workflow"),
         source_fps=60.0,
     )
-    configs = configs.with_workflow(WorkflowConfig.model_validate(resolved_workflow))
+    configs = with_workflow(configs, WorkflowConfig.model_validate(resolved_workflow))
     stage_plan = build_stage_plan(
         projection,
         60,
@@ -213,7 +217,7 @@ def test_load_runtime_configs_returns_typed_models_and_wire_shape():
     assert configs.workflow.interpolation.tensor_backend == "pytorch"
     assert configs.output.output_dir == "D:/typed-output"
 
-    sections = configs.json_sections()
+    sections = runtime_config_sections(configs)
     assert sections["decode"]["mode"] == "software"
     assert sections["decode"]["hwaccelDevice"] is None
     assert sections["encode"]["keepAudio"] is True
@@ -223,7 +227,7 @@ def test_load_runtime_configs_returns_typed_models_and_wire_shape():
 
 def test_runtime_config_json_sections_are_defensive_copies():
     configs = load_runtime_configs(_make_runtime_args(output_dir="D:/wire-output"))
-    sections = configs.json_sections()
+    sections = runtime_config_sections(configs)
 
     assert sections["decode"]["decoder"] == "software"
     assert sections["encode"]["rateControl"] == {"mode": "crf", "value": 18}
@@ -231,7 +235,7 @@ def test_runtime_config_json_sections_are_defensive_copies():
     assert sections["output"]["outputDir"] == "D:/wire-output"
 
     sections["workflow"]["interpolation"]["multi"] = 99
-    assert configs.json_section("workflow")["interpolation"]["multi"] == 2
+    assert runtime_config_section(configs, "workflow")["interpolation"]["multi"] == 2
 
 
 def test_load_runtime_configs_rejects_missing_output_dir():
@@ -252,7 +256,7 @@ def test_load_runtime_configs_rejects_invalid_stdin_json(monkeypatch: pytest.Mon
         load_runtime_configs(_make_runtime_args(config_stdin=True))
 
     assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
-    assert "Invalid stdin JSON" in exc_info.value.message
+    assert "Invalid runtime config bundle" in exc_info.value.message
 
 
 def test_load_runtime_configs_rejects_non_object_stdin_section(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -268,17 +272,41 @@ def test_load_runtime_configs_rejects_non_object_stdin_section(monkeypatch: pyte
     assert "workflow" in exc_info.value.message
 
 
+def test_load_runtime_configs_rejects_unknown_top_level_section(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.cli.commands._process_validation.sys.stdin",
+        io.StringIO('{"workflow": {}, "legacy": {}}'),
+    )
+
+    with pytest.raises(ProcessError) as exc_info:
+        load_runtime_configs(_make_runtime_args(config_stdin=True))
+
+    assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
+    assert "legacy" in exc_info.value.message
+
+
+def test_runtime_config_wire_rejects_python_field_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = runtime_config_sections(load_runtime_configs(_make_runtime_args(output_dir="D:/output")))
+    payload["output"]["output_dir"] = payload["output"].pop("outputDir")
+
+    with pytest.raises(ProcessError) as exc_info:
+        _load_stdin_configs(monkeypatch, payload, output_dir="D:/output")
+
+    assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
+    assert "outputDir" in exc_info.value.message
+
+
 def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
     input_path = tmp_path / "input.mp4"
     output_path = tmp_path / "out.mp4"
     input_path.write_bytes(b"video")
     configs = load_runtime_configs(_make_runtime_args(output_dir=str(tmp_path)))
-    workflow_section = configs.json_section("workflow")
+    workflow_section = runtime_config_section(configs, "workflow")
     workflow_config = {
         **workflow_section,
         "interpolation": {**workflow_section["interpolation"], "multi": 3},
     }
-    updated = configs.with_workflow(WorkflowConfig.model_validate(workflow_config))
+    updated = with_workflow(configs, WorkflowConfig.model_validate(workflow_config))
     processing_steps = [
         ProcessingStep(
             algorithm_type="frame_interpolation",
@@ -294,7 +322,7 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
         duration=2.0,
         has_audio=True,
     )
-    sections = updated.json_sections()
+    sections = runtime_config_sections(updated)
 
     section_signature = build_run_identity(
         input_path=str(input_path),
@@ -323,46 +351,49 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
 
 def test_runtime_output_config_includes_segment_frames_and_stdin_override(monkeypatch: pytest.MonkeyPatch):
     default_configs = load_runtime_configs(_make_runtime_args(output_dir="D:/output"))
+    payload = runtime_config_sections(default_configs)
+    payload["output"]["segmentFrames"] = 240
     override_configs = _load_stdin_configs(
         monkeypatch,
-        {"output": {"segmentFrames": 240}},
+        payload,
         output_dir="D:/output",
     )
 
-    assert default_configs.json_section("output")["segmentFrames"] == 1000
-    assert override_configs.json_section("output")["segmentFrames"] == 240
+    assert runtime_config_section(default_configs, "output")["segmentFrames"] == 1000
+    assert runtime_config_section(override_configs, "output")["segmentFrames"] == 240
 
 
-def test_runtime_config_emits_complete_defaults_for_explicit_wire_contract(monkeypatch: pytest.MonkeyPatch):
+def test_runtime_config_rejects_incomplete_explicit_wire_contract(monkeypatch: pytest.MonkeyPatch):
+    with pytest.raises(ProcessError) as exc_info:
+        _load_stdin_configs(
+            monkeypatch,
+            {"decode": {}},
+            output_dir="D:/output",
+        )
+
+    assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
+    assert "workflow" in exc_info.value.message
+
+
+def test_runtime_config_accepts_full_bundle_and_rejects_partial_bundle(monkeypatch: pytest.MonkeyPatch):
     default_configs = load_runtime_configs(_make_runtime_args(output_dir="D:/output"))
-    override_configs = _load_stdin_configs(
-        monkeypatch,
-        {"decode": {}},
-        output_dir="D:/output",
-    )
-
-    assert default_configs.json_section("decode")["hwaccelDevice"] is None
-    assert override_configs.json_section("decode")["hwaccelDevice"] is None
-
-
-def test_runtime_config_default_partial_and_full_payloads_are_equivalent(monkeypatch: pytest.MonkeyPatch):
-    default_configs = load_runtime_configs(_make_runtime_args(output_dir="D:/output"))
-    partial_configs = _load_stdin_configs(
-        monkeypatch,
-        {
-            "workflow": {"interpolation": {"multi": 2}},
-            "output": {"outputDir": "D:/output"},
-        },
-        output_dir="D:/output",
-    )
     full_configs = _load_stdin_configs(
         monkeypatch,
-        default_configs.json_sections(),
+        runtime_config_sections(default_configs),
         output_dir="D:/output",
     )
 
-    assert partial_configs.json_sections() == default_configs.json_sections()
-    assert full_configs.json_sections() == default_configs.json_sections()
+    with pytest.raises(ProcessError):
+        _load_stdin_configs(
+            monkeypatch,
+            {
+                "workflow": {"interpolation": {"multi": 2}},
+                "output": {"outputDir": "D:/output"},
+            },
+            output_dir="D:/output",
+        )
+
+    assert runtime_config_sections(full_configs) == runtime_config_sections(default_configs)
 
 
 def test_stage_plan_uses_input_frames_for_format_conversion():
@@ -424,7 +455,43 @@ def test_stage_worker_parser_requires_config_json():
 
     assert args.command == "stage-worker"
     assert args.config_json == "stage.json"
-    assert callable(args.func)
+    assert args.handler == "stage_worker"
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "app.cli.parser",
+        "app.cli.commands.check",
+        "app.catalog.model_metrics",
+        "app.planning.manifest",
+    ],
+)
+def test_lightweight_cli_imports_have_no_runtime_or_logging_side_effects(
+    module: str,
+    tmp_path,
+) -> None:
+    log_dir = tmp_path / "import-logs"
+    script = (
+        "import logging, pathlib, sys; "
+        "handlers=tuple(logging.getLogger().handlers); "
+        f"import {module}; "
+        "assert tuple(logging.getLogger().handlers) == handlers; "
+        f"assert not pathlib.Path({str(log_dir)!r}).exists(); "
+        "blocked=[name for name in sys.modules if name.startswith(('app.processing.', 'app.benchmark'))]; "
+        "assert not blocked, blocked"
+    )
+
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "VP_LOG_DIR": str(log_dir)},
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == ""
 
 
 def test_stage_worker_main_runs_logging_and_handler_only(monkeypatch):
@@ -435,9 +502,10 @@ def test_stage_worker_main_runs_logging_and_handler_only(monkeypatch):
 
     class _Parser:
         def parse_args(self):
-            return SimpleNamespace(command="stage-worker", func=lambda _args: calls.append("func"))
+            return SimpleNamespace(command="stage-worker", handler="stage_worker")
 
     monkeypatch.setattr(cli_main, "build_parser", lambda: _Parser())
+    monkeypatch.setattr(cli_main, "_load_handler", lambda _name: lambda _args: calls.append("func"))
     monkeypatch.setattr(cli_main, "setup_logging", lambda: calls.append("logging"))
     cli_main.main()
 
@@ -448,16 +516,20 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
     model_dir = tmp_path / "models"
     (model_dir / "interpolation" / "rife").mkdir(parents=True)
     (model_dir / "super_resolution" / "placeholder").mkdir(parents=True)
+    (model_dir / "super_resolution" / "realesrgan").mkdir(parents=True)
+    (model_dir / "super_resolution" / "edvr").mkdir(parents=True)
     (model_dir / "flownet_v4.25.pkl").write_bytes(b"model")
     (model_dir / "interpolation" / "rife" / "interp.onnx").write_bytes(b"onnx")
     (model_dir / "super_resolution" / "placeholder" / "sr.onnx").write_bytes(b"onnx")
+    (model_dir / "super_resolution" / "realesrgan" / "x4.onnx").write_bytes(b"onnx")
+    (model_dir / "super_resolution" / "edvr" / "collision.onnx").write_bytes(b"onnx")
 
     monkeypatch.setattr("app.cli.commands.check.FFmpegWrapper", _FakeCheckFFmpeg)
     monkeypatch.setattr(
         "app.cli.commands.check.probe_tensor_engines",
-        lambda: {"pytorch": [], "paddle": [], "onnx": []},
+        lambda: TensorEngines(pytorch=[], paddle=[], onnx=[]),
     )
-    gpu_adapters = [{"name": "NVIDIA GeForce RTX 3070 Laptop GPU", "vendor": "nvidia"}]
+    gpu_adapters = [GpuAdapter(name="NVIDIA GeForce RTX 3070 Laptop GPU", vendor=GpuVendor.NVIDIA)]
     _FakeCheckFFmpeg.discovered_gpu_adapters = None
     monkeypatch.setattr("app.cli.commands.check.list_gpu_adapters", lambda: gpu_adapters)
     monkeypatch.setattr(settings, "RIFE_MODEL_DIR", str(model_dir))
@@ -475,7 +547,7 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
     }
     assert set(payload["ffmpeg"]) == {"available", "hwaccels", "encoderProfiles", "decoderProfiles"}
     assert _FakeCheckFFmpeg.discovered_gpu_adapters is gpu_adapters
-    assert payload["gpu"] == {"adapters": gpu_adapters}
+    assert payload["gpu"] == {"adapters": [adapter.model_dump(by_alias=True, mode="json") for adapter in gpu_adapters]}
     assert payload["tensorEngines"]["onnx"] == []
     assert payload["runtimeMode"] == settings.runtime_mode
     assert "onnxModels" not in payload
@@ -489,7 +561,6 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
         "onnxModels",
         "modelDetails",
         "onnxModelDetails",
-        "scaleFactors",
         "fixedScaleFactor",
         "defaultNumFrames",
         "inputFrameMode",
@@ -502,6 +573,9 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
     placeholder_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "placeholder")
     assert placeholder_alg["onnxModels"] == ["sr.onnx"]
     assert placeholder_alg["onnxModelDetails"][0]["name"] == "sr.onnx"
+    realesrgan_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "realesrgan")
+    assert realesrgan_alg["tensorBackends"] == ["onnx"]
+    assert realesrgan_alg["onnxModels"] == ["x4.onnx"]
     sr_names = {a["name"] for a in payload["superResolutionAlgorithms"]}
     assert {
         "ppmsvsr",
@@ -514,7 +588,7 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
     ppmsvsr_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "ppmsvsr")
     assert ppmsvsr_alg["tensorBackends"] == ["paddle"]
     assert ppmsvsr_alg["models"] == ["x4"]
-    assert ppmsvsr_alg["scaleFactors"] == [4]
+    assert ppmsvsr_alg["fixedScaleFactor"] == 4
     assert ppmsvsr_alg["defaultNumFrames"] == 10
     assert "sequenceMode" not in ppmsvsr_alg
     assert ppmsvsr_alg["inputFrameMode"] == "editable_chunk"
@@ -529,4 +603,50 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
     assert "sequenceMode" not in edvr_alg
     assert edvr_alg["inputFrameMode"] == "fixed_window"
     assert edvr_alg["defaultNumFrames"] == 5
+    assert edvr_alg["onnxModels"] == []
     assert edvr_alg["modelDetails"][0]["metrics"]["runtimeFrameCount"] == 5
+
+
+def test_check_bounds_large_discovered_model_diagnostics(monkeypatch, capsys):
+    names = [f"rife-{index}.onnx" for index in range(100)]
+    details = [
+        ModelMetricSpec(
+            name=name,
+            label=name,
+            parameter_count=None,
+            parameter_bytes=None,
+            gflops_per_megapixel=None,
+            activation_bytes_per_megapixel=None,
+            runtime_overhead_bytes=None,
+            runtime_frame_count=None,
+            input_modulo=None,
+            analysis_status="partial",
+            analysis_notes=tuple(f"node-{note}:" + "x" * 2_000 for note in range(10)),
+        )
+        for name in names
+    ]
+    raw_diagnostic_bytes = sum(len(note.encode("utf-8")) for detail in details for note in detail.analysis_notes)
+    assert raw_diagnostic_bytes > NDJSON_LINE_LIMIT_BYTES
+    catalog = OnnxModelCatalog(
+        names={"interpolation": {"rife": names}, "super_resolution": {}},
+        details={"interpolation": {"rife": details}, "super_resolution": {}},
+    )
+    monkeypatch.setattr("app.cli.commands.check.FFmpegWrapper", _FakeCheckFFmpeg)
+    monkeypatch.setattr(
+        "app.cli.commands.check.probe_tensor_engines",
+        lambda: TensorEngines(pytorch=[], paddle=[], onnx=[]),
+    )
+    monkeypatch.setattr("app.cli.commands.check.list_gpu_adapters", lambda: [])
+    monkeypatch.setattr("app.cli.commands.check.scan_onnx_catalog", lambda _root: catalog)
+
+    cmd_check(argparse.Namespace())
+
+    line = capsys.readouterr().out
+    payload = json.loads(line)
+    rife = payload["interpolationAlgorithms"][0]
+    assert rife["onnxModels"] == names
+    assert len(rife["onnxModelDetails"]) == len(names)
+    projected_notes = rife["onnxModelDetails"][0]["metrics"]["analysisNotes"]
+    assert len(projected_notes) == 8
+    assert all(len(note.encode("utf-8")) <= 512 for note in projected_notes)
+    assert len(line.encode("utf-8")) <= NDJSON_LINE_LIMIT_BYTES

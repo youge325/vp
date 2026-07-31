@@ -7,22 +7,16 @@
 """
 
 import os
-import sys
 
 import numpy as np
 import pytest
 
 pytestmark = pytest.mark.pytorch
 
-# 确保 backend 目录在 path 上
-_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if _BACKEND_DIR not in sys.path:
-    sys.path.insert(0, _BACKEND_DIR)
-
 
 def _is_torch_available():
     try:
-        import torch
+        __import__("torch")
 
         return True
     except ImportError:
@@ -31,7 +25,7 @@ def _is_torch_available():
 
 def _is_onnxruntime_available():
     try:
-        import onnxruntime
+        __import__("onnxruntime")
 
         return True
     except ImportError:
@@ -215,10 +209,9 @@ class TestFrameInterpolationAlgorithmONNX:
     def algorithm(self):
         """导出 ONNX 并创建算法实例。"""
         from app.algorithms.pytorch.rife.onnx_export import export_rife_to_onnx
-        from app.algorithms.pytorch.rife.onnx_solver import RIFEONNXSolver
         from app.algorithms.pytorch.rife.model_loader import get_model_dir
         from app.algorithms.tensor_backend import OnnxBackend
-        from app.processing.interpolation import FrameInterpolationAlgorithm
+        from app.algorithms.rife_interpolation import FrameInterpolationAlgorithm
 
         model_dir = get_model_dir()
         onnx_path = os.path.join(model_dir, "interpolation", "rife", "rife_v4.25.onnx")
@@ -231,8 +224,13 @@ class TestFrameInterpolationAlgorithmONNX:
 
         backend = OnnxBackend()
         algo = FrameInterpolationAlgorithm(
-            tensor_backend=backend,
+            backend_name="onnx",
             model_version="4.25",
+            scale=1.0,
+            fp16=False,
+            onnx_model="rife_v4.25.onnx",
+            engine="cuda",
+            model_dir=model_dir,
         )
         return algo, backend
 

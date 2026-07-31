@@ -1,4 +1,4 @@
-"""验证 ``SUPPORTED_ALGORITHMS`` 元数据携带的 ``tensorBackends`` 字段。
+"""验证中立 algorithm capability catalog 的完整性。
 
 前端的算法下拉过滤完全依赖该字段:每个算法必须显式声明它在哪些
 tensor backend 下有实现。漏声明 = 算法在 UI 上消失;声明错误 = UI 会
@@ -9,53 +9,56 @@ tensor backend 下有实现。漏声明 = 算法在 UI 上消失;声明错误 = 
 from __future__ import annotations
 
 import pytest
+import operator
 
-from app.processing.interpolation import SUPPORTED_ALGORITHMS as INTERPOLATION_ALGORITHMS
-from app.processing.super_resolution import SUPPORTED_ALGORITHMS as SR_ALGORITHMS
+from app.catalog.algorithm_capabilities import (
+    INTERPOLATION_CAPABILITIES,
+    SUPER_RESOLUTION_CAPABILITIES,
+)
+from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
+from app.catalog.model_metrics import MODEL_METRIC_SPECS_BY_ALGORITHM
+from app.catalog.rife_models import MODEL_SPECS, SUPPORTED_MODELS
 
 _VALID_BACKENDS = {"pytorch", "paddle", "onnx"}
 _VALID_INPUT_FRAME_MODES = {"none", "editable_chunk", "fixed_window"}
+_ALL_CAPABILITIES = (*INTERPOLATION_CAPABILITIES, *SUPER_RESOLUTION_CAPABILITIES)
 
 
 @pytest.mark.parametrize(
     ("source", "label"),
     [
-        (INTERPOLATION_ALGORITHMS, "interpolation"),
-        (SR_ALGORITHMS, "super_resolution"),
+        (INTERPOLATION_CAPABILITIES, "interpolation"),
+        (SUPER_RESOLUTION_CAPABILITIES, "super_resolution"),
     ],
 )
 def test_every_algorithm_declares_non_empty_tensor_backends(source, label):
-    """``SUPPORTED_ALGORITHMS`` 中每一项都必须显式声明 ``tensorBackends``。"""
+    """每个 capability 都必须显式声明 tensor backend。"""
     for entry in source:
-        assert "tensorBackends" in entry, f"{label} algorithm {entry.get('name')!r} missing tensorBackends field"
-        backends = entry["tensorBackends"]
-        assert isinstance(backends, list) and backends, (
-            f"{label} algorithm {entry.get('name')!r} has empty / non-list tensorBackends: {backends!r}"
-        )
+        assert entry.descriptor.supported_backends, f"{label} algorithm {entry.name!r} has no tensor backends"
 
 
 @pytest.mark.parametrize(
     ("source", "label"),
     [
-        (INTERPOLATION_ALGORITHMS, "interpolation"),
-        (SR_ALGORITHMS, "super_resolution"),
+        (INTERPOLATION_CAPABILITIES, "interpolation"),
+        (SUPER_RESOLUTION_CAPABILITIES, "super_resolution"),
     ],
 )
 def test_tensor_backends_values_are_within_known_set(source, label):
     """``tensorBackends`` 里每个字符串都得在 ``{pytorch, paddle, onnx}``。"""
     for entry in source:
-        for backend in entry["tensorBackends"]:
+        for backend in entry.descriptor.supported_backends:
             assert backend in _VALID_BACKENDS, (
-                f"{label} algorithm {entry['name']!r} declares unknown backend {backend!r}; "
+                f"{label} algorithm {entry.name!r} declares unknown backend {backend!r}; "
                 f"allowed: {sorted(_VALID_BACKENDS)}"
             )
 
 
 def test_rife_declares_pytorch_and_onnx_but_not_paddle():
     """RIFE 当前只有 PyTorch 与 ONNX 实现,不应出现在 paddle 下拉中。"""
-    rife = next((entry for entry in INTERPOLATION_ALGORITHMS if entry["name"] == "rife"), None)
-    assert rife is not None, "rife missing from interpolation SUPPORTED_ALGORITHMS"
-    backends = set(rife["tensorBackends"])
+    rife = next((entry for entry in INTERPOLATION_CAPABILITIES if entry.name == "rife"), None)
+    assert rife is not None, "rife missing from interpolation capability catalog"
+    backends = set(rife.descriptor.supported_backends)
     assert "pytorch" in backends
     assert "onnx" in backends
     assert "paddle" not in backends, (
@@ -66,56 +69,92 @@ def test_rife_declares_pytorch_and_onnx_but_not_paddle():
 
 def test_builtin_models_expose_metric_details():
     """内置模型必须随算法元数据暴露参数量 / 计算量 / 显存估算基线。"""
-    rife = next(entry for entry in INTERPOLATION_ALGORITHMS if entry["name"] == "rife")
-    assert len(rife["modelDetails"]) == len(rife["models"])
-    assert {detail.name for detail in rife["modelDetails"]} == set(rife["models"])
-    assert all(detail.metrics.parameter_count for detail in rife["modelDetails"])
-    assert all(detail.metrics.engine_metrics["tensorrt"] for detail in rife["modelDetails"])
+    rife = next(entry for entry in INTERPOLATION_CAPABILITIES if entry.name == "rife")
+    rife_details = MODEL_METRIC_SPECS_BY_ALGORITHM[rife.name]
+    assert len(rife_details) == len(rife.models)
+    assert {detail.name for detail in rife_details} == set(rife.models)
+    assert all(detail.parameter_count for detail in rife_details)
+    assert all(dict(detail.engine_metrics)["tensorrt"] for detail in rife_details)
 
-    paddlegan_entries = [entry for entry in SR_ALGORITHMS if entry["tensorBackends"] == ["paddle"]]
+    paddlegan_entries = [
+        entry for entry in SUPER_RESOLUTION_CAPABILITIES if entry.descriptor.supported_backends == frozenset({"paddle"})
+    ]
     assert paddlegan_entries
     for entry in paddlegan_entries:
-        assert entry["modelDetails"][0].name == "x4"
-        assert entry["modelDetails"][0].metrics.parameter_count
-        assert entry["modelDetails"][0].metrics.engine_metrics["tensorrt"]
-        assert entry["inputFrameMode"] in {"editable_chunk", "fixed_window"}
+        details = MODEL_METRIC_SPECS_BY_ALGORITHM[entry.name]
+        assert details[0].name == "x4"
+        assert details[0].parameter_count
+        assert dict(details[0].engine_metrics)["tensorrt"]
+        assert entry.input_frame_mode in {"editable_chunk", "fixed_window"}
 
 
 def test_algorithms_expose_ui_capability_metadata():
     """能力 payload 需要携带足够元数据,前端不应再硬编码算法族规则。"""
-    rife = next(entry for entry in INTERPOLATION_ALGORITHMS if entry["name"] == "rife")
-    assert rife["family"] == "rife"
-    assert rife["inputFrameMode"] == "none"
-    assert "fixedScaleFactor" not in rife
+    rife = next(entry for entry in INTERPOLATION_CAPABILITIES if entry.name == "rife")
+    assert rife.descriptor.model_kind == "rife"
+    assert rife.input_frame_mode == "none"
+    assert rife.descriptor.fixed_scale_factor is None
 
-    onnx_entries = [entry for entry in SR_ALGORITHMS if entry["tensorBackends"] == ["onnx"]]
+    onnx_entries = [
+        entry for entry in SUPER_RESOLUTION_CAPABILITIES if entry.descriptor.supported_backends == frozenset({"onnx"})
+    ]
     assert onnx_entries
     for entry in onnx_entries:
-        assert entry["family"] == "onnx_super_resolution"
-        assert entry["inputFrameMode"] == "none"
-        assert "fixedScaleFactor" not in entry
+        assert entry.descriptor.model_kind == "onnx_super_resolution"
+        assert entry.input_frame_mode == "none"
+        assert entry.descriptor.fixed_scale_factor is None
 
-    paddlegan_entries = [entry for entry in SR_ALGORITHMS if entry["tensorBackends"] == ["paddle"]]
+    paddlegan_entries = [
+        entry for entry in SUPER_RESOLUTION_CAPABILITIES if entry.descriptor.supported_backends == frozenset({"paddle"})
+    ]
     assert paddlegan_entries
     for entry in paddlegan_entries:
-        assert entry["family"] == "paddlegan_vsr"
-        assert entry["fixedScaleFactor"] == 4
-        assert entry["inputFrameMode"] in _VALID_INPUT_FRAME_MODES
-        if entry["name"] == "edvr":
-            assert entry["inputFrameMode"] == "fixed_window"
+        assert entry.descriptor.model_kind == "paddlegan_vsr"
+        assert entry.descriptor.fixed_scale_factor == 4
+        assert entry.input_frame_mode in _VALID_INPUT_FRAME_MODES
+        if entry.name == "edvr":
+            assert entry.input_frame_mode == "fixed_window"
         else:
-            assert entry["inputFrameMode"] == "editable_chunk"
+            assert entry.input_frame_mode == "editable_chunk"
 
 
 def test_paddlegan_window_models_expose_fixed_runtime_frame_count():
     """EDVR 固定使用 5 邻帧窗口,前端不应把它当可编辑帧块数。"""
-    edvr = next(entry for entry in SR_ALGORITHMS if entry["name"] == "edvr")
-    assert edvr["inputFrameMode"] == "fixed_window"
-    assert edvr["defaultNumFrames"] == 5
-    assert edvr["modelDetails"][0].metrics.runtime_frame_count == 5
+    edvr = next(entry for entry in SUPER_RESOLUTION_CAPABILITIES if entry.name == "edvr")
+    assert edvr.input_frame_mode == "fixed_window"
+    assert edvr.default_num_frames == 5
+    assert MODEL_METRIC_SPECS_BY_ALGORITHM[edvr.name][0].runtime_frame_count == 5
 
-    recurrent = [entry for entry in SR_ALGORITHMS if entry["tensorBackends"] == ["paddle"] and entry["name"] != "edvr"]
+    recurrent = [
+        entry
+        for entry in SUPER_RESOLUTION_CAPABILITIES
+        if entry.descriptor.supported_backends == frozenset({"paddle"}) and entry.name != "edvr"
+    ]
     assert recurrent
     for entry in recurrent:
-        assert entry["inputFrameMode"] == "editable_chunk"
-        assert entry["modelDetails"][0].metrics.runtime_frame_count is None
+        assert entry.input_frame_mode == "editable_chunk"
+        assert MODEL_METRIC_SPECS_BY_ALGORITHM[entry.name][0].runtime_frame_count is None
+
+
+def test_catalog_sets_match_model_and_factory_registries() -> None:
+    from app.processing.streaming import stage_worker_factory
+
+    rife = next(entry for entry in INTERPOLATION_CAPABILITIES if entry.name == "rife")
+    paddle = {entry.name for entry in SUPER_RESOLUTION_CAPABILITIES if entry.descriptor.model_kind == "paddlegan_vsr"}
+
+    assert set(rife.models) == set(SUPPORTED_MODELS)
+    assert paddle == set(PADDLEGAN_VSR_SPECS)
+    assert set(stage_worker_factory._ALGORITHM_FACTORIES) == {
+        entry.descriptor.factory_key for entry in _ALL_CAPABILITIES
+    }
+
+
+def test_model_catalogs_reject_runtime_mutation() -> None:
+    with pytest.raises(TypeError):
+        operator.setitem(MODEL_SPECS, "future", MODEL_SPECS[SUPPORTED_MODELS[0]])
+    with pytest.raises(TypeError):
+        operator.setitem(PADDLEGAN_VSR_SPECS, "future", next(iter(PADDLEGAN_VSR_SPECS.values())))
+    head_config = MODEL_SPECS["4.7"].head_config
+    assert head_config is not None
+    with pytest.raises(TypeError):
+        operator.setitem(head_config, "in_channels", 99)

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from app.utils.model_metrics import get_paddlegan_model_detail
+from app.catalog.model_metrics import PADDLEGAN_MODEL_METRIC_SPECS
 from tests_full_e2e.helpers import (
     BACKEND_DIR,
     assert_completed_process,
@@ -32,11 +32,14 @@ NUM_FRAMES = 5
 
 
 def _expected_ppmsvsr_vram_bytes() -> float:
-    metrics = get_paddlegan_model_detail("ppmsvsr")["metrics"]
+    metrics = PADDLEGAN_MODEL_METRIC_SPECS["ppmsvsr"]
+    assert metrics.runtime_overhead_bytes is not None
+    assert metrics.parameter_bytes is not None
+    assert metrics.activation_bytes_per_megapixel is not None
     return (
-        metrics["runtimeOverheadBytes"]
-        + metrics["parameterBytes"]
-        + metrics["activationBytesPerMegapixel"] * (WIDTH * HEIGHT / 1_000_000.0) * NUM_FRAMES
+        metrics.runtime_overhead_bytes
+        + metrics.parameter_bytes
+        + metrics.activation_bytes_per_megapixel * (WIDTH * HEIGHT / 1_000_000.0) * NUM_FRAMES
     )
 
 

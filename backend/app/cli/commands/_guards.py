@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.adapters import FFmpegMediaAdapter
+from app.adapters.ffmpeg_media import FFmpegMediaAdapter
 from app.errors import TaskErrorCode, raise_error
 from app.ports.media import MediaRuntimePort
 from app.utils.ffmpeg import FFmpegWrapper

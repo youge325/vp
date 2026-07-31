@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from app.catalog.stage_descriptors import PADDLEGAN_STAGE_DESCRIPTORS
+from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
 
 ModelFactory = Callable[[], Any]
 
@@ -68,8 +68,8 @@ _MODEL_FACTORIES: dict[str, ModelFactory] = {
 
 
 def _validate_model_factory_registry() -> None:
-    missing = sorted(set(PADDLEGAN_STAGE_DESCRIPTORS) - set(_MODEL_FACTORIES))
-    extra = sorted(set(_MODEL_FACTORIES) - set(PADDLEGAN_STAGE_DESCRIPTORS))
+    missing = sorted(set(PADDLEGAN_VSR_SPECS) - set(_MODEL_FACTORIES))
+    extra = sorted(set(_MODEL_FACTORIES) - set(PADDLEGAN_VSR_SPECS))
     if missing or extra:
         raise RuntimeError(f"PaddleGAN model factory registry drift: missing={missing}, extra={extra}")
 

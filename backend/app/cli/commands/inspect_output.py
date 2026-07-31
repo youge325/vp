@@ -15,6 +15,7 @@ import argparse
 from pathlib import Path
 
 from app.adapters.model_availability import LocalModelAvailability
+from app.adapters.streaming_runtime import FilesystemManifestFactory
 from app.cli.commands._guards import ensure_input_and_ffmpeg
 from app.cli.commands._pipeline_preparation import prepare_pipeline_preflight
 from app.cli.commands._process_validation import load_runtime_configs
@@ -25,7 +26,7 @@ from app.generated.contracts import (
     ResumePipelineKind,
 )
 from app.generated.protocol_constants import BackendEnvelopeType
-from app.planning import ResumeInspection, SegmentManifest
+from app.planning.manifest import ResumeInspection
 from app.protocol import ndjson
 from app.utils.file_utils import prepare_default_output_path
 
@@ -54,7 +55,7 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
     preflight = pipeline.preflight
 
     if processing_steps:
-        manifest = SegmentManifest(output_path)
+        manifest = FilesystemManifestFactory()(output_path)
         inspection = manifest.inspect(
             preflight.signature,
             total_output_frames=preflight.stage_plan.total_encoded_frames,

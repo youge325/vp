@@ -8,9 +8,9 @@ from app.errors import ProcessError, TaskErrorCode
 
 def test_paddlegan_catalog_and_factory_registry_are_an_exact_set():
     from app.algorithms.paddle.paddlegan_vsr.model_factory import _MODEL_FACTORIES
-    from app.catalog.stage_descriptors import PADDLEGAN_STAGE_DESCRIPTORS
+    from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
 
-    assert set(_MODEL_FACTORIES) == set(PADDLEGAN_STAGE_DESCRIPTORS)
+    assert set(_MODEL_FACTORIES) == set(PADDLEGAN_VSR_SPECS)
 
 
 def test_paddlegan_factory_rejects_unknown_catalog_key():

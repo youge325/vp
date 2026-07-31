@@ -6,19 +6,19 @@ import time
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import numpy as np
 import pytest
 
 from app.cli.commands import stage_worker as stage_worker_command
 from app.errors import ProcessError, TaskErrorCode
-from app.planning import ProcessingStep
+from app.generated.protocol_constants import STAGE_WORKER_EVENT_PREFIX
+from app.generated.stage_worker_contracts import StageWorkerConfig
+from app.planning.processing_steps import ProcessingStep
 from app.processing.streaming import stage_worker as stage_worker_runtime
 from app.processing.streaming import stage_worker_progress
 from app.processing.streaming.stage_worker import (
     run_stage_worker_stream,
 )
-from app.processing.streaming.stage_worker_config import StageWorkerConfig
-from app.processing.streaming.stage_worker_progress import STAGE_EVENT_PREFIX
+from app.processing.streaming.stage_worker_config import build_stage_worker_step
 from tests.support.stage_worker import (
     IdentityBackend as _IdentityBackend,
     IncrementAlgorithm as _IncrementAlgorithm,
@@ -66,7 +66,8 @@ def _run_worker(
             config,
             input_stream,
             output_stream,
-            event_sink=event_sink,
+            event_sink=lambda event: event_sink(event.model_dump(by_alias=True, exclude_none=True, mode="json")),
+            model_root="D:/models",
         )
 
 
@@ -161,6 +162,7 @@ def test_sequence_stage_emits_start_and_heartbeat_during_blocking_process(monkey
         "stageTotal": 1,
         "current": 0,
         "total": 3,
+        "heartbeat": False,
         "force": True,
     }
     assert any(event.get("heartbeat") is True and event["current"] == 0 for event in progress_events)
@@ -189,16 +191,26 @@ def test_stage_worker_passes_configured_backend_to_algorithm() -> None:
     output = io.BytesIO()
     captured = {}
 
-    def fake_create(stage, backend):
+    def fake_create(stage, backend, *, model_root):
         captured["stage"] = stage
         captured["backend"] = backend
+        captured["model_root"] = model_root
         return _SequenceAlgorithm()
 
     config = StageWorkerConfig(
-        stage=ProcessingStep(
-            algorithm_type="super_resolution",
-            algorithm_kwargs={"sr_algorithm": "ppmsvsr", "tensor_backend": "paddle", "num_frames": 5},
-            stage_name="01_super_resolution",
+        stage=build_stage_worker_step(
+            ProcessingStep(
+                algorithm_type="super_resolution",
+                algorithm_kwargs={
+                    "sr_algorithm": "ppmsvsr",
+                    "scale_factor": 4.0,
+                    "tensor_backend": "paddle",
+                    "onnx_model": None,
+                    "engine": "cuda",
+                    "num_frames": 5,
+                },
+                stage_name="01_super_resolution",
+            )
         ),
         stage_index=1,
         stage_total=1,
@@ -209,6 +221,7 @@ def test_stage_worker_passes_configured_backend_to_algorithm() -> None:
         output_height=1,
         input_frame_count=1,
         tensor_backend_name="paddle",
+        output_frame_count=1,
     )
 
     backend = _IdentityBackend()
@@ -221,11 +234,13 @@ def test_stage_worker_passes_configured_backend_to_algorithm() -> None:
             _stream_of([_frame(1)]),
             output,
             event_sink=lambda _event: None,
+            model_root="D:/models",
         )
 
-    create_backend_mock.assert_called_once_with(config)
-    assert captured["stage"] is config.stage
-    assert captured["backend"].get_name() == "identity"
+    create_backend_mock.assert_called_once()
+    assert captured["stage"].stage_name == config.stage_name
+    assert captured["backend"] is backend
+    assert captured["model_root"] == "D:/models"
 
 
 def test_stage_worker_error_event_uses_wire_error_code(monkeypatch, capsys) -> None:
@@ -239,9 +254,9 @@ def test_stage_worker_error_event_uses_wire_error_code(monkeypatch, capsys) -> N
     )
 
     monkeypatch.setattr(
-        stage_worker_command.StageWorkerConfig,
-        "from_json_file",
-        classmethod(lambda _cls, _path: config),
+        stage_worker_command,
+        "load_stage_worker_config",
+        lambda _path: config,
     )
 
     def fail_stream(*_args, **_kwargs):
@@ -253,8 +268,30 @@ def test_stage_worker_error_event_uses_wire_error_code(monkeypatch, capsys) -> N
         stage_worker_command.cmd_stage_worker(SimpleNamespace(config_json="unused.json"))
 
     stderr = capsys.readouterr().err
-    line = next(line for line in stderr.splitlines() if line.startswith(STAGE_EVENT_PREFIX))
-    event = json.loads(line[len(STAGE_EVENT_PREFIX) :])
+    line = next(line for line in stderr.splitlines() if line.startswith(STAGE_WORKER_EVENT_PREFIX))
+    event = json.loads(line[len(STAGE_WORKER_EVENT_PREFIX) :])
     assert event["type"] == "error"
     assert event["code"] == TaskErrorCode.MISSING_MODEL.value
     assert event["message"] == "missing aux weight"
+
+
+def test_stage_worker_event_write_failure_never_contaminates_rawvideo_stdout(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(stage_worker_command, "load_stage_worker_config", lambda _path: object())
+
+    def fail_stream(*_args, **_kwargs):
+        raise RuntimeError("worker failed")
+
+    monkeypatch.setattr(stage_worker_command, "run_stage_worker_stream", fail_stream)
+    monkeypatch.setattr(
+        stage_worker_command,
+        "emit_stage_event",
+        lambda _event: (_ for _ in ()).throw(OSError("stderr closed")),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        stage_worker_command.cmd_stage_worker(SimpleNamespace(config_json="unused.json"))
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 1
+    assert captured.out == ""
+    assert captured.err == ""

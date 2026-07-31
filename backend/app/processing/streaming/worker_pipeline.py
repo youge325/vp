@@ -37,18 +37,18 @@ def run_stage_worker_pipeline(
         )
         return
 
-    plans = build_stage_worker_plans(
+    worker_configs = build_stage_worker_plans(
         stage_plan=config.stage_plan,
         source_width=config.source_width,
         source_height=config.source_height,
         source_frame_count=remaining_source_frames,
     )
-    if not plans:
+    if not worker_configs:
         raise RuntimeError("Worker pipeline requires at least one processing stage.")
 
     run_worker_chain_runtime(
         config=config,
-        plans=plans,
+        configs=worker_configs,
         encode_queue=encode_queue,
         error_queue=error_queue,
         stop_event=stop_event,

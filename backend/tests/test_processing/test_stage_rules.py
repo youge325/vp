@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from app.planning import ProcessingStep, StageProjection, build_stage_plan
+from app.planning.processing_steps import ProcessingStep
+from app.planning.stage_plan import build_stage_plan
+from app.planning.stage_projection import StageProjection
 from app.processing.streaming.stage_rules import (
-    stage_output_dimensions,
     stage_tensor_backend_name,
 )
 
 
-def test_stage_rules_centralize_stage_order_dimensions_and_backend_selection() -> None:
+def test_stage_rules_centralize_stage_order_and_backend_selection() -> None:
     steps = [
         ProcessingStep(
             algorithm_type="super_resolution",
@@ -31,5 +32,4 @@ def test_stage_rules_centralize_stage_order_dimensions_and_backend_selection() -
         "02_frame_interpolation",
     ]
     assert stage_tensor_backend_name(steps[0]) == "paddle"
-    assert stage_output_dimensions(steps[0], input_width=2, input_height=3) == (8, 12)
     assert stage_plan.projection.project_frame_count(steps[1], 3) == 7

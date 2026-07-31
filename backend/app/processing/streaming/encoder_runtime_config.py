@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.planning import ResumeState, SegmentManifest
+from app.planning.manifest import ResumeState, SegmentManifest
 from app.ports.media import EncodeProgressCallback, EncodingMediaPort
 from app.processing.streaming.metrics import PipelineMetrics
 

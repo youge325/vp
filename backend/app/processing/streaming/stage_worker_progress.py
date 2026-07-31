@@ -3,17 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 import sys
 import threading
 from typing import Any, Callable, Protocol
 
-from app.processing.streaming.stage_worker_config import StageWorkerConfig
+from app.generated.protocol_constants import STAGE_WORKER_EVENT_PREFIX
+from app.generated.stage_worker_contracts import (
+    StageWorkerConfig,
+    StageWorkerErrorEvent,
+    StageWorkerProgressEvent,
+)
+from app.protocol_encoding import encode_bounded_json_line
 
-STAGE_EVENT_PREFIX = "VP_STAGE_EVENT "
 SEQUENCE_STAGE_HEARTBEAT_SECONDS = 30.0
+_EVENT_WRITE_LOCK = threading.Lock()
 
-EventSink = Callable[[dict[str, Any]], None]
+_StageWorkerEvent = StageWorkerProgressEvent | StageWorkerErrorEvent
+EventSink = Callable[[_StageWorkerEvent], None]
 
 
 class StageProgressCallback(Protocol):
@@ -26,9 +32,15 @@ class StageProgressState:
     total: int = 1
 
 
-def emit_stage_event(event: dict[str, Any]) -> None:
+def emit_stage_event(event: _StageWorkerEvent) -> None:
     """Emit one worker event to stderr with a parseable prefix."""
-    print(f"{STAGE_EVENT_PREFIX}{json.dumps(event, ensure_ascii=False)}", file=sys.stderr, flush=True)
+    line = encode_bounded_json_line(
+        event.model_dump(by_alias=True, mode="json"),
+        prefix=STAGE_WORKER_EVENT_PREFIX,
+    )
+    with _EVENT_WRITE_LOCK:
+        sys.stderr.write(line)
+        sys.stderr.flush()
 
 
 def progress_event(
@@ -38,20 +50,17 @@ def progress_event(
     *,
     heartbeat: bool = False,
     force: bool = False,
-) -> dict[str, Any]:
-    event = {
-        "type": "progress",
-        "stageName": config.stage_name,
-        "stageIndex": config.stage_index,
-        "stageTotal": config.stage_total,
-        "current": current,
-        "total": total,
-    }
-    if heartbeat:
-        event["heartbeat"] = True
-    if force:
-        event["force"] = True
-    return event
+) -> StageWorkerProgressEvent:
+    return StageWorkerProgressEvent(
+        type="progress",
+        stage_name=config.stage_name,
+        stage_index=config.stage_index,
+        stage_total=config.stage_total,
+        current=current,
+        total=total,
+        heartbeat=heartbeat,
+        force=force,
+    )
 
 
 def start_sequence_stage_heartbeat(
@@ -85,7 +94,6 @@ def start_sequence_stage_heartbeat(
 __all__ = [
     "EventSink",
     "SEQUENCE_STAGE_HEARTBEAT_SECONDS",
-    "STAGE_EVENT_PREFIX",
     "StageProgressCallback",
     "StageProgressState",
     "emit_stage_event",

@@ -14,13 +14,15 @@ from pathlib import Path
 from typing import Any
 
 from app.adapters.model_availability import LocalModelAvailability
+from app.adapters.streaming_runtime import CliWorkerLogSink, FilesystemManifestFactory, NdjsonResumeStatusSink
 from app.cli.commands._pipeline_preparation import PreparedRun, prepare_pipeline_preflight
-from app.cli.runtime_configs import RuntimeConfigs
+from app.generated.contracts import RuntimeConfigBundle
 from app.config import settings
 from app.errors import TaskErrorCode, raise_error
 from app.ports.media import MediaProbePort
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_worker_progress import StageProgressCallback
+from app.processing.streaming.runtime_ports import ManifestFactoryPort, ResumeStatusSink, WorkerLogSink
 from app.protocol.reporter import CliProgressReporter
 from app.utils.file_utils import prepare_default_output_path
 
@@ -32,6 +34,9 @@ class RunObservers:
     progress_reporter: CliProgressReporter
     progress_callbacks: tuple[StageProgressCallback, ...]
     metrics: PipelineMetrics
+    manifest_factory: ManifestFactoryPort
+    resume_status_sink: ResumeStatusSink
+    worker_log_sink: WorkerLogSink
 
 
 def _make_stage_progress_callback(
@@ -65,7 +70,7 @@ def _make_stage_progress_callback(
 def _resolve_output_paths(
     args: argparse.Namespace,
     input_path: str,
-    configs: RuntimeConfigs,
+    configs: RuntimeConfigBundle,
 ) -> str:
     """Pick the output path and materialise its parent directory."""
     # Pydantic ``OutputConfig`` validator 保证 outputDir 必填非空,
@@ -90,7 +95,7 @@ def build_plan(
     args: argparse.Namespace,
     input_path: str,
     ffmpeg: MediaProbePort,
-    configs: RuntimeConfigs,
+    configs: RuntimeConfigBundle,
 ) -> tuple[PreparedRun, RunObservers]:
     """Compose immutable run facts and their runtime observers."""
     output_path = _resolve_output_paths(args, input_path, configs)
@@ -122,5 +127,8 @@ def build_plan(
         progress_reporter=progress_reporter,
         progress_callbacks=progress_callbacks,
         metrics=metrics,
+        manifest_factory=FilesystemManifestFactory(),
+        resume_status_sink=NdjsonResumeStatusSink(),
+        worker_log_sink=CliWorkerLogSink(),
     )
     return pipeline, observers

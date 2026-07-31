@@ -5,11 +5,38 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal, Mapping
 
-from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
+from app.catalog.filter_geometry import project_filter_chain
 
 AlgorithmType = Literal["frame_interpolation", "super_resolution", "frame_filter_chain"]
 StageExecutionMode = Literal["single", "pair", "sequence"]
 StageModelKind = Literal["rife", "onnx_super_resolution", "paddlegan_vsr", "filter_chain"]
+GeometryKind = Literal["preserve", "configured_scale", "fixed_scale", "filter_chain"]
+
+
+@dataclass(frozen=True, slots=True)
+class _GeometryPolicy:
+    """Pure dimension projection owned by the stage descriptor."""
+
+    kind: GeometryKind
+    fixed_scale_factor: float | None = None
+
+    def project(
+        self,
+        *,
+        input_width: int,
+        input_height: int,
+        algorithm_kwargs: Mapping[str, Any],
+    ) -> tuple[int, int]:
+        width = int(input_width)
+        height = int(input_height)
+        if self.kind == "preserve":
+            return width, height
+        if self.kind in {"configured_scale", "fixed_scale"}:
+            scale = self.fixed_scale_factor
+            if scale is None:
+                scale = float(algorithm_kwargs["scale_factor"])
+            return max(1, round(width * scale)), max(1, round(height * scale))
+        return project_filter_chain(width, height, algorithm_kwargs.get("filters", ()))
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,19 +45,22 @@ class StageDescriptor:
 
     execution_mode: StageExecutionMode
     requires_file_pipeline: bool
-    changes_dimensions: bool
+    geometry: _GeometryPolicy
     supported_backends: frozenset[str]
-    fixed_scale_factor: float | None
     factory_key: str
     model_kind: StageModelKind
+
+    @property
+    def fixed_scale_factor(self) -> float | None:
+        """Expose the scale projection without storing duplicate metadata."""
+        return self.geometry.fixed_scale_factor
 
 
 RIFE_STAGE_DESCRIPTOR = StageDescriptor(
     execution_mode="pair",
     requires_file_pipeline=True,
-    changes_dimensions=False,
+    geometry=_GeometryPolicy("preserve"),
     supported_backends=frozenset({"pytorch", "onnx"}),
-    fixed_scale_factor=None,
     factory_key="rife",
     model_kind="rife",
 )
@@ -38,9 +68,8 @@ RIFE_STAGE_DESCRIPTOR = StageDescriptor(
 ONNX_SUPER_RESOLUTION_DESCRIPTOR = StageDescriptor(
     execution_mode="single",
     requires_file_pipeline=False,
-    changes_dimensions=True,
+    geometry=_GeometryPolicy("configured_scale"),
     supported_backends=frozenset({"onnx"}),
-    fixed_scale_factor=None,
     factory_key="onnx_super_resolution",
     model_kind="onnx_super_resolution",
 )
@@ -48,44 +77,28 @@ ONNX_SUPER_RESOLUTION_DESCRIPTOR = StageDescriptor(
 FILTER_CHAIN_DESCRIPTOR = StageDescriptor(
     execution_mode="single",
     requires_file_pipeline=False,
-    changes_dimensions=False,
+    geometry=_GeometryPolicy("filter_chain"),
     supported_backends=frozenset(),
-    fixed_scale_factor=None,
     factory_key="filter_chain",
     model_kind="filter_chain",
 )
 
-PADDLEGAN_STAGE_DESCRIPTORS: dict[str, StageDescriptor] = {
-    model_id: StageDescriptor(
-        execution_mode="sequence",
-        requires_file_pipeline=True,
-        changes_dimensions=True,
-        supported_backends=frozenset({"paddle"}),
-        fixed_scale_factor=4.0,
-        factory_key=model_id,
-        model_kind="paddlegan_vsr",
-    )
-    for model_id in PADDLEGAN_VSR_SPECS
-}
-
-
-def resolve_stage_descriptor(
-    algorithm_type: AlgorithmType,
-    algorithm_kwargs: Mapping[str, Any],
-) -> StageDescriptor:
-    """Resolve stage capabilities without importing an algorithm implementation."""
-    if algorithm_type == "frame_interpolation":
-        return RIFE_STAGE_DESCRIPTOR
-    if algorithm_type == "super_resolution":
-        algorithm = str(algorithm_kwargs.get("sr_algorithm") or "")
-        return PADDLEGAN_STAGE_DESCRIPTORS.get(algorithm, ONNX_SUPER_RESOLUTION_DESCRIPTOR)
-    return FILTER_CHAIN_DESCRIPTOR
+PADDLEGAN_STAGE_DESCRIPTOR = StageDescriptor(
+    execution_mode="sequence",
+    requires_file_pipeline=True,
+    geometry=_GeometryPolicy("fixed_scale", fixed_scale_factor=4.0),
+    supported_backends=frozenset({"paddle"}),
+    factory_key="paddlegan_vsr",
+    model_kind="paddlegan_vsr",
+)
 
 
 __all__ = [
     "AlgorithmType",
-    "PADDLEGAN_STAGE_DESCRIPTORS",
+    "FILTER_CHAIN_DESCRIPTOR",
+    "ONNX_SUPER_RESOLUTION_DESCRIPTOR",
+    "PADDLEGAN_STAGE_DESCRIPTOR",
+    "RIFE_STAGE_DESCRIPTOR",
     "StageDescriptor",
     "StageExecutionMode",
-    "resolve_stage_descriptor",
 ]

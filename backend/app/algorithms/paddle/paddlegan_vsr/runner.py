@@ -21,14 +21,14 @@ from app.algorithms.paddle.paddlegan_vsr.weights import ensure_paddlegan_vsr_wei
 class PaddleGanVsrRunner:
     """Compose model loading, sequence execution, tracing, and optional TensorRT."""
 
-    def __init__(self, *, model_id: str, num_frames: int, engine: str = "cuda"):
+    def __init__(self, *, model_id: str, num_frames: int, engine: str):
         self.model_id = model_id
         self.spec = get_spec(model_id)
         self.num_frames = int(num_frames)
         if self.num_frames < 1:
             raise ValueError("PaddleGAN VSR num_frames must be at least 1.")
-        self.engine = (engine or "cuda").lower()
-        if self.engine not in {"cuda", "tensorrt"}:
+        self.engine = engine
+        if self.engine not in {"cuda", "tensorrt", "dcu"}:
             raise ValueError(f"Unsupported PaddleGAN VSR engine: {engine!r}")
         self._paddle: Any | None = None
         self._model: Any | None = None
@@ -87,8 +87,14 @@ class PaddleGanVsrRunner:
             return self._paddle
         import paddle
 
-        if paddle.device.is_compiled_with_cuda():
+        if self.engine == "dcu":
+            if not paddle.device.is_compiled_with_rocm():
+                raise RuntimeError("PaddleGAN VSR DCU engine requires a ROCm/DCU Paddle build.")
             paddle.set_device("gpu")
+        elif paddle.device.is_compiled_with_cuda():
+            paddle.set_device("gpu")
+        else:
+            raise RuntimeError(f"PaddleGAN VSR {self.engine} engine requires a CUDA Paddle build.")
         self._paddle = paddle
         return paddle
 

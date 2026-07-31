@@ -8,18 +8,19 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Any
 
 from app.errors import ResumeConflictError
 from app.generated.contracts import TaskCompletedPayload
 from app.generated.protocol_constants import BackendEnvelopeType
 from app.planning.resume_policy import decide_output_action
 from app.ports.media import MediaRuntimePort
-from app.processing.streaming import process_video_streaming
+from app.processing.streaming.pipeline import process_video_streaming
+from app.processing.execution_result import ExecutionResult
 from app.protocol import ndjson
 
 from app.cli.commands._pipeline_preparation import PreparedRun
 from app.cli.commands._process_planning import RunObservers
+from app.cli.runtime_configs import runtime_config_sections
 
 
 def _resolve_processed_frame_count(ffmpeg: MediaRuntimePort, output_path: str, fallback: int) -> int:
@@ -64,8 +65,8 @@ def _run_streaming(
     prepared: PreparedRun,
     observers: RunObservers,
     resume_mode: str,
-) -> dict[str, Any]:
-    sections = prepared.runtime_configs.json_sections()
+) -> ExecutionResult:
+    sections = runtime_config_sections(prepared.runtime_configs)
     return process_video_streaming(
         ffmpeg=ffmpeg,
         input_path=input_path,
@@ -78,6 +79,9 @@ def _run_streaming(
         encode_progress_callback=observers.progress_reporter.update,
         resume_mode=resume_mode,
         metrics=observers.metrics,
+        manifest_factory=observers.manifest_factory,
+        resume_status_sink=observers.resume_status_sink,
+        worker_log_sink=observers.worker_log_sink,
     )
 
 
@@ -88,8 +92,8 @@ def _run_format_conversion(
     prepared: PreparedRun,
     observers: RunObservers,
     resume_mode: str,
-) -> dict[str, Any]:
-    sections = prepared.runtime_configs.json_sections()
+) -> ExecutionResult:
+    sections = runtime_config_sections(prepared.runtime_configs)
     decode_config = sections["decode"]
     encode_config = sections["encode"]
     _enforce_format_conversion_resume_mode(output_path=prepared.output_path, resume_mode=resume_mode)
@@ -101,15 +105,14 @@ def _run_format_conversion(
         output_fps=prepared.final_output_fps,
         progress_callback=observers.progress_reporter.update,
     )
-    return {
-        "output_path": prepared.output_path,
-        "processed_frames": _resolve_processed_frame_count(
+    return ExecutionResult(
+        output_path=prepared.output_path,
+        processed_frames=_resolve_processed_frame_count(
             ffmpeg,
             prepared.output_path,
             prepared.expected_output_frames,
         ),
-        "audio_merged": prepared.runtime_configs.encode.keep_audio,
-    }
+    )
 
 
 def execute_plan(
@@ -119,7 +122,7 @@ def execute_plan(
     prepared: PreparedRun,
     observers: RunObservers,
     resume_mode: str,
-) -> tuple[dict[str, Any], float]:
+) -> tuple[ExecutionResult, float]:
     """Run the plan and return ``(result_dict, elapsed_seconds)``.
 
     Callers handle KeyboardInterrupt / ResumeConflictError / generic
@@ -148,24 +151,17 @@ def execute_plan(
 
 def finalize_and_emit(
     *,
-    ffmpeg: MediaRuntimePort,
-    prepared: PreparedRun,
     observers: RunObservers,
-    result: dict[str, Any],
+    result: ExecutionResult,
     elapsed: float,
 ) -> None:
     """Finish the progress bar and emit a typed completed envelope."""
-    processed_frames = _resolve_processed_frame_count(
-        ffmpeg,
-        str(result.get("output_path", prepared.output_path)),
-        int(result.get("processed_frames", prepared.expected_output_frames) or prepared.expected_output_frames),
-    )
     observers.progress_reporter.finish()
     ndjson.emit(
         BackendEnvelopeType.COMPLETED,
         TaskCompletedPayload(
-            output_path=result.get("output_path", prepared.output_path),
-            processed_frames=processed_frames,
+            output_path=result.output_path,
+            processed_frames=result.processed_frames,
             time_seconds=elapsed,
         ),
     )

@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 
-from app.planning import ProcessingStep, build_run_identity
+from app.planning.processing_steps import ProcessingStep
+from app.planning.run_identity import build_run_identity
 from app.ports.media import VideoMetadata
 
 

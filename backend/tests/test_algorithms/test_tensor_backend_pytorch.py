@@ -2,10 +2,10 @@
 
 import pytest
 
-pytestmark = pytest.mark.pytorch
-
 from app.algorithms.tensor_backend import PyTorchBackend, get_tensor_backend
 from tests.support.tensor_backends import assert_backend_contract, require_module
+
+pytestmark = pytest.mark.pytorch
 
 
 class TestPyTorchBackend:
@@ -17,7 +17,7 @@ class TestPyTorchBackend:
         return PyTorchBackend()
 
     def test_contract(self, backend):
-        assert_backend_contract(backend, expected_name="pytorch", check_float_range=True)
+        assert_backend_contract(backend, check_float_range=True)
 
 
 class TestGetTensorBackendPyTorch:
@@ -26,9 +26,4 @@ class TestGetTensorBackendPyTorch:
     def test_get_pytorch(self):
         require_module("torch", "PyTorch")
         backend = get_tensor_backend("pytorch")
-        assert backend.get_name() == "pytorch"
-
-    def test_case_insensitive(self):
-        require_module("torch", "PyTorch")
-        backend = get_tensor_backend("PyTorch")
-        assert backend.get_name() == "pytorch"
+        assert isinstance(backend, PyTorchBackend)

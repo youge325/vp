@@ -18,8 +18,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 from tests.support.ndjson import last_json_object
 
 REPO_ROOT = Path(__file__).resolve().parents[3]

@@ -10,6 +10,7 @@ from typing import Any
 from app.benchmark.comparison import compare_reports
 from app.benchmark.reporting import write_json_report, write_markdown_report
 from app.benchmark.runner import BenchmarkOptions, Workload, default_baseline_path, default_work_dir, run_benchmark
+from app.benchmark.scenarios import DEFAULT_SCENARIO
 from app.errors import ProcessError, TaskErrorCode
 
 
@@ -46,7 +47,7 @@ def _write_reports(report: dict[str, Any], *, json_path: Path | None, markdown_p
 
 def _workload_from_args(args: argparse.Namespace) -> Workload:
     return Workload(
-        scenario=args.scenario,
+        scenario=args.scenario or DEFAULT_SCENARIO,
         width=args.width,
         height=args.height,
         fps=args.fps,

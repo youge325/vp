@@ -7,10 +7,7 @@ from app.processing.streaming.pipeline_context import StreamingPipelineContext
 from app.processing.streaming.stage_file_chunks import run_single_stage_file_chunks
 from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 from app.processing.streaming.stage_file_stage_context import build_stage_file_stage_context
-from app.processing.streaming.stage_rules import (
-    stage_output_dimensions,
-    stage_tensor_backend_name,
-)
+from app.processing.streaming.stage_rules import stage_tensor_backend_name
 
 
 def run_stage_file_pipeline(
@@ -27,11 +24,11 @@ def run_stage_file_pipeline(
     stage_root.mkdir(parents=True, exist_ok=True)
 
     current_path = context.input_path
-    current_width = context.preflight.video_info.width
-    current_height = context.preflight.video_info.height
     projected_stages = stage_plan.projection.stages(
         source_frames=context.preflight.video_info.source_frames,
         source_fps=context.preflight.video_info.source_fps,
+        source_width=context.preflight.video_info.width,
+        source_height=context.preflight.video_info.height,
     )
 
     for projected_stage in projected_stages:
@@ -39,11 +36,17 @@ def run_stage_file_pipeline(
         step = projected_stage.step
         is_final_stage = stage_position == len(steps)
         current_frame_count = projected_stage.input_frames
-        output_width, output_height = stage_output_dimensions(
-            step,
-            input_width=current_width,
-            input_height=current_height,
-        )
+        if None in {
+            projected_stage.input_width,
+            projected_stage.input_height,
+            projected_stage.output_width,
+            projected_stage.output_height,
+        }:
+            raise RuntimeError("Stage geometry projection is incomplete.")
+        current_width = int(projected_stage.input_width)
+        current_height = int(projected_stage.input_height)
+        output_width = int(projected_stage.output_width)
+        output_height = int(projected_stage.output_height)
         stage_output_frames = projected_stage.output_frames
         stage_fps = float(projected_stage.output_fps)
 
@@ -60,6 +63,7 @@ def run_stage_file_pipeline(
             encode_config=context.encode_config,
             segment_frames=context.preflight.segment_frames,
             output_fps=context.output_fps,
+            manifest_factory=context.manifest_factory,
         )
 
         runtime_config = StageFileRuntimeConfig(
@@ -81,6 +85,7 @@ def run_stage_file_pipeline(
             output_fps=stage_fps,
             encode_output_fps=stage_context.encode_output_fps,
             metrics=context.metrics,
+            worker_log_sink=context.worker_log_sink,
         )
         completed_frames = run_single_stage_file_chunks(
             config=runtime_config,
@@ -105,11 +110,10 @@ def run_stage_file_pipeline(
             completed_output_frames=completed_frames,
             total_output_frames=stage_output_frames,
             strict_total_frames=True,
+            source_has_audio=False,
         )
         stage_context.manifest.workspace.cleanup()
         current_path = stage_context.output_path
-        current_width = output_width
-        current_height = output_height
 
 
 __all__ = [

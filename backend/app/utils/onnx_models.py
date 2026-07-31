@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Literal
 
-from app.generated.contracts import ModelVariantInfo
+from app.catalog.model_metrics import ModelMetricSpec
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -23,6 +24,12 @@ _ENGINE_PROVIDER_PRIORITY: dict[str, list[str]] = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class OnnxModelCatalog:
+    names: dict[str, dict[str, list[str]]]
+    details: dict[str, dict[str, list[ModelMetricSpec]]]
+
+
 def _get_onnx_model_dir(kind: _OnnxModelKind, model_root: str | Path | None = None) -> Path:
     """Return the configured ONNX model directory for a model kind."""
     if model_root is None:
@@ -31,18 +38,20 @@ def _get_onnx_model_dir(kind: _OnnxModelKind, model_root: str | Path | None = No
     return root / _ONNX_MODEL_SUBDIRS[kind]
 
 
-def scan_onnx_models(model_root: str | Path | None = None) -> dict[str, dict[str, list[str]]]:
-    """List ONNX model basenames grouped by kind, then by algorithm subdir.
+def scan_onnx_catalog(model_root: str | Path | None = None) -> OnnxModelCatalog:
+    """Discover names and analyze details from one directory traversal."""
+    from app.utils.onnx_metric_analyzer import analyze_onnx_model
 
-    Layout: ``<model_root>/<kind>/<algorithm>/<basename>.onnx``
-    Returns ``{"interpolation": {"rife": ["rife_v4.25.onnx", ...]}, "super_resolution": {...}}``.
-    """
-    return {kind: _scan_kind_dir(_get_onnx_model_dir(kind, model_root)) for kind in _ONNX_MODEL_SUBDIRS}
-
-
-def scan_onnx_model_details(model_root: str | Path | None = None) -> dict[str, dict[str, list[ModelVariantInfo]]]:
-    """Analyze ONNX model files grouped by kind and algorithm subdir."""
-    return {kind: _scan_kind_details(_get_onnx_model_dir(kind, model_root)) for kind in _ONNX_MODEL_SUBDIRS}
+    names: dict[str, dict[str, list[str]]] = {}
+    details: dict[str, dict[str, list[ModelMetricSpec]]] = {}
+    for kind in _ONNX_MODEL_SUBDIRS:
+        grouped_paths = _scan_kind_paths(_get_onnx_model_dir(kind, model_root))
+        names[kind] = {algorithm: [path.name for path in paths] for algorithm, paths in grouped_paths.items()}
+        details[kind] = {
+            algorithm: [analyze_onnx_model(path, name=path.name, label=path.name) for path in paths]
+            for algorithm, paths in grouped_paths.items()
+        }
+    return OnnxModelCatalog(names=names, details=details)
 
 
 def resolve_onnx_model_path(
@@ -98,51 +107,26 @@ def _is_safe_algorithm_name(name: str) -> bool:
     return _is_basename_only(name)
 
 
-def _scan_kind_dir(kind_dir: Path) -> dict[str, list[str]]:
-    """Scan a kind directory: each immediate subdirectory is treated as an algorithm name."""
+def _scan_kind_paths(kind_dir: Path) -> dict[str, list[Path]]:
     if not kind_dir.is_dir():
         return {}
-    result: dict[str, list[str]] = {}
+    result: dict[str, list[Path]] = {}
     for alg_dir in sorted(kind_dir.iterdir(), key=lambda p: p.name.casefold()):
         if not alg_dir.is_dir() or not _is_safe_algorithm_name(alg_dir.name):
             continue
         files = sorted(
             (
-                item.name
+                item
                 for item in alg_dir.iterdir()
                 if item.is_file()
                 and item.suffix.lower() == ".onnx"
                 and item.stat().st_size > 0
                 and _is_safe_onnx_basename(item.name)
             ),
-            key=str.casefold,
+            key=lambda path: path.name.casefold(),
         )
         if files:
             result[alg_dir.name] = files
-    return result
-
-
-def _scan_kind_details(kind_dir: Path) -> dict[str, list[ModelVariantInfo]]:
-    """Scan and analyze a kind directory without changing ``scan_onnx_models``."""
-    if not kind_dir.is_dir():
-        return {}
-
-    from app.utils.model_metrics import analyze_onnx_model
-
-    result: dict[str, list[ModelVariantInfo]] = {}
-    for alg_dir in sorted(kind_dir.iterdir(), key=lambda p: p.name.casefold()):
-        if not alg_dir.is_dir() or not _is_safe_algorithm_name(alg_dir.name):
-            continue
-        details = [
-            analyze_onnx_model(item, name=item.name, label=item.name)
-            for item in sorted(alg_dir.iterdir(), key=lambda p: p.name.casefold())
-            if item.is_file()
-            and item.suffix.lower() == ".onnx"
-            and item.stat().st_size > 0
-            and _is_safe_onnx_basename(item.name)
-        ]
-        if details:
-            result[alg_dir.name] = details
     return result
 
 
@@ -154,13 +138,8 @@ def _select_onnx_providers(engine: str, ort_module: Any) -> list[str]:
     misconfiguration becomes a precise error.
     """
     available = list(ort_module.get_available_providers())
-    if engine == "auto" or engine not in _ENGINE_PROVIDER_PRIORITY:
-        logger.info(
-            "ONNX engine=%s, using available providers in default order: %s",
-            engine,
-            available,
-        )
-        return available
+    if engine not in _ENGINE_PROVIDER_PRIORITY:
+        raise ValueError(f"Unsupported ONNX inference engine: {engine!r}.")
 
     desired = _ENGINE_PROVIDER_PRIORITY[engine]
     primary = desired[0]

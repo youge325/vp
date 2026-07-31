@@ -70,11 +70,11 @@ def test_paddlegan_tensorrt_engine_logs_reach_parent_process_stderr(tmp_path: Pa
 
     assert "[VP_TRT]" in proc.stderr
     assert re.search(
-        r"\d\d:\d\d:\d\d \[INFO\] app\.algorithms\.paddle\.paddlegan_vsr\.runner: "
+        r"\d\d:\d\d:\d\d \[INFO\] app\.algorithms\.paddle\.paddlegan_vsr\.tensorrt_cache: "
         r"\[VP_TRT\] TensorRT BUILD PaddleGAN ppmsvsr shape=1x5x3x128x128",
         proc.stderr,
     ) or re.search(
-        r"\d\d:\d\d:\d\d \[INFO\] app\.algorithms\.paddle\.paddlegan_vsr\.runner: "
+        r"\d\d:\d\d:\d\d \[INFO\] app\.algorithms\.paddle\.paddlegan_vsr\.tensorrt_cache: "
         r"\[VP_TRT\] TensorRT LOAD static_model=",
         proc.stderr,
     )

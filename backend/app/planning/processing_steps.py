@@ -6,12 +6,8 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from app.catalog.stage_descriptors import (
-    AlgorithmType,
-    StageDescriptor,
-    StageExecutionMode,
-    resolve_stage_descriptor,
-)
+from app.catalog.algorithm_capabilities import resolve_stage_descriptor
+from app.catalog.stage_descriptors import AlgorithmType, StageDescriptor, StageExecutionMode
 
 
 @dataclass(frozen=True, slots=True)

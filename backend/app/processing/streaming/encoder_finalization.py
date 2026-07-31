@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from app.planning import SegmentManifest
+from app.planning.manifest import SegmentManifest
 from app.ports.media import FinalizingMediaPort
 
 
@@ -20,6 +20,7 @@ def finalize_segmented_output(
     completed_output_frames: int,
     total_output_frames: int,
     strict_total_frames: bool,
+    source_has_audio: bool,
 ) -> None:
     completed_segments = manifest.scan_completed_chunks()
     segment_paths = [str(manifest.workspace.sidecar_dir / record.path) for record in completed_segments]
@@ -36,7 +37,7 @@ def finalize_segmented_output(
     ffmpeg.concat_videos(segment_paths, concat_path)
 
     keep_audio = bool(encode_config.get("keepAudio", True))
-    if keep_audio and ffmpeg.has_audio(input_path):
+    if keep_audio and source_has_audio:
         audio_path = str(manifest.workspace.sidecar_dir / "source_audio.aac")
         if ffmpeg.extract_audio(input_path, audio_path):
             ffmpeg.merge_audio(concat_path, audio_path, output_path)

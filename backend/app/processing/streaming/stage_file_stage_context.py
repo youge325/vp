@@ -8,8 +8,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-from app.planning import ProcessingStep
+from app.planning.processing_steps import ProcessingStep
 from app.planning.manifest import ResumeState, SegmentManifest
+from app.processing.streaming.runtime_ports import ManifestFactoryPort
 
 
 def _stage_signature(stage_position: int, step: ProcessingStep, input_path: str, output_path: str) -> str:
@@ -55,6 +56,7 @@ def build_stage_file_stage_context(
     encode_config: dict[str, Any],
     segment_frames: int,
     output_fps: float | None,
+    manifest_factory: ManifestFactoryPort,
 ) -> _StageFileStageContext:
     if is_final_stage:
         return _StageFileStageContext(
@@ -68,7 +70,7 @@ def build_stage_file_stage_context(
         )
 
     stage_output_path = str(stage_root / f"stage-{stage_position:02d}-{_safe_stage_name(step)}.mp4")
-    stage_manifest = SegmentManifest(stage_output_path)
+    stage_manifest = manifest_factory(stage_output_path)
     stage_manifest.prepare(
         _stage_signature(stage_position, step, current_path, stage_output_path),
         {

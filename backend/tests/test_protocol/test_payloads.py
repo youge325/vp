@@ -14,7 +14,7 @@ from app.generated.contracts import (
     TaskProgressPayload,
     VideoInfo,
 )
-from app.generated.protocol_constants import BackendEnvelopeType
+from app.generated.protocol_constants import BackendEnvelopeType, NDJSON_LINE_LIMIT_BYTES
 from app.protocol import ndjson
 
 
@@ -304,5 +304,20 @@ def test_emitter_rejects_payload_type_mismatch_before_writing(
                 time_seconds=1.0,
             ),
         )
+
+    assert capsys.readouterr().out == ""
+
+
+def test_ndjson_emitter_rejects_oversized_utf8_line_before_writing(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    payload = BackendTaskErrorPayload(
+        code=TaskErrorCode.PROCESS_FAILED,
+        message="boom",
+        details={"traceback": "界" * NDJSON_LINE_LIMIT_BYTES},
+    )
+
+    with pytest.raises(ValueError, match="Protocol line"):
+        ndjson.emit(BackendEnvelopeType.ERROR, payload)
 
     assert capsys.readouterr().out == ""

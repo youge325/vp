@@ -16,9 +16,6 @@ class _CountingBackend:
         self.to_tensor_calls = 0
         self.to_numpy_calls = 0
 
-    def get_name(self) -> str:
-        return self.name
-
     def numpy_to_tensor(self, frame: np.ndarray) -> dict[str, Any]:
         self.to_tensor_calls += 1
         return {"tensor": frame.copy()}

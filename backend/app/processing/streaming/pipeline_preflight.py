@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.planning import (
-    StageProjection,
-    build_run_identity,
-    build_stage_plan,
-)
+from app.planning.run_identity import build_run_identity
+from app.planning.stage_plan import build_stage_plan
+from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
 from app.processing.streaming.pipeline_context import StreamingPipelinePreflight
 from app.processing.streaming.pipeline_rules import (

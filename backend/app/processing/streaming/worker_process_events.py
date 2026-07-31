@@ -2,35 +2,41 @@
 
 from __future__ import annotations
 
-import json
 import queue
 import subprocess
-import sys
 import threading
 from collections import deque
-from typing import Any, Protocol, Sequence
+from typing import Protocol, Sequence
 
-from app.errors import ProcessError, TaskErrorCode, error_code_to_wire
-from app.protocol.process_markers import TENSORRT_LOG_PREFIX as _TENSORRT_LOG_PREFIX
-from app.processing.streaming.stage_worker_progress import STAGE_EVENT_PREFIX, StageProgressCallback
-from app.processing.streaming.worker_plans import StageWorkerPlan
+from pydantic import TypeAdapter, ValidationError
+
+from app.errors import ProcessError, error_code_to_wire
+from app.generated.protocol_constants import (
+    NDJSON_LINE_LIMIT_BYTES,
+    STAGE_WORKER_EVENT_PREFIX,
+    STDERR_TAIL_LIMIT_BYTES,
+)
+from app.generated.stage_worker_contracts import StageWorkerConfig, StageWorkerErrorEvent, StageWorkerProgressEvent
+from app.processing.streaming.runtime_ports import WorkerLogSink
+from app.processing.streaming.error_channel import report_first_error
+from app.processing.streaming.stage_worker_progress import StageProgressCallback
 
 
 class _WorkerEventHandle(Protocol):
     process: subprocess.Popen[bytes]
-    plan: StageWorkerPlan
+    config: StageWorkerConfig
     stderr_tail: deque[str]
 
 
-def _parse_stage_event_line(line: str) -> dict[str, Any] | None:
+_EVENT_ADAPTER = TypeAdapter(StageWorkerProgressEvent | StageWorkerErrorEvent)
+
+
+def _parse_stage_event_line(line: str) -> StageWorkerProgressEvent | StageWorkerErrorEvent | None:
     """Parse a structured worker stderr line, ignoring ordinary stderr."""
-    if not line.startswith(STAGE_EVENT_PREFIX):
+    if not line.startswith(STAGE_WORKER_EVENT_PREFIX):
         return None
-    payload = line[len(STAGE_EVENT_PREFIX) :].strip()
-    event = json.loads(payload)
-    if not isinstance(event, dict):
-        return None
-    return event
+    payload = line[len(STAGE_WORKER_EVENT_PREFIX) :].strip()
+    return _EVENT_ADAPTER.validate_json(payload, by_alias=True, by_name=False)
 
 
 def read_worker_stderr(
@@ -38,46 +44,94 @@ def read_worker_stderr(
     progress_callbacks: Sequence[StageProgressCallback | None],
     error_queue: queue.Queue[BaseException],
     stop_event: threading.Event,
+    worker_log_sink: WorkerLogSink,
 ) -> None:
     stderr = handle.process.stderr
     if stderr is None:
         return
-    for raw_line in iter(stderr.readline, b""):
+
+    def read_line() -> bytes:
+        try:
+            return stderr.readline(NDJSON_LINE_LIMIT_BYTES + 1)
+        except BaseException as exc:  # pragma: no cover - process pipe boundary
+            report_first_error(error_queue, stop_event, exc)
+            return b""
+
+    while raw_line := read_line():
+        if len(raw_line) > NDJSON_LINE_LIMIT_BYTES:
+            while raw_line and not raw_line.endswith(b"\n"):
+                raw_line = read_line()
+            report_first_error(
+                error_queue,
+                stop_event,
+                ValueError("Stage worker stderr line exceeds the protocol limit."),
+            )
+            continue
         line = raw_line.decode("utf-8", errors="replace").strip()
         if not line:
             continue
-        event = _parse_stage_event_line(line)
-        if event is None:
-            handle.stderr_tail.append(line)
-            if _TENSORRT_LOG_PREFIX in line:
-                print(line, file=sys.stderr, flush=True)
+        try:
+            event = _parse_stage_event_line(line)
+        except ValidationError as exc:
+            report_first_error(error_queue, stop_event, exc)
             continue
-        if event.get("type") == "progress":
-            callback_index = int(event.get("stageIndex") or handle.plan.config.stage_index) - 1
+        if event is None:
+            _append_stderr_tail(handle.stderr_tail, line)
+            try:
+                worker_log_sink(line)
+            except BaseException as exc:  # pragma: no cover - thread adapter boundary
+                report_first_error(error_queue, stop_event, exc)
+            continue
+        if isinstance(event, StageWorkerProgressEvent):
+            expected_identity = (
+                handle.config.stage_name,
+                handle.config.stage_index,
+                handle.config.stage_total,
+            )
+            actual_identity = (event.stage_name, event.stage_index, event.stage_total)
+            if actual_identity != expected_identity:
+                report_first_error(
+                    error_queue,
+                    stop_event,
+                    ValueError(
+                        "Stage worker event identity mismatch: "
+                        f"expected={expected_identity!r}, actual={actual_identity!r}."
+                    ),
+                )
+                continue
+            callback_index = event.stage_index - 1
             if 0 <= callback_index < len(progress_callbacks):
                 callback = progress_callbacks[callback_index]
                 if callback is None:
                     continue
                 try:
                     callback(
-                        int(event.get("current") or 0),
-                        int(event.get("total") or 1),
-                        force=bool(event.get("force") or False),
-                        heartbeat=bool(event.get("heartbeat") or False),
+                        event.current,
+                        event.total,
+                        force=event.force,
+                        heartbeat=event.heartbeat,
                     )
                 except BaseException as exc:  # pragma: no cover - defensive thread boundary
-                    stop_event.set()
-                    error_queue.put(exc)
+                    report_first_error(error_queue, stop_event, exc)
             continue
-        if event.get("type") == "error":
-            stop_event.set()
-            error_queue.put(
-                ProcessError(
-                    error_code_to_wire(event.get("code") or TaskErrorCode.PROCESS_FAILED.value),
-                    str(event.get("message") or "Stage worker failed."),
-                    details=dict(event.get("details") or {}),
-                )
-            )
+        report_first_error(
+            error_queue,
+            stop_event,
+            ProcessError(
+                error_code_to_wire(event.code),
+                event.message,
+                details=event.details or {},
+            ),
+        )
+
+
+def _append_stderr_tail(stderr_tail: deque[str], line: str) -> None:
+    encoded_line = line.encode("utf-8")
+    if len(encoded_line) > STDERR_TAIL_LIMIT_BYTES:
+        line = encoded_line[-STDERR_TAIL_LIMIT_BYTES:].decode("utf-8", errors="replace")
+    stderr_tail.append(line)
+    while len(stderr_tail) > 1 and sum(len(item.encode("utf-8")) + 1 for item in stderr_tail) > STDERR_TAIL_LIMIT_BYTES:
+        stderr_tail.popleft()
 
 
 __all__ = ["read_worker_stderr"]

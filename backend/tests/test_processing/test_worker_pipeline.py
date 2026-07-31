@@ -4,11 +4,14 @@ import queue
 import threading
 
 import app.processing.streaming.worker_pipeline as worker_pipeline
-from app.planning import ProcessingStep, StageProjection, build_stage_plan
+from app.planning.processing_steps import ProcessingStep
+from app.planning.stage_plan import build_stage_plan
+from app.planning.stage_projection import StageProjection
 from app.planning.manifest import ResumeState
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import StreamEnd, _ENCODE_END
 from app.processing.streaming.worker_runtime_config import WorkerPipelineRuntimeConfig
+from tests.support.streaming_runtime import ignore_worker_log
 
 
 def _runtime_config(stage_plan, *, start_source_frame: int = 0) -> WorkerPipelineRuntimeConfig:
@@ -27,13 +30,20 @@ def _runtime_config(stage_plan, *, start_source_frame: int = 0) -> WorkerPipelin
             completed_segments=[],
         ),
         metrics=PipelineMetrics(),
+        worker_log_sink=ignore_worker_log,
     )
 
 
 def _super_resolution_plan():
     step = ProcessingStep(
         algorithm_type="super_resolution",
-        algorithm_kwargs={"scale_factor": 1.0, "tensor_backend": "onnx"},
+        algorithm_kwargs={
+            "scale_factor": 1.0,
+            "sr_algorithm": "placeholder",
+            "onnx_model": "sr.onnx",
+            "engine": "cuda",
+            "tensor_backend": "onnx",
+        },
         stage_name="01_super_resolution",
     )
     return build_stage_plan(StageProjection((step,)), 3, source_duration=1.0, output_fps=None)
@@ -59,7 +69,7 @@ def test_worker_pipeline_delegates_runtime_and_emits_stream_end(monkeypatch) -> 
 
     assert len(runtime_calls) == 1
     assert runtime_calls[0]["config"] is config
-    assert runtime_calls[0]["plans"][0].config.input_frame_count == 2
+    assert runtime_calls[0]["configs"][0].input_frame_count == 2
     item = encode_queue.get_nowait()
     assert isinstance(item, StreamEnd)
     assert item.next_source_frame == 3
