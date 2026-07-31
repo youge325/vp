@@ -108,6 +108,39 @@ export const test: TestApi = Object.assign(
 type LocatorExpectationOptions = { timeout?: number }
 type CheckedExpectationOptions = LocatorExpectationOptions & { checked?: boolean }
 
+interface LocatorExpectation {
+  readonly not: LocatorExpectation
+  toBeVisible: (options?: LocatorExpectationOptions) => Promise<void>
+  toBeEnabled: (options?: LocatorExpectationOptions) => Promise<void>
+  toBeDisabled: (options?: LocatorExpectationOptions) => Promise<void>
+  toBeChecked: (options?: CheckedExpectationOptions) => Promise<void>
+  toHaveText: (expected: string | RegExp, options?: LocatorExpectationOptions) => Promise<void>
+  toContainText: (expected: string | RegExp, options?: LocatorExpectationOptions) => Promise<void>
+  toHaveCount: (expected: number, options?: LocatorExpectationOptions) => Promise<void>
+  toHaveAttribute: (
+    name: string,
+    expected?: string | RegExp,
+    options?: LocatorExpectationOptions,
+  ) => Promise<void>
+  toHaveClass: (expected: string | RegExp, options?: LocatorExpectationOptions) => Promise<void>
+  toHaveValue: (expected: string | RegExp, options?: LocatorExpectationOptions) => Promise<void>
+}
+
+interface ValueExpectation {
+  readonly not: ValueExpectation
+  toBe: (expected: unknown) => void
+  toEqual: (expected: unknown) => void
+  toHaveProperty: (path: string, expected?: unknown) => void
+  toBeGreaterThan: (expected: number) => void
+  toBeGreaterThanOrEqual: (expected: number) => void
+  toBeLessThan: (expected: number) => void
+  toBeTruthy: () => void
+  toBeNull: () => void
+  toContain: (expected: unknown) => void
+  toMatch: (expected: string | RegExp) => void
+  toBeCloseTo: (expected: number, precision?: number) => void
+}
+
 const pollLocator = async (assertion: () => Promise<void>, timeout = 5000) => {
   const deadline = Date.now() + timeout
   let lastError: unknown
@@ -123,7 +156,7 @@ const pollLocator = async (assertion: () => Promise<void>, timeout = 5000) => {
   throw lastError instanceof Error ? lastError : new Error('locator assertion timed out')
 }
 
-const makeLocatorExpect = (locator: LocatorAdapter, negate: boolean): any => {
+const makeLocatorExpect = (locator: LocatorAdapter, negate: boolean): LocatorExpectation => {
   const assert = async (condition: boolean, message: string) => {
     if (negate ? condition : !condition) {
       throw new Error(message)
@@ -235,7 +268,7 @@ const getProperty = (value: unknown, path: string) => {
   }, value)
 }
 
-const makeValueExpect = (actual: unknown, negate: boolean): any => {
+const makeValueExpect = (actual: unknown, negate: boolean): ValueExpectation => {
   const assert = (condition: boolean, message: string) => {
     if (negate ? condition : !condition) {
       throw new Error(message)
@@ -298,7 +331,9 @@ const makeValueExpect = (actual: unknown, negate: boolean): any => {
   return api
 }
 
-export const expect = (actual: unknown) => {
+export function expect(actual: LocatorAdapter): LocatorExpectation
+export function expect(actual: unknown): ValueExpectation
+export function expect(actual: unknown): LocatorExpectation | ValueExpectation {
   if (isLocatorAdapter(actual)) {
     return makeLocatorExpect(actual, false)
   }

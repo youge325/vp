@@ -5,7 +5,15 @@ export interface TaskContextLookup {
   getItemRunState: (id: string) => MediaRunState | null
 }
 
-export function resolveTaskContext(lookup: TaskContextLookup, id: string | null) {
+export interface TaskContext {
+  item: MediaItem | null
+  runState: MediaRunState | null
+}
+
+export function resolveTaskContext(
+  lookup: TaskContextLookup,
+  id: string | null,
+): TaskContext {
   const item = id ? lookup.getMediaItem(id) : null
   return {
     item,
@@ -17,7 +25,7 @@ export function resolveConsoleTaskContext(
   lookup: TaskContextLookup,
   currentId: string | null,
   activeId: string | null,
-) {
+): TaskContext {
   const current = resolveTaskContext(lookup, currentId)
   return current.item ? current : resolveTaskContext(lookup, activeId)
 }

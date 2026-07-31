@@ -1,8 +1,9 @@
 import { expect, test } from '../fixtures'
 import { seedMediaItems, seedTaskConsoleState } from '../utils/media'
 import { openModule } from '../utils/navigation'
+import type { TauriPage } from '../utils/wdio-tauri'
 
-const renderControls = (tauriPage: any) => ({
+const renderControls = (tauriPage: TauriPage) => ({
   start: tauriPage.locator('.render-stack .panel-actions .primary-button'),
   pause: tauriPage.locator('.render-stack .panel-actions .ghost-button'),
   cancel: tauriPage.locator('.render-stack .panel-actions .danger-button'),

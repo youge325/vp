@@ -1,8 +1,16 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, extname, relative, resolve } from 'node:path'
 import process from 'node:process'
+import ts from 'typescript'
+import {
+  AMBIENT_SOURCE_ALLOWLIST,
+  GENERATED_SOURCE_ALLOWLIST,
+  KNIP_DEPENDENCY_ALLOWLIST,
+} from './quality-allowlists.mjs'
+import { collectUnreachableModules } from './production-reachability.mjs'
 
 const sourceRoot = resolve(process.cwd(), 'src')
+const e2eRoot = resolve(process.cwd(), 'tests/e2e')
 const sourceExtensions = new Set(['.ts', '.tsx', '.vue'])
 const importPattern = /\b(?:from\s+|import\s*\(\s*)['"]([^'"]+)['"]/g
 
@@ -102,6 +110,74 @@ for (const modulePath of dependencyGraph.keys()) {
 }
 for (const cycle of [...cycles].sort()) {
   violations.push(`frontend dependency cycle: ${cycle}`)
+}
+
+for (const path of walk(e2eRoot)) {
+  const source = readFileSync(path, 'utf8')
+  const sourceFile = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true)
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue
+    }
+    if (!statement.moduleSpecifier.text.startsWith('@/')) {
+      continue
+    }
+    const clause = statement.importClause
+    const namedImports = clause?.namedBindings && ts.isNamedImports(clause.namedBindings)
+      ? clause.namedBindings.elements
+      : []
+    const isTypeOnly = clause?.isTypeOnly === true
+      || (
+        clause?.name === undefined
+        && namedImports.length > 0
+        && namedImports.every((element) => element.isTypeOnly)
+      )
+    if (!isTypeOnly) {
+      const owner = relative(process.cwd(), path).replaceAll('\\', '/')
+      violations.push(
+        `E2E runtime import must be relative because WDIO does not resolve @ aliases: ${owner} -> ${statement.moduleSpecifier.text}`,
+      )
+    }
+  }
+}
+
+const unreachableModules = collectUnreachableModules(
+  dependencyGraph,
+  ['main.ts'],
+  new Set(Object.keys(AMBIENT_SOURCE_ALLOWLIST)),
+)
+for (const modulePath of unreachableModules) {
+  violations.push(`frontend production source is unreachable from src/main.ts: ${modulePath}`)
+}
+
+const allowlists = [
+  ['ambient source', AMBIENT_SOURCE_ALLOWLIST],
+  ['generated source', GENERATED_SOURCE_ALLOWLIST],
+  ['Knip dependency', KNIP_DEPENDENCY_ALLOWLIST],
+]
+for (const [kind, entries] of allowlists) {
+  for (const [name, entry] of Object.entries(entries)) {
+    if (!entry.reason.trim()) {
+      violations.push(`${kind} allowlist entry has no reason: ${name}`)
+    }
+    const evidencePath = resolve(process.cwd(), entry.evidenceFile)
+    let evidence
+    try {
+      evidence = readFileSync(evidencePath, 'utf8')
+    } catch {
+      violations.push(`${kind} allowlist evidence file is missing: ${name} -> ${entry.evidenceFile}`)
+      continue
+    }
+    if (!evidence.includes(entry.marker)) {
+      violations.push(`${kind} allowlist evidence marker is missing: ${name} -> ${entry.marker}`)
+    }
+  }
+}
+
+for (const name of Object.keys(AMBIENT_SOURCE_ALLOWLIST)) {
+  if (!name.endsWith('.d.ts')) {
+    violations.push(`ambient source allowlist entry is not a declaration file: ${name}`)
+  }
 }
 
 if (violations.length > 0) {

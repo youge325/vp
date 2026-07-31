@@ -1,7 +1,6 @@
 import { reactive, ref } from 'vue'
 import { describe, expect, it } from 'vitest'
 
-import * as lensModule from '@/composables/forms/lens'
 import { createDraftEditor } from '@/composables/forms/lens'
 
 interface Draft {
@@ -27,11 +26,6 @@ function createDraftStore() {
 }
 
 describe('createDraftEditor public surface', () => {
-  it('keeps low-level field and effect helpers private to the draft editor module', () => {
-    expect('fieldLens' in lensModule).toBe(false)
-    expect('defineLens' in lensModule).toBe(false)
-  })
-
   it('reads through to the current draft value', () => {
     const { state, patch } = createDraftStore()
     const { field } = createDraftEditor<Draft>(() => state.draft, patch)

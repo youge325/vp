@@ -17,24 +17,27 @@ import {
   applyTaskProgress,
   applyTaskResumeStatus,
 } from '../events'
-import type { createConflictResolver } from './conflict'
-import type { createCommonHelpers } from './lifecycle/common'
-import type { createFinalizeOps } from './lifecycle/finalize'
-import type { MediaRunStatePort, TaskIssuePort } from './lifecycle/types'
+import type {
+  ConflictCapability,
+  ConsoleTaskContextCapability,
+  FinalizationCapability,
+  MediaRunStatePort,
+  TaskContextCapability,
+  TaskIssuePort,
+} from './lifecycle/types'
 
 type EventHandlersDeps =
   & Pick<MediaRunStatePort, 'setItemTaskState' | 'setItemLastOutputPath'>
   & TaskIssuePort
-type EventLifecycle = Pick<
-  ReturnType<typeof createCommonHelpers>,
-  'getConsoleTaskContext' | 'getCurrentTaskContext'
-> &
-  Pick<ReturnType<typeof createFinalizeOps>, 'finalizeCurrent' | 'handleErrored'>
+type EventLifecycle =
+  & TaskContextCapability
+  & ConsoleTaskContextCapability
+  & FinalizationCapability
 
 export function createEventHandlers(
   deps: EventHandlersDeps,
   lifecycle: EventLifecycle,
-  conflict: ReturnType<typeof createConflictResolver>,
+  conflict: Pick<ConflictCapability, 'tryStashFromError'>,
 ) {
   function updateConsoleTaskState(
     update: (state: MediaTaskState) => MediaTaskState,

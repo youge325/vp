@@ -1,14 +1,13 @@
-<script setup lang="ts">
-// 下拉选择控件:接受 `options: { value, label }[]`,
-// 替代视图里 `<select :value="..." @change="setX(($event.target as HTMLSelectElement).value)">` 模板。
+<script setup lang="ts" generic="Value extends string">
+// Typed select: the option value union is preserved through v-model.
 
 import BaseField from './BaseField.vue'
 import type { SelectOption } from '@/types/view/select-option'
 
 defineProps<{
-  modelValue: string
+  modelValue: Value
   label: string
-  options: readonly SelectOption[]
+  options: readonly SelectOption<Value>[]
   hint?: string
   error?: string | null
   spanTwo?: boolean
@@ -16,12 +15,12 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (event: 'update:modelValue', value: string): void
+  (event: 'update:modelValue', value: Value): void
 }>()
 
 function handleChange(event: Event): void {
   const target = event.target as HTMLSelectElement
-  emit('update:modelValue', target.value)
+  emit('update:modelValue', target.value as Value)
 }
 </script>
 

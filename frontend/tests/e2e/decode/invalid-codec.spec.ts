@@ -2,6 +2,7 @@ import { expect, test } from '../fixtures'
 import {
   buildSoftwareTaskRequest,
   disposeTaskEventListeners,
+  isTaskEvent,
   invokeTauri,
   listenForTaskEvents,
   readTaskEvents,
@@ -26,9 +27,9 @@ test.describe('Invalid encoder contract', () => {
     )
 
     expect(terminals.length).toBe(1)
-    expect(terminals[0].name).toBe('task-error')
-    expect(terminals[0].data.code).toBeTruthy()
-    expect(terminals[0].data.message).toBeTruthy()
+    const terminal = terminals.find(isTaskEvent('task-error'))
+    expect(terminal?.data.code).toBeTruthy()
+    expect(terminal?.data.message).toBeTruthy()
     await disposeTaskEventListeners(tauriPage)
   })
 })

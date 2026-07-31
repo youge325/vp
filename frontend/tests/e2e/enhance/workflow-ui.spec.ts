@@ -1,13 +1,14 @@
 import { expect, test } from '../fixtures'
 import { setDeterministicEnhanceMetricState } from '../utils/pinia'
 import { saveE2EScreenshot } from '../utils/screenshots'
+import type { TauriPage } from '../utils/wdio-tauri'
 
-async function openWorkflow(tauriPage: any) {
+async function openWorkflow(tauriPage: TauriPage) {
   await tauriPage.click('.rail-link:has-text("增强")')
   await expect(tauriPage.locator('h2:has-text("增强流程")')).toBeVisible()
 }
 
-const workflowSection = (tauriPage: any, heading: string) =>
+const workflowSection = (tauriPage: TauriPage, heading: string) =>
   tauriPage.locator('section.panel-surface').filter({
     has: tauriPage.locator('h2', { hasText: heading }),
   })

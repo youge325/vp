@@ -185,9 +185,9 @@ const unwrapBrowserResult = <T>(result: SerializedBrowserResult): T => {
   throw error
 }
 
-const evaluateBrowserCallback = async <T>(
-  callback: (...args: any[]) => unknown,
-  ...args: unknown[]
+const evaluateBrowserCallback = async <T, Args extends unknown[] = unknown[]>(
+  callback: (...args: Args) => unknown,
+  ...args: Args
 ): Promise<T> => {
   const result = await getBrowser().executeAsync(
     executeSerializedCallback,
@@ -321,7 +321,14 @@ export class LocatorAdapter {
 
   async evaluate<T = unknown, A = unknown>(fn: (element: Element, arg: A) => T | Promise<T>, arg?: A) {
     const element = await this.element()
-    return await evaluateBrowserCallback<Awaited<ReturnType<typeof fn>>>(fn, element, arg)
+    return await evaluateBrowserCallback<
+      Awaited<ReturnType<typeof fn>>,
+      [WdioElement, A | undefined]
+    >(
+      fn as unknown as (element: WdioElement, arg: A | undefined) => T | Promise<T>,
+      element,
+      arg,
+    )
   }
 
   async selectOption(option: string | { label?: string; value?: string; index?: number }) {
@@ -465,7 +472,10 @@ export const createTauriPage = (): TauriPage => ({
     await new LocatorAdapter([toSegment(selector)]).click()
   },
   evaluate: async (fn, arg) => {
-    return await evaluateBrowserCallback<Awaited<ReturnType<typeof fn>>>(fn, arg)
+    return await evaluateBrowserCallback<
+      Awaited<ReturnType<typeof fn>>,
+      [typeof arg]
+    >(fn as (value: typeof arg) => ReturnType<typeof fn>, arg)
   },
   waitForFunction: async (fn, argOrOptions, options) => {
     const maybeOptions = options ?? (isWaitForOptions(argOrOptions) ? argOrOptions : undefined)
@@ -511,9 +521,12 @@ const readAppBootstrapStatus = async (): Promise<AppBootstrapStatus> => {
   return await getBrowser().execute(() => {
     const root = document.querySelector('#app') as HTMLElement & { __vue_app__?: unknown } | null
     const vueApp = root?.__vue_app__ as {
-      config?: { globalProperties?: { $pinia?: { state?: { value?: Record<string, any> } } } }
+      config?: { globalProperties?: { $pinia?: { state?: { value?: Record<string, unknown> } } } }
     } | undefined
-    const state = vueApp?.config?.globalProperties?.$pinia?.state?.value
+    const state = vueApp?.config?.globalProperties?.$pinia?.state?.value as {
+      env?: { env?: { isBootstrapping?: boolean; isChecking?: boolean } }
+      preset?: { presetPersistenceReady?: boolean }
+    } | undefined
     return {
       piniaAvailable: Boolean(state),
       isBootstrapping: state?.env?.env?.isBootstrapping ?? true,
@@ -566,7 +579,11 @@ export const withPiniaState = async <T, A = undefined>(
   ) => T | Promise<T>,
   argument?: A,
 ): Promise<T> => {
-  return await evaluateBrowserCallback<T>(runPiniaStateOperation, operation.toString(), argument)
+  return await evaluateBrowserCallback<T, [string, A | undefined]>(
+    runPiniaStateOperation,
+    operation.toString(),
+    argument,
+  )
 }
 
 export const captureAppStateBaseline = async () => {

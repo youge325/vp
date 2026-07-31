@@ -4,9 +4,10 @@
 import type { EnvironmentCheckResult, InferenceEngine, TensorBackend } from '@/types/protocol'
 
 const ALL_BACKENDS: TensorBackend[] = ['pytorch', 'paddle', 'onnx']
+type TensorEngineSnapshot = Pick<EnvironmentCheckResult, 'tensorEngines'>
 
 export function getVisibleBackends(
-  checkResult: EnvironmentCheckResult | null,
+  checkResult: TensorEngineSnapshot | null,
 ): TensorBackend[] {
   if (!checkResult) return [...ALL_BACKENDS]
 
@@ -14,14 +15,14 @@ export function getVisibleBackends(
 }
 
 export function getAvailableEngines(
-  checkResult: EnvironmentCheckResult | null,
+  checkResult: TensorEngineSnapshot | null,
   backend: TensorBackend,
 ): InferenceEngine[] {
   return checkResult?.tensorEngines[backend] ?? []
 }
 
 export function shouldShowEngineSelector(
-  checkResult: EnvironmentCheckResult | null,
+  checkResult: TensorEngineSnapshot | null,
   backend: TensorBackend,
 ): boolean {
   return getAvailableEngines(checkResult, backend).length > 0

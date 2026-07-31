@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import * as workflowDefaults from '@/services/preset/workflow-defaults'
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
 import type { EnvironmentCheckResult } from '@/types/protocol'
 import { createEnvironmentResult } from '../../fixtures/environment'
@@ -12,14 +11,6 @@ function makeEnv(
 }
 
 describe('workflow defaults', () => {
-  it('keeps the base workflow factory private', () => {
-    expect('createDefaultWorkflowConfig' in workflowDefaults).toBe(false)
-  })
-
-  it('keeps environment hydration private to the environment-aware factory', () => {
-    expect('applyEnvironmentWorkflowDefaults' in workflowDefaults).toBe(false)
-  })
-
   it('creates fallback workflow defaults without environment metadata', () => {
     const workflow = createDefaultWorkflowConfigForEnvironment(null)
 

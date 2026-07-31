@@ -7,7 +7,7 @@ import { useEnvStore } from '@/stores/env'
 import { useIssueStore } from '@/stores/issue'
 import { usePresetStore } from '@/stores/preset'
 import { presetIpc } from '@/lib/ipc/endpoints/preset'
-import { normalizeError } from '@/services/error/normalize'
+import { normalizeError } from '@/lib/errors/normalize'
 import { cloneWorkbenchPreset } from '@/services/preset/clone'
 import { createDefaultWorkbenchPreset } from '@/services/preset/defaults'
 

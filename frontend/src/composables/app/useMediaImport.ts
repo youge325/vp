@@ -10,7 +10,7 @@ import {
   normalizeDecodeConfig,
   normalizeEncodeConfig,
 } from '@/services/preset/normalize'
-import { normalizeError } from '@/services/error/normalize'
+import { normalizeError } from '@/lib/errors/normalize'
 import { TASK_ERROR_CODES } from '@/types/protocol'
 
 export function useMediaImport() {

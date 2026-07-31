@@ -4,30 +4,27 @@ import type { TaskError } from '@/types/domain/media'
 
 import { applyTaskError } from '../../events'
 
-import type { createCommonHelpers } from './common'
 import type {
   BatchStatePort,
+  FinalizationCapability,
   MediaRunStatePort,
   OutputLocationPort,
+  QueueContinuation,
+  TaskContextCapability,
   TaskIssuePort,
 } from './types'
 
-type CommonHelpers = ReturnType<typeof createCommonHelpers>
 type FinalizeDeps =
   & Pick<BatchStatePort, 'getBatch' | 'setBatch'>
   & Pick<MediaRunStatePort, 'setItemTaskState'>
   & TaskIssuePort
   & OutputLocationPort
 
-interface FinalizeInternalRefs {
-  runNextQueuedItem: () => Promise<void>
-}
-
 export function createFinalizeOps(
   deps: FinalizeDeps,
-  helpers: CommonHelpers,
-  internal: FinalizeInternalRefs,
-) {
+  helpers: TaskContextCapability,
+  internal: Pick<QueueContinuation, 'runNextQueuedItem'>,
+): FinalizationCapability {
   function finishBatchRun(): void {
     deps.setBatch({
       isRunning: false,
@@ -37,7 +34,9 @@ export function createFinalizeOps(
     })
   }
 
-  async function finalizeCurrent(state: 'completed' | 'error' | 'cancelled'): Promise<void> {
+  async function finalizeCurrent(
+    state: Parameters<FinalizationCapability['finalizeCurrent']>[0],
+  ): Promise<void> {
     const context = helpers.getCurrentTaskContext()
     const item = context.item
     if (!item) {

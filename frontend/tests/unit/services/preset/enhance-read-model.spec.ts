@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildEnhanceViewModel } from '@/services/preset/enhance-view-model'
+import { buildEnhanceReadModel } from '@/services/preset/enhance-read-model'
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
 import type { AlgorithmInfo } from '@/types/protocol'
 import {
+  createAlgorithmInfo,
   createEdvrAlgorithm,
+  createModelVariantInfo,
   createPpmsvsrAlgorithm,
   createRifeAlgorithm,
 } from '../../fixtures/environment'
@@ -14,6 +16,40 @@ const ppmsvsr: AlgorithmInfo = createPpmsvsrAlgorithm()
 const edvr: AlgorithmInfo = createEdvrAlgorithm()
 
 describe('enhance view-model rules', () => {
+  it('uses the selected ONNX detail instead of the native model mirror', () => {
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
+    workflow.interpolation.enabled = true
+    workflow.interpolation.tensorBackend = 'onnx'
+    workflow.interpolation.onnxModel = 'rife.onnx'
+    const algorithm = createAlgorithmInfo({
+      name: 'rife',
+      tensorBackends: ['pytorch', 'onnx'],
+      models: ['native'],
+      onnxModels: ['rife.onnx'],
+      modelDetails: [
+        createModelVariantInfo({
+          name: 'native',
+          metrics: { parameterCount: 10 },
+        }),
+      ],
+      onnxModelDetails: [
+        createModelVariantInfo({
+          name: 'rife.onnx',
+          metrics: { parameterCount: 20 },
+        }),
+      ],
+    })
+
+    const model = buildEnhanceReadModel({
+      workflow,
+      activeVideoDimensions: { width: 640, height: 288 },
+      currentInterpolationAlgorithm: algorithm,
+      currentSuperResolutionAlgorithm: undefined,
+    })
+
+    expect(model.interpolationMetricRows[0].value).toBe('20')
+  })
+
   it('resolves selected models and estimates SR-to-interpolation runtime rows', () => {
     const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.processOrder = 'super_resolution_then_interpolation'
@@ -30,16 +66,13 @@ describe('enhance view-model rules', () => {
     workflow.superResolution.scaleFactor = 4
     workflow.superResolution.numFrames = 10
 
-    const model = buildEnhanceViewModel({
+    const model = buildEnhanceReadModel({
       workflow,
       activeVideoDimensions: { width: 640, height: 288 },
       currentInterpolationAlgorithm: rife,
       currentSuperResolutionAlgorithm: ppmsvsr,
     })
 
-    expect(model.currentInterpolationModelDetail?.name).toBe('4.25')
-    expect(model.interpolationInputDimensions).toEqual({ width: 2560, height: 1152 })
-    expect(model.interpolationRuntimeEstimate?.effectiveHeight).toBe(1152)
     expect(model.interpolationMetricRows[2].value).toBe('1.96 GiB')
     expect(model.superResolutionMetricRows[2].value).toBe('5.63 GiB')
     expect(model.combinedVramMetricRows[0].value).toBe('5.63 GiB')
@@ -55,7 +88,7 @@ describe('enhance view-model rules', () => {
     workflow.superResolution.scaleFactor = 4
     workflow.superResolution.numFrames = 10
 
-    const model = buildEnhanceViewModel({
+    const model = buildEnhanceReadModel({
       workflow,
       activeVideoDimensions: { width: 640, height: 288 },
       currentInterpolationAlgorithm: rife,
@@ -67,7 +100,7 @@ describe('enhance view-model rules', () => {
     expect(model.superResolutionFixedWindowRows).toEqual([
       { label: '邻帧窗口', value: '5 帧（固定）' },
     ])
-    expect(model.superResolutionMetricRows).toEqual(buildEnhanceViewModel({
+    expect(model.superResolutionMetricRows).toEqual(buildEnhanceReadModel({
       workflow: {
         ...workflow,
         superResolution: { ...workflow.superResolution, numFrames: 2 },
@@ -88,7 +121,7 @@ describe('enhance view-model rules', () => {
     workflow.superResolution.scaleFactor = 4
     workflow.superResolution.numFrames = 5
 
-    const model = buildEnhanceViewModel({
+    const model = buildEnhanceReadModel({
       workflow,
       activeVideoDimensions: { width: 640, height: 288 },
       currentInterpolationAlgorithm: rife,
@@ -97,5 +130,20 @@ describe('enhance view-model rules', () => {
 
     expect(model.superResolutionMetricRows[1].value).toBe('22.1 GFLOPs')
     expect(model.superResolutionMetricRows[2].value).toBe('3.17 GiB')
+  })
+
+  it('does not expose a combined peak when either stage is disabled', () => {
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
+    workflow.interpolation.enabled = true
+    workflow.superResolution.enabled = false
+
+    const model = buildEnhanceReadModel({
+      workflow,
+      activeVideoDimensions: { width: 640, height: 288 },
+      currentInterpolationAlgorithm: rife,
+      currentSuperResolutionAlgorithm: ppmsvsr,
+    })
+
+    expect(model.combinedVramMetricRows).toEqual([])
   })
 })

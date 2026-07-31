@@ -5,7 +5,10 @@ import { TERMINAL_PROGRESS_PREFIX } from '@/types/protocol'
 import type { ResumeStatusPayload, TaskLogPayload } from '@/types/protocol'
 import type { MediaTaskState } from '@/types/domain/media'
 
-const STAGE_PROGRESS_KEY_RE = /^\[VP_PROGRESS\]\s+\[(\d+\/\d+\s+[^\]]+)\]/
+const escapedProgressPrefix = TERMINAL_PROGRESS_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const STAGE_PROGRESS_KEY_RE = new RegExp(
+  `^${escapedProgressPrefix}\\s+\\[(\\d+\\/\\d+\\s+[^\\]]+)\\]`,
+)
 const TENSORRT_LOG_PREFIX = '[VP_TRT]'
 
 type TaskLogLineKind = 'progress' | 'tensorrt' | 'default'

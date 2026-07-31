@@ -1,8 +1,9 @@
 import { expect, test } from '../fixtures'
 import { seedMediaItems } from '../utils/media'
 import { openModule } from '../utils/navigation'
+import type { TauriPage } from '../utils/wdio-tauri'
 
-const outputInput = (tauriPage: any) =>
+const outputInput = (tauriPage: TauriPage) =>
   tauriPage.locator('input[placeholder="必填:请选择输出目录"]')
 
 test.describe('Preset and media editor isolation', () => {

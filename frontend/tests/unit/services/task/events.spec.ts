@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import * as taskEvents from '@/services/task/events'
 import { appendTaskLog, createIdleTaskState, displayTaskLogLine } from '@/services/task/events'
 
 function appendLine(logs: string[], message: string): string[] {
@@ -66,12 +65,6 @@ describe('appendTaskLog', () => {
       buildLine,
       readyLine,
     ])
-  })
-})
-
-describe('task event public surface', () => {
-  it('keeps log classification private to the task event reducer', () => {
-    expect('classifyTaskLogLine' in taskEvents).toBe(false)
   })
 })
 

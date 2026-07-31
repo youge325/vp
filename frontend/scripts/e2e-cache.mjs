@@ -3,6 +3,11 @@ import { readFileSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { resolve } from 'node:path'
 
+/**
+ * @param {NodeJS.ProcessEnv} [environment]
+ * @param {NodeJS.Platform} [platformName]
+ * @param {string} [homeDirectory]
+ */
 export function resolveE2ECacheDir(
   environment = process.env,
   platformName = platform(),
@@ -18,6 +23,12 @@ export function resolveE2ECacheDir(
   return resolve(systemCacheRoot, 'vp-workbench', 'e2e')
 }
 
+/**
+ * @param {string} cacheDir
+ * @param {string} sourcePath
+ * @param {string} launcherName
+ * @param {NodeJS.Platform} [platformName]
+ */
 export function rustLauncherCachePath(cacheDir, sourcePath, launcherName, platformName = platform()) {
   const sourceHash = createHash('sha256').update(readFileSync(sourcePath)).digest('hex').slice(0, 16)
   const extension = platformName === 'win32' ? '.exe' : ''

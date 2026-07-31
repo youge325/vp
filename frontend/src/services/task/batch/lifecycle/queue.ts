@@ -1,7 +1,7 @@
 // Queue initialization, resume inspection and task launch.
 
 import type { MediaItem } from '@/types/domain/media'
-import { normalizeError } from '@/services/error/normalize'
+import { normalizeError } from '@/lib/errors/normalize'
 import {
   TASK_ERROR_CODES,
   type ResumeInspectionResult,
@@ -13,15 +13,13 @@ import { buildResumeConflictDescriptor } from '../../resume-classifier'
 
 import type {
   BatchStatePort,
+  ErrorFinalizationCapability,
   MediaItemPort,
   MediaRunStatePort,
+  QueueOperations,
   TaskCommandPort,
   TaskRequestFactory,
 } from './types'
-
-interface QueueInternalRefs {
-  handleErrored: (error: ReturnType<typeof normalizeError>) => Promise<void>
-}
 
 type QueueDeps =
   & Pick<BatchStatePort, 'getBatch' | 'setBatch' | 'setRuntimeIds' | 'setPendingConflict'>
@@ -32,8 +30,8 @@ type QueueDeps =
 
 export function createQueueOps(
   deps: QueueDeps,
-  internal: QueueInternalRefs,
-) {
+  internal: ErrorFinalizationCapability,
+): QueueOperations {
   function resetBatchRunState(ids: string[]): void {
     deps.setRuntimeIds([...ids])
     deps.setBatch({

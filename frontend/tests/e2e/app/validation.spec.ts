@@ -1,5 +1,18 @@
 import { test, expect } from '../fixtures'
 import { buildSoftwareTaskRequest, captureTauriError } from '../utils/task-runtime'
+import type { TaskRequest } from '@/types/protocol'
+
+function deleteNestedField(value: Record<string, unknown>, path: readonly string[]): void {
+  let parent = value
+  for (const key of path.slice(0, -1)) {
+    const nested = parent[key]
+    if (typeof nested !== 'object' || nested === null || Array.isArray(nested)) {
+      throw new Error(`Expected object at ${key}`)
+    }
+    parent = nested as Record<string, unknown>
+  }
+  delete parent[path.at(-1)!]
+}
 
 test.describe('Config validation', () => {
   test('rejects requests that omit required non-nullable contract fields', async ({ tauriPage }) => {
@@ -12,15 +25,11 @@ test.describe('Config validation', () => {
     ] as const
 
     for (const path of missingFields) {
-      const invalidRequest = JSON.parse(JSON.stringify(request)) as Record<string, any>
-      const parent = path.slice(0, -1).reduce<Record<string, any>>(
-        (value, key) => value[key],
-        invalidRequest,
-      )
-      delete parent[path.at(-1)!]
+      const invalidRequest = JSON.parse(JSON.stringify(request)) as Record<string, unknown>
+      deleteNestedField(invalidRequest, path)
 
       const error = await captureTauriError(tauriPage, 'check_resume_state', {
-        request: invalidRequest,
+        request: invalidRequest as unknown as TaskRequest,
       })
       expect(error).not.toBeNull()
       expect(error?.message).toBeTruthy()
