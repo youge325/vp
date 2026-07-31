@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-ResumeMode = Literal["auto", "force-fresh", "force-resume"]
+from app.generated.contracts import ResumeMode
+
 OutputAction = Literal["conflict", "fresh", "resume"]
 
 
@@ -16,9 +17,9 @@ def decide_output_action(
     has_progress: bool,
     mode: ResumeMode,
 ) -> OutputAction:
-    if final_exists and mode == "auto":
+    if final_exists and mode == ResumeMode.AUTO:
         return "conflict"
-    if mode == "force-fresh":
+    if mode == ResumeMode.FORCE_FRESH:
         return "fresh"
     if not sidecar_exists or not signature_match:
         return "fresh"

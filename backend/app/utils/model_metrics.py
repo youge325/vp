@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from app.catalog.rife_models import MODEL_SPECS, SUPPORTED_MODELS
+from app.generated.contracts import ModelEngineMetricInfo, ModelMetricInfo, ModelVariantInfo
 
 AnalysisStatus = str
 
@@ -239,20 +240,20 @@ def _metrics(
     input_modulo: int | None,
     analysis_status: AnalysisStatus,
     analysis_notes: list[str] | None = None,
-    engine_metrics: dict[str, dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    return {
-        "parameterCount": parameter_count,
-        "parameterBytes": parameter_bytes,
-        "gflopsPerMegapixel": gflops_per_megapixel,
-        "activationBytesPerMegapixel": activation_bytes_per_megapixel,
-        "runtimeOverheadBytes": runtime_overhead_bytes,
-        "runtimeFrameCount": runtime_frame_count,
-        "inputModulo": input_modulo,
-        "analysisStatus": analysis_status,
-        "analysisNotes": analysis_notes or [],
-        "engineMetrics": engine_metrics or {},
-    }
+    engine_metrics: dict[str, ModelEngineMetricInfo] | None = None,
+) -> ModelMetricInfo:
+    return ModelMetricInfo(
+        parameterCount=parameter_count,
+        parameterBytes=parameter_bytes,
+        gflopsPerMegapixel=gflops_per_megapixel,
+        activationBytesPerMegapixel=activation_bytes_per_megapixel,
+        runtimeOverheadBytes=runtime_overhead_bytes,
+        runtimeFrameCount=runtime_frame_count,
+        inputModulo=input_modulo,
+        analysisStatus=analysis_status,
+        analysisNotes=analysis_notes or [],
+        engineMetrics=engine_metrics or {},
+    )
 
 
 def _engine_metric(
@@ -264,20 +265,20 @@ def _engine_metric(
     input_modulo: int | None = None,
     analysis_status: AnalysisStatus = "unknown",
     analysis_notes: list[str] | None = None,
-) -> dict[str, Any]:
-    return {
-        "gflopsPerMegapixel": gflops_per_megapixel,
-        "activationBytesPerMegapixel": activation_bytes_per_megapixel,
-        "runtimeOverheadBytes": runtime_overhead_bytes,
-        "runtimeFrameCount": runtime_frame_count,
-        "inputModulo": input_modulo,
-        "analysisStatus": analysis_status,
-        "analysisNotes": analysis_notes or [],
-    }
+) -> ModelEngineMetricInfo:
+    return ModelEngineMetricInfo(
+        gflopsPerMegapixel=gflops_per_megapixel,
+        activationBytesPerMegapixel=activation_bytes_per_megapixel,
+        runtimeOverheadBytes=runtime_overhead_bytes,
+        runtimeFrameCount=runtime_frame_count,
+        inputModulo=input_modulo,
+        analysisStatus=analysis_status,
+        analysisNotes=analysis_notes or [],
+    )
 
 
-def _variant(name: str, label: str, metrics: dict[str, Any]) -> dict[str, Any]:
-    return {"name": name, "label": label, "metrics": metrics}
+def _variant(name: str, label: str, metrics: ModelMetricInfo) -> ModelVariantInfo:
+    return ModelVariantInfo(name=name, label=label, metrics=metrics)
 
 
 def _rife_gflops_per_megapixel(version: str, parameter_count: int) -> float:
@@ -290,7 +291,7 @@ def _rife_gflops_per_megapixel(version: str, parameter_count: int) -> float:
     return round((parameter_count / 300_000) * multiplier, 3)
 
 
-def _rife_tensorrt_engine_metric(version: str, gflops_per_megapixel: float) -> dict[str, Any]:
+def _rife_tensorrt_engine_metric(version: str, gflops_per_megapixel: float) -> ModelEngineMetricInfo:
     calibrated = _RIFE_TENSORRT_CALIBRATED_METRICS.get(version)
     if calibrated is not None:
         return _engine_metric(
@@ -320,9 +321,9 @@ def _rife_tensorrt_engine_metric(version: str, gflops_per_megapixel: float) -> d
     )
 
 
-def get_rife_model_details() -> list[dict[str, Any]]:
+def get_rife_model_details() -> list[ModelVariantInfo]:
     """Return static metric details for built-in RIFE model versions."""
-    details: list[dict[str, Any]] = []
+    details: list[ModelVariantInfo] = []
     for version in SUPPORTED_MODELS:
         parameter_count = _RIFE_PARAMETER_COUNTS[version]
         gflops_per_megapixel = _rife_gflops_per_megapixel(version, parameter_count)
@@ -348,7 +349,7 @@ def get_rife_model_details() -> list[dict[str, Any]]:
     return details
 
 
-def get_paddlegan_model_detail(model_id: str) -> dict[str, Any]:
+def get_paddlegan_model_detail(model_id: str) -> ModelVariantInfo:
     """Return static metric details for one built-in PaddleGAN VSR model."""
     metric = _PADDLEGAN_MODEL_METRICS[model_id]
     parameter_count = int(metric["parameter_count"])
@@ -380,7 +381,7 @@ def get_paddlegan_model_detail(model_id: str) -> dict[str, Any]:
     )
 
 
-def analyze_onnx_model(path: str | Path, *, name: str | None = None, label: str | None = None) -> dict[str, Any]:
+def analyze_onnx_model(path: str | Path, *, name: str | None = None, label: str | None = None) -> ModelVariantInfo:
     """Inspect an ONNX file without creating an inference session.
 
     The analyzer is intentionally best-effort. Invalid files or models with
@@ -448,7 +449,7 @@ def analyze_onnx_model(path: str | Path, *, name: str | None = None, label: str 
     )
 
 
-def _unknown_onnx_variant(name: str, label: str, note: str) -> dict[str, Any]:
+def _unknown_onnx_variant(name: str, label: str, note: str) -> ModelVariantInfo:
     return _variant(
         name,
         label,

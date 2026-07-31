@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
+
+PaddleGanSequenceMode = Literal["recurrent", "window"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -10,7 +13,7 @@ class PaddleGanVsrSpec:
     model_id: str
     subdir: str
     filename: str
-    sequence_mode: str
+    sequence_mode: PaddleGanSequenceMode
     default_num_frames: int
     auxiliary_filenames: tuple[str, ...] = ()
 
@@ -66,4 +69,4 @@ PADDLEGAN_VSR_SPECS: dict[str, PaddleGanVsrSpec] = {
 }
 
 
-__all__ = ["PADDLEGAN_VSR_SPECS", "PaddleGanVsrSpec"]
+__all__ = ["PADDLEGAN_VSR_SPECS", "PaddleGanSequenceMode", "PaddleGanVsrSpec"]

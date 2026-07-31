@@ -13,12 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.adapters.model_availability import LocalModelAvailability
 from app.cli.commands._pipeline_preparation import PreparedRun, prepare_pipeline_preflight
 from app.cli.runtime_configs import RuntimeConfigs
 from app.config import settings
 from app.errors import TaskErrorCode, raise_error
 from app.ports.media import MediaProbePort
-from app.planning import validate_workflow_requirements
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_worker_progress import StageProgressCallback
 from app.protocol.reporter import CliProgressReporter
@@ -99,9 +99,9 @@ def build_plan(
         input_path=input_path,
         output_path=output_path,
         configs=configs,
+        model_availability=LocalModelAvailability(settings.RIFE_MODEL_DIR),
     )
     processing_steps = pipeline.processing_steps
-    validate_workflow_requirements(processing_steps)
 
     expected_output_frames = pipeline.preflight.stage_plan.total_encoded_frames
     metrics = PipelineMetrics()

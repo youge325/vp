@@ -64,7 +64,6 @@ def _test_structure_impl():
     for version in SUPPORTED_MODELS:
         spec = MODEL_SPECS[version]
         head_type = spec.head_type
-        encode_channel = spec.encode_channel
         ensemble = spec.ensemble
 
         try:
@@ -136,7 +135,7 @@ def _test_structure_impl():
                         continue
 
             print(
-                f"  OK {version}: structure OK (head={head_type}, enc_ch={encode_channel}, "
+                f"  OK {version}: structure OK (head={head_type}, "
                 f"ifnet_keys={len(ifnet_only_keys)}, enc_keys={len(encode_keys_in_ifnet)})"
             )
             results[version] = "PASS"
@@ -275,7 +274,6 @@ def _test_weight_loading_impl():
         spec = MODEL_SPECS[version]
         head_type = spec.head_type
         ensemble = spec.ensemble
-        encode_channel = spec.encode_channel
 
         weight_path = os.path.join(model_dir, f"flownet_v{version}.pkl")
 
@@ -363,10 +361,7 @@ def _test_weight_loading_impl():
                 failed.append((version, ", ".join(msg_parts)))
                 results[version] = "FAIL"
             else:
-                print(
-                    f"  OK {version}: 权重加载成功 ({file_size / 1024 / 1024:.1f}MB, "
-                    f"head={head_type}, enc_ch={encode_channel})"
-                )
+                print(f"  OK {version}: 权重加载成功 ({file_size / 1024 / 1024:.1f}MB, head={head_type})")
                 results[version] = "PASS"
 
         except Exception as e:

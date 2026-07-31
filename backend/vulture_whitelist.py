@@ -16,7 +16,6 @@ denoise_gain
 edge_radius
 edge_gain
 edge_threshold
-_._default_details
 collect_ignore
 pytestmark
 _.__spec__
@@ -25,3 +24,5 @@ restore_root_logger
 _reset_registry
 # Imported and called by the protected dynamic ``ifnet_v4_*`` RIFE modules.
 warp
+# Called by PyTorch when tracing the ONNX export wrapper.
+_.forward

@@ -5,6 +5,8 @@ from typing import Any
 import pytest
 
 from app.errors import ResumeConflictError
+from app.generated.contracts import ResumeStatusPayload
+from app.generated.protocol_constants import BackendEnvelopeType
 from app.planning import ResumeState, SegmentManifest, StagePlan, StageProjection
 from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
@@ -86,28 +88,27 @@ def test_prepare_streaming_manifest_raises_resume_conflict_for_existing_final_ou
 
 
 def test_emit_resume_status_event_uses_existing_ndjson_payload(monkeypatch) -> None:
-    events: list[dict[str, object]] = []
+    events: list[tuple[BackendEnvelopeType, ResumeStatusPayload]] = []
     state = ResumeState(
         start_source_frame=12,
         completed_output_frames=20,
         completed_segments=[object()],
     )
     monkeypatch.setattr(
-        "app.processing.streaming.pipeline_lifecycle.ndjson.resume_status",
-        lambda **kwargs: events.append(kwargs),
+        "app.processing.streaming.pipeline_lifecycle.ndjson.emit",
+        lambda event_type, payload: events.append((event_type, payload)),
     )
 
     emit_resume_status_event(resume_state=state, total_output_frames=40)
 
-    assert events == [
-        {
-            "resumed": True,
-            "completed_chunks": 1,
-            "completed_output_frames": 20,
-            "start_source_frame": 12,
-            "total_output_frames": 40,
-        }
-    ]
+    assert events[0][0] is BackendEnvelopeType.RESUME_STATUS
+    assert events[0][1].model_dump(mode="json") == {
+        "resumed": True,
+        "completed_chunks": 1,
+        "completed_output_frames": 20,
+        "start_source_frame": 12,
+        "total_output_frames": 40,
+    }
 
 
 def test_finalize_streaming_output_cleans_sidecar_after_success_and_builds_result(monkeypatch, tmp_path) -> None:

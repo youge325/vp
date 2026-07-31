@@ -95,7 +95,7 @@ jobs:
         working-directory: frontend
 
       - name: Python dead-code gate
-        run: python -m vulture backend/app backend/tests backend/tests_full_e2e backend/export_all_rife_onnx.py scripts backend/vulture_whitelist.py --min-confidence 60 --exclude "backend/app/generated/,backend/app/algorithms/paddle/paddlegan_vsr/vendor/,backend/app/algorithms/pytorch/rife/ifnet_v4_"
+        run: python scripts/check_python_dead_code.py
 
       - name: Architecture contracts check
         run: python scripts/check_architecture_contracts.py

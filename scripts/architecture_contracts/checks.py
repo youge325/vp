@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import ast
-import contextlib
-import io
 import json
 import re
-import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -79,7 +76,7 @@ def _collect_manifest_commands(root: Path) -> dict[str, ManifestCommand]:
         manifest = json.loads(read_source(path, root))
     except json.JSONDecodeError as exc:
         raise ContractParseError(f"invalid IPC manifest JSON: {exc}") from exc
-    if manifest.get("schemaVersion") != 1:
+    if manifest.get("schemaVersion") != 2:
         raise ContractParseError("unsupported contracts/ipc-manifest.json schemaVersion")
     commands = manifest.get("commands")
     if not isinstance(commands, list):
@@ -342,55 +339,112 @@ def _collect_python_dict_keys(text: str, symbol: str) -> set[str]:
     return set(re.findall(r"['\"]([a-z0-9-]+)['\"]\s*:", text[body_start + 1 : body_end]))
 
 
-def _collect_backend_algorithm_metadata(root: Path) -> dict[str, dict[str, object]]:
-    backend_dir = root / "backend"
-    inserted = False
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-        inserted = True
-    try:
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            from app.processing.super_resolution import SUPPORTED_ALGORITHMS
-
-        return {
-            str(entry["name"]): {
-                "family": entry.get("family"),
-                "fixedScaleFactor": entry.get("fixedScaleFactor"),
-                "inputFrameMode": entry.get("inputFrameMode"),
-            }
-            for entry in SUPPORTED_ALGORITHMS
-        }
-    finally:
-        if inserted:
-            sys.path.remove(str(backend_dir))
+def _static_descriptor_value(node: ast.expr, model_id_name: str) -> object:
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Name) and node.id == model_id_name:
+        return "<model-id>"
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "frozenset"
+        and len(node.args) == 1
+        and not node.keywords
+    ):
+        return frozenset(ast.literal_eval(node.args[0]))
+    raise ContractParseError("PADDLEGAN_STAGE_DESCRIPTORS must use statically readable descriptor values")
 
 
-def diff_paddlegan_vsr_contract(backend_specs: set[str], algorithm_metadata: dict[str, dict[str, object]]) -> list[str]:
-    issues: list[str] = []
-    metadata_models = {
-        name for name, metadata in algorithm_metadata.items() if metadata.get("family") == "paddlegan_vsr"
+def _collect_paddlegan_descriptors(root: Path, backend_specs: set[str]) -> tuple[set[str], dict[str, object]]:
+    path = root / "backend/app/catalog/stage_descriptors.py"
+    tree = _parse_python(path, root)
+    assignment = next(
+        (
+            node
+            for node in tree.body
+            if isinstance(node, (ast.Assign, ast.AnnAssign))
+            and (
+                isinstance(node.target, ast.Name)
+                if isinstance(node, ast.AnnAssign)
+                else len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+            )
+            and (node.target.id if isinstance(node, ast.AnnAssign) else node.targets[0].id)
+            == "PADDLEGAN_STAGE_DESCRIPTORS"
+        ),
+        None,
+    )
+    if assignment is None:
+        raise ContractParseError("could not find PADDLEGAN_STAGE_DESCRIPTORS in the neutral catalog")
+    value = assignment.value
+    if not isinstance(value, ast.DictComp) or len(value.generators) != 1:
+        raise ContractParseError("PADDLEGAN_STAGE_DESCRIPTORS must be one exact-set dict comprehension")
+    generator = value.generators[0]
+    if (
+        not isinstance(generator.target, ast.Name)
+        or not isinstance(generator.iter, ast.Name)
+        or generator.iter.id != "PADDLEGAN_VSR_SPECS"
+        or generator.ifs
+        or generator.is_async
+        or not isinstance(value.key, ast.Name)
+        or value.key.id != generator.target.id
+    ):
+        raise ContractParseError("PADDLEGAN_STAGE_DESCRIPTORS must derive every key directly from PADDLEGAN_VSR_SPECS")
+    if not isinstance(value.value, ast.Call) or not isinstance(value.value.func, ast.Name):
+        raise ContractParseError("PADDLEGAN_STAGE_DESCRIPTORS values must construct StageDescriptor")
+    if value.value.func.id != "StageDescriptor" or value.value.args:
+        raise ContractParseError("PADDLEGAN_STAGE_DESCRIPTORS values must use keyword-only StageDescriptor fields")
+    descriptor = {
+        keyword.arg: _static_descriptor_value(keyword.value, generator.target.id)
+        for keyword in value.value.keywords
+        if keyword.arg is not None
     }
-    missing_metadata = backend_specs - metadata_models
-    extra_metadata = metadata_models - backend_specs
-    if missing_metadata or extra_metadata:
+    if len(descriptor) != len(value.value.keywords):
+        raise ContractParseError("PADDLEGAN_STAGE_DESCRIPTORS may not use expanded keyword arguments")
+    return set(backend_specs), descriptor
+
+
+def diff_paddlegan_catalog_contract(
+    backend_specs: set[str],
+    descriptor_models: set[str],
+    factory_models: set[str],
+    descriptor: dict[str, object],
+) -> list[str]:
+    issues: list[str] = []
+    missing_descriptors = backend_specs - descriptor_models
+    extra_descriptors = descriptor_models - backend_specs
+    if missing_descriptors or extra_descriptors:
         issues.append(
-            "PaddleGAN VSR metadata drift: "
-            f"missing-metadata={sorted(missing_metadata)}, extra-metadata={sorted(extra_metadata)}"
+            "PaddleGAN VSR descriptor drift: "
+            f"missing-descriptors={sorted(missing_descriptors)}, extra-descriptors={sorted(extra_descriptors)}"
         )
-    for model_id in sorted(backend_specs & metadata_models):
-        metadata = algorithm_metadata[model_id]
-        if metadata.get("fixedScaleFactor") != 4:
-            issues.append(f"PaddleGAN VSR `{model_id}` must expose fixedScaleFactor=4")
-        expected_mode = "fixed_window" if model_id == "edvr" else "editable_chunk"
-        if metadata.get("inputFrameMode") != expected_mode:
-            issues.append(f"PaddleGAN VSR `{model_id}` must expose inputFrameMode={expected_mode!r}")
+    missing_factories = backend_specs - factory_models
+    extra_factories = factory_models - backend_specs
+    if missing_factories or extra_factories:
+        issues.append(
+            "PaddleGAN VSR factory drift: "
+            f"missing-factories={sorted(missing_factories)}, extra-factories={sorted(extra_factories)}"
+        )
+    expected_descriptor = {
+        "execution_mode": "sequence",
+        "requires_file_pipeline": True,
+        "changes_dimensions": True,
+        "supported_backends": frozenset({"paddle"}),
+        "fixed_scale_factor": 4.0,
+        "factory_key": "<model-id>",
+        "model_kind": "paddlegan_vsr",
+    }
+    if descriptor != expected_descriptor:
+        issues.append(f"PaddleGAN VSR descriptor fields drift: expected={expected_descriptor!r}, actual={descriptor!r}")
     return issues
 
 
 def _check_paddlegan_metadata(root: Path) -> list[str]:
     catalog = root / "backend/app/catalog/paddlegan_models.py"
     specs = _collect_python_dict_keys(read_source(catalog, root), "PADDLEGAN_VSR_SPECS")
-    return diff_paddlegan_vsr_contract(specs, _collect_backend_algorithm_metadata(root))
+    descriptor_models, descriptor = _collect_paddlegan_descriptors(root, specs)
+    factory_path = root / "backend/app/algorithms/paddle/paddlegan_vsr/model_factory.py"
+    factories = _collect_python_dict_keys(read_source(factory_path, root), "_MODEL_FACTORIES")
+    return diff_paddlegan_catalog_contract(specs, descriptor_models, factories, descriptor)
 
 
 def _is_frontend_test(path: Path) -> bool:
@@ -740,38 +794,6 @@ def _check_rust_unused_dependencies(root: Path) -> list[str]:
     return issues
 
 
-def _check_stage_sequence_metrics(root: Path) -> list[str]:
-    execution_path = root / "backend/app/processing/streaming/stage_worker_execution.py"
-    execution_tree = _parse_python(execution_path, root)
-    issues: list[str] = []
-    for node in ast.walk(execution_tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name != "run_sequence_stage":
-            continue
-        parameters = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
-        if any(parameter.arg == "metrics" for parameter in parameters):
-            issues.append(f"stage worker sequence metrics parameter remains in {relative_path(execution_path, root)}")
-        if any(
-            isinstance(child, ast.Delete)
-            and any(isinstance(target, ast.Name) and target.id == "metrics" for target in child.targets)
-            for child in ast.walk(node)
-        ):
-            issues.append(f"stage worker sequence metrics discard remains in {relative_path(execution_path, root)}")
-
-    worker_path = root / "backend/app/processing/streaming/stage_worker.py"
-    worker_tree = _parse_python(worker_path, root)
-    for node in ast.walk(worker_tree):
-        if (
-            not isinstance(node, ast.Call)
-            or not isinstance(node.func, ast.Name)
-            or node.func.id != "run_sequence_stage"
-        ):
-            continue
-        values = [*node.args, *(keyword.value for keyword in node.keywords)]
-        if any(isinstance(value, ast.Name) and value.id == "metrics" for value in values):
-            issues.append(f"stage worker sequence metrics forwarding remains in {relative_path(worker_path, root)}")
-    return issues
-
-
 def _check_rust_public_surface(root: Path) -> list[str]:
     rust_root = root / "frontend/src-tauri/src"
     allowed_public_files = {
@@ -806,6 +828,5 @@ def collect_architecture_issues(root: Path) -> list[str]:
     issues.extend(_check_backend_package_cycles(root))
     issues.extend(_check_rust_package_cycles(root))
     issues.extend(_check_rust_unused_dependencies(root))
-    issues.extend(_check_stage_sequence_metrics(root))
     issues.extend(_check_rust_public_surface(root))
     return issues

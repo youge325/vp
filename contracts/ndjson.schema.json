@@ -120,6 +120,122 @@
         "totalOutputFrames",
         "type"
       ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fps": {
+          "$ref": "./video-info.schema.json#/properties/fps"
+        },
+        "width": {
+          "$ref": "./video-info.schema.json#/properties/width"
+        },
+        "height": {
+          "$ref": "./video-info.schema.json#/properties/height"
+        },
+        "videoCodec": {
+          "$ref": "./video-info.schema.json#/properties/videoCodec"
+        },
+        "type": {
+          "const": "info"
+        }
+      },
+      "required": [
+        "fps",
+        "width",
+        "height",
+        "videoCodec",
+        "type"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ffmpeg": {
+          "$ref": "./environment.schema.json#/$defs/EnvironmentCheckResult/properties/ffmpeg"
+        },
+        "gpu": {
+          "$ref": "./environment.schema.json#/$defs/EnvironmentCheckResult/properties/gpu"
+        },
+        "tensorEngines": {
+          "$ref": "./environment.schema.json#/$defs/EnvironmentCheckResult/properties/tensorEngines"
+        },
+        "interpolationAlgorithms": {
+          "$ref": "./environment.schema.json#/$defs/EnvironmentCheckResult/properties/interpolationAlgorithms"
+        },
+        "superResolutionAlgorithms": {
+          "$ref": "./environment.schema.json#/$defs/EnvironmentCheckResult/properties/superResolutionAlgorithms"
+        },
+        "runtimeMode": {
+          "$ref": "./environment.schema.json#/$defs/EnvironmentCheckResult/properties/runtimeMode"
+        },
+        "type": {
+          "const": "check"
+        }
+      },
+      "required": [
+        "ffmpeg",
+        "gpu",
+        "tensorEngines",
+        "interpolationAlgorithms",
+        "superResolutionAlgorithms",
+        "runtimeMode",
+        "type"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pipeline_kind": {
+          "$ref": "./resume-inspection.schema.json#/properties/pipeline_kind"
+        },
+        "outputPath": {
+          "$ref": "./resume-inspection.schema.json#/properties/outputPath"
+        },
+        "input_path": {
+          "$ref": "./resume-inspection.schema.json#/properties/input_path"
+        },
+        "finalExists": {
+          "$ref": "./resume-inspection.schema.json#/properties/finalExists"
+        },
+        "sidecarExists": {
+          "$ref": "./resume-inspection.schema.json#/properties/sidecarExists"
+        },
+        "signatureMatch": {
+          "$ref": "./resume-inspection.schema.json#/properties/signatureMatch"
+        },
+        "completedChunks": {
+          "$ref": "./resume-inspection.schema.json#/properties/completedChunks"
+        },
+        "completedOutputFrames": {
+          "$ref": "./resume-inspection.schema.json#/properties/completedOutputFrames"
+        },
+        "nextSourceFrame": {
+          "$ref": "./resume-inspection.schema.json#/properties/nextSourceFrame"
+        },
+        "totalOutputFrames": {
+          "$ref": "./resume-inspection.schema.json#/properties/totalOutputFrames"
+        },
+        "type": {
+          "const": "resume_inspection"
+        }
+      },
+      "required": [
+        "pipeline_kind",
+        "outputPath",
+        "input_path",
+        "finalExists",
+        "sidecarExists",
+        "signatureMatch",
+        "completedChunks",
+        "completedOutputFrames",
+        "nextSourceFrame",
+        "totalOutputFrames",
+        "type"
+      ]
     }
   ]
 }

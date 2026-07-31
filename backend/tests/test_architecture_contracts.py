@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import importlib.util
 import subprocess
 import sys
@@ -13,6 +14,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from architecture_contracts.checks import (  # noqa: E402
+    _check_paddlegan_metadata,
     _check_frontend_dependency_boundaries,
     _find_unconsumed_rust_model_reexports,
     _find_unconsumed_protocol_reexports,
@@ -23,7 +25,7 @@ from architecture_contracts.checks import (  # noqa: E402
     _check_frontend_test_layout,
     collect_architecture_issues,
     diff_command_surface,
-    diff_paddlegan_vsr_contract,
+    diff_paddlegan_catalog_contract,
 )
 
 
@@ -138,27 +140,32 @@ def test_command_surface_diff_reports_membership_and_argument_drift() -> None:
     assert any("args drift" in issue and "start_task" in issue for issue in issues)
 
 
-def test_paddlegan_contract_diff_reports_metadata_drift() -> None:
-    issues = diff_paddlegan_vsr_contract(
+def test_paddlegan_contract_diff_reports_catalog_and_descriptor_drift() -> None:
+    issues = diff_paddlegan_catalog_contract(
         {"edvr", "basicvsr"},
-        {
-            "edvr": {
-                "family": "paddlegan_vsr",
-                "fixedScaleFactor": 2,
-                "inputFrameMode": "editable_chunk",
-            },
-            "extra": {
-                "family": "paddlegan_vsr",
-                "fixedScaleFactor": 4,
-                "inputFrameMode": "editable_chunk",
-            },
-        },
+        {"edvr", "extra"},
+        {"basicvsr", "extra"},
+        {"execution_mode": "single"},
     )
 
-    assert any("missing-metadata=['basicvsr']" in issue for issue in issues)
-    assert any("extra-metadata=['extra']" in issue for issue in issues)
-    assert any("fixedScaleFactor=4" in issue for issue in issues)
-    assert any("fixed_window" in issue for issue in issues)
+    assert any("missing-descriptors=['basicvsr']" in issue for issue in issues)
+    assert any("extra-descriptors=['extra']" in issue for issue in issues)
+    assert any("missing-factories=['edvr']" in issue for issue in issues)
+    assert any("extra-factories=['extra']" in issue for issue in issues)
+    assert any("descriptor fields drift" in issue for issue in issues)
+
+
+def test_paddlegan_architecture_check_never_imports_runtime_modules(monkeypatch) -> None:
+    original_import = builtins.__import__
+
+    def reject_runtime_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "app" or name.startswith("app."):
+            raise AssertionError(f"architecture check imported runtime module {name}")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", reject_runtime_import)
+
+    assert _check_paddlegan_metadata(REPO_ROOT) == []
 
 
 def test_architecture_checker_cli_preserves_success_protocol() -> None:

@@ -1,6 +1,7 @@
 """Public planning types, workflow resolvers, and resume lifecycle."""
 
 from app.planning.manifest import (
+    ResumeInspection,
     ResumeMode,
     ResumeState,
     SegmentManifest,
@@ -22,6 +23,7 @@ from app.planning.workflow_validation import validate_workflow_requirements
 
 __all__ = [
     "ResumeMode",
+    "ResumeInspection",
     "ResumeState",
     "SegmentManifest",
     "ProcessingStep",

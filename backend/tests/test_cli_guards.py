@@ -66,7 +66,7 @@ def test_process_guard_wires_ffmpeg_through_the_media_adapter(monkeypatch) -> No
 
 
 def test_info_keeps_existence_only_input_policy(monkeypatch) -> None:
-    payload: dict[str, object] = {}
+    payload: list[object] = []
 
     class _InfoFFmpeg(_FakeFFmpeg):
         def get_video_info(self, _input_path: str) -> dict[str, object]:
@@ -80,8 +80,16 @@ def test_info_keeps_existence_only_input_policy(monkeypatch) -> None:
 
     monkeypatch.setattr(info.os.path, "isfile", lambda _path: True)
     monkeypatch.setattr(info, "ensure_ffmpeg_available", lambda: _InfoFFmpeg())
-    monkeypatch.setattr(info.ndjson, "info", lambda **values: payload.update(values))
+    monkeypatch.setattr(info.ndjson, "emit", lambda event_type, model: payload.append((event_type, model)))
 
     info.cmd_info(argparse.Namespace(input="input.unsupported-extension"))
 
-    assert payload == {"fps": 24.0, "width": 16, "height": 9, "videoCodec": "h264"}
+    assert len(payload) == 1
+    event_type, model = payload[0]
+    assert event_type.value == "info"
+    assert model.model_dump(by_alias=True, mode="json") == {
+        "fps": 24.0,
+        "width": 16,
+        "height": 9,
+        "videoCodec": "h264",
+    }

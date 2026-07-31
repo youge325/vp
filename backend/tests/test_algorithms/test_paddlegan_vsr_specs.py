@@ -6,6 +6,20 @@ from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
 
 
+def test_paddlegan_catalog_and_factory_registry_are_an_exact_set():
+    from app.algorithms.paddle.paddlegan_vsr.model_factory import _MODEL_FACTORIES
+    from app.catalog.stage_descriptors import PADDLEGAN_STAGE_DESCRIPTORS
+
+    assert set(_MODEL_FACTORIES) == set(PADDLEGAN_STAGE_DESCRIPTORS)
+
+
+def test_paddlegan_factory_rejects_unknown_catalog_key():
+    from app.algorithms.paddle.paddlegan_vsr.model_factory import build_paddlegan_model
+
+    with pytest.raises(ValueError, match="No PaddleGAN model factory"):
+        build_paddlegan_model("missing-model")
+
+
 def test_paddlegan_weight_paths_are_fixed_under_backend_models(monkeypatch):
     monkeypatch.setenv("VP_RIFE_MODEL_DIR", "D:/should/not/be/used")
 

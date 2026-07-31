@@ -24,10 +24,16 @@ def _emit_error_payload(code: object, message: str, details: dict) -> None:
 
 
 def _emit_typed_error(emitter: Any, error: Any) -> None:
-    emitter.error(
-        code=_wire_error_code(error.code),
-        message=error.message,
-        details=error.details,
+    from app.generated.contracts import BackendTaskErrorPayload
+    from app.generated.protocol_constants import BackendEnvelopeType
+
+    emitter.emit(
+        BackendEnvelopeType.ERROR,
+        BackendTaskErrorPayload(
+            code=_wire_error_code(error.code),
+            message=error.message,
+            details=error.details or {},
+        ),
     )
 
 

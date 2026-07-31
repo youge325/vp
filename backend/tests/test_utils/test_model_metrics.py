@@ -12,6 +12,10 @@ from app.utils.model_metrics import (
 )
 
 
+def _wire(detail):
+    return detail.model_dump(by_alias=True, mode="json")
+
+
 def _save_conv_model(path: Path, *, dynamic: bool = False) -> None:
     height = "height" if dynamic else 8
     width = "width" if dynamic else 8
@@ -39,7 +43,7 @@ def test_analyze_onnx_model_counts_parameters_and_estimates_conv_flops(tmp_path:
     model_path = tmp_path / "conv.onnx"
     _save_conv_model(model_path)
 
-    detail = analyze_onnx_model(model_path, name="conv.onnx", label="Conv")
+    detail = _wire(analyze_onnx_model(model_path, name="conv.onnx", label="Conv"))
 
     assert detail["name"] == "conv.onnx"
     assert detail["label"] == "Conv"
@@ -56,7 +60,7 @@ def test_analyze_onnx_model_keeps_parameters_when_dynamic_shapes_hide_flops(tmp_
     model_path = tmp_path / "dynamic.onnx"
     _save_conv_model(model_path, dynamic=True)
 
-    detail = analyze_onnx_model(model_path, name="dynamic.onnx")
+    detail = _wire(analyze_onnx_model(model_path, name="dynamic.onnx"))
 
     assert detail["metrics"]["parameterCount"] == 224
     assert detail["metrics"]["gflopsPerMegapixel"] is None
@@ -70,7 +74,7 @@ def test_analyze_onnx_model_returns_unknown_for_invalid_files(tmp_path: Path) ->
     model_path = tmp_path / "broken.onnx"
     model_path.write_bytes(b"not an onnx model")
 
-    detail = analyze_onnx_model(model_path, name="broken.onnx")
+    detail = _wire(analyze_onnx_model(model_path, name="broken.onnx"))
 
     assert detail["metrics"]["parameterCount"] is None
     assert detail["metrics"]["analysisStatus"] == "unknown"
@@ -78,7 +82,7 @@ def test_analyze_onnx_model_returns_unknown_for_invalid_files(tmp_path: Path) ->
 
 
 def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
-    rife_details = get_rife_model_details()
+    rife_details = [_wire(detail) for detail in get_rife_model_details()]
     assert [detail["name"] for detail in rife_details] == list(SUPPORTED_MODELS)
     assert all(detail["metrics"]["parameterCount"] for detail in rife_details)
     assert all(detail["metrics"]["inputModulo"] for detail in rife_details)
@@ -92,7 +96,7 @@ def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
     assert rife_425_trt["activationBytesPerMegapixel"] is not None
     assert rife_425_trt["gflopsPerMegapixel"] == rife_425["metrics"]["gflopsPerMegapixel"]
 
-    ppmsvsr = get_paddlegan_model_detail("ppmsvsr")
+    ppmsvsr = _wire(get_paddlegan_model_detail("ppmsvsr"))
     assert ppmsvsr["name"] == "x4"
     assert ppmsvsr["label"] == "PP-MSVSR"
     assert ppmsvsr["metrics"]["parameterCount"] == 1_453_607
@@ -107,7 +111,7 @@ def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
     assert ppmsvsr_trt["activationBytesPerMegapixel"] is not None
     assert ppmsvsr_trt["gflopsPerMegapixel"] == ppmsvsr["metrics"]["gflopsPerMegapixel"]
 
-    edvr = get_paddlegan_model_detail("edvr")
+    edvr = _wire(get_paddlegan_model_detail("edvr"))
     assert edvr["metrics"]["parameterCount"] == 20_633_827
     assert edvr["metrics"]["runtimeOverheadBytes"] is not None
     assert edvr["metrics"]["runtimeFrameCount"] == 5
@@ -121,7 +125,7 @@ def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
         "iconvsr": 8_694_991,
         "basicvsr-plus-plus": 7_322_927,
     }.items():
-        detail = get_paddlegan_model_detail(model_id)
+        detail = _wire(get_paddlegan_model_detail(model_id))
         assert detail["metrics"]["parameterCount"] == parameter_count
         assert detail["metrics"]["runtimeOverheadBytes"]
         assert detail["metrics"]["activationBytesPerMegapixel"]

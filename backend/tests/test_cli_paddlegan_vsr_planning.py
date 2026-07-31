@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from app.adapters.model_availability import LocalModelAvailability
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
 from app.planning import (
@@ -32,9 +33,27 @@ def _super_resolution_step(
     )
 
 
+def _validate(steps: list[ProcessingStep]) -> None:
+    validate_workflow_requirements(steps, LocalModelAvailability(settings.RIFE_MODEL_DIR))
+
+
+def test_planning_uses_an_injected_model_availability_port():
+    validated: list[ProcessingStep] = []
+
+    class _Availability:
+        def validate(self, step: ProcessingStep) -> None:
+            validated.append(step)
+
+    step = _super_resolution_step(backend="onnx", algorithm="external-onnx")
+    validate_workflow_requirements([step], _Availability())
+
+    assert validated == [step]
+    assert step.descriptor.factory_key == "onnx_super_resolution"
+
+
 def test_paddlegan_vsr_requires_4x_scale_factor():
     with pytest.raises(ProcessError) as exc_info:
-        validate_workflow_requirements([_super_resolution_step(scale_factor=2.0)])
+        _validate([_super_resolution_step(scale_factor=2.0)])
 
     assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
     assert "4x" in exc_info.value.message
@@ -52,7 +71,7 @@ def test_paddlegan_vsr_rejects_paddle_interpolation_backend_combination():
     )
 
     with pytest.raises(ProcessError) as exc_info:
-        validate_workflow_requirements([step])
+        _validate([step])
 
     assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
     assert "RIFE" in exc_info.value.message
@@ -64,7 +83,7 @@ def test_restored_paddlegan_vsr_models_are_accepted_by_backend_planning(monkeypa
 
     monkeypatch.setattr(weights, "ensure_paddlegan_vsr_weights", lambda _algorithm: None)
     for algorithm in ["ppmsvsr-large", "basicvsr", "iconvsr", "basicvsr-plus-plus"]:
-        validate_workflow_requirements([_super_resolution_step(algorithm=algorithm)])
+        _validate([_super_resolution_step(algorithm=algorithm)])
 
 
 def test_paddlegan_vsr_missing_auxiliary_weight_is_rejected_before_stage_worker(tmp_path, monkeypatch):
@@ -87,7 +106,7 @@ def test_paddlegan_vsr_missing_auxiliary_weight_is_rejected_before_stage_worker(
     ]
 
     with pytest.raises(ProcessError) as exc_info:
-        validate_workflow_requirements(steps)
+        _validate(steps)
 
     expected_aux = tmp_path / "_auxiliary" / "modified_spynet_tiny.pdparams"
     assert exc_info.value.code == TaskErrorCode.MISSING_MODEL
@@ -109,7 +128,7 @@ def test_onnx_super_resolution_model_is_checked_from_its_stage_backend(tmp_path,
     ]
 
     with pytest.raises(ProcessError) as exc_info:
-        validate_workflow_requirements(steps)
+        _validate(steps)
 
     assert exc_info.value.code == TaskErrorCode.MISSING_MODEL
     assert exc_info.value.details["tensor_backend"] == "onnx"
@@ -142,7 +161,7 @@ def test_mixed_pytorch_interpolation_and_onnx_sr_checks_both_stage_models(tmp_pa
     ]
 
     with pytest.raises(ProcessError) as exc_info:
-        validate_workflow_requirements(steps)
+        _validate(steps)
 
     assert exc_info.value.code == TaskErrorCode.MISSING_MODEL
     assert exc_info.value.details["stage"] == "02_super_resolution"
@@ -162,7 +181,7 @@ def test_rife_paddle_backend_is_rejected_in_planning():
     ]
 
     with pytest.raises(ProcessError) as exc_info:
-        validate_workflow_requirements(steps)
+        _validate(steps)
 
     assert exc_info.value.code == TaskErrorCode.INVALID_CONFIG
     assert exc_info.value.details["tensor_backend"] == "paddle"

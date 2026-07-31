@@ -8,16 +8,25 @@ import app.__main__ as app_main
 import app.cli
 import app.protocol
 from app.errors import ProcessError, TaskErrorCode
+from app.generated.contracts import BackendTaskErrorPayload
+from app.generated.protocol_constants import BackendEnvelopeType
 
 
-def _run_with_failure(monkeypatch: pytest.MonkeyPatch, exc: Exception) -> list[dict[str, Any]]:
-    captured: list[dict[str, Any]] = []
+def _run_with_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    exc: Exception,
+) -> list[tuple[BackendEnvelopeType, BackendTaskErrorPayload]]:
+    captured: list[tuple[BackendEnvelopeType, BackendTaskErrorPayload]] = []
 
     def fail() -> None:
         raise exc
 
     monkeypatch.setattr(app.cli, "main", fail)
-    monkeypatch.setattr(app.protocol.ndjson, "error", lambda **payload: captured.append(payload))
+    monkeypatch.setattr(
+        app.protocol.ndjson,
+        "emit",
+        lambda event_type, payload: captured.append((event_type, payload)),
+    )
 
     with pytest.raises(SystemExit) as exit_info:
         app_main._run()
@@ -36,22 +45,24 @@ def test_process_error_uses_typed_ndjson_emitter(monkeypatch: pytest.MonkeyPatch
         ),
     )
 
-    assert captured == [
-        {
-            "code": "invalid_config",
-            "message": "bad config",
-            "details": {"section": "workflow"},
-        }
-    ]
+    assert captured[0][0] is BackendEnvelopeType.ERROR
+    assert captured[0][1].model_dump(mode="json") == {
+        "code": "invalid_config",
+        "message": "bad config",
+        "details": {"section": "workflow"},
+    }
 
 
 def test_unexpected_error_uses_typed_ndjson_emitter(monkeypatch: pytest.MonkeyPatch) -> None:
     captured = _run_with_failure(monkeypatch, RuntimeError("ffmpeg executable missing"))
 
     assert len(captured) == 1
-    assert captured[0]["code"] == "missing_ffmpeg"
-    assert captured[0]["message"] == "ffmpeg executable missing"
-    assert "traceback" in captured[0]["details"]
+    event_type, payload = captured[0]
+    assert event_type is BackendEnvelopeType.ERROR
+    assert payload.code == TaskErrorCode.MISSING_FFMPEG
+    assert payload.message == "ffmpeg executable missing"
+    assert payload.details is not None
+    assert "traceback" in payload.details
 
 
 def test_import_safe_fallback_builds_bootstrap_payload(monkeypatch: pytest.MonkeyPatch) -> None:

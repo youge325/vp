@@ -21,7 +21,7 @@ def _install_probe_stubs(monkeypatch) -> None:
     monkeypatch.setattr(
         capability_probe,
         "probe_rate_control_modes",
-        lambda _path, _codec, _options: [{"mode": "bitrate", "defaultValue": 8}],
+        lambda _path, _codec, _options: [{"mode": "bitrate", "label": "Bitrate", "defaultValue": 8, "unit": "Mbps"}],
     )
     monkeypatch.setattr(
         capability_probe,
@@ -36,12 +36,16 @@ def _install_probe_stubs(monkeypatch) -> None:
 def test_discover_capabilities_filters_profiles_by_gpu_vendor(monkeypatch) -> None:
     _install_probe_stubs(monkeypatch)
 
-    result = capabilities.discover_capabilities("ffmpeg", [{"name": "GPU", "vendor": "nvidia"}])
+    result = capabilities.discover_capabilities("ffmpeg", [{"name": "GPU", "vendor": "nvidia"}]).model_dump(
+        by_alias=True, mode="json"
+    )
 
     assert result["hwaccels"] == ["cuda"]
     assert [profile["name"] for profile in result["encoderProfiles"]] == ["libx264", "hevc_nvenc"]
     assert [profile["name"] for profile in result["decoderProfiles"]] == ["software", "hevc_cuvid"]
-    assert result["encoderProfiles"][0]["rateControlModes"] == [{"mode": "bitrate", "defaultValue": 8}]
+    assert result["encoderProfiles"][0]["rateControlModes"] == [
+        {"mode": "bitrate", "label": "Bitrate", "defaultValue": 8, "unit": "Mbps"}
+    ]
     assert result["decoderProfiles"][1]["hardwareDevices"] == ["cuda"]
     assert result["decoderProfiles"][1]["hardwareDeviceOptions"] == {"cuda": [{"value": "0", "label": "0"}]}
 
@@ -60,6 +64,6 @@ def test_discover_capabilities_returns_only_verified_hwaccels(monkeypatch) -> No
     result = capabilities.discover_capabilities(
         "ffmpeg",
         [{"name": "NVIDIA", "vendor": "nvidia"}, {"name": "Intel", "vendor": "intel"}],
-    )
+    ).model_dump(by_alias=True, mode="json")
 
     assert result["hwaccels"] == ["cuda"]

@@ -12,6 +12,7 @@ from app.cli.commands.info import cmd_info
 from app.cli.commands.inspect_output import cmd_inspect_output
 from app.cli.commands.process import cmd_process
 from app.cli.commands.stage_worker import cmd_stage_worker
+from app.generated.contracts import FpsMode, ResumeMode, TensorBackend
 from app.planning import PROCESS_ORDER_MAP
 
 
@@ -51,12 +52,24 @@ def _add_shared_planning_args(parser: argparse.ArgumentParser) -> None:
         choices=list(PROCESS_ORDER_MAP.keys()),
         help="Stage order when interpolation and super-resolution are both enabled",
     )
-    parser.add_argument("--fps-mode", default="multi", choices=["multi", "target"], help="FPS calculation mode")
+    parser.add_argument(
+        "--fps-mode",
+        type=FpsMode,
+        default=FpsMode.MULTI,
+        choices=list(FpsMode),
+        help="FPS calculation mode",
+    )
     parser.add_argument("--target-fps", type=float, default=60.0, help="Target FPS when using target mode")
     parser.add_argument("--codec", default="libx264", help="Video codec")
     parser.add_argument("--crf", type=int, default=18, help="CRF quality")
     parser.add_argument("--preset", default="medium", help="Encoding preset")
-    parser.add_argument("--backend", default="pytorch", choices=["pytorch", "paddle", "onnx"], help="Tensor backend")
+    parser.add_argument(
+        "--backend",
+        type=TensorBackend,
+        default=TensorBackend.PYTORCH,
+        choices=list(TensorBackend),
+        help="Tensor backend",
+    )
     parser.add_argument("--output-dir", default=None, help="Output directory override")
     parser.add_argument(
         "--multi",
@@ -98,8 +111,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_shared_planning_args(process_parser)
     process_parser.add_argument(
         "--resume-mode",
-        default="auto",
-        choices=["auto", "force-fresh", "force-resume"],
+        type=ResumeMode,
+        default=ResumeMode.AUTO,
+        choices=list(ResumeMode),
         help=(
             "Conflict policy when an existing output is detected. 'auto' (default) "
             "resumes on signature match, otherwise emits a resume_conflict error so "

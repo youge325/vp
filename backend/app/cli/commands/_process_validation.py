@@ -12,7 +12,6 @@ Pydantic 校验过、camelCase、已合并默认值的形状。
 from __future__ import annotations
 
 import argparse
-import copy
 import json
 import sys
 from typing import Any, TypeVar
@@ -47,13 +46,13 @@ def _validate_config_section(
 ) -> _ConfigModel:
     """Deep-merge and validate one config section.
 
-    RuntimeConfigs later projects default sections sparsely and explicit
-    sections as complete camelCase dictionaries.
+    RuntimeConfigs later projects every validated section as one complete
+    camelCase dictionary.
     """
     if raw_value is not None:
         merged = _deep_merge(default, raw_value)
     else:
-        merged = copy.deepcopy(default)
+        merged = default
 
     try:
         validated = model_cls.model_validate(merged)
@@ -113,8 +112,7 @@ def _read_stdin_config_sections() -> dict[str, dict[str, Any] | None]:
 def load_runtime_configs(args: argparse.Namespace) -> RuntimeConfigs:
     """Materialise typed runtime configs from scalar CLI args or stdin.
 
-    The returned bundle carries Pydantic models for internal code and records
-    which sections were explicit so wire projections preserve their shape.
+    The returned bundle carries complete Pydantic models for internal code.
     ``ValueError`` from any sub-call is caught and re-emitted
     as ``INVALID_CONFIG`` so the frontend sees a typed error rather than a
     stack trace.
@@ -154,7 +152,4 @@ def load_runtime_configs(args: argparse.Namespace) -> RuntimeConfigs:
         encode=encode,
         workflow=workflow,
         output=output,
-        _expanded_sections=frozenset(
-            section for section in ("decode", "encode", "workflow", "output") if sections[section] is not None
-        ),
     )

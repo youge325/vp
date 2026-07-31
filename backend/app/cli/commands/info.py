@@ -7,6 +7,8 @@ import os
 
 from app.cli.commands._guards import ensure_ffmpeg_available
 from app.errors import ProcessError, TaskErrorCode, raise_error
+from app.generated.contracts import VideoInfo
+from app.generated.protocol_constants import BackendEnvelopeType
 from app.protocol import ndjson
 from app.utils.ffmpeg.media_probe import get_primary_video_dimensions
 
@@ -28,11 +30,14 @@ def cmd_info(args: argparse.Namespace) -> None:
         video_codec = ffmpeg.get_primary_video_codec(input_path)
         width, height = get_primary_video_dimensions(info)
 
-        ndjson.info(
-            fps=fps,
-            width=width,
-            height=height,
-            videoCodec=video_codec,
+        ndjson.emit(
+            BackendEnvelopeType.INFO,
+            VideoInfo(
+                fps=fps,
+                width=width,
+                height=height,
+                videoCodec=video_codec,
+            ),
         )
     except Exception as exc:  # pragma: no cover - defensive boundary
         if isinstance(exc, ProcessError):

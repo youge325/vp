@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Literal, Mapping
+from typing import Any, Mapping
 
-from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
-
-AlgorithmType = Literal[
-    "frame_interpolation",
-    "super_resolution",
-    "frame_filter_chain",
-]
-StageExecutionMode = Literal["single", "pair", "sequence"]
+from app.catalog.stage_descriptors import (
+    AlgorithmType,
+    StageDescriptor,
+    StageExecutionMode,
+    resolve_stage_descriptor,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,21 +21,20 @@ class ProcessingStep:
     algorithm_type: AlgorithmType
     algorithm_kwargs: Mapping[str, Any]
     stage_name: str
+    descriptor: StageDescriptor = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "algorithm_kwargs", _freeze_mapping(self.algorithm_kwargs))
+        object.__setattr__(
+            self,
+            "descriptor",
+            resolve_stage_descriptor(self.algorithm_type, self.algorithm_kwargs),
+        )
 
     @property
     def execution_mode(self) -> StageExecutionMode:
         """Declare the worker contract without probing an algorithm instance."""
-        if self.algorithm_type == "frame_interpolation":
-            return "pair"
-        if (
-            self.algorithm_type == "super_resolution"
-            and str(self.algorithm_kwargs.get("sr_algorithm") or "") in PADDLEGAN_VSR_SPECS
-        ):
-            return "sequence"
-        return "single"
+        return self.descriptor.execution_mode
 
     def to_jsonable(self) -> dict[str, Any]:
         """Return the stable JSON shape used for signatures and sidecars."""
