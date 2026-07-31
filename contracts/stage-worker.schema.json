@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/stage-worker.schema.json",
+  "title": "StageWorkerProtocolValue",
+  "oneOf": [
+    { "$ref": "#/$defs/StageWorkerConfig" },
+    { "$ref": "#/$defs/StageWorkerProgressEvent" },
+    { "$ref": "#/$defs/StageWorkerErrorEvent" }
+  ],
+  "$defs": {
+    "StageWorkerInterpolationKwargs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "multi": { "type": "integer", "minimum": 2 },
+        "model_version": { "type": "string", "minLength": 1 },
+        "scale": { "type": "number", "exclusiveMinimum": 0 },
+        "fp16": { "type": "boolean" },
+        "onnx_model": { "type": ["string", "null"] },
+        "engine": { "$ref": "./inference-engine.schema.json" }
+      },
+      "required": ["multi", "model_version", "scale", "fp16", "onnx_model", "engine"]
+    },
+    "StageWorkerOnnxSuperResolutionKwargs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sr_algorithm": { "type": "string", "minLength": 1 },
+        "onnx_model": { "type": ["string", "null"] },
+        "engine": { "$ref": "./inference-engine.schema.json" }
+      },
+      "required": ["sr_algorithm", "onnx_model", "engine"]
+    },
+    "StageWorkerPaddleSuperResolutionKwargs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sr_algorithm": { "type": "string", "minLength": 1 },
+        "engine": { "$ref": "./inference-engine.schema.json" },
+        "num_frames": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["sr_algorithm", "engine", "num_frames"]
+    },
+    "StageWorkerFilterChainKwargs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "filters": {
+          "type": "array",
+          "items": { "$ref": "./filter-step.schema.json" }
+        }
+      },
+      "required": ["filters"]
+    },
+    "StageWorkerInterpolationStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm_type": { "const": "frame_interpolation" },
+        "algorithm_kwargs": { "$ref": "#/$defs/StageWorkerInterpolationKwargs" }
+      },
+      "required": ["algorithm_type", "algorithm_kwargs"]
+    },
+    "StageWorkerOnnxSuperResolutionStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm_type": { "const": "super_resolution" },
+        "algorithm_kwargs": { "$ref": "#/$defs/StageWorkerOnnxSuperResolutionKwargs" }
+      },
+      "required": ["algorithm_type", "algorithm_kwargs"]
+    },
+    "StageWorkerPaddleSuperResolutionStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm_type": { "const": "super_resolution" },
+        "algorithm_kwargs": { "$ref": "#/$defs/StageWorkerPaddleSuperResolutionKwargs" }
+      },
+      "required": ["algorithm_type", "algorithm_kwargs"]
+    },
+    "StageWorkerFilterChainStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm_type": { "const": "frame_filter_chain" },
+        "algorithm_kwargs": { "$ref": "#/$defs/StageWorkerFilterChainKwargs" }
+      },
+      "required": ["algorithm_type", "algorithm_kwargs"]
+    },
+    "StageWorkerStep": {
+      "oneOf": [
+        { "$ref": "#/$defs/StageWorkerInterpolationStep" },
+        { "$ref": "#/$defs/StageWorkerOnnxSuperResolutionStep" },
+        { "$ref": "#/$defs/StageWorkerPaddleSuperResolutionStep" },
+        { "$ref": "#/$defs/StageWorkerFilterChainStep" }
+      ]
+    },
+    "StageWorkerConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stage": { "$ref": "#/$defs/StageWorkerStep" },
+        "stageIndex": { "type": "integer", "minimum": 1 },
+        "stageTotal": { "type": "integer", "minimum": 1 },
+        "stageName": { "type": "string", "minLength": 1 },
+        "inputWidth": { "type": "integer", "minimum": 1 },
+        "inputHeight": { "type": "integer", "minimum": 1 },
+        "outputWidth": { "type": "integer", "minimum": 1 },
+        "outputHeight": { "type": "integer", "minimum": 1 },
+        "inputFrameCount": { "type": "integer", "minimum": 0 },
+        "tensorBackendName": {
+          "anyOf": [
+            { "$ref": "./tensor-backend.schema.json" },
+            { "type": "null" }
+          ]
+        },
+        "outputFrameCount": { "type": "integer", "minimum": 0 }
+      },
+      "required": [
+        "stage",
+        "stageIndex",
+        "stageTotal",
+        "stageName",
+        "inputWidth",
+        "inputHeight",
+        "outputWidth",
+        "outputHeight",
+        "inputFrameCount",
+        "tensorBackendName",
+        "outputFrameCount"
+      ]
+    },
+    "StageWorkerProgressEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "progress" },
+        "stageName": { "type": "string", "minLength": 1 },
+        "stageIndex": { "type": "integer", "minimum": 1 },
+        "stageTotal": { "type": "integer", "minimum": 1 },
+        "current": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 1 },
+        "heartbeat": { "type": "boolean" },
+        "force": { "type": "boolean" }
+      },
+      "required": [
+        "type",
+        "stageName",
+        "stageIndex",
+        "stageTotal",
+        "current",
+        "total",
+        "heartbeat",
+        "force"
+      ]
+    },
+    "StageWorkerErrorEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "error" },
+        "code": { "$ref": "./backend-error-codes.schema.json" },
+        "message": { "type": "string", "minLength": 1 },
+        "details": {
+          "anyOf": [
+            { "type": "object", "additionalProperties": true },
+            { "type": "null" }
+          ]
+        }
+      },
+      "required": ["type", "code", "message", "details"]
+    }
+  }
+}

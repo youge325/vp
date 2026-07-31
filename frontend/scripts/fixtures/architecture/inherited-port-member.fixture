@@ -1,0 +1,12 @@
+interface ProviderPort {
+  read(): string
+}
+
+export interface DerivedPort extends Pick<ProviderPort, 'read'> {
+  write(value: string): void
+}
+
+export function consumeDerivedPort(port: DerivedPort): void {
+  port.read()
+  port.write('value')
+}

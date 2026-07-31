@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import builtins
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -14,8 +17,19 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from architecture_contracts.checks import (  # noqa: E402
+    _check_python_cli_commands,
+    _check_python_algorithm_factory_registry,
+    _check_python_package_reexports,
+    _check_rust_unused_dependencies,
+    _check_python_boundary_field_consumers,
+    _check_side_effect_free_python_packages,
     _check_paddlegan_metadata,
+    _collect_manifest_commands,
+    _collect_python_name_registry,
     _check_frontend_dependency_boundaries,
+    _find_unconsumed_python_boundary_fields,
+    _find_unconsumed_python_package_reexports,
+    _find_unconsumed_python_module_exports,
     _find_unconsumed_rust_model_reexports,
     _find_unconsumed_protocol_reexports,
     _find_unconsumed_test_support_exports,
@@ -27,6 +41,45 @@ from architecture_contracts.checks import (  # noqa: E402
     diff_command_surface,
     diff_paddlegan_catalog_contract,
 )
+from architecture_contracts.rules import ContractParseError  # noqa: E402
+
+
+def test_rust_dev_dependency_usage_in_compile_fail_fixtures_is_counted(tmp_path: Path) -> None:
+    crate = tmp_path / "frontend/src-tauri"
+    (crate / "src").mkdir(parents=True)
+    (crate / "tests/ui").mkdir(parents=True)
+    (crate / "Cargo.toml").write_text(
+        '[package]\nname = "fixture"\nversion = "0.1.0"\nedition = "2021"\n[dev-dependencies]\ntrybuild = "1"\n',
+        encoding="utf-8",
+    )
+    (crate / "src/lib.rs").write_text("pub fn production() {}\n", encoding="utf-8")
+    fixture = crate / "tests/compile_fail.rs"
+    fixture.write_text("fn check() { let _ = trybuild::TestCases::new(); }\n", encoding="utf-8")
+
+    assert _check_rust_unused_dependencies(tmp_path) == []
+
+    fixture.write_text("fn check() {}\n", encoding="utf-8")
+    assert _check_rust_unused_dependencies(tmp_path) == [
+        "unused Rust Cargo dev-dependency `trybuild`: frontend/src-tauri/Cargo.toml"
+    ]
+
+
+def test_manifest_command_reader_accepts_schema_version_three(tmp_path: Path) -> None:
+    contracts = tmp_path / "contracts"
+    contracts.mkdir()
+    (contracts / "ipc-manifest.json").write_text(
+        json.dumps(
+            {
+                "schemaVersion": 3,
+                "commands": [
+                    {"name": "start_task", "args": {"request": "TaskRequest"}, "result": "void"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert set(_collect_manifest_commands(tmp_path)) == {"start_task"}
 
 
 def test_frontend_dependency_boundaries_reject_protocol_submodule_import(tmp_path: Path) -> None:
@@ -143,16 +196,103 @@ def test_command_surface_diff_reports_membership_and_argument_drift() -> None:
 def test_paddlegan_contract_diff_reports_catalog_and_descriptor_drift() -> None:
     issues = diff_paddlegan_catalog_contract(
         {"edvr", "basicvsr"},
-        {"edvr", "extra"},
         {"basicvsr", "extra"},
         {"execution_mode": "single"},
     )
 
-    assert any("missing-descriptors=['basicvsr']" in issue for issue in issues)
-    assert any("extra-descriptors=['extra']" in issue for issue in issues)
     assert any("missing-factories=['edvr']" in issue for issue in issues)
     assert any("extra-factories=['extra']" in issue for issue in issues)
     assert any("descriptor fields drift" in issue for issue in issues)
+
+
+def test_paddlegan_contract_accepts_geometry_policy_descriptor() -> None:
+    descriptor = {
+        "execution_mode": "sequence",
+        "requires_file_pipeline": True,
+        "geometry": {"kind": "fixed_scale", "fixed_scale_factor": 4.0},
+        "supported_backends": frozenset({"paddle"}),
+        "factory_key": "paddlegan_vsr",
+        "model_kind": "paddlegan_vsr",
+    }
+
+    assert (
+        diff_paddlegan_catalog_contract(
+            {"edvr"},
+            {"edvr"},
+            descriptor,
+        )
+        == []
+    )
+
+
+def test_python_factory_registry_requires_literal_local_function_targets() -> None:
+    assert _collect_python_name_registry("_FACTORIES = {'rife': _build_rife}\n", "_FACTORIES") == {
+        "rife": "_build_rife"
+    }
+
+    with pytest.raises(ContractParseError, match="local factory functions"):
+        _collect_python_name_registry("_FACTORIES = {'rife': 'app.rife'}\n", "_FACTORIES")
+
+
+def test_python_boundary_field_check_ignores_test_only_consumers() -> None:
+    declarations = {
+        "backend/app/catalog/example.py": (
+            "from dataclasses import dataclass\n"
+            "@dataclass(frozen=True)\n"
+            "class Descriptor:\n"
+            "    used: str\n"
+            "    test_only: str\n"
+        )
+    }
+    production = {
+        "backend/app/consumer.py": (
+            "from app.catalog.example import Descriptor\n"
+            "class Unrelated:\n"
+            "    test_only: str\n"
+            "def consume(descriptor: Descriptor, unrelated: Unrelated):\n"
+            "    return descriptor.used, unrelated.test_only\n"
+        )
+    }
+    tests = {
+        "backend/tests/test_consumer.py": (
+            "from app.catalog.example import Descriptor\n"
+            "def test_value(descriptor: Descriptor):\n"
+            "    assert descriptor.test_only\n"
+        )
+    }
+
+    assert _find_unconsumed_python_boundary_fields(declarations, {**production, **tests}) == []
+    assert _find_unconsumed_python_boundary_fields(declarations, production) == [
+        ("backend/app/catalog/example.py", "Descriptor", "test_only"),
+    ]
+
+
+def test_python_package_reexport_check_requires_production_import() -> None:
+    package = "app.example"
+    init_text = "from app.example.owner import Used, TestOnly\n__all__ = ['Used', 'TestOnly']\n"
+    production = ["from app.example import Used\n"]
+    tests = ["from app.example import TestOnly\n"]
+
+    assert _find_unconsumed_python_package_reexports(package, init_text, [*production, *tests]) == set()
+    assert _find_unconsumed_python_package_reexports(package, init_text, production) == {"TestOnly"}
+
+
+def test_python_module_export_check_ignores_self_all_and_test_only_consumers() -> None:
+    module = "app.example.owner"
+    source = "def used():\n    return 1\ndef test_only():\n    return 2\n__all__ = ['used', 'test_only']\n"
+    production = [("app.consumer", False, "from app.example.owner import used\nused()\n")]
+    tests = [("tests.test_owner", False, "from app.example.owner import test_only\ntest_only()\n")]
+
+    assert _find_unconsumed_python_module_exports(module, source, [*production, *tests]) == set()
+    assert _find_unconsumed_python_module_exports(module, source, production) == {"test_only"}
+
+
+def test_python_command_and_side_effect_checks_cover_current_repository() -> None:
+    assert _check_python_cli_commands(REPO_ROOT) == []
+    assert _check_python_algorithm_factory_registry(REPO_ROOT) == []
+    assert _check_side_effect_free_python_packages(REPO_ROOT) == []
+    assert _check_python_boundary_field_consumers(REPO_ROOT) == []
+    assert _check_python_package_reexports(REPO_ROOT) == []
 
 
 def test_paddlegan_architecture_check_never_imports_runtime_modules(monkeypatch) -> None:

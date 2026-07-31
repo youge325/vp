@@ -1,0 +1,3 @@
+import type * as Wire from '@/types/generated/contracts'
+
+export type NamespacedError = Wire.TaskErrorPayload

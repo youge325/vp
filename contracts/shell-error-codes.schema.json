@@ -13,6 +13,7 @@
     "persistence_failed",
     "backend_no_json",
     "controller_unavailable",
-    "backend_probe_failed"
+    "backend_probe_failed",
+    "process_control_unsupported"
   ]
 }

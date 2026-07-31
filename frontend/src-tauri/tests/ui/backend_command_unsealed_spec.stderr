@@ -1,0 +1,73 @@
+error[E0277]: the trait bound `ArbitraryCommand: Sealed` is not satisfied
+  --> tests/ui/backend_command_unsealed_spec.rs:34:5
+   |
+34 |     fn arguments(_invocation: &Self::Invocation) -> Vec<String> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `Sealed` is not implemented for `ArbitraryCommand`
+  --> tests/ui/backend_command_unsealed_spec.rs:27:1
+   |
+27 | struct ArbitraryCommand;
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+help: the following other types implement trait `Sealed`
+  --> tests/ui/../../src/generated/backend_oneshot.rs
+   |
+   | impl private::Sealed for StartTaskSpec {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `StartTaskSpec`
+...
+   | impl private::Sealed for InspectVideoSpec {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `InspectVideoSpec`
+...
+   | impl private::Sealed for CheckEnvironmentSpec {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `CheckEnvironmentSpec`
+...
+   | impl private::Sealed for CheckResumeStateSpec {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `CheckResumeStateSpec`
+note: required by a bound in `BackendCommandSpec`
+  --> tests/ui/../../src/generated/backend_oneshot.rs
+   |
+   | pub(crate) trait BackendCommandSpec: private::Sealed {
+   |                                      ^^^^^^^^^^^^^^^ required by this bound in `BackendCommandSpec`
+   = note: `BackendCommandSpec` is a "sealed trait", because to implement it you also need to implement `backend_oneshot::private::Sealed`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
+   = help: the following types implement the trait:
+             backend_oneshot::StartTaskSpec
+             backend_oneshot::InspectVideoSpec
+             backend_oneshot::CheckEnvironmentSpec
+             backend_oneshot::CheckResumeStateSpec
+
+error[E0277]: the trait bound `ArbitraryCommand: Sealed` is not satisfied
+  --> tests/ui/backend_command_unsealed_spec.rs:30:46
+   |
+30 | impl backend_oneshot::BackendCommandSpec for ArbitraryCommand {
+   |                                              ^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `Sealed` is not implemented for `ArbitraryCommand`
+  --> tests/ui/backend_command_unsealed_spec.rs:27:1
+   |
+27 | struct ArbitraryCommand;
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+help: the following other types implement trait `Sealed`
+  --> tests/ui/../../src/generated/backend_oneshot.rs
+   |
+   | impl private::Sealed for StartTaskSpec {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `StartTaskSpec`
+...
+   | impl private::Sealed for InspectVideoSpec {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `InspectVideoSpec`
+...
+   | impl private::Sealed for CheckEnvironmentSpec {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `CheckEnvironmentSpec`
+...
+   | impl private::Sealed for CheckResumeStateSpec {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `CheckResumeStateSpec`
+note: required by a bound in `BackendCommandSpec`
+  --> tests/ui/../../src/generated/backend_oneshot.rs
+   |
+   | pub(crate) trait BackendCommandSpec: private::Sealed {
+   |                                      ^^^^^^^^^^^^^^^ required by this bound in `BackendCommandSpec`
+   = note: `BackendCommandSpec` is a "sealed trait", because to implement it you also need to implement `backend_oneshot::private::Sealed`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
+   = help: the following types implement the trait:
+             backend_oneshot::StartTaskSpec
+             backend_oneshot::InspectVideoSpec
+             backend_oneshot::CheckEnvironmentSpec
+             backend_oneshot::CheckResumeStateSpec

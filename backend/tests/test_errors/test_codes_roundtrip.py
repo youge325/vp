@@ -99,6 +99,12 @@ def test_main_wire_error_code_uses_same_normalization(raw_code: object, expected
     assert app_main._wire_error_code(raw_code) == expected_code
 
 
+def test_main_wire_error_code_fallback_uses_generated_backend_codes(monkeypatch) -> None:
+    monkeypatch.setattr(app_main, "error_code_to_wire", None)
+
+    assert app_main._wire_error_code("persistence_failed") == "persistence_failed"
+
+
 def test_all_inferred_codes_are_in_enum() -> None:
     """Every code ``infer_error_code`` can return must be a real enum value.
 

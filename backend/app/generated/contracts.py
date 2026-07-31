@@ -3,16 +3,21 @@
 
 from __future__ import annotations
 from enum import StrEnum
-from typing import Any, Literal
 from pydantic import (
     AwareDatetime,
     BaseModel as _BaseModel,
     ConfigDict,
     Field,
-    PositiveFloat,
+    RootModel,
+    StrictBool,
+    StrictFloat,
+    StrictInt,
+    StrictStr,
+    confloat,
     conint,
     constr,
 )
+from typing import Any, Literal
 
 
 class BaseModel(_BaseModel):
@@ -26,6 +31,30 @@ class AlgorithmFamily(StrEnum):
     RIFE = "rife"
     ONNX_SUPER_RESOLUTION = "onnx_super_resolution"
     PADDLEGAN_VSR = "paddlegan_vsr"
+
+
+class Profile(StrEnum):
+    CLEAN_LINES = "clean-lines"
+    THIN_OUTLINE = "thin-outline"
+    BALANCED_CEL = "balanced-cel"
+
+
+class AnimeCleanupFilterParams(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    profile: Profile = None
+    denoise: confloat(ge=0.0, le=100.0, strict=True) = None
+    edge_boost: confloat(ge=0.0, le=100.0, strict=True) = Field(default=None, alias="edgeBoost")
+
+
+class AnimeCleanupFilterStep(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["anime_cleanup"]
+    enabled: StrictBool
+    params: AnimeCleanupFilterParams
 
 
 class BackendTaskErrorCode(StrEnum):
@@ -47,7 +76,7 @@ class BackendTaskErrorPayload(BaseModel):
         extra="forbid",
     )
     code: BackendTaskErrorCode
-    message: str
+    message: StrictStr
     details: dict[str, Any] | None = None
 
 
@@ -55,8 +84,8 @@ class CapabilityChoice(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    label: str
-    value: str | int | float | bool
+    label: StrictStr
+    value: StrictStr | StrictInt | StrictFloat | StrictBool
 
 
 class CapabilityOptionKind(StrEnum):
@@ -70,13 +99,13 @@ class CapabilityOptionSpec(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    name: str
-    label: str
+    name: StrictStr
+    label: StrictStr
     type: CapabilityOptionKind
-    default_value: str | int | float | bool | None = Field(..., alias="defaultValue")
+    default_value: StrictStr | StrictInt | StrictFloat | StrictBool | None = Field(..., alias="defaultValue")
     choices: list[CapabilityChoice]
-    min: float | None
-    max: float | None
+    min: StrictFloat | None
+    max: StrictFloat | None
 
 
 class CodecProfileFamily(StrEnum):
@@ -86,9 +115,63 @@ class CodecProfileFamily(StrEnum):
     SOFTWARE = "software"
 
 
+class ColorFilterParams(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    brightness: confloat(ge=-1.0, le=1.0, strict=True) = None
+    contrast: confloat(ge=0.0, le=3.0, strict=True) = None
+    saturation: confloat(ge=0.0, le=3.0, strict=True) = None
+
+
+class ColorFilterStep(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["color"]
+    enabled: StrictBool
+    params: ColorFilterParams
+
+
+class CropFilterParams(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    x: conint(ge=0, strict=True) = None
+    y: conint(ge=0, strict=True) = None
+    width: conint(ge=1, strict=True) = None
+    height: conint(ge=1, strict=True) = None
+
+
+class CropFilterStep(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["crop"]
+    enabled: StrictBool
+    params: CropFilterParams
+
+
 class DecodeMode(StrEnum):
     SOFTWARE = "software"
     HARDWARE = "hardware"
+
+
+class DenoiseFilterParams(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    strength: confloat(ge=0.0, le=20.0, strict=True) = None
+    color_strength: confloat(ge=0.0, le=20.0, strict=True) = Field(default=None, alias="colorStrength")
+
+
+class DenoiseFilterStep(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["denoise"]
+    enabled: StrictBool
+    params: DenoiseFilterParams
 
 
 class EnvironmentCheckSource(StrEnum):
@@ -123,8 +206,8 @@ class HardwareDeviceOptionSpec(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    value: str
-    label: str
+    value: StrictStr
+    label: StrictStr
 
 
 class InferenceEngine(StrEnum):
@@ -143,28 +226,28 @@ class ModelEngineMetricInfo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    gflops_per_megapixel: float | None = Field(..., alias="gflopsPerMegapixel")
-    activation_bytes_per_megapixel: float | None = Field(..., alias="activationBytesPerMegapixel")
-    runtime_overhead_bytes: conint(ge=0) | None = Field(..., alias="runtimeOverheadBytes")
-    runtime_frame_count: conint(ge=0) | None = Field(..., alias="runtimeFrameCount")
-    input_modulo: conint(ge=0) | None = Field(..., alias="inputModulo")
-    analysis_status: str = Field(..., alias="analysisStatus")
-    analysis_notes: list[str] = Field(..., alias="analysisNotes")
+    gflops_per_megapixel: StrictFloat | None = Field(..., alias="gflopsPerMegapixel")
+    activation_bytes_per_megapixel: StrictFloat | None = Field(..., alias="activationBytesPerMegapixel")
+    runtime_overhead_bytes: conint(ge=0, strict=True) | None = Field(..., alias="runtimeOverheadBytes")
+    runtime_frame_count: conint(ge=0, strict=True) | None = Field(..., alias="runtimeFrameCount")
+    input_modulo: conint(ge=0, strict=True) | None = Field(..., alias="inputModulo")
+    analysis_status: StrictStr = Field(..., alias="analysisStatus")
+    analysis_notes: list[StrictStr] = Field(..., alias="analysisNotes")
 
 
 class ModelMetricInfo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    parameter_count: conint(ge=0) | None = Field(..., alias="parameterCount")
-    parameter_bytes: conint(ge=0) | None = Field(..., alias="parameterBytes")
-    gflops_per_megapixel: float | None = Field(..., alias="gflopsPerMegapixel")
-    activation_bytes_per_megapixel: float | None = Field(..., alias="activationBytesPerMegapixel")
-    runtime_overhead_bytes: conint(ge=0) | None = Field(..., alias="runtimeOverheadBytes")
-    runtime_frame_count: conint(ge=0) | None = Field(..., alias="runtimeFrameCount")
-    input_modulo: conint(ge=0) | None = Field(..., alias="inputModulo")
-    analysis_status: str = Field(..., alias="analysisStatus")
-    analysis_notes: list[str] = Field(..., alias="analysisNotes")
+    parameter_count: conint(ge=0, strict=True) | None = Field(..., alias="parameterCount")
+    parameter_bytes: conint(ge=0, strict=True) | None = Field(..., alias="parameterBytes")
+    gflops_per_megapixel: StrictFloat | None = Field(..., alias="gflopsPerMegapixel")
+    activation_bytes_per_megapixel: StrictFloat | None = Field(..., alias="activationBytesPerMegapixel")
+    runtime_overhead_bytes: conint(ge=0, strict=True) | None = Field(..., alias="runtimeOverheadBytes")
+    runtime_frame_count: conint(ge=0, strict=True) | None = Field(..., alias="runtimeFrameCount")
+    input_modulo: conint(ge=0, strict=True) | None = Field(..., alias="inputModulo")
+    analysis_status: StrictStr = Field(..., alias="analysisStatus")
+    analysis_notes: list[StrictStr] = Field(..., alias="analysisNotes")
     engine_metrics: dict[str, ModelEngineMetricInfo] = Field(..., alias="engineMetrics")
 
 
@@ -172,8 +255,8 @@ class ModelVariantInfo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    name: str
-    label: str
+    name: StrictStr
+    label: StrictStr
     metrics: ModelMetricInfo
 
 
@@ -181,9 +264,29 @@ class OutputConfig(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    output_dir: str | None = Field(..., alias="outputDir")
-    open_on_complete: bool = Field(..., alias="openOnComplete")
-    segment_frames: conint(ge=1) = Field(..., alias="segmentFrames")
+    output_dir: constr(pattern=r"\S", strict=True) | None = Field(..., alias="outputDir")
+    open_on_complete: StrictBool = Field(..., alias="openOnComplete")
+    segment_frames: conint(ge=1, strict=True) = Field(..., alias="segmentFrames")
+
+
+class PadFilterParams(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    top: conint(ge=0, strict=True) = None
+    bottom: conint(ge=0, strict=True) = None
+    left: conint(ge=0, strict=True) = None
+    right: conint(ge=0, strict=True) = None
+    color: constr(pattern=r"^#?[0-9A-Fa-f]{6}$", strict=True) = None
+
+
+class PadFilterStep(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["pad"]
+    enabled: StrictBool
+    params: PadFilterParams
 
 
 class ProcessOrder(StrEnum):
@@ -203,9 +306,9 @@ class RateControlModeSpec(BaseModel):
         extra="forbid",
     )
     mode: RateControlMode
-    label: str
-    default_value: str | int | float = Field(..., alias="defaultValue")
-    unit: str
+    label: StrictStr
+    default_value: StrictStr | StrictInt | StrictFloat = Field(..., alias="defaultValue")
+    unit: StrictStr
 
 
 class ResumeInspectionEventType(StrEnum):
@@ -227,11 +330,11 @@ class ResumeStatusPayload(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    resumed: bool
-    completed_chunks: conint(ge=0) = Field(..., alias="completedChunks")
-    completed_output_frames: conint(ge=0) = Field(..., alias="completedOutputFrames")
-    start_source_frame: conint(ge=0) = Field(..., alias="startSourceFrame")
-    total_output_frames: conint(ge=0) = Field(..., alias="totalOutputFrames")
+    resumed: StrictBool
+    completed_chunks: conint(ge=0, strict=True) = Field(..., alias="completedChunks")
+    completed_output_frames: conint(ge=0, strict=True) = Field(..., alias="completedOutputFrames")
+    start_source_frame: conint(ge=0, strict=True) = Field(..., alias="startSourceFrame")
+    total_output_frames: conint(ge=0, strict=True) = Field(..., alias="totalOutputFrames")
 
 
 class RuntimeMode(StrEnum):
@@ -240,16 +343,64 @@ class RuntimeMode(StrEnum):
     EXPECTED_BUNDLED = "expected-bundled"
 
 
+class Mode(StrEnum):
+    FACTOR = "factor"
+    RESOLUTION = "resolution"
+
+
+class Interpolation(StrEnum):
+    LANCZOS4 = "lanczos4"
+    CUBIC = "cubic"
+    AREA = "area"
+    LINEAR = "linear"
+
+
+class ScaleFilterParams(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    mode: Mode = None
+    factor: confloat(gt=0.0, strict=True) = None
+    width: conint(ge=1, strict=True) = None
+    height: conint(ge=1, strict=True) = None
+    interpolation: Interpolation = None
+
+
+class ScaleFilterStep(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["scale"]
+    enabled: StrictBool
+    params: ScaleFilterParams
+
+
 class SegmentManifest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     version: Literal[3]
-    signature: constr(min_length=1)
+    signature: constr(min_length=1, strict=True)
     created_at: AwareDatetime
-    input_path: str
-    output_path: str
+    input_path: StrictStr
+    output_path: StrictStr
     config_snapshot: dict[str, Any]
+
+
+class SharpenFilterParams(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    amount: confloat(ge=0.0, le=1.0, strict=True) = None
+
+
+class SharpenFilterStep(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Literal["sharpen"]
+    enabled: StrictBool
+    params: SharpenFilterParams
 
 
 class ShellTaskErrorCode(StrEnum):
@@ -263,6 +414,7 @@ class ShellTaskErrorCode(StrEnum):
     BACKEND_NO_JSON = "backend_no_json"
     CONTROLLER_UNAVAILABLE = "controller_unavailable"
     BACKEND_PROBE_FAILED = "backend_probe_failed"
+    PROCESS_CONTROL_UNSUPPORTED = "process_control_unsupported"
 
 
 class TaskCancelledReason(StrEnum):
@@ -274,9 +426,9 @@ class TaskCompletedPayload(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    output_path: str = Field(..., alias="outputPath")
-    processed_frames: conint(ge=0) = Field(..., alias="processedFrames")
-    time_seconds: float = Field(..., alias="timeSeconds")
+    output_path: StrictStr = Field(..., alias="outputPath")
+    processed_frames: conint(ge=0, strict=True) = Field(..., alias="processedFrames")
+    time_seconds: StrictFloat = Field(..., alias="timeSeconds")
 
 
 class TaskControlKind(StrEnum):
@@ -303,6 +455,7 @@ class TaskErrorCode(StrEnum):
     BACKEND_NO_JSON = "backend_no_json"
     CONTROLLER_UNAVAILABLE = "controller_unavailable"
     BACKEND_PROBE_FAILED = "backend_probe_failed"
+    PROCESS_CONTROL_UNSUPPORTED = "process_control_unsupported"
 
 
 class TaskErrorPayload(BaseModel):
@@ -310,7 +463,7 @@ class TaskErrorPayload(BaseModel):
         extra="forbid",
     )
     code: TaskErrorCode
-    message: str
+    message: StrictStr
     details: dict[str, Any] | None
 
 
@@ -318,19 +471,19 @@ class TaskLogPayload(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    message: str
+    message: StrictStr
 
 
 class TaskProgressPayload(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    current: conint(ge=0)
-    total: conint(ge=0)
-    percent: float
-    stage: str
-    stage_index: conint(ge=0) = Field(..., alias="stageIndex")
-    stage_total: conint(ge=0) = Field(..., alias="stageTotal")
+    current: conint(ge=0, strict=True)
+    total: conint(ge=0, strict=True)
+    percent: StrictFloat
+    stage: StrictStr
+    stage_index: conint(ge=0, strict=True) = Field(..., alias="stageIndex")
+    stage_total: conint(ge=0, strict=True) = Field(..., alias="stageTotal")
     metrics: dict[str, Any] | None = None
 
 
@@ -353,26 +506,25 @@ class VideoInfo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    fps: float
-    width: conint(ge=0)
-    height: conint(ge=0)
-    video_codec: str = Field(..., alias="videoCodec")
+    fps: StrictFloat
+    width: conint(ge=0, strict=True)
+    height: conint(ge=0, strict=True)
+    video_codec: StrictStr = Field(..., alias="videoCodec")
 
 
 class AlgorithmInfo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    name: str
+    name: StrictStr
     family: AlgorithmFamily
     tensor_backends: list[TensorBackend] = Field(..., alias="tensorBackends")
-    models: list[str]
-    onnx_models: list[str] = Field(..., alias="onnxModels")
+    models: list[StrictStr]
+    onnx_models: list[StrictStr] = Field(..., alias="onnxModels")
     model_details: list[ModelVariantInfo] = Field(..., alias="modelDetails")
     onnx_model_details: list[ModelVariantInfo] = Field(..., alias="onnxModelDetails")
-    scale_factors: list[conint(ge=0)] = Field(..., alias="scaleFactors")
-    fixed_scale_factor: conint(ge=0) | None = Field(..., alias="fixedScaleFactor")
-    default_num_frames: conint(ge=0) | None = Field(..., alias="defaultNumFrames")
+    fixed_scale_factor: conint(ge=0, strict=True) | None = Field(..., alias="fixedScaleFactor")
+    default_num_frames: conint(ge=0, strict=True) | None = Field(..., alias="defaultNumFrames")
     input_frame_mode: InputFrameMode = Field(..., alias="inputFrameMode")
 
 
@@ -380,12 +532,12 @@ class CodecProfileSpec(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    name: str
-    label: str
+    name: StrictStr
+    label: StrictStr
     family: CodecProfileFamily
-    codec: str
-    available: bool
-    hardware_devices: list[str] = Field(..., alias="hardwareDevices")
+    codec: StrictStr
+    available: StrictBool
+    hardware_devices: list[StrictStr] = Field(..., alias="hardwareDevices")
     options: list[CapabilityOptionSpec]
     rate_control_modes: list[RateControlModeSpec] | None = Field(default=None, alias="rateControlModes")
     hardware_device_options: dict[str, Any] | None = Field(default=None, alias="hardwareDeviceOptions")
@@ -396,36 +548,49 @@ class DecodeConfig(BaseModel):
         extra="forbid",
     )
     mode: DecodeMode
-    hwaccel: str | None
-    hwaccel_device: str | None = Field(..., alias="hwaccelDevice")
-    decoder: str | None
-    options: dict[str, str | int | float | bool]
+    hwaccel: StrictStr | None
+    hwaccel_device: StrictStr | None = Field(..., alias="hwaccelDevice")
+    decoder: StrictStr | None
+    options: dict[str, StrictStr | StrictInt | StrictFloat | StrictBool]
 
 
 class FfmpegInfo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    available: bool
-    hwaccels: list[str]
+    available: StrictBool
+    hwaccels: list[StrictStr]
     encoder_profiles: list[CodecProfileSpec] = Field(..., alias="encoderProfiles")
     decoder_profiles: list[CodecProfileSpec] = Field(..., alias="decoderProfiles")
 
 
-class FilterStep(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
+class FilterStep(
+    RootModel[
+        ScaleFilterStep
+        | CropFilterStep
+        | PadFilterStep
+        | SharpenFilterStep
+        | DenoiseFilterStep
+        | ColorFilterStep
+        | AnimeCleanupFilterStep
+    ]
+):
+    root: (
+        ScaleFilterStep
+        | CropFilterStep
+        | PadFilterStep
+        | SharpenFilterStep
+        | DenoiseFilterStep
+        | ColorFilterStep
+        | AnimeCleanupFilterStep
     )
-    kind: FilterStepKind
-    enabled: bool
-    params: dict[str, Any]
 
 
 class GpuAdapter(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    name: str
+    name: StrictStr
     vendor: GpuVendor
 
 
@@ -440,23 +605,23 @@ class InterpolationConfig(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    enabled: bool
-    target_fps: PositiveFloat = Field(..., alias="targetFps")
-    multi: conint(ge=2)
-    algorithm: str
-    model: str
-    onnx_model: str | None = Field(..., alias="onnxModel")
-    scale: PositiveFloat
-    fp16: bool
+    enabled: StrictBool
+    target_fps: confloat(gt=0.0, strict=True) = Field(..., alias="targetFps")
+    multi: conint(ge=2, strict=True)
+    algorithm: StrictStr
+    model: StrictStr
+    onnx_model: StrictStr | None = Field(..., alias="onnxModel")
+    scale: confloat(gt=0.0, strict=True)
+    fp16: StrictBool
     tensor_backend: TensorBackend = Field(..., alias="tensorBackend")
-    engine: str
+    engine: InferenceEngine
 
 
 class PostprocessConfig(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    enabled: bool
+    enabled: StrictBool
     filters: list[FilterStep]
 
 
@@ -464,7 +629,7 @@ class PreprocessConfig(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    enabled: bool
+    enabled: StrictBool
     filters: list[FilterStep]
 
 
@@ -473,7 +638,7 @@ class RateControlConfig(BaseModel):
         extra="forbid",
     )
     mode: RateControlMode
-    value: str | int | float
+    value: StrictStr | StrictInt | StrictFloat
 
 
 class ResumeInspectionResult(BaseModel):
@@ -482,28 +647,28 @@ class ResumeInspectionResult(BaseModel):
     )
     type: ResumeInspectionEventType
     pipeline_kind: ResumePipelineKind
-    output_path: str = Field(..., alias="outputPath")
-    input_path: str
-    final_exists: bool = Field(..., alias="finalExists")
-    sidecar_exists: bool = Field(..., alias="sidecarExists")
-    signature_match: bool = Field(..., alias="signatureMatch")
-    completed_chunks: conint(ge=0) = Field(..., alias="completedChunks")
-    completed_output_frames: conint(ge=0) = Field(..., alias="completedOutputFrames")
-    next_source_frame: conint(ge=0) = Field(..., alias="nextSourceFrame")
-    total_output_frames: conint(ge=0) = Field(..., alias="totalOutputFrames")
+    output_path: StrictStr = Field(..., alias="outputPath")
+    input_path: StrictStr
+    final_exists: StrictBool = Field(..., alias="finalExists")
+    sidecar_exists: StrictBool = Field(..., alias="sidecarExists")
+    signature_match: StrictBool = Field(..., alias="signatureMatch")
+    completed_chunks: conint(ge=0, strict=True) = Field(..., alias="completedChunks")
+    completed_output_frames: conint(ge=0, strict=True) = Field(..., alias="completedOutputFrames")
+    next_source_frame: conint(ge=0, strict=True) = Field(..., alias="nextSourceFrame")
+    total_output_frames: conint(ge=0, strict=True) = Field(..., alias="totalOutputFrames")
 
 
 class SuperResolutionConfig(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    enabled: bool
-    scale_factor: PositiveFloat = Field(..., alias="scaleFactor")
-    algorithm: str
-    onnx_model: str | None = Field(..., alias="onnxModel")
+    enabled: StrictBool
+    scale_factor: confloat(gt=0.0, strict=True) = Field(..., alias="scaleFactor")
+    algorithm: StrictStr
+    onnx_model: StrictStr | None = Field(..., alias="onnxModel")
     tensor_backend: TensorBackend = Field(..., alias="tensorBackend")
-    engine: str
-    num_frames: conint(ge=1) = Field(..., alias="numFrames")
+    engine: InferenceEngine
+    num_frames: conint(ge=1, strict=True) = Field(..., alias="numFrames")
 
 
 class TaskCancelledPayload(BaseModel):
@@ -530,12 +695,12 @@ class EncodeConfig(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    codec: str
-    family: str
-    container: str
-    keep_audio: bool = Field(..., alias="keepAudio")
+    codec: StrictStr
+    family: StrictStr
+    container: StrictStr
+    keep_audio: StrictBool = Field(..., alias="keepAudio")
     rate_control: RateControlConfig = Field(..., alias="rateControl")
-    options: dict[str, str | int | float | bool]
+    options: dict[str, StrictStr | StrictInt | StrictFloat | StrictBool]
 
 
 class EnvironmentCheckResult(BaseModel):
@@ -554,15 +719,25 @@ class FilterPipelineConfig(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    enabled: bool
+    enabled: StrictBool
     filters: list[FilterStep]
+
+
+class RuntimeConfigBundle(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    decode: DecodeConfig
+    workflow: WorkflowConfig
+    encode: EncodeConfig
+    output: OutputConfig
 
 
 class TaskRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    input_path: str = Field(..., alias="inputPath")
+    input_path: StrictStr = Field(..., alias="inputPath")
     decode_config: DecodeConfig = Field(..., alias="decodeConfig")
     workflow_config: WorkflowConfig = Field(..., alias="workflowConfig")
     encode_config: EncodeConfig = Field(..., alias="encodeConfig")
@@ -594,7 +769,7 @@ class EnvironmentCacheEntry(BaseModel):
     )
     schema_version: Literal[14] = Field(..., alias="schemaVersion")
     checked_at: AwareDatetime = Field(..., alias="checkedAt")
-    fingerprint: constr(min_length=1)
+    fingerprint: constr(min_length=1, strict=True)
     result: EnvironmentCheckResult
 
 
@@ -604,7 +779,7 @@ class EnvironmentCheckPayload(BaseModel):
     )
     result: EnvironmentCheckResult
     source: EnvironmentCheckSource
-    checked_at: str = Field(..., alias="checkedAt")
+    checked_at: StrictStr = Field(..., alias="checkedAt")
 
 
 class VpBoundaryContracts(BaseModel):
@@ -613,6 +788,8 @@ class VpBoundaryContracts(BaseModel):
     )
     algorithm_family: AlgorithmFamily = Field(..., alias="AlgorithmFamily")
     algorithm_info: AlgorithmInfo = Field(..., alias="AlgorithmInfo")
+    anime_cleanup_filter_params: AnimeCleanupFilterParams = Field(..., alias="AnimeCleanupFilterParams")
+    anime_cleanup_filter_step: AnimeCleanupFilterStep = Field(..., alias="AnimeCleanupFilterStep")
     backend_task_error_code: BackendTaskErrorCode = Field(..., alias="BackendTaskErrorCode")
     backend_task_error_payload: BackendTaskErrorPayload = Field(..., alias="BackendTaskErrorPayload")
     capability_choice: CapabilityChoice = Field(..., alias="CapabilityChoice")
@@ -620,8 +797,14 @@ class VpBoundaryContracts(BaseModel):
     capability_option_spec: CapabilityOptionSpec = Field(..., alias="CapabilityOptionSpec")
     codec_profile_family: CodecProfileFamily = Field(..., alias="CodecProfileFamily")
     codec_profile_spec: CodecProfileSpec = Field(..., alias="CodecProfileSpec")
+    color_filter_params: ColorFilterParams = Field(..., alias="ColorFilterParams")
+    color_filter_step: ColorFilterStep = Field(..., alias="ColorFilterStep")
+    crop_filter_params: CropFilterParams = Field(..., alias="CropFilterParams")
+    crop_filter_step: CropFilterStep = Field(..., alias="CropFilterStep")
     decode_config: DecodeConfig = Field(..., alias="DecodeConfig")
     decode_mode: DecodeMode = Field(..., alias="DecodeMode")
+    denoise_filter_params: DenoiseFilterParams = Field(..., alias="DenoiseFilterParams")
+    denoise_filter_step: DenoiseFilterStep = Field(..., alias="DenoiseFilterStep")
     encode_config: EncodeConfig = Field(..., alias="EncodeConfig")
     environment_cache_entry: EnvironmentCacheEntry = Field(..., alias="EnvironmentCacheEntry")
     environment_check_payload: EnvironmentCheckPayload = Field(..., alias="EnvironmentCheckPayload")
@@ -643,6 +826,8 @@ class VpBoundaryContracts(BaseModel):
     model_metric_info: ModelMetricInfo = Field(..., alias="ModelMetricInfo")
     model_variant_info: ModelVariantInfo = Field(..., alias="ModelVariantInfo")
     output_config: OutputConfig = Field(..., alias="OutputConfig")
+    pad_filter_params: PadFilterParams = Field(..., alias="PadFilterParams")
+    pad_filter_step: PadFilterStep = Field(..., alias="PadFilterStep")
     postprocess_config: PostprocessConfig = Field(..., alias="PostprocessConfig")
     preprocess_config: PreprocessConfig = Field(..., alias="PreprocessConfig")
     process_order: ProcessOrder = Field(..., alias="ProcessOrder")
@@ -654,8 +839,13 @@ class VpBoundaryContracts(BaseModel):
     resume_mode: ResumeMode = Field(..., alias="ResumeMode")
     resume_pipeline_kind: ResumePipelineKind = Field(..., alias="ResumePipelineKind")
     resume_status_payload: ResumeStatusPayload = Field(..., alias="ResumeStatusPayload")
+    runtime_config_bundle: RuntimeConfigBundle = Field(..., alias="RuntimeConfigBundle")
     runtime_mode: RuntimeMode = Field(..., alias="RuntimeMode")
+    scale_filter_params: ScaleFilterParams = Field(..., alias="ScaleFilterParams")
+    scale_filter_step: ScaleFilterStep = Field(..., alias="ScaleFilterStep")
     segment_manifest: SegmentManifest = Field(..., alias="SegmentManifest")
+    sharpen_filter_params: SharpenFilterParams = Field(..., alias="SharpenFilterParams")
+    sharpen_filter_step: SharpenFilterStep = Field(..., alias="SharpenFilterStep")
     shell_task_error_code: ShellTaskErrorCode = Field(..., alias="ShellTaskErrorCode")
     super_resolution_config: SuperResolutionConfig = Field(..., alias="SuperResolutionConfig")
     task_cancelled_payload: TaskCancelledPayload = Field(..., alias="TaskCancelledPayload")

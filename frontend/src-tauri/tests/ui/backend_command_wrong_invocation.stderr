@@ -1,0 +1,13 @@
+error[E0308]: mismatched types
+  --> tests/ui/backend_command_wrong_invocation.rs:34:44
+   |
+34 |     accepts_invocation::<InspectVideoSpec>(CheckEnvironmentInvocation);
+   |     -------------------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `InspectVideoInvocation`, found `CheckEnvironmentInvocation`
+   |     |
+   |     arguments to this function are incorrect
+   |
+note: function defined here
+  --> tests/ui/backend_command_wrong_invocation.rs:31:4
+   |
+31 | fn accepts_invocation<S: BackendCommandSpec>(_invocation: S::Invocation) {}
+   |    ^^^^^^^^^^^^^^^^^^                        --------------------------

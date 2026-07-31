@@ -1,37 +1,118 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/filter-step.schema.json",
   "title": "FilterStep",
-  "type": "object",
-  "properties": {
-    "kind": {
-      "$ref": "#/$defs/FilterStepKind"
-    },
-    "enabled": {
-      "type": "boolean"
-    },
-    "params": {
-      "type": "object",
-      "additionalProperties": true
-    }
-  },
-  "required": [
-    "kind",
-    "enabled",
-    "params"
+  "oneOf": [
+    { "$ref": "#/$defs/ScaleFilterStep" },
+    { "$ref": "#/$defs/CropFilterStep" },
+    { "$ref": "#/$defs/PadFilterStep" },
+    { "$ref": "#/$defs/SharpenFilterStep" },
+    { "$ref": "#/$defs/DenoiseFilterStep" },
+    { "$ref": "#/$defs/ColorFilterStep" },
+    { "$ref": "#/$defs/AnimeCleanupFilterStep" }
   ],
   "$defs": {
     "FilterStepKind": {
       "type": "string",
-      "enum": [
-        "scale",
-        "crop",
-        "pad",
-        "sharpen",
-        "denoise",
-        "color",
-        "anime_cleanup"
-      ]
+      "enum": ["scale", "crop", "pad", "sharpen", "denoise", "color", "anime_cleanup"]
+    },
+    "ScaleFilterParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "type": "string", "enum": ["factor", "resolution"] },
+        "factor": { "type": "number", "exclusiveMinimum": 0 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "interpolation": { "type": "string", "enum": ["lanczos4", "cubic", "area", "linear"] }
+      }
+    },
+    "CropFilterParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "integer", "minimum": 0 },
+        "y": { "type": "integer", "minimum": 0 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "PadFilterParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "top": { "type": "integer", "minimum": 0 },
+        "bottom": { "type": "integer", "minimum": 0 },
+        "left": { "type": "integer", "minimum": 0 },
+        "right": { "type": "integer", "minimum": 0 },
+        "color": { "type": "string", "pattern": "^#?[0-9A-Fa-f]{6}$" }
+      }
+    },
+    "SharpenFilterParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "amount": { "type": "number", "minimum": 0, "maximum": 1 } }
+    },
+    "DenoiseFilterParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strength": { "type": "number", "minimum": 0, "maximum": 20 },
+        "colorStrength": { "type": "number", "minimum": 0, "maximum": 20 }
+      }
+    },
+    "ColorFilterParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "brightness": { "type": "number", "minimum": -1, "maximum": 1 },
+        "contrast": { "type": "number", "minimum": 0, "maximum": 3 },
+        "saturation": { "type": "number", "minimum": 0, "maximum": 3 }
+      }
+    },
+    "AnimeCleanupFilterParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile": { "type": "string", "enum": ["clean-lines", "thin-outline", "balanced-cel"] },
+        "denoise": { "type": "number", "minimum": 0, "maximum": 100 },
+        "edgeBoost": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "ScaleFilterStep": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "kind": { "const": "scale" }, "enabled": { "type": "boolean" }, "params": { "$ref": "#/$defs/ScaleFilterParams" } },
+      "required": ["kind", "enabled", "params"]
+    },
+    "CropFilterStep": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "kind": { "const": "crop" }, "enabled": { "type": "boolean" }, "params": { "$ref": "#/$defs/CropFilterParams" } },
+      "required": ["kind", "enabled", "params"]
+    },
+    "PadFilterStep": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "kind": { "const": "pad" }, "enabled": { "type": "boolean" }, "params": { "$ref": "#/$defs/PadFilterParams" } },
+      "required": ["kind", "enabled", "params"]
+    },
+    "SharpenFilterStep": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "kind": { "const": "sharpen" }, "enabled": { "type": "boolean" }, "params": { "$ref": "#/$defs/SharpenFilterParams" } },
+      "required": ["kind", "enabled", "params"]
+    },
+    "DenoiseFilterStep": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "kind": { "const": "denoise" }, "enabled": { "type": "boolean" }, "params": { "$ref": "#/$defs/DenoiseFilterParams" } },
+      "required": ["kind", "enabled", "params"]
+    },
+    "ColorFilterStep": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "kind": { "const": "color" }, "enabled": { "type": "boolean" }, "params": { "$ref": "#/$defs/ColorFilterParams" } },
+      "required": ["kind", "enabled", "params"]
+    },
+    "AnimeCleanupFilterStep": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "kind": { "const": "anime_cleanup" }, "enabled": { "type": "boolean" }, "params": { "$ref": "#/$defs/AnimeCleanupFilterParams" } },
+      "required": ["kind", "enabled", "params"]
     }
-  },
-  "additionalProperties": false
+  }
 }

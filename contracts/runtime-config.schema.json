@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/runtime-config.schema.json",
+  "title": "RuntimeConfigBundle",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "decode": { "$ref": "./decode-config.schema.json" },
+    "workflow": { "$ref": "./workflow-config.schema.json" },
+    "encode": { "$ref": "./encode-config.schema.json" },
+    "output": { "$ref": "./output-config.schema.json" }
+  },
+  "required": ["decode", "workflow", "encode", "output"]
+}

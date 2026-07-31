@@ -1,0 +1,13 @@
+export interface FixturePort {
+  used(): void
+  unused(): void
+}
+
+interface UnrelatedService {
+  unused(): void
+}
+
+export function consumeFixturePort(port: FixturePort, unrelated: UnrelatedService): void {
+  port.used()
+  unrelated.unused()
+}

@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from app.errors import TaskErrorCode
 from app.generated import contracts as generated
-from app.models import DecodeConfig, OutputConfig, WorkflowConfig
+from app.generated.contracts import DecodeConfig, OutputConfig, WorkflowConfig
 
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "contracts"
 
@@ -45,11 +45,10 @@ def _workflow() -> dict[str, object]:
     }
 
 
-def test_config_models_are_generated_or_thin_domain_subclasses() -> None:
+def test_config_models_are_generated_boundary_types() -> None:
     assert DecodeConfig is generated.DecodeConfig
     assert WorkflowConfig is generated.WorkflowConfig
-    assert issubclass(OutputConfig, generated.OutputConfig)
-    assert OutputConfig.model_fields.keys() == generated.OutputConfig.model_fields.keys()
+    assert OutputConfig is generated.OutputConfig
 
 
 def test_generated_config_rejects_unknown_fields() -> None:

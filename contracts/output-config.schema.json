@@ -7,7 +7,8 @@
       "type": [
         "string",
         "null"
-      ]
+      ],
+      "pattern": "\\S"
     },
     "openOnComplete": {
       "type": "boolean"

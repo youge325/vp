@@ -1,0 +1,3 @@
+import type { TaskErrorPayload } from '@/types/generated/contracts'
+
+export type ErrorCode = TaskErrorPayload['code']

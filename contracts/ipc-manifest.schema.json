@@ -7,24 +7,52 @@
   "required": [
     "schemaVersion",
     "protocolConstants",
+    "protocolLimits",
+    "backendProcessCommand",
     "backendTaskStream",
     "backendOneShotCommands",
+    "stageWorkerCommand",
     "commands",
     "events"
   ],
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "const": 2 },
+    "schemaVersion": { "const": 3 },
     "protocolConstants": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["terminalProgressPrefix"],
+      "required": ["terminalProgressPrefix", "stageWorkerEventPrefix"],
       "properties": {
         "terminalProgressPrefix": {
           "type": "string",
           "minLength": 1
+        },
+        "stageWorkerEventPrefix": {
+          "type": "string",
+          "minLength": 1
         }
       }
+    },
+    "protocolLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ndjsonLineBytes",
+        "oneShotStdoutBytes",
+        "stderrTailBytes",
+        "errorSummaryBytes",
+        "terminationReapMs"
+      ],
+      "properties": {
+        "ndjsonLineBytes": { "$ref": "#/$defs/positiveInteger" },
+        "oneShotStdoutBytes": { "$ref": "#/$defs/positiveInteger" },
+        "stderrTailBytes": { "$ref": "#/$defs/positiveInteger" },
+        "errorSummaryBytes": { "$ref": "#/$defs/positiveInteger" },
+        "terminationReapMs": { "$ref": "#/$defs/positiveInteger" }
+      }
+    },
+    "backendProcessCommand": {
+      "$ref": "#/$defs/backendProcessCommand"
     },
     "backendTaskStream": {
       "type": "array",
@@ -39,6 +67,9 @@
       "items": {
         "$ref": "#/$defs/backendOneShotEnvelope"
       }
+    },
+    "stageWorkerCommand": {
+      "$ref": "#/$defs/stageWorkerCommand"
     },
     "commands": {
       "type": "array",
@@ -72,6 +103,57 @@
     }
   },
   "$defs": {
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "commandDeadlines": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stdinMs", "totalMs", "terminationReapLimit"],
+      "properties": {
+        "stdinMs": { "$ref": "#/$defs/positiveInteger" },
+        "totalMs": {
+          "anyOf": [
+            { "$ref": "#/$defs/positiveInteger" },
+            { "type": "null" }
+          ]
+        },
+        "terminationReapLimit": { "const": "terminationReapMs" }
+      }
+    },
+    "backendProcessCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ipcCommand",
+        "subcommand",
+        "stdinPayload",
+        "stdinField",
+        "cliArguments",
+        "eventPayload",
+        "discriminants",
+        "deadlines"
+      ],
+      "properties": {
+        "ipcCommand": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "subcommand": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "stdinPayload": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
+        "stdinField": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]*$" },
+        "cliArguments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/cliArgument" }
+        },
+        "eventPayload": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
+        "discriminants": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+        },
+        "deadlines": { "$ref": "#/$defs/commandDeadlines" }
+      }
+    },
     "backendEnvelope": {
       "type": "object",
       "additionalProperties": false,
@@ -94,7 +176,17 @@
     "backendOneShotEnvelope": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["envelope", "payload", "schemaRef", "ipcCommand", "subcommand"],
+      "required": [
+        "envelope",
+        "payload",
+        "schemaRef",
+        "ipcCommand",
+        "subcommand",
+        "stdinPayload",
+        "stdinField",
+        "cliArguments",
+        "deadlines"
+      ],
       "properties": {
         "envelope": {
           "type": "string",
@@ -115,6 +207,105 @@
         "subcommand": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "stdinPayload": {
+          "anyOf": [
+            { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
+            { "type": "null" }
+          ]
+        },
+        "stdinField": {
+          "anyOf": [
+            { "type": "string", "pattern": "^[a-z][A-Za-z0-9]*$" },
+            { "type": "null" }
+          ]
+        },
+        "cliArguments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/cliArgument" }
+        },
+        "deadlines": {
+          "$ref": "#/$defs/commandDeadlines"
+        }
+      }
+    },
+    "cliArgument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["flag"],
+      "properties": {
+        "flag": {
+          "type": "string",
+          "pattern": "^--[a-z][a-z0-9-]*$"
+        },
+        "field": {
+          "type": "string",
+          "pattern": "^[a-z][A-Za-z0-9]*$"
+        },
+        "valueType": {
+          "anyOf": [
+            { "const": "string" },
+            { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" }
+          ]
+        },
+        "optional": { "type": "boolean" }
+      }
+    },
+    "stageWorkerCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "subcommand", "configFlag", "input", "output", "deadlines"],
+      "properties": {
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "subcommand": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "configFlag": {
+          "type": "string",
+          "pattern": "^--[a-z][a-z0-9-]*$"
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["configPayload", "stdinStream"],
+          "properties": {
+            "configPayload": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Za-z0-9]*$"
+            },
+            "stdinStream": { "const": "rawvideo-bytes" }
+          }
+        },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stdoutStream", "stderrPayloads"],
+          "properties": {
+            "stdoutStream": { "const": "rawvideo-bytes" },
+            "stderrPayloads": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Za-z0-9]*$"
+              }
+            }
+          }
+        },
+        "deadlines": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["totalMs", "terminationReapLimit"],
+          "properties": {
+            "totalMs": { "type": "null" },
+            "terminationReapLimit": { "const": "terminationReapMs" }
+          }
         }
       }
     }

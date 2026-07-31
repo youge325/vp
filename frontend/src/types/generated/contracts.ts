@@ -23,6 +23,14 @@ export type GpuVendor = "nvidia" | "intel" | "amd" | "hygon" | "other";
 export type InferenceEngine = "cuda" | "tensorrt" | "dcu";
 export type RuntimeMode = "external" | "bundled" | "expected-bundled";
 export type EnvironmentCheckSource = "cache" | "probe";
+export type FilterStep =
+  | ScaleFilterStep
+  | CropFilterStep
+  | PadFilterStep
+  | SharpenFilterStep
+  | DenoiseFilterStep
+  | ColorFilterStep
+  | AnimeCleanupFilterStep;
 export type FilterStepKind = "scale" | "crop" | "pad" | "sharpen" | "denoise" | "color" | "anime_cleanup";
 export type FpsMode = "multi" | "target";
 export type ProcessOrder = "super_resolution_then_interpolation" | "frame_interpolation_then_super_resolution";
@@ -39,7 +47,8 @@ export type ShellTaskErrorCode =
   | "persistence_failed"
   | "backend_no_json"
   | "controller_unavailable"
-  | "backend_probe_failed";
+  | "backend_probe_failed"
+  | "process_control_unsupported";
 export type TaskCancelledReason = "user" | "stalled";
 export type TaskControlKind = "pause" | "resume" | "cancel";
 export type TaskErrorCode =
@@ -59,11 +68,14 @@ export type TaskErrorCode =
   | "persistence_failed"
   | "backend_no_json"
   | "controller_unavailable"
-  | "backend_probe_failed";
+  | "backend_probe_failed"
+  | "process_control_unsupported";
 
 export interface VpBoundaryContracts {
   AlgorithmFamily: AlgorithmFamily;
   AlgorithmInfo: AlgorithmInfo;
+  AnimeCleanupFilterParams: AnimeCleanupFilterParams;
+  AnimeCleanupFilterStep: AnimeCleanupFilterStep;
   BackendTaskErrorCode: BackendTaskErrorCode;
   BackendTaskErrorPayload: BackendTaskErrorPayload;
   CapabilityChoice: CapabilityChoice;
@@ -71,8 +83,14 @@ export interface VpBoundaryContracts {
   CapabilityOptionSpec: CapabilityOptionSpec;
   CodecProfileFamily: CodecProfileFamily;
   CodecProfileSpec: CodecProfileSpec;
+  ColorFilterParams: ColorFilterParams;
+  ColorFilterStep: ColorFilterStep;
+  CropFilterParams: CropFilterParams;
+  CropFilterStep: CropFilterStep;
   DecodeConfig: DecodeConfig;
   DecodeMode: DecodeMode;
+  DenoiseFilterParams: DenoiseFilterParams;
+  DenoiseFilterStep: DenoiseFilterStep;
   EncodeConfig: EncodeConfig;
   EnvironmentCacheEntry: EnvironmentCacheEntry;
   EnvironmentCheckPayload: EnvironmentCheckPayload;
@@ -94,6 +112,8 @@ export interface VpBoundaryContracts {
   ModelMetricInfo: ModelMetricInfo;
   ModelVariantInfo: ModelVariantInfo;
   OutputConfig: OutputConfig;
+  PadFilterParams: PadFilterParams;
+  PadFilterStep: PadFilterStep;
   PostprocessConfig: PostprocessConfig;
   PreprocessConfig: PreprocessConfig;
   ProcessOrder: ProcessOrder;
@@ -106,7 +126,11 @@ export interface VpBoundaryContracts {
   ResumePipelineKind: ResumePipelineKind;
   ResumeStatusPayload: ResumeStatusPayload;
   RuntimeMode: RuntimeMode;
+  ScaleFilterParams: ScaleFilterParams;
+  ScaleFilterStep: ScaleFilterStep;
   SegmentManifest: SegmentManifest;
+  SharpenFilterParams: SharpenFilterParams;
+  SharpenFilterStep: SharpenFilterStep;
   ShellTaskErrorCode: ShellTaskErrorCode;
   SuperResolutionConfig: SuperResolutionConfig;
   TaskCancelledPayload: TaskCancelledPayload;
@@ -133,7 +157,6 @@ export interface AlgorithmInfo {
   onnxModels: string[];
   modelDetails: ModelVariantInfo[];
   onnxModelDetails: ModelVariantInfo[];
-  scaleFactors: number[];
   fixedScaleFactor: number | null;
   defaultNumFrames: number | null;
   inputFrameMode: InputFrameMode;
@@ -165,6 +188,16 @@ export interface ModelEngineMetricInfo {
   inputModulo: number | null;
   analysisStatus: string;
   analysisNotes: string[];
+}
+export interface AnimeCleanupFilterParams {
+  profile?: "clean-lines" | "thin-outline" | "balanced-cel";
+  denoise?: number;
+  edgeBoost?: number;
+}
+export interface AnimeCleanupFilterStep {
+  kind: "anime_cleanup";
+  enabled: boolean;
+  params: AnimeCleanupFilterParams;
 }
 export interface BackendTaskErrorPayload {
   code: BackendTaskErrorCode;
@@ -209,6 +242,27 @@ export interface HardwareDeviceOptionSpec {
   value: string;
   label: string;
 }
+export interface ColorFilterParams {
+  brightness?: number;
+  contrast?: number;
+  saturation?: number;
+}
+export interface ColorFilterStep {
+  kind: "color";
+  enabled: boolean;
+  params: ColorFilterParams;
+}
+export interface CropFilterParams {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}
+export interface CropFilterStep {
+  kind: "crop";
+  enabled: boolean;
+  params: CropFilterParams;
+}
 export interface DecodeConfig {
   mode: DecodeMode;
   hwaccel: string | null;
@@ -217,6 +271,15 @@ export interface DecodeConfig {
   options: {
     [k: string]: string | number | boolean;
   };
+}
+export interface DenoiseFilterParams {
+  strength?: number;
+  colorStrength?: number;
+}
+export interface DenoiseFilterStep {
+  kind: "denoise";
+  enabled: boolean;
+  params: DenoiseFilterParams;
 }
 export interface EncodeConfig {
   codec: string;
@@ -273,12 +336,37 @@ export interface FilterPipelineConfig {
   enabled: boolean;
   filters: FilterStep[];
 }
-export interface FilterStep {
-  kind: FilterStepKind;
+export interface ScaleFilterStep {
+  kind: "scale";
   enabled: boolean;
-  params: {
-    [k: string]: unknown;
-  };
+  params: ScaleFilterParams;
+}
+export interface ScaleFilterParams {
+  mode?: "factor" | "resolution";
+  factor?: number;
+  width?: number;
+  height?: number;
+  interpolation?: "lanczos4" | "cubic" | "area" | "linear";
+}
+export interface PadFilterStep {
+  kind: "pad";
+  enabled: boolean;
+  params: PadFilterParams;
+}
+export interface PadFilterParams {
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
+  color?: string;
+}
+export interface SharpenFilterStep {
+  kind: "sharpen";
+  enabled: boolean;
+  params: SharpenFilterParams;
+}
+export interface SharpenFilterParams {
+  amount?: number;
 }
 export interface InterpolationConfig {
   enabled: boolean;
@@ -290,7 +378,7 @@ export interface InterpolationConfig {
   scale: number;
   fp16: boolean;
   tensorBackend: TensorBackend;
-  engine: string;
+  engine: InferenceEngine;
 }
 export interface OutputConfig {
   outputDir: string | null;
@@ -341,7 +429,7 @@ export interface SuperResolutionConfig {
   algorithm: string;
   onnxModel: string | null;
   tensorBackend: TensorBackend;
-  engine: string;
+  engine: InferenceEngine;
   numFrames: number;
 }
 export interface TaskCancelledPayload {

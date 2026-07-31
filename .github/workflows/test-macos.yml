@@ -1,0 +1,70 @@
+name: macOS Rust and Tauri Test
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/**'
+      - 'contracts/**'
+      - 'frontend/**'
+      - 'scripts/**'
+      - '.github/workflows/test-macos.yml'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/**'
+      - 'contracts/**'
+      - 'frontend/**'
+      - 'scripts/**'
+      - '.github/workflows/test-macos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-rust-tauri-macos:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot' }}
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Rust with Clippy
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      # `tauri::generate_context!()` validates `frontendDist` at compile time.
+      # The real frontend replaces this placeholder during the Tauri build.
+      - name: Run Rust tests
+        run: |
+          mkdir -p ../dist
+          cargo test --quiet
+        working-directory: frontend/src-tauri
+
+      - name: Lint all Rust targets
+        run: cargo clippy --all-targets -- -D warnings
+        working-directory: frontend/src-tauri
+
+      - name: Build Tauri application
+        run: npm run tauri build -- --no-bundle
+        working-directory: frontend
+        env:
+          CI: true
