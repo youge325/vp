@@ -101,27 +101,29 @@ impl ProcessGroupChild {
                 source: io::Error::other("spawned process group has no valid leader id"),
                 child: None,
             })?;
-        let mut owner = Self {
-            child,
-            leader_status: None,
-            #[cfg(target_os = "linux")]
-            group: None,
-            #[cfg(target_os = "linux")]
-            pgid,
-            #[cfg(not(target_os = "linux"))]
-            pgid,
-        };
         #[cfg(target_os = "linux")]
-        match crate::process_control::StableProcessGroup::capture(pgid as u32) {
-            Ok(group) => owner.group = Some(group),
+        let group = match crate::process_control::StableProcessGroup::capture(pgid as u32) {
+            Ok(group) => Some(group),
             Err(error) => {
+                let owner = Self {
+                    child,
+                    leader_status: None,
+                    group: None,
+                    pgid,
+                };
                 return Err(ProcessGroupSpawnError {
                     source: io::Error::other(error.to_string()),
                     child: Some(Box::new(owner)),
                 });
             }
-        }
-        Ok(owner)
+        };
+        Ok(Self {
+            child,
+            leader_status: None,
+            #[cfg(target_os = "linux")]
+            group,
+            pgid,
+        })
     }
 
     #[cfg(windows)]
