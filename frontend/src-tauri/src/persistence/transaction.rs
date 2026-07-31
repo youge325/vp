@@ -272,10 +272,6 @@ where
 }
 
 fn normalized_path(path: &Path) -> PathBuf {
-    if let Ok(canonical) = std::fs::canonicalize(path) {
-        return canonical;
-    }
-
     let absolute = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -283,17 +279,37 @@ fn normalized_path(path: &Path) -> PathBuf {
             .unwrap_or_else(|_| PathBuf::from("."))
             .join(path)
     };
-    match (absolute.parent(), absolute.file_name()) {
+    let mut lexical = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                lexical.pop();
+            }
+            std::path::Component::Prefix(prefix) => lexical.push(prefix.as_os_str()),
+            std::path::Component::RootDir | std::path::Component::Normal(_) => {
+                lexical.push(component.as_os_str());
+            }
+        }
+    }
+
+    // The target may be atomically replaced or quarantined while concurrent
+    // callers calculate their transaction key. Canonicalizing that mutable
+    // file can therefore return a pre-rename identity for one caller and a
+    // post-rename/fallback identity for another. The parent is the stable lock
+    // namespace; append the lexically normalized file name without resolving
+    // the target itself.
+    match (lexical.parent(), lexical.file_name()) {
         (Some(parent), Some(file_name)) => std::fs::canonicalize(parent)
             .map(|canonical_parent| canonical_parent.join(file_name))
-            .unwrap_or(absolute),
-        _ => absolute,
+            .unwrap_or(lexical),
+        _ => lexical,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::PathTransactions;
+    use super::{normalized_path, PathTransactions};
     use std::future::pending;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -330,5 +346,41 @@ mod tests {
         .expect("replacement flight must not hang")
         .expect("replacement flight succeeds");
         assert_eq!(result, 2);
+    }
+
+    #[test]
+    fn transaction_key_is_stable_when_the_target_is_quarantined() {
+        let directory = tempfile::tempdir().expect("temporary transaction directory");
+        let target = directory.path().join("state.json");
+        std::fs::write(&target, b"invalid").expect("write target");
+
+        let before = normalized_path(&target);
+        std::fs::rename(&target, directory.path().join("state.json.quarantined"))
+            .expect("quarantine target");
+        let after = normalized_path(&directory.path().join(".").join("state.json"));
+
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn coordinator_identity_survives_target_rename() {
+        let directory = tempfile::tempdir().expect("temporary transaction directory");
+        let transactions = PathTransactions::<u8, u8>::new();
+
+        for iteration in 0..100 {
+            let file_name = format!("state-{iteration}.json");
+            let target = directory.path().join(&file_name);
+            std::fs::write(&target, b"invalid").expect("write target");
+
+            let before = transactions.coordinator(&target);
+            std::fs::rename(
+                &target,
+                directory.path().join(format!("{file_name}.quarantined")),
+            )
+            .expect("quarantine target");
+            let after = transactions.coordinator(&directory.path().join(".").join(file_name));
+
+            assert!(Arc::ptr_eq(&before, &after));
+        }
     }
 }

@@ -1,11 +1,12 @@
 mod builder;
 mod cancellation;
+mod cleanup;
 pub(crate) mod commands;
 mod control;
 mod controller;
 mod envelope;
-mod handle;
 mod oneshot;
+mod ports;
 mod readers;
 mod spawn;
 mod state;
@@ -20,7 +21,6 @@ use crate::error::ShellError;
 use crate::generated::TaskControlKind;
 use crate::process_control::ProcessControlError;
 
-pub(crate) use builder::build_resume_inspection_input;
 pub(crate) use control::send_task_control;
 pub(crate) use oneshot::run_single_cli_command;
 pub(crate) use spawn::spawn_task;

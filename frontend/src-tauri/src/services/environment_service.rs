@@ -1,7 +1,8 @@
 use tauri::State;
 
 use crate::error::ShellError;
-use crate::models::{EnvironmentCheckPayload, EnvironmentCheckResult};
+use crate::generated::{CheckEnvironmentInvocation, CheckEnvironmentSpec};
+use crate::models::EnvironmentCheckPayload;
 use crate::persistence;
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks;
@@ -29,12 +30,9 @@ async fn check_environment_impl(
         &fingerprint,
         force_refresh,
         || async {
-            tasks::run_single_cli_command::<EnvironmentCheckResult>(
+            tasks::run_single_cli_command::<CheckEnvironmentSpec>(
                 &paths,
-                "check_environment",
-                &[],
-                None,
-                "environment check result",
+                &CheckEnvironmentInvocation,
             )
             .await
         },

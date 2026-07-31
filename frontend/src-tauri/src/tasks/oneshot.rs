@@ -8,27 +8,23 @@ use std::io;
 use std::process::{Output, Stdio};
 use std::time::Duration;
 
-use command_group::AsyncGroupChild;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::task::JoinHandle;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+use tokio::process::{ChildStderr, ChildStdout};
 use tokio::time::{timeout, timeout_at, Instant};
 
 use crate::error::ShellError;
-use crate::generated::backend_oneshot_contract;
+use crate::generated::{
+    BackendOneShotSpec, ERROR_SUMMARY_LIMIT_BYTES, NDJSON_LINE_LIMIT_BYTES,
+    ONE_SHOT_STDOUT_LIMIT_BYTES, STDERR_TAIL_LIMIT_BYTES,
+};
 use crate::models::BackendTaskErrorPayload;
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks::builder::{backend_command, spawn_no_window_group};
 use crate::tasks::envelope::NdjsonEnvelope;
-use crate::tasks::subprocess::{
-    reap_after_termination_until, request_termination, STDIN_WRITE_TIMEOUT,
-    TERMINATION_REAP_TIMEOUT,
-};
-
-const INFO_TIMEOUT: Duration = Duration::from_secs(30);
-const INSPECT_OUTPUT_TIMEOUT: Duration = Duration::from_secs(60);
-const CHECK_TIMEOUT: Duration = Duration::from_secs(180);
+use crate::tasks::stderr::retain_tail;
+use crate::tasks::subprocess::{ProcessGroupChild, ProcessGroupOwner, ReapOutcome, ReapTicket};
 const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[cfg(test)]
 const SPAWN_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -46,18 +42,12 @@ struct OneShotDeadlines {
     termination: Duration,
 }
 
-fn deadlines_for_subcommand(subcommand: &str) -> Option<OneShotDeadlines> {
-    let total = match subcommand {
-        "info" => INFO_TIMEOUT,
-        "inspect-output" => INSPECT_OUTPUT_TIMEOUT,
-        "check" => CHECK_TIMEOUT,
-        _ => return None,
-    };
-    Some(OneShotDeadlines {
-        stdin: STDIN_WRITE_TIMEOUT,
-        total,
-        termination: TERMINATION_REAP_TIMEOUT,
-    })
+fn deadlines_for_spec<S: BackendOneShotSpec>() -> OneShotDeadlines {
+    OneShotDeadlines {
+        stdin: S::STDIN_TIMEOUT,
+        total: S::TOTAL_TIMEOUT,
+        termination: S::TERMINATION_TIMEOUT,
+    }
 }
 
 #[derive(Debug)]
@@ -97,47 +87,36 @@ impl fmt::Display for BoundedCommandError {
     }
 }
 
-type OutputReader = JoinHandle<io::Result<Vec<u8>>>;
-
 /// Owns every resource associated with a one-shot child.
 ///
 /// The guard is deliberately retained across every await. Dropping the caller's
-/// future therefore still synchronously requests group termination and hands
-/// the child to a detached reaper instead of relying on PID-only cleanup.
+/// future closes both output pipes, synchronously requests group termination,
+/// and hands the stable group/job handle to the process cleanup coordinator.
 struct BoundedOneShotChild {
-    child: Option<AsyncGroupChild>,
-    stdout_reader: Option<OutputReader>,
-    stderr_reader: Option<OutputReader>,
+    stdout: Option<ChildStdout>,
+    stderr: Option<ChildStderr>,
+    child: ProcessGroupOwner,
+    reap_ticket: Option<ReapTicket>,
     termination_timeout: Duration,
 }
 
 impl BoundedOneShotChild {
-    fn new(mut child: AsyncGroupChild, termination_timeout: Duration) -> Self {
-        let stdout_reader = child.inner().stdout.take().map(|mut stdout| {
-            tokio::spawn(async move {
-                let mut bytes = Vec::new();
-                stdout.read_to_end(&mut bytes).await?;
-                Ok(bytes)
-            })
-        });
-        let stderr_reader = child.inner().stderr.take().map(|mut stderr| {
-            tokio::spawn(async move {
-                let mut bytes = Vec::new();
-                stderr.read_to_end(&mut bytes).await?;
-                Ok(bytes)
-            })
-        });
+    fn new(mut child: ProcessGroupChild, termination_timeout: Duration) -> Self {
+        let stdout = child.inner().stdout.take();
+        let stderr = child.inner().stderr.take();
+        let (child, reap_ticket) = ProcessGroupOwner::new(child, "backend one-shot process");
         Self {
-            child: Some(child),
-            stdout_reader,
-            stderr_reader,
+            stdout,
+            stderr,
+            child,
+            reap_ticket: Some(reap_ticket),
             termination_timeout,
         }
     }
 
     #[cfg(test)]
     fn id(&self) -> Option<u32> {
-        self.child.as_ref().and_then(AsyncGroupChild::id)
+        self.child.id()
     }
 
     async fn finish(
@@ -145,17 +124,18 @@ impl BoundedOneShotChild {
         stdin_payload: Option<Vec<u8>>,
         stdin_timeout: Duration,
     ) -> Result<Output, BoundedCommandError> {
-        if self.stdout_reader.is_none() || self.stderr_reader.is_none() {
-            return Err(BoundedCommandError::lifecycle(
-                "backend one-shot stdout/stderr pipes were not captured",
-            ));
-        }
+        let mut stdout = self.stdout.take().ok_or_else(|| {
+            BoundedCommandError::lifecycle("backend one-shot stdout pipe was not captured")
+        })?;
+        let mut stderr = self.stderr.take().ok_or_else(|| {
+            BoundedCommandError::lifecycle("backend one-shot stderr pipe was not captured")
+        })?;
 
         match stdin_payload {
             None => {
                 if self
                     .child
-                    .as_mut()
+                    .inner_mut()
                     .and_then(|child| child.inner().stdin.take())
                     .is_some()
                 {
@@ -167,7 +147,7 @@ impl BoundedOneShotChild {
             Some(payload) => {
                 let mut stdin = self
                     .child
-                    .as_mut()
+                    .inner_mut()
                     .and_then(|child| child.inner().stdin.take())
                     .ok_or_else(|| {
                         BoundedCommandError::lifecycle(
@@ -200,40 +180,49 @@ impl BoundedOneShotChild {
             }
         }
 
-        let status = loop {
-            let child = self.child.as_mut().ok_or_else(|| {
-                BoundedCommandError::lifecycle(
-                    "backend one-shot child was released before it exited",
-                )
-            })?;
-            match child.try_wait() {
-                Ok(Some(status)) => break status,
-                Ok(None) => tokio::time::sleep(EXIT_POLL_INTERVAL).await,
-                Err(error) => {
-                    return Err(BoundedCommandError::lifecycle(format!(
-                        "unable to wait for backend one-shot process: {error}"
-                    )));
+        let (status, stdout, stderr) = {
+            let mut status = None;
+            let mut stdout_bytes = None;
+            let mut stderr_bytes = None;
+            let mut wait = Box::pin(wait_for_exit(&mut self.child));
+            let mut read_stdout = Box::pin(read_bounded_ndjson(
+                &mut stdout,
+                ONE_SHOT_STDOUT_LIMIT_BYTES,
+                NDJSON_LINE_LIMIT_BYTES,
+            ));
+            let mut read_stderr =
+                Box::pin(read_retained_tail(&mut stderr, STDERR_TAIL_LIMIT_BYTES));
+
+            loop {
+                tokio::select! {
+                    result = &mut wait, if status.is_none() => {
+                        status = Some(result?);
+                    }
+                    result = &mut read_stdout, if stdout_bytes.is_none() => {
+                        stdout_bytes = Some(map_reader_result(result, "stdout")?);
+                    }
+                    result = &mut read_stderr, if stderr_bytes.is_none() => {
+                        stderr_bytes = Some(map_reader_result(result, "stderr")?);
+                    }
+                }
+                if let (Some(status), Some(stdout), Some(stderr)) = (
+                    status.as_ref(),
+                    stdout_bytes.as_mut(),
+                    stderr_bytes.as_mut(),
+                ) {
+                    break (
+                        status.to_owned(),
+                        std::mem::take(stdout),
+                        std::mem::take(stderr),
+                    );
                 }
             }
         };
 
-        let stdout = await_reader(
-            self.stdout_reader
-                .take()
-                .expect("stdout reader checked above"),
-            "stdout",
-        )
-        .await?;
-        let stderr = await_reader(
-            self.stderr_reader
-                .take()
-                .expect("stderr reader checked above"),
-            "stderr",
-        )
-        .await?;
-        // `try_wait` above reaped the process group. Disarm the drop path only
-        // after both output readers have observed EOF.
-        drop(self.child.take());
+        let reap_ticket = self.reap_ticket.take().ok_or_else(|| {
+            BoundedCommandError::lifecycle("backend one-shot reap ticket was not retained")
+        })?;
+        confirm_reaped(&reap_ticket)?;
         Ok(Output {
             status,
             stdout,
@@ -242,146 +231,136 @@ impl BoundedOneShotChild {
     }
 
     async fn terminate_and_reap(&mut self) -> Result<(), String> {
-        let child = self.child.take();
-        let stdout_reader = self.stdout_reader.take();
-        let stderr_reader = self.stderr_reader.take();
-        terminate_and_reap_parts(
-            child,
-            stdout_reader,
-            stderr_reader,
-            self.termination_timeout,
-        )
-        .await
-    }
-}
-
-impl Drop for BoundedOneShotChild {
-    fn drop(&mut self) {
-        let Some(mut child) = self.child.take() else {
-            return;
-        };
-        let stdout_reader = self.stdout_reader.take();
-        let stderr_reader = self.stderr_reader.take();
-        // Synchronously request termination before returning from Drop. The
-        // async reaper owns the stable group/job handle from this point on.
-        let kill_error = request_termination(&mut child);
-        let cleanup_timeout = self.termination_timeout;
-        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-            runtime.spawn(async move {
-                let _ = terminate_and_reap_parts_after_kill(
-                    child,
-                    stdout_reader,
-                    stderr_reader,
-                    cleanup_timeout,
-                    kill_error,
-                )
-                .await;
-            });
+        self.stdout.take();
+        self.stderr.take();
+        self.child
+            .terminate_and_reap(self.termination_timeout)
+            .await?;
+        let reap_ticket = self
+            .reap_ticket
+            .take()
+            .ok_or_else(|| "backend one-shot reap ticket was not retained".to_string())?;
+        match reap_ticket.current() {
+            Some(ReapOutcome::Reaped) => Ok(()),
+            Some(ReapOutcome::Failed(error)) => Err(error),
+            None => Err("process exited without publishing its reap outcome".to_string()),
         }
-        // If no runtime exists, dropping `child` still invokes the
-        // command-group kill-on-drop fallback. All production call sites run
-        // inside Tokio, so the branch above also performs the reap.
     }
 }
 
-async fn await_reader(
-    reader: OutputReader,
+async fn wait_for_exit(
+    child: &mut ProcessGroupOwner,
+) -> Result<std::process::ExitStatus, BoundedCommandError> {
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(status),
+            Ok(None) => tokio::time::sleep(EXIT_POLL_INTERVAL).await,
+            Err(error) => {
+                return Err(BoundedCommandError::lifecycle(format!(
+                    "unable to wait for backend one-shot process: {error}"
+                )));
+            }
+        }
+    }
+}
+
+fn confirm_reaped(ticket: &ReapTicket) -> Result<(), BoundedCommandError> {
+    match ticket.current() {
+        Some(ReapOutcome::Reaped) => Ok(()),
+        Some(ReapOutcome::Failed(error)) => Err(BoundedCommandError::lifecycle(error)),
+        None => Err(BoundedCommandError::lifecycle(
+            "process exited without publishing its reap outcome",
+        )),
+    }
+}
+
+#[cfg(test)]
+async fn read_bounded<R: AsyncRead + Unpin>(reader: &mut R, limit: usize) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    reader
+        .take((limit as u64) + 1)
+        .read_to_end(&mut bytes)
+        .await?;
+    if bytes.len() > limit {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("backend output exceeded the {limit}-byte contract limit"),
+        ));
+    }
+    Ok(bytes)
+}
+
+async fn read_bounded_ndjson<R: AsyncRead + Unpin>(
+    reader: &mut R,
+    total_limit: usize,
+    line_limit: usize,
+) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::with_capacity(total_limit.min(8192));
+    let mut chunk = [0_u8; 8192];
+    let mut line_bytes = 0_usize;
+    loop {
+        let count = reader.read(&mut chunk).await?;
+        if count == 0 {
+            return Ok(bytes);
+        }
+        if bytes.len().saturating_add(count) > total_limit {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("backend output exceeded the {total_limit}-byte contract limit"),
+            ));
+        }
+        for byte in &chunk[..count] {
+            line_bytes = line_bytes.saturating_add(1);
+            if line_bytes > line_limit {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("backend output line exceeded the {line_limit}-byte contract limit"),
+                ));
+            }
+            if *byte == b'\n' {
+                line_bytes = 0;
+            }
+        }
+        bytes.extend_from_slice(&chunk[..count]);
+    }
+}
+
+async fn read_retained_tail<R: AsyncRead + Unpin>(
+    reader: &mut R,
+    limit: usize,
+) -> io::Result<Vec<u8>> {
+    let mut retained = Vec::with_capacity(limit.min(8192));
+    let mut chunk = [0_u8; 8192];
+    loop {
+        let count = reader.read(&mut chunk).await?;
+        if count == 0 {
+            return Ok(retained);
+        }
+        if limit == 0 {
+            continue;
+        }
+        if count >= limit {
+            retained.clear();
+            retained.extend_from_slice(&chunk[count - limit..count]);
+            continue;
+        }
+        let overflow = retained.len().saturating_add(count).saturating_sub(limit);
+        if overflow > 0 {
+            retained.drain(..overflow);
+        }
+        retained.extend_from_slice(&chunk[..count]);
+    }
+}
+
+fn map_reader_result(
+    result: io::Result<Vec<u8>>,
     stream_name: &'static str,
 ) -> Result<Vec<u8>, BoundedCommandError> {
-    reader
-        .await
-        .map_err(|error| {
-            BoundedCommandError::lifecycle(format!(
-                "backend one-shot {stream_name} reader stopped: {error}"
-            ))
-        })?
-        .map_err(|error| {
-            BoundedCommandError::lifecycle(format!(
-                "unable to read backend one-shot {stream_name}: {error}"
-            ))
-        })
-}
-
-async fn terminate_and_reap_parts(
-    mut child: Option<AsyncGroupChild>,
-    stdout_reader: Option<OutputReader>,
-    stderr_reader: Option<OutputReader>,
-    cleanup_timeout: Duration,
-) -> Result<(), String> {
-    let kill_error = child.as_mut().and_then(request_termination);
-    match child {
-        Some(child) => {
-            terminate_and_reap_parts_after_kill(
-                child,
-                stdout_reader,
-                stderr_reader,
-                cleanup_timeout,
-                kill_error,
-            )
-            .await
-        }
-        None => {
-            drain_readers(stdout_reader, stderr_reader, cleanup_timeout).await;
-            Ok(())
-        }
-    }
-}
-
-async fn terminate_and_reap_parts_after_kill(
-    child: AsyncGroupChild,
-    stdout_reader: Option<OutputReader>,
-    stderr_reader: Option<OutputReader>,
-    cleanup_timeout: Duration,
-    kill_error: Option<io::Error>,
-) -> Result<(), String> {
-    let deadline = Instant::now() + cleanup_timeout;
-    if let Err(error) =
-        reap_after_termination_until(child, deadline, kill_error, "backend one-shot process").await
-    {
-        abort_readers(stdout_reader, stderr_reader);
-        return Err(error);
-    }
-    drain_readers_until(stdout_reader, stderr_reader, deadline).await;
-    Ok(())
-}
-
-async fn drain_readers(
-    stdout_reader: Option<OutputReader>,
-    stderr_reader: Option<OutputReader>,
-    timeout_duration: Duration,
-) {
-    drain_readers_until(
-        stdout_reader,
-        stderr_reader,
-        Instant::now() + timeout_duration,
-    )
-    .await;
-}
-
-async fn drain_readers_until(
-    stdout_reader: Option<OutputReader>,
-    stderr_reader: Option<OutputReader>,
-    deadline: Instant,
-) {
-    if let Some(mut reader) = stdout_reader {
-        if timeout_at(deadline, &mut reader).await.is_err() {
-            reader.abort();
-        }
-    }
-    if let Some(mut reader) = stderr_reader {
-        if timeout_at(deadline, &mut reader).await.is_err() {
-            reader.abort();
-        }
-    }
-}
-
-fn abort_readers(stdout_reader: Option<OutputReader>, stderr_reader: Option<OutputReader>) {
-    if let Some(reader) = stdout_reader {
-        reader.abort();
-    }
-    if let Some(reader) = stderr_reader {
-        reader.abort();
-    }
+    result.map_err(|error| {
+        BoundedCommandError::lifecycle(format!(
+            "unable to read backend one-shot {stream_name}: {error}"
+        ))
+    })
 }
 
 async fn run_bounded_command(
@@ -402,7 +381,18 @@ async fn run_bounded_command(
     command.stderr(Stdio::piped());
 
     let started_at = Instant::now();
-    let child = spawn_no_window_group(&mut command).map_err(BoundedCommandError::Spawn)?;
+    let child = match spawn_no_window_group(&mut command) {
+        Ok(child) => child,
+        Err(error) => {
+            let (source, child) = error.into_parts();
+            let primary = BoundedCommandError::Spawn(source);
+            if let Some(child) = child {
+                let mut owner = BoundedOneShotChild::new(child, deadlines.termination);
+                return Err(primary.with_cleanup(owner.terminate_and_reap().await));
+            }
+            return Err(primary);
+        }
+    };
     let mut child = BoundedOneShotChild::new(child, deadlines.termination);
     #[cfg(test)]
     let started_at = match spawn_handshake {
@@ -463,50 +453,47 @@ enum TypedCliEnvelope<T> {
 /// Run a generated application IPC command and deserialize its success payload.
 ///
 /// The manifest-owned contract resolves the private backend subcommand.
-/// ``extra_args`` contains only command-specific flag/value pairs.
-///
-/// ``stdin_payload`` lets callers feed config through stdin instead of
-/// command-line flags. ``None`` uses ``Stdio::null`` for commands without
-/// input; ``Some`` writes the payload and closes stdin before collecting
-/// stdout and stderr.
-pub(crate) async fn run_single_cli_command<T: DeserializeOwned>(
+/// The sealed spec owns the exact argument encoder and optional stdin member,
+/// so callers cannot pair a valid command with arbitrary flags or another
+/// command's payload type.
+pub(crate) async fn run_single_cli_command<S>(
     paths: &ResolvedRuntimePaths,
-    ipc_command: &str,
-    extra_args: &[String],
-    stdin_payload: Option<&str>,
-    payload_name: &'static str,
-) -> Result<T, ShellError> {
-    let contract = backend_oneshot_contract(ipc_command).ok_or_else(|| {
-        ShellError::InvalidInput(format!(
-            "application IPC command has no backend one-shot contract: {ipc_command}"
-        ))
-    })?;
-    let deadlines = deadlines_for_subcommand(contract.subcommand).ok_or_else(|| {
-        ShellError::InvalidInput(format!(
-            "backend one-shot subcommand has no deadline policy: {}",
-            contract.subcommand
-        ))
-    })?;
-    let mut command = backend_command(paths, contract.subcommand);
-    command.args(extra_args);
+    invocation: &S::Invocation,
+) -> Result<S::Output, ShellError>
+where
+    S: BackendOneShotSpec,
+    S::Output: DeserializeOwned,
+{
+    let deadlines = deadlines_for_spec::<S>();
+    let command = backend_command::<S>(paths, invocation);
+    let stdin_payload = S::stdin_payload(invocation)
+        .map(serde_json::to_vec)
+        .transpose()
+        .map_err(|error| {
+            ShellError::SchemaValidation(format!(
+                "Unable to serialize {} input: {error}",
+                S::PAYLOAD_NAME
+            ))
+        })?;
     let output = run_bounded_command(
         command,
-        stdin_payload.map(|payload| payload.as_bytes().to_vec()),
+        stdin_payload,
         deadlines,
-        contract.subcommand,
+        S::SUBCOMMAND,
         #[cfg(test)]
         None,
     )
     .await
     .map_err(BoundedCommandError::into_shell_error)?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = decode_stdout(output.stdout)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr_summary = retain_tail(stderr.trim().trim_matches('"'), ERROR_SUMMARY_LIMIT_BYTES);
     let last_envelope = parse_last_typed_cli_envelope(
         &stdout,
-        contract.envelope,
-        contract.preserve_discriminator,
-        payload_name,
+        S::ENVELOPE,
+        S::PRESERVE_DISCRIMINATOR,
+        S::PAYLOAD_NAME,
     )?;
 
     match last_envelope {
@@ -517,7 +504,7 @@ pub(crate) async fn run_single_cli_command<T: DeserializeOwned>(
             } else {
                 Err(ShellError::BackendProbeFailed(format!(
                     "Backend command failed: {}",
-                    stderr.trim().trim_matches('"')
+                    stderr_summary
                 )))
             }
         }
@@ -527,11 +514,19 @@ pub(crate) async fn run_single_cli_command<T: DeserializeOwned>(
             } else {
                 Err(ShellError::BackendProbeFailed(format!(
                     "Backend command failed: {}",
-                    stderr.trim().trim_matches('"')
+                    stderr_summary
                 )))
             }
         }
     }
+}
+
+fn decode_stdout(stdout: Vec<u8>) -> Result<String, ShellError> {
+    String::from_utf8(stdout).map_err(|error| {
+        ShellError::SchemaValidation(format!(
+            "Backend one-shot stdout is not valid UTF-8: {error}"
+        ))
+    })
 }
 
 fn parse_last_typed_cli_envelope<T: DeserializeOwned>(
@@ -625,7 +620,7 @@ fn deserialize_success_envelope<T: DeserializeOwned>(
 
 #[cfg(test)]
 mod tests {
-    use std::io::Read;
+    use std::io::{Read, Write};
     use std::time::Duration;
 
     use serde::Deserialize;
@@ -634,13 +629,15 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::{
-        deadlines_for_subcommand, deserialize_success_envelope, parse_last_typed_cli_envelope,
-        run_bounded_command, OneShotDeadlines, SpawnHandshake, TypedCliEnvelope, CHECK_TIMEOUT,
-        INFO_TIMEOUT, INSPECT_OUTPUT_TIMEOUT, SPAWN_HANDSHAKE_TIMEOUT,
+        deadlines_for_spec, decode_stdout, deserialize_success_envelope,
+        parse_last_typed_cli_envelope, read_bounded, read_bounded_ndjson, read_retained_tail,
+        retain_tail, run_bounded_command, spawn_no_window_group, BoundedCommandError,
+        OneShotDeadlines, ProcessGroupOwner, ReapOutcome, SpawnHandshake, TypedCliEnvelope,
+        ERROR_SUMMARY_LIMIT_BYTES, ONE_SHOT_STDOUT_LIMIT_BYTES, SPAWN_HANDSHAKE_TIMEOUT,
     };
     use crate::error::ShellError;
+    use crate::generated::{CheckEnvironmentSpec, CheckResumeStateSpec, InspectVideoSpec};
     use crate::models::BackendTaskErrorCode;
-    use crate::tasks::subprocess::{STDIN_WRITE_TIMEOUT, TERMINATION_REAP_TIMEOUT};
     use crate::tasks::test_support::assert_process_exited;
 
     const FIXTURE_MODE_ENV: &str = "VP_ONESHOT_TEST_MODE";
@@ -669,6 +666,12 @@ mod tests {
                 println!("fixture-observed-stdin-eof");
             }
             "sleep" => std::thread::sleep(Duration::from_secs(60)),
+            "oversized-stdout" => {
+                let bytes = vec![b'x'; ONE_SHOT_STDOUT_LIMIT_BYTES + 1];
+                std::io::stdout()
+                    .write_all(&bytes)
+                    .expect("write oversized fixture stdout");
+            }
             other => panic!("unknown one-shot fixture mode: {other}"),
         }
     }
@@ -722,16 +725,79 @@ mod tests {
 
     #[test]
     fn one_shot_deadlines_match_the_command_policy() {
-        let info = deadlines_for_subcommand("info").expect("info policy");
-        let inspect = deadlines_for_subcommand("inspect-output").expect("inspect policy");
-        let check = deadlines_for_subcommand("check").expect("check policy");
+        let info = deadlines_for_spec::<InspectVideoSpec>();
+        let inspect = deadlines_for_spec::<CheckResumeStateSpec>();
+        let check = deadlines_for_spec::<CheckEnvironmentSpec>();
 
-        assert_eq!(info.stdin, STDIN_WRITE_TIMEOUT);
-        assert_eq!(info.total, INFO_TIMEOUT);
-        assert_eq!(inspect.total, INSPECT_OUTPUT_TIMEOUT);
-        assert_eq!(check.total, CHECK_TIMEOUT);
-        assert_eq!(check.termination, TERMINATION_REAP_TIMEOUT);
-        assert!(deadlines_for_subcommand("process").is_none());
+        assert_eq!(info.stdin, Duration::from_secs(10));
+        assert_eq!(info.total, Duration::from_secs(30));
+        assert_eq!(inspect.total, Duration::from_secs(60));
+        assert_eq!(check.total, Duration::from_secs(180));
+        assert_eq!(check.termination, Duration::from_secs(5));
+    }
+
+    #[tokio::test]
+    async fn stdout_reader_rejects_bytes_beyond_its_contract_limit() {
+        let mut input = &b"12345"[..];
+        let error = read_bounded(&mut input, 4)
+            .await
+            .expect_err("fifth byte must exceed the limit");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("4-byte contract limit"));
+    }
+
+    #[tokio::test]
+    async fn stdout_reader_rejects_an_oversized_ndjson_line_below_the_total_limit() {
+        let mut input = &b"12345\n6\n"[..];
+        let error = read_bounded_ndjson(&mut input, 32, 4)
+            .await
+            .expect_err("the first NDJSON line exceeds its independent limit");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("output line"));
+        assert!(error.to_string().contains("4-byte contract limit"));
+    }
+
+    #[tokio::test]
+    async fn stdout_reader_accepts_multiple_lines_within_both_limits() {
+        let mut input = &b"123\n456\n"[..];
+        let output = read_bounded_ndjson(&mut input, 8, 4)
+            .await
+            .expect("each line and the aggregate are within their limits");
+
+        assert_eq!(output, b"123\n456\n");
+    }
+
+    #[test]
+    fn invalid_utf8_after_a_valid_envelope_is_rejected() {
+        let mut stdout = br#"{"type":"check","value":42}\n"#.to_vec();
+        stdout.push(0xff);
+
+        let error = decode_stdout(stdout).expect_err("invalid trailing bytes must not be ignored");
+        assert!(matches!(
+            error,
+            ShellError::SchemaValidation(message) if message.contains("stdout is not valid UTF-8")
+        ));
+    }
+
+    #[test]
+    fn backend_error_summary_is_bounded_by_the_protocol_limit() {
+        let summary = retain_tail(
+            &"界".repeat(ERROR_SUMMARY_LIMIT_BYTES),
+            ERROR_SUMMARY_LIMIT_BYTES,
+        );
+
+        assert!(summary.len() <= ERROR_SUMMARY_LIMIT_BYTES);
+        assert!(summary.starts_with("[...truncated]"));
+    }
+
+    #[tokio::test]
+    async fn stderr_reader_retains_only_the_bounded_tail() {
+        let mut input = &b"0123456789"[..];
+        let retained = read_retained_tail(&mut input, 4)
+            .await
+            .expect("bounded stderr tail");
+        assert_eq!(retained, b"6789");
     }
 
     #[tokio::test]
@@ -801,6 +867,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn oversized_stdout_fails_early_and_the_child_is_reaped() {
+        let command = fixture_command("oversized-stdout");
+        let (handshake, started_rx, release_tx) = test_spawn_handshake();
+        let runner = tokio::spawn(run_bounded_command(
+            command,
+            None,
+            test_deadlines(Duration::from_millis(100), Duration::from_secs(10)),
+            "fixture-oversized-stdout",
+            Some(handshake),
+        ));
+        let pid = release_spawn_handshake(started_rx, release_tx).await;
+        let error = runner
+            .await
+            .expect("bounded command runner")
+            .expect_err("oversized stdout must fail");
+
+        assert!(error.to_string().contains("stdout"));
+        assert!(error.to_string().contains("contract limit"));
+        assert_process_exited(pid, Duration::from_secs(3)).await;
+    }
+
+    #[tokio::test]
     async fn dropping_the_run_future_kills_and_reaps_the_process_group() {
         let command = fixture_command("sleep");
         let (handshake, started_rx, release_tx) = test_spawn_handshake();
@@ -817,6 +905,42 @@ mod tests {
         let join_error = task.await.expect_err("aborted runner");
         assert!(join_error.is_cancelled());
         assert_process_exited(pid, Duration::from_secs(3)).await;
+    }
+
+    #[test]
+    fn cleanup_failure_is_never_lost_from_the_primary_error() {
+        let error = BoundedCommandError::lifecycle("primary lifecycle failure")
+            .with_cleanup(Err("reap confirmation failed".to_string()));
+
+        assert_eq!(
+            error.to_string(),
+            "primary lifecycle failure; cleanup failed: reap confirmation failed"
+        );
+    }
+
+    #[tokio::test]
+    async fn transient_wait_error_does_not_seal_the_late_reap_ticket() {
+        let mut command = fixture_command("sleep");
+        command
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        let child = spawn_no_window_group(&mut command).expect("spawn transient-error fixture");
+        let (mut owner, mut ticket) = ProcessGroupOwner::new(child, "transient wait-error fixture");
+        owner.inject_wait_error(std::io::Error::other("injected transient wait error"));
+
+        let error = owner
+            .terminate_and_reap(Duration::from_secs(2))
+            .await
+            .expect_err("injected wait error must surface to the immediate caller");
+        assert!(error.contains("injected transient wait error"));
+        assert_eq!(ticket.current(), None);
+
+        drop(owner);
+        assert_eq!(
+            ticket.wait_bounded(Duration::from_secs(3)).await,
+            Some(ReapOutcome::Reaped)
+        );
     }
 
     #[test]
