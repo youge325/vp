@@ -91,13 +91,24 @@ Rust 与 Python 之间的通信不通过 HTTP 或 gRPC，而是通过子进程 s
 
 ### 2. 中立契约与类型同步
 
-根目录 `contracts/` 中的 JSON Schema 2020-12 文档定义配置、IPC、NDJSON、错误码与持久化边界。`scripts/generate_contracts.py` 生成严格的聚合边界 schema、Python Pydantic 模型、单一 TypeScript 绑定以及命令/事件适配器；Rust 通过 Typify 直接消费同一聚合 schema。生成文件禁止手工修改，CI 逐字节检查 freshness。非 schema 14 的环境缓存会被隔离并重新探测。
+根目录 `contracts/` 中的 JSON Schema 2020-12 文档定义配置、IPC、NDJSON、错误码与持久化边界。
+IPC manifest v2 同时声明 10 个 Tauri command、任务事件、七类 Python envelope 和终端进度常量。
+`scripts/generate_contracts.py` 生成严格的聚合边界 schema、Python Pydantic 模型、单一 TypeScript
+绑定以及命令/事件/one-shot 适配器；其中 one-shot 表以应用 IPC command 为 key，解析私有 Python
+subcommand、success envelope 与 discriminator 策略，task envelope enum 也由同一 manifest 生成。
+Rust 通过 Typify 直接消费同一聚合 schema。生成文件禁止
+手工修改，CI 逐字节检查 freshness。非 schema 14 的环境缓存会被隔离并重新探测。
 
 源 schema 通过本地外部 `$ref` 复用结构，并为每个对象显式声明 `additionalProperties`。生成器会先用
 JSON Schema 2020-12 校验 schema、引用目标、IPC manifest 和错误码子集，再把依赖内联到
 `boundary.schema.json`。Python 绑定由 `datamodel-code-generator` 生成，TypeScript 绑定由
 `json-schema-to-typescript` 生成；Rust 编译期的 Typify、前端 invoke 映射和 Rust/TS 事件适配器
 都消费同一份生成结果。
+
+生产可达性门禁独立于测试引用：Vue 从 `src/main.ts` 遍历 import DAG，Python 从 `app`、
+`app.__main__` 和显式导出入口遍历静态 import DAG。动态边界只能进入带理由、evidence 与回归测试
+的精确 allowlist；两个前端 ambient declaration 是唯一非生成源码例外，36 个 RIFE 模块必须与
+中立版本 catalog 精确同集，额外或缺失模块都会使门禁失败。
 
 ### 3. stage-worker 流式处理
 
@@ -238,7 +249,7 @@ graph LR
 |------|------|
 | [`frontend/src-tauri/src/lib.rs`](../frontend/src-tauri/src/lib.rs) | Tauri Builder + 命令注册 + 集成测试 |
 | [`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) | 命令与事件清单单一真相源 |
-| [`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) | `Idle / Starting / Running / Cancelling` 与 task-bound 启动租约 |
+| [`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) | `Idle / Starting / Running / Cancelling / Finishing` 与 task-bound 启动租约 |
 | [`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) | `TaskSupervisor`、有界控制、Watchdog 与终态仲裁 |
 | [`frontend/src-tauri/src/runtime/mod.rs`](../frontend/src-tauri/src/runtime/mod.rs) | 运行时资源解析 |
 

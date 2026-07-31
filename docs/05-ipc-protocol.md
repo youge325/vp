@@ -23,14 +23,17 @@ graph LR
 NDJSON、错误码和持久化边界。源 schema 使用本地外部 `$ref` 复用结构，并为每个对象显式声明
 `additionalProperties`。
 
-[`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) 是命令名、参数、返回值和事件名的
-唯一清单。`python scripts/generate_contracts.py` 会：
+[`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) schema version 2 是命令名、参数、
+返回值、事件名、Python task/one-shot envelope 映射和终端进度前缀的唯一清单。
+`python scripts/generate_contracts.py` 会：
 
 - 校验所有 schema、外部 `$ref`/JSON Pointer、manifest 唯一性和错误码集合；
 - 生成并跟踪 `contracts/boundary.schema.json`；
 - 用 `datamodel-code-generator` 生成 Python Pydantic 边界；
 - 用 `json-schema-to-typescript` 生成 TypeScript 边界；
-- 生成前端 invoke/事件适配器，以及 Rust manifest、事件和持久化版本适配器；
+- 从同一清单生成覆盖四类 task 与三类 one-shot 的 `ndjson.schema.json`；
+- 生成 Python envelope enum/类型映射、TypeScript 事件/进度常量，以及 Rust manifest、
+  task envelope、one-shot/事件和持久化版本适配器；
 - 让 Rust 的私有 Typify 模块在编译期消费同一聚合 schema。
 
 `python scripts/generate_contracts.py --check` 对上述生成物执行逐字节 freshness 检查。Rust
@@ -83,17 +86,12 @@ Rust 以进程组启动
 使用窄 CLI 参数，stdin 只传 `{ decode, workflow, encode, output }` 四段类型化配置。Python 的
 stdout 只承载结构化 task envelope；普通诊断写到 stderr。
 
-任务流只允许四种 NDJSON envelope：
+聚合 `ndjson.schema.json` 覆盖全部七种 Python stdout envelope；长任务 reader 仍只允许其中
+四种 task envelope，one-shot runner 只允许与当前子命令匹配的一种，两个解析上下文不会混用：
 
-```rust
-#[serde(tag = "type", rename_all = "snake_case")]
-enum NdjsonEnvelope {
-    Progress(TaskProgressPayload),
-    Completed(TaskCompletedPayload),
-    Error(BackendTaskErrorPayload),
-    ResumeStatus(ResumeStatusPayload),
-}
-```
+四类 task variant 由 manifest 生成到
+`frontend/src-tauri/src/generated/backend_task_envelope.rs`；生产 classifier 直接使用该 enum，
+不维护手写镜像。
 
 其中：
 
@@ -113,8 +111,10 @@ enum NdjsonEnvelope {
 
 Python 的所有结构化 task 输出都经
 [`backend/app/protocol/__init__.py`](../backend/app/protocol/__init__.py) 的模块级 `ndjson`
-发射器；它用专用锁覆盖序列化、整行 write 和 flush，并发 reporter 不会交错行。正常运行路径
-不自行拼装 error 对象。
+发射器；调用方必须先构造 manifest 指定的生成 Pydantic payload。生成的 envelope→payload
+映射在写 stdout 前拒绝错误模型、非法字段、负值和 discriminator 漂移，并按 schema 的可选字段
+集合移除空值。发射器用专用锁覆盖序列化、整行 write 和 flush，并发 reporter 不会交错行。
+正常运行路径不自行拼装 error 对象。
 
 ## One-shot CLI Envelope
 
@@ -129,7 +129,16 @@ schema 合法且类型匹配的 success 或 backend error envelope：
   `backend_probe_failed`；
 - 若只找到类型匹配但 schema 错误的候选，则返回 `schema_mismatch`。
 
-这避免了日志尾行、较早出现的合法 envelope 或无关事件影响结果选择。
+应用 IPC command → 私有 Python subcommand、envelope 名和 discriminator 保留策略的映射由
+manifest 生成到 `generated/backend_oneshot.rs`，Rust 调用方只提供应用 command，不维护第二份
+subcommand 条件链。这避免了日志尾行、较早出现的合法 envelope 或无关事件影响结果选择。
+
+进程执行期限由 Rust 的共享子进程策略统一约束：stdin 10 秒，`info` 30 秒，
+`inspect-output` 60 秒，`check` 180 秒，终止回收 5 秒。无 payload 的 one-shot 使用空 stdin；
+超时、错误或 future drop 都会 kill-and-reap 其进程组/job。
+
+终端进度前缀同样来自 `protocolConstants.terminalProgressPrefix`，生成到 Python 与
+TypeScript；reporter 和前端日志折叠不再硬编码 `"[VP_PROGRESS]"`。
 
 ## Tauri 任务事件
 

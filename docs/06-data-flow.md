@@ -150,7 +150,6 @@ class StagePlan:
     source_duration: float
     output_fps: float | None
     steps: tuple[ProcessingStep, ...] = field(init=False)
-    processed_output_frames: int = field(init=False)
     total_encoded_frames: int = field(init=False)
     interpolation_index: int | None = field(init=False)
 ```

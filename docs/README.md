@@ -35,10 +35,18 @@
 | 前端模块依赖图 | [02](02-frontend-architecture.md) |
 | 任务状态机（前端） | [02](02-frontend-architecture.md) |
 | Rust 模块依赖图 | [03](03-rust-shell-architecture.md) |
-| TaskStatePhase 四状态与启动租约 | [03](03-rust-shell-architecture.md) / [07](07-task-lifecycle.md) |
+| TaskStatePhase 五状态、启动租约与终态封口 | [03](03-rust-shell-architecture.md) / [07](07-task-lifecycle.md) |
 | Python 包依赖图 | [04](04-backend-architecture.md) |
 | stage-worker 流式流水线 | [04](04-backend-architecture.md) |
 | 完整任务执行序列图 | [05](05-ipc-protocol.md) |
 | 错误传播双路径序列图 | [05](05-ipc-protocol.md) / [08](08-error-handling.md) |
 | 配置数据流图 | [06](06-data-flow.md) |
 | 续传决策矩阵图 | [09](09-resume-checkpointing.md) |
+
+## 第二轮 UI 验收证据
+
+以下截图由 release Tauri E2E 在真实 WebView2 session 中生成：
+
+- [损坏预设全局提示](assets/architecture-round2/preset-banner.png)
+- [共享 toggle field](assets/architecture-round2/toggle.png)
+- [统一模型指标网格](assets/architecture-round2/model-metrics.png)
