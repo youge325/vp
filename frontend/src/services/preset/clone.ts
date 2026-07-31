@@ -1,5 +1,5 @@
 // pure: no Vue / no Pinia / no Tauri
-// 配置克隆 — 单一深拷贝实现 ``clone<T>``,所有具名 helper 都委托给它。
+// 配置克隆 — 仅接受预设及其四个配置 section。
 //
 // 实现细节:这里继续走 ``JSON.parse(JSON.stringify(...))`` 而不是
 // ``structuredClone``。原因:本工具的实际输入是 Pinia store 中的
@@ -10,14 +10,15 @@
 // 我们的 Config 都是 ``serde``-friendly 的纯数据,无 Date / Map / undefined,
 // 所以"JSON 丢失的语义"不影响实际使用。
 
-import type { DecodeConfig, EncodeConfig, OutputConfig, WorkbenchPreset, WorkflowConfig } from '@/types/protocol'
+import type { WorkbenchPreset } from '@/types/protocol'
 
-function clone<T>(value: T): T {
+type PresetData =
+  | WorkbenchPreset
+  | WorkbenchPreset['decodeConfig']
+  | WorkbenchPreset['workflowConfig']
+  | WorkbenchPreset['encodeConfig']
+  | WorkbenchPreset['outputConfig']
+
+export function clonePresetData<T extends PresetData>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
-
-export const cloneWorkflowConfig = (config: WorkflowConfig): WorkflowConfig => clone(config)
-export const cloneEncodeConfig = (config: EncodeConfig): EncodeConfig => clone(config)
-export const cloneDecodeConfig = (config: DecodeConfig): DecodeConfig => clone(config)
-export const cloneOutputConfig = (config: OutputConfig): OutputConfig => clone(config)
-export const cloneWorkbenchPreset = (config: WorkbenchPreset): WorkbenchPreset => clone(config)

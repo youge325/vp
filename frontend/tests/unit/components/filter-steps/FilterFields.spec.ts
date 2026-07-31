@@ -6,6 +6,15 @@ import { getFilterCatalogEntry } from '@/services/filters/filter-catalog'
 import type { FilterStep } from '@/types/protocol'
 
 describe('FilterFields', () => {
+  it('rejects a catalog entry for a different discriminant', () => {
+    expect(() => mount(FilterFields, {
+      props: {
+        entry: getFilterCatalogEntry('pad'),
+        modelValue: { kind: 'color', enabled: true, params: {} },
+      },
+    })).toThrow('Filter editor pad cannot edit color')
+  })
+
   it('renders catalog fields in order with their constraints', () => {
     const step: FilterStep = { kind: 'color', enabled: true, params: {} }
     const wrapper = mount(FilterFields, {

@@ -4,8 +4,8 @@ import type {
   EnvironmentCheckResult,
   EnvironmentCheckPayload,
   EnvironmentCheckSource,
+  TaskErrorPayload,
 } from '@/types/protocol'
-import type { TaskError } from '@/types/domain/media'
 
 interface AppEnv {
   lastProbeAt: string | null
@@ -13,7 +13,7 @@ interface AppEnv {
   isChecking: boolean
   isBootstrapping: boolean
   checkResult: EnvironmentCheckResult | null
-  issue: TaskError | null
+  issue: TaskErrorPayload | null
 }
 
 function createInitialEnv(): AppEnv {
@@ -36,7 +36,7 @@ export const useEnvStore = defineStore('env', () => {
     env.lastProbeAt = payload.checkedAt
   }
 
-  function setIssue(issue: TaskError | null): void {
+  function setIssue(issue: TaskErrorPayload | null): void {
     env.issue = issue
   }
 

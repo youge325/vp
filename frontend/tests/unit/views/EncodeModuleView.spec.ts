@@ -4,11 +4,11 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import EncodeModuleView from '@/views/EncodeModuleView.vue'
 import { useEnvStore } from '@/stores/env'
-import type { EncoderProfileSpec } from '@/types/protocol'
+import type { CodecProfileSpec } from '@/types/protocol'
 import type { EnvironmentCheckResult } from '@/types/protocol'
 import { createEnvironmentPayload, createEnvironmentResult } from '../fixtures/environment'
 
-const encoderProfile = (name: string, label: string): EncoderProfileSpec => ({
+const encoderProfile = (name: string, label: string): CodecProfileSpec => ({
   name,
   label,
   family: name.includes('nvenc') ? 'nvidia' : 'software',

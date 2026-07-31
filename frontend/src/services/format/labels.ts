@@ -2,7 +2,7 @@
 // UI 标签格式化 — 按业务规则把领域数据投影成显示字符串。
 
 import type { BatchState } from '@/types/domain/batch'
-import type { EncoderProfileSpec, WorkflowConfig } from '@/types/protocol'
+import type { CodecProfileSpec, WorkflowConfig } from '@/types/protocol'
 
 const FORMAT_CONVERSION_LABEL = '转码'
 
@@ -18,7 +18,7 @@ export function getWorkflowSummaryLabel(workflowConfig: WorkflowConfig): string 
 }
 
 export function groupEncoderProfilesByFamily(
-  profiles: EncoderProfileSpec[],
+  profiles: CodecProfileSpec[],
 ): Array<{ title: string; value: string }> {
   return [
     {

@@ -37,7 +37,7 @@ describe('listenTaskEvents', () => {
   it('subscribes every generated task event exactly once', async () => {
     const handlers = listeners()
 
-    const detach = await listenTaskEvents(handlers)
+    const detach = await listenTaskEvents(handlers, vi.fn())
 
     expect(listenMock.mock.calls.map(([name]) => name)).toEqual(Object.values(TASK_EVENT_NAMES))
     detach()
@@ -46,7 +46,7 @@ describe('listenTaskEvents', () => {
 
   it('routes a generated event payload to its keyed listener', async () => {
     const handlers = listeners()
-    await listenTaskEvents(handlers)
+    await listenTaskEvents(handlers, vi.fn())
     const name: TaskEventName = TASK_EVENT_NAMES.TaskResumeStatus
     const call = listenMock.mock.calls.find(([eventName]) => eventName === name)
     const callback = call?.[1] as ((event: { payload: ResumeStatusPayload }) => void) | undefined
@@ -63,12 +63,47 @@ describe('listenTaskEvents', () => {
     expect(handlers[name]).toHaveBeenCalledWith(payload)
   })
 
+  it('rolls back partial subscriptions in reverse order when a later listen fails', async () => {
+    const firstUnlisten = vi.fn()
+    const secondUnlisten = vi.fn()
+    const failure = new Error('event registration failed')
+    listenMock
+      .mockResolvedValueOnce(firstUnlisten)
+      .mockResolvedValueOnce(secondUnlisten)
+      .mockRejectedValueOnce(failure)
+
+    await expect(listenTaskEvents(listeners(), vi.fn())).rejects.toBe(failure)
+
+    expect(listenMock).toHaveBeenCalledTimes(3)
+    expect(firstUnlisten).toHaveBeenCalledOnce()
+    expect(secondUnlisten).toHaveBeenCalledOnce()
+    expect(secondUnlisten.mock.invocationCallOrder[0])
+      .toBeLessThan(firstUnlisten.mock.invocationCallOrder[0] ?? 0)
+  })
+
   it('returns a no-op listener outside the Tauri runtime', async () => {
     Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
 
-    const detach = await listenTaskEvents(listeners())
+    const detach = await listenTaskEvents(listeners(), vi.fn())
 
     expect(listenMock).not.toHaveBeenCalled()
     expect(detach()).toBeUndefined()
+  })
+
+  it('routes asynchronous listener failures to the required error handler', async () => {
+    const failure = new Error('event handler failed')
+    const handlers = listeners()
+    const name: TaskEventName = TASK_EVENT_NAMES.TaskCompleted
+    handlers[name] = vi.fn().mockRejectedValue(failure)
+    const onListenerError = vi.fn()
+    await listenTaskEvents(handlers, onListenerError)
+    const callback = listenMock.mock.calls.find(([eventName]) => eventName === name)?.[1] as
+      | ((event: { payload: unknown }) => void)
+      | undefined
+
+    callback?.({ payload: {} })
+    await Promise.resolve()
+
+    expect(onListenerError).toHaveBeenCalledWith(name, failure)
   })
 })

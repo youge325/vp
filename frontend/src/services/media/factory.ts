@@ -3,7 +3,7 @@
 
 import type { MediaItem } from '@/types/domain/media'
 import type { WorkbenchPreset } from '@/types/protocol'
-import { cloneWorkbenchPreset } from '@/services/preset/clone'
+import { clonePresetData } from '@/services/preset/clone'
 
 function createMediaId(path: string): string {
   const suffix = Math.random().toString(36).slice(2, 8)
@@ -16,7 +16,7 @@ function basename(path: string): string {
 
 // 运行时投影由 ``useMediaRunState`` 按需创建;本工厂只创建媒体实体。
 export function createMediaItem(path: string, preset: WorkbenchPreset): MediaItem {
-  const snapshot = cloneWorkbenchPreset(preset)
+  const snapshot = clonePresetData(preset)
   return {
     id: createMediaId(path),
     inputPath: path,

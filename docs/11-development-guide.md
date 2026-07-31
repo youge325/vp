@@ -109,7 +109,7 @@ cargo clippy --all-targets -- -D warnings
 覆盖范围：
 
 - manifest ↔ handler ↔ permissions ↔ ACL 与本地 capability/CSP
-- `Idle / Starting / Running / Cancelling / Finishing`、启动/取消/封口竞态与 lease ownership
+- `Idle / Starting / Running / Cancelling / Finishing / Reaping / CleanupFailed`、启动/取消/封口与回收竞态
 - TaskSupervisor 终态唯一性、stderr 排空、kill/reap、控制超时
 - 生产 `classify_line()`、one-shot 逆序类型化 envelope 解析
 - 稳定进程身份、PID/TID 重用 fail-closed 与 one-shot 有界期限
@@ -128,6 +128,7 @@ python -m pytest tests -q
 - 流水线集成测试
 - 生成边界的严格解码与错误码一致性测试
 - manifest v3 严格字段校验与并发 NDJSON 整行写入测试
+- CLI `_HANDLERS` 惰性导入、parser/handler/实现精确同集和无副作用 package import 测试
 
 默认进程运行共享与 ONNX 测试。PyTorch 与 Paddle 使用独立 pytest 进程，避免在同一进程加载
 不兼容的 cuDNN runtime：
@@ -183,12 +184,19 @@ python -m pytest tests_full_e2e -m full_e2e -q
   services/stores/IPC 反向依赖；Knip 查未消费导出、文件和 npm 依赖。
 - `scripts/check_architecture_contracts.py` 建立 Python package DAG 与 Rust crate-module DAG，
   检查未使用 Cargo 依赖、Rust public surface、生成协议深导入、命令面、未消费协议 re-export、
-  CSS/test-id/test-support export 和 PaddleGAN catalog 一致性。
+  Python 中立 dataclass 字段/包级 re-export/CLI handler、无副作用 package、CSS/test-id/test-support
+  export 和算法 catalog↔factory 一致性；同时建立 Rust tasks 子模块 DAG，并只允许
+  `tasks/commands.rs`、`tasks/spawn.rs`、`tasks/ports.rs` 依赖 Tauri。任务门禁还拒绝忽略
+  emit/lifecycle/reap/rollback 结果或在 `subprocess.rs` 外 fire-and-forget 地持有进程 owner，并验证
+  cleanup coordinator 始终保留 join handle、稳定进程句柄和 `ReapTicket` outcome。Cargo 扫描只在
+  Typify 宏确实导入 `contracts/` 内含 `pattern` 的 schema 时，把 `regress` 认作生成代码依赖。
 - `scripts/check_python_dead_code.py` 从 `app`、`app.__main__` 和显式导出入口静态遍历 production
-  import DAG，并以 production roots 单独运行 Vulture；测试引用不能让生产模块或符号存活。
+  import DAG，把 CLI 字面量 `_HANDLERS` 转换为精确动态边，并以 production roots 单独运行
+  Vulture；测试引用或普通字符串不能让生产模块/符号存活，stage-worker 生成模型通过真实 command
+  与 processing import 边可达。
   RIFE、vendor 与生成物 exclusion 必须声明理由、evidence 文件和 marker，RIFE 还必须与中立
-  catalog 精确同集。`backend/vulture_whitelist.py` 只列出经审核的 Pydantic/pytest/framework
-  动态入口。
+  catalog 精确同集。Pydantic、pytest 与 framework 动态入口由 gate 内的精确
+  `(path, symbol, reason, evidence)` registry 审核；不存在会跨文件保活同名符号的全局 whitelist。
 - jscpd 负责跨语言实现克隆，阈值为 0；发现必须抽取或给出最小、可回归验证的保护理由。
 
 ## 调试技巧

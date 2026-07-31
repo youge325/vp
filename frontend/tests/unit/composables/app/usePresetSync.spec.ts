@@ -8,6 +8,7 @@ import { useIssueStore } from '@/stores/issue'
 import { usePresetStore } from '@/stores/preset'
 import { codedError } from './errors'
 import { createDeferred } from '../../fixtures/deferred'
+import { createTestPreset } from '../../fixtures/preset'
 
 // Mock the preset IPC endpoints so we can control success/failure per test.
 const loadMock = vi.fn()
@@ -162,6 +163,72 @@ describe('usePresetSync', () => {
         interpolation: { scale: 0.75 },
       },
     })
+  })
+
+  it('starts one watcher and disposal cancels its pending debounce', async () => {
+    const presetStore = usePresetStore()
+    presetStore.setPersistenceReady(true)
+    const sync = usePresetSync()
+    sync.startAutoSync()
+    sync.startAutoSync()
+
+    presetStore.patchWorkflow((workflow) => {
+      workflow.interpolation.scale = 0.5
+    })
+    await nextTick()
+    sync.dispose()
+    await vi.advanceTimersByTimeAsync(300)
+
+    presetStore.patchWorkflow((workflow) => {
+      workflow.interpolation.scale = 0.75
+    })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(saveMock).not.toHaveBeenCalled()
+  })
+
+  it('disposal invalidates an in-flight save and drops the queued generation', async () => {
+    const firstSave = createDeferred()
+    saveMock.mockImplementationOnce(() => firstSave.promise)
+    const presetStore = usePresetStore()
+    const issueStore = useIssueStore()
+    presetStore.setPersistenceReady(true)
+    const sync = usePresetSync()
+    sync.startAutoSync()
+
+    presetStore.patchWorkflow((workflow) => {
+      workflow.interpolation.scale = 0.5
+    })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(300)
+    presetStore.patchWorkflow((workflow) => {
+      workflow.interpolation.scale = 0.75
+    })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(300)
+
+    sync.dispose()
+    firstSave.reject(codedError(TASK_ERROR_CODES.PersistenceFailed, 'late failure'))
+    await flushPromises()
+
+    expect(saveMock).toHaveBeenCalledOnce()
+    expect(issueStore.operationIssue).toBeNull()
+  })
+
+  it('disposal prevents a pending load generation from mutating the store', async () => {
+    const pendingLoad = createDeferred<ReturnType<typeof createTestPreset> | null>()
+    loadMock.mockReturnValueOnce(pendingLoad.promise)
+    const presetStore = usePresetStore()
+    const replaceSpy = vi.spyOn(presetStore, 'replaceDraftPreset')
+    const sync = usePresetSync()
+
+    const loading = sync.loadPersistedPreset()
+    sync.dispose()
+    pendingLoad.resolve(createTestPreset())
+    await loading
+
+    expect(replaceSpy).not.toHaveBeenCalled()
   })
 
   it('lets only the latest save generation update the preset issue surface', async () => {

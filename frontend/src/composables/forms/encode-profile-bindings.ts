@@ -3,7 +3,7 @@ import type { ComputedRef } from 'vue'
 import { createIoProfileState } from '@/composables/forms/io-profile-state'
 import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
 import { selectEncodeProfile } from '@/services/preset/profile-selection'
-import type { EncoderProfileSpec } from '@/types/protocol'
+import type { CodecProfileSpec } from '@/types/protocol'
 import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { EncodeConfig, WorkbenchPreset } from '@/types/protocol'
 
@@ -18,7 +18,7 @@ export function createEncodeProfileBindings({
   editorConfig,
   patchEncode,
 }: EncodeProfileBindingParams) {
-  const profileState = createIoProfileState<EncoderProfileSpec>({
+  const profileState = createIoProfileState<CodecProfileSpec>({
     resolveVisibleProfiles: () => getVisibleEncoderProfiles(checkResult.value),
     selectedProfileName: () => editorConfig.value.encodeConfig.codec,
   })

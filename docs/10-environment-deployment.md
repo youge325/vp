@@ -232,12 +232,13 @@ Windows 与 Linux 的 UI E2E job 都只构建一次插桩应用，随后让全�
 | 功能 | Windows | Linux | macOS |
 |------|---------|-------|-------|
 | 桌面窗口 | ✅ 完整支持 | ✅ | ✅ |
-| 进程暂停/恢复 | ✅ Win32 API | ✅ 进程组 SIGSTOP/SIGCONT | ✅ 进程组 SIGSTOP/SIGCONT |
+| 进程暂停/恢复 | ✅ 稳定进程/线程句柄 | ✅ pidfd 集合 + SIGSTOP/SIGCONT | ❌ 明确返回 Unsupported |
 | FFmpeg 打包 | ✅ | ✅ | ✅ |
 | Python 打包 | ✅ 可选 | ✅ 可选 | ✅ 可选 |
 
-当前主要开发和测试平台为 Windows。POSIX 暂停/恢复通过 `kill(-pgid, SIGSTOP/SIGCONT)` 控制
-整个 backend 进程组；平台 CI 仍负责验证各自的系统调用和打包路径。
+当前主要开发和测试平台为 Windows。Linux 为任务树每个成员保留 pidfd 并验证启动身份后发送
+`SIGSTOP/SIGCONT`；macOS 因缺少等价的稳定信号句柄而 fail closed，不按旧 PID/PGID 控制。
+三个平台都保留 cancel 与 supervisor kill-and-reap；平台 CI 负责验证各自系统调用和打包路径。
 
 ## 桌面安全配置
 

@@ -12,14 +12,11 @@ import type {
 
 type TaskStatus = 'idle' | 'running' | 'paused' | 'cancelling' | 'completed' | 'error' | 'cancelled'
 
-// 错误载荷直接复用生成协议,避免维护第二套错误码。
-export type TaskError = TaskErrorPayload
-
 export type OperationIssueScope = 'input' | 'encode' | 'task' | 'preset'
 
 export interface OperationIssue {
   scope: OperationIssueScope
-  error: TaskError
+  error: TaskErrorPayload
 }
 
 // 只保留视图实际消费的任务投影;批次级进度由 ``BatchState`` 管理。

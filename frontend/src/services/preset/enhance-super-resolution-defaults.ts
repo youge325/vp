@@ -30,13 +30,6 @@ export function applySuperResolutionAlgorithmDefaults(
     return
   }
 
-  if (
-    algorithm.scaleFactors?.length &&
-    !algorithm.scaleFactors.includes(config.superResolution.scaleFactor)
-  ) {
-    config.superResolution.scaleFactor = algorithm.scaleFactors[0] ?? config.superResolution.scaleFactor
-  }
-
   if (config.superResolution.tensorBackend === 'onnx') {
     config.superResolution.onnxModel = fallbackSuperResolutionOnnxModel(
       checkResult,

@@ -42,7 +42,7 @@ describe('workflow defaults', () => {
         { name: 'rife-fast', tensorBackends: ['pytorch', 'onnx'], models: ['4.26'], onnxModels: ['fast.onnx'] },
       ],
       superResolutionAlgorithms: [
-        { name: 'realesrgan-x4', tensorBackends: ['onnx'], models: [], onnxModels: ['sr-x4.onnx'], scaleFactors: [4] },
+        { name: 'realesrgan-x4', tensorBackends: ['onnx'], models: [], onnxModels: ['sr-x4.onnx'] },
       ],
     }))
 
@@ -51,7 +51,7 @@ describe('workflow defaults', () => {
     expect(workflow.interpolation.onnxModel).toBe('fast.onnx')
     expect(workflow.superResolution.algorithm).toBe('realesrgan-x4')
     expect(workflow.superResolution.onnxModel).toBe('sr-x4.onnx')
-    expect(workflow.superResolution.scaleFactor).toBe(4)
+    expect(workflow.superResolution.scaleFactor).toBe(2)
   })
 
   it('applies existing initial engine preference for NVIDIA and Hygon environments', () => {

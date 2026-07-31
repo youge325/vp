@@ -9,28 +9,54 @@ export type TaskEventListeners = {
   [Name in TaskEventName]: (payload: TaskEventPayloadMap[Name]) => void | Promise<void>
 }
 
+export type TaskEventListenerErrorHandler = (name: TaskEventName, error: unknown) => void
+
 function subscribeTaskEvent<Name extends TaskEventName>(
   name: Name,
   listeners: TaskEventListeners,
+  onListenerError: TaskEventListenerErrorHandler,
 ): Promise<UnlistenFn> {
   return listen<TaskEventPayloadMap[Name]>(name, (event) => {
-    void listeners[name](event.payload)
+    try {
+      void Promise.resolve(listeners[name](event.payload)).catch((error: unknown) => {
+        onListenerError(name, error)
+      })
+    } catch (error) {
+      onListenerError(name, error)
+    }
   })
 }
 
-export async function listenTaskEvents(listeners: TaskEventListeners): Promise<UnlistenFn> {
+export async function listenTaskEvents(
+  listeners: TaskEventListeners,
+  onListenerError: TaskEventListenerErrorHandler,
+): Promise<UnlistenFn> {
   if (!isTauriRuntime()) {
-    return () => {
-      void listeners
-    }
+    return () => {}
   }
 
   const names = Object.values(TASK_EVENT_NAMES) as TaskEventName[]
-  const unlisteners = await Promise.all(names.map((name) => subscribeTaskEvent(name, listeners)))
+  const unlisteners: UnlistenFn[] = []
+  try {
+    for (const name of names) {
+      unlisteners.push(await subscribeTaskEvent(name, listeners, onListenerError))
+    }
+  } catch (error) {
+    detachReverse(unlisteners)
+    throw error
+  }
 
   return () => {
-    for (const unlisten of unlisteners) {
-      unlisten()
+    detachReverse(unlisteners)
+  }
+}
+
+function detachReverse(unlisteners: readonly UnlistenFn[]): void {
+  for (let index = unlisteners.length - 1; index >= 0; index -= 1) {
+    try {
+      unlisteners[index]?.()
+    } catch {
+      // Continue releasing earlier subscriptions when one detach fails.
     }
   }
 }

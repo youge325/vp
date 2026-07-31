@@ -172,7 +172,9 @@ export async function safeInvoke<C extends IpcCommand>(
 事件名及 payload 映射由 [`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) 生成到
 [`frontend/src/types/protocol/events.ts`](../frontend/src/types/protocol/events.ts)；通用 listener
 遍历生成的 `TASK_EVENT_NAMES`，mapped payload type 强制 composition root 覆盖全部事件，包括
-`task-resume-status`。Rust 枚举来自同一清单。
+`task-resume-status`。订阅按生成顺序建立；中途失败会逆序释放已注册 listener，正常卸载同样
+逆序执行且不会因单个 unlisten 失败跳过其余资源。非 Tauri 预览只返回不捕获 handler 的空函数。
+Rust 枚举来自同一清单。
 
 ## 任务状态机（纯函数 Reducer）
 
@@ -249,7 +251,11 @@ token，并记录开始时的 `currentId`；回复只有在 token、任务 ID、
 
 ### Task orchestrator runtime 单例
 
-[`frontend/src/composables/app/taskOrchestratorRuntime.ts`](../frontend/src/composables/app/taskOrchestratorRuntime.ts) 缓存 `BatchRunner` 并连接 Pinia、IPC 与事件监听。`useBootstrap()` 直接负责监听器注册和卸载；`useTaskOrchestrator()` 只投影 Render 页消费的状态并把启动、取消、暂停、恢复和冲突处理命令发送给同一 runner，不暴露 listener lifecycle 或 console 专用读模型。`TaskConsole` 直接消费 task/media stores 与 `useConsoleTaskContext()`。
+[`frontend/src/composables/app/taskOrchestratorRuntime.ts`](../frontend/src/composables/app/taskOrchestratorRuntime.ts)
+缓存 `BatchRunner` 并连接 Pinia、IPC 与事件监听。并发 attach 共享同一个 pending promise；每次
+dispose 递增 generation，因此迟到的旧 listener 会立即自卸载，失败的 attachment 则清空 promise
+允许重试。`useBootstrap()` 直接负责监听器注册和卸载，并在 unmount 后停止后续 preset/environment
+启动步骤；`useTaskOrchestrator()` 只投影 Render 页消费的状态并发送任务命令。
 
 [`frontend/src/composables/selectors/useTaskConsoleState.ts`](../frontend/src/composables/selectors/useTaskConsoleState.ts)
 是 TaskConsole 的唯一视图投影，统一日志格式、续传 banner 和批次完成百分比。模型指标展示统一由
@@ -263,7 +269,8 @@ token，并记录开始时的 `currentId`；回复只有在 token、任务 ID、
 debounced save 分配 generation。只有最新 generation 的成功或失败能清理或设置 `preset` issue，
 过期回复不会覆盖较新的结果。损坏或版本不匹配的预设会重置为默认值，并通过 App 根部的全局
 `IssueBanner` 显示；随后立即保存 schema 2 默认替代，成功也保留本次不兼容提示。替代写入或
-后续保存失败会在同一可见错误面显示具体持久化错误。
+后续保存失败会在同一可见错误面显示具体持久化错误。auto-sync watcher 只能启动一次；dispose
+停止 watcher、清除 debounce、丢弃 queued save 并使迟到的 load/save generation 失效。
 
 ### Enhance 唯一组合根
 
@@ -322,7 +329,8 @@ IPC 命令与事件适配器。`python scripts/generate_contracts.py --check` �
 
 ### 类型扩展层
 
-生成文件禁止前端代码直接深路径引用。`types/protocol/index.ts` 统一 re-export 所有 generated 类型：
+生成文件禁止前端代码直接深路径引用。`types/protocol/index.ts` 只 re-export 生产代码实际消费的
+generated 类型，不创建同义 mirror alias：
 
 ```typescript
 export type {
@@ -386,6 +394,8 @@ export const TASK_ERROR_CODES = {
 是互不依赖的叶子层，前者不依赖 Vue、Pinia 或 Tauri。组件和视图只能经
 `@/types/protocol` 公共入口使用生成协议。前端架构脚本从 `src/main.ts` 和明确动态入口遍历生产
 import DAG，拒绝越层依赖、环和不可达生产文件；只有两个带 evidence 的 ambient declaration
-进入精确 allowlist。production Knip 单独检查导出，因此测试引用不能让生产 API 存活。
+进入精确 allowlist。架构脚本还要求 Port/Capability/Continuation/Operations 的每个成员都存在
+生产属性读取，并拒绝 `type Alias = GeneratedType` 形式的镜像；fixture 明确证明测试引用不能让
+这些成员存活。production Knip 单独检查导出，因此测试引用不能让生产 API 存活。
 `npm run check` 顺序执行 ESLint、生产/测试 typecheck、依赖/可达性检查、Knip 未使用导出与
 依赖检查，以及零阈值 jscpd 克隆扫描。

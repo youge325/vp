@@ -13,6 +13,11 @@
 | `python -m app benchmark ...` | 端到端补帧性能回归检查 | GitHub Actions / 本地开发 |
 | `python -m app stage-worker --config-json ...` | 执行单个隔离算法 stage | 仅由 Python 流水线内部拉起 |
 
+`app.cli` 与 `app.cli.commands` 的包导入无副作用。`cli.main` 只保存字面量 `_HANDLERS` 映射，完成
+参数解析后才用 `importlib.import_module()` 导入被选择的 command；运行 `check` 不会顺带加载
+process、Paddle、PyTorch 或 ONNX 执行模块。生产可达性门禁把该映射解析成精确 import 边，并校验
+parser handler、registry 和实际 `cmd_*` 实现严格同集。
+
 ### 双层兜底
 
 [`backend/app/__main__.py`](../backend/app/__main__.py) 在 `app` 包完全加载前后各设一层异常捕获：
@@ -53,8 +58,10 @@ CLI composition root 将职责拆成以下边界：
 ## 配置体系
 
 配置与 NDJSON payload 的字段、别名和枚举均由 `contracts/boundary.schema.json` 生成到
-`backend/app/generated/contracts.py`。`app.models` 只增加输出路径等领域校验；NDJSON 发射器
-直接接收生成模型，不再保留手写 payload adapter 或镜像字段。
+`backend/app/generated/contracts.py`；内部 worker 配置/事件由 `stage-worker.schema.json` 独立生成到
+`backend/app/generated/stage_worker_contracts.py`。生产调用方直接引用 generated owner，不保留聚合
+re-export 层；`OutputConfig.outputDir` 的非空白约束也由 schema 生成。NDJSON 发射器直接接收生成模型，
+不保留手写 payload adapter、validator 或镜像字段。
 
 ### pydantic-settings
 
@@ -67,8 +74,9 @@ CLI composition root 将职责拆成以下边界：
 ### 生成模型与领域校验
 
 [`backend/app/generated/contracts.py`](../backend/app/generated/contracts.py) 是
-`datamodel-code-generator` 产出的唯一边界字段定义。`app.models` 直接 re-export 生成类型，只在
-`OutputConfig` 上增加非空路径领域校验。`RuntimeConfigs` 保存校验后的 Pydantic 模型，并按需
+`datamodel-code-generator` 产出的唯一公共边界字段定义。调用方直接导入所需的 generated 模型；
+`OutputConfig` 的非空白路径和正整数分段约束来自 schema，删除手写继承模型后不会形成双重校验。
+`RuntimeConfigs` 保存校验后的 Pydantic 模型，并按需
 生成 camelCase JSON 投影供签名、adapter 和 worker 使用，不维护展开缓存或冗余深拷贝。
 
 ## 处理步骤规划
@@ -87,8 +95,10 @@ class StagePlan:
 插值位置、输出帧数与 FPS 均从有序步骤和同一个 `StageProjection` 派生，不保存可互相矛盾的平行状态。输出尺寸由 preflight 对同一 `StagePlan` 应用 stage 尺寸规则得到。
 
 [`backend/app/catalog/stage_descriptors.py`](../backend/app/catalog/stage_descriptors.py) 是 stage
-能力的中立不可变 catalog，统一声明执行模式、文件流水线要求、后端支持、固定倍率、模型类别和
-工厂键。`ProcessingStep`、规划规则与算法装配读取同一个 descriptor；规划层不导入算法实现。
+能力的中立不可变 catalog，统一声明执行模式、文件流水线要求、后端支持、固定倍率、模型类别、
+工厂键和 `GeometryPolicy`。尺寸投影通过 `geometry.project()` 处理 preserve、配置倍率、固定倍率与
+filter chain，不保存 `changes_dimensions` 镜像布尔值。`algorithm_capabilities.py` 是算法发现、
+模型元数据和 descriptor resolution 的单一 catalog；规划层不导入算法实现。
 模型文件存在性由消费方定义的 `ModelAvailabilityPort` 注入，production adapter 才访问文件系统
 和运行时路径，因此纯规划测试可只提供 fake port。
 
@@ -231,11 +241,17 @@ stage-worker factory 按 descriptor 显式选择，不用同一类兼容两种�
 
 [`backend/app/processing/streaming/stage_worker_factory.py`](../backend/app/processing/streaming/stage_worker_factory.py)
 根据已经完成规划的 stage 类型惰性导入并实例化具体算法。该边界只暴露 `create_backend()` 和
-`create_algorithm()`，不维护全局 registry，也不要求测试或应用启动代码预先注册算法。
+`create_algorithm()`；私有不可变 `_ALGORITHM_FACTORIES` 以 descriptor `factory_key` 为键，和中立
+catalog 由静态门禁保证精确同集。factory 函数内部才导入 RIFE、ONNX SR 或 Paddle 视频 SR，应用
+启动和无关 command 不会加载重型框架。
 
 - filter chain 不创建 tensor backend，直接构造 `FrameFilterChainAlgorithm`
 - interpolation 与 super-resolution 复用规划层过滤后的 kwargs 和已创建 backend
 - 未支持的 stage 类型在装配边界立即失败
+
+PaddleGAN 视频超分进一步拆为 sequence executor、模型 factory、tensor codec、TensorRT cache 和
+trace observer；`paddle_video_super_resolution.py` 只组合这些能力。ONNX 单帧超分与 Paddle 序列
+超分是两个独立实现，不通过兼容分支共享类。
 
 factory、stage runtime 和 execution loop 共享 `Algorithm` union、`ITensorBackend` 与
 `StageWorkerConfig` 类型契约，并按 descriptor 的模式做一次结构化 Protocol 校验。
@@ -333,6 +349,10 @@ class _NdjsonEmitter:
 - 所有结构化 stdout 输出集中在同一 emitter；专用锁覆盖校验、序列化、整行 write 与 flush，
   保证并发 reporter 不会交错 NDJSON 行
 - 普通日志和终端进度条继续输出到 stderr，不经过此处
+
+stage-worker 的进度/错误事件使用生成 Pydantic 模型，并以 manifest v3 生成的
+`STAGE_WORKER_EVENT_PREFIX` 写到 worker stderr；父 Python 进程只解析该前缀后的类型化 JSON。
+worker 行长、stderr tail、error summary 和回收期限与 Rust 共用 manifest limits。
 
 ### Reporter
 

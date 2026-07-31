@@ -12,7 +12,7 @@ VP Workbench 的错误边界遵循四条规则：
 ## 中立错误契约
 
 [`contracts/backend-error-codes.schema.json`](../contracts/backend-error-codes.schema.json) 定义 Python
-可发出的 10 个码：
+可发出的 11 个码：
 
 | Code | 典型来源 |
 |------|----------|
@@ -26,9 +26,10 @@ VP Workbench 的错误边界遵循四条规则：
 | `invalid_config` | 配置校验/工作流组合无效 |
 | `resume_conflict` | 输出和恢复状态需要用户决策 |
 | `io_error` | 后端文件系统或媒体 IO |
+| `persistence_failed` | 分段 manifest 或工作区持久化失败 |
 
 [`contracts/shell-error-codes.schema.json`](../contracts/shell-error-codes.schema.json) 定义 Rust 壳可生成
-的 10 个码：
+的 11 个码：
 
 | Code | 典型来源 |
 |------|----------|
@@ -42,9 +43,10 @@ VP Workbench 的错误边界遵循四条规则：
 | `backend_no_json` | one-shot 成功退出但无合法 envelope |
 | `controller_unavailable` | 控制 channel/reply 关闭或超时 |
 | `backend_probe_failed` | one-shot 非零退出且无 backend error |
+| `process_control_unsupported` | 当前平台不支持 pause/resume |
 
-三个码在两组中重叠，因此
-[`contracts/error-codes.schema.json`](../contracts/error-codes.schema.json) 的完整前端联合为 17 个
+四个码在两组中重叠，因此
+[`contracts/error-codes.schema.json`](../contracts/error-codes.schema.json) 的完整前端联合为 18 个
 值。生成器断言完整集合严格等于两个子集的并集。
 
 ## Python：ProcessError
@@ -68,7 +70,8 @@ class ProcessError(Exception):
 [`backend/app/__main__.py`](../backend/app/__main__.py) 有两个防御边界：
 
 - 导入期：在完整 app 包尚不可用时，用唯一允许的 bootstrap 手写 error envelope 报告依赖错误；
-- 运行期：把未处理异常转为 `ProcessError`，通过模块级 `ndjson.error()` 发出。
+- 运行期：把未处理异常转为 `ProcessError`，构造生成的 `BackendTaskErrorPayload`，再通过
+  `ndjson.emit(BackendEnvelopeType.ERROR, payload)` 发出。
 
 正常 CLI 代码不能自行拼装 `{"type": "error"}`；架构门禁要求手写 error envelope 只剩 bootstrap
 这一处。
@@ -78,7 +81,7 @@ class ProcessError(Exception):
 任务状态层返回 `TaskStateError`：
 
 `AlreadyRunning`、`StartLeaseExpired`、`NoActiveTask`、`StillStarting`、
-`AlreadyCancelling`。
+`AlreadyCancelling`、`AlreadyFinishing`、`Reaping`、`CleanupFailed`。
 
 只有 [`frontend/src-tauri/src/tasks/commands.rs`](../frontend/src-tauri/src/tasks/commands.rs) 将这些
 领域状态映射为 `ShellError::InvalidInput` 或 `ShellError::NoActiveTask`。状态机和 supervisor
@@ -115,7 +118,8 @@ enum ShellError {
 
 | ShellError | Wire code |
 |------------|-----------|
-| `RuntimeResolution`、`ProcessControl` | `process_failed` |
+| `RuntimeResolution`、非 unsupported 的 `ProcessControl` | `process_failed` |
+| `ProcessControl(Unsupported)` | `process_control_unsupported` |
 | `Spawn` | `spawn_failed` |
 | `BackendNoJson` | `backend_no_json` |
 | `ControllerUnavailable` | `controller_unavailable` |

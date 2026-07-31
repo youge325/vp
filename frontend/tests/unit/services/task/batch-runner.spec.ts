@@ -18,7 +18,6 @@ function makeDeps(overrides: Partial<BatchRunnerDeps> = {}): BatchRunnerDeps {
     isCancelling: false,
     controlPending: null,
   }
-  const runtimeIds: string[] = []
   const items = new Map<string, MediaItem>()
   const runStates = new Map<string, MediaRunState>()
 
@@ -56,8 +55,7 @@ function makeDeps(overrides: Partial<BatchRunnerDeps> = {}): BatchRunnerDeps {
 
     getBatch: () => batchState,
     setBatch: (partial) => { Object.assign(batchState, partial) },
-    getRuntimeIds: () => runtimeIds,
-    setRuntimeIds: (ids) => { runtimeIds.length = 0; runtimeIds.push(...ids) },
+    setRuntimeIds: vi.fn(),
     setPendingConflict: vi.fn(),
 
     buildRequest: (item) => ({ inputPath: item.inputPath, decodeConfig: item.decodeConfig, workflowConfig: item.workflowConfig, encodeConfig: item.encodeConfig, outputConfig: item.outputConfig } as TaskRequest),
@@ -394,7 +392,6 @@ describe('batch-runner', () => {
       completedCount: 1,
       isRunning: false,
     })
-    expect(deps.getRuntimeIds()).toEqual(['a'])
     expect(deps.getItemRunState('a')?.taskState.status).toBe('completed')
 
     await runner.start(['a'])

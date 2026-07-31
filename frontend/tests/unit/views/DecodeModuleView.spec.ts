@@ -4,11 +4,11 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import DecodeModuleView from '@/views/DecodeModuleView.vue'
 import { useEnvStore } from '@/stores/env'
-import type { DecoderProfileSpec } from '@/types/protocol'
+import type { CodecProfileSpec } from '@/types/protocol'
 import type { EnvironmentCheckResult } from '@/types/protocol'
 import { createEnvironmentPayload, createEnvironmentResult } from '../fixtures/environment'
 
-const decoderProfile = (name: string, label: string): DecoderProfileSpec => ({
+const decoderProfile = (name: string, label: string): CodecProfileSpec => ({
   name,
   label,
   family: name === 'software' ? 'software' : 'nvidia',

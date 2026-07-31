@@ -68,8 +68,10 @@ graph TD
     FFE --> FFA
 ```
 
-`stage-worker` 只消费 stdin rawvideo、输出 stdout rawvideo 并在 stderr 上报内部事件；FFmpeg
-decoder/encoder 与 finalization port 由父流水线消费，worker 不穿透 adapter。
+`stage-worker` 通过参数接收生成的 `StageWorkerConfig`，只消费 stdin rawvideo、输出 stdout
+rawvideo，并在 stderr 以 manifest v3 的 `stageWorkerEventPrefix` 上报生成的 progress/error event。
+父进程对单行设置 1 MiB 上限并只解析该前缀后的 JSON；FFmpeg decoder/encoder 与 finalization
+port 由父流水线消费，worker 不穿透 adapter。
 
 ## 前端层：配置构建
 
@@ -106,9 +108,10 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 [`frontend/src-tauri/src/tasks/builder.rs`](../frontend/src-tauri/src/tasks/builder.rs) 构建启动 Python 子进程的命令：
 
 1. 解析 `ResolvedRuntimePaths` 获取 Python 可执行文件路径
-2. 构建命令行：`python -m app process --input <path> --config-stdin`，可选追加
+2. 通过生成的 `StartTaskSpec` 取得 `process` subcommand、stdin 类型、10 秒写入期限和 5 秒回收期限
+3. 构建命令行：`python -m app process --input <path> --config-stdin`，可选追加
    `--resume-mode`
-3. 从 `TaskRequest` 提取 `{ decode, workflow, encode, output }` 四段配置并序列化到 stdin
+4. 从 `TaskRequest` 提取 `{ decode, workflow, encode, output }` 四段配置并序列化到 stdin
 
 关键设计：spawn 后立即写 stdin，避免 Python 等待 stdin 输入而阻塞。stdin 写入在单独的异步 task 中完成，与 stdout reader 并发执行。
 
@@ -237,7 +240,7 @@ graph TD
 graph LR
     A[FFmpeg stderr] --> B[Python _progress.py]
     B --> C[Python reporter.py]
-    C --> D[NdjsonEmitter.progress()]
+    C --> D[NdjsonEmitter.emit typed progress]
     D --> E[stdout NDJSON]
     E --> F[Rust stdout reader]
     F --> G[app_handle.emit]

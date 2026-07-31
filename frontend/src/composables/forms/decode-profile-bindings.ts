@@ -8,7 +8,7 @@ import {
   fallbackUnavailableDecodeProfile,
   selectDecodeProfile,
 } from '@/services/preset/profile-selection'
-import type { DecoderProfileSpec } from '@/types/protocol'
+import type { CodecProfileSpec } from '@/types/protocol'
 import type { EnvironmentCheckResult } from '@/types/protocol'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
 
@@ -25,7 +25,7 @@ export function createDecodeProfileBindings({
   editorVideoCodec,
   patchDecode,
 }: DecodeProfileBindingParams) {
-  const profileState = createIoProfileState<DecoderProfileSpec>({
+  const profileState = createIoProfileState<CodecProfileSpec>({
     resolveVisibleProfiles: () => getVisibleDecoderProfiles(checkResult.value, editorVideoCodec.value),
     selectedProfileName: () => editorConfig.value.decodeConfig.decoder ?? '',
   })

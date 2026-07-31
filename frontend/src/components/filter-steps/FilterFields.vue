@@ -12,25 +12,41 @@ const props = defineProps<{
 const modelValue = defineModel<FilterStep>({ required: true })
 const patch = createFilterModelParamsPatch(modelValue)
 const editor = computed(() => {
+  if (props.entry.kind !== modelValue.value.kind) {
+    throw new Error(`Filter editor ${props.entry.kind} cannot edit ${modelValue.value.kind}`)
+  }
   if (!props.entry.editor) throw new Error(`Filter ${props.entry.kind} has no declarative editor`)
   return props.entry.editor
 })
 
+function hasKey<Params extends object>(params: Params, key: PropertyKey): key is keyof Params {
+  return key in params
+}
+
 function fieldValue(field: FilterFieldDefinition): string | number | boolean {
-  const value = modelValue.value.params[field.key] ?? props.entry.defaultParams[field.key]
+  const params = modelValue.value.params
+  const defaults = props.entry.defaultStep.params
+  const value = hasKey(params, field.key)
+    ? params[field.key]
+    : hasKey(defaults, field.key)
+      ? defaults[field.key]
+      : undefined
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? value : ''
 }
 
 function updateNumber(field: FilterFieldDefinition, value: number): void {
   patch((params) => {
-    params[field.key] = value
+    Object.assign(params, { [field.key]: value })
   })
 }
 
 function updateText(field: FilterFieldDefinition, event: Event): void {
-  const value = (event.target as HTMLInputElement).value
+  if (!(event.target instanceof HTMLInputElement)) {
+    throw new Error('Filter text update did not originate from an input')
+  }
+  const value = event.target.value
   patch((params) => {
-    params[field.key] = value
+    Object.assign(params, { [field.key]: value })
   })
 }
 </script>

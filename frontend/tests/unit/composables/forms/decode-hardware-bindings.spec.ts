@@ -2,7 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import { describe, expect, it } from 'vitest'
 
 import { createDecodeHardwareBindings } from '@/composables/forms/decode-hardware-bindings'
-import type { DecoderProfileSpec, HardwareDeviceOptionSpec } from '@/types/protocol'
+import type { CodecProfileSpec, HardwareDeviceOptionSpec } from '@/types/protocol'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
 
 const stringOption = (name: string, defaultValue: string) => ({
@@ -18,7 +18,7 @@ const stringOption = (name: string, defaultValue: string) => ({
 function decoderProfile(
   hardwareDevices: string[],
   hardwareDeviceOptions: Record<string, HardwareDeviceOptionSpec[]>,
-): DecoderProfileSpec {
+): CodecProfileSpec {
   return {
     name: 'h264_cuvid',
     label: 'NVDEC H.264',
@@ -32,7 +32,7 @@ function decoderProfile(
 }
 
 function makeBindings() {
-  const currentDecoderProfile = ref<DecoderProfileSpec | null>(
+  const currentDecoderProfile = ref<CodecProfileSpec | null>(
     decoderProfile(['cuda', 'd3d11va'], {
       cuda: [
         { value: '0', label: '0' },

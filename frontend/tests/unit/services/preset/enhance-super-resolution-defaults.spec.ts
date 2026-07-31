@@ -34,7 +34,7 @@ describe('super-resolution algorithm defaults', () => {
     expect(workflow.superResolution.numFrames).toBe(8)
   })
 
-  it('repairs unsupported scale and ONNX model for non-Paddle super-resolution algorithms', () => {
+  it('preserves configured scale and repairs the ONNX model for non-Paddle algorithms', () => {
     const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.superResolution.tensorBackend = 'onnx'
     workflow.superResolution.algorithm = 'sr'
@@ -47,14 +47,13 @@ describe('super-resolution algorithm defaults', () => {
           tensorBackends: ['onnx'],
           models: [],
           onnxModels: ['sr-x4.onnx'],
-          scaleFactors: [4],
         },
       ],
     })
 
     applySuperResolutionAlgorithmDefaults(workflow, env.superResolutionAlgorithms?.[0], env)
 
-    expect(workflow.superResolution.scaleFactor).toBe(4)
+    expect(workflow.superResolution.scaleFactor).toBe(2)
     expect(workflow.superResolution.onnxModel).toBe('sr-x4.onnx')
   })
 })

@@ -4,9 +4,9 @@ import {
   buildProfileOptions,
   CONTAINER_SELECT_OPTIONS,
 } from '@/services/preset/io-options'
-import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/protocol'
+import type { CodecProfileSpec } from '@/types/protocol'
 
-const decoderProfile = (name: string, label: string): DecoderProfileSpec => ({
+const decoderProfile = (name: string, label: string): CodecProfileSpec => ({
   name,
   label,
   family: 'software',
@@ -16,7 +16,7 @@ const decoderProfile = (name: string, label: string): DecoderProfileSpec => ({
   options: [],
 })
 
-const encoderProfile = (name: string, label: string): EncoderProfileSpec => ({
+const encoderProfile = (name: string, label: string): CodecProfileSpec => ({
   name,
   label,
   family: 'software',

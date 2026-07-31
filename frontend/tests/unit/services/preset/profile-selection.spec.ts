@@ -8,8 +8,7 @@ import {
 } from '@/services/preset/profile-selection'
 import type {
   CapabilityOptionSpec,
-  DecoderProfileSpec,
-  EncoderProfileSpec,
+  CodecProfileSpec,
   HardwareDeviceOptionSpec,
 } from '@/types/protocol'
 import type { EncodeConfig } from '@/types/protocol'
@@ -25,14 +24,14 @@ const stringOption = (name: string, defaultValue: string): CapabilityOptionSpec 
 })
 
 const decoderProfile = (
-  overrides: Partial<DecoderProfileSpec> = {},
+  overrides: Partial<CodecProfileSpec> = {},
   hardwareDeviceOptions: Record<string, HardwareDeviceOptionSpec[]> = {
     cuda: [
       { value: '0', label: '0' },
       { value: '1', label: '1' },
     ],
   },
-): DecoderProfileSpec => ({
+): CodecProfileSpec => ({
   name: 'h264_cuvid',
   label: 'NVDEC H.264',
   family: 'nvidia',
@@ -44,7 +43,7 @@ const decoderProfile = (
   ...overrides,
 })
 
-const encoderProfile = (overrides: Partial<EncoderProfileSpec> = {}): EncoderProfileSpec => ({
+const encoderProfile = (overrides: Partial<CodecProfileSpec> = {}): CodecProfileSpec => ({
   name: 'hevc_nvenc',
   label: 'NVENC H.265',
   family: 'nvidia',

@@ -1,8 +1,13 @@
 import { animeCleanupParamsForProfile } from './anime-cleanup'
 import type { FilterStep, FilterStepKind } from '@/types/protocol'
 
-export interface FilterFieldDefinition {
-  key: string
+type FilterStepFor<Kind extends FilterStepKind> = Extract<FilterStep, { kind: Kind }>
+type FilterParamKey<Kind extends FilterStepKind> = Kind extends FilterStepKind
+  ? keyof FilterStepFor<Kind>['params'] & string
+  : never
+
+export interface FilterFieldDefinition<Kind extends FilterStepKind = FilterStepKind> {
+  key: FilterParamKey<Kind>
   label: string
   type: 'number' | 'text'
   min?: number
@@ -10,28 +15,40 @@ export interface FilterFieldDefinition {
   step?: number
 }
 
-interface FilterEditorDefinition {
+interface FilterEditorDefinition<Kind extends FilterStepKind> {
   columns: 2 | 3 | 4
-  fields: readonly FilterFieldDefinition[]
+  fields: readonly FilterFieldDefinition<Kind>[]
 }
 
-export interface FilterCatalogEntry {
-  kind: FilterStepKind
+export interface FilterCatalogEntry<Kind extends FilterStepKind = FilterStepKind> {
+  kind: Kind
   label: string
-  defaultParams: Readonly<FilterStep['params']>
-  editor?: FilterEditorDefinition
+  defaultStep: Readonly<FilterStepFor<Kind>>
+  editor?: FilterEditorDefinition<Kind>
 }
 
-export const FILTER_CATALOG: readonly FilterCatalogEntry[] = [
-  {
+interface FilterCatalogDefinition<Kind extends FilterStepKind> extends FilterCatalogEntry<Kind> {
+  defaultStep: FilterStepFor<Kind>
+}
+
+type FilterCatalogByKind = {
+  [Kind in FilterStepKind]: FilterCatalogDefinition<Kind>
+}
+
+const CATALOG_BY_KIND: FilterCatalogByKind = {
+  scale: {
     kind: 'scale',
     label: '缩放',
-    defaultParams: { mode: 'factor', factor: 0.5, width: 1920, height: 1080, interpolation: 'lanczos4' },
+    defaultStep: {
+      kind: 'scale',
+      enabled: true,
+      params: { mode: 'factor', factor: 0.5, width: 1920, height: 1080, interpolation: 'lanczos4' },
+    },
   },
-  {
+  crop: {
     kind: 'crop',
     label: '裁剪',
-    defaultParams: { x: 0, y: 0, width: 1920, height: 1080 },
+    defaultStep: { kind: 'crop', enabled: true, params: { x: 0, y: 0, width: 1920, height: 1080 } },
     editor: {
       columns: 4,
       fields: [
@@ -42,10 +59,14 @@ export const FILTER_CATALOG: readonly FilterCatalogEntry[] = [
       ],
     },
   },
-  {
+  pad: {
     kind: 'pad',
     label: '填充',
-    defaultParams: { top: 0, bottom: 0, left: 0, right: 0, color: '#000000' },
+    defaultStep: {
+      kind: 'pad',
+      enabled: true,
+      params: { top: 0, bottom: 0, left: 0, right: 0, color: '#000000' },
+    },
     editor: {
       columns: 3,
       fields: [
@@ -57,19 +78,19 @@ export const FILTER_CATALOG: readonly FilterCatalogEntry[] = [
       ],
     },
   },
-  {
+  sharpen: {
     kind: 'sharpen',
     label: '锐化',
-    defaultParams: { amount: 0.5 },
+    defaultStep: { kind: 'sharpen', enabled: true, params: { amount: 0.5 } },
     editor: {
       columns: 2,
       fields: [{ key: 'amount', label: '强度 (0~1)', type: 'number', min: 0, max: 1, step: 0.05 }],
     },
   },
-  {
+  denoise: {
     kind: 'denoise',
     label: '降噪',
-    defaultParams: { strength: 10, colorStrength: 10 },
+    defaultStep: { kind: 'denoise', enabled: true, params: { strength: 10, colorStrength: 10 } },
     editor: {
       columns: 2,
       fields: [
@@ -78,10 +99,10 @@ export const FILTER_CATALOG: readonly FilterCatalogEntry[] = [
       ],
     },
   },
-  {
+  color: {
     kind: 'color',
     label: '色彩调整',
-    defaultParams: { brightness: 0, contrast: 1, saturation: 1 },
+    defaultStep: { kind: 'color', enabled: true, params: { brightness: 0, contrast: 1, saturation: 1 } },
     editor: {
       columns: 3,
       fields: [
@@ -91,18 +112,23 @@ export const FILTER_CATALOG: readonly FilterCatalogEntry[] = [
       ],
     },
   },
-  { kind: 'anime_cleanup', label: 'Anime 清理', defaultParams: animeCleanupParamsForProfile('clean-lines') },
-] as const
-
-const CATALOG_BY_KIND = new Map(FILTER_CATALOG.map((entry) => [entry.kind, entry]))
-
-export function getFilterCatalogEntry(kind: FilterStepKind): FilterCatalogEntry {
-  const entry = CATALOG_BY_KIND.get(kind)
-  if (!entry) throw new Error(`Unknown filter kind: ${kind}`)
-  return entry
+  anime_cleanup: {
+    kind: 'anime_cleanup',
+    label: 'Anime 清理',
+    defaultStep: {
+      kind: 'anime_cleanup',
+      enabled: true,
+      params: animeCleanupParamsForProfile('clean-lines'),
+    },
+  },
 }
 
-export function createDefaultFilterStep(kind: FilterStepKind): FilterStep {
-  const entry = getFilterCatalogEntry(kind)
-  return { kind, enabled: true, params: { ...entry.defaultParams } }
+export const FILTER_CATALOG: readonly FilterCatalogEntry[] = Object.values(CATALOG_BY_KIND)
+
+export function getFilterCatalogEntry<Kind extends FilterStepKind>(kind: Kind): FilterCatalogEntry<Kind> {
+  return CATALOG_BY_KIND[kind]
+}
+
+export function createDefaultFilterStep<Kind extends FilterStepKind>(kind: Kind): FilterStepFor<Kind> {
+  return structuredClone(CATALOG_BY_KIND[kind].defaultStep)
 }

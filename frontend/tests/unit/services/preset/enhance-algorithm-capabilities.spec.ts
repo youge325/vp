@@ -27,7 +27,6 @@ describe('enhance algorithm capability rules', () => {
         name: 'onnx-vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
-        scaleFactors: [4],
       })),
     ).toBe(false)
   })

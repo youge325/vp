@@ -4,6 +4,11 @@ import { useEnvStore } from '@/stores/env'
 import { envIpc } from '@/lib/ipc/endpoints/env'
 import { normalizeError } from '@/lib/errors/normalize'
 import { TASK_ERROR_CODES } from '@/types/protocol'
+import type { EnvironmentCheckPayload } from '@/types/protocol'
+
+export function requestEnvironmentCheck(forceRefresh = true): Promise<EnvironmentCheckPayload> {
+  return envIpc.check(forceRefresh)
+}
 
 export function useEnvironmentChecker() {
   const envStore = useEnvStore()
@@ -12,7 +17,7 @@ export function useEnvironmentChecker() {
     envStore.setChecking(true)
     envStore.setIssue(null)
     try {
-      envStore.setCheckPayload(await envIpc.check(forceRefresh))
+      envStore.setCheckPayload(await requestEnvironmentCheck(forceRefresh))
     } catch (error) {
       // Structured shell errors retain their code; unknown failures
       // use the canonical process error fallback.

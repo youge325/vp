@@ -2,13 +2,14 @@
 // terminal transitions through a narrow lifecycle capability.
 
 import { TASK_ERROR_CODES } from '@/types/protocol'
-import type { MediaTaskState, TaskError } from '@/types/domain/media'
+import type { MediaTaskState } from '@/types/domain/media'
 import type {
   ResumeStatusPayload,
   TaskCancelledPayload,
   TaskCompletedPayload,
   TaskLogPayload,
   TaskProgressPayload,
+  TaskErrorPayload,
 } from '@/types/protocol'
 import {
   appendTaskLog,
@@ -69,7 +70,7 @@ export function createEventHandlers(
     await lifecycle.finalizeCurrent('completed')
   }
 
-  async function onError(error: TaskError): Promise<void> {
+  async function onError(error: TaskErrorPayload): Promise<void> {
     if (conflict.tryStashFromError(error)) {
       return
     }
@@ -83,7 +84,7 @@ export function createEventHandlers(
     }
     // A watchdog stall is exceptional; user cancellation remains silent.
     if (payload.reason === 'stalled') {
-      const stalledError: TaskError = {
+      const stalledError: TaskErrorPayload = {
         code: TASK_ERROR_CODES.ProcessFailed,
         message: '后端进程在配置的超时时间内无任何进度,任务已被中止。',
         details: payload.details,

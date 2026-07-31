@@ -25,6 +25,5 @@ export function fixedSuperResolutionScaleFactor(algorithm: AlgorithmInfo | null 
   if (typeof explicit === 'number' && Number.isFinite(explicit)) {
     return explicit
   }
-  const scale = algorithm?.scaleFactors?.length === 1 ? algorithm.scaleFactors[0] : null
-  return typeof scale === 'number' && Number.isFinite(scale) ? scale : null
+  return null
 }
