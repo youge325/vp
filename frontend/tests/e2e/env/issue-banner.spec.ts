@@ -42,6 +42,7 @@ test.describe('Issue banner', () => {
     await expect(banner.locator('strong')).toHaveText('预设持久化失败')
     await expect(banner.locator('p')).toHaveText('预设文件损坏，已恢复默认设置')
 
+    await banner.evaluate((element) => element.scrollIntoView({ block: 'center' }))
     await saveE2EScreenshot('preset-banner')
     await clearOperationIssue()
     await expect(banner).not.toBeVisible()

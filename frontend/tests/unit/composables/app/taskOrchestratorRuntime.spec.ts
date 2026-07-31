@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const unlistenMock = vi.hoisted(() => vi.fn())
-const listenMock = vi.hoisted(() => vi.fn(async () => unlistenMock))
+const listenMock = vi.hoisted(() => vi.fn(async (_listeners: unknown) => unlistenMock))
 
 vi.mock('@/lib/ipc/events', () => ({
   listenTaskEvents: listenMock,
@@ -44,7 +44,9 @@ describe('taskOrchestratorRuntime', () => {
     await attachTaskListeners()
 
     expect(listenMock).toHaveBeenCalledTimes(1)
-    expect(listenMock).toHaveBeenCalledWith(runner)
+    const listeners = listenMock.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(listeners['task-progress']).toBe(runner.onProgress)
+    expect(listeners['task-resume-status']).toBe(runner.onResumeStatus)
   })
 
   it('disposes the listener and cached runner before the next mount cycle', async () => {

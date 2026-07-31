@@ -1,6 +1,22 @@
-import type { ResumeInspectionResult, ResumeMode, TaskRequest } from '@/types/protocol'
+import type {
+  ResumeInspectionResult,
+  ResumeMode,
+  ResumeStatusPayload,
+  TaskCancelledPayload,
+  TaskCompletedPayload,
+  TaskLogPayload,
+  TaskProgressPayload,
+  TaskRequest,
+} from '@/types/protocol'
 import type { BatchState, ResumeConflictDescriptor } from '@/types/domain/batch'
-import type { MediaItem, MediaRunState, MediaTaskState, TaskError } from '@/types/domain/media'
+import type {
+  MediaItem,
+  MediaRunState,
+  MediaTaskState,
+  TaskError,
+} from '@/types/domain/media'
+import type { ResumeConflictAction } from '@/types/domain/batch'
+import type { TaskContext } from '../../task-context'
 
 export interface TaskCommandPort {
   startTask: (request: TaskRequest) => Promise<void>
@@ -41,6 +57,54 @@ export interface BatchStatePort {
 
 export interface TaskRequestFactory {
   buildRequest: (item: MediaItem, resumeMode?: ResumeMode) => TaskRequest
+}
+
+export interface TaskContextCapability {
+  getCurrentTaskContext: () => TaskContext
+}
+
+export interface ConsoleTaskContextCapability {
+  getConsoleTaskContext: () => TaskContext
+}
+
+export interface QueueContinuation {
+  runNextQueuedItem: () => Promise<void>
+  launchCurrentItem: (item: MediaItem, resumeMode?: ResumeMode) => Promise<void>
+}
+
+export interface QueueOperations extends QueueContinuation {
+  start: (ids: string[]) => Promise<void>
+}
+
+export interface ErrorFinalizationCapability {
+  handleErrored: (error: TaskError) => Promise<void>
+}
+
+export interface FinalizationCapability extends ErrorFinalizationCapability {
+  finalizeCurrent: (state: 'completed' | 'error' | 'cancelled') => Promise<void>
+}
+
+export interface ConflictCapability {
+  resolveConflict: (action: ResumeConflictAction) => Promise<void>
+  tryStashFromError: (error: TaskError) => boolean
+}
+
+export interface ControlOperations {
+  pause: () => Promise<void>
+  resume: () => Promise<void>
+  cancel: () => Promise<void>
+}
+
+export interface BatchRunner
+  extends Pick<QueueOperations, 'start'>,
+  ControlOperations,
+  Pick<ConflictCapability, 'resolveConflict'> {
+  onProgress: (payload: TaskProgressPayload) => void
+  onLog: (payload: TaskLogPayload) => void
+  onCompleted: (payload: TaskCompletedPayload) => Promise<void>
+  onError: (error: TaskError) => Promise<void>
+  onCancelled: (payload: TaskCancelledPayload) => Promise<void>
+  onResumeStatus: (payload: ResumeStatusPayload) => void
 }
 
 export type BatchRunnerDeps =

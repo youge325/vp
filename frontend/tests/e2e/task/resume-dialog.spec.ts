@@ -12,7 +12,7 @@ test.describe('Resume conflict dialog', () => {
     }
     const overlay = tauriPage.locator('.resume-conflict-overlay')
     for (const action of ['继续续传', '重新开始', '跳过此任务', '取消批次']) {
-      const ready = await injectResumeConflict(tauriPage, descriptor)
+      const ready = await injectResumeConflict(descriptor)
       test.skip(!ready, 'Cannot seed resume conflict')
       await expect(overlay).toHaveAttribute('role', 'dialog')
       await expect(overlay).toHaveAttribute('aria-modal', 'true')
@@ -26,7 +26,7 @@ test.describe('Resume conflict dialog', () => {
 
   test('renders overwrite mode and supports keyboard dismissal', async ({ tauriPage }) => {
     await openModule(tauriPage, '渲染', '批处理队列')
-    const ready = await injectResumeConflict(tauriPage, {
+    const ready = await injectResumeConflict({
       kind: 'final_exists_only',
       outputPath: 'C:/tmp/output.mp4',
       progress: { completedChunks: 0, completedOutputFrames: 0, totalOutputFrames: 0 },
@@ -40,6 +40,6 @@ test.describe('Resume conflict dialog', () => {
     await expect(tauriPage.locator('button', { hasText: '继续续传' })).not.toBeVisible()
     await tauriPage.keyboard.press('Escape')
     await expect(overlay).not.toBeVisible()
-    await clearResumeConflict(tauriPage)
+    await clearResumeConflict()
   })
 })

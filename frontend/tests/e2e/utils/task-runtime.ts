@@ -1,22 +1,26 @@
 import type { TauriPage } from './wdio-tauri'
-import type { TaskRequest } from '@/types/protocol'
+import type {
+  IpcCommand,
+  IpcInvokeArgs,
+  IpcInvokeResult,
+} from '@/lib/ipc/contract'
+import type {
+  ResumeMode,
+  TaskEventName,
+  TaskEventPayloadMap,
+  TaskRequest,
+} from '@/types/protocol'
+import { TASK_EVENT_NAMES } from '../../../src/types/protocol/events'
 
-type TaskEventName =
-  | 'task-progress'
-  | 'task-log'
-  | 'task-completed'
-  | 'task-error'
-  | 'task-cancelled'
-
-interface CapturedTaskEvent {
-  name: TaskEventName
-  data: Record<string, unknown>
-}
+type CapturedTaskEvent<Name extends TaskEventName = TaskEventName> =
+  Name extends TaskEventName
+    ? { name: Name, data: TaskEventPayloadMap[Name] }
+    : never
 
 export function buildSoftwareTaskRequest(
   inputPath: string,
   outputDir: string,
-  resumeMode: 'auto' | 'force-fresh' | 'force-resume' = 'force-fresh',
+  resumeMode: ResumeMode = 'force-fresh',
 ): TaskRequest {
   return {
     inputPath,
@@ -69,13 +73,13 @@ export function buildSoftwareTaskRequest(
 
 export async function listenForTaskEvents(
   tauriPage: TauriPage,
-  names: TaskEventName[],
+  names: readonly TaskEventName[] = Object.values(TASK_EVENT_NAMES),
 ): Promise<void> {
   await tauriPage.evaluate(async (eventNames) => {
     const target = window as typeof window & {
       __TAURI_INTERNALS__?: {
-        invoke: (command: string, args?: unknown) => Promise<any>
-        transformCallback: (callback: (event: any) => void) => number
+        invoke: (command: string, args?: unknown) => Promise<unknown>
+        transformCallback: (callback: (event: { payload: unknown }) => void) => number
       }
       __E2E_EVENTS?: CapturedTaskEvent[]
       __E2E_UNLISTENERS?: Array<() => Promise<void>>
@@ -89,13 +93,16 @@ export async function listenForTaskEvents(
 
     for (const name of eventNames) {
       const handler = internals.transformCallback((event) => {
-        target.__E2E_EVENTS?.push({ name, data: event.payload })
+        target.__E2E_EVENTS?.push({
+          name,
+          data: event.payload,
+        } as CapturedTaskEvent)
       })
       const eventId = await internals.invoke('plugin:event|listen', {
         event: name,
         target: { kind: 'Any' },
         handler,
-      })
+      }) as number
       target.__E2E_UNLISTENERS.push(async () => {
         await internals.invoke('plugin:event|unlisten', { event: name, eventId })
       })
@@ -103,11 +110,12 @@ export async function listenForTaskEvents(
   }, names)
 }
 
-export async function invokeTauri<T>(
+export async function invokeTauri<C extends IpcCommand>(
   tauriPage: TauriPage,
-  command: string,
-  args?: unknown,
-): Promise<T> {
+  command: C,
+  ...args: IpcInvokeArgs<C> extends undefined ? [] : [args: IpcInvokeArgs<C>]
+): Promise<IpcInvokeResult<C>> {
+  const commandArgs = args[0]
   return await tauriPage.evaluate(async (payload) => {
     const target = window as typeof window & {
       __TAURI_INTERNALS__?: { invoke: (name: string, value?: unknown) => Promise<unknown> }
@@ -123,14 +131,15 @@ export async function invokeTauri<T>(
         : String(error)
       throw new Error(`${payload.command} failed: ${details}`)
     }
-  }, { command, args }) as T
+  }, { command, args: commandArgs }) as IpcInvokeResult<C>
 }
 
-export async function captureTauriError(
+export async function captureTauriError<C extends IpcCommand>(
   tauriPage: TauriPage,
-  command: string,
-  args?: unknown,
+  command: C,
+  ...args: IpcInvokeArgs<C> extends undefined ? [] : [args: IpcInvokeArgs<C>]
 ): Promise<{ code?: string, message?: string } | null> {
+  const commandArgs = args[0]
   return await tauriPage.evaluate(async (payload) => {
     const target = window as typeof window & {
       __TAURI_INTERNALS__?: { invoke: (name: string, value?: unknown) => Promise<unknown> }
@@ -147,7 +156,11 @@ export async function captureTauriError(
         ),
       }
     }
-  }, { command, args })
+  }, { command, args: commandArgs })
+}
+
+export function isTaskEvent<Name extends TaskEventName>(name: Name) {
+  return (event: CapturedTaskEvent): event is CapturedTaskEvent<Name> => event.name === name
 }
 
 export async function waitForTaskEvent(

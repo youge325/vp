@@ -3,9 +3,11 @@
   "compilerOptions": {
     "lib": ["ES2023", "DOM"],
     "types": ["node", "@wdio/mocha-framework"],
+    "allowJs": true,
+    "checkJs": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "strict": false,
+    "strict": true,
     "erasableSyntaxOnly": false
   },
   "include": [

@@ -6,6 +6,7 @@ import {
   PROCESS_ORDER_OPTIONS,
   buildAlgorithmOptions,
   buildBackendOptions,
+  buildEnhanceOptions,
   buildEngineOptions,
   buildModelOptions,
   buildOnnxModelOptions,
@@ -13,6 +14,7 @@ import {
 import type { AlgorithmInfo, ModelVariantInfo } from '@/types/protocol'
 import {
   createAlgorithmInfo,
+  createEnvironmentResult,
   createModelVariantInfo,
 } from '../../fixtures/environment'
 
@@ -34,10 +36,10 @@ describe('enhance option rules', () => {
       { value: 'pytorch', label: 'PyTorch' },
       { value: 'onnx', label: 'ONNX Runtime' },
     ])
-    expect(buildEngineOptions(['cuda', 'tensorrt', 'custom'])).toEqual([
+    expect(buildEngineOptions(['cuda', 'tensorrt', 'dcu'])).toEqual([
       { value: 'cuda', label: 'CUDA' },
       { value: 'tensorrt', label: 'TensorRT' },
-      { value: 'custom', label: 'custom' },
+      { value: 'dcu', label: 'DCU' },
     ])
   })
 
@@ -85,6 +87,57 @@ describe('enhance option rules', () => {
     expect(PROCESS_ORDER_OPTIONS).toEqual([
       { value: 'super_resolution_then_interpolation', label: '先超分后补帧' },
       { value: 'frame_interpolation_then_super_resolution', label: '先补帧后超分' },
+    ])
+  })
+
+  it('builds one option snapshot from form inputs and a narrow environment snapshot', () => {
+    const interpolationAlgorithm = createAlgorithmInfo({
+      name: 'rife',
+      tensorBackends: ['pytorch'],
+      models: ['4.25'],
+    })
+    const superResolutionAlgorithm = createAlgorithmInfo({
+      name: 'placeholder',
+      tensorBackends: ['onnx'],
+      models: [],
+      modelDetails: [detail('placeholder')],
+    })
+    const options = buildEnhanceOptions({
+      checkResult: createEnvironmentResult({
+        tensorEngines: {
+          pytorch: ['cuda', 'tensorrt'],
+          paddle: ['cuda'],
+          onnx: ['tensorrt', 'cuda'],
+        },
+      }),
+      interpolationBackend: 'pytorch',
+      superResolutionBackend: 'onnx',
+      interpolationAlgorithms: [interpolationAlgorithm],
+      interpolationModels: ['4.25'],
+      interpolationOnnxModels: [],
+      interpolationModelDetails: [detail('4.25')],
+      interpolationOnnxModelDetails: [],
+      superResolutionAlgorithms: [superResolutionAlgorithm],
+      superResolutionOnnxModels: ['sr.onnx'],
+      superResolutionOnnxModelDetails: [detail('sr.onnx')],
+    })
+
+    expect(options.backendOptions.map(({ value }) => value)).toEqual([
+      'pytorch',
+      'paddle',
+      'onnx',
+    ])
+    expect(options.interpolationEngineOptions.map(({ value }) => value)).toEqual([
+      'cuda',
+      'tensorrt',
+    ])
+    expect(options.interpolationAlgorithmOptions).toEqual([{ value: 'rife', label: 'rife' }])
+    expect(options.interpolationOnnxOptions).toEqual([{ value: '', label: '未选择' }])
+    expect(options.interpolationOnnxDisabled).toBe(true)
+    expect(options.interpolationOnnxHint).toContain('models/interpolation')
+    expect(options.superResolutionOnnxOptions).toEqual([
+      { value: '', label: '未选择' },
+      { value: 'sr.onnx', label: 'sr.onnx · 5.67M' },
     ])
   })
 })

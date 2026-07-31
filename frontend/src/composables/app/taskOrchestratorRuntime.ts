@@ -4,8 +4,13 @@
 // process-level wiring between stores, IPC endpoints, task event listeners and
 // the pure ``BatchRunner`` facade.
 
-import { listenTaskEvents, type UnlistenFn } from '@/lib/ipc/events'
+import {
+  listenTaskEvents,
+  type TaskEventListeners,
+  type UnlistenFn,
+} from '@/lib/ipc/events'
 import { taskIpc } from '@/lib/ipc/endpoints/task'
+import { TASK_EVENT_NAMES } from '@/types/protocol'
 import { useIssueStore } from '@/stores/issue'
 import { useMediaStore } from '@/stores/media'
 import { useMediaRunState } from '@/stores/mediaRunState'
@@ -70,5 +75,13 @@ export async function attachTaskListeners(): Promise<void> {
   }
 
   const runner = getTaskRunner()
-  detachHandle = await listenTaskEvents(runner)
+  const listeners = {
+    [TASK_EVENT_NAMES.TaskProgress]: runner.onProgress,
+    [TASK_EVENT_NAMES.TaskLog]: runner.onLog,
+    [TASK_EVENT_NAMES.TaskCompleted]: runner.onCompleted,
+    [TASK_EVENT_NAMES.TaskError]: runner.onError,
+    [TASK_EVENT_NAMES.TaskCancelled]: runner.onCancelled,
+    [TASK_EVENT_NAMES.TaskResumeStatus]: runner.onResumeStatus,
+  } satisfies TaskEventListeners
+  detachHandle = await listenTaskEvents(listeners)
 }

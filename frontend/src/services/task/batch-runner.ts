@@ -6,11 +6,11 @@ import { createCommonHelpers } from './batch/lifecycle/common'
 import { createControlOps } from './batch/lifecycle/control'
 import { createFinalizeOps } from './batch/lifecycle/finalize'
 import { createQueueOps } from './batch/lifecycle/queue'
-import type { BatchRunnerDeps } from './batch/lifecycle/types'
+import type { BatchRunner, BatchRunnerDeps } from './batch/lifecycle/types'
 import { createConflictResolver } from './batch/conflict'
 import { createEventHandlers } from './batch/events'
 
-export function createBatchRunner(deps: BatchRunnerDeps) {
+export function createBatchRunner(deps: BatchRunnerDeps): BatchRunner {
   const helpers = createCommonHelpers(deps)
   const finalizeOps = createFinalizeOps(deps, helpers, {
     runNextQueuedItem: () => queueOps.runNextQueuedItem(),
@@ -38,4 +38,4 @@ export function createBatchRunner(deps: BatchRunnerDeps) {
   }
 }
 
-export type BatchRunner = ReturnType<typeof createBatchRunner>
+export type { BatchRunner } from './batch/lifecycle/types'

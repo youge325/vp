@@ -44,14 +44,31 @@ describe('getVisibleEncoderProfiles', () => {
   it('filters out unavailable profiles', () => {
     const env = makeEnv({
       ffmpeg: {
+        available: true,
         encoderProfiles: [
-          { name: 'libx265', available: true, family: 'cpu', codec: 'hevc', label: 'HEVC', options: [] },
-          { name: 'h264_nvenc', available: false, family: 'nvidia', codec: 'h264', label: 'NVENC H264', options: [] },
+          {
+            name: 'libx265',
+            available: true,
+            family: 'cpu',
+            codec: 'hevc',
+            label: 'HEVC',
+            hardwareDevices: [],
+            options: [],
+          },
+          {
+            name: 'h264_nvenc',
+            available: false,
+            family: 'nvidia',
+            codec: 'h264',
+            label: 'NVENC H264',
+            hardwareDevices: [],
+            options: [],
+          },
         ],
         decoderProfiles: [],
         hwaccels: [],
       },
-    } as any)
+    })
     const profiles = getVisibleEncoderProfiles(env)
     expect(profiles).toHaveLength(1)
     expect(profiles[0].name).toBe('libx265')
@@ -62,14 +79,31 @@ describe('getVisibleDecoderProfiles', () => {
   it('filters by video codec when provided', () => {
     const env = makeEnv({
       ffmpeg: {
+        available: true,
         decoderProfiles: [
-          { name: 'hevc', available: true, family: 'software', codec: 'hevc', label: 'HEVC', options: [] },
-          { name: 'h264', available: true, family: 'software', codec: 'h264', label: 'H264', options: [] },
+          {
+            name: 'hevc',
+            available: true,
+            family: 'software',
+            codec: 'hevc',
+            label: 'HEVC',
+            hardwareDevices: [],
+            options: [],
+          },
+          {
+            name: 'h264',
+            available: true,
+            family: 'software',
+            codec: 'h264',
+            label: 'H264',
+            hardwareDevices: [],
+            options: [],
+          },
         ],
         encoderProfiles: [],
         hwaccels: [],
       },
-    } as any)
+    })
     const profiles = getVisibleDecoderProfiles(env, 'hevc')
     expect(profiles).toHaveLength(1)
     expect(profiles[0].name).toBe('hevc')

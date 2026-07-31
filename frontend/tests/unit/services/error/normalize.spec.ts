@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeError } from '@/services/error/normalize'
+import { normalizeError } from '@/lib/errors/normalize'
 
 describe('normalizeError', () => {
   it('returns the error as-is when it already has code and message', () => {

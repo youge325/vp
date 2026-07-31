@@ -11,10 +11,7 @@ test.describe('VP Workbench e2e smoke', () => {
   })
 
   test('check_environment returns structured capabilities', async ({ tauriPage }) => {
-    const result = await tauriPage.evaluate(async () => {
-      // @ts-expect-error __TAURI_INTERNALS__ is injected by Tauri runtime
-      return await window.__TAURI_INTERNALS__.invoke('check_environment', { forceRefresh: false })
-    })
+    const result = await invokeTauri(tauriPage, 'check_environment', { forceRefresh: false })
     expect(result).toHaveProperty('result')
     expect(result.result).toHaveProperty('ffmpeg')
     expect(result.result).toHaveProperty('runtimeMode')
@@ -22,10 +19,7 @@ test.describe('VP Workbench e2e smoke', () => {
   })
 
   test('check_environment result contains all core schema keys', async ({ tauriPage }) => {
-    const result = await tauriPage.evaluate(async () => {
-      // @ts-expect-error
-      return await window.__TAURI_INTERNALS__.invoke('check_environment', { forceRefresh: false })
-    })
+    const result = await invokeTauri(tauriPage, 'check_environment', { forceRefresh: false })
 
     expect(result).toHaveProperty('result')
     expect(result.result).toHaveProperty('ffmpeg')
@@ -41,14 +35,7 @@ test.describe('VP Workbench e2e smoke', () => {
 
   test('inspect_video parses synthetic test video', async ({ tauriPage }) => {
     const inputPath = process.env.VP_E2E_INPUT ?? 'C:/tmp/vp-e2e-test.mp4'
-    const info = await tauriPage.evaluate(async (path: string) => {
-      try {
-        // @ts-expect-error __TAURI_INTERNALS__ is injected by Tauri runtime
-        return await window.__TAURI_INTERNALS__.invoke('inspect_video', { inputPath: path })
-      } catch (error: any) {
-        throw new Error(`inspect_video failed: ${JSON.stringify({ message: error?.message, code: error?.code, details: error?.details })}`)
-      }
-    }, inputPath)
+    const info = await invokeTauri(tauriPage, 'inspect_video', { inputPath })
 
     expect(info.fps).toBeGreaterThan(0)
     expect(info.width).toBeGreaterThan(0)

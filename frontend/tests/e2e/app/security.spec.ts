@@ -16,8 +16,9 @@ test.describe('Desktop security boundary', () => {
         script.textContent = `window.${marker} = true`
         document.head.append(script)
         window.setTimeout(() => {
+          const markerWindow = window as unknown as Record<string, unknown>
           resolveResult({
-            executed: Boolean((window as any)[marker]),
+            executed: Boolean(markerWindow[marker]),
             violated,
           })
         }, 100)

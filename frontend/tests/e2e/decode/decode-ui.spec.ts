@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { installEnvironmentFixture } from '../utils/environment'
+import { withPiniaState, type TauriPage } from '../utils/wdio-tauri'
 
 const makeOption = (name: string, defaultValue: string) => ({
   name,
@@ -49,7 +50,6 @@ const CONTROLLED_PROFILES = [
 ]
 
 async function installDecodeProfiles(
-  tauriPage: any,
   profiles: unknown[] = CONTROLLED_PROFILES,
   decodeConfig: Record<string, unknown> = {
     mode: 'hardware',
@@ -59,54 +59,51 @@ async function installDecodeProfiles(
     options: {},
   },
 ): Promise<boolean> {
-  void tauriPage
   return await installEnvironmentFixture({ decoderProfiles: profiles, decodeConfig })
 }
 
-async function openDecodeModule(tauriPage: any): Promise<void> {
+async function openDecodeModule(tauriPage: TauriPage): Promise<void> {
   await tauriPage.click('.rail-link:has-text("解码")')
   await expect(tauriPage.locator('h2:has-text("解码设置")')).toBeVisible({ timeout: 5000 })
 }
 
-const decoderSelect = (tauriPage: any) =>
+const decoderSelect = (tauriPage: TauriPage) =>
   tauriPage.locator('label.field').filter({ hasText: '解码方案' }).locator('select')
 
-const hardwareDeviceField = (tauriPage: any) =>
+const hardwareDeviceField = (tauriPage: TauriPage) =>
   tauriPage.locator('label.field').filter({ hasText: '硬件设备' })
 
-const hardwareDeviceSelect = (tauriPage: any) =>
+const hardwareDeviceSelect = (tauriPage: TauriPage) =>
   hardwareDeviceField(tauriPage).locator('select')
 
-const deviceNumberField = (tauriPage: any) =>
+const deviceNumberField = (tauriPage: TauriPage) =>
   tauriPage.locator('label.field').filter({ hasText: '设备编号' })
 
-const deviceNumberSelect = (tauriPage: any) =>
+const deviceNumberSelect = (tauriPage: TauriPage) =>
   deviceNumberField(tauriPage).locator('select')
 
-async function setDraftHwaccelDevice(tauriPage: any, value: string): Promise<void> {
-  await tauriPage.evaluate((nextValue: string) => {
-    const root = document.querySelector('#app')
-    const vueApp = (root as any)?.__vue_app__
-    const pinia = vueApp?.config?.globalProperties?.$pinia
-    const state = pinia?.state?.value
-    if (state?.preset?.draftPreset?.decodeConfig) {
-      state.preset.draftPreset.decodeConfig.hwaccelDevice = nextValue
+async function setDraftHwaccelDevice(value: string): Promise<void> {
+  await withPiniaState((state, _win, nextValue: string) => {
+    const preset = state.preset as {
+      draftPreset?: { decodeConfig?: { hwaccelDevice?: string } }
+    } | undefined
+    if (preset?.draftPreset?.decodeConfig) {
+      preset.draftPreset.decodeConfig.hwaccelDevice = nextValue
     }
   }, value)
 }
 
-async function getDraftHwaccelDevice(tauriPage: any): Promise<string> {
-  return await tauriPage.evaluate(() => {
-    const root = document.querySelector('#app')
-    const vueApp = (root as any)?.__vue_app__
-    const pinia = vueApp?.config?.globalProperties?.$pinia
-    const state = pinia?.state?.value
-    return state?.preset?.draftPreset?.decodeConfig?.hwaccelDevice ?? ''
+async function getDraftHwaccelDevice(): Promise<string> {
+  return await withPiniaState((state) => {
+    const preset = state.preset as {
+      draftPreset?: { decodeConfig?: { hwaccelDevice?: string } }
+    } | undefined
+    return preset?.draftPreset?.decodeConfig?.hwaccelDevice ?? ''
   })
 }
 
 async function expectHardwareDeviceState(
-  tauriPage: any,
+  tauriPage: TauriPage,
   labels: string[],
   value: string,
 ): Promise<void> {
@@ -116,7 +113,7 @@ async function expectHardwareDeviceState(
 }
 
 async function expectDeviceNumberState(
-  tauriPage: any,
+  tauriPage: TauriPage,
   labels: string[],
   value: string,
 ): Promise<void> {
@@ -141,7 +138,7 @@ test.describe('Decode module UI', () => {
   })
 
   test('switching decoder profile updates hardware device and probed device number options', async ({ tauriPage }) => {
-    const ok = await installDecodeProfiles(tauriPage)
+    const ok = await installDecodeProfiles()
     test.skip(!ok, 'Cannot access Pinia stores from evaluate')
 
     await openDecodeModule(tauriPage)
@@ -152,25 +149,24 @@ test.describe('Decode module UI', () => {
     await decoderSelect(tauriPage).selectOption({ label: 'QSV H.265' })
     await expectHardwareDeviceState(tauriPage, ['QSV'], 'qsv')
     await expectDeviceNumberState(tauriPage, ['QSV 0'], 'qsv0')
-    expect(await getDraftHwaccelDevice(tauriPage)).toBe('qsv0')
+    expect(await getDraftHwaccelDevice()).toBe('qsv0')
 
     await decoderSelect(tauriPage).selectOption({ label: 'NVDEC H.264' })
     await expectHardwareDeviceState(tauriPage, ['CUDA', 'D3D11VA'], 'cuda')
     await expectDeviceNumberState(tauriPage, ['GPU 0', 'GPU 1'], '0')
 
     await deviceNumberSelect(tauriPage).selectOption({ label: 'GPU 1' })
-    expect(await getDraftHwaccelDevice(tauriPage)).toBe('1')
+    expect(await getDraftHwaccelDevice()).toBe('1')
 
-    await setDraftHwaccelDevice(tauriPage, '2')
+    await setDraftHwaccelDevice('2')
     await hardwareDeviceSelect(tauriPage).selectOption({ label: 'D3D11VA' })
     await expectHardwareDeviceState(tauriPage, ['CUDA', 'D3D11VA'], 'd3d11va')
     await expectDeviceNumberState(tauriPage, ['D3D11 0'], 'd3d11-0')
-    expect(await getDraftHwaccelDevice(tauriPage)).toBe('d3d11-0')
+    expect(await getDraftHwaccelDevice()).toBe('d3d11-0')
   })
 
   test('empty hardware device list hides device selector', async ({ tauriPage }) => {
     const ok = await installDecodeProfiles(
-      tauriPage,
       [
         makeProfile('software', 'Software Decode', 'software', 'any', []),
         makeProfile('av1_cuvid', 'NVDEC AV1', 'nvidia', 'av1', []),

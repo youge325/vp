@@ -60,12 +60,18 @@ test.describe('Preset persistence', () => {
     const dir2 = 'D:/vp-e2e-preset-test-v2'
 
     await invokeTauri(tauriPage, 'save_workbench_preset', { preset: buildPreset(dir1) })
-    const first = await invokeTauri<any>(tauriPage, 'load_workbench_preset')
+    const first = await invokeTauri(tauriPage, 'load_workbench_preset')
+    if (!first) {
+      throw new Error('saved preset was not returned')
+    }
     expect(first.outputConfig.outputDir).toBe(dir1)
     expect(first.encodeConfig.rateControl.value).toBe(18)
 
     await invokeTauri(tauriPage, 'save_workbench_preset', { preset: buildPreset(dir2) })
-    const overwritten = await invokeTauri<any>(tauriPage, 'load_workbench_preset')
+    const overwritten = await invokeTauri(tauriPage, 'load_workbench_preset')
+    if (!overwritten) {
+      throw new Error('overwritten preset was not returned')
+    }
     expect(overwritten.outputConfig.outputDir).toBe(dir2)
     expect(overwritten.workflowConfig.interpolation.algorithm).toBe('rife')
   })

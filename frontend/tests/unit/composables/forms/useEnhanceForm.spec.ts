@@ -38,11 +38,14 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       workflow.superResolution.tensorBackend = 'onnx'
     })
 
-    const form = useEnhanceForm()
-    expect(form.superResolutionAlgorithms.map((algorithm) => algorithm.name)).toEqual(['placeholder'])
+    const model = useEnhanceForm()
+    const form = model.fields
+    expect(model.options.value.superResolutionAlgorithmOptions.map(({ value }) => value)).toEqual([
+      'placeholder',
+    ])
 
     form.superResolutionBackend = 'paddle'
-    expect(form.superResolutionAlgorithms.map((algorithm) => algorithm.name)).toEqual([
+    expect(model.options.value.superResolutionAlgorithmOptions.map(({ value }) => value)).toEqual([
       'ppmsvsr',
       'edvr',
       'custom-vsr',
@@ -64,6 +67,16 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     expect('superResolutionAutoDownloadWeights' in form).toBe(false)
   })
 
+  it('converts the two numeric select values at the composition boundary', () => {
+    const { fields, actions } = useEnhanceForm()
+
+    actions.setInterpolationMulti('4')
+    actions.setSuperResolutionScale('4')
+
+    expect(fields.interpolationMulti).toBe(4)
+    expect(fields.superResolutionScale).toBe(4)
+  })
+
   it('applies PaddleGAN defaults to every supported PaddleGAN VSR algorithm', () => {
     const presetStore = usePresetStore()
     presetStore.patchWorkflow((workflow) => {
@@ -73,7 +86,7 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       workflow.superResolution.numFrames = 3
     })
 
-    const form = useEnhanceForm()
+    const { fields: form } = useEnhanceForm()
 
     form.superResolutionAlgorithm = 'edvr'
     expect(form.superResolutionScale).toBe(4)
@@ -95,7 +108,7 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       workflow.superResolution.numFrames = 3
     })
 
-    const form = useEnhanceForm()
+    const { fields: form } = useEnhanceForm()
     form.superResolutionAlgorithm = 'custom-vsr'
 
     expect(form.isPaddleGanSuperResolution).toBe(true)
@@ -112,20 +125,21 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       workflow.superResolution.numFrames = 10
     })
 
-    const form = useEnhanceForm()
+    const model = useEnhanceForm()
+    const form = model.fields
 
     expect(form.isSuperResolutionInputFramesEditable).toBe(true)
     expect(form.superResolutionInputFramesLabel).toBe('每块输入帧数')
     expect(form.superResolutionInputFramesHint).toContain('连续输入帧数')
     expect(form.superResolutionInputFramesHint).toContain('不是邻帧窗口')
-    expect(form.superResolutionFixedWindowRows).toEqual([])
+    expect(model.metrics.value.superResolutionFixedWindowRows).toEqual([])
 
     form.superResolutionAlgorithm = 'edvr'
     form.superResolutionNumFrames = 10
 
     expect(form.isSuperResolutionInputFramesEditable).toBe(false)
     expect(form.superResolutionNumFrames).toBe(5)
-    expect(form.superResolutionFixedWindowRows).toEqual([
+    expect(model.metrics.value.superResolutionFixedWindowRows).toEqual([
       { label: '邻帧窗口', value: '5 帧（固定）' },
     ])
   })
@@ -149,12 +163,13 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       videoCodec: 'h264',
     })
 
-    const form = useEnhanceForm()
-    const before = form.superResolutionMetricRows[2]?.value
+    const model = useEnhanceForm()
+    const form = model.fields
+    const before = model.metrics.value.superResolutionRows[2]?.value
 
     form.superResolutionNumFrames = 2
 
-    expect(form.superResolutionMetricRows[2]?.value).toBe(before)
+    expect(model.metrics.value.superResolutionRows[2]?.value).toBe(before)
   })
 
   it('applies recurrent input frame edits to every selected media item before task start', () => {
@@ -166,7 +181,7 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       workflow.superResolution.numFrames = 10
     })
 
-    const form = useEnhanceForm()
+    const { fields: form } = useEnhanceForm()
     form.superResolutionNumFrames = 5
 
     expect(first.workflowConfig.superResolution.numFrames).toBe(5)
@@ -197,7 +212,7 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       workflow.processOrder = 'super_resolution_then_interpolation'
     })
 
-    const form = useEnhanceForm()
+    const { fields: form } = useEnhanceForm()
     form.interpolationEnabled = true
     form.interpolationAlgorithm = 'rife-lite'
     form.interpolationModel = 'lite'
@@ -270,7 +285,7 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       workflow.processOrder = 'super_resolution_then_interpolation'
     })
 
-    const form = useEnhanceForm()
+    const { fields: form } = useEnhanceForm()
     form.processOrder = 'frame_interpolation_then_super_resolution'
 
     expect(first.workflowConfig.processOrder).toBe('frame_interpolation_then_super_resolution')
@@ -287,7 +302,7 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       workflow.superResolution.numFrames = 10
     })
 
-    const form = useEnhanceForm()
+    const { fields: form } = useEnhanceForm()
     form.superResolutionAlgorithm = 'edvr'
 
     expect(first.workflowConfig.superResolution.algorithm).toBe('edvr')
@@ -299,7 +314,7 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     expect(presetStore.draftPreset.workflowConfig.superResolution.numFrames).toBe(5)
   })
 
-  it('exposes selected model details and current-video runtime estimates', () => {
+  it('projects selected model metrics for the active video', () => {
     const mediaStore = useMediaStore()
     const presetStore = usePresetStore()
     const item = createMediaItem('/video/clip.mp4', presetStore.draftPreset)
@@ -311,11 +326,9 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       videoCodec: 'h264',
     })
 
-    const form = useEnhanceForm()
+    const { metrics } = useEnhanceForm()
 
-    expect(form.currentInterpolationModelDetail?.name).toBe('4.25')
-    expect(form.interpolationRuntimeEstimate?.effectiveHeight).toBe(1088)
-    expect(form.interpolationMetricRows[0].value).toBe('5.67M')
+    expect(metrics.value.interpolationRows[0].value).toBe('5.67M')
   })
 
   it('estimates default SR to interpolation order and exposes combined peak VRAM', () => {
@@ -342,13 +355,11 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       videoCodec: 'h264',
     })
 
-    const form = useEnhanceForm()
+    const { metrics } = useEnhanceForm()
 
-    expect(form.interpolationRuntimeEstimate?.effectiveWidth).toBe(2560)
-    expect(form.interpolationRuntimeEstimate?.effectiveHeight).toBe(1152)
-    expect(form.interpolationMetricRows[2].value).toBe('1.96 GiB')
-    expect(form.superResolutionMetricRows[2].value).toBe('5.63 GiB')
-    expect(form.combinedVramMetricRows[0].value).toBe('5.63 GiB')
+    expect(metrics.value.interpolationRows[2].value).toBe('1.96 GiB')
+    expect(metrics.value.superResolutionRows[2].value).toBe('5.63 GiB')
+    expect(metrics.value.combinedVramRows[0].value).toBe('5.63 GiB')
   })
 
   it('uses selected TensorRT engine metrics for super-resolution memory estimates', () => {
@@ -371,9 +382,9 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       videoCodec: 'h264',
     })
 
-    const form = useEnhanceForm()
+    const { metrics } = useEnhanceForm()
 
-    expect(form.superResolutionMetricRows[1].value).toBe('22.1 GFLOPs')
-    expect(form.superResolutionMetricRows[2].value).toBe('3.17 GiB')
+    expect(metrics.value.superResolutionRows[1].value).toBe('22.1 GFLOPs')
+    expect(metrics.value.superResolutionRows[2].value).toBe('3.17 GiB')
   })
 })

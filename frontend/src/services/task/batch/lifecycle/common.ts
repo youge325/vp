@@ -6,8 +6,10 @@ import {
 } from '@/services/task/task-context'
 import type {
   BatchStatePort,
+  ConsoleTaskContextCapability,
   MediaItemPort,
   MediaRunStatePort,
+  TaskContextCapability,
 } from './types'
 
 type CommonDeps =
@@ -15,7 +17,9 @@ type CommonDeps =
   & Pick<MediaItemPort, 'getMediaItem' | 'getActiveItemId'>
   & Pick<MediaRunStatePort, 'getItemRunState'>
 
-export function createCommonHelpers(deps: CommonDeps) {
+export function createCommonHelpers(
+  deps: CommonDeps,
+): TaskContextCapability & ConsoleTaskContextCapability {
   function getCurrentTaskContext() {
     return resolveTaskContext(deps, deps.getBatch().currentId)
   }

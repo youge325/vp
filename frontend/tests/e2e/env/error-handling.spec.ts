@@ -8,7 +8,7 @@ import {
 
 test.describe('Error handling', () => {
   test('returns structured InvalidInput errors for every idle control action', async ({ tauriPage }) => {
-    for (const kind of ['pause', 'resume', 'cancel']) {
+    for (const kind of ['pause', 'resume', 'cancel'] as const) {
       const error = await captureTauriError(tauriPage, 'control_task', { kind })
       expect(error).not.toBeNull()
       expect(error?.code).toBe('invalid_input')

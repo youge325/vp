@@ -1,6 +1,6 @@
 // Pause, resume and cancel IPC operations with state rollback on failure.
 
-import { normalizeError } from '@/services/error/normalize'
+import { normalizeError } from '@/lib/errors/normalize'
 import {
   TASK_ERROR_CODES,
   type TaskControlKind,
@@ -9,15 +9,15 @@ import type { BatchState } from '@/types/domain/batch'
 
 import { applyTaskCancelling, applyTaskPaused, applyTaskResumed } from '../../events'
 
-import type { createCommonHelpers } from './common'
 import type {
   BatchStatePort,
+  ControlOperations,
   MediaRunStatePort,
+  TaskContextCapability,
   TaskCommandPort,
   TaskIssuePort,
 } from './types'
 
-type CommonHelpers = ReturnType<typeof createCommonHelpers>
 type ControlDeps =
   & Pick<BatchStatePort, 'getBatch' | 'setBatch' | 'setPendingConflict'>
   & Pick<MediaRunStatePort, 'setItemTaskState'>
@@ -32,8 +32,8 @@ interface ControlAttempt {
 
 export function createControlOps(
   deps: ControlDeps,
-  helpers: CommonHelpers,
-) {
+  helpers: TaskContextCapability,
+): ControlOperations {
   let nextControlToken = 0
   let activeControlToken: number | null = null
 

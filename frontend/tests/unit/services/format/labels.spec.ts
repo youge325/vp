@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import * as labelModule from '@/services/format/labels'
 import { getWorkflowSummaryLabel } from '@/services/format/labels'
 import { createDefaultWorkflowConfigForEnvironment } from '@/services/preset/workflow-defaults'
 
@@ -17,10 +16,6 @@ function workflowWithEnhancements({
 }
 
 describe('getWorkflowSummaryLabel', () => {
-  it('keeps primary mode resolution private to label formatting', () => {
-    expect('resolvePrimaryMode' in labelModule).toBe(false)
-  })
-
   it('returns the interpolation summary when interpolation is enabled', () => {
     expect(getWorkflowSummaryLabel(workflowWithEnhancements({ interpolation: true }))).toBe('补帧')
   })

@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { installEnvironmentFixture } from '../utils/environment'
+import type { TauriPage } from '../utils/wdio-tauri'
 
 const makeNumberOption = (name: string, defaultValue: number) => ({
   name,
@@ -62,10 +63,8 @@ const CONTROLLED_PROFILES = [
 ]
 
 async function installEncodeProfiles(
-  tauriPage: any,
   profiles: unknown[] = CONTROLLED_PROFILES,
 ): Promise<boolean> {
-  void tauriPage
   return await installEnvironmentFixture({
     encoderProfiles: profiles,
     encodeConfig: {
@@ -79,22 +78,22 @@ async function installEncodeProfiles(
   })
 }
 
-async function openEncodeModule(tauriPage: any): Promise<void> {
+async function openEncodeModule(tauriPage: TauriPage): Promise<void> {
   await tauriPage.click('.rail-link:has-text("编码")')
   await expect(tauriPage.locator('h2:has-text("编码与输出")')).toBeVisible({ timeout: 5000 })
 }
 
-const encoderSelect = (tauriPage: any) =>
+const encoderSelect = (tauriPage: TauriPage) =>
   tauriPage.locator('label.field').filter({ hasText: '编码器' }).locator('select')
 
-const modeField = (tauriPage: any) =>
+const modeField = (tauriPage: TauriPage) =>
   tauriPage.locator('label.field').filter({ hasText: '码率控制模式' })
 
-const valueField = (tauriPage: any) =>
+const valueField = (tauriPage: TauriPage) =>
   tauriPage.locator('label.field').filter({ hasText: '码率控制值' })
 
 async function expectRateControlState(
-  tauriPage: any,
+  tauriPage: TauriPage,
   labels: string[],
   mode: string,
   value: string,
@@ -111,7 +110,7 @@ async function expectRateControlState(
 
 test.describe('Encode module rate control', () => {
   test('switching encoder updates supported mode, value and unit', async ({ tauriPage }) => {
-    const ok = await installEncodeProfiles(tauriPage)
+    const ok = await installEncodeProfiles()
     test.skip(!ok, 'Cannot access Pinia stores from evaluate')
 
     await openEncodeModule(tauriPage)
@@ -129,7 +128,7 @@ test.describe('Encode module rate control', () => {
   })
 
   test('switching rate control mode updates value and unit', async ({ tauriPage }) => {
-    const ok = await installEncodeProfiles(tauriPage)
+    const ok = await installEncodeProfiles()
     test.skip(!ok, 'Cannot access Pinia stores from evaluate')
 
     await openEncodeModule(tauriPage)
@@ -145,7 +144,7 @@ test.describe('Encode module rate control', () => {
   })
 
   test('empty rateControlModes disables mode and value controls', async ({ tauriPage }) => {
-    const ok = await installEncodeProfiles(tauriPage, [
+    const ok = await installEncodeProfiles([
       makeProfile('libx264', 'CPU H.264', 'cpu', [], [makeNumberOption('crf', 19)]),
     ])
     test.skip(!ok, 'Cannot access Pinia stores from evaluate')
