@@ -165,10 +165,10 @@ a:focus-visible {
 
 .rail-column {
   min-height: 0;
-  padding: 24px 18px;
+  padding: 16px 14px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
   background:
     linear-gradient(180deg, rgba(16, 28, 44, 0.98) 0%, rgba(10, 18, 29, 0.98) 100%);
   border-right: 1px solid var(--border);
@@ -784,27 +784,29 @@ a:focus-visible {
 .rail-brand {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .rail-brand h2 {
-  font-size: 34px;
+  font-size: 30px;
 }
 
 .rail-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .rail-link {
-  min-height: 78px;
-  padding: 14px 16px;
+  min-height: 0;
+  padding: 6px 12px;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 10px;
+  grid-template-columns: 36px minmax(0, 1fr) 10px;
   align-items: center;
-  gap: 12px;
-  border-radius: 18px;
+  gap: 10px;
+  border-radius: 14px;
   color: inherit;
   text-decoration: none;
   background: rgba(17, 27, 41, 0.94);
@@ -817,19 +819,19 @@ a:focus-visible {
 }
 
 .rail-link-icon {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 15px;
+  border-radius: 12px;
   background: rgba(46, 164, 249, 0.12);
   color: #d8eaff;
 }
 
 .rail-link-icon svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .rail-link-copy {
@@ -868,11 +870,12 @@ a:focus-visible {
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .rail-footer-chip {
-  min-height: 36px;
+  min-height: 30px;
+  padding-inline: 10px;
 }
 
 .rail-footer-chip[data-state='running'] {
@@ -937,9 +940,13 @@ a:focus-visible {
 
   .rail-nav {
     width: 100%;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
   }
 
   .rail-link {
+    min-height: 52px;
     grid-template-columns: 1fr;
     justify-items: center;
     padding: 12px 8px;
