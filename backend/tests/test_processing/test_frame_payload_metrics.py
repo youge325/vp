@@ -17,9 +17,6 @@ class _Backend:
     def tensor_to_numpy(self, tensor: dict[str, Any]) -> np.ndarray:
         return tensor["tensor"].copy()
 
-    def get_name(self) -> str:
-        return "timed"
-
 
 def test_ensure_tensor_records_h2d_transfer_duration() -> None:
     metrics = PipelineMetrics()

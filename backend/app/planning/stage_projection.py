@@ -8,15 +8,15 @@ from typing import Any
 
 from app.planning.processing_steps import AlgorithmType, ProcessingStep
 
-PROCESS_ORDER_MAP: dict[str, list[AlgorithmType]] = {
-    "super_resolution_then_interpolation": [
+_PROCESS_ORDER_MAP: dict[str, tuple[AlgorithmType, ...]] = {
+    "super_resolution_then_interpolation": (
         "super_resolution",
         "frame_interpolation",
-    ],
-    "frame_interpolation_then_super_resolution": [
+    ),
+    "frame_interpolation_then_super_resolution": (
         "frame_interpolation",
         "super_resolution",
-    ],
+    ),
 }
 
 
@@ -28,8 +28,11 @@ class ProjectedStage:
     step: ProcessingStep
     input_frames: int
     output_frames: int
-    input_fps: float | None
     output_fps: float | None
+    input_width: int | None
+    input_height: int | None
+    output_width: int | None
+    output_height: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,28 +99,47 @@ class StageProjection:
         *,
         source_frames: int,
         source_fps: float | None = None,
+        source_width: int | None = None,
+        source_height: int | None = None,
         stop_before: int | None = None,
     ) -> tuple[ProjectedStage, ...]:
         """Project the ordered stages, optionally stopping before an index."""
         limit = len(self.steps) if stop_before is None else max(0, min(stop_before, len(self.steps)))
         current_frames = int(source_frames)
         current_fps = source_fps
+        current_width = source_width
+        current_height = source_height
         projected: list[ProjectedStage] = []
         for position, step in enumerate(self.steps[:limit], start=1):
             output_frames = self.project_frame_count(step, current_frames)
             output_fps = self.project_fps(step, current_fps) if current_fps is not None else None
+            if (current_width is None) != (current_height is None):
+                raise ValueError("source_width and source_height must be provided together.")
+            if current_width is None:
+                output_width = output_height = None
+            else:
+                output_width, output_height = step.descriptor.geometry.project(
+                    input_width=current_width,
+                    input_height=current_height,
+                    algorithm_kwargs=step.algorithm_kwargs,
+                )
             projected.append(
                 ProjectedStage(
                     position=position,
                     step=step,
                     input_frames=current_frames,
                     output_frames=output_frames,
-                    input_fps=current_fps,
                     output_fps=output_fps,
+                    input_width=current_width,
+                    input_height=current_height,
+                    output_width=output_width,
+                    output_height=output_height,
                 )
             )
             current_frames = output_frames
             current_fps = output_fps
+            current_width = output_width
+            current_height = output_height
         return tuple(projected)
 
     def output_frame_count(self, source_frames: int, *, stop_before: int | None = None) -> int:
@@ -128,6 +150,26 @@ class StageProjection:
         projected = self.stages(source_frames=0, source_fps=source_fps, stop_before=stop_before)
         output_fps = projected[-1].output_fps if projected else source_fps
         return float(output_fps)
+
+    def output_dimensions(
+        self,
+        source_width: int,
+        source_height: int,
+        *,
+        stop_before: int | None = None,
+    ) -> tuple[int, int]:
+        projected = self.stages(
+            source_frames=0,
+            source_width=source_width,
+            source_height=source_height,
+            stop_before=stop_before,
+        )
+        if not projected:
+            return int(source_width), int(source_height)
+        final = projected[-1]
+        if final.output_width is None or final.output_height is None:  # pragma: no cover - constructor invariant
+            raise RuntimeError("Dimension projection did not produce an output size.")
+        return final.output_width, final.output_height
 
     def encoded_output_frame_count(
         self,
@@ -145,7 +187,15 @@ class StageProjection:
     def project_frame_count(step: ProcessingStep, input_frame_count: int) -> int:
         if step.algorithm_type != "frame_interpolation" or input_frame_count < 2:
             return input_frame_count
-        multi = int(step.algorithm_kwargs["multi"])
+        return StageProjection.interpolation_output_frame_count(
+            input_frame_count,
+            int(step.algorithm_kwargs["multi"]),
+        )
+
+    @staticmethod
+    def interpolation_output_frame_count(input_frame_count: int, multi: int) -> int:
+        if input_frame_count < 2:
+            return input_frame_count
         return input_frame_count + (input_frame_count - 1) * (multi - 1)
 
     @staticmethod
@@ -159,7 +209,7 @@ class StageProjection:
         interpolation_enabled = bool(workflow_config["interpolation"]["enabled"])
         super_resolution_enabled = bool(workflow_config["superResolution"]["enabled"])
         if interpolation_enabled and super_resolution_enabled:
-            return tuple(PROCESS_ORDER_MAP[workflow_config["processOrder"]])
+            return _PROCESS_ORDER_MAP[workflow_config["processOrder"]]
         if interpolation_enabled:
             return ("frame_interpolation",)
         if super_resolution_enabled:
@@ -199,13 +249,14 @@ class StageProjection:
         existing_count: int,
     ) -> ProcessingStep | None:
         section = workflow_config.get(kind, {})
-        if not section.get("enabled"):
+        filters = section.get("filters", ())
+        if not section.get("enabled") or not any(filter_step.get("enabled", True) for filter_step in filters):
             return None
         return ProcessingStep(
             algorithm_type="frame_filter_chain",
-            algorithm_kwargs={"filters": section["filters"]},
+            algorithm_kwargs={"filters": filters},
             stage_name=f"{existing_count + 1:02d}_{kind}",
         )
 
 
-__all__ = ["PROCESS_ORDER_MAP", "StageProjection"]
+__all__ = ["StageProjection"]

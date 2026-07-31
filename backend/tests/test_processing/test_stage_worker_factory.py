@@ -5,13 +5,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from app.planning import ProcessingStep
+from app.planning.processing_steps import ProcessingStep
 from app.processing.streaming import stage_worker_factory
 
 
 class _Backend:
-    def get_name(self) -> str:
-        return "identity"
+    pass
 
 
 def test_stage_worker_factory_skips_backend_for_frame_filter_chain(monkeypatch) -> None:
@@ -26,7 +25,7 @@ def test_stage_worker_factory_skips_backend_for_frame_filter_chain(monkeypatch) 
     calls: list[str] = []
     monkeypatch.setattr(stage_worker_factory, "get_tensor_backend", lambda name: calls.append(name))
 
-    assert stage_worker_factory.create_backend(config) is None
+    assert stage_worker_factory.create_backend(config, config.stage) is None
     assert calls == []
 
 
@@ -41,11 +40,11 @@ def test_stage_worker_factory_skips_backend_for_sequence_stages(monkeypatch) -> 
     )
     monkeypatch.setattr(stage_worker_factory, "get_tensor_backend", lambda name: {"backend": name})
 
-    assert stage_worker_factory.create_backend(config) is None
+    assert stage_worker_factory.create_backend(config, config.stage) is None
 
 
 def test_stage_worker_factory_passes_filtered_kwargs_to_algorithm(monkeypatch) -> None:
-    from app.processing import super_resolution
+    from app.algorithms import onnx_super_resolution
 
     captured = {}
 
@@ -53,17 +52,28 @@ def test_stage_worker_factory_passes_filtered_kwargs_to_algorithm(monkeypatch) -
         def __init__(self, **kwargs):
             captured.update({"kwargs": kwargs})
 
-    monkeypatch.setattr(super_resolution, "OnnxSuperResolution", FakeAlgorithm)
+    monkeypatch.setattr(onnx_super_resolution, "OnnxSuperResolution", FakeAlgorithm)
     stage = ProcessingStep(
         algorithm_type="super_resolution",
-        algorithm_kwargs={"sr_algorithm": "placeholder", "tensor_backend": "onnx", "scale_factor": 2.0},
+        algorithm_kwargs={
+            "sr_algorithm": "placeholder",
+            "tensor_backend": "onnx",
+            "scale_factor": 2.0,
+            "onnx_model": "sr.onnx",
+            "engine": "cuda",
+        },
         stage_name="01_super_resolution",
     )
 
-    algorithm = stage_worker_factory.create_algorithm(stage, _Backend())
+    algorithm = stage_worker_factory.create_algorithm(stage, _Backend(), model_root="D:/models")
 
     assert isinstance(algorithm, FakeAlgorithm)
-    assert captured["kwargs"] == {"sr_algorithm": "placeholder", "scale_factor": 2.0}
+    assert captured["kwargs"] == {
+        "sr_algorithm": "placeholder",
+        "onnx_model": "sr.onnx",
+        "engine": "cuda",
+        "model_dir": "D:/models",
+    }
 
 
 def test_stage_worker_factory_accepts_immutable_filter_params() -> None:
@@ -82,13 +92,13 @@ def test_stage_worker_factory_accepts_immutable_filter_params() -> None:
     )
     frame = np.arange(8 * 8 * 3, dtype=np.uint8).reshape(8, 8, 3)
 
-    algorithm = stage_worker_factory.create_algorithm(stage, None)
+    algorithm = stage_worker_factory.create_algorithm(stage, None, model_root="D:/models")
 
-    assert algorithm.process_frame(frame) is frame
+    assert algorithm.process_numpy(frame) is frame
 
 
 def test_stage_worker_factory_rejects_unknown_algorithm_type() -> None:
-    with pytest.raises(ValueError, match="Unsupported stage-worker algorithm type"):
+    with pytest.raises(ValueError, match="Unknown processing stage type"):
         stage_worker_factory.create_algorithm(
             ProcessingStep(
                 algorithm_type="unknown",
@@ -96,4 +106,5 @@ def test_stage_worker_factory_rejects_unknown_algorithm_type() -> None:
                 stage_name="01_unknown",
             ),
             _Backend(),
+            model_root="D:/models",
         )

@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from app.planning import ProcessingStep
+from app.planning.processing_steps import ProcessingStep
 from app.processing.streaming.metrics import PipelineMetrics
 import app.processing.streaming.stage_file_chunk_runtime as runtime
 from app.processing.streaming.stage_file_chunk_runtime import run_stage_chunk_to_file
@@ -46,7 +46,13 @@ def _run_chunk(
 def test_stage_chunk_runtime_writes_unskipped_worker_frames(monkeypatch, tmp_path) -> None:
     step = ProcessingStep(
         algorithm_type="super_resolution",
-        algorithm_kwargs={"scale_factor": 4.0, "sr_algorithm": "ppmsvsr"},
+        algorithm_kwargs={
+            "scale_factor": 4.0,
+            "sr_algorithm": "ppmsvsr",
+            "onnx_model": None,
+            "engine": "cuda",
+            "num_frames": 10,
+        },
         stage_name="01_super_resolution",
     )
     chunk = StageChunkPlan(
@@ -64,17 +70,15 @@ def test_stage_chunk_runtime_writes_unskipped_worker_frames(monkeypatch, tmp_pat
     @contextmanager
     def fake_session(plans, *, progress_callbacks, **_kwargs):
         progress_callbacks[0](3, 999, phase="stage")
-        yield [SimpleNamespace(process=fake_process, plan=plans[0])]
+        group = SimpleNamespace(
+            handles=[SimpleNamespace(process=fake_process, plan=plans[0])],
+            start_decoded_frame_writer=lambda config, **_kwargs: decoded_configs.append(config),
+        )
+        yield group
 
     decoded_configs = []
 
-    @contextmanager
-    def fake_decoded_frame_writer_session(config, **_kwargs):
-        decoded_configs.append(config)
-        yield
-
     monkeypatch.setattr(runtime, "stage_worker_session", fake_session)
-    monkeypatch.setattr(runtime, "decoded_frame_writer_session", fake_decoded_frame_writer_session)
 
     ffmpeg = FakeRawVideoMedia(payload=b"encoded")
     output_path = tmp_path / "chunk.mp4"
@@ -99,7 +103,13 @@ def test_stage_chunk_runtime_writes_unskipped_worker_frames(monkeypatch, tmp_pat
 def test_stage_chunk_runtime_preserves_direct_error_without_requeue(monkeypatch, tmp_path) -> None:
     step = ProcessingStep(
         algorithm_type="super_resolution",
-        algorithm_kwargs={"scale_factor": 1.0},
+        algorithm_kwargs={
+            "scale_factor": 1.0,
+            "sr_algorithm": "placeholder",
+            "onnx_model": None,
+            "engine": "cuda",
+            "num_frames": 10,
+        },
         stage_name="01_super_resolution",
     )
     chunk = StageChunkPlan(
@@ -117,11 +127,10 @@ def test_stage_chunk_runtime_preserves_direct_error_without_requeue(monkeypatch,
     def fake_session(plans, *, error_queue, stop_event, **_kwargs):
         captured["error_queue"] = error_queue
         captured["stop_event"] = stop_event
-        yield [SimpleNamespace(process=process, plan=plans[0])]
-
-    @contextmanager
-    def fake_decoded_frame_writer_session(_config, **_kwargs):
-        yield
+        yield SimpleNamespace(
+            handles=[SimpleNamespace(process=process, plan=plans[0])],
+            start_decoded_frame_writer=lambda *_args, **_kwargs: None,
+        )
 
     expected = RuntimeError("encode failed")
 
@@ -129,7 +138,6 @@ def test_stage_chunk_runtime_preserves_direct_error_without_requeue(monkeypatch,
         raise expected
 
     monkeypatch.setattr(runtime, "stage_worker_session", fake_session)
-    monkeypatch.setattr(runtime, "decoded_frame_writer_session", fake_decoded_frame_writer_session)
     monkeypatch.setattr(runtime, "encode_stage_worker_output", fail_encode)
 
     with pytest.raises(RuntimeError, match="encode failed") as exc_info:

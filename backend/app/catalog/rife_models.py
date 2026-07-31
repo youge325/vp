@@ -7,7 +7,9 @@ creating a package cycle.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
 # Head type constants shared by model loading, runtime metrics and tests.
 HEAD_NONE = "none"  # No Head encoder (v4.0 ~ v4.6)
@@ -31,20 +33,24 @@ class RifeModelSpec:
     modulo: int
     ensemble: bool
     head_type: str
-    head_config: dict[str, int] | None = None
+    head_config: Mapping[str, int] | None = None
+
+    def __post_init__(self) -> None:
+        if self.head_config is not None:
+            object.__setattr__(self, "head_config", MappingProxyType(dict(self.head_config)))
 
 
 # Versions grouped by spec. Order here also defines ``SUPPORTED_MODELS``.
 # Each entry: (list_of_versions, RifeModelSpec).
-_VERSION_GROUPS: list[tuple[list[str], RifeModelSpec]] = [
+_VERSION_GROUPS: tuple[tuple[tuple[str, ...], RifeModelSpec], ...] = (
     # v4.0 ~ v4.6: no Head encoder; 4-block; ensemble enabled
     (
-        ["4.0", "4.1", "4.2", "4.3", "4.4", "4.5", "4.6"],
+        ("4.0", "4.1", "4.2", "4.3", "4.4", "4.5", "4.6"),
         RifeModelSpec(32, True, HEAD_NONE),
     ),
     # v4.7 ~ v4.9: sequential Head (3 → 16 → 4); encode_channel=4
     (
-        ["4.7", "4.8", "4.9"],
+        ("4.7", "4.8", "4.9"),
         RifeModelSpec(
             32,
             True,
@@ -54,7 +60,7 @@ _VERSION_GROUPS: list[tuple[list[str], RifeModelSpec]] = [
     ),
     # v4.10 ~ v4.12: sequential Head (3 → 32 → 8); encode_channel=8
     (
-        ["4.10", "4.11", "4.12"],
+        ("4.10", "4.11", "4.12"),
         RifeModelSpec(
             32,
             True,
@@ -64,7 +70,7 @@ _VERSION_GROUPS: list[tuple[list[str], RifeModelSpec]] = [
     ),
     # v4.12.lite / v4.13.lite: sequential Head (3 → 32 → 4); encode_channel=4
     (
-        ["4.12.lite", "4.13.lite"],
+        ("4.12.lite", "4.13.lite"),
         RifeModelSpec(
             32,
             True,
@@ -74,45 +80,47 @@ _VERSION_GROUPS: list[tuple[list[str], RifeModelSpec]] = [
     ),
     # v4.13 ~ v4.20: custom Head; encode_channel=8 except v4.15.lite / v4.16.lite / v4.17.lite
     (
-        ["4.13", "4.14", "4.14.lite", "4.15", "4.17", "4.18", "4.19", "4.20"],
+        ("4.13", "4.14", "4.14.lite", "4.15", "4.17", "4.18", "4.19", "4.20"),
         RifeModelSpec(32, True, HEAD_CUSTOM),
     ),
     (
-        ["4.15.lite", "4.16.lite", "4.17.lite"],
+        ("4.15.lite", "4.16.lite", "4.17.lite"),
         RifeModelSpec(32, True, HEAD_CUSTOM),
     ),
     # v4.21 ~ v4.24: custom Head; feat 传播,无 ensemble
     (
-        ["4.21", "4.22", "4.23", "4.24"],
+        ("4.21", "4.22", "4.23", "4.24"),
         RifeModelSpec(32, False, HEAD_CUSTOM),
     ),
     (
-        ["4.22.lite"],
+        ("4.22.lite",),
         RifeModelSpec(32, False, HEAD_CUSTOM),
     ),
     # v4.25 / v4.26 / v4.25.heavy: 5-block, modulo=64; no ensemble; encode_channel=4
     (
-        ["4.25", "4.26", "4.25.heavy"],
+        ("4.25", "4.26", "4.25.heavy"),
         RifeModelSpec(64, False, HEAD_CUSTOM),
     ),
     # v4.25.lite: 5-block, modulo=128
     (
-        ["4.25.lite"],
+        ("4.25.lite",),
         RifeModelSpec(128, False, HEAD_CUSTOM),
     ),
     # v4.26.heavy: encode_channel=16
     (
-        ["4.26.heavy"],
+        ("4.26.heavy",),
         RifeModelSpec(64, False, HEAD_CUSTOM),
     ),
-]
+)
 
 
 # Public API ---------------------------------------------------------------
 
-SUPPORTED_MODELS: list[str] = [v for versions, _ in _VERSION_GROUPS for v in versions]
+SUPPORTED_MODELS: tuple[str, ...] = tuple(v for versions, _ in _VERSION_GROUPS for v in versions)
 
-MODEL_SPECS: dict[str, RifeModelSpec] = {version: spec for versions, spec in _VERSION_GROUPS for version in versions}
+MODEL_SPECS: Mapping[str, RifeModelSpec] = MappingProxyType(
+    {version: spec for versions, spec in _VERSION_GROUPS for version in versions}
+)
 
 
 def get_spec(version: str) -> RifeModelSpec:

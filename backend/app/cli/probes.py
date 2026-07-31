@@ -12,6 +12,8 @@ import subprocess
 from typing import Any
 
 from app.config import settings
+from app.catalog.tensor_capabilities import BACKEND_ENGINES
+from app.generated.contracts import InferenceEngine, TensorEngines
 from app.utils.subprocess_utils import hidden_subprocess_kwargs
 
 _PYTORCH_SCRIPT = (
@@ -60,10 +62,10 @@ _ONNX_SCRIPT = (
     "print(json.dumps(result), flush=True)\n"
 )
 
-_PROBE_SPECS: dict[str, tuple[str, str, tuple[str, ...]]] = {
-    "pytorch": (_PYTORCH_SCRIPT, "pytorch_available", ("cuda", "tensorrt")),
-    "paddle": (_PADDLE_SCRIPT, "paddle_available", ("cuda", "tensorrt", "dcu")),
-    "onnx": (_ONNX_SCRIPT, "onnx_available", ("tensorrt", "cuda")),
+_PROBE_SPECS: dict[str, tuple[str, str]] = {
+    "pytorch": (_PYTORCH_SCRIPT, "pytorch_available"),
+    "paddle": (_PADDLE_SCRIPT, "paddle_available"),
+    "onnx": (_ONNX_SCRIPT, "onnx_available"),
 }
 
 
@@ -92,10 +94,11 @@ def _run_python_capability_probe(script: str, fallback: dict[str, Any]) -> dict[
     return dict(fallback)
 
 
-def probe_tensor_engines() -> dict[str, list[str]]:
-    """Probe each tensor runtime and return its usable engine names."""
+def probe_tensor_engines() -> TensorEngines:
+    """Probe each tensor runtime and return a validated wire model."""
     engines_by_backend: dict[str, list[str]] = {}
-    for backend, (script, availability_key, engine_order) in _PROBE_SPECS.items():
+    for backend, (script, availability_key) in _PROBE_SPECS.items():
+        engine_order = BACKEND_ENGINES[backend]
         fallback = {
             availability_key: False,
             **{f"supports_{engine}": False for engine in engine_order},
@@ -106,4 +109,8 @@ def probe_tensor_engines() -> dict[str, list[str]]:
             if capabilities.get(availability_key)
             else []
         )
-    return engines_by_backend
+    return TensorEngines(
+        pytorch=[InferenceEngine(engine) for engine in engines_by_backend["pytorch"]],
+        paddle=[InferenceEngine(engine) for engine in engines_by_backend["paddle"]],
+        onnx=[InferenceEngine(engine) for engine in engines_by_backend["onnx"]],
+    )

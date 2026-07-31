@@ -5,10 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.planning import ProcessingStep
+from app.planning.processing_steps import ProcessingStep
 from app.ports.media import StageFileMediaPort
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_worker_progress import StageProgressCallback
+from app.processing.streaming.runtime_ports import WorkerLogSink
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +32,7 @@ class StageFileRuntimeConfig:
     output_fps: float
     encode_output_fps: float | None
     metrics: PipelineMetrics
+    worker_log_sink: WorkerLogSink
 
 
 __all__ = ["StageFileRuntimeConfig"]

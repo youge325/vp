@@ -4,20 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.planning import ProcessingStep, StagePlan, StageProjection
-from app.processing.streaming.stage_rules import (
-    stage_output_dimensions,
-    stage_tensor_backend_name,
-)
-from app.processing.streaming.stage_worker_config import StageWorkerConfig
-
-
-@dataclass(frozen=True, slots=True)
-class StageWorkerPlan:
-    """Parent-side plan for one stage-worker process."""
-
-    config: StageWorkerConfig
-    output_frame_count: int
+from app.generated.stage_worker_contracts import StageWorkerConfig
+from app.planning.processing_steps import ProcessingStep
+from app.planning.stage_plan import StagePlan
+from app.planning.stage_projection import StageProjection
+from app.processing.streaming.stage_rules import stage_tensor_backend_name
+from app.processing.streaming.stage_worker_config import build_stage_worker_step
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,46 +30,47 @@ def build_stage_worker_plans(
     source_width: int,
     source_height: int,
     source_frame_count: int,
-) -> list[StageWorkerPlan]:
+) -> list[StageWorkerConfig]:
     """Build sequential stage-worker configs from a resolved ``StagePlan``."""
     steps = stage_plan.steps
-    plans: list[StageWorkerPlan] = []
-    input_width = source_width
-    input_height = source_height
-
-    projected_stages = stage_plan.projection.stages(source_frames=source_frame_count)
+    configs: list[StageWorkerConfig] = []
+    projected_stages = stage_plan.projection.stages(
+        source_frames=source_frame_count,
+        source_width=source_width,
+        source_height=source_height,
+    )
     for projected_stage in projected_stages:
         index = projected_stage.position
         step = projected_stage.step
         input_frame_count = projected_stage.input_frames
-        output_width, output_height = stage_output_dimensions(
-            step,
-            input_width=input_width,
-            input_height=input_height,
-        )
+        if None in {
+            projected_stage.input_width,
+            projected_stage.input_height,
+            projected_stage.output_width,
+            projected_stage.output_height,
+        }:
+            raise RuntimeError("Stage geometry projection is incomplete.")
+        input_width = int(projected_stage.input_width)
+        input_height = int(projected_stage.input_height)
+        output_width = int(projected_stage.output_width)
+        output_height = int(projected_stage.output_height)
         output_frame_count = projected_stage.output_frames
-        plans.append(
-            StageWorkerPlan(
-                config=StageWorkerConfig(
-                    stage=step,
-                    stage_index=index,
-                    stage_total=len(steps),
-                    stage_name=step.stage_name or step.algorithm_type,
-                    input_width=input_width,
-                    input_height=input_height,
-                    output_width=output_width,
-                    output_height=output_height,
-                    input_frame_count=input_frame_count,
-                    tensor_backend_name=stage_tensor_backend_name(step),
-                    output_frame_count=output_frame_count,
-                ),
+        configs.append(
+            StageWorkerConfig(
+                stage=build_stage_worker_step(step),
+                stage_index=index,
+                stage_total=len(steps),
+                stage_name=step.stage_name or step.algorithm_type,
+                input_width=input_width,
+                input_height=input_height,
+                output_width=output_width,
+                output_height=output_height,
+                input_frame_count=input_frame_count,
+                tensor_backend_name=stage_tensor_backend_name(step),
                 output_frame_count=output_frame_count,
             )
         )
-        input_width = output_width
-        input_height = output_height
-
-    return plans
+    return configs
 
 
 def build_stage_chunk_plans(
@@ -156,7 +149,6 @@ def boundary_schedule_for_stage_plan(
 
 __all__ = [
     "StageChunkPlan",
-    "StageWorkerPlan",
     "boundary_schedule_for_stage_plan",
     "build_stage_chunk_plans",
     "build_stage_worker_plans",

@@ -14,8 +14,9 @@ def test_run_encoder_worker_seals_stream_end_and_discards_open_segment(monkeypat
     config = object()
 
     class FakeSegmentWriter:
-        def __init__(self, received_config: object) -> None:
+        def __init__(self, received_config: object, writer_owner: object) -> None:
             self.config = received_config
+            self.writer_owner = writer_owner
             self.actions: list[tuple[str, int] | tuple[str]] = []
             instances.append(self)
 
@@ -40,6 +41,7 @@ def test_run_encoder_worker_seals_stream_end_and_discards_open_segment(monkeypat
         encode_queue=encode_queue,
         error_queue=queue.Queue(),
         stop_event=threading.Event(),
+        writer_owner=object(),  # type: ignore[arg-type]
     )
 
     assert instances

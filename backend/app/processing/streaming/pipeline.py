@@ -9,9 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.planning import (
-    ResumeMode,
-)
+from app.planning.resume_policy import ResumeMode
 from app.ports.media import EncodeProgressCallback, MediaRuntimePort
 from app.processing.streaming.pipeline_lifecycle import (
     finalize_streaming_output,
@@ -22,6 +20,8 @@ from app.processing.streaming.pipeline_context import StreamingPipelineContext
 from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline
 from app.processing.streaming.pipeline_context import StreamingPipelinePreflight
 from app.processing.streaming.stage_worker_progress import StageProgressCallback
+from app.processing.streaming.runtime_ports import ManifestFactoryPort, ResumeStatusSink, WorkerLogSink
+from app.processing.execution_result import ExecutionResult
 
 
 def process_video_streaming(
@@ -34,13 +34,16 @@ def process_video_streaming(
     preflight: StreamingPipelinePreflight,
     progress_callbacks: list[StageProgressCallback],
     metrics: PipelineMetrics,
+    manifest_factory: ManifestFactoryPort,
+    resume_status_sink: ResumeStatusSink,
+    worker_log_sink: WorkerLogSink,
     output_fps: float | None = None,
     encode_progress_callback: EncodeProgressCallback | None = None,
     resume_mode: ResumeMode = "auto",
-) -> dict[str, Any]:
+) -> ExecutionResult:
     """Process a video through the selected streaming runtime."""
     manifest, resume_state = prepare_streaming_manifest(
-        output_path=output_path,
+        manifest=manifest_factory(output_path),
         signature=preflight.signature,
         config_snapshot=preflight.config_snapshot,
         resume_mode=resume_mode,
@@ -58,6 +61,9 @@ def process_video_streaming(
         output_fps=output_fps,
         encode_progress_callback=encode_progress_callback,
         metrics=metrics,
+        manifest_factory=manifest_factory,
+        resume_status_sink=resume_status_sink,
+        worker_log_sink=worker_log_sink,
     )
 
     if resume_state.start_source_frame >= preflight.resume_source_frames:

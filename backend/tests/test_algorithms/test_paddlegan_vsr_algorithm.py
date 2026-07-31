@@ -11,11 +11,12 @@ from app.algorithms.paddle.paddlegan_vsr import trace_observer as trace_module
 from app.algorithms.paddle.paddlegan_vsr.runner import PaddleGanVsrRunner
 from app.algorithms.paddle.paddlegan_vsr.tensorrt_cache import (
     PaddleGanTensorRtPredictor,
-    PredictorBinding,
-    TensorRtPredictorCache,
+    _PredictorBinding,
+    _TensorRtPredictorCache,
 )
 from app.algorithms.paddle.paddlegan_vsr.trace_observer import PaddleGanTraceObserver
-from app.processing.super_resolution import PaddleGanVideoSuperResolution, SUPPORTED_ALGORITHMS
+from app.algorithms.paddle_video_super_resolution import PaddleGanVideoSuperResolution
+from app.catalog.algorithm_capabilities import SUPER_RESOLUTION_CAPABILITIES
 
 
 class _NoGradPaddle:
@@ -31,18 +32,18 @@ class _NoGradPaddle:
 
 
 def test_supported_super_resolution_algorithms_include_all_paddlegan_vsr_models():
-    algorithms = {entry["name"]: entry for entry in SUPPORTED_ALGORITHMS}
+    algorithms = {entry.name: entry for entry in SUPER_RESOLUTION_CAPABILITIES}
 
     for name in ["ppmsvsr", "ppmsvsr-large", "edvr", "basicvsr", "iconvsr", "basicvsr-plus-plus"]:
-        assert algorithms[name]["tensorBackends"] == ["paddle"]
-        assert algorithms[name]["models"] == ["x4"]
-        assert algorithms[name]["scaleFactors"] == [4]
+        assert algorithms[name].descriptor.supported_backends == frozenset({"paddle"})
+        assert algorithms[name].models == ("x4",)
+        assert algorithms[name].descriptor.fixed_scale_factor == 4
 
 
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
-        ({"model_id": "ppmsvsr", "num_frames": 0}, "num_frames must be at least 1"),
+        ({"model_id": "ppmsvsr", "num_frames": 0, "engine": "cuda"}, "num_frames must be at least 1"),
         ({"model_id": "ppmsvsr", "num_frames": 5, "engine": "openvino"}, "Unsupported PaddleGAN VSR engine"),
     ],
 )
@@ -65,11 +66,10 @@ def test_paddlegan_super_resolution_delegates_to_sequence_runner(monkeypatch):
                 progress_callback(len(input_frames), len(input_frames))
             return [frame + 2 for frame in input_frames]
 
-    monkeypatch.setattr("app.processing.super_resolution.PaddleGanVsrRunner", _Runner)
+    monkeypatch.setattr("app.algorithms.paddle_video_super_resolution.PaddleGanVsrRunner", _Runner)
 
     algorithm = PaddleGanVideoSuperResolution(
         sr_algorithm="ppmsvsr",
-        scale_factor=4,
         num_frames=6,
         engine="tensorrt",
     )
@@ -88,7 +88,7 @@ def test_paddlegan_super_resolution_delegates_to_sequence_runner(monkeypatch):
 
 def test_paddlegan_recurrent_runner_reports_completed_frames_by_chunk(monkeypatch):
     frames = [np.full((1, 1, 3), index, dtype=np.uint8) for index in range(5)]
-    runner = PaddleGanVsrRunner(model_id="ppmsvsr", num_frames=2)
+    runner = PaddleGanVsrRunner(model_id="ppmsvsr", num_frames=2, engine="cuda")
     runner._ensure_paddle = lambda: _NoGradPaddle()
     runner._ensure_model = lambda: lambda tensor: tensor
     monkeypatch.setattr(executor_module, "frames_to_tensor", lambda chunk, _paddle: len(chunk))
@@ -110,7 +110,7 @@ def test_paddlegan_recurrent_runner_reports_completed_frames_by_chunk(monkeypatc
 
 def test_paddlegan_window_runner_reports_completed_frames_by_window(monkeypatch):
     frames = [np.full((1, 1, 3), index, dtype=np.uint8) for index in range(3)]
-    runner = PaddleGanVsrRunner(model_id="edvr", num_frames=5)
+    runner = PaddleGanVsrRunner(model_id="edvr", num_frames=5, engine="cuda")
     runner._ensure_paddle = lambda: _NoGradPaddle()
     runner._ensure_model = lambda: lambda _tensor: "frame"
     monkeypatch.setattr(executor_module, "frames_to_tensor", lambda _neighbors, _paddle: "neighbors")
@@ -283,7 +283,7 @@ def test_paddlegan_tensorrt_predictor_pads_and_crops_short_chunks(monkeypatch):
     monkeypatch.setattr(
         predictor._cache,
         "ensure",
-        lambda _shape: PredictorBinding(_Predictor(), "input", ["aux", "final"]),
+        lambda _shape: _PredictorBinding(_Predictor(), "input", ["aux", "final"]),
     )
 
     output = predictor.run(np.zeros((1, 3, 3, 128, 128), dtype=np.float32))
@@ -294,7 +294,7 @@ def test_paddlegan_tensorrt_predictor_pads_and_crops_short_chunks(monkeypatch):
 
 def _ensure_tensorrt_predictor(monkeypatch, caplog, *, prefix: Path, paddle):
     caplog.set_level(logging.INFO, logger=tensorrt_module.__name__)
-    cache = TensorRtPredictorCache(
+    cache = _TensorRtPredictorCache(
         paddle=paddle,
         model="model",
         model_id="ppmsvsr",
@@ -305,7 +305,7 @@ def _ensure_tensorrt_predictor(monkeypatch, caplog, *, prefix: Path, paddle):
     monkeypatch.setattr(
         tensorrt_module,
         "_create_tensorrt_predictor",
-        lambda **_kwargs: PredictorBinding("predictor", "input", ["output"]),
+        lambda **_kwargs: _PredictorBinding("predictor", "input", ["output"]),
     )
     cache.ensure([1, 5, 3, 288, 640])
     return [record.getMessage() for record in caplog.records if record.name == tensorrt_module.__name__]
@@ -370,16 +370,16 @@ def test_paddlegan_tensorrt_predictor_logs_load_when_static_files_exist(tmp_path
 
 def test_paddlegan_tensorrt_predictor_logs_in_process_reuse(caplog):
     caplog.set_level(logging.INFO, logger=tensorrt_module.__name__)
-    cache = TensorRtPredictorCache(
+    cache = _TensorRtPredictorCache(
         paddle=object(),
         model=object(),
         model_id="ppmsvsr",
         sequence_mode="recurrent",
         num_frames=5,
     )
-    cache._entries[(5, 288, 640)] = PredictorBinding("predictor", "input", ["output"])
+    cache._entries[(5, 288, 640)] = _PredictorBinding("predictor", "input", ["output"])
 
-    expected = PredictorBinding("predictor", "input", ["output"])
+    expected = _PredictorBinding("predictor", "input", ["output"])
     assert cache.ensure([1, 5, 3, 288, 640]) == expected
     assert cache.ensure([1, 5, 3, 288, 640]) == expected
 

@@ -6,7 +6,8 @@ import queue
 import threading
 
 from app.processing.streaming.encoder_runtime_config import EncoderRuntimeConfig
-from app.processing.streaming.encoder_segment_writer import EncoderSegmentWriter
+from app.processing.streaming.encoder_segment_writer import EncoderSegmentWriter, EncoderWriterOwner
+from app.processing.streaming.error_channel import report_first_error
 from app.processing.streaming.queues import (
     EncodeQueue,
     EncodedFrame,
@@ -23,8 +24,9 @@ def run_encoder_worker(
     encode_queue: EncodeQueue,
     error_queue: queue.Queue[BaseException],
     stop_event: threading.Event,
+    writer_owner: EncoderWriterOwner,
 ) -> None:
-    segment_writer = EncoderSegmentWriter(config)
+    segment_writer = EncoderSegmentWriter(config, writer_owner)
 
     try:
         while not stop_event.is_set():
@@ -48,10 +50,12 @@ def run_encoder_worker(
                 segment_writer.seal_remaining(item.next_source_frame)
                 break
     except BaseException as exc:  # pragma: no cover - thread boundary
-        stop_event.set()
-        error_queue.put(exc)
+        report_first_error(error_queue, stop_event, exc)
     finally:
-        segment_writer.discard_open_segment()
+        try:
+            segment_writer.discard_open_segment()
+        except BaseException as exc:  # pragma: no cover - thread cleanup boundary
+            report_first_error(error_queue, stop_event, exc)
 
 
 __all__ = ["run_encoder_worker"]

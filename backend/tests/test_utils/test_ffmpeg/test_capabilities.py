@@ -1,5 +1,6 @@
 """FFmpeg capability aggregation tests."""
 
+from app.generated.contracts import GpuAdapter, GpuVendor
 from app.utils.ffmpeg import capabilities, capability_probe
 
 
@@ -36,7 +37,7 @@ def _install_probe_stubs(monkeypatch) -> None:
 def test_discover_capabilities_filters_profiles_by_gpu_vendor(monkeypatch) -> None:
     _install_probe_stubs(monkeypatch)
 
-    result = capabilities.discover_capabilities("ffmpeg", [{"name": "GPU", "vendor": "nvidia"}]).model_dump(
+    result = capabilities.discover_capabilities("ffmpeg", [GpuAdapter(name="GPU", vendor=GpuVendor.NVIDIA)]).model_dump(
         by_alias=True, mode="json"
     )
 
@@ -63,7 +64,10 @@ def test_discover_capabilities_returns_only_verified_hwaccels(monkeypatch) -> No
 
     result = capabilities.discover_capabilities(
         "ffmpeg",
-        [{"name": "NVIDIA", "vendor": "nvidia"}, {"name": "Intel", "vendor": "intel"}],
+        [
+            GpuAdapter(name="NVIDIA", vendor=GpuVendor.NVIDIA),
+            GpuAdapter(name="Intel", vendor=GpuVendor.INTEL),
+        ],
     ).model_dump(by_alias=True, mode="json")
 
     assert result["hwaccels"] == ["cuda"]

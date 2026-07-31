@@ -8,8 +8,23 @@ from pathlib import Path
 import pytest
 
 from app.errors import ResumeConflictError
-from app.planning import SegmentManifest
+from app.generated.contracts import SegmentManifest as SegmentManifestContract
+from app.planning.manifest import SegmentManifest
 from app.planning.manifest_store import _MANIFEST_VERSION
+from app.planning.segment_workspace import SegmentWorkspace
+from tests.support.streaming_runtime import create_test_manifest
+
+
+class _FakeManifestRepository:
+    def __init__(self) -> None:
+        self.value: SegmentManifestContract | None = None
+        self.writes: list[tuple[str, dict[str, object]]] = []
+
+    def load(self) -> SegmentManifestContract | None:
+        return self.value
+
+    def write(self, *, signature: str, config_snapshot: dict[str, object]) -> None:
+        self.writes.append((signature, config_snapshot))
 
 
 def _make_chunk(sidecar: Path, *, index: int, start: int, end: int, next_src: int) -> Path:
@@ -20,7 +35,7 @@ def _make_chunk(sidecar: Path, *, index: int, start: int, end: int, next_src: in
 
 
 def test_prepare_fresh_when_sidecar_missing(tmp_path):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     decision = manifest.prepare("sig-1", {"foo": "bar"}, mode="auto")
 
     assert decision.kind == "fresh"
@@ -35,8 +50,20 @@ def test_prepare_fresh_when_sidecar_missing(tmp_path):
     assert "segments" not in payload  # progress is filesystem-derived
 
 
+def test_manifest_uses_injected_repository_port(tmp_path: Path) -> None:
+    workspace = SegmentWorkspace.for_output(tmp_path / "out.mp4")
+    repository = _FakeManifestRepository()
+    manifest = SegmentManifest(workspace=workspace, repository=repository)
+
+    decision = manifest.prepare("sig-port", {"input_path": "input.mp4"})
+
+    assert decision.kind == "fresh"
+    assert repository.writes == [("sig-port", {"input_path": "input.mp4"})]
+    assert not workspace.manifest_path.exists()
+
+
 def test_prepare_resume_with_contiguous_chunks(tmp_path):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     manifest.prepare("sig-2", {}, mode="auto")
     _make_chunk(manifest.workspace.sidecar_dir, index=1, start=0, end=999, next_src=500)
     _make_chunk(manifest.workspace.sidecar_dir, index=2, start=1000, end=1499, next_src=750)
@@ -49,7 +76,7 @@ def test_prepare_resume_with_contiguous_chunks(tmp_path):
 
 
 def test_prepare_resets_on_signature_mismatch(tmp_path):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     manifest.prepare("sig-old", {}, mode="auto")
     _make_chunk(manifest.workspace.sidecar_dir, index=1, start=0, end=999, next_src=500)
 
@@ -62,7 +89,7 @@ def test_prepare_resets_on_signature_mismatch(tmp_path):
 
 
 def test_prepare_recovers_from_corrupt_manifest(tmp_path):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     manifest.workspace.sidecar_dir.mkdir(parents=True, exist_ok=True)
     manifest.workspace.manifest_path.write_text("{not json", encoding="utf-8")
 
@@ -74,7 +101,7 @@ def test_prepare_recovers_from_corrupt_manifest(tmp_path):
 
 
 def test_prepare_quarantines_v2_sidecar_without_reading_progress(tmp_path):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     manifest.workspace.sidecar_dir.mkdir(parents=True, exist_ok=True)
     manifest.workspace.manifest_path.write_text(
         json.dumps(
@@ -111,7 +138,7 @@ def test_prepare_quarantines_v2_sidecar_without_reading_progress(tmp_path):
 
 
 def test_prepare_quarantines_corrupt_manifest(tmp_path):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     manifest.workspace.sidecar_dir.mkdir(parents=True, exist_ok=True)
     manifest.workspace.manifest_path.write_text("{not json", encoding="utf-8")
     stale_chunk = manifest.workspace.sidecar_dir / "chunk-tmp.mp4"
@@ -127,7 +154,7 @@ def test_prepare_quarantines_corrupt_manifest(tmp_path):
 
 
 def test_prepare_quarantines_schema_three_manifest_with_missing_fields(tmp_path):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     manifest.workspace.sidecar_dir.mkdir(parents=True, exist_ok=True)
     incomplete = {
         "version": _MANIFEST_VERSION,
@@ -152,7 +179,7 @@ def test_prepare_quarantines_schema_three_manifest_with_missing_fields(tmp_path)
 
 
 def test_scan_truncates_at_first_gap(tmp_path):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     manifest.prepare("sig-4", {}, mode="auto")
     _make_chunk(manifest.workspace.sidecar_dir, index=1, start=0, end=999, next_src=500)
     # chunk 2 missing on purpose
@@ -167,7 +194,7 @@ def test_scan_truncates_at_first_gap(tmp_path):
 
 
 def test_cleanup_partial_drops_in_flight_sentinel(tmp_path):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     manifest.prepare("sig-5", {}, mode="auto")
     _make_chunk(manifest.workspace.sidecar_dir, index=1, start=0, end=999, next_src=500)
     sentinel = manifest.workspace.sidecar_dir / "chunk-tmp.mp4"
@@ -181,7 +208,7 @@ def test_cleanup_partial_drops_in_flight_sentinel(tmp_path):
 
 def test_prepare_auto_returns_conflict_when_final_exists(tmp_path):
     output = tmp_path / "out.mp4"
-    manifest = SegmentManifest(str(output))
+    manifest = create_test_manifest(str(output))
     manifest.prepare("sig-conflict", {}, mode="auto")
     _make_chunk(manifest.workspace.sidecar_dir, index=1, start=0, end=999, next_src=500)
     output.write_bytes(b"final")
@@ -198,7 +225,7 @@ def test_prepare_auto_returns_conflict_when_final_exists(tmp_path):
 def test_prepare_force_fresh_purges_final_and_sidecar(tmp_path):
     output = tmp_path / "out.mp4"
     output.write_bytes(b"final")
-    manifest = SegmentManifest(str(output))
+    manifest = create_test_manifest(str(output))
     manifest.prepare("sig-7", {}, mode="auto")
     # the previous prepare returned a conflict but did not touch state; do it now
     decision = manifest.prepare("sig-7", {"foo": "bar"}, mode="force-fresh")
@@ -212,7 +239,7 @@ def test_prepare_force_fresh_purges_final_and_sidecar(tmp_path):
 
 def test_prepare_force_fresh_with_changed_signature_also_purges_final(tmp_path):
     output = tmp_path / "out.mp4"
-    manifest = SegmentManifest(str(output))
+    manifest = create_test_manifest(str(output))
     manifest.prepare("sig-old", {}, mode="auto")
     _make_chunk(manifest.workspace.sidecar_dir, index=1, start=0, end=99, next_src=50)
     output.write_bytes(b"stale-final")
@@ -229,7 +256,7 @@ def test_prepare_force_fresh_with_changed_signature_also_purges_final(tmp_path):
 
 def test_prepare_fresh_fails_closed_when_sidecar_cleanup_fails(tmp_path, monkeypatch):
     output = tmp_path / "out.mp4"
-    manifest = SegmentManifest(str(output))
+    manifest = create_test_manifest(str(output))
     manifest.prepare("sig", {"generation": 1}, mode="auto")
     output.write_bytes(b"existing-final")
 
@@ -251,7 +278,7 @@ def test_prepare_fresh_fails_closed_when_sidecar_cleanup_fails(tmp_path, monkeyp
 
 
 def test_prepare_fails_closed_when_stale_sentinel_cannot_be_removed(tmp_path, monkeypatch):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     manifest.prepare("sig", {}, mode="auto")
     sentinel = manifest.workspace.sidecar_dir / "chunk-tmp.mp4"
     sentinel.write_bytes(b"in-flight")
@@ -271,7 +298,7 @@ def test_prepare_fails_closed_when_stale_sentinel_cannot_be_removed(tmp_path, mo
 
 
 def test_prepare_fails_closed_when_noncontiguous_chunk_cannot_be_removed(tmp_path, monkeypatch):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     manifest.prepare("sig", {}, mode="auto")
     _make_chunk(manifest.workspace.sidecar_dir, index=1, start=0, end=99, next_src=50)
     stale = _make_chunk(manifest.workspace.sidecar_dir, index=3, start=200, end=299, next_src=150)
@@ -292,7 +319,7 @@ def test_prepare_fails_closed_when_noncontiguous_chunk_cannot_be_removed(tmp_pat
 
 def test_prepare_force_resume_reuses_matching_progress_with_final_output(tmp_path):
     output = tmp_path / "out.mp4"
-    manifest = SegmentManifest(str(output))
+    manifest = create_test_manifest(str(output))
     manifest.prepare("sig-resume", {}, mode="auto")
     _make_chunk(manifest.workspace.sidecar_dir, index=1, start=0, end=99, next_src=50)
     output.write_bytes(b"previous-final")
@@ -307,7 +334,7 @@ def test_prepare_force_resume_reuses_matching_progress_with_final_output(tmp_pat
 
 def test_prepare_force_resume_resets_mismatched_progress_without_deleting_final(tmp_path):
     output = tmp_path / "out.mp4"
-    manifest = SegmentManifest(str(output))
+    manifest = create_test_manifest(str(output))
     manifest.prepare("sig-old", {}, mode="auto")
     _make_chunk(manifest.workspace.sidecar_dir, index=1, start=0, end=99, next_src=50)
     output.write_bytes(b"previous-final")
@@ -323,7 +350,7 @@ def test_prepare_force_resume_resets_mismatched_progress_without_deleting_final(
 
 
 def test_finalize_chunk_renames_atomically(tmp_path):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     manifest.prepare("sig-8", {}, mode="auto")
     tmp_path_str = manifest.workspace.chunk_tmp_path(".mp4")
     Path(tmp_path_str).write_bytes(b"chunk-data")
@@ -346,7 +373,7 @@ def test_finalize_chunk_renames_atomically(tmp_path):
 
 def test_inspect_reports_sidecar_state(tmp_path):
     output = tmp_path / "out.mp4"
-    manifest = SegmentManifest(str(output))
+    manifest = create_test_manifest(str(output))
     manifest.prepare("sig-9", {}, mode="auto")
     _make_chunk(manifest.workspace.sidecar_dir, index=1, start=0, end=999, next_src=500)
 
@@ -361,7 +388,7 @@ def test_inspect_reports_sidecar_state(tmp_path):
 
 
 def test_inspect_does_not_mutate_noncontiguous_or_in_flight_chunks(tmp_path):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     manifest.prepare("sig-read-only", {}, mode="auto")
     _make_chunk(manifest.workspace.sidecar_dir, index=1, start=0, end=99, next_src=50)
     stale = _make_chunk(manifest.workspace.sidecar_dir, index=3, start=200, end=299, next_src=150)
@@ -380,7 +407,7 @@ def test_inspect_does_not_mutate_noncontiguous_or_in_flight_chunks(tmp_path):
 
 
 def test_inspect_handles_missing_sidecar(tmp_path):
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     info = manifest.inspect("sig-10", total_output_frames=42)
     assert info.sidecar_exists is False
     assert info.signature_match is False
@@ -405,7 +432,7 @@ def test_resume_conflict_error_serializes_details():
 
 def test_manifest_write_uses_tmp_then_replace(tmp_path, monkeypatch):
     """The manifest writer should always go via a .tmp + os.replace dance."""
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
 
     captured: list[tuple[str, str]] = []
 

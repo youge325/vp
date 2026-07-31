@@ -1,4 +1,4 @@
-"""Tensor 后端策略 — 支持 PyTorch、PaddlePaddle 和 ONNX Runtime。"""
+"""Tensor conversion backends used by isolated frame workers."""
 
 from abc import ABC, abstractmethod
 from typing import Any
@@ -20,11 +20,6 @@ class ITensorBackend(ABC):
     @abstractmethod
     def tensor_to_numpy(self, tensor: Any) -> np.ndarray:
         """将后端 Tensor 转换回 numpy 数组 (HWC, uint8)。"""
-        pass
-
-    @abstractmethod
-    def get_name(self) -> str:
-        """返回后端名称。"""
         pass
 
     @abstractmethod
@@ -62,44 +57,8 @@ class PyTorchBackend(ITensorBackend):
         frame = np.transpose(frame, (1, 2, 0))
         return frame
 
-    def get_name(self) -> str:
-        return "pytorch"
-
     def is_available(self) -> bool:
         return self._torch is not None
-
-
-class PaddleBackend(ITensorBackend):
-    """PaddlePaddle Tensor 后端。"""
-
-    def __init__(self):
-        self._paddle = None
-        try:
-            import paddle
-
-            self._paddle = paddle
-        except ImportError:
-            logger.warning("PaddlePaddle 未安装")
-
-    def numpy_to_tensor(self, frame: np.ndarray) -> Any:
-        """将 numpy (HWC, uint8) 转换为 Paddle Tensor (1CHW, float32 [0,1])。"""
-        # paddle.to_tensor(np.transpose(frame, (2,0,1))).unsqueeze(0).astype("float32") / 255.
-        tensor = self._paddle.to_tensor(np.transpose(frame, (2, 0, 1)).copy()).unsqueeze(0).astype("float32") / 255.0
-        if self._paddle.device.is_compiled_with_cuda():
-            tensor = tensor.cuda()
-        return tensor
-
-    def tensor_to_numpy(self, tensor: Any) -> np.ndarray:
-        """将 Paddle Tensor (1CHW, float32) 转换为 numpy (HWC, uint8)。"""
-        frame = (tensor[0] * 255.0).astype("uint8").numpy()
-        frame = np.transpose(frame, (1, 2, 0))
-        return frame
-
-    def get_name(self) -> str:
-        return "paddle"
-
-    def is_available(self) -> bool:
-        return self._paddle is not None
 
 
 class OnnxBackend(ITensorBackend):
@@ -123,9 +82,6 @@ class OnnxBackend(ITensorBackend):
         frame = np.transpose(frame, (1, 2, 0))
         return frame
 
-    def get_name(self) -> str:
-        return "onnx"
-
     def is_available(self) -> bool:
         """轻量探测 onnxruntime 是否安装,不触发实际 import。"""
         import importlib.util
@@ -137,14 +93,12 @@ def get_tensor_backend(name: str) -> ITensorBackend:
     """根据名称获取 Tensor 后端的工厂函数。"""
     backends = {
         "pytorch": PyTorchBackend,
-        "paddle": PaddleBackend,
         "onnx": OnnxBackend,
     }
-    name_lower = name.lower()
-    if name_lower not in backends:
+    if name not in backends:
         raise ValueError(f"未知 Tensor 后端: {name}. 可用后端: {list(backends.keys())}")
 
-    backend = backends[name_lower]()
+    backend = backends[name]()
     if not backend.is_available():
         raise RuntimeError(f"Tensor 后端 '{name}' 不可用（未安装）")
 

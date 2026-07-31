@@ -5,7 +5,9 @@ from typing import Any
 
 import pytest
 
-from app.planning import ResumeState, SegmentManifest, StagePlan, StageProjection
+from app.planning.manifest import ResumeState, SegmentManifest
+from app.planning.stage_plan import StagePlan
+from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import (
@@ -15,6 +17,7 @@ from app.processing.streaming.pipeline_context import (
 from app.processing.streaming.pipeline_raw import run_raw_streaming_pipeline
 from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, StreamEnd, _ENCODE_END
 from tests.support.raw_video import FakeRawVideoMedia, frame as _frame
+from tests.support.streaming_runtime import create_test_manifest, ignore_resume_status, ignore_worker_log
 
 
 def _context(
@@ -26,7 +29,7 @@ def _context(
     manifest: SegmentManifest | None = None,
     encode_progress_callback: Any = None,
 ) -> StreamingPipelineContext:
-    manifest = manifest or SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = manifest or create_test_manifest(str(tmp_path / "out.mp4"))
     stage_plan = StagePlan(
         projection=StageProjection(()),
         source_frames=total_frames,
@@ -63,12 +66,15 @@ def _context(
         output_fps=None,
         encode_progress_callback=encode_progress_callback,
         metrics=PipelineMetrics(),
+        manifest_factory=create_test_manifest,
+        resume_status_sink=ignore_resume_status,
+        worker_log_sink=ignore_worker_log,
     )
 
 
 def test_raw_pipeline_runs_stage_worker_chain_into_segmented_encoder(tmp_path: Path, monkeypatch) -> None:
     ffmpeg = FakeRawVideoMedia()
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
     progress_events: list[tuple[int, str]] = []
     worker_configs = []
 
@@ -108,7 +114,7 @@ def test_raw_pipeline_runs_stage_worker_chain_into_segmented_encoder(tmp_path: P
 
 
 def test_raw_pipeline_raises_worker_error_after_encoder_shutdown(tmp_path: Path, monkeypatch) -> None:
-    manifest = SegmentManifest(str(tmp_path / "out.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "out.mp4"))
 
     def fake_stage_worker_runner(**kwargs: Any) -> None:
         kwargs["error_queue"].put(RuntimeError("worker failed"))
@@ -135,10 +141,14 @@ def test_raw_pipeline_stops_and_joins_encoder_when_stage_worker_raises(tmp_path:
     runtime: dict[str, Any] = {}
 
     class _JoinableThread:
-        joined = False
+        aborted = False
 
-        def join(self) -> None:
-            self.joined = True
+        def abort(self, *, deadline: float) -> bool:
+            assert deadline > 0
+            self.aborted = True
+            runtime["stop_event"].set()
+            runtime["encode_queue"].put_nowait(_ENCODE_END)
+            return True
 
     encoder_thread = _JoinableThread()
 
@@ -159,7 +169,7 @@ def test_raw_pipeline_stops_and_joins_encoder_when_stage_worker_raises(tmp_path:
                 ffmpeg=FakeRawVideoMedia(),  # type: ignore[arg-type]
                 total_frames=1,
                 source_frames=1,
-                manifest=SegmentManifest(str(tmp_path / "out.mp4")),
+                manifest=create_test_manifest(str(tmp_path / "out.mp4")),
             )
         )
 
@@ -168,4 +178,4 @@ def test_raw_pipeline_stops_and_joins_encoder_when_stage_worker_raises(tmp_path:
     assert runtime["config"].width == 1
     assert runtime["config"].height == 1
     assert runtime["config"].fps == 24.0
-    assert encoder_thread.joined is True
+    assert encoder_thread.aborted is True

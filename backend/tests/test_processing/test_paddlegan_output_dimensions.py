@@ -1,4 +1,6 @@
-from app.planning import ProcessingStep, StagePlan, StageProjection
+from app.planning.processing_steps import ProcessingStep
+from app.planning.stage_plan import StagePlan
+from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
 from app.processing.streaming.pipeline_rules import resolved_output_dimensions
 

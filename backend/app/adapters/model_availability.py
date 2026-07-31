@@ -20,7 +20,7 @@ class LocalModelAvailability:
         if descriptor.model_kind == "paddlegan_vsr":
             from app.algorithms.paddle.paddlegan_vsr.weights import ensure_paddlegan_vsr_weights
 
-            ensure_paddlegan_vsr_weights(descriptor.factory_key)
+            ensure_paddlegan_vsr_weights(str(step.algorithm_kwargs["sr_algorithm"]))
             return
         if descriptor.model_kind == "rife" and backend_name == "pytorch":
             model_version = str(step.algorithm_kwargs["model_version"])

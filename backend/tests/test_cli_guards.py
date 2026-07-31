@@ -7,7 +7,7 @@ import argparse
 import pytest
 
 from app.cli.commands import _guards, info
-from app.adapters import FFmpegMediaAdapter
+from app.adapters.ffmpeg_media import FFmpegMediaAdapter
 from app.errors import ProcessError, TaskErrorCode
 
 

@@ -29,6 +29,8 @@ class RawVideoReaderPort(Protocol):
 
     def close(self) -> None: ...
 
+    def terminate_and_reap(self, *, deadline: float) -> bool: ...
+
 
 class RawVideoWriterPort(Protocol):
     @property
@@ -37,6 +39,8 @@ class RawVideoWriterPort(Protocol):
     def write_frame(self, frame: np.ndarray) -> None: ...
 
     def close(self) -> None: ...
+
+    def terminate_and_reap(self, *, deadline: float) -> bool: ...
 
 
 class MediaProbePort(Protocol):
@@ -60,7 +64,7 @@ class RawVideoPort(Protocol):
     ) -> RawVideoReaderPort: ...
 
 
-class EncodePort(Protocol):
+class _EncodePort(Protocol):
     def open_rawvideo_encoder(
         self,
         *,
@@ -86,9 +90,7 @@ class EncodePort(Protocol):
     ) -> None: ...
 
 
-class FinalizationPort(Protocol):
-    def has_audio(self, input_path: str) -> bool: ...
-
+class _FinalizationPort(Protocol):
     def concat_videos(self, inputs: list[str], output_path: str) -> None: ...
 
     def extract_audio(self, input_path: str, output_path: str) -> bool: ...
@@ -96,11 +98,11 @@ class FinalizationPort(Protocol):
     def merge_audio(self, video_path: str, audio_path: str, output_path: str) -> None: ...
 
 
-class EncodingMediaPort(FrameCountProbePort, EncodePort, Protocol):
+class EncodingMediaPort(FrameCountProbePort, _EncodePort, Protocol):
     """Operations consumed by the segmented encoder."""
 
 
-class FinalizingMediaPort(FinalizationPort, Protocol):
+class FinalizingMediaPort(_FinalizationPort, Protocol):
     """Operations consumed by output finalization."""
 
 
@@ -112,7 +114,7 @@ class MediaRuntimePort(
     MediaProbePort,
     RawVideoPort,
     EncodingMediaPort,
-    FinalizationPort,
+    _FinalizationPort,
     Protocol,
 ):
     """Composition-root aggregate; leaf consumers use narrower ports."""
@@ -120,10 +122,8 @@ class MediaRuntimePort(
 
 __all__ = [
     "ConfigMap",
-    "EncodePort",
     "EncodeProgressCallback",
     "EncodingMediaPort",
-    "FinalizationPort",
     "FinalizingMediaPort",
     "FrameCountProbePort",
     "MediaProbePort",

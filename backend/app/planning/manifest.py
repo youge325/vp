@@ -7,15 +7,22 @@ chunk/decision records.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
-from app.planning.manifest_store import ManifestRepository
+from app.generated.contracts import SegmentManifest as SegmentManifestContract
 from app.planning.resume_policy import ResumeMode, decide_output_action
 from app.planning.segment_workspace import SegmentWorkspace
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+class ManifestRepositoryPort(Protocol):
+    """Consumer-owned persistence boundary for the resume lifecycle."""
+
+    def load(self) -> SegmentManifestContract | None: ...
+
+    def write(self, *, signature: str, config_snapshot: dict[str, Any]) -> None: ...
 
 
 @dataclass(slots=True)
@@ -56,8 +63,8 @@ class ResumeInspection:
 _ResumeKind = Literal["fresh", "resume", "conflict_final_exists"]
 
 
-@dataclass(slots=True)
-class _ResumeDecision:
+@dataclass(frozen=True, slots=True)
+class ResumeDecision:
     """Outcome of preparing a sidecar for a run."""
 
     kind: _ResumeKind
@@ -80,18 +87,12 @@ class SegmentManifest:
 
     def __init__(
         self,
-        output_path: str | Path | None = None,
         *,
-        workspace: SegmentWorkspace | None = None,
+        workspace: SegmentWorkspace,
+        repository: ManifestRepositoryPort,
     ) -> None:
-        if workspace is None:
-            if output_path is None:
-                raise TypeError("output_path or workspace is required")
-            workspace = SegmentWorkspace.for_output(output_path)
-        elif output_path is not None:
-            raise TypeError("pass output_path or workspace, not both")
         self.workspace = workspace
-        self.repository = ManifestRepository(workspace)
+        self.repository = repository
 
     # ------------------------------------------------------------------ prepare
     def prepare(
@@ -100,7 +101,7 @@ class SegmentManifest:
         config_snapshot: dict[str, Any] | None = None,
         *,
         mode: ResumeMode = ResumeMode.AUTO,
-    ) -> _ResumeDecision:
+    ) -> ResumeDecision:
         """Resolve the sidecar state and return an internal decision.
 
         ``mode`` controls how conflicts with an already-existing final output
@@ -131,7 +132,7 @@ class SegmentManifest:
             mode=mode,
         )
         if action == "conflict":
-            return _ResumeDecision(
+            return ResumeDecision(
                 kind="conflict_final_exists",
                 state=state,
                 sidecar_signature_match=signature_match,
@@ -151,9 +152,9 @@ class SegmentManifest:
             delete_final=delete_final,
         )
 
-    def _resume_decision(self, state: ResumeState | None = None) -> _ResumeDecision:
+    def _resume_decision(self, state: ResumeState | None = None) -> ResumeDecision:
         state = state or self._prepare_resume_state()
-        return _ResumeDecision(
+        return ResumeDecision(
             kind="resume" if state.completed_output_frames > 0 else "fresh",
             state=state,
             sidecar_signature_match=True,
@@ -165,7 +166,7 @@ class SegmentManifest:
         config_snapshot: dict[str, Any],
         *,
         delete_final: bool,
-    ) -> _ResumeDecision:
+    ) -> ResumeDecision:
         self._quarantine_sidecar()
         decision = self._prepare_fresh(
             signature,
@@ -312,7 +313,7 @@ class SegmentManifest:
         config_snapshot: dict[str, Any],
         *,
         delete_final: bool = False,
-    ) -> _ResumeDecision:
+    ) -> ResumeDecision:
         self.workspace.cleanup()
         if delete_final:
             self.workspace.delete_final_output()
@@ -320,4 +321,4 @@ class SegmentManifest:
             signature=signature,
             config_snapshot=config_snapshot,
         )
-        return _ResumeDecision(kind="fresh", state=self._empty_state())
+        return ResumeDecision(kind="fresh", state=self._empty_state())

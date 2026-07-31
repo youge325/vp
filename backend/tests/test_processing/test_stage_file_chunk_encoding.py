@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
+import time
 
 import numpy as np
 import pytest
@@ -67,3 +68,44 @@ def test_encode_stage_worker_output_closes_writer_when_frame_count_mismatches(tm
 
     assert ffmpeg.writer is not None
     assert ffmpeg.writer.closed is True
+
+
+def test_encode_stage_worker_output_reaps_writer_after_repeated_close_failure(tmp_path: Path) -> None:
+    class CloseFailingWriter:
+        output_frame_count = 0
+        terminate_calls = 0
+
+        def write_frame(self, _frame) -> None:
+            pass
+
+        def close(self) -> None:
+            raise OSError("writer close failed")
+
+        def terminate_and_reap(self, *, deadline: float) -> bool:
+            assert deadline >= time.monotonic()
+            self.terminate_calls += 1
+            return True
+
+    class Media:
+        writer = CloseFailingWriter()
+
+        def open_rawvideo_encoder(self, **_kwargs):
+            return self.writer
+
+    chunk = StageChunkPlan(
+        input_start_frame=0,
+        input_frame_count=1,
+        logical_input_frame_count=1,
+        raw_output_frame_count=1,
+        written_output_frame_count=1,
+    )
+
+    with pytest.raises(OSError, match="writer close failed"):
+        encode_stage_worker_output(
+            config=_runtime_config(Media(), PipelineMetrics()),
+            output_path=str(tmp_path / "chunk.mp4"),
+            worker_stdout=BytesIO(np.ascontiguousarray(_frame(1)).tobytes()),
+            chunk=chunk,
+        )
+
+    assert Media.writer.terminate_calls == 1

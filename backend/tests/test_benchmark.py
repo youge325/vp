@@ -177,13 +177,16 @@ def test_build_report_keeps_warmups_out_of_median_summary() -> None:
     assert report["summary"]["median"]["throughputFps"] == pytest.approx(191 / 11)
 
 
-def test_benchmark_parser_defaults_to_interpolation_cpu_transfer_scenario() -> None:
+def test_benchmark_handler_applies_default_scenario_after_lazy_import() -> None:
+    from app.cli.commands.benchmark import _workload_from_args
+
     parser = build_parser()
 
     args = parser.parse_args(["benchmark"])
 
-    assert args.func.__name__ == "cmd_benchmark"
-    assert args.scenario == "interpolation-e2e-cpu-transfer"
+    assert args.handler == "benchmark"
+    assert args.scenario is None
+    assert _workload_from_args(args).scenario == "interpolation-e2e-cpu-transfer"
     assert args.threshold == 0.15
     assert args.warmup_runs == 1
     assert args.runs == 3

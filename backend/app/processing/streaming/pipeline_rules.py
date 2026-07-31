@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.planning import StagePlan
+from app.planning.stage_plan import StagePlan
 from app.ports.media import VideoMetadata
 from app.processing.streaming.stage_rules import (
     resolve_stage_plan_output_dimensions,

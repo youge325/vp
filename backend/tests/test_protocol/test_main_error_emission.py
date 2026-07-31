@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 
 import app.__main__ as app_main
-import app.cli
+import app.cli.main
 import app.protocol
 from app.errors import ProcessError, TaskErrorCode
 from app.generated.contracts import BackendTaskErrorPayload
@@ -21,7 +21,7 @@ def _run_with_failure(
     def fail() -> None:
         raise exc
 
-    monkeypatch.setattr(app.cli, "main", fail)
+    monkeypatch.setattr(app.cli.main, "main", fail)
     monkeypatch.setattr(
         app.protocol.ndjson,
         "emit",

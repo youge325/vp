@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.planning import ResumeState, SegmentManifest, StagePlan
+from app.planning.manifest import ResumeState, SegmentManifest
+from app.planning.stage_plan import StagePlan
 from app.ports.media import EncodeProgressCallback, MediaRuntimePort, VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
+from app.processing.streaming.runtime_ports import ManifestFactoryPort, ResumeStatusSink, WorkerLogSink
 from app.processing.streaming.stage_worker_progress import StageProgressCallback
 
 
@@ -38,6 +40,9 @@ class StreamingPipelineContext:
     output_fps: float | None
     encode_progress_callback: EncodeProgressCallback | None
     metrics: PipelineMetrics
+    manifest_factory: ManifestFactoryPort
+    resume_status_sink: ResumeStatusSink
+    worker_log_sink: WorkerLogSink
 
 
 __all__ = ["StreamingPipelineContext", "StreamingPipelinePreflight"]

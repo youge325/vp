@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from app.planning import ProcessingStep, StageProjection
+from app.planning.processing_steps import ProcessingStep
+from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
 from app.processing.streaming.pipeline_preflight import build_streaming_pipeline_preflight
 

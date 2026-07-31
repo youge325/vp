@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from app.planning import ProcessingStep, ResumeState, SegmentManifest, StagePlan, StageProjection
+from app.planning.manifest import ResumeState
+from app.planning.processing_steps import ProcessingStep
+from app.planning.stage_plan import StagePlan
+from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
@@ -8,6 +11,8 @@ from app.processing.streaming.pipeline_context import (
 )
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline
+from app.processing.streaming.runtime_ports import ResumeStatusSink
+from tests.support.streaming_runtime import create_test_manifest, ignore_resume_status, ignore_worker_log
 
 
 def _stage_plan() -> StagePlan:
@@ -31,7 +36,12 @@ def _resume_state() -> ResumeState:
     return ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[])
 
 
-def _context(tmp_path, *, use_stage_file_pipeline: bool) -> StreamingPipelineContext:
+def _context(
+    tmp_path,
+    *,
+    use_stage_file_pipeline: bool,
+    resume_status_sink: ResumeStatusSink = ignore_resume_status,
+) -> StreamingPipelineContext:
     stage_plan = _stage_plan()
     return StreamingPipelineContext(
         ffmpeg=object(),  # type: ignore[arg-type]
@@ -57,12 +67,15 @@ def _context(tmp_path, *, use_stage_file_pipeline: bool) -> StreamingPipelineCon
             output_height=360,
             segment_frames=1000,
         ),
-        manifest=SegmentManifest(str(tmp_path / "out.mp4")),
+        manifest=create_test_manifest(str(tmp_path / "out.mp4")),
         resume_state=_resume_state(),
         progress_callbacks=[],
         output_fps=None,
         encode_progress_callback=None,
         metrics=PipelineMetrics(),
+        manifest_factory=create_test_manifest,
+        resume_status_sink=resume_status_sink,
+        worker_log_sink=ignore_worker_log,
     )
 
 
@@ -74,15 +87,13 @@ def test_run_streaming_pipeline_dispatches_stage_file_pipeline_and_emits_resume_
         calls.update(kwargs)
         return 11
 
-    monkeypatch.setattr(
-        "app.processing.streaming.pipeline_dispatch.emit_resume_status_event",
-        lambda *, resume_state, total_output_frames: events.append(
-            (resume_state.completed_output_frames, total_output_frames)
-        ),
-    )
     monkeypatch.setattr("app.processing.streaming.pipeline_dispatch.run_stage_file_pipeline", fake_stage_file_pipeline)
 
-    context = _context(tmp_path, use_stage_file_pipeline=True)
+    context = _context(
+        tmp_path,
+        use_stage_file_pipeline=True,
+        resume_status_sink=lambda state, total: events.append((state.completed_output_frames, total)),
+    )
     result = run_streaming_pipeline(context=context)
 
     assert result == 11
@@ -98,15 +109,13 @@ def test_run_streaming_pipeline_dispatches_raw_pipeline_without_worker_chain_cou
         calls.update(kwargs)
         return 7
 
-    monkeypatch.setattr(
-        "app.processing.streaming.pipeline_dispatch.emit_resume_status_event",
-        lambda *, resume_state, total_output_frames: events.append(
-            (resume_state.completed_output_frames, total_output_frames)
-        ),
-    )
     monkeypatch.setattr("app.processing.streaming.pipeline_dispatch.run_raw_streaming_pipeline", fake_raw_pipeline)
 
-    context = _context(tmp_path, use_stage_file_pipeline=False)
+    context = _context(
+        tmp_path,
+        use_stage_file_pipeline=False,
+        resume_status_sink=lambda state, total: events.append((state.completed_output_frames, total)),
+    )
     result = run_streaming_pipeline(context=context)
 
     assert result == 7

@@ -24,7 +24,7 @@ def test_probe_tensor_engines_maps_available_capabilities(monkeypatch) -> None:
 
     monkeypatch.setattr(probes, "_run_python_capability_probe", fake_probe)
 
-    assert probes.probe_tensor_engines() == {
+    assert probes.probe_tensor_engines().model_dump(mode="json") == {
         "pytorch": ["cuda"],
         "paddle": ["cuda", "tensorrt"],
         "onnx": ["tensorrt", "cuda"],
@@ -45,4 +45,4 @@ def test_probe_tensor_engines_hides_engines_when_runtime_is_unavailable(monkeypa
         },
     )
 
-    assert probes.probe_tensor_engines() == {"pytorch": [], "paddle": [], "onnx": []}
+    assert probes.probe_tensor_engines().model_dump(mode="json") == {"pytorch": [], "paddle": [], "onnx": []}

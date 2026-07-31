@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from typing import Any
 
 import numpy as np
 
-from app.planning import ProcessingStep
+from app.planning.processing_steps import ProcessingStep
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
+from .streaming_runtime import ignore_worker_log
 
 
 class FakeRawVideoWriter:
@@ -44,6 +46,11 @@ class FakeRawVideoWriter:
                 None,
                 "end",
             )
+
+    def terminate_and_reap(self, *, deadline: float) -> bool:
+        assert deadline >= time.monotonic()
+        self.closed = True
+        return True
 
 
 class FakeRawVideoMedia:
@@ -114,4 +121,5 @@ def make_stage_file_runtime_config(
         output_fps=24.0,
         encode_output_fps=None,
         metrics=metrics,
+        worker_log_sink=ignore_worker_log,
     )

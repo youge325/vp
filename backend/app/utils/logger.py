@@ -149,13 +149,5 @@ def setup_logging() -> None:
 
 
 def get_logger(name: str) -> logging.Logger:
-    """获取模块 logger 的便捷函数。
-
-    用法:
-        logger = get_logger(__name__)
-
-    如果日志系统尚未初始化，自动以默认配置初始化。
-    """
-    if not _initialized:
-        setup_logging()
+    """Return a named logger without configuring handlers or touching disk."""
     return logging.getLogger(name)

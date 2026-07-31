@@ -6,17 +6,23 @@ from typing import BinaryIO
 
 import numpy as np
 
-from app.algorithms.interfaces import FramePairAlgorithm, FrameSequenceAlgorithm, SingleFrameAlgorithm
+from app.algorithms.interfaces import (
+    FramePairAlgorithm,
+    FrameSequenceAlgorithm,
+    NumpyFrameAlgorithm,
+    SingleFrameAlgorithm,
+)
 from app.algorithms.tensor_backend import ITensorBackend
 from app.processing.streaming.frame_payload import FramePayload
 from app.processing.streaming.metrics import PipelineMetrics
-from app.processing.streaming.stage_runtime import StepAlgorithm, is_cpu_frame_stage, run_stage
+from app.processing.streaming.stage_runtime import StepAlgorithm, run_stage
 from app.processing.streaming.stage_worker_io import (
     RawVideoFrameError,
     read_rgb_frame,
     write_rgb_frame,
 )
-from app.processing.streaming.stage_worker_config import StageWorkerConfig
+from app.generated.stage_worker_contracts import StageWorkerConfig
+from app.planning.processing_steps import ProcessingStep
 from app.processing.streaming.stage_worker_progress import (
     EventSink,
     SEQUENCE_STAGE_HEARTBEAT_SECONDS,
@@ -36,7 +42,7 @@ def run_sequence_stage(
     heartbeat_seconds: float = SEQUENCE_STAGE_HEARTBEAT_SECONDS,
 ) -> None:
     frames = _read_declared_frames(config, input_stream)
-    total = max(int(config.output_frame_count or config.input_frame_count or len(frames)), 1)
+    total = max(config.output_frame_count, 1)
     progress_state = StageProgressState()
     event_sink(progress_event(config, 0, total, force=True))
     stop_heartbeat, heartbeat_thread = start_sequence_stage_heartbeat(
@@ -65,6 +71,7 @@ def run_sequence_stage(
     finally:
         stop_heartbeat.set()
         heartbeat_thread.join(timeout=1)
+    _require_output_frame_count(config, len(output_frames))
     total = max(len(output_frames), 1)
     emit_write_progress = progress_state.current <= 0
     for index, frame in enumerate(output_frames, start=1):
@@ -77,6 +84,7 @@ def run_sequence_stage(
 
 def run_interpolation_stage(
     config: StageWorkerConfig,
+    step: ProcessingStep,
     input_stream: BinaryIO,
     output_stream: BinaryIO,
     backend: ITensorBackend,
@@ -85,6 +93,9 @@ def run_interpolation_stage(
     metrics: PipelineMetrics,
 ) -> None:
     frames = _read_declared_frames(config, input_stream)
+    multi = int(step.algorithm_kwargs["multi"])
+    projected_output_count = 0 if not frames else 1 + (len(frames) - 1) * multi
+    _require_output_frame_count(config, projected_output_count)
     if not frames:
         return
     if len(frames) == 1:
@@ -92,7 +103,6 @@ def run_interpolation_stage(
         event_sink(progress_event(config, 1, 1))
         return
 
-    multi = int(config.stage.algorithm_kwargs.get("multi") or 2)
     total_pairs = len(frames) - 1
     previous_payload = FramePayload.from_numpy(frames[0])
     for pair_index, current_frame in enumerate(frames[1:], start=1):
@@ -124,14 +134,16 @@ def run_interpolation_stage(
 
 def run_single_frame_stage(
     config: StageWorkerConfig,
+    step: ProcessingStep,
     input_stream: BinaryIO,
     output_stream: BinaryIO,
     backend: ITensorBackend | None,
-    algorithm: SingleFrameAlgorithm,
+    algorithm: SingleFrameAlgorithm | NumpyFrameAlgorithm,
     event_sink: EventSink,
     metrics: PipelineMetrics,
 ) -> None:
-    entry = StepAlgorithm(step=config.stage, backend=backend, algorithm=algorithm)
+    _require_output_frame_count(config, config.input_frame_count)
+    entry = StepAlgorithm(step=step, backend=backend, algorithm=algorithm)
     total = max(config.input_frame_count, 1)
     for index in range(config.input_frame_count):
         frame = read_rgb_frame(input_stream, width=config.input_width, height=config.input_height)
@@ -143,7 +155,6 @@ def run_single_frame_stage(
             entry,
             FramePayload.from_numpy(frame),
             metrics,
-            prefer_tensor=not is_cpu_frame_stage(entry),
         )
         write_rgb_frame(
             output_stream, payload.ensure_numpy(metrics), width=config.output_width, height=config.output_height
@@ -161,6 +172,13 @@ def _read_declared_frames(config: StageWorkerConfig, input_stream: BinaryIO) -> 
             )
         frames.append(frame)
     return frames
+
+
+def _require_output_frame_count(config: StageWorkerConfig, actual: int) -> None:
+    if actual != config.output_frame_count:
+        raise RawVideoFrameError(
+            f"Stage worker output frame count mismatch: expected {config.output_frame_count}, got {actual}."
+        )
 
 
 __all__ = [

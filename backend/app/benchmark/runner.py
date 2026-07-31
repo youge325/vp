@@ -14,8 +14,8 @@ from typing import Any
 
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
-
-DEFAULT_SCENARIO = "interpolation-e2e-cpu-transfer"
+from app.benchmark.scenarios import DEFAULT_SCENARIO
+from app.planning.stage_projection import StageProjection
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,9 +33,7 @@ class Workload:
 
     @property
     def expected_processed_frames(self) -> int:
-        if self.frames < 2:
-            return self.frames
-        return self.frames + (self.frames - 1) * (self.multi - 1)
+        return StageProjection.interpolation_output_frame_count(self.frames, self.multi)
 
 
 @dataclass(frozen=True, slots=True)

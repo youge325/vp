@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from app.processing.super_resolution import OnnxSuperResolution
+from app.algorithms.onnx_super_resolution import OnnxSuperResolution
 
 
 class _Node:
@@ -38,16 +38,16 @@ def test_super_resolution_onnx_lazily_loads_and_scales(tmp_path: Path, monkeypat
     class _Ort:
         @staticmethod
         def get_available_providers():
-            return ["CPUExecutionProvider"]
+            return ["CUDAExecutionProvider", "CPUExecutionProvider"]
 
         InferenceSession = _Session
 
     monkeypatch.setitem(sys.modules, "onnxruntime", _Ort)
     algorithm = OnnxSuperResolution(
-        scale_factor=2,
+        sr_algorithm="placeholder",
         onnx_model="sr.onnx",
         model_dir=str(tmp_path),
-        engine="auto",
+        engine="cuda",
     )
 
     assert created_sessions == []

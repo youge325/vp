@@ -5,6 +5,7 @@ import subprocess
 
 import pytest
 
+from app.generated.contracts import GpuAdapter, GpuVendor
 from app.utils import system_probe
 from app.utils.system_probe import _classify_gpu_vendor, _is_virtual_gpu_adapter
 
@@ -83,10 +84,7 @@ def test_list_windows_gpu_adapters_filters_reported_virtual_displays(monkeypatch
     )
 
     assert system_probe._list_windows_gpu_adapters() == [
-        {
-            "name": "NVIDIA GeForce RTX 3070 Laptop GPU",
-            "vendor": "nvidia",
-        }
+        GpuAdapter(name="NVIDIA GeForce RTX 3070 Laptop GPU", vendor=GpuVendor.NVIDIA)
     ]
 
 
@@ -120,6 +118,6 @@ def test_list_windows_gpu_adapters_keeps_duplicate_unknown_physical_adapters_and
     )
 
     assert system_probe._list_windows_gpu_adapters() == [
-        {"name": "Acme Accelerator", "vendor": "other"},
-        {"name": "Acme Accelerator", "vendor": "other"},
+        GpuAdapter(name="Acme Accelerator", vendor=GpuVendor.OTHER),
+        GpuAdapter(name="Acme Accelerator", vendor=GpuVendor.OTHER),
     ]

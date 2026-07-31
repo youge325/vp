@@ -1,104 +1,90 @@
-"""JSON config model for one isolated stage-worker process."""
+"""Domain conversion at the generated stage-worker contract boundary."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import json
 from pathlib import Path
-from typing import Any, Mapping, cast, get_args
 
-from app.planning.processing_steps import AlgorithmType, ProcessingStep
+from app.generated.stage_worker_contracts import (
+    StageWorkerConfig,
+    StageWorkerFilterChainStep,
+    StageWorkerInterpolationStep,
+    StageWorkerOnnxSuperResolutionStep,
+    StageWorkerPaddleSuperResolutionStep,
+)
+from app.catalog.tensor_capabilities import supports_backend_engine
+from app.planning.processing_steps import ProcessingStep
 
 
-def _parse_processing_step(payload: Any) -> ProcessingStep:
-    if not isinstance(payload, Mapping):
-        raise TypeError(f"Processing step must be a mapping, got {type(payload).__name__}.")
-
-    algorithm_type = payload.get("algorithm_type")
-    if not isinstance(algorithm_type, str) or algorithm_type not in get_args(AlgorithmType):
-        raise ValueError(f"Unknown processing step algorithm_type: {algorithm_type!r}")
-
-    algorithm_kwargs = payload.get("algorithm_kwargs", {})
-    if algorithm_kwargs is None:
-        algorithm_kwargs = {}
-    if not isinstance(algorithm_kwargs, Mapping):
-        raise TypeError("Processing step algorithm_kwargs must be a mapping.")
-
-    stage_name = payload.get("stage_name")
-    if not isinstance(stage_name, str) or not stage_name:
-        raise ValueError("Processing step stage_name must be a non-empty string.")
-
-    return ProcessingStep(
-        algorithm_type=cast(AlgorithmType, algorithm_type),
-        algorithm_kwargs=dict(algorithm_kwargs),
-        stage_name=stage_name,
+def load_stage_worker_config(path: str | Path) -> StageWorkerConfig:
+    config = StageWorkerConfig.model_validate_json(
+        Path(path).read_text(encoding="utf-8"),
+        by_alias=True,
+        by_name=False,
     )
+    processing_step_from_config(config)
+    return config
 
 
-@dataclass(frozen=True, slots=True)
-class StageWorkerConfig:
-    """JSON-serialisable configuration for one isolated algorithm stage."""
+def build_stage_worker_step(
+    step: ProcessingStep,
+) -> (
+    StageWorkerInterpolationStep
+    | StageWorkerOnnxSuperResolutionStep
+    | StageWorkerPaddleSuperResolutionStep
+    | StageWorkerFilterChainStep
+):
+    """Project a domain step without duplicating the top-level backend field."""
+    payload = step.to_jsonable()
+    payload.pop("stage_name")
+    kwargs = payload["algorithm_kwargs"]
+    kwargs.pop("tensor_backend", None)
+    factory_key = step.descriptor.factory_key
+    if factory_key == "rife":
+        kwargs.pop("algorithm", None)
+        return StageWorkerInterpolationStep.model_validate(payload)
+    if factory_key == "onnx_super_resolution":
+        kwargs.pop("scale_factor", None)
+        kwargs.pop("num_frames", None)
+        return StageWorkerOnnxSuperResolutionStep.model_validate(payload)
+    if factory_key == "paddlegan_vsr":
+        kwargs.pop("scale_factor", None)
+        kwargs.pop("onnx_model", None)
+        return StageWorkerPaddleSuperResolutionStep.model_validate(payload)
+    if factory_key == "filter_chain":
+        return StageWorkerFilterChainStep.model_validate(payload)
+    raise ValueError(f"Stage worker protocol has no payload for factory {factory_key!r}.")
 
-    stage: ProcessingStep
-    stage_index: int
-    stage_total: int
-    stage_name: str
-    input_width: int
-    input_height: int
-    output_width: int
-    output_height: int
-    input_frame_count: int
-    tensor_backend_name: str | None
-    output_frame_count: int | None = None
 
-    def __post_init__(self) -> None:
-        needs_backend = self.stage.algorithm_type in {"frame_interpolation", "super_resolution"}
-        if needs_backend and not self.tensor_backend_name:
-            raise ValueError(f"Stage '{self.stage_name}' requires a tensor backend.")
-        if self.stage.algorithm_type == "frame_filter_chain" and self.tensor_backend_name is not None:
-            raise ValueError(f"Filter stage '{self.stage_name}' must not consume a tensor backend.")
-
-    @classmethod
-    def from_json_file(cls, path: str | Path) -> "StageWorkerConfig":
-        with Path(path).open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-        if not isinstance(payload, Mapping):
-            raise ValueError("Stage worker config must be a JSON object.")
-
-        backend_name = payload["tensorBackendName"]
-        if backend_name is not None and (not isinstance(backend_name, str) or not backend_name):
-            raise ValueError("tensorBackendName must be a non-empty string or null.")
-
-        return cls(
-            stage=_parse_processing_step(payload["stage"]),
-            stage_index=int(payload["stageIndex"]),
-            stage_total=int(payload["stageTotal"]),
-            stage_name=str(payload["stageName"]),
-            input_width=int(payload["inputWidth"]),
-            input_height=int(payload["inputHeight"]),
-            output_width=int(payload["outputWidth"]),
-            output_height=int(payload["outputHeight"]),
-            input_frame_count=int(payload["inputFrameCount"]),
-            tensor_backend_name=backend_name,
-            output_frame_count=(
-                int(payload["outputFrameCount"]) if payload.get("outputFrameCount") is not None else None
-            ),
+def processing_step_from_config(config: StageWorkerConfig) -> ProcessingStep:
+    stage = config.stage
+    if config.stage_index > config.stage_total:
+        raise ValueError("Stage worker stageIndex must not exceed stageTotal.")
+    if stage.algorithm_type == "frame_filter_chain" and config.tensor_backend_name is not None:
+        raise ValueError("Frame-filter stage must not consume a tensor backend.")
+    if stage.algorithm_type != "frame_filter_chain" and config.tensor_backend_name is None:
+        raise ValueError(f"Stage worker {stage.algorithm_type.value!r} requires a tensor backend.")
+    algorithm_kwargs = stage.algorithm_kwargs.model_dump(exclude_unset=True)
+    if config.tensor_backend_name is not None:
+        algorithm_kwargs["tensor_backend"] = config.tensor_backend_name
+    step = ProcessingStep(
+        algorithm_type=stage.algorithm_type,
+        algorithm_kwargs=algorithm_kwargs,
+        stage_name=config.stage_name,
+    )
+    if (
+        config.tensor_backend_name is not None
+        and config.tensor_backend_name.value not in step.descriptor.supported_backends
+    ):
+        raise ValueError(
+            f"Stage worker {stage.algorithm_type!r} does not support backend {config.tensor_backend_name.value!r}."
         )
-
-    def to_jsonable(self) -> dict[str, Any]:
-        return {
-            "stage": self.stage.to_jsonable(),
-            "stageIndex": self.stage_index,
-            "stageTotal": self.stage_total,
-            "stageName": self.stage_name,
-            "inputWidth": self.input_width,
-            "inputHeight": self.input_height,
-            "outputWidth": self.output_width,
-            "outputHeight": self.output_height,
-            "inputFrameCount": self.input_frame_count,
-            "tensorBackendName": self.tensor_backend_name,
-            "outputFrameCount": self.output_frame_count,
-        }
+    if config.tensor_backend_name is not None:
+        engine = str(step.algorithm_kwargs["engine"])
+        if not supports_backend_engine(config.tensor_backend_name.value, engine):
+            raise ValueError(
+                f"Stage worker backend {config.tensor_backend_name.value!r} does not support engine {engine!r}."
+            )
+    return step
 
 
-__all__ = ["StageWorkerConfig"]
+__all__ = ["build_stage_worker_step", "load_stage_worker_config", "processing_step_from_config"]

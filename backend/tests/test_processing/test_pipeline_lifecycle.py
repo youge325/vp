@@ -5,21 +5,21 @@ from typing import Any
 import pytest
 
 from app.errors import ResumeConflictError
+from app.adapters.streaming_runtime import NdjsonResumeStatusSink
 from app.generated.contracts import ResumeStatusPayload
 from app.generated.protocol_constants import BackendEnvelopeType
-from app.planning import ResumeState, SegmentManifest, StagePlan, StageProjection
+from app.planning.manifest import ResumeState, SegmentManifest
+from app.planning.stage_plan import StagePlan
+from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
     StreamingPipelinePreflight,
 )
-from app.processing.streaming.pipeline_lifecycle import (
-    emit_resume_status_event,
-    finalize_streaming_output,
-    prepare_streaming_manifest,
-)
+from app.processing.streaming.pipeline_lifecycle import finalize_streaming_output, prepare_streaming_manifest
 from tests.support.frame_count_probe import FakeFrameCountProbe
+from tests.support.streaming_runtime import create_test_manifest, ignore_resume_status, ignore_worker_log
 
 
 def _context(
@@ -65,6 +65,9 @@ def _context(
         output_fps=None,
         encode_progress_callback=None,
         metrics=PipelineMetrics(),
+        manifest_factory=create_test_manifest,
+        resume_status_sink=ignore_resume_status,
+        worker_log_sink=ignore_worker_log,
     )
 
 
@@ -74,7 +77,7 @@ def test_prepare_streaming_manifest_raises_resume_conflict_for_existing_final_ou
 
     with pytest.raises(ResumeConflictError) as exc_info:
         prepare_streaming_manifest(
-            output_path=str(output_path),
+            manifest=create_test_manifest(str(output_path)),
             signature="sig",
             config_snapshot={"input": "video.mp4"},
             resume_mode="auto",
@@ -87,7 +90,7 @@ def test_prepare_streaming_manifest_raises_resume_conflict_for_existing_final_ou
     assert exc.sidecar_signature_match is False
 
 
-def test_emit_resume_status_event_uses_existing_ndjson_payload(monkeypatch) -> None:
+def test_ndjson_resume_status_sink_uses_generated_payload(monkeypatch) -> None:
     events: list[tuple[BackendEnvelopeType, ResumeStatusPayload]] = []
     state = ResumeState(
         start_source_frame=12,
@@ -95,11 +98,11 @@ def test_emit_resume_status_event_uses_existing_ndjson_payload(monkeypatch) -> N
         completed_segments=[object()],
     )
     monkeypatch.setattr(
-        "app.processing.streaming.pipeline_lifecycle.ndjson.emit",
+        "app.adapters.streaming_runtime.ndjson.emit",
         lambda event_type, payload: events.append((event_type, payload)),
     )
 
-    emit_resume_status_event(resume_state=state, total_output_frames=40)
+    NdjsonResumeStatusSink()(state, 40)
 
     assert events[0][0] is BackendEnvelopeType.RESUME_STATUS
     assert events[0][1].model_dump(mode="json") == {
@@ -111,9 +114,25 @@ def test_emit_resume_status_event_uses_existing_ndjson_payload(monkeypatch) -> N
     }
 
 
+def test_ndjson_resume_status_sink_propagates_required_envelope_failure(monkeypatch) -> None:
+    state = ResumeState(
+        start_source_frame=0,
+        completed_output_frames=0,
+        completed_segments=[],
+    )
+
+    def fail_emit(*_args, **_kwargs) -> None:
+        raise OSError("stdout closed")
+
+    monkeypatch.setattr("app.adapters.streaming_runtime.ndjson.emit", fail_emit)
+
+    with pytest.raises(OSError, match="stdout closed"):
+        NdjsonResumeStatusSink()(state, 40)
+
+
 def test_finalize_streaming_output_cleans_sidecar_after_success_and_builds_result(monkeypatch, tmp_path) -> None:
     output_path = tmp_path / "out.mp4"
-    manifest = SegmentManifest(str(output_path))
+    manifest = create_test_manifest(str(output_path))
     manifest.workspace.sidecar_dir.mkdir(parents=True)
     calls: dict[str, object] = {}
 
@@ -137,11 +156,8 @@ def test_finalize_streaming_output_cleans_sidecar_after_success_and_builds_resul
         completed_output_frames=12,
     )
 
-    assert result == {
-        "output_path": str(output_path),
-        "processed_frames": 12,
-        "audio_merged": False,
-    }
+    assert result.output_path == str(output_path)
+    assert result.processed_frames == 12
     assert ffmpeg.counted_path == str(output_path)
     assert calls["manifest"] is manifest
     assert calls["strict_total_frames"] is True
@@ -150,7 +166,7 @@ def test_finalize_streaming_output_cleans_sidecar_after_success_and_builds_resul
 
 def test_finalize_streaming_output_preserves_sidecar_when_finalize_fails(monkeypatch, tmp_path) -> None:
     output_path = tmp_path / "out.mp4"
-    manifest = SegmentManifest(str(output_path))
+    manifest = create_test_manifest(str(output_path))
     manifest.workspace.sidecar_dir.mkdir(parents=True)
 
     def fail_finalize(**kwargs):

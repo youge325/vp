@@ -1,19 +1,28 @@
 """补帧算法测试 — 基于 RIFE v4.25。"""
 
-from typing import cast
-
 import pytest
+
+from app.algorithms.interfaces import FramePairAlgorithm
+from app.algorithms.rife_interpolation import FrameInterpolationAlgorithm
+from app.algorithms.tensor_backend import get_tensor_backend
+from app.planning.processing_steps import ProcessingStep
 
 pytestmark = pytest.mark.pytorch
 
-from app.algorithms.interfaces import FramePairAlgorithm
-from app.algorithms.tensor_backend import ITensorBackend, get_tensor_backend
-from app.planning import ProcessingStep
-from app.processing.interpolation import FrameInterpolationAlgorithm
-
 
 def _create_interpolation(**kwargs):
-    return FrameInterpolationAlgorithm(tensor_backend=get_tensor_backend("pytorch"), **kwargs)
+    parameters = {
+        "backend_name": "pytorch",
+        "model_version": "4.25",
+        "scale": 1.0,
+        "fp16": False,
+        "onnx_model": None,
+        "engine": "cuda",
+        "model_dir": "D:/models",
+        **kwargs,
+    }
+    get_tensor_backend("pytorch")
+    return FrameInterpolationAlgorithm(**parameters)
 
 
 class TestFrameInterpolationAlgorithm:
@@ -21,7 +30,7 @@ class TestFrameInterpolationAlgorithm:
 
     def test_create_instance(self):
         try:
-            algo = _create_interpolation(multi=2, model_version="4.25")
+            algo = _create_interpolation(model_version="4.25")
             assert isinstance(algo, FramePairAlgorithm)
         except RuntimeError:
             pytest.skip("Tensor 后端不可用")
@@ -37,10 +46,13 @@ class TestFrameInterpolationAlgorithm:
         assert step.algorithm_kwargs["multi"] == 4
 
     def test_rejects_paddle_backend_instead_of_bridging_through_pytorch(self):
-        class _PaddleBackend:
-            @staticmethod
-            def get_name():
-                return "paddle"
-
         with pytest.raises(ValueError, match="does not support"):
-            FrameInterpolationAlgorithm(tensor_backend=cast(ITensorBackend, _PaddleBackend()))
+            FrameInterpolationAlgorithm(
+                backend_name="paddle",
+                model_version="4.25",
+                scale=1.0,
+                fp16=False,
+                onnx_model=None,
+                engine="cuda",
+                model_dir="D:/models",
+            )

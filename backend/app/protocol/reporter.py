@@ -4,7 +4,7 @@ Bridges the streaming pipeline's progress callbacks to two sinks:
 
 - the typed ``ndjson.emit`` boundary for the structured stdout stream consumed by the
   Tauri host
-- a human-readable line on stderr prefixed with ``[VP_PROGRESS]`` that
+- a human-readable line on stderr prefixed with the generated terminal marker that
   the desktop log panel renders as an in-place progress bar
 
 Lives in :mod:`app.protocol` (not :mod:`app.cli`) because the streaming

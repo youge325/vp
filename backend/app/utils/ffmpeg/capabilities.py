@@ -5,15 +5,15 @@ from __future__ import annotations
 import tempfile
 from typing import Any
 
-from app.generated.contracts import FfmpegInfo
+from app.generated.contracts import FfmpegInfo, GpuAdapter
 
 from . import _constants
 from . import capability_probe as _probe
 
 
-def discover_capabilities(ffmpeg_path: str, gpu_adapters: list[dict[str, Any]] | None = None) -> FfmpegInfo:
+def discover_capabilities(ffmpeg_path: str, gpu_adapters: list[GpuAdapter] | None = None) -> FfmpegInfo:
     adapters = gpu_adapters or []
-    available_vendors = {adapter.get("vendor") for adapter in adapters}
+    available_vendors = {adapter.vendor.value for adapter in adapters}
     encoder_names = set(_probe.list_codec_names(ffmpeg_path, "encoders"))
     decoder_names = set(_probe.list_codec_names(ffmpeg_path, "decoders"))
     hwaccels = _probe.list_hwaccels(ffmpeg_path)

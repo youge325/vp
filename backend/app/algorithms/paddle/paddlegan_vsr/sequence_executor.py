@@ -16,7 +16,7 @@ from app.algorithms.paddle.paddlegan_vsr.tensor_codec import (
 from app.catalog.paddlegan_models import PaddleGanSequenceMode
 
 
-class ChunkTracePort(Protocol):
+class _ChunkTracePort(Protocol):
     """Trace capability consumed by the sequence executor."""
 
     def record_chunk(self, paddle: Any, *, tensor: Any, output: Any, frame_count: int) -> None: ...
@@ -39,7 +39,7 @@ class PaddleGanSequenceExecutor:
         *,
         paddle: Any,
         run_tensor: Callable[[Any], Any],
-        trace: ChunkTracePort,
+        trace: _ChunkTracePort,
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[np.ndarray]:
         if self.sequence_mode == "window":
@@ -79,4 +79,4 @@ def _edvr_neighbor_indexes(index: int, length: int, window_size: int = 5) -> lis
     return [min(max(index + offset, 0), length - 1) for offset in range(-radius, radius + 1)]
 
 
-__all__ = ["ChunkTracePort", "PaddleGanSequenceExecutor"]
+__all__ = ["PaddleGanSequenceExecutor"]

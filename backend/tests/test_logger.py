@@ -68,6 +68,19 @@ def test_setup_logging_creates_startup_log_file(tmp_path, monkeypatch):
     assert not (tmp_path / "app.log").exists()
 
 
+def test_get_logger_is_pure_before_explicit_setup(tmp_path, monkeypatch):
+    _use_test_settings(monkeypatch, tmp_path)
+    root = logging.getLogger()
+    handlers = root.handlers[:]
+
+    logger = logger_module.get_logger("tests.pure")
+
+    assert logger is logging.getLogger("tests.pure")
+    assert root.handlers == handlers
+    assert logger_module._initialized is False
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_setup_logging_is_idempotent(tmp_path, monkeypatch):
     _use_test_settings(monkeypatch, tmp_path)
     logger_module.setup_logging()

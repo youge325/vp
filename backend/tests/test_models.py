@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.models import FilterStep, InterpolationConfig, OutputConfig, SuperResolutionConfig
+from app.generated.contracts import FilterStep, InterpolationConfig, OutputConfig, SuperResolutionConfig
 
 
 def _kwargs(output_dir: str) -> dict[str, object]:
@@ -34,7 +34,7 @@ def test_output_dir_rejects_empty_string() -> None:
 def test_output_dir_rejects_whitespace_only() -> None:
     with pytest.raises(ValidationError) as exc_info:
         OutputConfig.model_validate(_kwargs("   \t  "))
-    assert "output_dir" in str(exc_info.value)
+    assert "outputDir" in str(exc_info.value)
 
 
 def test_output_dir_rejects_single_newline() -> None:
@@ -67,7 +67,7 @@ def test_filter_step_accepts_anime_cleanup_kind() -> None:
         }
     )
 
-    assert step.kind == "anime_cleanup"
+    assert step.root.kind == "anime_cleanup"
 
 
 def test_filter_step_rejects_unknown_kind() -> None:

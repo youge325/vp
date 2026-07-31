@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from app.planning import ProcessingStep, StagePlan, StageProjection, build_stage_plan
+from app.planning.processing_steps import ProcessingStep
+from app.planning.stage_plan import StagePlan, build_stage_plan
+from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
 from app.processing.streaming.pipeline_rules import (
     resolved_output_dimensions,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.planning import SegmentManifest
+from app.planning.manifest import SegmentManifest
 from app.planning.manifest_store import ManifestRepository
 from app.planning.segment_workspace import SegmentWorkspace
 
@@ -21,8 +21,8 @@ def test_segment_workspace_is_the_single_path_owner(tmp_path: Path) -> None:
 
 def test_manifest_and_repository_depend_on_segment_workspace(tmp_path: Path) -> None:
     workspace = SegmentWorkspace.for_output(tmp_path / "render.mp4")
-    manifest = SegmentManifest(workspace=workspace)
     repository = ManifestRepository(workspace)
+    manifest = SegmentManifest(workspace=workspace, repository=repository)
 
     assert manifest.workspace is workspace
     assert manifest.repository.workspace is workspace

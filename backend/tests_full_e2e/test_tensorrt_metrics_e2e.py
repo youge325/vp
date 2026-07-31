@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
-from app.utils.model_metrics import get_paddlegan_model_detail
+from app.catalog.model_metrics import PADDLEGAN_MODEL_METRIC_SPECS
 from tests_full_e2e.helpers import try_last_json_line
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -132,14 +132,14 @@ def _run_case(case: dict[str, Any], tmp_path: Path) -> dict[str, Any]:
 
 
 def _expected_vram_bytes(model_id: str, *, width: int, height: int, num_frames: int) -> float:
-    metrics = get_paddlegan_model_detail(model_id)["metrics"]
-    tensorrt = metrics["engineMetrics"]["tensorrt"]
-    frame_count = tensorrt["runtimeFrameCount"] or num_frames
+    metrics = PADDLEGAN_MODEL_METRIC_SPECS[model_id]
+    tensorrt = dict(metrics.engine_metrics)["tensorrt"]
+    frame_count = tensorrt.runtime_frame_count or num_frames
     megapixels = (width * height) / 1_000_000
     return (
-        (tensorrt["runtimeOverheadBytes"] or 0)
-        + (metrics["parameterBytes"] or 0)
-        + (tensorrt["activationBytesPerMegapixel"] or 0) * megapixels * frame_count
+        (tensorrt.runtime_overhead_bytes or 0)
+        + (metrics.parameter_bytes or 0)
+        + (tensorrt.activation_bytes_per_megapixel or 0) * megapixels * frame_count
     )
 
 

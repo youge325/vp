@@ -1,16 +1,14 @@
 """Planning-layer workflow-to-stage helpers."""
 
-from app.planning import (
-    PROCESS_ORDER_MAP,
-    StageProjection,
-    build_stage_plan,
-    resolve_primary_algorithm,
-)
+from app.planning.stage_plan import build_stage_plan
+from app.planning.stage_projection import StageProjection
+from app.planning.workflow_steps import resolve_primary_algorithm
 from tests.support.workflow_configs import make_workflow_config as _workflow
 
 
-def test_workflow_step_planning_is_exported_from_planning_layer():
-    assert PROCESS_ORDER_MAP["super_resolution_then_interpolation"] == [
+def test_workflow_step_planning_uses_canonical_order():
+    projection = StageProjection.from_workflow(_workflow(superResolution={"enabled": True, "algorithm": "placeholder"}))
+    assert [step.algorithm_type for step in projection.steps] == [
         "super_resolution",
         "frame_interpolation",
     ]

@@ -18,7 +18,8 @@ from app.cli.commands._guards import ensure_input_and_ffmpeg
 from app.cli.commands._process_planning import build_plan
 from app.cli.commands._process_validation import load_runtime_configs
 from app.errors import ProcessError, ResumeConflictError, TaskErrorCode
-from app.planning import resolve_primary_algorithm
+from app.planning.workflow_steps import resolve_primary_algorithm
+from app.cli.runtime_configs import runtime_config_section
 
 
 def cmd_process(args: argparse.Namespace) -> None:
@@ -42,8 +43,6 @@ def cmd_process(args: argparse.Namespace) -> None:
             resume_mode=resume_mode,
         )
         finalize_and_emit(
-            ffmpeg=ffmpeg,
-            prepared=prepared,
             observers=observers,
             result=result,
             elapsed=elapsed,
@@ -66,7 +65,7 @@ def cmd_process(args: argparse.Namespace) -> None:
             {
                 "input_path": input_path,
                 "output_path": prepared.output_path,
-                "algorithm": resolve_primary_algorithm(prepared.runtime_configs.json_section("workflow")),
+                "algorithm": resolve_primary_algorithm(runtime_config_section(prepared.runtime_configs, "workflow")),
                 "processing_steps": [step.algorithm_type for step in prepared.processing_steps],
             }
         )

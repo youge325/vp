@@ -4,8 +4,9 @@ import io
 
 import numpy as np
 
-from app.planning import ProcessingStep
-from app.processing.streaming.stage_worker_config import StageWorkerConfig
+from app.planning.processing_steps import ProcessingStep
+from app.generated.stage_worker_contracts import StageWorkerConfig
+from app.processing.streaming.stage_worker_config import build_stage_worker_step
 
 
 class IdentityBackend:
@@ -14,9 +15,6 @@ class IdentityBackend:
 
     def tensor_to_numpy(self, tensor: dict[str, np.ndarray]) -> np.ndarray:
         return tensor["tensor"].copy()
-
-    def get_name(self) -> str:
-        return "identity"
 
 
 class IncrementAlgorithm:
@@ -73,8 +71,39 @@ def make_stage_worker_config(
     *,
     input_frame_count: int = 2,
 ) -> StageWorkerConfig:
+    payload = step.to_jsonable()
+    kwargs = payload["algorithm_kwargs"]
+    kwargs.pop("tensor_backend", None)
+    if step.algorithm_type == "frame_interpolation":
+        kwargs |= {
+            "algorithm": kwargs.get("algorithm", "rife"),
+            "model_version": kwargs.get("model_version", "4.25"),
+            "scale": kwargs.get("scale", 1.0),
+            "fp16": kwargs.get("fp16", False),
+            "onnx_model": kwargs.get("onnx_model"),
+            "engine": kwargs.get("engine", "cuda"),
+        }
+    elif step.algorithm_type == "super_resolution":
+        kwargs |= {
+            "scale_factor": kwargs.get("scale_factor", 1.0),
+            "sr_algorithm": kwargs.get("sr_algorithm", "placeholder"),
+            "onnx_model": kwargs.get("onnx_model"),
+            "engine": kwargs.get("engine", "cuda"),
+            "num_frames": kwargs.get("num_frames", 10),
+        }
+    normalized_step = ProcessingStep(
+        algorithm_type=step.algorithm_type,
+        algorithm_kwargs=kwargs,
+        stage_name=step.stage_name,
+    )
+    output_frame_count = input_frame_count
+    if step.algorithm_type == "frame_interpolation" and input_frame_count > 0:
+        output_frame_count = 1 + (input_frame_count - 1) * int(kwargs["multi"])
+    tensor_backend_name = None
+    if step.algorithm_type != "frame_filter_chain":
+        tensor_backend_name = "paddle" if normalized_step.descriptor.supported_backends == {"paddle"} else "onnx"
     return StageWorkerConfig(
-        stage=step,
+        stage=build_stage_worker_step(normalized_step),
         stage_index=1,
         stage_total=1,
         stage_name=step.stage_name,
@@ -83,5 +112,6 @@ def make_stage_worker_config(
         output_width=1,
         output_height=1,
         input_frame_count=input_frame_count,
-        tensor_backend_name=None if step.algorithm_type == "frame_filter_chain" else "identity",
+        tensor_backend_name=tensor_backend_name,
+        output_frame_count=output_frame_count,
     )

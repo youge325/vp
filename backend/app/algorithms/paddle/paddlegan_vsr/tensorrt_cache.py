@@ -16,13 +16,13 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class PredictorBinding(NamedTuple):
+class _PredictorBinding(NamedTuple):
     predictor: Any
     input_name: str
     output_names: list[str]
 
 
-class TensorRtPredictorCache:
+class _TensorRtPredictorCache:
     """Create and retain shape-specific Paddle TensorRT predictors."""
 
     def __init__(
@@ -40,10 +40,10 @@ class TensorRtPredictorCache:
         self.model = model
         self.model_id = model_id
         self.runtime_frame_count = 5 if sequence_mode == "window" else num_frames
-        self._entries: dict[tuple[int, int, int], PredictorBinding] = {}
+        self._entries: dict[tuple[int, int, int], _PredictorBinding] = {}
         self._logged_reuse_keys: set[tuple[int, int, int]] = set()
 
-    def ensure(self, input_shape: list[int]) -> PredictorBinding:
+    def ensure(self, input_shape: list[int]) -> _PredictorBinding:
         _, _, _, height, width = input_shape
         key = (self.runtime_frame_count, height, width)
         shape = [1, self.runtime_frame_count, 3, height, width]
@@ -107,7 +107,7 @@ class PaddleGanTensorRtPredictor:
         sequence_mode: str,
         num_frames: int,
     ):
-        self._cache = TensorRtPredictorCache(
+        self._cache = _TensorRtPredictorCache(
             paddle=paddle,
             model=model,
             model_id=model_id,
@@ -199,7 +199,7 @@ def _create_tensorrt_predictor(
     max_shape: list[int],
     optim_shape: list[int],
     cache_dir: Path,
-) -> PredictorBinding:
+) -> _PredictorBinding:
     config = paddle.inference.Config(str(model_file), str(params_file))
     _configure_tensorrt_config(
         config,
@@ -217,7 +217,7 @@ def _create_tensorrt_predictor(
         raise RuntimeError("PaddleGAN TensorRT predictor has no inputs.")
     if not output_names:
         raise RuntimeError("PaddleGAN TensorRT predictor has no outputs.")
-    return PredictorBinding(predictor, input_names[0], output_names)
+    return _PredictorBinding(predictor, input_names[0], output_names)
 
 
 def _emit_tensorrt_log(message: str) -> None:
@@ -228,4 +228,4 @@ def _format_shape(shape: Sequence[int]) -> str:
     return "x".join(str(int(dim)) for dim in shape)
 
 
-__all__ = ["PaddleGanTensorRtPredictor", "PredictorBinding", "TensorRtPredictorCache"]
+__all__ = ["PaddleGanTensorRtPredictor"]

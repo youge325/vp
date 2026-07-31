@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from app.catalog.algorithm_capabilities import find_static_algorithm_capability
+from app.catalog.tensor_capabilities import supports_backend_engine
 from app.errors import TaskErrorCode, raise_error
 from app.planning.model_availability import ModelAvailabilityPort
 from app.planning.processing_steps import ProcessingStep
@@ -31,11 +33,29 @@ def _required_float(step: ProcessingStep, key: str) -> float:
     return float(value)
 
 
+def _required_int(step: ProcessingStep, key: str) -> int:
+    value = step.algorithm_kwargs.get(key)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise_error(
+            TaskErrorCode.INVALID_CONFIG,
+            f"Stage '{step.stage_name}' requires an integer '{key}' value.",
+            details={"stage": step.stage_name, "field": key},
+        )
+    return value
+
+
 def _validate_structure(step: ProcessingStep) -> None:
     if step.algorithm_type == "frame_filter_chain":
         return
 
     backend_name = _required_string(step, "tensor_backend")
+    engine = _required_string(step, "engine")
+    if not supports_backend_engine(backend_name, engine):
+        raise_error(
+            TaskErrorCode.INVALID_CONFIG,
+            f"Tensor backend '{backend_name}' does not support engine '{engine}'.",
+            details={"stage": step.stage_name, "tensor_backend": backend_name, "engine": engine},
+        )
     descriptor = step.descriptor
     if step.algorithm_type == "frame_interpolation":
         algorithm = _required_string(step, "algorithm")
@@ -56,11 +76,18 @@ def _validate_structure(step: ProcessingStep) -> None:
                     "tensor_backend": backend_name,
                 },
             )
-        if backend_name == "pytorch":
-            _required_string(step, "model_version")
+        model_version = _required_string(step, "model_version")
+        capability = find_static_algorithm_capability(step.algorithm_type, algorithm)
+        if capability is None or model_version not in capability.models:
+            raise_error(
+                TaskErrorCode.INVALID_CONFIG,
+                f"Unsupported RIFE model version: '{model_version}'.",
+                details={"stage": step.stage_name, "model_version": model_version},
+            )
         return
 
     algorithm = _required_string(step, "sr_algorithm")
+    capability = find_static_algorithm_capability(step.algorithm_type, algorithm)
     if descriptor.fixed_scale_factor is not None:
         scale_factor = _required_float(step, "scale_factor")
         if scale_factor != descriptor.fixed_scale_factor:
@@ -73,6 +100,18 @@ def _validate_structure(step: ProcessingStep) -> None:
                     "scale_factor": scale_factor,
                 },
             )
+        if capability is not None and capability.input_frame_mode == "fixed_window":
+            num_frames = _required_int(step, "num_frames")
+            if num_frames != capability.default_num_frames:
+                raise_error(
+                    TaskErrorCode.INVALID_CONFIG,
+                    f"{algorithm} requires a fixed {capability.default_num_frames}-frame window; got {num_frames}.",
+                    details={
+                        "stage": step.stage_name,
+                        "algorithm": algorithm,
+                        "num_frames": num_frames,
+                    },
+                )
     if backend_name not in descriptor.supported_backends:
         if descriptor.model_kind == "paddlegan_vsr":
             message = f"PaddleGAN VSR requires the Paddle tensor backend; got '{backend_name}'."

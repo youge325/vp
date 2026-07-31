@@ -5,11 +5,11 @@ import pytest
 from app.utils.onnx_models import (
     create_onnx_session,
     resolve_onnx_model_path,
-    scan_onnx_models,
+    scan_onnx_catalog,
 )
 
 
-def test_scan_onnx_models_groups_by_algorithm_subdirectory(tmp_path: Path):
+def test_scan_onnx_catalog_groups_by_algorithm_subdirectory(tmp_path: Path):
     interp_rife = tmp_path / "interpolation" / "rife"
     interp_rife.mkdir(parents=True)
     (interp_rife / "b.onnx").write_bytes(b"model")
@@ -23,10 +23,12 @@ def test_scan_onnx_models_groups_by_algorithm_subdirectory(tmp_path: Path):
     sr_alg.mkdir(parents=True)
     (sr_alg / "sr.onnx").write_bytes(b"model")
 
-    assert scan_onnx_models(tmp_path) == {
+    catalog = scan_onnx_catalog(tmp_path)
+    assert catalog.names == {
         "interpolation": {"rife": ["a.ONNX", "b.onnx"]},
         "super_resolution": {"realesrgan": ["sr.onnx"]},
     }
+    assert [detail.name for detail in catalog.details["interpolation"]["rife"]] == ["a.ONNX", "b.onnx"]
 
 
 @pytest.mark.parametrize(
@@ -121,10 +123,11 @@ def test_create_onnx_session_raises_when_primary_provider_is_missing():
         create_onnx_session("/tmp/model.onnx", engine="tensorrt", ort_module=ort)
 
 
-def test_create_onnx_session_auto_uses_available_providers():
+@pytest.mark.parametrize("engine", ["auto", "dcu"])
+def test_create_onnx_session_rejects_unsupported_engine(engine: str):
     ort = _StubOrt(["CPUExecutionProvider"])
-    session = create_onnx_session("/tmp/model.onnx", engine="auto", ort_module=ort)
-    assert session.providers == ["CPUExecutionProvider"]
+    with pytest.raises(ValueError, match="Unsupported ONNX inference engine"):
+        create_onnx_session("/tmp/model.onnx", engine=engine, ort_module=ort)
 
 
 def test_create_onnx_session_warns_when_session_falls_back_to_cpu(caplog: pytest.LogCaptureFixture):

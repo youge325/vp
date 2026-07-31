@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 from pathlib import Path
 import shutil
 
 import numpy as np
 import pytest
 
-from app.planning import ProcessingStep, SegmentManifest, StageProjection, build_run_identity
+from app.planning.processing_steps import ProcessingStep
+from app.planning.run_identity import build_run_identity
+from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
+from tests.support.streaming_runtime import create_test_manifest, ignore_resume_status, ignore_worker_log
 from app.processing.streaming.queues import EncodedFrame, StreamEnd
-from app.processing.streaming import process_video_streaming
+from app.processing.streaming.pipeline import process_video_streaming
 from app.processing.streaming.pipeline_preflight import build_streaming_pipeline_preflight
 from app.processing.streaming.worker_plans import (
     boundary_schedule_for_stage_plan,
@@ -117,9 +119,6 @@ class _FakeFFmpegWrapper:
             return len(self.video_frames[input_path])
         return len(self._source_frames)
 
-    def has_audio(self, _input_path: str) -> bool:
-        return True
-
     def open_rawvideo_decoder(
         self,
         *,
@@ -215,8 +214,13 @@ def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None
             source_height=config.source_height,
             source_frame_count=len(frames),
         )
-        for plan in plans:
-            frames = _apply_fake_stage(plan.config.stage, frames, plan.config.output_width, plan.config.output_height)
+        for worker_config in plans:
+            frames = _apply_fake_stage(
+                worker_config.stage,
+                frames,
+                worker_config.output_width,
+                worker_config.output_height,
+            )
 
         schedule = boundary_schedule_for_stage_plan(
             stage_plan=stage_plan,
@@ -243,7 +247,7 @@ def _apply_fake_stage(step, frames: list[np.ndarray], output_width: int, output_
     if step.algorithm_type == "frame_interpolation":
         if len(frames) < 2:
             return [frame.copy() for frame in frames]
-        multi = int(step.algorithm_kwargs.get("multi") or 2)
+        multi = int(step.algorithm_kwargs.multi)
         output: list[np.ndarray] = []
         for index in range(len(frames) - 1):
             prev = frames[index]
@@ -288,11 +292,16 @@ def _workflow_config(segment_frames: int = 2) -> tuple[dict, dict, list[Processi
             "scale": 1.0,
             "fp16": False,
             "tensorBackend": "pytorch",
+            "engine": "cuda",
         },
         "superResolution": {
             "enabled": True,
             "scaleFactor": 2.0,
             "algorithm": "placeholder",
+            "onnxModel": "sr.onnx",
+            "tensorBackend": "onnx",
+            "engine": "cuda",
+            "numFrames": 10,
         },
     }
     encode_config = {
@@ -308,9 +317,12 @@ def _workflow_config(segment_frames: int = 2) -> tuple[dict, dict, list[Processi
             algorithm_type="frame_interpolation",
             algorithm_kwargs={
                 "multi": 2,
+                "algorithm": "rife",
                 "model_version": "4.25",
                 "scale": 1.0,
                 "fp16": False,
+                "onnx_model": None,
+                "engine": "cuda",
                 "tensor_backend": "pytorch",
             },
             stage_name="01_frame_interpolation",
@@ -320,6 +332,8 @@ def _workflow_config(segment_frames: int = 2) -> tuple[dict, dict, list[Processi
             algorithm_kwargs={
                 "scale_factor": 2.0,
                 "sr_algorithm": "placeholder",
+                "onnx_model": "sr.onnx",
+                "engine": "cuda",
                 "tensor_backend": "onnx",
             },
             stage_name="02_super_resolution",
@@ -428,6 +442,9 @@ def _run_streaming_case(
         progress_callbacks=[lambda *_args: None for _step in resolved_steps],
         metrics=PipelineMetrics(),
         output_fps=output_fps,
+        manifest_factory=create_test_manifest,
+        resume_status_sink=ignore_resume_status,
+        worker_log_sink=ignore_worker_log,
     )
 
 
@@ -452,7 +469,7 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
         processing_steps=case.processing_steps,
         video_info=video_info,
     )
-    manifest = SegmentManifest(str(case.output_path))
+    manifest = create_test_manifest(str(case.output_path))
     decision = manifest.prepare(identity.signature, identity.config_snapshot, mode="auto")
     assert decision.kind == "fresh"
     first_segment_tmp = manifest.workspace.chunk_tmp_path(".mp4", index=1)
@@ -469,8 +486,8 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
 
     result = _run_streaming_case(case)
 
-    assert result["output_path"] == str(case.output_path)
-    assert result["processed_frames"] == 5
+    assert result.output_path == str(case.output_path)
+    assert result.processed_frames == 5
     assert [int(frame[0, 0, 0]) for frame in case.wrapper.video_frames[str(case.output_path)]] == [0, 50, 100, 150, 200]
     assert not manifest.workspace.sidecar_dir.exists()
     assert not any(path.is_dir() and path.name == "frames" for path in case.workspace.rglob("*"))
@@ -489,7 +506,7 @@ def test_streaming_pipeline_keeps_sidecar_when_finalization_fails(monkeypatch):
     with pytest.raises(RuntimeError, match="concat failed"):
         _run_streaming_case(case)
 
-    manifest = SegmentManifest(str(case.output_path))
+    manifest = create_test_manifest(str(case.output_path))
     assert manifest.workspace.sidecar_dir.exists()
     assert manifest.workspace.manifest_path.is_file()
     assert any(path.suffix == ".mp4" for path in manifest.workspace.sidecar_dir.iterdir())
@@ -500,47 +517,23 @@ def test_streaming_pipeline_reports_final_encoded_frames_when_resampling(monkeyp
 
     result = _run_streaming_case(case, output_fps=3.0)
 
-    assert result["processed_frames"] == len(case.wrapper.video_frames[str(case.output_path)])
-    assert result["processed_frames"] == 5
+    assert result.processed_frames == len(case.wrapper.video_frames[str(case.output_path)])
+    assert result.processed_frames == 5
 
 
 def test_streaming_pipeline_uses_scaled_encoder_dimensions_for_onnx_super_resolution(monkeypatch):
     case = _streaming_case(monkeypatch, "onnx_sr_dimensions", [_frame(0), _frame(100)])
-    workflow_config = {
-        "fpsMode": "multi",
-        "processOrder": "super_resolution_then_interpolation",
-        "interpolation": {
-            "enabled": False,
-            "targetFps": 60,
-            "multi": 2,
-            "model": "4.25",
-            "scale": 1.0,
-            "fp16": False,
-            "tensorBackend": "onnx",
-            "onnxModel": "",
-        },
-        "superResolution": {
-            "enabled": True,
-            "scaleFactor": 2.0,
-            "algorithm": "onnx",
-            "onnxModel": "sr.onnx",
-        },
-    }
-    encode_config = {
-        "codec": "libx264",
-        "family": "cpu",
-        "container": "mp4",
-        "keepAudio": True,
-        "rateControl": {"mode": "crf", "value": 18},
-        "options": {},
-    }
+    workflow_config, encode_config, _default_steps, _output_config = _workflow_config()
+    workflow_config["processOrder"] = "super_resolution_then_interpolation"
+    workflow_config["interpolation"].update(enabled=False, tensorBackend="onnx", onnxModel="")
     processing_steps = [
         ProcessingStep(
             algorithm_type="super_resolution",
             algorithm_kwargs={
                 "scale_factor": 2.0,
-                "sr_algorithm": "onnx",
+                "sr_algorithm": "placeholder",
                 "onnx_model": "sr.onnx",
+                "engine": "cuda",
                 "tensor_backend": "onnx",
             },
             stage_name="01_super_resolution",
@@ -565,6 +558,8 @@ def test_streaming_pipeline_uses_stage_worker_pipeline_for_processing_steps(monk
             algorithm_kwargs={
                 "scale_factor": 1.0,
                 "sr_algorithm": "placeholder",
+                "onnx_model": "sr.onnx",
+                "engine": "cuda",
                 "tensor_backend": "onnx",
             },
             stage_name="01_super_resolution",

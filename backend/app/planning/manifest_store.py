@@ -35,7 +35,7 @@ class ManifestRepository:
                 details={"operation": "read", "path": str(path)},
             ) from exc
         try:
-            return SegmentManifestContract.model_validate_json(raw)
+            return SegmentManifestContract.model_validate_json(raw, by_alias=True, by_name=False)
         except ValidationError:
             return None
 

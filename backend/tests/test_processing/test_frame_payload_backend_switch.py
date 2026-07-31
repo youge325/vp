@@ -8,9 +8,6 @@ class _Backend:
     def __init__(self, name: str):
         self.name = name
 
-    def get_name(self) -> str:
-        return self.name
-
     def numpy_to_tensor(self, frame):
         return (self.name, frame.copy())
 

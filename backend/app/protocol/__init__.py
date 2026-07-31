@@ -8,7 +8,6 @@ stderr and are *not* handled here.
 
 from __future__ import annotations
 
-import json
 import sys
 import threading
 from typing import Any
@@ -21,6 +20,7 @@ from app.generated.protocol_constants import (
     BACKEND_ENVELOPE_PRESERVES_DISCRIMINATOR,
     BackendEnvelopeType,
 )
+from app.protocol_encoding import encode_bounded_json_line
 
 
 # Stream variants are constrained by ``contracts/ndjson.schema.json``.
@@ -37,8 +37,9 @@ class _NdjsonEmitter:
         self._lock = threading.Lock()
 
     def _write(self, envelope: dict[str, Any]) -> None:
+        line = encode_bounded_json_line(envelope)
         with self._lock:
-            sys.stdout.write(json.dumps(envelope, ensure_ascii=False) + "\n")
+            sys.stdout.write(line)
             sys.stdout.flush()
 
     def emit(self, event_type: BackendEnvelopeType, payload: BaseModel) -> None:

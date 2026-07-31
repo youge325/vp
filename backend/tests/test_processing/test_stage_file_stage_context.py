@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import os
 
-from app.planning import ProcessingStep, SegmentManifest
 from app.planning.manifest import ResumeState
+from app.planning.processing_steps import ProcessingStep
 from app.processing.streaming import stage_file_stage_context
 from app.processing.streaming.stage_file_stage_context import build_stage_file_stage_context
+from tests.support.streaming_runtime import create_test_manifest
 
 
 def test_stage_file_stage_context_only_exports_builder() -> None:
@@ -19,7 +20,7 @@ def test_stage_file_stage_context_uses_resume_state_for_final_stage(tmp_path) ->
         algorithm_kwargs={"scale_factor": 4.0},
         stage_name="01_super_resolution",
     )
-    manifest = SegmentManifest(str(tmp_path / "final.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "final.mp4"))
     completed_segments = [object()]
     resume_state = ResumeState(start_source_frame=99, completed_output_frames=4, completed_segments=completed_segments)
     encode_config = {"container": "mp4", "keepAudio": True}
@@ -37,6 +38,7 @@ def test_stage_file_stage_context_uses_resume_state_for_final_stage(tmp_path) ->
         encode_config=encode_config,
         segment_frames=5,
         output_fps=48.0,
+        manifest_factory=create_test_manifest,
     )
 
     assert context.manifest is manifest
@@ -54,7 +56,7 @@ def test_stage_file_stage_context_prepares_intermediate_stage_manifest(tmp_path)
         algorithm_kwargs={"multi": 2},
         stage_name="01 frame/interpolation",
     )
-    final_manifest = SegmentManifest(str(tmp_path / "final.mp4"))
+    final_manifest = create_test_manifest(str(tmp_path / "final.mp4"))
     final_resume_state = ResumeState(start_source_frame=3, completed_output_frames=7, completed_segments=[])
     encode_config = {"container": "mkv", "keepAudio": True}
 
@@ -71,6 +73,7 @@ def test_stage_file_stage_context_prepares_intermediate_stage_manifest(tmp_path)
         encode_config=encode_config,
         segment_frames=0,
         output_fps=60.0,
+        manifest_factory=create_test_manifest,
     )
 
     assert context.output_path == str(tmp_path / "stages" / "stage-01-01_frame_interpolation.mp4")

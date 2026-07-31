@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from app.planning import SegmentManifest
+from app.planning.manifest import SegmentManifest
+from tests.support.streaming_runtime import create_test_manifest
 from app.processing.streaming.encoder_finalization import finalize_segmented_output
 
 
 class _FakeFFmpeg:
-    def __init__(self, *, has_audio: bool = False, extracted_audio: bool = True) -> None:
-        self.has_audio_value = has_audio
+    def __init__(self, *, extracted_audio: bool = True) -> None:
         self.extracted_audio = extracted_audio
         self.concat_calls: list[tuple[list[str], str]] = []
         self.merged: tuple[str, str, str] | None = None
@@ -18,9 +18,6 @@ class _FakeFFmpeg:
     def concat_videos(self, segment_paths: list[str], output_path: str) -> None:
         self.concat_calls.append((segment_paths, output_path))
         Path(output_path).write_bytes(b"concat")
-
-    def has_audio(self, _input_path: str) -> bool:
-        return self.has_audio_value
 
     def extract_audio(self, _input_path: str, output_path: str) -> bool:
         if not self.extracted_audio:
@@ -35,7 +32,7 @@ class _FakeFFmpeg:
 
 def _manifest_with_chunk(tmp_path: Path, *, output_name: str = "out.mp4") -> SegmentManifest:
     output_path = tmp_path / output_name
-    manifest = SegmentManifest(str(output_path))
+    manifest = create_test_manifest(str(output_path))
     manifest.prepare("sig", {"test": True}, mode="force-fresh")
     tmp_chunk = manifest.workspace.chunk_tmp_path(".mp4", index=1)
     Path(tmp_chunk).write_bytes(b"segment")
@@ -52,7 +49,7 @@ def _manifest_with_chunk(tmp_path: Path, *, output_name: str = "out.mp4") -> Seg
 def test_finalize_segmented_output_concats_segments_without_audio(tmp_path: Path) -> None:
     manifest = _manifest_with_chunk(tmp_path)
     output_path = str(tmp_path / "out.mp4")
-    ffmpeg = _FakeFFmpeg(has_audio=False)
+    ffmpeg = _FakeFFmpeg()
 
     finalize_segmented_output(
         ffmpeg=ffmpeg,
@@ -63,6 +60,7 @@ def test_finalize_segmented_output_concats_segments_without_audio(tmp_path: Path
         completed_output_frames=2,
         total_output_frames=2,
         strict_total_frames=True,
+        source_has_audio=False,
     )
 
     assert Path(output_path).read_bytes() == b"concat"
@@ -73,7 +71,7 @@ def test_finalize_segmented_output_concats_segments_without_audio(tmp_path: Path
 def test_finalize_segmented_output_merges_audio_when_requested(tmp_path: Path) -> None:
     manifest = _manifest_with_chunk(tmp_path)
     output_path = str(tmp_path / "out.mp4")
-    ffmpeg = _FakeFFmpeg(has_audio=True)
+    ffmpeg = _FakeFFmpeg()
 
     finalize_segmented_output(
         ffmpeg=ffmpeg,
@@ -84,6 +82,7 @@ def test_finalize_segmented_output_merges_audio_when_requested(tmp_path: Path) -
         completed_output_frames=2,
         total_output_frames=2,
         strict_total_frames=True,
+        source_has_audio=True,
     )
 
     assert Path(output_path).read_bytes() == b"merged"
@@ -105,4 +104,5 @@ def test_finalize_segmented_output_rejects_incomplete_strict_totals(tmp_path: Pa
             completed_output_frames=1,
             total_output_frames=2,
             strict_total_frames=True,
+            source_has_audio=False,
         )

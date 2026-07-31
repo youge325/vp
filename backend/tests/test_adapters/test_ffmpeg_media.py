@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from app.adapters import FFmpegMediaAdapter
+from app.adapters.ffmpeg_media import FFmpegMediaAdapter
 from app.ports.media import VideoMetadata
 from app.utils.ffmpeg import FFmpegWrapper
 

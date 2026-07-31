@@ -4,7 +4,10 @@ from pathlib import Path
 from typing import Any
 
 import app.processing.streaming.stage_file_pipeline as stage_file_pipeline
-from app.planning import ProcessingStep, ResumeState, SegmentManifest, StageProjection, build_stage_plan
+from app.planning.manifest import ResumeState
+from app.planning.processing_steps import ProcessingStep
+from app.planning.stage_plan import build_stage_plan
+from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import (
@@ -12,6 +15,7 @@ from app.processing.streaming.pipeline_context import (
     StreamingPipelinePreflight,
 )
 from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
+from tests.support.streaming_runtime import create_test_manifest, ignore_resume_status, ignore_worker_log
 
 
 def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(monkeypatch, tmp_path) -> None:
@@ -32,7 +36,7 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
         ),
     ]
     stage_plan = build_stage_plan(StageProjection(tuple(steps)), 5, source_duration=5 / 24, output_fps=None)
-    manifest = SegmentManifest(str(tmp_path / "final.mp4"))
+    manifest = create_test_manifest(str(tmp_path / "final.mp4"))
     manifest.prepare("sig", {"test": True}, mode="force-fresh")
     input_path = str(tmp_path / "input.mp4")
     output_path = str(tmp_path / "final.mp4")
@@ -100,6 +104,9 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
         output_fps=None,
         encode_progress_callback=None,
         metrics=metrics,
+        manifest_factory=create_test_manifest,
+        resume_status_sink=ignore_resume_status,
+        worker_log_sink=ignore_worker_log,
     )
     completed = stage_file_pipeline.run_stage_file_pipeline(context=context)
 

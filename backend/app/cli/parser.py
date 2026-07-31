@@ -4,16 +4,8 @@ from __future__ import annotations
 
 import argparse
 
-from app.benchmark.runner import DEFAULT_SCENARIO
-
-from app.cli.commands.check import cmd_check
-from app.cli.commands.benchmark import cmd_benchmark
-from app.cli.commands.info import cmd_info
-from app.cli.commands.inspect_output import cmd_inspect_output
-from app.cli.commands.process import cmd_process
-from app.cli.commands.stage_worker import cmd_stage_worker
-from app.generated.contracts import FpsMode, ResumeMode, TensorBackend
-from app.planning import PROCESS_ORDER_MAP
+from app.generated.contracts import FpsMode, ProcessOrder, ResumeMode, TensorBackend
+from app.generated.protocol_constants import STAGE_WORKER_CONFIG_FLAG, STAGE_WORKER_SUBCOMMAND
 
 
 def _add_shared_planning_args(parser: argparse.ArgumentParser) -> None:
@@ -48,8 +40,9 @@ def _add_shared_planning_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--enable-super-resolution", action="store_true", help="Enable super-resolution stage")
     parser.add_argument(
         "--process-order",
-        default="super_resolution_then_interpolation",
-        choices=list(PROCESS_ORDER_MAP.keys()),
+        type=ProcessOrder,
+        default=ProcessOrder.SUPER_RESOLUTION_THEN_INTERPOLATION,
+        choices=list(ProcessOrder),
         help="Stage order when interpolation and super-resolution are both enabled",
     )
     parser.add_argument(
@@ -121,11 +114,11 @@ def build_parser() -> argparse.ArgumentParser:
             "and the existing final file. 'force-resume' keeps the sidecar."
         ),
     )
-    process_parser.set_defaults(func=cmd_process)
+    process_parser.set_defaults(handler="process")
 
     info_parser = subcommands.add_parser("info", help="Inspect an input video")
     info_parser.add_argument("--input", required=True, help="Input video path")
-    info_parser.set_defaults(func=cmd_info)
+    info_parser.set_defaults(handler="info")
 
     inspect_output_parser = subcommands.add_parser(
         "inspect-output",
@@ -134,20 +127,20 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_output_parser.add_argument("--input", required=True, help="Input video path")
     inspect_output_parser.add_argument("--output", default=None, help="Optional explicit output file path")
     _add_shared_planning_args(inspect_output_parser)
-    inspect_output_parser.set_defaults(func=cmd_inspect_output)
+    inspect_output_parser.set_defaults(handler="inspect_output")
 
     stage_worker_parser = subcommands.add_parser(
-        "stage-worker",
+        STAGE_WORKER_SUBCOMMAND,
         help=argparse.SUPPRESS,
     )
-    stage_worker_parser.add_argument("--config-json", required=True, help=argparse.SUPPRESS)
-    stage_worker_parser.set_defaults(func=cmd_stage_worker)
+    stage_worker_parser.add_argument(STAGE_WORKER_CONFIG_FLAG, required=True, help=argparse.SUPPRESS)
+    stage_worker_parser.set_defaults(handler="stage_worker")
 
     check_parser = subcommands.add_parser("check", help="Inspect runtime availability")
-    check_parser.set_defaults(func=cmd_check)
+    check_parser.set_defaults(handler="check")
 
     benchmark_parser = subcommands.add_parser("benchmark", help="Run backend benchmark regression checks")
-    benchmark_parser.add_argument("--scenario", default=DEFAULT_SCENARIO)
+    benchmark_parser.add_argument("--scenario", default=None)
     benchmark_parser.add_argument("--baseline", default=None, help="Baseline JSON path")
     benchmark_parser.add_argument("--threshold", type=float, default=0.15, help="Relative regression threshold")
     benchmark_parser.add_argument("--report-json", default=None, help="Write JSON report to this path")
@@ -163,6 +156,6 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--multi", type=int, default=2)
     benchmark_parser.add_argument("--backend", default="pytorch", choices=["pytorch"])
     benchmark_parser.add_argument("--model", default="4.25")
-    benchmark_parser.set_defaults(func=cmd_benchmark)
+    benchmark_parser.set_defaults(handler="benchmark")
 
     return parser

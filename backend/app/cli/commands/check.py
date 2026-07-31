@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 import argparse
-from typing import cast
 
+from app.catalog.algorithm_capabilities import (
+    AlgorithmCapability,
+    INTERPOLATION_CAPABILITIES,
+    SUPER_RESOLUTION_CAPABILITIES,
+    project_dynamic_onnx_super_resolution_capabilities,
+)
+from app.catalog.model_metrics import MODEL_METRIC_SPECS_BY_ALGORITHM, ModelMetricSpec
+from app.cli.model_metric_projection import project_model_metrics
 from app.cli.probes import probe_tensor_engines
 from app.config import settings
 from app.generated.contracts import (
@@ -12,47 +19,36 @@ from app.generated.contracts import (
     AlgorithmInfo,
     EnvironmentCheckResult,
     FfmpegInfo,
-    GpuAdapter,
     GpuInfo,
-    GpuVendor,
-    InferenceEngine,
     InputFrameMode,
-    ModelVariantInfo,
     TensorBackend,
-    TensorEngines,
 )
 from app.generated.protocol_constants import BackendEnvelopeType
-from app.processing.interpolation import SUPPORTED_ALGORITHMS as INTERPOLATION_ALGORITHMS
-from app.processing.super_resolution import SUPPORTED_ALGORITHMS as SR_ALGORITHMS
 from app.protocol import ndjson
 from app.utils.ffmpeg import FFmpegWrapper
-from app.utils.onnx_models import scan_onnx_model_details, scan_onnx_models
+from app.utils.onnx_models import scan_onnx_catalog
 from app.utils.system_probe import list_gpu_adapters
 
 
 def _algorithm_payload(
-    algorithm: dict[str, object],
+    algorithm: AlgorithmCapability,
     *,
     onnx_models: list[str],
-    onnx_model_details: list[ModelVariantInfo],
+    onnx_model_details: list[ModelMetricSpec],
 ) -> AlgorithmInfo:
-    """Project catalog entries onto the complete version-2 wire contract."""
-    raw_fixed_scale_factor = cast(int | float | None, algorithm.get("fixedScaleFactor"))
-    fixed_scale_factor = int(raw_fixed_scale_factor) if raw_fixed_scale_factor is not None else None
+    """Project one neutral catalog entry onto the generated wire contract."""
+    fixed_scale_factor = algorithm.descriptor.fixed_scale_factor
     return AlgorithmInfo(
-        name=cast(str, algorithm["name"]),
-        family=AlgorithmFamily(cast(str, algorithm["family"])),
-        tensor_backends=[TensorBackend(backend) for backend in cast(list[str], algorithm.get("tensorBackends", []))],
-        models=list(cast(list[str], algorithm.get("models", []))),
+        name=algorithm.name,
+        family=AlgorithmFamily(algorithm.descriptor.model_kind),
+        tensor_backends=[TensorBackend(backend) for backend in sorted(algorithm.descriptor.supported_backends)],
+        models=list(algorithm.models),
         onnx_models=onnx_models,
-        model_details=list(cast(list[ModelVariantInfo], algorithm.get("modelDetails", []))),
-        onnx_model_details=onnx_model_details,
-        scale_factors=[
-            int(scale_factor) for scale_factor in cast(list[int | float], algorithm.get("scaleFactors", []))
-        ],
-        fixed_scale_factor=fixed_scale_factor,
-        default_num_frames=cast(int | None, algorithm.get("defaultNumFrames")),
-        input_frame_mode=InputFrameMode(cast(str, algorithm["inputFrameMode"])),
+        model_details=project_model_metrics(MODEL_METRIC_SPECS_BY_ALGORITHM.get(algorithm.name, ())),
+        onnx_model_details=project_model_metrics(onnx_model_details),
+        fixed_scale_factor=int(fixed_scale_factor) if fixed_scale_factor is not None else None,
+        default_num_frames=algorithm.default_num_frames,
+        input_frame_mode=InputFrameMode(algorithm.input_frame_mode),
     )
 
 
@@ -62,8 +58,9 @@ def cmd_check(_args: argparse.Namespace) -> None:
 
     tensor_engines = probe_tensor_engines()
     gpu_adapters = list_gpu_adapters()
-    onnx_models = scan_onnx_models(settings.RIFE_MODEL_DIR)
-    onnx_model_details = scan_onnx_model_details(settings.RIFE_MODEL_DIR)
+    onnx_catalog = scan_onnx_catalog(settings.RIFE_MODEL_DIR)
+    onnx_models = onnx_catalog.names
+    onnx_model_details = onnx_catalog.details
     ffmpeg_capabilities = (
         ffmpeg.discover_capabilities(gpu_adapters)
         if ffmpeg_available
@@ -73,38 +70,39 @@ def cmd_check(_args: argparse.Namespace) -> None:
     interpolation_algorithms_payload = [
         _algorithm_payload(
             alg,
-            onnx_models=onnx_models.get("interpolation", {}).get(alg["name"], []),
-            onnx_model_details=onnx_model_details.get("interpolation", {}).get(alg["name"], []),
+            onnx_models=onnx_models.get("interpolation", {}).get(alg.name, []),
+            onnx_model_details=onnx_model_details.get("interpolation", {}).get(alg.name, []),
         )
-        for alg in INTERPOLATION_ALGORITHMS
+        for alg in INTERPOLATION_CAPABILITIES
     ]
+    discovered_super_resolution = onnx_models.get("super_resolution", {})
+    super_resolution_capabilities = (
+        *SUPER_RESOLUTION_CAPABILITIES,
+        *project_dynamic_onnx_super_resolution_capabilities(discovered_super_resolution),
+    )
     super_resolution_algorithms_payload = [
         _algorithm_payload(
             alg,
-            onnx_models=onnx_models.get("super_resolution", {}).get(alg["name"], []),
-            onnx_model_details=onnx_model_details.get("super_resolution", {}).get(alg["name"], []),
+            onnx_models=(
+                discovered_super_resolution.get(alg.name, [])
+                if alg.descriptor.factory_key == "onnx_super_resolution"
+                else []
+            ),
+            onnx_model_details=(
+                onnx_model_details.get("super_resolution", {}).get(alg.name, [])
+                if alg.descriptor.factory_key == "onnx_super_resolution"
+                else []
+            ),
         )
-        for alg in SR_ALGORITHMS
+        for alg in super_resolution_capabilities
     ]
 
     ndjson.emit(
         BackendEnvelopeType.CHECK,
         EnvironmentCheckResult(
             ffmpeg=ffmpeg_capabilities,
-            gpu=GpuInfo(
-                adapters=[
-                    GpuAdapter(
-                        name=adapter["name"],
-                        vendor=GpuVendor(adapter["vendor"]),
-                    )
-                    for adapter in gpu_adapters
-                ]
-            ),
-            tensor_engines=TensorEngines(
-                pytorch=[InferenceEngine(engine) for engine in tensor_engines["pytorch"]],
-                paddle=[InferenceEngine(engine) for engine in tensor_engines["paddle"]],
-                onnx=[InferenceEngine(engine) for engine in tensor_engines["onnx"]],
-            ),
+            gpu=GpuInfo(adapters=gpu_adapters),
+            tensor_engines=tensor_engines,
             interpolationAlgorithms=interpolation_algorithms_payload,
             superResolutionAlgorithms=super_resolution_algorithms_payload,
             runtimeMode=settings.runtime_mode,
