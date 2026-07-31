@@ -6,8 +6,24 @@ import numpy as np
 
 from app.algorithms.paddle.paddlegan_vsr.runner import PaddleGanVsrRunner
 from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
+from app.catalog.stage_descriptors import PADDLEGAN_STAGE_DESCRIPTORS, StageDescriptor
 from app.utils.onnx_models import create_onnx_session, resolve_onnx_model_path
 from app.utils.model_metrics import get_paddlegan_model_detail
+
+
+def _paddlegan_algorithm_metadata(model_id: str, descriptor: StageDescriptor) -> dict[str, Any]:
+    spec = PADDLEGAN_VSR_SPECS[model_id]
+    return {
+        "name": model_id,
+        "family": descriptor.model_kind,
+        "tensorBackends": sorted(descriptor.supported_backends),
+        "models": ["x4"],
+        "scaleFactors": [descriptor.fixed_scale_factor],
+        "fixedScaleFactor": descriptor.fixed_scale_factor,
+        "defaultNumFrames": spec.default_num_frames,
+        "inputFrameMode": "fixed_window" if spec.sequence_mode == "window" else "editable_chunk",
+        "modelDetails": [get_paddlegan_model_detail(model_id)],
+    }
 
 
 SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
@@ -19,26 +35,9 @@ SUPPORTED_ALGORITHMS: list[dict[str, Any]] = [
         "models": [],
         "inputFrameMode": "none",
     },
-    {
-        "name": "realesrgan-plan",
-        "family": "onnx_super_resolution",
-        "tensorBackends": ["onnx"],
-        "models": [],
-        "inputFrameMode": "none",
-    },
     *[
-        {
-            "name": spec.model_id,
-            "family": "paddlegan_vsr",
-            "tensorBackends": ["paddle"],
-            "models": ["x4"],
-            "scaleFactors": [4],
-            "fixedScaleFactor": 4,
-            "defaultNumFrames": spec.default_num_frames,
-            "inputFrameMode": "fixed_window" if spec.sequence_mode == "window" else "editable_chunk",
-            "modelDetails": [get_paddlegan_model_detail(spec.model_id)],
-        }
-        for spec in PADDLEGAN_VSR_SPECS.values()
+        _paddlegan_algorithm_metadata(model_id, descriptor)
+        for model_id, descriptor in PADDLEGAN_STAGE_DESCRIPTORS.items()
     ],
 ]
 
@@ -112,9 +111,14 @@ class PaddleGanVideoSuperResolution:
 
     def __init__(self, **kwargs: Any):
         self._algorithm_name = str(kwargs.get("sr_algorithm") or "")
-        if self._algorithm_name not in PADDLEGAN_VSR_SPECS:
+        if self._algorithm_name not in PADDLEGAN_STAGE_DESCRIPTORS:
             raise ValueError(f"Unknown PaddleGAN VSR algorithm: {self._algorithm_name}")
-        self._num_frames = int(kwargs.get("num_frames") or kwargs.get("numFrames") or 10)
+        raw_num_frames = kwargs.get("num_frames", kwargs.get("numFrames"))
+        if raw_num_frames is None:
+            raise ValueError("PaddleGAN VSR num_frames is required.")
+        self._num_frames = int(raw_num_frames)
+        if self._num_frames < 1:
+            raise ValueError("PaddleGAN VSR num_frames must be at least 1.")
         self._engine = str(kwargs.get("engine") or "cuda")
         self._runner: PaddleGanVsrRunner | None = None
 

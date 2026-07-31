@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.generated.contracts import FfmpegInfo
 from app.cli.commands.check import cmd_check
 from app.cli.commands._process_execution import _run_format_conversion
 from app.cli.commands._process_planning import PreparedRun
@@ -91,7 +92,7 @@ class _FakeCheckFFmpeg:
 
     def discover_capabilities(self, gpu_adapters):
         type(self).discovered_gpu_adapters = gpu_adapters
-        return {"hwaccels": [], "encoderProfiles": [], "decoderProfiles": []}
+        return FfmpegInfo(available=True, hwaccels=[], encoderProfiles=[], decoderProfiles=[])
 
 
 def _make_runtime_args(**overrides):
@@ -342,6 +343,26 @@ def test_runtime_config_emits_complete_defaults_for_explicit_wire_contract(monke
 
     assert default_configs.json_section("decode")["hwaccelDevice"] is None
     assert override_configs.json_section("decode")["hwaccelDevice"] is None
+
+
+def test_runtime_config_default_partial_and_full_payloads_are_equivalent(monkeypatch: pytest.MonkeyPatch):
+    default_configs = load_runtime_configs(_make_runtime_args(output_dir="D:/output"))
+    partial_configs = _load_stdin_configs(
+        monkeypatch,
+        {
+            "workflow": {"interpolation": {"multi": 2}},
+            "output": {"outputDir": "D:/output"},
+        },
+        output_dir="D:/output",
+    )
+    full_configs = _load_stdin_configs(
+        monkeypatch,
+        default_configs.json_sections(),
+        output_dir="D:/output",
+    )
+
+    assert partial_configs.json_sections() == default_configs.json_sections()
+    assert full_configs.json_sections() == default_configs.json_sections()
 
 
 def test_stage_plan_uses_input_frames_for_format_conversion():

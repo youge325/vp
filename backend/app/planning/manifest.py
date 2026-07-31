@@ -39,6 +39,20 @@ class ResumeState:
     completed_segments: list[_SegmentRecord]
 
 
+@dataclass(frozen=True, slots=True)
+class ResumeInspection:
+    """Read-only domain projection of the resumable sidecar state."""
+
+    output_path: str
+    final_exists: bool
+    sidecar_exists: bool
+    signature_match: bool
+    completed_chunks: int
+    completed_output_frames: int
+    next_source_frame: int
+    total_output_frames: int
+
+
 _ResumeKind = Literal["fresh", "resume", "conflict_final_exists"]
 
 
@@ -85,7 +99,7 @@ class SegmentManifest:
         signature: str,
         config_snapshot: dict[str, Any] | None = None,
         *,
-        mode: ResumeMode = "auto",
+        mode: ResumeMode = ResumeMode.AUTO,
     ) -> _ResumeDecision:
         """Resolve the sidecar state and return an internal decision.
 
@@ -167,7 +181,7 @@ class SegmentManifest:
         signature: str,
         *,
         total_output_frames: int = 0,
-    ) -> dict[str, Any]:
+    ) -> ResumeInspection:
         """Read-only probe of the sidecar state used by ``inspect-output``."""
         manifest_data = self.repository.load()
         signature_match = bool(manifest_data and manifest_data.signature == signature)
@@ -177,16 +191,16 @@ class SegmentManifest:
         else:
             state = self._empty_state()
 
-        return {
-            "outputPath": str(self.workspace.output_path),
-            "finalExists": self.workspace.output_path.exists(),
-            "sidecarExists": self.workspace.manifest_path.is_file(),
-            "signatureMatch": signature_match,
-            "completedChunks": len(state.completed_segments),
-            "completedOutputFrames": state.completed_output_frames,
-            "nextSourceFrame": state.start_source_frame,
-            "totalOutputFrames": total_output_frames,
-        }
+        return ResumeInspection(
+            output_path=str(self.workspace.output_path),
+            final_exists=self.workspace.output_path.exists(),
+            sidecar_exists=self.workspace.manifest_path.is_file(),
+            signature_match=signature_match,
+            completed_chunks=len(state.completed_segments),
+            completed_output_frames=state.completed_output_frames,
+            next_source_frame=state.start_source_frame,
+            total_output_frames=total_output_frames,
+        )
 
     # ------------------------------------------------------------------ state
     def scan_completed_chunks(self) -> list[_SegmentRecord]:
@@ -258,12 +272,11 @@ class SegmentManifest:
                 entry.unlink()
                 logger.info("Discarded non-contiguous chunk %s", entry.name)
 
-    def _quarantine_sidecar(self) -> Path | None:
+    def _quarantine_sidecar(self) -> None:
         """Move incompatible progress aside without keeping a read fallback."""
         destination = self.workspace.quarantine()
         if destination is not None:
             logger.info("Quarantined incompatible progress at %s", destination)
-        return destination
 
     # ------------------------------------------------------------- internals
     def _prepare_resume_state(self) -> ResumeState:

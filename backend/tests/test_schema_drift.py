@@ -11,7 +11,6 @@ from pydantic import ValidationError
 from app.errors import TaskErrorCode
 from app.generated import contracts as generated
 from app.models import DecodeConfig, OutputConfig, WorkflowConfig
-from app.protocol.payloads import TaskErrorPayload, TaskProgressPayload
 
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "contracts"
 
@@ -51,13 +50,6 @@ def test_config_models_are_generated_or_thin_domain_subclasses() -> None:
     assert WorkflowConfig is generated.WorkflowConfig
     assert issubclass(OutputConfig, generated.OutputConfig)
     assert OutputConfig.model_fields.keys() == generated.OutputConfig.model_fields.keys()
-
-
-def test_ndjson_adapters_reuse_generated_field_sets() -> None:
-    assert issubclass(TaskProgressPayload, generated.TaskProgressPayload)
-    assert TaskProgressPayload.model_fields.keys() == generated.TaskProgressPayload.model_fields.keys()
-    assert issubclass(TaskErrorPayload, generated.BackendTaskErrorPayload)
-    assert TaskErrorPayload.model_fields.keys() == generated.BackendTaskErrorPayload.model_fields.keys()
 
 
 def test_generated_config_rejects_unknown_fields() -> None:
@@ -100,7 +92,7 @@ def test_generated_task_request_rejects_unknown_fields() -> None:
 
 def test_generated_ndjson_payload_rejects_unknown_fields() -> None:
     with pytest.raises(ValidationError, match="unexpected"):
-        TaskProgressPayload.model_validate(
+        generated.TaskProgressPayload.model_validate(
             {
                 "current": 1,
                 "total": 2,

@@ -2,7 +2,7 @@
 
 Bridges the streaming pipeline's progress callbacks to two sinks:
 
-- ``ndjson.progress`` for the structured stdout stream consumed by the
+- the typed ``ndjson.emit`` boundary for the structured stdout stream consumed by the
   Tauri host
 - a human-readable line on stderr prefixed with ``[VP_PROGRESS]`` that
   the desktop log panel renders as an in-place progress bar
@@ -23,9 +23,10 @@ import sys
 import time
 from typing import Any, Protocol
 
+from app.generated.contracts import TaskProgressPayload
+from app.generated.protocol_constants import BackendEnvelopeType, TERMINAL_PROGRESS_PREFIX
 from app.protocol import ndjson
 
-_TERMINAL_PROGRESS_PREFIX = "[VP_PROGRESS]"
 _TERMINAL_PROGRESS_BAR_WIDTH = 24
 
 
@@ -150,7 +151,7 @@ class CliProgressReporter:
         run_text = f" | RUN {_format_eta(time.time() - self._stage_started_at)}" if heartbeat else ""
         if display_current > 0 or is_end:
             _emit_terminal(
-                f"{_TERMINAL_PROGRESS_PREFIX} "
+                f"{TERMINAL_PROGRESS_PREFIX} "
                 f"[{self._stage_index}/{self._stage_total} {self._stage_name}] "
                 f"{_format_progress_bar(display_current, display_total)} "
                 f"{percent:5.1f}% "
@@ -160,14 +161,18 @@ class CliProgressReporter:
                 f"| ETA {_format_eta(eta_seconds)}"
                 f"{run_text}"
             )
-        ndjson.progress(
-            current=display_current,
-            total=display_total,
-            percent=round(percent, 1),
-            stage=self._stage_name,
-            stage_index=self._stage_index,
-            stage_total=self._stage_total,
-            metrics=self._metrics.snapshot() if self._metrics is not None else None,
+        metrics = self._metrics.snapshot() if self._metrics is not None else None
+        ndjson.emit(
+            BackendEnvelopeType.PROGRESS,
+            TaskProgressPayload(
+                current=display_current,
+                total=display_total,
+                percent=round(percent, 1),
+                stage=self._stage_name,
+                stage_index=self._stage_index,
+                stage_total=self._stage_total,
+                metrics=metrics or None,
+            ),
         )
 
     def finish(self) -> None:

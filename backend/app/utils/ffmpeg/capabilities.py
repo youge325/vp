@@ -5,11 +5,13 @@ from __future__ import annotations
 import tempfile
 from typing import Any
 
+from app.generated.contracts import FfmpegInfo
+
 from . import _constants
 from . import capability_probe as _probe
 
 
-def discover_capabilities(ffmpeg_path: str, gpu_adapters: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def discover_capabilities(ffmpeg_path: str, gpu_adapters: list[dict[str, Any]] | None = None) -> FfmpegInfo:
     adapters = gpu_adapters or []
     available_vendors = {adapter.get("vendor") for adapter in adapters}
     encoder_names = set(_probe.list_codec_names(ffmpeg_path, "encoders"))
@@ -68,8 +70,11 @@ def discover_capabilities(ffmpeg_path: str, gpu_adapters: list[dict[str, Any]] |
                     verified_hwaccels.append(device)
             decoder_profiles.append(profile)
 
-    return {
-        "hwaccels": verified_hwaccels,
-        "encoderProfiles": encoder_profiles,
-        "decoderProfiles": decoder_profiles,
-    }
+    return FfmpegInfo.model_validate(
+        {
+            "available": True,
+            "hwaccels": verified_hwaccels,
+            "encoderProfiles": encoder_profiles,
+            "decoderProfiles": decoder_profiles,
+        }
+    )

@@ -19,8 +19,7 @@ HEAD_CUSTOM = "custom"  # Custom Head class imported from the IFNet file
 class RifeModelSpec:
     """Immutable spec for one RIFE checkpoint.
 
-    The 4 mandatory fields are what the loader / IFNet wrapper care about:
-    - ``encode_channel``: feature-pyramid output channel count (0 = no head)
+    The mandatory fields are what the loader / IFNet wrapper care about:
     - ``modulo``: input frame padding stride
     - ``ensemble``: whether to average forward+flip flows
     - ``head_type``: one of HEAD_NONE / HEAD_SEQUENTIAL / HEAD_CUSTOM
@@ -29,7 +28,6 @@ class RifeModelSpec:
     head class is imported from the per-version IFNet module.
     """
 
-    encode_channel: int
     modulo: int
     ensemble: bool
     head_type: str
@@ -42,13 +40,12 @@ _VERSION_GROUPS: list[tuple[list[str], RifeModelSpec]] = [
     # v4.0 ~ v4.6: no Head encoder; 4-block; ensemble enabled
     (
         ["4.0", "4.1", "4.2", "4.3", "4.4", "4.5", "4.6"],
-        RifeModelSpec(0, 32, True, HEAD_NONE),
+        RifeModelSpec(32, True, HEAD_NONE),
     ),
     # v4.7 ~ v4.9: sequential Head (3 → 16 → 4); encode_channel=4
     (
         ["4.7", "4.8", "4.9"],
         RifeModelSpec(
-            4,
             32,
             True,
             HEAD_SEQUENTIAL,
@@ -59,7 +56,6 @@ _VERSION_GROUPS: list[tuple[list[str], RifeModelSpec]] = [
     (
         ["4.10", "4.11", "4.12"],
         RifeModelSpec(
-            8,
             32,
             True,
             HEAD_SEQUENTIAL,
@@ -70,7 +66,6 @@ _VERSION_GROUPS: list[tuple[list[str], RifeModelSpec]] = [
     (
         ["4.12.lite", "4.13.lite"],
         RifeModelSpec(
-            4,
             32,
             True,
             HEAD_SEQUENTIAL,
@@ -80,35 +75,35 @@ _VERSION_GROUPS: list[tuple[list[str], RifeModelSpec]] = [
     # v4.13 ~ v4.20: custom Head; encode_channel=8 except v4.15.lite / v4.16.lite / v4.17.lite
     (
         ["4.13", "4.14", "4.14.lite", "4.15", "4.17", "4.18", "4.19", "4.20"],
-        RifeModelSpec(8, 32, True, HEAD_CUSTOM),
+        RifeModelSpec(32, True, HEAD_CUSTOM),
     ),
     (
         ["4.15.lite", "4.16.lite", "4.17.lite"],
-        RifeModelSpec(4, 32, True, HEAD_CUSTOM),
+        RifeModelSpec(32, True, HEAD_CUSTOM),
     ),
     # v4.21 ~ v4.24: custom Head; feat 传播,无 ensemble
     (
         ["4.21", "4.22", "4.23", "4.24"],
-        RifeModelSpec(8, 32, False, HEAD_CUSTOM),
+        RifeModelSpec(32, False, HEAD_CUSTOM),
     ),
     (
         ["4.22.lite"],
-        RifeModelSpec(4, 32, False, HEAD_CUSTOM),
+        RifeModelSpec(32, False, HEAD_CUSTOM),
     ),
     # v4.25 / v4.26 / v4.25.heavy: 5-block, modulo=64; no ensemble; encode_channel=4
     (
         ["4.25", "4.26", "4.25.heavy"],
-        RifeModelSpec(4, 64, False, HEAD_CUSTOM),
+        RifeModelSpec(64, False, HEAD_CUSTOM),
     ),
     # v4.25.lite: 5-block, modulo=128
     (
         ["4.25.lite"],
-        RifeModelSpec(4, 128, False, HEAD_CUSTOM),
+        RifeModelSpec(128, False, HEAD_CUSTOM),
     ),
     # v4.26.heavy: encode_channel=16
     (
         ["4.26.heavy"],
-        RifeModelSpec(16, 64, False, HEAD_CUSTOM),
+        RifeModelSpec(64, False, HEAD_CUSTOM),
     ),
 ]
 

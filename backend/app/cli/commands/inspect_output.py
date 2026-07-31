@@ -14,10 +14,18 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from app.adapters.model_availability import LocalModelAvailability
 from app.cli.commands._guards import ensure_input_and_ffmpeg
 from app.cli.commands._pipeline_preparation import prepare_pipeline_preflight
 from app.cli.commands._process_validation import load_runtime_configs
-from app.planning import SegmentManifest
+from app.config import settings
+from app.generated.contracts import (
+    ResumeInspectionEventType,
+    ResumeInspectionResult,
+    ResumePipelineKind,
+)
+from app.generated.protocol_constants import BackendEnvelopeType
+from app.planning import ResumeInspection, SegmentManifest
 from app.protocol import ndjson
 from app.utils.file_utils import prepare_default_output_path
 
@@ -40,30 +48,44 @@ def cmd_inspect_output(args: argparse.Namespace) -> None:
         input_path=input_path,
         output_path=output_path,
         configs=configs,
+        model_availability=LocalModelAvailability(settings.RIFE_MODEL_DIR),
     )
     processing_steps = pipeline.processing_steps
     preflight = pipeline.preflight
 
     if processing_steps:
         manifest = SegmentManifest(output_path)
-        info = manifest.inspect(
+        inspection = manifest.inspect(
             preflight.signature,
             total_output_frames=preflight.stage_plan.total_encoded_frames,
         )
     else:
         # Format conversion path has no sidecar; only the final-file check matters.
         resolved_output = Path(output_path).expanduser().resolve()
-        info = {
-            "outputPath": str(resolved_output),
-            "finalExists": resolved_output.exists(),
-            "sidecarExists": False,
-            "signatureMatch": False,
-            "completedChunks": 0,
-            "completedOutputFrames": 0,
-            "nextSourceFrame": 0,
-            "totalOutputFrames": preflight.stage_plan.total_encoded_frames,
-        }
+        inspection = ResumeInspection(
+            output_path=str(resolved_output),
+            final_exists=resolved_output.exists(),
+            sidecar_exists=False,
+            signature_match=False,
+            completed_chunks=0,
+            completed_output_frames=0,
+            next_source_frame=0,
+            total_output_frames=preflight.stage_plan.total_encoded_frames,
+        )
 
-    info["input_path"] = input_path
-    info["pipeline_kind"] = "streaming" if processing_steps else "format_conversion"
-    ndjson.resume_inspection(**info)
+    ndjson.emit(
+        BackendEnvelopeType.RESUME_INSPECTION,
+        ResumeInspectionResult(
+            type=ResumeInspectionEventType.RESUME_INSPECTION,
+            pipeline_kind=(ResumePipelineKind.STREAMING if processing_steps else ResumePipelineKind.FORMAT_CONVERSION),
+            input_path=input_path,
+            output_path=inspection.output_path,
+            final_exists=inspection.final_exists,
+            sidecar_exists=inspection.sidecar_exists,
+            signature_match=inspection.signature_match,
+            completed_chunks=inspection.completed_chunks,
+            completed_output_frames=inspection.completed_output_frames,
+            next_source_frame=inspection.next_source_frame,
+            total_output_frames=inspection.total_output_frames,
+        ),
+    )

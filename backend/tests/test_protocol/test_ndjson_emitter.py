@@ -8,6 +8,8 @@ import threading
 import time
 from typing import Any
 
+from app.generated.contracts import VideoInfo
+from app.generated.protocol_constants import BackendEnvelopeType
 from app.protocol import _NdjsonEmitter
 
 
@@ -41,7 +43,10 @@ def test_concurrent_emits_are_complete_non_overlapping_lines(monkeypatch: Any) -
 
     def emit(index: int) -> None:
         start.wait()
-        emitter.info(worker=index)
+        emitter.emit(
+            BackendEnvelopeType.INFO,
+            VideoInfo(fps=24.0, width=index, height=1080, videoCodec=f"h264-{index}"),
+        )
 
     workers = [threading.Thread(target=emit, args=(index,)) for index in range(worker_count)]
     for worker in workers:
@@ -54,4 +59,4 @@ def test_concurrent_emits_are_complete_non_overlapping_lines(monkeypatch: Any) -
     lines = "".join(stream.fragments).splitlines()
     payloads = [json.loads(line) for line in lines]
     assert len(payloads) == worker_count
-    assert {payload["worker"] for payload in payloads} == set(range(worker_count))
+    assert {payload["width"] for payload in payloads} == set(range(worker_count))

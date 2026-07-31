@@ -11,30 +11,21 @@ from __future__ import annotations
 import json
 import sys
 import threading
-from enum import Enum
 from typing import Any
 
-from app.protocol.payloads import (
-    ResumeStatusPayload,
-    TaskCompletedPayload,
-    TaskErrorPayload,
-    TaskProgressPayload,
+from pydantic import BaseModel
+
+from app.generated.protocol_constants import (
+    BACKEND_ENVELOPE_OPTIONAL_FIELDS,
+    BACKEND_ENVELOPE_PAYLOAD_TYPES,
+    BACKEND_ENVELOPE_PRESERVES_DISCRIMINATOR,
+    BackendEnvelopeType,
 )
 
 
 # Stream variants are constrained by ``contracts/ndjson.schema.json``.
 # One-shot check/info/inspection envelopes are decoded only by their typed
 # command adapters and therefore are not task-stream variants.
-class NdjsonEventType(str, Enum):
-    PROGRESS = "progress"
-    COMPLETED = "completed"
-    ERROR = "error"
-    RESUME_STATUS = "resume_status"
-    RESUME_INSPECTION = "resume_inspection"
-    INFO = "info"
-    CHECK = "check"
-
-
 class _NdjsonEmitter:
     """Serialize complete NDJSON lines onto stdout.
 
@@ -45,83 +36,29 @@ class _NdjsonEmitter:
     def __init__(self) -> None:
         self._lock = threading.Lock()
 
-    def _emit(self, event_type: NdjsonEventType, data: dict[str, Any]) -> None:
+    def _write(self, envelope: dict[str, Any]) -> None:
         with self._lock:
-            envelope = {"type": event_type.value, **data}
             sys.stdout.write(json.dumps(envelope, ensure_ascii=False) + "\n")
             sys.stdout.flush()
 
-    # --- Convenience helpers ---
+    def emit(self, event_type: BackendEnvelopeType, payload: BaseModel) -> None:
+        expected_type = BACKEND_ENVELOPE_PAYLOAD_TYPES[event_type]
+        if type(payload) is not expected_type:
+            raise TypeError(f"{event_type.value} requires {expected_type.__name__}, got {type(payload).__name__}")
 
-    def progress(
-        self,
-        current: int,
-        total: int,
-        percent: float,
-        stage: str,
-        stage_index: int,
-        stage_total: int,
-        metrics: dict[str, Any] | None = None,
-    ) -> None:
-        payload = TaskProgressPayload(
-            current=current,
-            total=total,
-            percent=percent,
-            stage=stage,
-            stage_index=stage_index,
-            stage_total=stage_total,
-            # Empty snapshots keep the field absent on the wire.
-            metrics=metrics if metrics else None,
-        )
-        self._emit(NdjsonEventType.PROGRESS, payload.to_wire())
+        data = payload.model_dump(by_alias=True, mode="json")
+        for field in BACKEND_ENVELOPE_OPTIONAL_FIELDS[event_type]:
+            if data.get(field) is None:
+                data.pop(field, None)
 
-    def completed(
-        self,
-        output_path: str,
-        processed_frames: int,
-        time_seconds: float,
-    ) -> None:
-        payload = TaskCompletedPayload(
-            output_path=output_path,
-            processed_frames=processed_frames,
-            time_seconds=time_seconds,
-        )
-        self._emit(NdjsonEventType.COMPLETED, payload.to_wire())
+        if event_type in BACKEND_ENVELOPE_PRESERVES_DISCRIMINATOR:
+            discriminator = data.pop("type", None)
+            if discriminator != event_type.value:
+                raise ValueError(f"{event_type.value} payload discriminator is {discriminator!r}")
+        elif "type" in data:
+            raise ValueError(f"{event_type.value} payload must not define a discriminator")
 
-    def error(
-        self,
-        code: str,
-        message: str,
-        details: dict[str, Any] | None = None,
-    ) -> None:
-        payload = TaskErrorPayload(code=code, message=message, details=details or {})
-        self._emit(NdjsonEventType.ERROR, payload.to_wire())
-
-    def resume_status(
-        self,
-        resumed: bool,
-        completed_chunks: int,
-        completed_output_frames: int,
-        start_source_frame: int,
-        total_output_frames: int,
-    ) -> None:
-        payload = ResumeStatusPayload(
-            resumed=resumed,
-            completed_chunks=completed_chunks,
-            completed_output_frames=completed_output_frames,
-            start_source_frame=start_source_frame,
-            total_output_frames=total_output_frames,
-        )
-        self._emit(NdjsonEventType.RESUME_STATUS, payload.to_wire())
-
-    def resume_inspection(self, **kwargs: Any) -> None:
-        self._emit(NdjsonEventType.RESUME_INSPECTION, kwargs)
-
-    def info(self, **kwargs: Any) -> None:
-        self._emit(NdjsonEventType.INFO, kwargs)
-
-    def check(self, **kwargs: Any) -> None:
-        self._emit(NdjsonEventType.CHECK, kwargs)
+        self._write({"type": event_type.value, **data})
 
 
 # Module-level convenience alias

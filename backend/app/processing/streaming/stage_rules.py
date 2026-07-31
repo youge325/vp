@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
 from app.planning import ProcessingStep, StagePlan
 
 
@@ -58,22 +57,13 @@ def resolve_stage_plan_output_dimensions(
 
 
 def stage_requires_file_pipeline(step: ProcessingStep) -> bool:
-    if step.algorithm_type == "frame_interpolation":
-        return True
-    return step.algorithm_type == "super_resolution" and _is_paddlegan_vsr_step(step)
+    return step.descriptor.requires_file_pipeline
 
 
 def _super_resolution_changes_dimensions(step: ProcessingStep) -> bool:
     if step.algorithm_type != "super_resolution":
         return False
-    if step.algorithm_kwargs.get("onnx_model"):
-        return True
-    return _is_paddlegan_vsr_step(step)
-
-
-def _is_paddlegan_vsr_step(step: ProcessingStep) -> bool:
-    sr_algorithm = str(step.algorithm_kwargs.get("sr_algorithm") or "")
-    return sr_algorithm in PADDLEGAN_VSR_SPECS
+    return step.descriptor.changes_dimensions
 
 
 __all__ = [

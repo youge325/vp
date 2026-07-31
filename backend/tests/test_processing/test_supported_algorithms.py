@@ -68,16 +68,16 @@ def test_builtin_models_expose_metric_details():
     """内置模型必须随算法元数据暴露参数量 / 计算量 / 显存估算基线。"""
     rife = next(entry for entry in INTERPOLATION_ALGORITHMS if entry["name"] == "rife")
     assert len(rife["modelDetails"]) == len(rife["models"])
-    assert {detail["name"] for detail in rife["modelDetails"]} == set(rife["models"])
-    assert all(detail["metrics"]["parameterCount"] for detail in rife["modelDetails"])
-    assert all(detail["metrics"]["engineMetrics"]["tensorrt"] for detail in rife["modelDetails"])
+    assert {detail.name for detail in rife["modelDetails"]} == set(rife["models"])
+    assert all(detail.metrics.parameter_count for detail in rife["modelDetails"])
+    assert all(detail.metrics.engine_metrics["tensorrt"] for detail in rife["modelDetails"])
 
     paddlegan_entries = [entry for entry in SR_ALGORITHMS if entry["tensorBackends"] == ["paddle"]]
     assert paddlegan_entries
     for entry in paddlegan_entries:
-        assert entry["modelDetails"][0]["name"] == "x4"
-        assert entry["modelDetails"][0]["metrics"]["parameterCount"]
-        assert entry["modelDetails"][0]["metrics"]["engineMetrics"]["tensorrt"]
+        assert entry["modelDetails"][0].name == "x4"
+        assert entry["modelDetails"][0].metrics.parameter_count
+        assert entry["modelDetails"][0].metrics.engine_metrics["tensorrt"]
         assert entry["inputFrameMode"] in {"editable_chunk", "fixed_window"}
 
 
@@ -112,10 +112,10 @@ def test_paddlegan_window_models_expose_fixed_runtime_frame_count():
     edvr = next(entry for entry in SR_ALGORITHMS if entry["name"] == "edvr")
     assert edvr["inputFrameMode"] == "fixed_window"
     assert edvr["defaultNumFrames"] == 5
-    assert edvr["modelDetails"][0]["metrics"]["runtimeFrameCount"] == 5
+    assert edvr["modelDetails"][0].metrics.runtime_frame_count == 5
 
     recurrent = [entry for entry in SR_ALGORITHMS if entry["tensorBackends"] == ["paddle"] and entry["name"] != "edvr"]
     assert recurrent
     for entry in recurrent:
         assert entry["inputFrameMode"] == "editable_chunk"
-        assert entry["modelDetails"][0]["metrics"]["runtimeFrameCount"] is None
+        assert entry["modelDetails"][0].metrics.runtime_frame_count is None

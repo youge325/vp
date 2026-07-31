@@ -10,7 +10,9 @@ from app.planning import (
     ProcessingStep,
     StageProjection,
     resolve_video_info,
+    validate_workflow_requirements,
 )
+from app.planning.model_availability import ModelAvailabilityPort
 from app.ports.media import MediaProbePort
 from app.processing.streaming.pipeline_context import StreamingPipelinePreflight
 from app.processing.streaming.pipeline_preflight import build_streaming_pipeline_preflight
@@ -43,6 +45,7 @@ def prepare_pipeline_preflight(
     input_path: str,
     output_path: str,
     configs: RuntimeConfigs,
+    model_availability: ModelAvailabilityPort,
 ) -> PreparedRun:
     """Resolve workflow projection and construct the shared immutable preflight."""
     video_info = resolve_video_info(ffmpeg, input_path)
@@ -51,6 +54,7 @@ def prepare_pipeline_preflight(
         source_fps=video_info.source_fps,
     )
     resolved_configs = configs.with_workflow(WorkflowConfig.model_validate(workflow_config))
+    validate_workflow_requirements(projection.steps, model_availability)
     sections = resolved_configs.json_sections()
     preflight = build_streaming_pipeline_preflight(
         video_info=video_info,

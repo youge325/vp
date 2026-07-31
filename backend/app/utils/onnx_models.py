@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Literal
 
+from app.generated.contracts import ModelVariantInfo
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -39,7 +40,7 @@ def scan_onnx_models(model_root: str | Path | None = None) -> dict[str, dict[str
     return {kind: _scan_kind_dir(_get_onnx_model_dir(kind, model_root)) for kind in _ONNX_MODEL_SUBDIRS}
 
 
-def scan_onnx_model_details(model_root: str | Path | None = None) -> dict[str, dict[str, list[dict[str, Any]]]]:
+def scan_onnx_model_details(model_root: str | Path | None = None) -> dict[str, dict[str, list[ModelVariantInfo]]]:
     """Analyze ONNX model files grouped by kind and algorithm subdir."""
     return {kind: _scan_kind_details(_get_onnx_model_dir(kind, model_root)) for kind in _ONNX_MODEL_SUBDIRS}
 
@@ -121,14 +122,14 @@ def _scan_kind_dir(kind_dir: Path) -> dict[str, list[str]]:
     return result
 
 
-def _scan_kind_details(kind_dir: Path) -> dict[str, list[dict[str, Any]]]:
+def _scan_kind_details(kind_dir: Path) -> dict[str, list[ModelVariantInfo]]:
     """Scan and analyze a kind directory without changing ``scan_onnx_models``."""
     if not kind_dir.is_dir():
         return {}
 
     from app.utils.model_metrics import analyze_onnx_model
 
-    result: dict[str, list[dict[str, Any]]] = {}
+    result: dict[str, list[ModelVariantInfo]] = {}
     for alg_dir in sorted(kind_dir.iterdir(), key=lambda p: p.name.casefold()):
         if not alg_dir.is_dir() or not _is_safe_algorithm_name(alg_dir.name):
             continue

@@ -351,13 +351,13 @@ def test_inspect_reports_sidecar_state(tmp_path):
     _make_chunk(manifest.workspace.sidecar_dir, index=1, start=0, end=999, next_src=500)
 
     info = manifest.inspect("sig-9", total_output_frames=2000)
-    assert info["finalExists"] is False
-    assert info["sidecarExists"] is True
-    assert info["signatureMatch"] is True
-    assert info["completedChunks"] == 1
-    assert info["completedOutputFrames"] == 1000
-    assert info["nextSourceFrame"] == 500
-    assert info["totalOutputFrames"] == 2000
+    assert info.final_exists is False
+    assert info.sidecar_exists is True
+    assert info.signature_match is True
+    assert info.completed_chunks == 1
+    assert info.completed_output_frames == 1000
+    assert info.next_source_frame == 500
+    assert info.total_output_frames == 2000
 
 
 def test_inspect_does_not_mutate_noncontiguous_or_in_flight_chunks(tmp_path):
@@ -372,8 +372,8 @@ def test_inspect_does_not_mutate_noncontiguous_or_in_flight_chunks(tmp_path):
     info = manifest.inspect("sig-read-only", total_output_frames=300)
 
     after = {path.name: path.read_bytes() for path in manifest.workspace.sidecar_dir.iterdir()}
-    assert info["completedChunks"] == 1
-    assert info["completedOutputFrames"] == 100
+    assert info.completed_chunks == 1
+    assert info.completed_output_frames == 100
     assert after == before
     assert stale.is_file()
     assert sentinel.is_file()
@@ -382,9 +382,9 @@ def test_inspect_does_not_mutate_noncontiguous_or_in_flight_chunks(tmp_path):
 def test_inspect_handles_missing_sidecar(tmp_path):
     manifest = SegmentManifest(str(tmp_path / "out.mp4"))
     info = manifest.inspect("sig-10", total_output_frames=42)
-    assert info["sidecarExists"] is False
-    assert info["signatureMatch"] is False
-    assert info["completedChunks"] == 0
+    assert info.sidecar_exists is False
+    assert info.signature_match is False
+    assert info.completed_chunks == 0
 
 
 def test_resume_conflict_error_serializes_details():

@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from app.errors import ResumeConflictError
+from app.generated.contracts import ResumeStatusPayload
+from app.generated.protocol_constants import BackendEnvelopeType
 from app.planning import ResumeMode, ResumeState, SegmentManifest
 from app.processing.streaming.encoder_finalization import finalize_segmented_output
 from app.processing.streaming.pipeline_context import StreamingPipelineContext
@@ -36,12 +38,15 @@ def prepare_streaming_manifest(
 def emit_resume_status_event(*, resume_state: ResumeState, total_output_frames: int) -> None:
     """Emit a structured resume_status JSON line consumed by the Tauri host."""
     try:
-        ndjson.resume_status(
-            resumed=resume_state.completed_output_frames > 0,
-            completed_chunks=len(resume_state.completed_segments),
-            completed_output_frames=resume_state.completed_output_frames,
-            start_source_frame=resume_state.start_source_frame,
-            total_output_frames=total_output_frames,
+        ndjson.emit(
+            BackendEnvelopeType.RESUME_STATUS,
+            ResumeStatusPayload(
+                resumed=resume_state.completed_output_frames > 0,
+                completed_chunks=len(resume_state.completed_segments),
+                completed_output_frames=resume_state.completed_output_frames,
+                start_source_frame=resume_state.start_source_frame,
+                total_output_frames=total_output_frames,
+            ),
         )
     except Exception:  # pragma: no cover - never let telemetry break the pipeline
         logger.exception("Failed to emit resume_status event")

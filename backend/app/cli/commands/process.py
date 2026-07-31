@@ -3,7 +3,7 @@
 本文件保留为薄入口,串联 3 个子阶段:
 1. ``_process_validation`` 加载并校验类型化 runtime config
 2. ``_process_planning`` 生成不可变 ``PreparedRun`` 与运行期 ``RunObservers``
-3. ``_process_execution`` 跑 streaming pipeline 或 fast-path,emit ``ndjson.completed``
+3. ``_process_execution`` 跑 streaming pipeline 或 fast-path，并通过 typed ``ndjson.emit`` 发出结果
 
 顶层 try/except 把 KeyboardInterrupt / ResumeConflictError / 其它 Exception
 归一为 ``ProcessError``,后续由 ``__main__.py`` 转 NDJSON ``error`` 帧。

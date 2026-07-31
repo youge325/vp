@@ -1,7 +1,7 @@
 """Pipeline execution and terminal NDJSON for ``cmd_process``.
 
 收静态运行计划和观察者后,选择 streaming pipeline 或
-fast-path FFmpeg transcode 跑流水线,然后把结果格式化成 ``ndjson.completed``。
+fast-path FFmpeg transcode 跑流水线，然后把结果格式化成 typed ``ndjson.emit``。
 """
 
 from __future__ import annotations
@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from app.errors import ResumeConflictError
+from app.generated.contracts import TaskCompletedPayload
+from app.generated.protocol_constants import BackendEnvelopeType
 from app.planning.resume_policy import decide_output_action
 from app.ports.media import MediaRuntimePort
 from app.processing.streaming import process_video_streaming
@@ -152,15 +154,18 @@ def finalize_and_emit(
     result: dict[str, Any],
     elapsed: float,
 ) -> None:
-    """Finish the progress bar and emit ``ndjson.completed``."""
+    """Finish the progress bar and emit a typed completed envelope."""
     processed_frames = _resolve_processed_frame_count(
         ffmpeg,
         str(result.get("output_path", prepared.output_path)),
         int(result.get("processed_frames", prepared.expected_output_frames) or prepared.expected_output_frames),
     )
     observers.progress_reporter.finish()
-    ndjson.completed(
-        output_path=result.get("output_path", prepared.output_path),
-        processed_frames=processed_frames,
-        time_seconds=elapsed,
+    ndjson.emit(
+        BackendEnvelopeType.COMPLETED,
+        TaskCompletedPayload(
+            output_path=result.get("output_path", prepared.output_path),
+            processed_frames=processed_frames,
+            time_seconds=elapsed,
+        ),
     )

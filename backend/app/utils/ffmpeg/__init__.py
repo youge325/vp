@@ -6,6 +6,8 @@ import os
 import shutil
 from typing import Any, Callable
 
+from app.generated.contracts import FfmpegInfo
+
 from app.config import settings
 from app.utils.logger import get_logger
 
@@ -179,7 +181,7 @@ class FFmpegWrapper:
     #  Capability discovery
     # ------------------------------------------------------------------ #
 
-    def discover_capabilities(self, gpu_adapters: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    def discover_capabilities(self, gpu_adapters: list[dict[str, Any]] | None = None) -> FfmpegInfo:
         return _capabilities.discover_capabilities(self.ffmpeg_path, gpu_adapters)
 
     # ------------------------------------------------------------------ #

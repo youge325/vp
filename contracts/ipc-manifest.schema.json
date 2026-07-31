@@ -4,10 +4,42 @@
   "title": "VP Workbench IPC manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "commands", "events"],
+  "required": [
+    "schemaVersion",
+    "protocolConstants",
+    "backendTaskStream",
+    "backendOneShotCommands",
+    "commands",
+    "events"
+  ],
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
+    "protocolConstants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["terminalProgressPrefix"],
+      "properties": {
+        "terminalProgressPrefix": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "backendTaskStream": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/backendEnvelope"
+      }
+    },
+    "backendOneShotCommands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/backendOneShotEnvelope"
+      }
+    },
     "commands": {
       "type": "array",
       "minItems": 1,
@@ -35,6 +67,54 @@
         "properties": {
           "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
           "payload": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "backendEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["envelope", "payload", "schemaRef"],
+      "properties": {
+        "envelope": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "payload": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$"
+        },
+        "schemaRef": {
+          "type": "string",
+          "pattern": "^\\./[a-z0-9-]+\\.schema\\.json(?:#/.*)?$"
+        }
+      }
+    },
+    "backendOneShotEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["envelope", "payload", "schemaRef", "ipcCommand", "subcommand"],
+      "properties": {
+        "envelope": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "payload": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$"
+        },
+        "schemaRef": {
+          "type": "string",
+          "pattern": "^\\./[a-z0-9-]+\\.schema\\.json(?:#/.*)?$"
+        },
+        "ipcCommand": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "subcommand": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
         }
       }
     }

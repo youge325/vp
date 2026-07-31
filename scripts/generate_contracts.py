@@ -41,6 +41,40 @@ def _resolve_json_pointer(document: Any, pointer: str, *, ref: str) -> Any:
     return current
 
 
+def _resolve_manifest_schema_ref(schema_ref: str) -> tuple[str, str, dict[str, Any], dict[str, Any]]:
+    location, separator, fragment = schema_ref.partition("#")
+    if not location.startswith("./"):
+        raise RuntimeError(f"backend envelope schemaRef must be local: {schema_ref}")
+    schema_name = location[2:]
+    source_path = CONTRACTS / schema_name
+    if not source_path.is_file():
+        raise RuntimeError(f"backend envelope schemaRef does not exist: {schema_ref}")
+    source = _load(source_path)
+    pointer = fragment if separator else ""
+    target = _resolve_json_pointer(source, pointer, ref=schema_ref)
+    if not isinstance(target, dict):
+        raise RuntimeError(f"backend envelope schemaRef must resolve to an object schema: {schema_ref}")
+    return schema_name, pointer, source, target
+
+
+def _schema_string_values(property_schema: dict[str, Any], source: dict[str, Any], *, ref: str) -> set[str]:
+    resolved = property_schema
+    local_ref = property_schema.get("$ref")
+    if isinstance(local_ref, str):
+        location, separator, fragment = local_ref.partition("#")
+        if location:
+            return set()
+        resolved_value = _resolve_json_pointer(source, fragment if separator else "", ref=f"{ref}: {local_ref}")
+        if not isinstance(resolved_value, dict):
+            return set()
+        resolved = resolved_value
+    const = resolved.get("const")
+    if isinstance(const, str):
+        return {const}
+    enum = resolved.get("enum")
+    return {value for value in enum or [] if isinstance(value, str)}
+
+
 def _validate_contract_references(
     value: Any,
     *,
@@ -129,6 +163,42 @@ def validate_contracts() -> dict[str, Any]:
         raise RuntimeError("IPC manifest contains duplicate command names")
     if len(events) != len(set(events)):
         raise RuntimeError("IPC manifest contains duplicate event names")
+
+    backend_entries = [*manifest["backendTaskStream"], *manifest["backendOneShotCommands"]]
+    envelope_names = [entry["envelope"] for entry in backend_entries]
+    if len(envelope_names) != len(set(envelope_names)):
+        raise RuntimeError("IPC manifest contains duplicate backend envelope names")
+    one_shot_subcommands = [entry["subcommand"] for entry in manifest["backendOneShotCommands"]]
+    if len(one_shot_subcommands) != len(set(one_shot_subcommands)):
+        raise RuntimeError("IPC manifest contains duplicate backend one-shot subcommands")
+    one_shot_commands = [entry["ipcCommand"] for entry in manifest["backendOneShotCommands"]]
+    if len(one_shot_commands) != len(set(one_shot_commands)):
+        raise RuntimeError("IPC manifest contains duplicate backend one-shot IPC commands")
+    unknown_commands = sorted(set(one_shot_commands) - set(names))
+    if unknown_commands:
+        raise RuntimeError(f"backend one-shot entries reference unknown IPC commands: {unknown_commands}")
+
+    boundary_definitions = json.loads(_render_boundary_schema())["$defs"]
+    for entry in backend_entries:
+        schema_name, pointer, source, payload = _resolve_manifest_schema_ref(entry["schemaRef"])
+        if payload.get("type") != "object" or payload.get("additionalProperties") is not False:
+            raise RuntimeError(f"backend envelope payload must be a strict object: {entry['schemaRef']}")
+        expected_name = pointer.rsplit("/", 1)[-1] if pointer else source.get("title")
+        if expected_name != entry["payload"]:
+            raise RuntimeError(
+                f"backend envelope payload name mismatch for {entry['schemaRef']}: "
+                f"manifest={entry['payload']}, schema={expected_name}"
+            )
+        if entry["payload"] not in boundary_definitions:
+            raise RuntimeError(f"backend envelope payload is missing from boundary schema: {entry['payload']}")
+        type_schema = payload.get("properties", {}).get("type")
+        if isinstance(type_schema, dict):
+            values = _schema_string_values(type_schema, source, ref=f"{schema_name}{pointer}")
+            if values != {entry["envelope"]}:
+                raise RuntimeError(
+                    f"backend envelope discriminator mismatch for {entry['schemaRef']}: "
+                    f"manifest={entry['envelope']}, schema={sorted(values)}"
+                )
 
     backend_codes = set(_load(CONTRACTS / "backend-error-codes.schema.json")["enum"])
     shell_codes = set(_load(CONTRACTS / "shell-error-codes.schema.json")["enum"])
@@ -396,21 +466,18 @@ def _render_boundary_schema() -> str:
     return json.dumps(aggregate, ensure_ascii=False, indent=2) + "\n"
 
 
-def _render_ndjson_schema() -> str:
-    variants = (
-        ("task-progress.schema.json", "progress"),
-        ("task-completed.schema.json", "completed"),
-        ("backend-task-error.schema.json", "error"),
-        ("resume-status.schema.json", "resume_status"),
-    )
+def _render_ndjson_schema(manifest: dict[str, Any]) -> str:
+    variants = [*manifest["backendTaskStream"], *manifest["backendOneShotCommands"]]
     one_of: list[dict[str, Any]] = []
-    for schema_name, event_type in variants:
-        payload = _load(CONTRACTS / schema_name)
+    for variant in variants:
+        schema_name, pointer, _source, payload = _resolve_manifest_schema_ref(variant["schemaRef"])
+        event_type = variant["envelope"]
         properties = {
             property_name: {
-                "$ref": f"./{schema_name}#/properties/{property_name}",
+                "$ref": f"./{schema_name}#{pointer}/properties/{property_name}",
             }
             for property_name in payload["properties"]
+            if property_name != "type"
         }
         properties["type"] = {"const": event_type}
         one_of.append(
@@ -418,7 +485,7 @@ def _render_ndjson_schema() -> str:
                 "type": "object",
                 "additionalProperties": False,
                 "properties": properties,
-                "required": [*payload.get("required", []), "type"],
+                "required": [*(name for name in payload.get("required", []) if name != "type"), "type"],
             }
         )
     schema = {
@@ -478,12 +545,77 @@ def _render_rust_manifest(manifest: dict[str, Any]) -> str:
     )
 
 
+def _render_rust_oneshot_contracts(manifest: dict[str, Any]) -> str:
+    one_shot_arms: list[str] = []
+    for entry in manifest["backendOneShotCommands"]:
+        _schema_name, _pointer, _source, payload = _resolve_manifest_schema_ref(entry["schemaRef"])
+        preserve = "type" in payload.get("properties", {})
+        rust_bool = "true" if preserve else "false"
+        one_shot_arms.extend(
+            (
+                f'        "{entry["ipcCommand"]}" => Some(BackendOneShotContract {{',
+                f'            subcommand: "{entry["subcommand"]}",',
+                f'            envelope: "{entry["envelope"]}",',
+                f"            preserve_discriminator: {rust_bool},",
+                "        }),",
+            )
+        )
+    lines = [
+        "// Generated from contracts/ipc-manifest.json. Do not edit.",
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq)]",
+        "pub(crate) struct BackendOneShotContract {",
+        "    pub(crate) subcommand: &'static str,",
+        "    pub(crate) envelope: &'static str,",
+        "    pub(crate) preserve_discriminator: bool,",
+        "}",
+        "",
+        "pub(crate) fn backend_oneshot_contract(ipc_command: &str) -> Option<BackendOneShotContract> {",
+        "    match ipc_command {",
+        *one_shot_arms,
+        "        _ => None,",
+        "    }",
+        "}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _render_rust_task_envelopes(manifest: dict[str, Any]) -> str:
+    entries = manifest["backendTaskStream"]
+    payloads = sorted({entry["payload"] for entry in entries})
+    lines = [
+        "// Generated from contracts/ipc-manifest.json. Do not edit.",
+        "",
+        "use serde::Deserialize;",
+        "",
+        "use crate::models::{",
+        f"    {', '.join(payloads)},",
+        "};",
+        "",
+        "#[derive(Debug, Clone, Deserialize)]",
+        '#[serde(tag = "type")]',
+        "pub(crate) enum BackendTaskEnvelope {",
+        *(
+            line
+            for entry in entries
+            for line in (
+                f'    #[serde(rename = "{entry["envelope"]}")]',
+                f"    {_pascal_case(entry['envelope'])}({entry['payload']}),",
+            )
+        ),
+        "}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _pascal_case(value: str) -> str:
     return "".join(part[:1].upper() + part[1:] for part in value.replace("_", "-").split("-"))
 
 
 def _render_typescript_events(manifest: dict[str, Any]) -> str:
     events = manifest["events"]
+    constants = manifest["protocolConstants"]
     payloads = sorted({event["payload"] for event in events})
     lines = [
         "/* Generated from contracts/ipc-manifest.json. Do not edit. */",
@@ -502,7 +634,60 @@ def _render_typescript_events(manifest: dict[str, Any]) -> str:
         *(f"  '{event['name']}': {event['payload']}" for event in events),
         "}",
         "",
-        "export const TERMINAL_PROGRESS_PREFIX = '[VP_PROGRESS]'",
+        f"export const TERMINAL_PROGRESS_PREFIX = {constants['terminalProgressPrefix']!r}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _render_python_protocol_constants(manifest: dict[str, Any]) -> str:
+    prefix = manifest["protocolConstants"]["terminalProgressPrefix"]
+    backend_entries = [*manifest["backendTaskStream"], *manifest["backendOneShotCommands"]]
+    payload_metadata: list[tuple[dict[str, Any], list[str], bool]] = []
+    for entry in backend_entries:
+        _schema_name, _pointer, _source, payload = _resolve_manifest_schema_ref(entry["schemaRef"])
+        required = set(payload.get("required", []))
+        optional_fields = sorted(
+            name for name in payload.get("properties", {}) if name not in required and name != "type"
+        )
+        payload_metadata.append((entry, optional_fields, "type" in payload.get("properties", {})))
+    lines = [
+        '"""Generated from contracts/ipc-manifest.json. Do not edit."""',
+        "",
+        "from enum import StrEnum",
+        "",
+        "from app.generated import contracts as _contracts",
+        "",
+        "",
+        "class BackendEnvelopeType(StrEnum):",
+        *(f"    {entry['envelope'].upper()} = {json.dumps(entry['envelope'])}" for entry in backend_entries),
+        "",
+        "",
+        f"TERMINAL_PROGRESS_PREFIX = {json.dumps(prefix)}",
+        "",
+        "BACKEND_ENVELOPE_PAYLOAD_TYPES = {",
+        *(
+            f"    BackendEnvelopeType.{entry['envelope'].upper()}: _contracts.{entry['payload']},"
+            for entry in backend_entries
+        ),
+        "}",
+        "",
+        "BACKEND_ENVELOPE_OPTIONAL_FIELDS = {",
+        *(
+            f"    BackendEnvelopeType.{entry['envelope'].upper()}: frozenset({json.dumps(optional_fields)}),"
+            for entry, optional_fields, _preserves_discriminator in payload_metadata
+        ),
+        "}",
+        "",
+        "BACKEND_ENVELOPE_PRESERVES_DISCRIMINATOR = frozenset(",
+        "    {",
+        *(
+            f"        BackendEnvelopeType.{entry['envelope'].upper()},"
+            for entry, _optional_fields, preserves_discriminator in payload_metadata
+            if preserves_discriminator
+        ),
+        "    }",
+        ")",
         "",
     ]
     return "\n".join(lines)
@@ -583,7 +768,7 @@ def main() -> int:
                 ROOT / "contracts/boundary.schema.json",
                 boundary_output,
             ),
-            (ROOT / "contracts/ndjson.schema.json", _render_ndjson_schema()),
+            (ROOT / "contracts/ndjson.schema.json", _render_ndjson_schema(manifest)),
             (
                 ROOT / "frontend/src/types/generated/contracts.ts",
                 typescript_output,
@@ -594,8 +779,20 @@ def main() -> int:
                 _render_typescript_events(manifest),
             ),
             (
+                ROOT / "backend/app/generated/protocol_constants.py",
+                _render_python_protocol_constants(manifest),
+            ),
+            (
                 ROOT / "frontend/src-tauri/src/generated/ipc_manifest.rs",
                 _render_rust_manifest(manifest),
+            ),
+            (
+                ROOT / "frontend/src-tauri/src/generated/backend_oneshot.rs",
+                _render_rust_oneshot_contracts(manifest),
+            ),
+            (
+                ROOT / "frontend/src-tauri/src/generated/backend_task_envelope.rs",
+                _render_rust_task_envelopes(manifest),
             ),
             (
                 ROOT / "frontend/src-tauri/src/generated/task_events.rs",

@@ -54,5 +54,4 @@ def test_stage_plan_uses_stage_projection_as_its_step_source() -> None:
 
     assert plan.projection is projection
     assert plan.steps is plan.projection.steps
-    assert plan.processed_output_frames == plan.projection.output_frame_count(5)
     assert plan.projection.output_fps(24.0) == 48.0

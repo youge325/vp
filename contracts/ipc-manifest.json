@@ -1,6 +1,54 @@
 {
   "$schema": "./ipc-manifest.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "protocolConstants": {
+    "terminalProgressPrefix": "[VP_PROGRESS]"
+  },
+  "backendTaskStream": [
+    {
+      "envelope": "progress",
+      "payload": "TaskProgressPayload",
+      "schemaRef": "./task-progress.schema.json"
+    },
+    {
+      "envelope": "completed",
+      "payload": "TaskCompletedPayload",
+      "schemaRef": "./task-completed.schema.json"
+    },
+    {
+      "envelope": "error",
+      "payload": "BackendTaskErrorPayload",
+      "schemaRef": "./backend-task-error.schema.json"
+    },
+    {
+      "envelope": "resume_status",
+      "payload": "ResumeStatusPayload",
+      "schemaRef": "./resume-status.schema.json"
+    }
+  ],
+  "backendOneShotCommands": [
+    {
+      "ipcCommand": "inspect_video",
+      "subcommand": "info",
+      "envelope": "info",
+      "payload": "VideoInfo",
+      "schemaRef": "./video-info.schema.json"
+    },
+    {
+      "ipcCommand": "check_environment",
+      "subcommand": "check",
+      "envelope": "check",
+      "payload": "EnvironmentCheckResult",
+      "schemaRef": "./environment.schema.json#/$defs/EnvironmentCheckResult"
+    },
+    {
+      "ipcCommand": "check_resume_state",
+      "subcommand": "inspect-output",
+      "envelope": "resume_inspection",
+      "payload": "ResumeInspectionResult",
+      "schemaRef": "./resume-inspection.schema.json"
+    }
+  ],
   "commands": [
     { "name": "pick_inputs", "args": {}, "result": "string[]" },
     { "name": "pick_output_directory", "args": {}, "result": "string|null" },

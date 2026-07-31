@@ -4,8 +4,17 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from app.algorithms.paddle.paddlegan_vsr import runner as runner_module
+from app.algorithms.paddle.paddlegan_vsr import sequence_executor as executor_module
+from app.algorithms.paddle.paddlegan_vsr import tensor_codec
+from app.algorithms.paddle.paddlegan_vsr import tensorrt_cache as tensorrt_module
+from app.algorithms.paddle.paddlegan_vsr import trace_observer as trace_module
 from app.algorithms.paddle.paddlegan_vsr.runner import PaddleGanVsrRunner
+from app.algorithms.paddle.paddlegan_vsr.tensorrt_cache import (
+    PaddleGanTensorRtPredictor,
+    PredictorBinding,
+    TensorRtPredictorCache,
+)
+from app.algorithms.paddle.paddlegan_vsr.trace_observer import PaddleGanTraceObserver
 from app.processing.super_resolution import PaddleGanVideoSuperResolution, SUPPORTED_ALGORITHMS
 
 
@@ -28,6 +37,18 @@ def test_supported_super_resolution_algorithms_include_all_paddlegan_vsr_models(
         assert algorithms[name]["tensorBackends"] == ["paddle"]
         assert algorithms[name]["models"] == ["x4"]
         assert algorithms[name]["scaleFactors"] == [4]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"model_id": "ppmsvsr", "num_frames": 0}, "num_frames must be at least 1"),
+        ({"model_id": "ppmsvsr", "num_frames": 5, "engine": "openvino"}, "Unsupported PaddleGAN VSR engine"),
+    ],
+)
+def test_paddlegan_runner_rejects_invalid_runtime_parameters(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        PaddleGanVsrRunner(**kwargs)
 
 
 def test_paddlegan_super_resolution_delegates_to_sequence_runner(monkeypatch):
@@ -70,10 +91,10 @@ def test_paddlegan_recurrent_runner_reports_completed_frames_by_chunk(monkeypatc
     runner = PaddleGanVsrRunner(model_id="ppmsvsr", num_frames=2)
     runner._ensure_paddle = lambda: _NoGradPaddle()
     runner._ensure_model = lambda: lambda tensor: tensor
-    runner._frames_to_tensor = lambda chunk: len(chunk)
+    monkeypatch.setattr(executor_module, "frames_to_tensor", lambda chunk, _paddle: len(chunk))
     monkeypatch.setattr(
-        runner_module,
-        "_sequence_tensor_to_frames",
+        executor_module,
+        "sequence_tensor_to_frames",
         lambda count: [np.zeros((1, 1, 3), dtype=np.uint8) for _ in range(count)],
     )
     progress_calls = []
@@ -92,10 +113,10 @@ def test_paddlegan_window_runner_reports_completed_frames_by_window(monkeypatch)
     runner = PaddleGanVsrRunner(model_id="edvr", num_frames=5)
     runner._ensure_paddle = lambda: _NoGradPaddle()
     runner._ensure_model = lambda: lambda _tensor: "frame"
-    runner._frames_to_tensor = lambda _neighbors: "neighbors"
+    monkeypatch.setattr(executor_module, "frames_to_tensor", lambda _neighbors, _paddle: "neighbors")
     monkeypatch.setattr(
-        runner_module,
-        "_image_tensor_to_frames",
+        executor_module,
+        "image_tensor_to_frames",
         lambda _tensor: [np.zeros((1, 1, 3), dtype=np.uint8)],
     )
     progress_calls = []
@@ -114,8 +135,8 @@ def test_paddlegan_tensor_outputs_share_rgb_uint8_conversion() -> None:
     sequence = np.stack([chw, chw * 0.5], axis=0)[np.newaxis, ...]
     images = np.stack([chw, chw * 0.5], axis=0)
 
-    sequence_frames = runner_module._sequence_tensor_to_frames(sequence)
-    image_frames = runner_module._image_tensor_to_frames(images)
+    sequence_frames = tensor_codec.sequence_tensor_to_frames(sequence)
+    image_frames = tensor_codec.image_tensor_to_frames(images)
 
     assert len(sequence_frames) == 2
     assert len(image_frames) == 2
@@ -128,12 +149,12 @@ def test_paddlegan_tensor_outputs_share_rgb_uint8_conversion() -> None:
     ("converter", "tensor", "message"),
     [
         (
-            runner_module._sequence_tensor_to_frames,
+            tensor_codec.sequence_tensor_to_frames,
             np.zeros((1, 3, 2, 2), dtype=np.float32),
             "PaddleGAN recurrent VSR output must be 5D",
         ),
         (
-            runner_module._image_tensor_to_frames,
+            tensor_codec.image_tensor_to_frames,
             np.zeros((1, 1, 3, 2, 2), dtype=np.float32),
             "PaddleGAN EDVR output must be 4D",
         ),
@@ -147,12 +168,13 @@ def test_paddlegan_tensor_outputs_reject_wrong_dimensions(converter, tensor, mes
 def test_paddlegan_chunk_trace_records_shared_shape_payload(monkeypatch):
     trace_chunks = []
     sync_calls = []
-    monkeypatch.setattr(runner_module, "_sync_paddle", lambda paddle: sync_calls.append(paddle))
+    monkeypatch.setattr(trace_module, "_sync_paddle", lambda paddle: sync_calls.append(paddle))
 
     tensor = np.zeros((1, 2, 3, 4, 5), dtype=np.float32)
     output = np.zeros((1, 2, 3, 16, 20), dtype=np.float32)
-    runner_module._record_chunk_trace(
-        trace_chunks,
+    observer = PaddleGanTraceObserver(Path("trace.json"))
+    observer._chunks = trace_chunks
+    observer.record_chunk(
         "paddle",
         tensor=tensor,
         output=output,
@@ -170,8 +192,6 @@ def test_paddlegan_chunk_trace_records_shared_shape_payload(monkeypatch):
 
 
 def test_configure_tensorrt_predictor_enables_gpu_trt_and_shape():
-    from app.algorithms.paddle.paddlegan_vsr.runner import _configure_tensorrt_config
-
     calls = []
 
     class _PrecisionType:
@@ -205,7 +225,7 @@ def test_configure_tensorrt_predictor_enables_gpu_trt_and_shape():
         def tensorrt_engine_enabled(self):
             return True
 
-    _configure_tensorrt_config(
+    tensorrt_module._configure_tensorrt_config(
         _Config(),
         _Paddle(),
         input_name="input",
@@ -232,8 +252,6 @@ def test_configure_tensorrt_predictor_enables_gpu_trt_and_shape():
 
 
 def test_paddlegan_tensorrt_predictor_pads_and_crops_short_chunks(monkeypatch):
-    from app.algorithms.paddle.paddlegan_vsr.runner import _PaddleGanTensorRtPredictor
-
     copied_inputs = []
 
     class _InputHandle:
@@ -255,14 +273,18 @@ def test_paddlegan_tensorrt_predictor_pads_and_crops_short_chunks(monkeypatch):
             assert name == "final"
             return _OutputHandle()
 
-    predictor = _PaddleGanTensorRtPredictor(
+    predictor = PaddleGanTensorRtPredictor(
         paddle=object(),
         model=object(),
         model_id="ppmsvsr",
         sequence_mode="recurrent",
         num_frames=5,
     )
-    monkeypatch.setattr(predictor, "_ensure_predictor", lambda _shape: (_Predictor(), "input", ["aux", "final"]))
+    monkeypatch.setattr(
+        predictor._cache,
+        "ensure",
+        lambda _shape: PredictorBinding(_Predictor(), "input", ["aux", "final"]),
+    )
 
     output = predictor.run(np.zeros((1, 3, 3, 128, 128), dtype=np.float32))
 
@@ -271,24 +293,22 @@ def test_paddlegan_tensorrt_predictor_pads_and_crops_short_chunks(monkeypatch):
 
 
 def _ensure_tensorrt_predictor(monkeypatch, caplog, *, prefix: Path, paddle):
-    from app.algorithms.paddle.paddlegan_vsr.runner import _PaddleGanTensorRtPredictor
-
-    caplog.set_level(logging.INFO, logger=runner_module.__name__)
-    predictor = _PaddleGanTensorRtPredictor(
+    caplog.set_level(logging.INFO, logger=tensorrt_module.__name__)
+    cache = TensorRtPredictorCache(
         paddle=paddle,
         model="model",
         model_id="ppmsvsr",
         sequence_mode="recurrent",
         num_frames=5,
     )
-    monkeypatch.setattr(runner_module, "_tensorrt_model_prefix", lambda *_args, **_kwargs: prefix)
+    monkeypatch.setattr(tensorrt_module, "_tensorrt_model_prefix", lambda *_args, **_kwargs: prefix)
     monkeypatch.setattr(
-        runner_module,
+        tensorrt_module,
         "_create_tensorrt_predictor",
-        lambda **_kwargs: ("predictor", "input", ["output"]),
+        lambda **_kwargs: PredictorBinding("predictor", "input", ["output"]),
     )
-    predictor._ensure_predictor([1, 5, 3, 288, 640])
-    return [record.getMessage() for record in caplog.records if record.name == runner_module.__name__]
+    cache.ensure([1, 5, 3, 288, 640])
+    return [record.getMessage() for record in caplog.records if record.name == tensorrt_module.__name__]
 
 
 def test_paddlegan_tensorrt_predictor_logs_build_save_cache_and_ready(tmp_path, monkeypatch, caplog):
@@ -349,20 +369,19 @@ def test_paddlegan_tensorrt_predictor_logs_load_when_static_files_exist(tmp_path
 
 
 def test_paddlegan_tensorrt_predictor_logs_in_process_reuse(caplog):
-    from app.algorithms.paddle.paddlegan_vsr.runner import _PaddleGanTensorRtPredictor
-
-    caplog.set_level(logging.INFO, logger=runner_module.__name__)
-    predictor = _PaddleGanTensorRtPredictor(
+    caplog.set_level(logging.INFO, logger=tensorrt_module.__name__)
+    cache = TensorRtPredictorCache(
         paddle=object(),
         model=object(),
         model_id="ppmsvsr",
         sequence_mode="recurrent",
         num_frames=5,
     )
-    predictor._cache[(5, 288, 640)] = ("predictor", "input", ["output"])
+    cache._entries[(5, 288, 640)] = PredictorBinding("predictor", "input", ["output"])
 
-    assert predictor._ensure_predictor([1, 5, 3, 288, 640]) == ("predictor", "input", ["output"])
-    assert predictor._ensure_predictor([1, 5, 3, 288, 640]) == ("predictor", "input", ["output"])
+    expected = PredictorBinding("predictor", "input", ["output"])
+    assert cache.ensure([1, 5, 3, 288, 640]) == expected
+    assert cache.ensure([1, 5, 3, 288, 640]) == expected
 
-    messages = [record.getMessage() for record in caplog.records if record.name == runner_module.__name__]
+    messages = [record.getMessage() for record in caplog.records if record.name == tensorrt_module.__name__]
     assert messages.count("[VP_TRT] TensorRT REUSE PaddleGAN ppmsvsr shape=1x5x3x288x640") == 1

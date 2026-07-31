@@ -48,7 +48,6 @@ class TestModelSpecs:
     def test_config_fields(self):
         """每个配置都有必要的字段。"""
         for version, spec in MODEL_SPECS.items():
-            assert spec.encode_channel >= 0, f"{version} 的 encode_channel 无效"
             assert spec.modulo > 0, f"{version} 的 modulo 无效"
             assert isinstance(spec.ensemble, bool), f"{version} 的 ensemble 无效"
             assert spec.head_type in (HEAD_NONE, HEAD_SEQUENTIAL, HEAD_CUSTOM)
@@ -57,7 +56,6 @@ class TestModelSpecs:
         """v4.0~v4.6 无 Head。"""
         for v in ["4.0", "4.1", "4.2", "4.3", "4.4", "4.5", "4.6"]:
             assert MODEL_SPECS[v].head_type == HEAD_NONE
-            assert MODEL_SPECS[v].encode_channel == 0
 
     def test_sequential_head_versions(self):
         """v4.7~v4.9, v4.10~v4.12, v4.12.lite, v4.13.lite 使用 nn.Sequential Head。"""
