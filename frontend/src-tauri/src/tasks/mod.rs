@@ -10,6 +10,9 @@ mod readers;
 mod spawn;
 mod state;
 mod stderr;
+mod subprocess;
+#[cfg(test)]
+mod test_support;
 
 use tokio::sync::oneshot as TokioOneshot;
 
@@ -17,7 +20,7 @@ use crate::error::ShellError;
 use crate::generated::TaskControlKind;
 use crate::process_control::ProcessControlError;
 
-pub(crate) use builder::build_inspect_output_args;
+pub(crate) use builder::build_resume_inspection_input;
 pub(crate) use control::send_task_control;
 pub(crate) use oneshot::run_single_cli_command;
 pub(crate) use spawn::spawn_task;

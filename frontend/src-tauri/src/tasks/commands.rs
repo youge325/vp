@@ -4,7 +4,7 @@ use crate::error::ShellError;
 use crate::models::{ResumeInspectionResult, TaskRequest, VideoInfo};
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks::{
-    build_inspect_output_args, run_single_cli_command, send_task_control, spawn_task,
+    build_resume_inspection_input, run_single_cli_command, send_task_control, spawn_task,
     TaskApplicationError, TaskControlKind, TaskState, TaskStateError,
 };
 
@@ -39,7 +39,8 @@ pub(crate) async fn inspect_video(
 ) -> Result<VideoInfo, ShellError> {
     run_single_cli_command(
         paths.inner(),
-        &[String::from("info"), String::from("--input"), input_path],
+        "inspect_video",
+        &[String::from("--input"), input_path],
         None,
         "video info",
     )
@@ -63,13 +64,14 @@ pub(crate) async fn check_resume_state(
     paths: State<'_, ResolvedRuntimePaths>,
     request: TaskRequest,
 ) -> Result<ResumeInspectionResult, ShellError> {
-    let (args, stdin_payload) = build_inspect_output_args(&request).map_err(|error| {
+    let (args, stdin_payload) = build_resume_inspection_input(&request).map_err(|error| {
         ShellError::SchemaValidation(format!(
             "Unable to encode resume inspection configuration: {error}"
         ))
     })?;
     run_single_cli_command(
         paths.inner(),
+        "check_resume_state",
         &args,
         Some(&stdin_payload),
         "resume inspection",

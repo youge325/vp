@@ -19,7 +19,7 @@ const CREATE_NO_WINDOW: u32 = windows_sys::Win32::System::Threading::CREATE_NO_W
 /// The returned ``Command`` has only the executable, the subcommand,
 /// the working directory and the env map set. Callers are expected to
 /// append their own ``--flag value`` arguments, stdio configuration and
-/// platform-specific flags (``apply_no_window``, ``spawn_no_window_group``).
+/// spawn through ``spawn_no_window_group``.
 pub(crate) fn backend_command(paths: &ResolvedRuntimePaths, subcommand: &str) -> Command {
     let mut command = Command::new(&paths.python_executable);
     command.args(["-m", "app", subcommand]);
@@ -66,11 +66,10 @@ pub(crate) fn build_process_command(
     Ok((command, stdin_payload))
 }
 
-pub(crate) fn build_inspect_output_args(
+pub(crate) fn build_resume_inspection_input(
     request: &TaskRequest,
 ) -> Result<(Vec<String>, String), serde_json::Error> {
     let args = vec![
-        String::from("inspect-output"),
         String::from("--input"),
         request.input_path.clone(),
         String::from("--config-stdin"),
@@ -78,14 +77,6 @@ pub(crate) fn build_inspect_output_args(
     let stdin_payload = build_config_stdin_payload(request)?;
     Ok((args, stdin_payload))
 }
-
-#[cfg(windows)]
-pub(crate) fn apply_no_window(command: &mut Command) {
-    command.creation_flags(CREATE_NO_WINDOW);
-}
-
-#[cfg(not(windows))]
-pub(crate) fn apply_no_window(_command: &mut Command) {}
 
 #[cfg(windows)]
 pub(crate) fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChild> {
@@ -178,22 +169,16 @@ mod tests {
     }
 
     #[test]
-    fn build_inspect_output_args_leads_with_subcommand_input_and_stdin_flag() {
+    fn resume_inspection_args_only_contain_command_specific_flags() {
         let request = sample_request();
-        let (args, _payload) = build_inspect_output_args(&request).expect("args");
-        assert_eq!(args[0], "inspect-output");
-        assert_eq!(args[1], "--input");
-        assert_eq!(args[2], "D:/in.mp4");
-        assert_eq!(
-            args,
-            ["inspect-output", "--input", "D:/in.mp4", "--config-stdin"],
-        );
+        let (args, _payload) = build_resume_inspection_input(&request).expect("args");
+        assert_eq!(args, ["--input", "D:/in.mp4", "--config-stdin"]);
     }
 
     #[test]
     fn build_inspect_output_stdin_payload_packs_all_four_sections() {
         let request = sample_request();
-        let (_args, payload) = build_inspect_output_args(&request).expect("args");
+        let (_args, payload) = build_resume_inspection_input(&request).expect("args");
         let parsed = serde_json::from_str::<serde_json::Value>(&payload)
             .expect("stdin payload must be valid JSON");
         let obj = parsed.as_object().expect("payload root must be object");
@@ -208,7 +193,7 @@ mod tests {
     #[test]
     fn build_inspect_output_stdin_payload_serializes_camel_case_fields() {
         let request = sample_request();
-        let (_args, payload) = build_inspect_output_args(&request).expect("args");
+        let (_args, payload) = build_resume_inspection_input(&request).expect("args");
         // Rust uses snake_case fields (fps_mode) but serializes to camelCase (fpsMode).
         assert!(
             payload.contains("\"fpsMode\""),

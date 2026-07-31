@@ -12,6 +12,8 @@
 use std::error::Error;
 use std::fmt;
 use std::io;
+#[cfg(target_os = "windows")]
+use std::sync::Mutex;
 
 #[cfg(not(target_os = "windows"))]
 mod posix;
@@ -36,6 +38,9 @@ pub(crate) enum ProcessControlError {
     /// One or more threads were enumerated but every Suspend/Resume
     /// call failed (typical: the OS denied access mid-shutdown).
     NoControllableThreads,
+    /// A numeric PID/TID now resolves to a different OS process/thread
+    /// than the one captured when this task started.
+    IdentityMismatch,
     /// Wrapping for unexpected OS errors. Keeps the original
     /// ``io::Error`` so the source chain survives downstream.
     Os(io::Error),
@@ -49,6 +54,12 @@ impl fmt::Display for ProcessControlError {
             Self::NotFound => write!(f, "target process is no longer running"),
             Self::NoControllableThreads => {
                 write!(f, "no controllable threads remain for the running task")
+            }
+            Self::IdentityMismatch => {
+                write!(
+                    f,
+                    "process identity changed; refusing to control a reused PID or TID"
+                )
             }
             Self::Os(error) => write!(f, "process control OS error: {error}"),
             Self::Worker(message) => write!(f, "process control worker failed: {message}"),
@@ -78,18 +89,18 @@ pub(crate) trait ProcessControl: Send + Sync {
 
 /// Process controller bound to one backend root process.
 pub(crate) struct ProcessController {
-    root_pid: u32,
+    identity: imp::ProcessIdentity,
     #[cfg(target_os = "windows")]
-    cached_threads: std::sync::Mutex<Option<Vec<u32>>>,
+    suspended_threads: Mutex<Option<imp::SuspendedThreads>>,
 }
 
 impl ProcessController {
-    pub(crate) fn new(root_pid: u32) -> Self {
-        Self {
-            root_pid,
+    pub(crate) fn new(root_pid: u32) -> Result<Self, ProcessControlError> {
+        Ok(Self {
+            identity: imp::ProcessIdentity::capture(root_pid)?,
             #[cfg(target_os = "windows")]
-            cached_threads: std::sync::Mutex::new(None),
-        }
+            suspended_threads: Mutex::new(None),
+        })
     }
 }
 
@@ -97,28 +108,35 @@ impl ProcessControl for ProcessController {
     fn suspend(&self) -> Result<(), ProcessControlError> {
         #[cfg(target_os = "windows")]
         {
-            let threads = imp::suspend_process_tree(self.root_pid)?;
-            if let Ok(mut cache) = self.cached_threads.lock() {
-                *cache = Some(threads);
+            let mut suspended = self.suspended_threads.lock().map_err(|_| {
+                ProcessControlError::Worker("suspended-thread lock poisoned".into())
+            })?;
+            if suspended.is_some() {
+                imp::validate_process_identity(&self.identity)?;
+                return Ok(());
             }
+            *suspended = Some(imp::suspend_process_tree(&self.identity)?);
         }
         #[cfg(not(target_os = "windows"))]
-        imp::suspend_process_tree(self.root_pid)?;
+        imp::suspend_process_tree(&self.identity)?;
         Ok(())
     }
 
     fn resume(&self) -> Result<(), ProcessControlError> {
         #[cfg(target_os = "windows")]
         {
-            let cached = self
-                .cached_threads
-                .lock()
-                .ok()
-                .and_then(|mut cache| cache.take());
-            imp::resume_process_tree(self.root_pid, cached)?;
+            let mut suspended = self.suspended_threads.lock().map_err(|_| {
+                ProcessControlError::Worker("suspended-thread lock poisoned".into())
+            })?;
+            if let Some(threads) = suspended.as_mut() {
+                imp::resume_process_tree(&self.identity, threads)?;
+                *suspended = None;
+            } else {
+                imp::validate_process_identity(&self.identity)?;
+            }
         }
         #[cfg(not(target_os = "windows"))]
-        imp::resume_process_tree(self.root_pid)?;
+        imp::resume_process_tree(&self.identity)?;
         Ok(())
     }
 }
@@ -135,6 +153,9 @@ mod tests {
         assert!(ProcessControlError::NoControllableThreads
             .to_string()
             .contains("no controllable threads"));
+        assert!(ProcessControlError::IdentityMismatch
+            .to_string()
+            .contains("identity changed"));
         let os = ProcessControlError::Os(io::Error::new(io::ErrorKind::PermissionDenied, "boom"));
         assert!(os.to_string().contains("boom"));
     }
@@ -151,17 +172,5 @@ mod tests {
         let inner = io::Error::other("nope");
         let err: ProcessControlError = inner.into();
         assert!(matches!(err, ProcessControlError::Os(_)));
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn thread_cache_is_task_local_and_consumed_once() {
-        let controller = ProcessController::new(1234);
-        *controller.cached_threads.lock().unwrap() = Some(vec![10, 20, 30]);
-        let first = controller.cached_threads.lock().unwrap().take();
-        let second = controller.cached_threads.lock().unwrap().take();
-
-        assert_eq!(first.as_deref(), Some(&[10u32, 20, 30][..]));
-        assert!(second.is_none(), "cache must be consumed by the first take");
     }
 }

@@ -51,6 +51,13 @@ mod tests {
         std::fs::create_dir_all(canonical.parent().expect("python parent"))
             .expect("create python parent");
         std::fs::write(&canonical, b"python").expect("write python");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            std::fs::set_permissions(&canonical, std::fs::Permissions::from_mode(0o755))
+                .expect("mark python executable");
+        }
 
         assert_eq!(
             bundled_python_path(Some(&runtime), binary),

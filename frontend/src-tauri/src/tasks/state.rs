@@ -446,6 +446,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn activation_and_cancel_race_preserves_the_cancellation_reason() {
+        let state = TaskState::default();
+        let lease = state.reserve_start().await.expect("reserve");
+        let barrier = tokio::sync::Barrier::new(2);
+        let (activation, cancellation) = tokio::join!(
+            async {
+                barrier.wait().await;
+                state.activate(&lease, make_control_sender()).await
+            },
+            async {
+                barrier.wait().await;
+                state.begin_cancel(CancelReason::User).await
+            },
+        );
+
+        activation.expect("activation wins before or after cancellation");
+        cancellation.expect("cancellation wins before or after activation");
+        let handle = state
+            .current_handle()
+            .await
+            .expect("published cancelling handle");
+        assert_eq!(handle.cancel_token.reason(), Some(CancelReason::User));
+        assert!(state.finish_once(&lease, || {}).await);
+    }
+
+    #[tokio::test]
     async fn cancelled_starting_task_reports_already_cancelling() {
         let state = TaskState::default();
         let lease = state.reserve_start().await.expect("reserve");
