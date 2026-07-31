@@ -6,9 +6,9 @@ import {
   resolveRateControlForMode,
   resolveRateControlForProfile,
 } from '@/services/preset/rate-control'
-import type { EncoderProfileSpec } from '@/types/protocol'
+import type { CodecProfileSpec } from '@/types/protocol'
 
-function makeProfile(overrides: Partial<EncoderProfileSpec> = {}): EncoderProfileSpec {
+function makeProfile(overrides: Partial<CodecProfileSpec> = {}): CodecProfileSpec {
   return {
     name: 'h264_nvenc',
     label: 'NVENC H.264',

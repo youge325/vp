@@ -2,9 +2,10 @@
 
 import { computed } from 'vue'
 import { useIssueStore } from '@/stores/issue'
-import type { OperationIssueScope, TaskError } from '@/types/domain/media'
+import type { OperationIssueScope } from '@/types/domain/media'
+import type { TaskErrorPayload } from '@/types/protocol'
 
 export function useOperationIssue(scope: OperationIssueScope) {
   const issueStore = useIssueStore()
-  return computed<TaskError | null>(() => issueStore.getIssue(scope))
+  return computed<TaskErrorPayload | null>(() => issueStore.getIssue(scope))
 }

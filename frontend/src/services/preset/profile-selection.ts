@@ -1,8 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // Decode/encode profile selection rules shared by defaults, normalize, and forms.
 
-import type { CodecFamily } from '@/types/protocol'
-import type { DecoderProfileSpec, EncoderProfileSpec, CapabilityValue } from '@/types/protocol'
+import type { CapabilityValue, CodecProfileFamily, CodecProfileSpec } from '@/types/protocol'
 import type { DecodeConfig, EncodeConfig } from '@/types/protocol'
 import { resolveDecoderHwaccel, resolveDecoderHwaccelDevice } from './decode-hardware'
 import { seedProfileOptions } from './options'
@@ -19,7 +18,7 @@ function softwareDecodeConfig(): DecodeConfig {
 }
 
 export function selectDecodeProfile(
-  profile: DecoderProfileSpec | null,
+  profile: CodecProfileSpec | null,
   currentOptions: Record<string, CapabilityValue> = {},
   preferredHwaccel: string | null | undefined = '',
   preferredHwaccelDevice: string | null | undefined = '',
@@ -39,7 +38,7 @@ export function selectDecodeProfile(
 }
 
 export function fallbackUnavailableDecodeProfile(
-  profile: DecoderProfileSpec | null,
+  profile: CodecProfileSpec | null,
   mode: DecodeConfig['mode'],
 ): DecodeConfig | null {
   if (mode !== 'hardware') {
@@ -51,7 +50,7 @@ export function fallbackUnavailableDecodeProfile(
   return softwareDecodeConfig()
 }
 
-export function encoderFamilyFromProfile(family: CodecFamily): EncodeConfig['family'] {
+export function encoderFamilyFromProfile(family: CodecProfileFamily): EncodeConfig['family'] {
   return family === 'nvidia' || family === 'intel' ? family : 'cpu'
 }
 
@@ -66,7 +65,7 @@ export function defaultRateControlValue(family: EncodeConfig['family']): EncodeC
 }
 
 export function selectEncodeProfile(
-  profile: EncoderProfileSpec | null,
+  profile: CodecProfileSpec | null,
   config: EncodeConfig,
   fallbackRateControl: EncodeConfig['rateControl'] | null = null,
 ): EncodeConfig | null {

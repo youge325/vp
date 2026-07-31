@@ -4,7 +4,7 @@ import { createFilterModelParamsPatch } from '@/services/filters/filter-params'
 
 describe('createFilterModelParamsPatch', () => {
   it('updates a writable model without mutating its current step', () => {
-    const source = { kind: 'sharpen', enabled: true, params: { amount: 0.5 } } as const
+    const source = { kind: 'sharpen' as const, enabled: true, params: { amount: 0.5 } }
     const model = { value: source }
     const patch = createFilterModelParamsPatch(model)
 

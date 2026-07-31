@@ -4,12 +4,13 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import type { OperationIssue, OperationIssueScope, TaskError } from '@/types/domain/media'
+import type { OperationIssue, OperationIssueScope } from '@/types/domain/media'
+import type { TaskErrorPayload } from '@/types/protocol'
 
 export const useIssueStore = defineStore('issue', () => {
   const operationIssue = ref<OperationIssue | null>(null)
 
-  function setIssue(scope: OperationIssueScope, error: TaskError): void {
+  function setIssue(scope: OperationIssueScope, error: TaskErrorPayload): void {
     operationIssue.value = { scope, error }
   }
 
@@ -23,7 +24,7 @@ export const useIssueStore = defineStore('issue', () => {
     }
   }
 
-  function getIssue(scope: OperationIssueScope): TaskError | null {
+  function getIssue(scope: OperationIssueScope): TaskErrorPayload | null {
     return operationIssue.value?.scope === scope ? operationIssue.value.error : null
   }
 

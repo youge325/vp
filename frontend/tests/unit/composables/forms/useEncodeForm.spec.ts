@@ -45,4 +45,36 @@ describe('useEncodeForm profile binding', () => {
     expect(presetStore.draftPreset.encodeConfig.options).toEqual({ preset: 'p7' })
     expect(presetStore.draftPreset.encodeConfig.options).not.toBe(previous)
   })
+
+  it('assembles profile, rate-control, container, and output bindings in one root', () => {
+    const presetStore = usePresetStore()
+    const form = useEncodeForm()
+
+    expect(form.encoderProfileOptions.value).toEqual([
+      { value: 'libx265', label: 'x265' },
+      { value: 'hevc_nvenc', label: 'NVENC H.265' },
+    ])
+    expect(form.rateControlOptions.value).toEqual([{ value: 'crf', label: 'CRF' }])
+    expect(form.containerOptions).toEqual([
+      { value: 'mp4', label: 'MP4' },
+      { value: 'mkv', label: 'MKV' },
+      { value: 'mov', label: 'MOV' },
+    ])
+
+    form.setContainer('mkv')
+    form.setKeepAudio(false)
+    form.setOutputDir('  D:/Video Output  ')
+    form.setOpenOnComplete(false)
+    form.setSegmentFrames(Number.NaN)
+
+    expect(presetStore.draftPreset.encodeConfig).toMatchObject({
+      container: 'mkv',
+      keepAudio: false,
+    })
+    expect(presetStore.draftPreset.outputConfig).toEqual({
+      outputDir: 'D:/Video Output',
+      openOnComplete: false,
+      segmentFrames: 1000,
+    })
+  })
 })

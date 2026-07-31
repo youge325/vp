@@ -4,6 +4,8 @@ import FilterNumberField from './FilterNumberField.vue'
 import { createFilterModelParamsPatch } from '@/services/filters/filter-params'
 import type { FilterStep } from '@/types/protocol'
 
+type ScaleFilterStep = Extract<FilterStep, { kind: 'scale' }>
+
 const MODE_OPTIONS = [
   { value: 'factor', label: '缩放系数' },
   { value: 'resolution', label: '目标分辨率' },
@@ -16,20 +18,20 @@ const INTERP_OPTIONS = [
   { value: 'linear', label: 'Linear' },
 ] as const
 
-const modelValue = defineModel<FilterStep>({ required: true })
+const modelValue = defineModel<ScaleFilterStep>({ required: true })
 const patch = createFilterModelParamsPatch(modelValue)
 </script>
 
 <template>
   <div class="field-grid field-grid-2">
     <BaseSelect
-      :model-value="String(modelValue.params.mode ?? 'factor')"
+      :model-value="modelValue.params.mode ?? 'factor'"
       label="模式"
       :options="MODE_OPTIONS"
       @update:model-value="patch((params) => (params.mode = $event))"
     />
     <BaseSelect
-      :model-value="String(modelValue.params.interpolation ?? 'lanczos4')"
+      :model-value="modelValue.params.interpolation ?? 'lanczos4'"
       label="插值算法"
       :options="INTERP_OPTIONS"
       @update:model-value="patch((params) => (params.interpolation = $event))"

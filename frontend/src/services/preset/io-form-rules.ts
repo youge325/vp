@@ -2,8 +2,7 @@
 // Decode/encode form view-state and value correction rules.
 
 import type {
-  DecoderProfileSpec,
-  EncoderProfileSpec,
+  CodecProfileSpec,
   HardwareDeviceOptionSpec,
 } from '@/types/protocol'
 import type { RateControlMode } from '@/types/protocol'
@@ -23,7 +22,7 @@ import type { SelectOption } from '@/types/view/select-option'
 const RATE_CONTROL_UNAVAILABLE_HINT = '未探测到可用码率控制模式'
 
 export function buildDecoderHardwareDeviceOptions(
-  profile: Pick<DecoderProfileSpec, 'hardwareDevices'> | null,
+  profile: Pick<CodecProfileSpec, 'hardwareDevices'> | null,
 ): SelectOption[] {
   return (profile?.hardwareDevices ?? []).map((device) => ({
     value: device,
@@ -32,7 +31,7 @@ export function buildDecoderHardwareDeviceOptions(
 }
 
 export function buildDecoderHardwareDeviceNumberOptions(
-  profile: DecoderProfileSpec | null,
+  profile: CodecProfileSpec | null,
   hwaccel: string,
 ): HardwareDeviceOptionSpec[] {
   return getDecoderHwaccelDeviceOptions(profile, hwaccel)
@@ -40,7 +39,7 @@ export function buildDecoderHardwareDeviceNumberOptions(
 
 export function applyDecodeHwaccelSelection(
   config: DecodeConfig,
-  profile: DecoderProfileSpec | null,
+  profile: CodecProfileSpec | null,
   hwaccel: string,
 ): DecodeConfig {
   return {
@@ -52,7 +51,7 @@ export function applyDecodeHwaccelSelection(
 
 export function applyDecodeHwaccelDeviceSelection(
   config: DecodeConfig,
-  profile: DecoderProfileSpec | null,
+  profile: CodecProfileSpec | null,
   hwaccelDevice: string,
 ): DecodeConfig {
   return {
@@ -62,7 +61,7 @@ export function applyDecodeHwaccelDeviceSelection(
 }
 
 export function buildRateControlViewState(
-  profile: EncoderProfileSpec | null,
+  profile: CodecProfileSpec | null,
   mode: RateControlMode,
 ) {
   const disabled = !hasRateControlModes(profile)
@@ -85,7 +84,7 @@ export function buildRateControlViewState(
 }
 
 export function resolveRateControlModeSelection(
-  profile: EncoderProfileSpec | null,
+  profile: CodecProfileSpec | null,
   mode: RateControlMode,
 ): EncodeConfig['rateControl'] | null {
   return resolveRateControlForMode(profile, mode)

@@ -76,6 +76,10 @@ graph TB
 - 提供本地持久化（环境缓存、工作台预设）
 - **不执行任何算法逻辑**
 
+暂停/恢复不是跨平台的最低能力：Windows 使用稳定进程/线程句柄，Linux 使用 pidfd 集合；macOS
+因缺少等价的稳定信号句柄而明确返回“不支持”，但取消与进程组回收仍可用。控制层在无法验证
+进程身份时一律 fail closed。
+
 ### Python 算法层
 
 - 作为纯 CLI 工具被 Rust 层通过子进程调用
@@ -92,10 +96,11 @@ Rust 与 Python 之间的通信不通过 HTTP 或 gRPC，而是通过子进程 s
 ### 2. 中立契约与类型同步
 
 根目录 `contracts/` 中的 JSON Schema 2020-12 文档定义配置、IPC、NDJSON、错误码与持久化边界。
-IPC manifest v2 同时声明 10 个 Tauri command、任务事件、七类 Python envelope 和终端进度常量。
-`scripts/generate_contracts.py` 生成严格的聚合边界 schema、Python Pydantic 模型、单一 TypeScript
-绑定以及命令/事件/one-shot 适配器；其中 one-shot 表以应用 IPC command 为 key，解析私有 Python
-subcommand、success envelope 与 discriminator 策略，task envelope enum 也由同一 manifest 生成。
+IPC manifest v3 同时声明 10 个 Tauri command、6 个任务事件、七类 Python envelope、长任务与
+one-shot 的 stdin/期限策略、协议大小上限，以及终端/内部 stage-worker 两个前缀。
+`scripts/generate_contracts.py` 生成严格的聚合边界 schema、stage-worker 专用 Pydantic 边界、单一
+TypeScript 绑定以及 Rust 命令/事件/子进程 spec；one-shot 和长任务调用方只选择生成 spec，不维护
+平行的 subcommand、payload、期限或 discriminator 条件链。
 Rust 通过 Typify 直接消费同一聚合 schema。生成文件禁止
 手工修改，CI 逐字节检查 freshness。非 schema 14 的环境缓存会被隔离并重新探测。
 
@@ -106,13 +111,20 @@ JSON Schema 2020-12 校验 schema、引用目标、IPC manifest 和错误码子�
 都消费同一份生成结果。
 
 生产可达性门禁独立于测试引用：Vue 从 `src/main.ts` 遍历 import DAG，Python 从 `app`、
-`app.__main__` 和显式导出入口遍历静态 import DAG。动态边界只能进入带理由、evidence 与回归测试
+`app.__main__` 和显式导出入口遍历静态 import DAG。Python CLI 的 `_HANDLERS` 字符串注册表由 AST
+转换为精确动态 import 边，factory 函数体中的惰性 import 仍作为真实生产边；普通字符串不能让
+模块存活。通用门禁同时拒绝未消费的中立 dataclass 字段、包级 `__all__` re-export、不可达 CLI
+handler 和声明为无副作用却执行顶层代码的包。动态框架边界才可进入带理由、evidence 与回归测试
 的精确 allowlist；两个前端 ambient declaration 是唯一非生成源码例外，36 个 RIFE 模块必须与
 中立版本 catalog 精确同集，额外或缺失模块都会使门禁失败。
 
 ### 3. stage-worker 流式处理
 
-Python 后端通过 `pipeline_preflight` 规划 stage plan，再由 `pipeline_dispatch` 选择 rawvideo stage-worker chain 或 stage-file pipeline。rawvideo 路径中 stage-worker 子进程负责解码与算法 stage 链，主进程只维护 `encode_queue` 和 `encoder_worker`；编码线程、worker 与 segment writer 共享单个不可变 runtime config，帧数据不经过临时帧目录，显著减少磁盘 I/O。
+Python 后端通过 `pipeline_preflight` 规划 stage plan，再由 `pipeline_dispatch` 选择 rawvideo
+stage-worker chain 或 stage-file pipeline。每个不可变 `StageDescriptor` 携带 `GeometryPolicy`，
+输出尺寸只由该策略投影，不再维护 `changes_dimensions` 布尔镜像。rawvideo 路径中 stage-worker
+子进程负责解码与算法 stage 链，主进程只维护 `encode_queue` 和 `encoder_worker`；编码线程、
+worker 与 segment writer 共享单个不可变 runtime config。
 
 ### 4. 断点续传（filesystem-as-state）
 

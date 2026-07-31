@@ -40,7 +40,7 @@ export function useMediaImport() {
   }
 
   async function reinspectIds(ids: string[]): Promise<void> {
-    await Promise.allSettled(ids.map((id) => inspectAndNormalize(id)))
+    await Promise.all(ids.map((id) => inspectAndNormalize(id)))
   }
 
   async function importPaths(paths: string[]): Promise<void> {

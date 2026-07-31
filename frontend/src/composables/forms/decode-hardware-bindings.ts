@@ -6,11 +6,11 @@ import {
   buildDecoderHardwareDeviceNumberOptions,
   buildDecoderHardwareDeviceOptions,
 } from '@/services/preset/io-form-rules'
-import type { DecoderProfileSpec } from '@/types/protocol'
+import type { CodecProfileSpec } from '@/types/protocol'
 import type { DecodeConfig, WorkbenchPreset } from '@/types/protocol'
 
 interface DecodeHardwareBindingParams {
-  currentDecoderProfile: ComputedRef<DecoderProfileSpec | null>
+  currentDecoderProfile: ComputedRef<CodecProfileSpec | null>
   editorConfig: ComputedRef<Pick<WorkbenchPreset, 'decodeConfig'>>
   patchDecode: (mutator: (config: DecodeConfig) => void) => void
 }

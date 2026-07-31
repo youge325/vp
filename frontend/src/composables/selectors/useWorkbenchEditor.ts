@@ -24,12 +24,7 @@
 import { computed } from 'vue'
 import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
-import {
-  cloneDecodeConfig,
-  cloneEncodeConfig,
-  cloneOutputConfig,
-  cloneWorkflowConfig,
-} from '@/services/preset/clone'
+import { clonePresetData } from '@/services/preset/clone'
 import { getEditingScopeLabel } from '@/services/format/labels'
 import type { DecodeConfig, EncodeConfig, OutputConfig, WorkflowConfig } from '@/types/protocol'
 import type { MediaItem } from '@/types/domain/media'
@@ -40,6 +35,8 @@ type ItemConfigPartial = {
   workflowConfig?: WorkflowConfig
   outputConfig?: OutputConfig
 }
+
+type EditableConfig = DecodeConfig | EncodeConfig | WorkflowConfig | OutputConfig
 
 export function useWorkbenchEditor() {
   const mediaStore = useMediaStore()
@@ -57,9 +54,8 @@ export function useWorkbenchEditor() {
 
   const editorVideoCodec = computed(() => activeItem.value?.info?.videoCodec ?? '')
 
-  function makePatcher<TConfig>(
+  function makePatcher<TConfig extends EditableConfig>(
     getItemConfig: (item: MediaItem) => TConfig,
-    clone: (c: TConfig) => TConfig,
     buildPartial: (config: TConfig) => ItemConfigPartial,
     patchPreset: (mutator: (c: TConfig) => void) => void,
     syncPreset = false,
@@ -71,7 +67,7 @@ export function useWorkbenchEditor() {
           if (!targetIds.has(item.id)) {
             continue
           }
-          const next = clone(getItemConfig(item))
+          const next = clonePresetData(getItemConfig(item))
           mutator(next)
           mediaStore.replaceItemConfig(item.id, buildPartial(next))
         }
@@ -84,28 +80,24 @@ export function useWorkbenchEditor() {
 
   const patchDecode = makePatcher(
     (item) => item.decodeConfig,
-    cloneDecodeConfig,
     (next) => ({ decodeConfig: next }),
     presetStore.patchDecode,
   )
 
   const patchEncode = makePatcher(
     (item) => item.encodeConfig,
-    cloneEncodeConfig,
     (next) => ({ encodeConfig: next }),
     presetStore.patchEncode,
   )
 
   const patchWorkflow = makePatcher(
     (item) => item.workflowConfig,
-    cloneWorkflowConfig,
     (next) => ({ workflowConfig: next }),
     presetStore.patchWorkflow,
   )
 
   const patchWorkflowAndPreset = makePatcher(
     (item) => item.workflowConfig,
-    cloneWorkflowConfig,
     (next) => ({ workflowConfig: next }),
     presetStore.patchWorkflow,
     true,
@@ -113,7 +105,6 @@ export function useWorkbenchEditor() {
 
   const patchOutput = makePatcher(
     (item) => item.outputConfig,
-    cloneOutputConfig,
     (next) => ({ outputConfig: next }),
     presetStore.patchOutput,
   )

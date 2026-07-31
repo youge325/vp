@@ -1,7 +1,7 @@
 // 续传冲突解析 — 处理 resume 冲突对话框,以及 runtime onError 中的 ResumeConflict 错误码。
 // 不直接迁移状态机,而是调用 lifecycle 的 hook 来推进队列。
 
-import type { MediaItem, TaskError } from '@/types/domain/media'
+import type { MediaItem } from '@/types/domain/media'
 import type { ResumeConflictAction } from '@/types/domain/batch'
 import type {
   BatchStatePort,
@@ -12,7 +12,7 @@ import type {
   TaskContextCapability,
 } from './lifecycle/types'
 import { buildResumeConflictDescriptorFromError } from '../resume-classifier'
-import { TASK_ERROR_CODES, type ResumeMode } from '@/types/protocol'
+import { TASK_ERROR_CODES, type ResumeMode, type TaskErrorPayload } from '@/types/protocol'
 
 type ConflictResolverDeps =
   & Pick<BatchStatePort, 'getBatch' | 'setBatch' | 'setPendingConflict'>
@@ -53,7 +53,7 @@ export function createConflictResolver(
     await lifecycle.launchCurrentItem(conflictItem, mode)
   }
 
-  function tryStashFromError(error: TaskError): boolean {
+  function tryStashFromError(error: TaskErrorPayload): boolean {
     if (error.code !== TASK_ERROR_CODES.ResumeConflict) {
       return false
     }

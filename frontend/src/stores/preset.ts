@@ -1,12 +1,7 @@
 import { reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { DecodeConfig, EncodeConfig, OutputConfig, WorkbenchPreset, WorkflowConfig } from '@/types/protocol'
-import {
-  cloneDecodeConfig,
-  cloneEncodeConfig,
-  cloneOutputConfig,
-  cloneWorkflowConfig,
-} from '@/services/preset/clone'
+import { clonePresetData } from '@/services/preset/clone'
 import { createDefaultWorkbenchPreset } from '@/services/preset/defaults'
 
 export const usePresetStore = defineStore('preset', () => {
@@ -14,32 +9,32 @@ export const usePresetStore = defineStore('preset', () => {
   const presetPersistenceReady = ref(false)
 
   function replaceDraftPreset(next: WorkbenchPreset): void {
-    draftPreset.decodeConfig = cloneDecodeConfig(next.decodeConfig)
-    draftPreset.workflowConfig = cloneWorkflowConfig(next.workflowConfig)
-    draftPreset.encodeConfig = cloneEncodeConfig(next.encodeConfig)
-    draftPreset.outputConfig = cloneOutputConfig(next.outputConfig)
+    draftPreset.decodeConfig = clonePresetData(next.decodeConfig)
+    draftPreset.workflowConfig = clonePresetData(next.workflowConfig)
+    draftPreset.encodeConfig = clonePresetData(next.encodeConfig)
+    draftPreset.outputConfig = clonePresetData(next.outputConfig)
   }
 
   function patchDecode(mutator: (config: DecodeConfig) => void): void {
-    const next = cloneDecodeConfig(draftPreset.decodeConfig)
+    const next = clonePresetData(draftPreset.decodeConfig)
     mutator(next)
     draftPreset.decodeConfig = next
   }
 
   function patchEncode(mutator: (config: EncodeConfig) => void): void {
-    const next = cloneEncodeConfig(draftPreset.encodeConfig)
+    const next = clonePresetData(draftPreset.encodeConfig)
     mutator(next)
     draftPreset.encodeConfig = next
   }
 
   function patchWorkflow(mutator: (config: WorkflowConfig) => void): void {
-    const next = cloneWorkflowConfig(draftPreset.workflowConfig)
+    const next = clonePresetData(draftPreset.workflowConfig)
     mutator(next)
     draftPreset.workflowConfig = next
   }
 
   function patchOutput(mutator: (config: OutputConfig) => void): void {
-    const next = cloneOutputConfig(draftPreset.outputConfig)
+    const next = clonePresetData(draftPreset.outputConfig)
     mutator(next)
     draftPreset.outputConfig = next
   }

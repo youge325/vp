@@ -1,9 +1,8 @@
 // pure: no Vue / no Pinia / no Tauri
 // Resume 冲突分类与 wire/error payload 到领域 descriptor 的投影。
 
-import type { TaskError } from '@/types/domain/media'
 import type { ResumeConflictDescriptor } from '@/types/domain/batch'
-import type { ResumeInspectionResult } from '@/types/protocol'
+import type { ResumeInspectionResult, TaskErrorPayload } from '@/types/protocol'
 
 interface ResumeConflictSource {
   outputPath: string
@@ -36,7 +35,7 @@ export function buildResumeConflictDescriptor(
   return createResumeConflictDescriptor(inspection)
 }
 
-export function buildResumeConflictDescriptorFromError(error: TaskError): ResumeConflictDescriptor {
+export function buildResumeConflictDescriptorFromError(error: TaskErrorPayload): ResumeConflictDescriptor {
   const details = (error.details ?? {}) as Record<string, unknown>
   return createResumeConflictDescriptor({
     outputPath: typeof details.outputPath === 'string' ? details.outputPath : '',

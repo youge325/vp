@@ -1,6 +1,6 @@
 import type { MediaItem, MediaRunState } from '@/types/domain/media'
 
-export interface TaskContextLookup {
+export interface TaskContextPort {
   getMediaItem: (id: string) => MediaItem | null
   getItemRunState: (id: string) => MediaRunState | null
 }
@@ -11,7 +11,7 @@ export interface TaskContext {
 }
 
 export function resolveTaskContext(
-  lookup: TaskContextLookup,
+  lookup: TaskContextPort,
   id: string | null,
 ): TaskContext {
   const item = id ? lookup.getMediaItem(id) : null
@@ -22,7 +22,7 @@ export function resolveTaskContext(
 }
 
 export function resolveConsoleTaskContext(
-  lookup: TaskContextLookup,
+  lookup: TaskContextPort,
   currentId: string | null,
   activeId: string | null,
 ): TaskContext {

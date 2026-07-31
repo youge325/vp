@@ -19,9 +19,15 @@ export function createBatchRunner(deps: BatchRunnerDeps): BatchRunner {
     handleErrored: (error) => finalizeOps.handleErrored(error),
   })
   const controlOps = createControlOps(deps, helpers)
-  const operations = { ...helpers, ...queueOps, ...finalizeOps }
-  const conflict = createConflictResolver(deps, operations)
-  const events = createEventHandlers(deps, operations, conflict)
+  const lifecycle = {
+    getCurrentTaskContext: helpers.getCurrentTaskContext,
+    getConsoleTaskContext: helpers.getConsoleTaskContext,
+    launchCurrentItem: queueOps.launchCurrentItem,
+    finalizeCurrent: finalizeOps.finalizeCurrent,
+    handleErrored: finalizeOps.handleErrored,
+  }
+  const conflict = createConflictResolver(deps, lifecycle)
+  const events = createEventHandlers(deps, lifecycle, conflict)
 
   return {
     start: queueOps.start,

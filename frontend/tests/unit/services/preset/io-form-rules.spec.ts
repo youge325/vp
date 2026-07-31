@@ -9,10 +9,10 @@ import {
   normalizeSegmentFrames,
   resolveRateControlModeSelection,
 } from '@/services/preset/io-form-rules'
-import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/protocol'
+import type { CodecProfileSpec } from '@/types/protocol'
 import type { DecodeConfig } from '@/types/protocol'
 
-const decoderProfile = (): DecoderProfileSpec => ({
+const decoderProfile = (): CodecProfileSpec => ({
   name: 'h264_cuvid',
   label: 'NVDEC H.264',
   family: 'nvidia',
@@ -29,7 +29,7 @@ const decoderProfile = (): DecoderProfileSpec => ({
   options: [],
 })
 
-const encoderProfile = (): EncoderProfileSpec => ({
+const encoderProfile = (): CodecProfileSpec => ({
   name: 'hevc_nvenc',
   label: 'NVENC H.265',
   family: 'nvidia',

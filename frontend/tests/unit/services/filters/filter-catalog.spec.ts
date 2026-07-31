@@ -23,7 +23,7 @@ describe('filter catalog', () => {
     expect(pad.editor?.fields.map(({ key }) => key)).toEqual(['top', 'bottom', 'left', 'right', 'color'])
     expect(pad.editor?.fields.slice(0, 4).every(({ min, type }) => min === 0 && type === 'number')).toBe(true)
     expect(pad.editor?.fields.at(-1)?.type).toBe('text')
-    expect(pad.defaultParams).toEqual({ top: 0, bottom: 0, left: 0, right: 0, color: '#000000' })
+    expect(pad.defaultStep.params).toEqual({ top: 0, bottom: 0, left: 0, right: 0, color: '#000000' })
   })
 
   it('creates independent default params', () => {

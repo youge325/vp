@@ -31,10 +31,10 @@ crate 内部接口；命令是否可由前端调用由 Tauri handler 与权限�
 
 根目录 `contracts/ipc-manifest.json` 是命令名、参数、返回值和事件名的唯一清单。生成脚本产出 Rust build manifest 与前端类型化 invoke 映射；架构门禁再与 `generate_handler!` 和 Tauri permissions 比对。
 
-manifest v2 还把应用 IPC command 映射到私有 Python subcommand、success envelope 和
-discriminator 保留策略。调用方只传 `inspect_video`、`check_environment` 或
-`check_resume_state`；`generated/backend_oneshot.rs` 负责解析对应的 `info`、`check` 或
-`inspect-output`，Rust 不维护平行命令表。
+manifest v3 还声明长任务与 one-shot 的 Python subcommand、stdin payload、success/event 类型、
+discriminator、期限和统一大小上限。`generated/backend_oneshot.rs` 将每个应用命令生成成 sealed
+`BackendProcessSpec` / `BackendOneShotSpec`；调用方选择 `StartTaskSpec`、`InspectVideoSpec`、
+`CheckEnvironmentSpec` 或 `CheckResumeStateSpec`，不维护平行命令表或 timeout 常量。
 
 **新增命令的 checklist：** 修改中立 manifest → 重新生成绑定 → 实现并注册 handler → 更新 permission → 运行契约门禁。
 
@@ -79,12 +79,14 @@ graph TB
     A --> D[oneshot.rs 短命令运行]
     A --> E[builder.rs 后端命令构建]
     A --> F[state.rs 任务状态机]
-    A --> G[handle.rs TaskHandle]
+    A --> G[control.rs control adapter]
     A --> H[controller.rs TaskSupervisor + Watchdog]
     A --> I[cancellation.rs CancellationToken]
-    A --> J[readers.rs stdout 读取器]
+    A --> J[readers.rs pipe readers]
     A --> K[envelope.rs NDJSON 信封解析]
     A --> L[stderr.rs stderr 兜底]
+    A --> M[ports.rs Tauri event/lifecycle adapter]
+    A --> N[subprocess.rs kill-and-reap owner]
 
     B --> C
     B --> D
@@ -101,8 +103,9 @@ graph TB
 ### One-shot 短命令
 
 [`frontend/src-tauri/src/tasks/oneshot.rs`](../frontend/src-tauri/src/tasks/oneshot.rs) 通过
-`run_single_cli_command<T>()` 接收应用 IPC command，并直接返回 schema 校验后的
-`Result<T, ShellError>`。结构化错误信封
+`run_single_cli_command<S>(paths, &S::Invocation)` 接收 sealed `BackendOneShotSpec`，并直接返回
+schema 校验后的 `Result<S::Output, ShellError>`。调用方不能把任意 subcommand、输入模型、输出模型
+或期限拼成一次调用。结构化错误信封
 映射为 `BackendEnvelope`，无信封的非零退出映射为 `BackendProbeFailed`，成功但没有 JSON 映射为
 `BackendNoJson`。解析器从 stdout 末尾逆序寻找最后一个 schema 合法、类型匹配的 success 或
 backend error envelope；较新的无关日志/事件不会遮住合法结果，只有不存在合法候选时才报告最新
@@ -121,9 +124,13 @@ schema mismatch。`check`/`info` 的 transport-only `type` 在反序列化前移
 | `check_environment` → `check` 总期限 | 180 秒 |
 | 终止与回收 | 5 秒 |
 
+这些值以及 1 MiB pipe 行、8 MiB one-shot stdout、64 KiB stderr tail 和 8 KiB error summary
+都来自 manifest v3；`process` 与每个 one-shot 条目显式绑定 `terminationReapLimit`，Rust 生产代码只消费
+各 sealed spec 生成的期限。
+
 ### 任务状态机与启动租约
 
-[`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) 定义五状态生命周期：
+[`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) 定义七阶段生命周期：
 
 ```mermaid
 stateDiagram-v2
@@ -134,8 +141,13 @@ stateDiagram-v2
     Starting --> Idle: rollback_start(lease)
     Running --> Cancelling: begin_cancel(reason)
     Running --> Finishing: seal_owned(lease)
-    Cancelling --> Idle: finish_once(lease)
-    Finishing --> Idle: finish_once(lease)
+    Starting --> Reaping: spawned child cleanup
+    Running --> Reaping: kill-and-reap
+    Cancelling --> Reaping: kill-and-reap
+    Finishing --> Reaping: kill-and-reap
+    Reaping --> Idle: reap confirmed
+    Reaping --> CleanupFailed: reap unconfirmed
+    CleanupFailed --> Idle: cleanup coordinator confirms
 ```
 
 - `Starting { lease }` 在任何命令构建或进程创建前占用唯一任务槽，第二个 start 不会创建子进程。
@@ -146,6 +158,8 @@ stateDiagram-v2
 - `seal_owned()` 在收到 terminal envelope 或发现进程退出后把当前 lease 置为 `Finishing`，
   立即拒绝新的 pause、resume 和 cancel，同时允许 supervisor 排空 reader 并完成终态仲裁。
 - `finish_once()` 在持有生命周期锁时先提交终态回调，再释放任务槽，保证终态恰好一次且先于下一次启动。
+- `Reaping` 在稳定 owner 确认退出前继续占用槽位；5 秒回收失败进入 `CleanupFailed`，终态仍只
+  提交一次，只有持有稳定句柄的 cleanup coordinator 后续确认退出才能重新开放任务槽。
 - 状态层返回领域 `TaskStateError`；只有 `tasks/commands.rs` 的 Tauri adapter 将其映射为
   `ShellError`。
 
@@ -164,7 +178,7 @@ sequenceDiagram
     Frontend->>Rust: start_task(request)
     Rust->>State: reserve_start()
     Rust->>Rust: build_process_command()
-    Rust->>Python: command_group::AsyncCommand::spawn()
+    Rust->>Python: ProcessGroupChild::spawn()
     Rust->>Rust: 取得 stdin/stdout/stderr 和 root pid
     Rust->>State: activate(lease, control_tx)
     Rust->>Rust: 启动 stdin writer 与 stdout/stderr reader
@@ -181,6 +195,10 @@ writer 前启动，避免三条 pipe 互相填满形成死锁；stdin 写入也�
 `TaskSupervisorSession` 是运行任务的结构化 owner，持有 child、lease、控制/输出通道、三个 pipe
 task、stderr capture、取消 token 和 progress beat。只有 supervisor 能发送终态。
 
+`controller.rs` 与 `readers.rs` 只依赖 Tokio、领域 payload 和 `TaskEventSink` /
+`TaskLifecyclePort`；`ports.rs` 是任务域唯一 Tauri event/lifecycle adapter，`spawn.rs` 是装配它的
+composition root。架构门禁禁止 task core 重新导入 Tauri，并检查 tasks 子模块 DAG 无环。
+
 supervisor 在一个 `tokio::select!` 循环中并发处理 reader 消息、进程退出、取消、watchdog 和
 暂停/恢复结果。终态规则如下：
 
@@ -191,14 +209,15 @@ supervisor 在一个 `tokio::select!` 循环中并发处理 reader 消息、进�
 - schema mismatch、pipe failure、terminal 后进程不退出都会触发进程组 kill。
 - 退出后先在 5 秒内排空 stdout/stderr，再 join reader；排空失败覆盖先前 completed。
 - 取消原因优先生成 `task-cancelled`；最终事件通过 `finish_once(lease, callback)` 恰好提交一次。
-- supervisor panic 或 join failure 会先触发结构化 owner 的 drop：进程组被 kill，稳定的
-  group/job handle 交给 detached reaper；monitor 随后按同一 lease 释放槽并只提交一个
-  `process_failed` 终态。
+- supervisor panic 或 join failure 会先触发结构化 owner 的 drop：进程组收到终止请求，稳定的
+  group/job handle 交给进程级 cleanup coordinator。协调器持有单一后台线程的 join handle，持续
+  轮询并通过 `ReapTicket` 发布 `Reaped/Failed`；monitor 按同一 lease 只提交一个 `process_failed`
+  终态。
 
 ### NDJSON 信封解析
 
 [`frontend/src-tauri/src/tasks/envelope.rs`](../frontend/src-tauri/src/tasks/envelope.rs) 复用
-`generated/backend_task_envelope.rs` 中从 manifest v2 生成的四 variant enum，不再手写
+`generated/backend_task_envelope.rs` 中从 manifest v3 生成的四 variant enum，不再手写
 `progress / completed / error / resume_status` 镜像。
 
 `classify_line()` 是生产 reader 与测试共同覆盖的唯一 classifier。合法 envelope 被解析为类型化
@@ -207,9 +226,10 @@ payload；普通非 JSON 文本作为日志；对象形 JSON、未知 `type`、�
 
 ### stderr 兜底
 
-[`frontend/src-tauri/src/tasks/stderr.rs`](../frontend/src-tauri/src/tasks/stderr.rs) 维护滚动缓冲
-（400 行 / 8KB）。Python 未发类型化 error 就异常退出时，supervisor 生成 `runtime_panic`，并把
-缓冲内容放进 `details.traceback`；reader 会先排空，因此进程退出前最后写入的 stderr 不会丢失。
+[`frontend/src-tauri/src/tasks/stderr.rs`](../frontend/src-tauri/src/tasks/stderr.rs) 维护最多 400 行、
+总计 64 KiB 的滚动缓冲，并把最终错误摘要截到 8 KiB。Python 未发类型化 error 就异常退出时，
+supervisor 生成 `runtime_panic` 并把摘要放进 `details.traceback`；reader 会先排空，因此退出前的
+尾部诊断不会丢失。
 
 ## 进程控制
 
@@ -217,15 +237,17 @@ payload；普通非 JSON 文本作为日志；对象形 JSON、未知 `type`、�
 
 - `mod.rs` — 任务绑定的 `ProcessController` 与测试用 `ProcessControl` trait
 - `windows.rs` — Win32 稳定进程/线程句柄上的 `SuspendThread` / `ResumeThread`
-- `posix.rs` — 稳定 root identity 校验后的 `kill(-pgid, SIGSTOP/SIGCONT)`
+- `posix.rs` — Linux pidfd 集合控制，以及 macOS 的显式不支持路径
 
 `ProcessController` 在任务启动时捕获稳定身份，后续每次控制都先复核：
 
 - Windows 在任务期持有 root 进程句柄和 creation FILETIME；每次枚举时再捕获后代进程句柄与
   creation FILETIME，暂停期间继续持有包含 owner 进程身份与 creation FILETIME 的线程句柄，
   恢复只操作这些原句柄。双次 ToolHelp 快照还会验证 parent link 未变化。
-- Linux 持有 root pidfd，并同时校验 `/proc/<pid>/stat` 的启动时间和 PGID。
-- macOS 校验 `proc_pidinfo` 返回的启动时间和 PGID。
+- Linux 固定点枚举 root、后代和同 PGID 成员，为每个成员打开并保留 pidfd；暂停/恢复只向这些
+  稳定句柄发 `SIGSTOP/SIGCONT`，同时校验 `/proc/<pid>/stat` 的启动时间、parent link 和 PGID。
+- macOS 缺少与 pidfd/进程句柄等价的稳定信号句柄，因此 pause/resume 明确返回
+  `ProcessControlError::Unsupported`；cancel 与 supervisor 的进程组终止仍可用。
 
 任何句柄、启动时间、owner 或 parent link 无法验证时，控制以 `IdentityMismatch`/typed OS error
 失败关闭，禁止仅凭旧 PID/TID 发信号。控制消息和 reply 都有有界超时；OS 扫描与系统调用通过

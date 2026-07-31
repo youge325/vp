@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useIssueStore } from '@/stores/issue'
 import { TASK_ERROR_CODES } from '@/types/protocol'
-import type { TaskError } from '@/types/domain/media'
+import type { TaskErrorPayload } from '@/types/protocol'
 
 // Banner-surface store split out of ``useMediaStore``.
 // Cover every scope so a future regression that drops or mis-routes
@@ -12,7 +12,7 @@ import type { TaskError } from '@/types/domain/media'
 
 const allScopes = ['input', 'encode', 'task', 'preset'] as const
 
-function makeError(message = 'something went wrong'): TaskError {
+function makeError(message = 'something went wrong'): TaskErrorPayload {
   return { code: TASK_ERROR_CODES.ProcessFailed, message, details: null }
 }
 

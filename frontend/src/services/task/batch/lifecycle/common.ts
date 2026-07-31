@@ -21,12 +21,21 @@ export function createCommonHelpers(
   deps: CommonDeps,
 ): TaskContextCapability & ConsoleTaskContextCapability {
   function getCurrentTaskContext() {
-    return resolveTaskContext(deps, deps.getBatch().currentId)
+    return resolveTaskContext(
+      {
+        getMediaItem: deps.getMediaItem,
+        getItemRunState: deps.getItemRunState,
+      },
+      deps.getBatch().currentId,
+    )
   }
 
   function getConsoleTaskContext() {
     return resolveConsoleTaskContext(
-      deps,
+      {
+        getMediaItem: deps.getMediaItem,
+        getItemRunState: deps.getItemRunState,
+      },
       deps.getBatch().currentId,
       deps.getActiveItemId(),
     )

@@ -1,28 +1,28 @@
 // pure: no Vue / no Pinia / no Tauri
 // 编码器/解码器 profile 选优。
 
-import type { DecoderProfileSpec, EncoderProfileSpec } from '@/types/protocol'
+import type { CodecProfileSpec } from '@/types/protocol'
 import type { EnvironmentCheckResult } from '@/types/protocol'
 
 const FAMILY_PRIORITY = ['nvidia', 'intel', 'cpu'] as const
 const CODEC_PRIORITY = ['hevc', 'h264', 'av1'] as const
 
-function getEncoderProfiles(env: EnvironmentCheckResult | null): EncoderProfileSpec[] {
+function getEncoderProfiles(env: EnvironmentCheckResult | null): CodecProfileSpec[] {
   return env?.ffmpeg.encoderProfiles ?? []
 }
 
-function getDecoderProfiles(env: EnvironmentCheckResult | null): DecoderProfileSpec[] {
+function getDecoderProfiles(env: EnvironmentCheckResult | null): CodecProfileSpec[] {
   return env?.ffmpeg.decoderProfiles ?? []
 }
 
-export function getVisibleEncoderProfiles(env: EnvironmentCheckResult | null): EncoderProfileSpec[] {
+export function getVisibleEncoderProfiles(env: EnvironmentCheckResult | null): CodecProfileSpec[] {
   return getEncoderProfiles(env).filter((profile) => profile.available)
 }
 
 export function getVisibleDecoderProfiles(
   env: EnvironmentCheckResult | null,
   videoCodec = '',
-): DecoderProfileSpec[] {
+): CodecProfileSpec[] {
   const codec = normalizeCodec(videoCodec)
   return getDecoderProfiles(env).filter((profile) => {
     if (!profile.available) {
@@ -35,7 +35,7 @@ export function getVisibleDecoderProfiles(
   })
 }
 
-export function pickPreferredEncoderProfile(env: EnvironmentCheckResult | null): EncoderProfileSpec | null {
+export function pickPreferredEncoderProfile(env: EnvironmentCheckResult | null): CodecProfileSpec | null {
   const profiles = getVisibleEncoderProfiles(env)
   for (const family of FAMILY_PRIORITY) {
     const familyProfiles = profiles.filter((profile) => profile.family === family)
@@ -56,7 +56,7 @@ export function pickPreferredEncoderProfile(env: EnvironmentCheckResult | null):
 export function pickPreferredDecoderProfile(
   env: EnvironmentCheckResult | null,
   videoCodec: string,
-): DecoderProfileSpec | null {
+): CodecProfileSpec | null {
   const codec = normalizeCodec(videoCodec)
   const profiles = getVisibleDecoderProfiles(env, codec)
   for (const family of ['nvidia', 'intel'] as const) {

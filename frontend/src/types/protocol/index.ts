@@ -9,6 +9,7 @@ export * from './errors'
 export type {
   AlgorithmInfo,
   CapabilityOptionSpec,
+  CodecProfileFamily,
   CodecProfileSpec,
   DecodeConfig,
   EncodeConfig,
@@ -43,11 +44,6 @@ export type {
 
 import type {
   CapabilityChoice,
-  CodecProfileFamily,
-  CodecProfileSpec,
 } from '@/types/generated/contracts'
 
 export type CapabilityValue = CapabilityChoice['value']
-export type CodecFamily = CodecProfileFamily
-export type DecoderProfileSpec = CodecProfileSpec
-export type EncoderProfileSpec = CodecProfileSpec

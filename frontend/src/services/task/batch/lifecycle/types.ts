@@ -7,13 +7,13 @@ import type {
   TaskLogPayload,
   TaskProgressPayload,
   TaskRequest,
+  TaskErrorPayload,
 } from '@/types/protocol'
 import type { BatchState, ResumeConflictDescriptor } from '@/types/domain/batch'
 import type {
   MediaItem,
   MediaRunState,
   MediaTaskState,
-  TaskError,
 } from '@/types/domain/media'
 import type { ResumeConflictAction } from '@/types/domain/batch'
 import type { TaskContext } from '../../task-context'
@@ -44,13 +44,12 @@ export interface MediaRunStatePort {
 }
 
 export interface TaskIssuePort {
-  setTaskIssue: (issue: TaskError | null) => void
+  setTaskIssue: (issue: TaskErrorPayload | null) => void
 }
 
 export interface BatchStatePort {
   getBatch: () => BatchState
   setBatch: (partial: Partial<BatchState>) => void
-  getRuntimeIds: () => string[]
   setRuntimeIds: (ids: string[]) => void
   setPendingConflict: (descriptor: ResumeConflictDescriptor | null) => void
 }
@@ -72,21 +71,24 @@ export interface QueueContinuation {
   launchCurrentItem: (item: MediaItem, resumeMode?: ResumeMode) => Promise<void>
 }
 
-export interface QueueOperations extends QueueContinuation {
+export interface QueueOperations {
+  runNextQueuedItem: () => Promise<void>
+  launchCurrentItem: (item: MediaItem, resumeMode?: ResumeMode) => Promise<void>
   start: (ids: string[]) => Promise<void>
 }
 
 export interface ErrorFinalizationCapability {
-  handleErrored: (error: TaskError) => Promise<void>
+  handleErrored: (error: TaskErrorPayload) => Promise<void>
 }
 
-export interface FinalizationCapability extends ErrorFinalizationCapability {
+export interface FinalizationCapability {
+  handleErrored: (error: TaskErrorPayload) => Promise<void>
   finalizeCurrent: (state: 'completed' | 'error' | 'cancelled') => Promise<void>
 }
 
 export interface ConflictCapability {
   resolveConflict: (action: ResumeConflictAction) => Promise<void>
-  tryStashFromError: (error: TaskError) => boolean
+  tryStashFromError: (error: TaskErrorPayload) => boolean
 }
 
 export interface ControlOperations {
@@ -95,14 +97,16 @@ export interface ControlOperations {
   cancel: () => Promise<void>
 }
 
-export interface BatchRunner
-  extends Pick<QueueOperations, 'start'>,
-  ControlOperations,
-  Pick<ConflictCapability, 'resolveConflict'> {
+export interface BatchRunner {
+  start: (ids: string[]) => Promise<void>
+  pause: () => Promise<void>
+  resume: () => Promise<void>
+  cancel: () => Promise<void>
+  resolveConflict: (action: ResumeConflictAction) => Promise<void>
   onProgress: (payload: TaskProgressPayload) => void
   onLog: (payload: TaskLogPayload) => void
   onCompleted: (payload: TaskCompletedPayload) => Promise<void>
-  onError: (error: TaskError) => Promise<void>
+  onError: (error: TaskErrorPayload) => Promise<void>
   onCancelled: (payload: TaskCancelledPayload) => Promise<void>
   onResumeStatus: (payload: ResumeStatusPayload) => void
 }

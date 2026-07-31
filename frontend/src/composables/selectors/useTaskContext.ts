@@ -5,13 +5,13 @@ import { useTaskStore } from '@/stores/task'
 import {
   resolveConsoleTaskContext,
   resolveTaskContext,
-  type TaskContextLookup,
+  type TaskContextPort,
 } from '@/services/task/task-context'
 
 function useTaskContextLookup() {
   const mediaStore = useMediaStore()
   const runStateStore = useMediaRunState()
-  const lookup: TaskContextLookup = {
+  const lookup: TaskContextPort = {
     getMediaItem: (id) => mediaStore.findItem(id),
     getItemRunState: (id) => runStateStore.getByItemId(id),
   }

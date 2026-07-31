@@ -4,7 +4,7 @@ import {
   buildResumeConflictDescriptor,
   buildResumeConflictDescriptorFromError,
 } from '@/services/task/resume-classifier'
-import type { TaskError } from '@/types/domain/media'
+import type { TaskErrorPayload } from '@/types/protocol'
 
 describe('resume conflict classification', () => {
   it('classifies final output with resumable chunks', () => {
@@ -32,7 +32,7 @@ describe('resume conflict classification', () => {
   })
 
   it('projects error details without fabricating an inspection wire payload', () => {
-    const error: TaskError = {
+    const error: TaskErrorPayload = {
       code: 'resume_conflict',
       message: 'resume conflict',
       details: {

@@ -1,6 +1,6 @@
 // Terminal accounting, cleanup and queue continuation.
 
-import type { TaskError } from '@/types/domain/media'
+import type { TaskErrorPayload } from '@/types/protocol'
 
 import { applyTaskError } from '../../events'
 
@@ -79,7 +79,7 @@ export function createFinalizeOps(
     finishBatchRun()
   }
 
-  async function handleErrored(error: TaskError): Promise<void> {
+  async function handleErrored(error: TaskErrorPayload): Promise<void> {
     const { item, runState } = helpers.getCurrentTaskContext()
     if (item && runState) {
       deps.setItemTaskState(item.id, applyTaskError(runState.taskState))

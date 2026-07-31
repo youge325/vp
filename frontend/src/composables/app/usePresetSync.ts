@@ -1,6 +1,6 @@
 // 应用层 — 预设持久化协调:加载、保存、debounce、自动同步草稿变更。
 
-import { watch } from 'vue'
+import { watch, type WatchStopHandle } from 'vue'
 import type { WorkbenchPreset } from '@/types/protocol'
 import { TASK_ERROR_CODES } from '@/types/protocol'
 import { useEnvStore } from '@/stores/env'
@@ -8,7 +8,7 @@ import { useIssueStore } from '@/stores/issue'
 import { usePresetStore } from '@/stores/preset'
 import { presetIpc } from '@/lib/ipc/endpoints/preset'
 import { normalizeError } from '@/lib/errors/normalize'
-import { cloneWorkbenchPreset } from '@/services/preset/clone'
+import { clonePresetData } from '@/services/preset/clone'
 import { createDefaultWorkbenchPreset } from '@/services/preset/defaults'
 
 const PRESET_SAVE_DEBOUNCE_MS = 300
@@ -24,8 +24,15 @@ export function usePresetSync() {
   const issueStore = useIssueStore()
   let saveTimer: ReturnType<typeof setTimeout> | null = null
   let latestSaveGeneration = 0
+  let lifecycleGeneration = 0
   let queuedSave: PresetSaveRequest | null = null
   let saveInFlight = false
+  let stopAutoSync: WatchStopHandle | null = null
+  let disposed = false
+
+  function isActive(generation = lifecycleGeneration): boolean {
+    return !disposed && generation === lifecycleGeneration
+  }
 
   function handlePersistenceFailure(
     error: unknown,
@@ -58,13 +65,13 @@ export function usePresetSync() {
   }
 
   async function drainSaveQueue(): Promise<void> {
-    if (saveInFlight) {
+    if (disposed || saveInFlight) {
       return
     }
     saveInFlight = true
 
     try {
-      while (queuedSave) {
+      while (!disposed && queuedSave) {
         const request = queuedSave
         queuedSave = null
         if (request.generation !== latestSaveGeneration) {
@@ -72,25 +79,25 @@ export function usePresetSync() {
         }
         try {
           await presetIpc.save(request.preset)
-          if (request.generation === latestSaveGeneration) {
+          if (!disposed && request.generation === latestSaveGeneration) {
             issueStore.clearIssue('preset')
           }
         } catch (error) {
-          if (request.generation === latestSaveGeneration) {
+          if (!disposed && request.generation === latestSaveGeneration) {
             handlePersistenceFailure(error, 'Unable to save the workbench preset.', false)
           }
         }
       }
     } finally {
       saveInFlight = false
-      if (queuedSave) {
+      if (!disposed && queuedSave) {
         void drainSaveQueue()
       }
     }
   }
 
   function scheduleSave(): void {
-    if (!presetStore.presetPersistenceReady) {
+    if (disposed || !presetStore.presetPersistenceReady) {
       return
     }
     if (saveTimer) {
@@ -99,33 +106,43 @@ export function usePresetSync() {
     const generation = ++latestSaveGeneration
     saveTimer = setTimeout(() => {
       saveTimer = null
-      if (generation !== latestSaveGeneration) {
+      if (disposed || generation !== latestSaveGeneration) {
         return
       }
       queuedSave = {
         generation,
-        preset: cloneWorkbenchPreset(presetStore.draftPreset),
+        preset: clonePresetData(presetStore.draftPreset),
       }
       void drainSaveQueue()
     }, PRESET_SAVE_DEBOUNCE_MS)
   }
 
   async function loadPersistedPreset(): Promise<void> {
+    const generation = lifecycleGeneration
     try {
       const preset = await presetIpc.load()
+      if (!isActive(generation)) {
+        return
+      }
       if (!preset) {
         presetStore.replaceDraftPreset(createDefaultWorkbenchPreset(envStore.env.checkResult))
         return
       }
-      presetStore.replaceDraftPreset(cloneWorkbenchPreset(preset))
+      presetStore.replaceDraftPreset(clonePresetData(preset))
       issueStore.clearIssue('preset')
     } catch (error) {
+      if (!isActive(generation)) {
+        return
+      }
       const normalized = normalizeError(error, TASK_ERROR_CODES.PersistenceFailed)
       if (normalized.code === TASK_ERROR_CODES.SchemaMismatch) {
         const recovered = recoverFromSchemaMismatch()
         try {
-          await presetIpc.save(cloneWorkbenchPreset(recovered))
+          await presetIpc.save(clonePresetData(recovered))
         } catch (rebuildError) {
+          if (!isActive(generation)) {
+            return
+          }
           const rebuildFailure = normalizeError(
             rebuildError,
             TASK_ERROR_CODES.PersistenceFailed,
@@ -142,15 +159,35 @@ export function usePresetSync() {
   }
 
   function startAutoSync(): void {
-    watch(
+    if (disposed || stopAutoSync) {
+      return
+    }
+    stopAutoSync = watch(
       () => [presetStore.draftPreset.decodeConfig, presetStore.draftPreset.encodeConfig, presetStore.draftPreset.workflowConfig, presetStore.draftPreset.outputConfig],
       () => scheduleSave(),
       { deep: true },
     )
   }
 
+  function dispose(): void {
+    if (disposed) {
+      return
+    }
+    disposed = true
+    lifecycleGeneration += 1
+    latestSaveGeneration += 1
+    stopAutoSync?.()
+    stopAutoSync = null
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+    queuedSave = null
+  }
+
   return {
     loadPersistedPreset,
     startAutoSync,
+    dispose,
   }
 }

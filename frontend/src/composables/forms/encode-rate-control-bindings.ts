@@ -5,11 +5,11 @@ import {
   resolveRateControlModeSelection,
 } from '@/services/preset/io-form-rules'
 import { toNumberValue } from '@/services/preset/options'
-import type { EncoderProfileSpec } from '@/types/protocol'
+import type { CodecProfileSpec } from '@/types/protocol'
 import type { EncodeConfig, WorkbenchPreset } from '@/types/protocol'
 
 interface EncodeRateControlBindingParams {
-  currentEncoderProfile: ComputedRef<EncoderProfileSpec | null>
+  currentEncoderProfile: ComputedRef<CodecProfileSpec | null>
   editorConfig: ComputedRef<Pick<WorkbenchPreset, 'encodeConfig'>>
   patchEncode: (mutator: (config: EncodeConfig) => void) => void
 }

@@ -1,5 +1,4 @@
-import type { TaskError } from '@/types/domain/media'
-import { TASK_ERROR_CODES, type TaskErrorCode } from '@/types/protocol'
+import { TASK_ERROR_CODES, type TaskErrorCode, type TaskErrorPayload } from '@/types/protocol'
 
 /**
  * Convert JavaScript, Tauri, and backend error shapes into the shared domain
@@ -8,7 +7,7 @@ import { TASK_ERROR_CODES, type TaskErrorCode } from '@/types/protocol'
 export function normalizeError(
   error: unknown,
   code: TaskErrorCode = TASK_ERROR_CODES.ProcessFailed,
-): TaskError {
+): TaskErrorPayload {
   if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
     const payload = error as {
       code?: unknown

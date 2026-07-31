@@ -35,7 +35,7 @@
 | 前端模块依赖图 | [02](02-frontend-architecture.md) |
 | 任务状态机（前端） | [02](02-frontend-architecture.md) |
 | Rust 模块依赖图 | [03](03-rust-shell-architecture.md) |
-| TaskStatePhase 五状态、启动租约与终态封口 | [03](03-rust-shell-architecture.md) / [07](07-task-lifecycle.md) |
+| TaskStatePhase 七阶段、启动租约、终态封口与回收占位 | [03](03-rust-shell-architecture.md) / [07](07-task-lifecycle.md) |
 | Python 包依赖图 | [04](04-backend-architecture.md) |
 | stage-worker 流式流水线 | [04](04-backend-architecture.md) |
 | 完整任务执行序列图 | [05](05-ipc-protocol.md) |

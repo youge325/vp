@@ -23,8 +23,9 @@ graph LR
 NDJSON、错误码和持久化边界。源 schema 使用本地外部 `$ref` 复用结构，并为每个对象显式声明
 `additionalProperties`。
 
-[`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) schema version 2 是命令名、参数、
-返回值、事件名、Python task/one-shot envelope 映射和终端进度前缀的唯一清单。
+[`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) schema version 3 是命令名、参数、
+返回值、事件名、Python task/one-shot envelope、stdin payload、期限、大小上限和两个诊断前缀的
+唯一清单。
 `python scripts/generate_contracts.py` 会：
 
 - 校验所有 schema、外部 `$ref`/JSON Pointer、manifest 唯一性和错误码集合；
@@ -32,8 +33,9 @@ NDJSON、错误码和持久化边界。源 schema 使用本地外部 `$ref` 复�
 - 用 `datamodel-code-generator` 生成 Python Pydantic 边界；
 - 用 `json-schema-to-typescript` 生成 TypeScript 边界；
 - 从同一清单生成覆盖四类 task 与三类 one-shot 的 `ndjson.schema.json`；
-- 生成 Python envelope enum/类型映射、TypeScript 事件/进度常量，以及 Rust manifest、
-  task envelope、one-shot/事件和持久化版本适配器；
+- 生成 Python envelope enum/类型映射/协议 limits、TypeScript 事件/进度常量，以及 Rust manifest、
+  task envelope、sealed process/one-shot spec、错误码转换、事件和持久化版本适配器；
+- 从 `stage-worker.schema.json` 生成 Python 内部 worker config/progress/error 模型；
 - 让 Rust 的私有 Typify 模块在编译期消费同一聚合 schema。
 
 `python scripts/generate_contracts.py --check` 对上述生成物执行逐字节 freshness 检查。Rust
@@ -130,15 +132,36 @@ schema 合法且类型匹配的 success 或 backend error envelope：
 - 若只找到类型匹配但 schema 错误的候选，则返回 `schema_mismatch`。
 
 应用 IPC command → 私有 Python subcommand、envelope 名和 discriminator 保留策略的映射由
-manifest 生成到 `generated/backend_oneshot.rs`，Rust 调用方只提供应用 command，不维护第二份
-subcommand 条件链。这避免了日志尾行、较早出现的合法 envelope 或无关事件影响结果选择。
+manifest 生成到 `generated/backend_oneshot.rs` 的 sealed spec。Rust 调用方以 spec 类型选择
+subcommand、输入/输出模型和期限，不维护字符串条件链。这避免了日志尾行、较早出现的合法
+envelope 或无关事件影响结果选择。
 
 进程执行期限由 Rust 的共享子进程策略统一约束：stdin 10 秒，`info` 30 秒，
-`inspect-output` 60 秒，`check` 180 秒，终止回收 5 秒。无 payload 的 one-shot 使用空 stdin；
+`inspect-output` 60 秒，`check` 180 秒，终止回收 5 秒。`process` 与每个 one-shot 条目均通过
+`terminationReapLimit` 显式绑定回收上限，生成的 sealed spec 不使用手写 deadline 表。无 payload 的 one-shot 使用空 stdin；
 超时、错误或 future drop 都会 kill-and-reap 其进程组/job。
 
-终端进度前缀同样来自 `protocolConstants.terminalProgressPrefix`，生成到 Python 与
-TypeScript；reporter 和前端日志折叠不再硬编码 `"[VP_PROGRESS]"`。
+长任务 `process` 没有总时限，只受 10 秒 stdin、watchdog、terminal exit grace 和回收期限约束。
+manifest v3 的 transport limits 如下：
+
+| 限制 | 值 | 作用域 |
+|------|----|--------|
+| 单条 pipe 行 | 1 MiB | 长任务 stdout/stderr 与 stage-worker stderr |
+| one-shot stdout | 8 MiB | 完整 one-shot 输出；超限即终止 |
+| retained stderr tail | 64 KiB | 长任务、one-shot 与 stage-worker 诊断尾部 |
+| error summary | 8 KiB | 写入结构化错误 details 的最终摘要 |
+| termination/reap | 5 秒 | Rust 子进程组与 Python worker 回收 |
+
+终端进度前缀来自 `protocolConstants.terminalProgressPrefix`；内部 worker 事件前缀来自
+`protocolConstants.stageWorkerEventPrefix`。两者和 limits 都生成到生产语言，reporter、worker
+parser 与前端日志折叠不再硬编码协议字面量。
+
+## Python 主进程 ↔ stage-worker
+
+stage-worker 从 `--config-json` 接收生成的 `StageWorkerConfig`，stdin/stdout 只传 rawvideo bytes；
+进度与错误以 `VP_STAGE_EVENT ` 前缀加类型化 JSON 写入 stderr。父进程保留普通 stderr 日志，但
+只有前缀匹配且通过生成模型校验的行会进入 worker event 通道。超长行、非法 event 或 pipe 失败
+会终止 worker chain，并经主 task 的类型化 error envelope 上报 Rust。
 
 ## Tauri 任务事件
 
@@ -157,18 +180,19 @@ TypeScript；reporter 和前端日志折叠不再硬编码 `"[VP_PROGRESS]"`。
 
 ## 错误码按生产者分层
 
-Backend 子集有 10 个：
+Backend 子集有 11 个：
 
 `missing_ffmpeg`、`missing_model`、`missing_tensor_backend`、`missing_python_dependency`、
-`cancelled`、`process_failed`、`invalid_input`、`invalid_config`、`resume_conflict`、`io_error`。
+`cancelled`、`process_failed`、`invalid_input`、`invalid_config`、`resume_conflict`、`io_error`、
+`persistence_failed`。
 
-Shell 子集有 10 个：
+Shell 子集有 11 个：
 
 `process_failed`、`invalid_input`、`io_error`、`spawn_failed`、`runtime_panic`、
 `schema_mismatch`、`persistence_failed`、`backend_no_json`、`controller_unavailable`、
-`backend_probe_failed`。
+`backend_probe_failed`、`process_control_unsupported`。
 
-三个公共码重叠，因此前端的完整 `TaskErrorCode` 联合共有 17 个值。生成器要求完整集合严格等于
+四个公共码重叠，因此前端的完整 `TaskErrorCode` 联合共有 18 个值。生成器要求完整集合严格等于
 两个生产者子集的并集。Python 只能发 backend 子集；Rust 自己生成 shell 子集，但收到
 `BackendTaskErrorPayload` 时会保留原始 `code / message / details`，不会改写成信息更少的壳错误。
 
@@ -198,5 +222,6 @@ sequenceDiagram
 4. completed 只有在进程成功退出、reader 排空且无协议错误时成立。
 5. 无 terminal、重复 terminal、schema mismatch、pipe failure 或 terminal 后不退出都成为壳错误。
 
-stderr 使用 400 行/8KB 滚动缓冲。Python 未发结构化 error 就异常退出时，Rust 生成
-`runtime_panic`，并把缓冲内容放在 `details.traceback`；reader 排空发生在最终事件前。
+stderr 最多保留 400 行且总量不超过 64 KiB，最终摘要再截到 8 KiB。Python 未发结构化 error 就
+异常退出时，Rust 生成 `runtime_panic` 并把摘要放在 `details.traceback`；reader 排空发生在最终
+事件前。

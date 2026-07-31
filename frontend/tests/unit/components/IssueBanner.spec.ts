@@ -3,9 +3,9 @@ import { mount } from '@vue/test-utils'
 
 import IssueBanner from '@/components/IssueBanner.vue'
 import { TASK_ERROR_CODES } from '@/types/protocol'
-import type { TaskError } from '@/types/domain/media'
+import type { TaskErrorPayload } from '@/types/protocol'
 
-function makeIssue(message: string): TaskError {
+function makeIssue(message: string): TaskErrorPayload {
   return {
     code: TASK_ERROR_CODES.ProcessFailed,
     message,
