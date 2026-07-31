@@ -60,5 +60,5 @@ jobs:
           test -d "$VP_RIFE_MODEL_DIR"
 
       - name: Run Paddle backend tests with coverage
-        run: python -m pytest -m paddle -q --cov=app --cov-report=term
+        run: python -m pytest -q --cov=app --cov-report=term
         working-directory: backend
