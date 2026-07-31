@@ -1,6 +1,6 @@
 # 任务生命周期与状态机
 
-## 四状态生命周期
+## 五状态生命周期
 
 [`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) 用一个
 `Mutex<TaskStatePhase>` 管理单任务槽：
@@ -13,16 +13,18 @@ stateDiagram-v2
     Starting --> Cancelling: cancel 已记录后 activate(lease)
     Starting --> Idle: rollback_start(lease)
     Running --> Cancelling: begin_cancel(reason)
-    Running --> Idle: finish_once(lease)
+    Running --> Finishing: seal_owned(lease)
     Cancelling --> Idle: finish_once(lease)
+    Finishing --> Idle: finish_once(lease)
 ```
 
 | 状态 | 所有权 | 合法行为 |
 |------|--------|----------|
 | `Idle` | 无 | `reserve_start()` |
 | `Starting { lease }` | 启动租约和取消 token | activate、按 lease 回滚、记录首次取消 |
-| `Running { lease, handle }` | 租约、控制通道、取消 token | pause、resume、cancel、终结 |
+| `Running { lease, handle }` | 租约、控制通道、取消 token | pause、resume、cancel、seal |
 | `Cancelling { lease, handle }` | 同一任务仍持有槽位 | 等待 supervisor 回收并终结 |
+| `Finishing { lease, handle }` | 已观察到 terminal/退出的同一任务 | 拒绝控制，排空 reader 后终结 |
 
 `reserve_start()` 在任何命令构建或 spawn 副作用前执行。第二个 start 在 `Starting` 阶段就被拒绝，
 不会出现“子进程已创建但任务未登记”的窗口。
@@ -35,11 +37,13 @@ stateDiagram-v2
 - 任一启动失败都先杀死并回收已创建的进程组，再调用 `rollback_start(lease)`。
 - startup 期间到达的 cancel 直接写入 lease token；activate 后状态成为 `Cancelling`。
 - `cancel_owned()` 让 watchdog 只能取消自己监管的 lease。
-- `finish_once()` 只接受当前运行 lease。回调在状态锁内先提交终态，再把槽位置为 `Idle`；
+- `seal_owned()` 只允许当前 `Running` lease 进入 `Finishing`；此后 pause、resume 和 cancel
+  返回 `AlreadyFinishing`，终态仍由同一 supervisor 仲裁。
+- `finish_once()` 只接受当前已激活 lease。回调在状态锁内先提交终态，再把槽位置为 `Idle`；
   过期 supervisor 不能终结新任务，也不能重复发终态。
 
 状态层只返回 `TaskStateError`。`tasks/commands.rs` 是唯一把
-`AlreadyRunning / StartLeaseExpired / NoActiveTask / StillStarting / AlreadyCancelling`
+`AlreadyRunning / StartLeaseExpired / NoActiveTask / StillStarting / AlreadyCancelling / AlreadyFinishing`
 映射为 `ShellError` 的命令 adapter。
 
 ## 启动流程
@@ -82,7 +86,8 @@ reader 在写入潜在的大 stdin payload 前启动，避免三 pipe 死锁；s
 
 reader 只负责观察和分类，不直接发送终态。supervisor 在同一个 `tokio::select!` 循环中等待
 reader 消息、进程退出、取消、暂停/恢复结果、watchdog 和各类 deadline。supervisor 被 abort 或
-panic 时，child 的 kill-on-drop owner 仍会终止进程组。
+panic 时，child 的 kill-on-drop owner 先终止进程组，再把稳定 group/job handle 交给 detached
+reaper；join monitor 按原 lease 提交至多一个 `process_failed` 并释放任务槽。
 
 ## NDJSON 与终态仲裁
 
@@ -154,8 +159,11 @@ sequenceDiagram
 
 - command 发送与 reply 各有 5 秒上限；
 - supervisor 内 OS 操作有 4 秒上限，保留 1 秒给 reply 传递；
-- Windows 使用 task-local 线程枚举/恢复缓存；
-- POSIX 使用 `kill(-pgid, SIGSTOP/SIGCONT)`，控制整个进程组；
+- Windows 以进程句柄和 creation FILETIME 校验 root/后代身份，恢复只使用暂停期间保留并校验
+  owner/creation time 的线程句柄；
+- Linux 持有 pidfd 并校验 `/proc` 启动时间与 PGID；macOS 校验 `proc_pidinfo` 启动身份与 PGID，
+  之后才对进程组执行 `SIGSTOP/SIGCONT`；
+- 无法证明身份一致时 fail closed，不使用旧 PID/TID 继续控制；
 - OS 扫描在 `spawn_blocking` 执行，取消观察不会被同步系统调用阻塞；
 - pause/resume 对 supervisor 当前 pause 状态幂等，取消后拒绝新控制。
 

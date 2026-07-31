@@ -50,7 +50,7 @@ vp/
 | `python scripts/generate_contracts.py` | 从中立 schema 更新生成物 |
 | `python scripts/generate_contracts.py --check` | 校验 schema/引用并逐字节检查生成物 freshness |
 | `python scripts/check_architecture_contracts.py` | 运行跨层依赖、环、命令面、未消费导出/依赖门禁 |
-| `python -m vulture backend/app backend/tests backend/tests_full_e2e backend/export_all_rife_onnx.py scripts backend/vulture_whitelist.py --min-confidence 60 --exclude "backend/app/generated/,backend/app/algorithms/paddle/paddlegan_vsr/vendor/,backend/app/algorithms/pytorch/rife/ifnet_v4_"` | Python 60% 置信度零发现门禁 |
+| `python scripts/check_python_dead_code.py` | 分别运行 production-only 与全套 Python Vulture 60% 零发现门禁 |
 | `cd frontend && npm run check:duplicates` | 扫描前端、Python、Rust 与仓库脚本的生产实现克隆 |
 | `cd frontend && npm run check` | 运行 ESLint、测试类型、架构、死代码和重复检测 |
 | `pre-commit run --all-files` | 运行所有 pre-commit 检查 |
@@ -109,9 +109,10 @@ cargo clippy --all-targets -- -D warnings
 覆盖范围：
 
 - manifest ↔ handler ↔ permissions ↔ ACL 与本地 capability/CSP
-- `Idle / Starting / Running / Cancelling`、启动/取消竞态与 lease ownership
+- `Idle / Starting / Running / Cancelling / Finishing`、启动/取消/封口竞态与 lease ownership
 - TaskSupervisor 终态唯一性、stderr 排空、kill/reap、控制超时
 - 生产 `classify_line()`、one-shot 逆序类型化 envelope 解析
+- 稳定进程身份、PID/TID 重用 fail-closed 与 one-shot 有界期限
 - 持久化隔离、错误分类和 ShellError 原样透传
 
 ### Python 测试（pytest）
@@ -154,7 +155,9 @@ python -m pytest tests_full_e2e -m full_e2e -q
 
 零重复门禁使用 `frontend/.jscpd.json`，扫描前端生产/脚本/全部 unit 与 E2E、Python
 生产/测试、Rust 源码、根级脚本和源 contracts，阈值为 0。只精确排除三类保护项：
-各语言生成绑定/聚合 schema、PaddleGAN vendor、36 个动态 RIFE `ifnet_v4_*` 模块。
+各语言生成绑定/聚合 schema、PaddleGAN vendor、与中立 catalog 精确同集的 36 个动态 RIFE
+`ifnet_v4_*` 模块。RIFE allowlist 逐文件生成并校验实际目录；新增未登记模块或缺失 catalog
+模块都会失败。
 声明式大 fixture 只有在无法抽取且有理由时，才允许使用最小范围成对
 `jscpd:ignore-start/end`；生产函数和测试 helper 均参与扫描。
 
@@ -181,8 +184,11 @@ python -m pytest tests_full_e2e -m full_e2e -q
 - `scripts/check_architecture_contracts.py` 建立 Python package DAG 与 Rust crate-module DAG，
   检查未使用 Cargo 依赖、Rust public surface、生成协议深导入、命令面、未消费协议 re-export、
   CSS/test-id/test-support export 和 PaddleGAN catalog 一致性。
-- Vulture 以 60% 置信度扫描 Python 生产、测试和脚本；`backend/vulture_whitelist.py` 只列出经
-  审核的 Pydantic/pytest/framework 动态入口。
+- `scripts/check_python_dead_code.py` 从 `app`、`app.__main__` 和显式导出入口静态遍历 production
+  import DAG，并以 production roots 单独运行 Vulture；测试引用不能让生产模块或符号存活。
+  RIFE、vendor 与生成物 exclusion 必须声明理由、evidence 文件和 marker，RIFE 还必须与中立
+  catalog 精确同集。`backend/vulture_whitelist.py` 只列出经审核的 Pydantic/pytest/framework
+  动态入口。
 - jscpd 负责跨语言实现克隆，阈值为 0；发现必须抽取或给出最小、可回归验证的保护理由。
 
 ## 调试技巧
@@ -232,13 +238,15 @@ npm run tauri:dev
 
 ## 添加新 NDJSON 事件类型的 Checklist
 
-1. **Payload schema**：在 [`contracts/`](../contracts/) 中添加事件 payload schema
-2. **事件清单**：在 [`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) 中添加事件名和 payload 类型
+1. **Payload schema**：在 [`contracts/`](../contracts/) 中添加严格 payload schema
+2. **Envelope 清单**：在 [`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) 的
+   `backendTaskStream` 或 `backendOneShotCommands` 中添加 envelope、生成 payload 和 schema ref；
+   若还需 Tauri 事件，再更新 `events`
 3. **重新生成**：运行 `python scripts/generate_contracts.py`，不要手改前端事件常量或 Rust 枚举
-4. **Python 发射器**：在 [`backend/app/protocol/__init__.py`](../backend/app/protocol/__init__.py) 的
-   `NdjsonEventType` 和模块级 `ndjson` emitter 中接入
-5. **Rust classifier**：在 [`tasks/envelope.rs`](../frontend/src-tauri/src/tasks/envelope.rs) 增加类型化
-   variant 和生产 classifier 覆盖
+4. **Python 发射点**：构造生成 Pydantic payload，并调用模块级 `ndjson.emit()`；envelope enum、
+   payload 类型映射、可选字段和 discriminator 策略均由 manifest 生成，不手写条件分支
+5. **Rust classifier**：确认重新生成的 `generated/backend_task_envelope.rs` variant 被
+   [`tasks/envelope.rs`](../frontend/src-tauri/src/tasks/envelope.rs) 的生产 classifier 覆盖
 6. **前端监听**：在 [`lib/ipc/events.ts`](../frontend/src/lib/ipc/events.ts) 接入生成事件
 7. **运行构建**：执行 freshness、架构检查、`cargo build/test/clippy` 与 `npm run build`
 

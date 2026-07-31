@@ -115,10 +115,9 @@ App 顶栏和 StepRail 通过 `useCurrentTaskStatusLabel()` 读取同一任务�
 
 ## 表单类型边界
 
-`BaseSelect` 向视图和 binding 统一提供字符串值。领域类型收窄只发生在实际写回配置的 setter
-边界，例如 Enhance option setter 和 Encode rate-control binding；纯 option service 只构造
-显示选项，不导出没有运行时校验语义的 identity cast helper。具有真实转换行为并被多个表单
-复用的数值转换仍由共享 service 提供。
+`SelectOption<Value>` 与泛型 `BaseSelect<Value>` 把领域字符串联合类型贯穿到 `v-model`；
+DOM change 边界只做一次类型恢复，不为每个字段维护重复 setter。只有字符串→数值这类真实转换
+保留显式 action。纯 option builder 只接收工作流字段和窄环境快照，不读取 store。
 
 ## IPC 调用层
 
@@ -170,7 +169,10 @@ export async function safeInvoke<C extends IpcCommand>(
 | `task-log` | IPC manifest | 日志输出 |
 | `task-resume-status` | IPC manifest | 续传状态 |
 
-事件名及 payload 映射由 [`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) 生成到 [`frontend/src/types/protocol/events.ts`](../frontend/src/types/protocol/events.ts)；Rust 枚举来自同一清单。
+事件名及 payload 映射由 [`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) 生成到
+[`frontend/src/types/protocol/events.ts`](../frontend/src/types/protocol/events.ts)；通用 listener
+遍历生成的 `TASK_EVENT_NAMES`，mapped payload type 强制 composition root 覆盖全部事件，包括
+`task-resume-status`。Rust 枚举来自同一清单。
 
 ## 任务状态机（纯函数 Reducer）
 
@@ -226,7 +228,10 @@ active item。conflict、events、control 和 finalize 每次操作只读取一�
 单项开始时的 `resetItemRunState()` 固定清空日志，批次终结时的
 `resetItemsRunState()` 固定保留各项日志。两种语义由 `mediaRunState` 的两个明确命令表达。
 
-`conflict.ts` 和 `events.ts` 只接收各自需要的 lifecycle capability；内部 queue/finalize 方法不会成为 BatchRunner 的公共返回字段。
+`conflict.ts`、`events.ts`、`queue.ts` 与 `finalize.ts` 只接收消费方拥有的
+`TaskContextCapability`、`QueueContinuation`、`FinalizationCapability` 和
+`ConflictCapability`；它们不通过 `ReturnType<typeof siblingFactory>` 反向依赖其他 creator，
+内部 queue/finalize 方法也不会成为 BatchRunner 的公共返回字段。
 
 `ResumeInspectionResult` 只存在于 IPC 边界。进入任务状态前，`resume-classifier.ts` 将它或运行时 error details 投影为 `{ kind, outputPath, progress }`；对话框不保存输入路径、pipeline kind、sidecar 标记等未消费 wire 字段。
 
@@ -259,6 +264,18 @@ debounced save 分配 generation。只有最新 generation 的成功或失败能
 过期回复不会覆盖较新的结果。损坏或版本不匹配的预设会重置为默认值，并通过 App 根部的全局
 `IssueBanner` 显示；随后立即保存 schema 2 默认替代，成功也保留本次不兼容提示。替代写入或
 后续保存失败会在同一可见错误面显示具体持久化错误。
+
+### Enhance 唯一组合根
+
+[`frontend/src/composables/forms/useEnhanceForm.ts`](../frontend/src/composables/forms/useEnhanceForm.ts)
+是 Enhance 页唯一 composition root，返回
+`EnhanceFormModel { fields, options, actions, metrics }`。它只装配 store-backed 字段、纯 option
+builder 和一个 `buildEnhanceReadModel()` computed；视图不再二次装配 option state 或 setter
+facade。
+
+[`frontend/src/services/preset/enhance-read-model.ts`](../frontend/src/services/preset/enhance-read-model.ts)
+是单一纯投影，内部完成模型选择、SR 后插帧尺寸、EDVR 固定窗口、TensorRT engine metrics 和
+组合峰值显存行。单消费者中间 estimate/detail 不导出，测试只验证最终 read model。
 
 ## 视图与路由
 
@@ -367,6 +384,8 @@ export const TASK_ERROR_CODES = {
 组件和视图只进入 composables 与 stores；composition-root composables 将 stores、纯 services
 和 IPC adapter 组合起来。stores 可以消费纯 services，但不编排 IPC；`services` 与 `lib/ipc`
 是互不依赖的叶子层，前者不依赖 Vue、Pinia 或 Tauri。组件和视图只能经
-`@/types/protocol` 公共入口使用生成协议。Python 架构门禁维护层级规则，前端图扫描只负责全图
-环检测，避免两套规则源漂移。`npm run check` 顺序执行 ESLint、生产/测试 typecheck、依赖环
-检测、Knip 未使用导出/依赖检查，以及零阈值 jscpd 克隆扫描。
+`@/types/protocol` 公共入口使用生成协议。前端架构脚本从 `src/main.ts` 和明确动态入口遍历生产
+import DAG，拒绝越层依赖、环和不可达生产文件；只有两个带 evidence 的 ambient declaration
+进入精确 allowlist。production Knip 单独检查导出，因此测试引用不能让生产 API 存活。
+`npm run check` 顺序执行 ESLint、生产/测试 typecheck、依赖/可达性检查、Knip 未使用导出与
+依赖检查，以及零阈值 jscpd 克隆扫描。

@@ -31,6 +31,11 @@ crate 内部接口；命令是否可由前端调用由 Tauri handler 与权限�
 
 根目录 `contracts/ipc-manifest.json` 是命令名、参数、返回值和事件名的唯一清单。生成脚本产出 Rust build manifest 与前端类型化 invoke 映射；架构门禁再与 `generate_handler!` 和 Tauri permissions 比对。
 
+manifest v2 还把应用 IPC command 映射到私有 Python subcommand、success envelope 和
+discriminator 保留策略。调用方只传 `inspect_video`、`check_environment` 或
+`check_resume_state`；`generated/backend_oneshot.rs` 负责解析对应的 `info`、`check` 或
+`inspect-output`，Rust 不维护平行命令表。
+
 **新增命令的 checklist：** 修改中立 manifest → 重新生成绑定 → 实现并注册 handler → 更新 permission → 运行契约门禁。
 
 ## 运行时资源解析
@@ -96,16 +101,29 @@ graph TB
 ### One-shot 短命令
 
 [`frontend/src-tauri/src/tasks/oneshot.rs`](../frontend/src-tauri/src/tasks/oneshot.rs) 通过
-`run_single_cli_command<T>()` 直接返回 schema 校验后的 `Result<T, ShellError>`。结构化错误信封
+`run_single_cli_command<T>()` 接收应用 IPC command，并直接返回 schema 校验后的
+`Result<T, ShellError>`。结构化错误信封
 映射为 `BackendEnvelope`，无信封的非零退出映射为 `BackendProbeFailed`，成功但没有 JSON 映射为
 `BackendNoJson`。解析器从 stdout 末尾逆序寻找最后一个 schema 合法、类型匹配的 success 或
 backend error envelope；较新的无关日志/事件不会遮住合法结果，只有不存在合法候选时才报告最新
 schema mismatch。`check`/`info` 的 transport-only `type` 在反序列化前移除，
 `resume_inspection.type` 则保留为公共结果字段。
 
+长任务与 one-shot 共享 `tasks/subprocess.rs` 的有界 stdin 和 kill-and-reap 原语。无 payload
+的命令使用空 stdin，不继承桌面宿主输入；超时、错误或 future drop 都会按稳定的进程组/job
+句柄终止并回收，而不是再按数字 PID 清理。
+
+| 期限 | 上限 |
+|------|------|
+| stdin 写入与关闭 | 10 秒 |
+| `inspect_video` → `info` 总期限 | 30 秒 |
+| `check_resume_state` → `inspect-output` 总期限 | 60 秒 |
+| `check_environment` → `check` 总期限 | 180 秒 |
+| 终止与回收 | 5 秒 |
+
 ### 任务状态机与启动租约
 
-[`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) 定义四状态生命周期：
+[`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) 定义五状态生命周期：
 
 ```mermaid
 stateDiagram-v2
@@ -115,8 +133,9 @@ stateDiagram-v2
     Starting --> Cancelling: cancel reason recorded, then activate()
     Starting --> Idle: rollback_start(lease)
     Running --> Cancelling: begin_cancel(reason)
-    Running --> Idle: finish_once(lease)
+    Running --> Finishing: seal_owned(lease)
     Cancelling --> Idle: finish_once(lease)
+    Finishing --> Idle: finish_once(lease)
 ```
 
 - `Starting { lease }` 在任何命令构建或进程创建前占用唯一任务槽，第二个 start 不会创建子进程。
@@ -124,6 +143,8 @@ stateDiagram-v2
   `activate()` 随后直接发布 `Cancelling` handle。
 - 所有 activate、rollback、supervisor cancel 和 finish 都校验 lease。过期 supervisor 的清理不能
   清空或取消新任务。
+- `seal_owned()` 在收到 terminal envelope 或发现进程退出后把当前 lease 置为 `Finishing`，
+  立即拒绝新的 pause、resume 和 cancel，同时允许 supervisor 排空 reader 并完成终态仲裁。
 - `finish_once()` 在持有生命周期锁时先提交终态回调，再释放任务槽，保证终态恰好一次且先于下一次启动。
 - 状态层返回领域 `TaskStateError`；只有 `tasks/commands.rs` 的 Tauri adapter 将其映射为
   `ShellError`。
@@ -170,22 +191,15 @@ supervisor 在一个 `tokio::select!` 循环中并发处理 reader 消息、进�
 - schema mismatch、pipe failure、terminal 后进程不退出都会触发进程组 kill。
 - 退出后先在 5 秒内排空 stdout/stderr，再 join reader；排空失败覆盖先前 completed。
 - 取消原因优先生成 `task-cancelled`；最终事件通过 `finish_once(lease, callback)` 恰好提交一次。
+- supervisor panic 或 join failure 会先触发结构化 owner 的 drop：进程组被 kill，稳定的
+  group/job handle 交给 detached reaper；monitor 随后按同一 lease 释放槽并只提交一个
+  `process_failed` 终态。
 
 ### NDJSON 信封解析
 
-[`frontend/src-tauri/src/tasks/envelope.rs`](../frontend/src-tauri/src/tasks/envelope.rs):
-
-```rust
-#[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub(crate) enum NdjsonEnvelope {
-    #[serde(rename = "progress")]
-    Progress(TaskProgressPayload),
-    Completed(TaskCompletedPayload),
-    Error(BackendTaskErrorPayload),
-    ResumeStatus(ResumeStatusPayload),
-}
-```
+[`frontend/src-tauri/src/tasks/envelope.rs`](../frontend/src-tauri/src/tasks/envelope.rs) 复用
+`generated/backend_task_envelope.rs` 中从 manifest v2 生成的四 variant enum，不再手写
+`progress / completed / error / resume_status` 镜像。
 
 `classify_line()` 是生产 reader 与测试共同覆盖的唯一 classifier。合法 envelope 被解析为类型化
 payload；普通非 JSON 文本作为日志；对象形 JSON、未知 `type`、缺字段或以 `{` 开头的破损 JSON
@@ -202,18 +216,27 @@ payload；普通非 JSON 文本作为日志；对象形 JSON、未知 `type`、�
 [`frontend/src-tauri/src/process_control/`](../frontend/src-tauri/src/process_control/) 实现任务暂停/恢复：
 
 - `mod.rs` — 任务绑定的 `ProcessController` 与测试用 `ProcessControl` trait
-- `windows.rs` — Win32 `SuspendThread` / `ResumeThread` 实现
-- `posix.rs` — `kill(-pgid, SIGSTOP/SIGCONT)` 的进程组实现
+- `windows.rs` — Win32 稳定进程/线程句柄上的 `SuspendThread` / `ResumeThread`
+- `posix.rs` — 稳定 root identity 校验后的 `kill(-pgid, SIGSTOP/SIGCONT)`
 
-控制消息和 reply 都有有界超时。Windows 线程枚举与 POSIX 系统调用通过 `spawn_blocking` 离开
-Tokio worker；一个 task-bound controller 只控制自己的 root pid，Windows 恢复缓存也只属于该任务，
-POSIX 不维护无意义的线程缓存。结构化错误保留原始 `io::Error` source chain。
+`ProcessController` 在任务启动时捕获稳定身份，后续每次控制都先复核：
+
+- Windows 在任务期持有 root 进程句柄和 creation FILETIME；每次枚举时再捕获后代进程句柄与
+  creation FILETIME，暂停期间继续持有包含 owner 进程身份与 creation FILETIME 的线程句柄，
+  恢复只操作这些原句柄。双次 ToolHelp 快照还会验证 parent link 未变化。
+- Linux 持有 root pidfd，并同时校验 `/proc/<pid>/stat` 的启动时间和 PGID。
+- macOS 校验 `proc_pidinfo` 返回的启动时间和 PGID。
+
+任何句柄、启动时间、owner 或 parent link 无法验证时，控制以 `IdentityMismatch`/typed OS error
+失败关闭，禁止仅凭旧 PID/TID 发信号。控制消息和 reply 都有有界超时；OS 扫描与系统调用通过
+`spawn_blocking` 离开 Tokio worker。结构化错误保留原始 `io::Error` source chain。
 
 ## 本地持久化
 
 [`frontend/src-tauri/src/persistence/`](../frontend/src-tauri/src/persistence/):
 
 - `storage.rs` — 缓存/预设读写，使用 `tempfile::NamedTempFile::persist` 原子提交
+- `transaction.rs` — 按规范化文件路径协调 async exclusive transaction 与同 key single-flight
 - `commands.rs` — `load_workbench_preset` / `save_workbench_preset` 命令体
 
 持久化数据包括：
@@ -227,6 +250,12 @@ POSIX 不维护无意义的线程缓存。结构化错误保留原始 `io::Error
 回退读取。环境缓存失效后重新探测；预设失效返回 `schema_mismatch`，由前端重置默认值并展示
 全局 banner，再立即保存 schema 2 默认替代。JSON 序列化、路径 IO 和 schema 失败分别在发生
 上下文中映射为结构化错误。
+
+同一路径的 `read → 隔离 → probe/rebuild → 原子保存 → 发布结果` 全部位于一个 transaction，
+因此并发环境检查对同一 fingerprint/force key 只探测一次，所有调用方得到相同 payload；flight
+结束后不记忆环境结果，下一次仍从磁盘正常命中 `source=cache`。预设损坏则记忆同一
+`SchemaValidation` outcome，避免首个调用报错、其他调用读到 `None`；保存重建的 v2 预设时在
+同一 exclusive 锁内清除此记忆。损坏文件只隔离一次，leader 取消或 panic 由 RAII 释放 flight。
 
 ## 构建接入与桌面安全
 

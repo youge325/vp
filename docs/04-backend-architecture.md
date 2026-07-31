@@ -52,7 +52,9 @@ CLI composition root 将职责拆成以下边界：
 
 ## 配置体系
 
-配置与 NDJSON payload 的字段、别名和枚举均由 `contracts/boundary.schema.json` 生成到 `backend/app/generated/contracts.py`。`app.models` 只增加输出路径等领域校验，`app.protocol.payloads` 只增加 camelCase wire 投影；两者不重复声明边界字段。
+配置与 NDJSON payload 的字段、别名和枚举均由 `contracts/boundary.schema.json` 生成到
+`backend/app/generated/contracts.py`。`app.models` 只增加输出路径等领域校验；NDJSON 发射器
+直接接收生成模型，不再保留手写 payload adapter 或镜像字段。
 
 ### pydantic-settings
 
@@ -66,9 +68,8 @@ CLI composition root 将职责拆成以下边界：
 
 [`backend/app/generated/contracts.py`](../backend/app/generated/contracts.py) 是
 `datamodel-code-generator` 产出的唯一边界字段定义。`app.models` 直接 re-export 生成类型，只在
-`OutputConfig` 上增加非空路径领域校验；`app.protocol.payloads` 只提供 wire 投影，不重声明字段。
-`RuntimeConfigs` 保存校验后的 Pydantic 模型，并按需生成防御性 camelCase JSON 副本供签名、adapter
-和 worker 使用。
+`OutputConfig` 上增加非空路径领域校验。`RuntimeConfigs` 保存校验后的 Pydantic 模型，并按需
+生成 camelCase JSON 投影供签名、adapter 和 worker 使用，不维护展开缓存或冗余深拷贝。
 
 ## 处理步骤规划
 
@@ -84,6 +85,12 @@ class StagePlan:
 ```
 
 插值位置、输出帧数与 FPS 均从有序步骤和同一个 `StageProjection` 派生，不保存可互相矛盾的平行状态。输出尺寸由 preflight 对同一 `StagePlan` 应用 stage 尺寸规则得到。
+
+[`backend/app/catalog/stage_descriptors.py`](../backend/app/catalog/stage_descriptors.py) 是 stage
+能力的中立不可变 catalog，统一声明执行模式、文件流水线要求、后端支持、固定倍率、模型类别和
+工厂键。`ProcessingStep`、规划规则与算法装配读取同一个 descriptor；规划层不导入算法实现。
+模型文件存在性由消费方定义的 `ModelAvailabilityPort` 注入，production adapter 才访问文件系统
+和运行时路径，因此纯规划测试可只提供 fake port。
 
 ### 配置签名
 
@@ -318,14 +325,13 @@ Rust 原样保留 `code / message / details`，前端再把 details 投影为 `R
 
 ```python
 class _NdjsonEmitter:
-    def progress(self, current, total, percent, stage, stage_index, stage_total, metrics=None): ...
-    def completed(self, output_path, processed_frames, time_seconds): ...
-    def error(self, code, message, details=None): ...
-    def resume_status(self, resumed, completed_chunks, ...): ...
+    def emit(self, event_type: BackendEnvelopeType, payload: BaseModel) -> None: ...
 ```
 
-- 所有结构化 stdout 输出集中在同一 emitter；专用锁覆盖序列化、整行 write 与 flush，保证并发
-  reporter 不会交错 NDJSON 行
+- command、reporter 和 pipeline lifecycle 在调用前构造 manifest 指定的生成 Pydantic 模型；
+  生成的 envelope→payload 映射在写出前拒绝模型类型或 discriminator 不匹配
+- 所有结构化 stdout 输出集中在同一 emitter；专用锁覆盖校验、序列化、整行 write 与 flush，
+  保证并发 reporter 不会交错 NDJSON 行
 - 普通日志和终端进度条继续输出到 stderr，不经过此处
 
 ### Reporter
