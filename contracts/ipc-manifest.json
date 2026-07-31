@@ -1,8 +1,34 @@
 {
   "$schema": "./ipc-manifest.schema.json",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "protocolConstants": {
-    "terminalProgressPrefix": "[VP_PROGRESS]"
+    "terminalProgressPrefix": "[VP_PROGRESS]",
+    "stageWorkerEventPrefix": "VP_STAGE_EVENT "
+  },
+  "protocolLimits": {
+    "ndjsonLineBytes": 1048576,
+    "oneShotStdoutBytes": 8388608,
+    "stderrTailBytes": 65536,
+    "errorSummaryBytes": 8192,
+    "terminationReapMs": 5000
+  },
+  "backendProcessCommand": {
+    "ipcCommand": "start_task",
+    "subcommand": "process",
+    "stdinPayload": "RuntimeConfigBundle",
+    "stdinField": "config",
+    "cliArguments": [
+      { "flag": "--input", "field": "inputPath", "valueType": "string" },
+      { "flag": "--config-stdin" },
+      { "flag": "--resume-mode", "field": "resumeMode", "valueType": "ResumeMode", "optional": true }
+    ],
+    "eventPayload": "BackendTaskEnvelope",
+    "discriminants": ["progress", "completed", "error", "resume_status"],
+    "deadlines": {
+      "stdinMs": 10000,
+      "totalMs": null,
+      "terminationReapLimit": "terminationReapMs"
+    }
   },
   "backendTaskStream": [
     {
@@ -32,23 +58,69 @@
       "subcommand": "info",
       "envelope": "info",
       "payload": "VideoInfo",
-      "schemaRef": "./video-info.schema.json"
+      "schemaRef": "./video-info.schema.json",
+      "stdinPayload": null,
+      "stdinField": null,
+      "cliArguments": [
+        { "flag": "--input", "field": "inputPath", "valueType": "string" }
+      ],
+      "deadlines": {
+        "stdinMs": 10000,
+        "totalMs": 30000,
+        "terminationReapLimit": "terminationReapMs"
+      }
     },
     {
       "ipcCommand": "check_environment",
       "subcommand": "check",
       "envelope": "check",
       "payload": "EnvironmentCheckResult",
-      "schemaRef": "./environment.schema.json#/$defs/EnvironmentCheckResult"
+      "schemaRef": "./environment.schema.json#/$defs/EnvironmentCheckResult",
+      "stdinPayload": null,
+      "stdinField": null,
+      "cliArguments": [],
+      "deadlines": {
+        "stdinMs": 10000,
+        "totalMs": 180000,
+        "terminationReapLimit": "terminationReapMs"
+      }
     },
     {
       "ipcCommand": "check_resume_state",
       "subcommand": "inspect-output",
       "envelope": "resume_inspection",
       "payload": "ResumeInspectionResult",
-      "schemaRef": "./resume-inspection.schema.json"
+      "schemaRef": "./resume-inspection.schema.json",
+      "stdinPayload": "RuntimeConfigBundle",
+      "stdinField": "config",
+      "cliArguments": [
+        { "flag": "--input", "field": "inputPath", "valueType": "string" },
+        { "flag": "--config-stdin" }
+      ],
+      "deadlines": {
+        "stdinMs": 10000,
+        "totalMs": 60000,
+        "terminationReapLimit": "terminationReapMs"
+      }
     }
   ],
+  "stageWorkerCommand": {
+    "command": ["-m", "app"],
+    "subcommand": "stage-worker",
+    "configFlag": "--config-json",
+    "input": {
+      "configPayload": "StageWorkerConfig",
+      "stdinStream": "rawvideo-bytes"
+    },
+    "output": {
+      "stdoutStream": "rawvideo-bytes",
+      "stderrPayloads": ["StageWorkerProgressEvent", "StageWorkerErrorEvent"]
+    },
+    "deadlines": {
+      "totalMs": null,
+      "terminationReapLimit": "terminationReapMs"
+    }
+  },
   "commands": [
     { "name": "pick_inputs", "args": {}, "result": "string[]" },
     { "name": "pick_output_directory", "args": {}, "result": "string|null" },

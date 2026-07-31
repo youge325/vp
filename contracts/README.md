@@ -9,6 +9,12 @@ shapes.
 `python scripts/generate_contracts.py --check` before committing; generated
 language bindings must never be edited by hand.
 
+Manifest version 3 also owns the backend `process`/one-shot command policies,
+protocol size limits, deadlines, terminal prefix, and stage-worker event
+prefix. `runtime-config.schema.json` is shared by Rust and Python;
+`stage-worker.schema.json` intentionally generates Python bindings only because
+that protocol never crosses the Tauri or Vue boundary.
+
 Canonical schemas compose shared configuration and payload shapes through
 external `$ref` links. Required and nullable wire fields are declared only in
 those source schemas; the generated `boundary.schema.json` aggregate does not

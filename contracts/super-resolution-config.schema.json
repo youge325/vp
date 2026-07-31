@@ -21,10 +21,10 @@
       ]
     },
     "tensorBackend": {
-      "$ref": "#/$defs/TensorBackend"
+      "$ref": "./tensor-backend.schema.json"
     },
     "engine": {
-      "type": "string"
+      "$ref": "./inference-engine.schema.json"
     },
     "numFrames": {
       "type": "integer",
@@ -41,15 +41,5 @@
     "engine",
     "numFrames"
   ],
-  "$defs": {
-    "TensorBackend": {
-      "type": "string",
-      "enum": [
-        "pytorch",
-        "paddle",
-        "onnx"
-      ]
-    }
-  },
   "additionalProperties": false
 }

@@ -1,0 +1,7 @@
+export type { TaskErrorPayload as DirectExportError } from '@/types/generated/contracts'
+export type { TaskErrorPayload } from '@/types/generated/contracts'
+
+import type { TaskErrorPayload as ImportedError } from '@/types/generated/contracts'
+
+export type ImportedMirror = ImportedError
+export type { ImportedError as ReExportedError }

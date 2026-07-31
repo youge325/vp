@@ -1,0 +1,3 @@
+import type { TaskEventPayloadMap } from '@/types/protocol/events'
+
+export type MirroredEventMap = TaskEventPayloadMap

@@ -369,19 +369,19 @@
         "pytorch": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/InferenceEngine"
+            "$ref": "./inference-engine.schema.json"
           }
         },
         "paddle": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/InferenceEngine"
+            "$ref": "./inference-engine.schema.json"
           }
         },
         "onnx": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/InferenceEngine"
+            "$ref": "./inference-engine.schema.json"
           }
         }
       },
@@ -391,14 +391,6 @@
         "onnx"
       ],
       "additionalProperties": false
-    },
-    "InferenceEngine": {
-      "type": "string",
-      "enum": [
-        "cuda",
-        "tensorrt",
-        "dcu"
-      ]
     },
     "AlgorithmInfo": {
       "type": "object",
@@ -412,7 +404,7 @@
         "tensorBackends": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/TensorBackend"
+            "$ref": "./tensor-backend.schema.json"
           }
         },
         "models": {
@@ -437,14 +429,6 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/ModelVariantInfo"
-          }
-        },
-        "scaleFactors": {
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
           }
         },
         "fixedScaleFactor": {
@@ -475,7 +459,6 @@
         "onnxModels",
         "modelDetails",
         "onnxModelDetails",
-        "scaleFactors",
         "fixedScaleFactor",
         "defaultNumFrames",
         "inputFrameMode"
@@ -488,14 +471,6 @@
         "rife",
         "onnx_super_resolution",
         "paddlegan_vsr"
-      ]
-    },
-    "TensorBackend": {
-      "type": "string",
-      "enum": [
-        "pytorch",
-        "paddle",
-        "onnx"
       ]
     },
     "ModelVariantInfo": {

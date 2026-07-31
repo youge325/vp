@@ -37,10 +37,10 @@
       "type": "boolean"
     },
     "tensorBackend": {
-      "$ref": "#/$defs/TensorBackend"
+      "$ref": "./tensor-backend.schema.json"
     },
     "engine": {
-      "type": "string"
+      "$ref": "./inference-engine.schema.json"
     }
   },
   "required": [
@@ -55,15 +55,5 @@
     "tensorBackend",
     "engine"
   ],
-  "$defs": {
-    "TensorBackend": {
-      "type": "string",
-      "enum": [
-        "pytorch",
-        "paddle",
-        "onnx"
-      ]
-    }
-  },
   "additionalProperties": false
 }

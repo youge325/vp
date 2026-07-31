@@ -12,10 +12,15 @@ if str(SCRIPTS_DIR) not in sys.path:
 from architecture_contracts.catalog import RULES  # noqa: E402
 from architecture_contracts.checks import (  # noqa: E402
     ManifestCommand,
+    _RUST_PUBLIC_MODEL_EXPORTS,
     RustCommandSignature,
     _check_backend_package_cycles,
     _check_rust_package_cycles,
     _check_rust_public_surface,
+    _check_rust_lifecycle_result_handling,
+    _check_rust_reaper_ownership,
+    _check_rust_submodule_cycles,
+    _check_rust_task_adapter_boundaries,
     _check_rust_unused_dependencies,
     _check_typed_ndjson_error_emission,
     diff_command_surface,
@@ -29,6 +34,22 @@ from architecture_contracts.rules import (  # noqa: E402
     RequiredPatternRule,
     run_rules,
 )
+
+
+def _write_exact_rust_public_api(root: Path, *, extra_config_exports: set[str] | None = None) -> Path:
+    rust = root / "frontend/src-tauri/src"
+    models = rust / "models"
+    models.mkdir(parents=True)
+    (rust / "lib.rs").write_text("pub mod models;\npub fn run() {\n}\n", encoding="utf-8")
+    config_exports = sorted(_RUST_PUBLIC_MODEL_EXPORTS["config"] | (extra_config_exports or set()))
+    (models / "mod.rs").write_text(
+        "pub mod config {\n"
+        "    pub use super::boundary::{\n" + ",\n".join(config_exports) + ",\n    };\n}\n"
+        "pub mod task {\n"
+        "    pub use super::boundary::{\n" + ",\n".join(sorted(_RUST_PUBLIC_MODEL_EXPORTS["task"])) + ",\n    };\n}\n",
+        encoding="utf-8",
+    )
+    return rust
 
 
 @pytest.mark.parametrize(
@@ -157,6 +178,149 @@ def test_rust_package_cycle_is_reported(tmp_path: Path) -> None:
     assert _check_rust_package_cycles(tmp_path) == ["Rust package dependency cycle: runtime -> tasks -> runtime"]
 
 
+def test_rust_tasks_submodule_cycle_is_reported(tmp_path: Path) -> None:
+    source = tmp_path / "frontend/src-tauri/src/tasks"
+    source.mkdir(parents=True)
+    (source / "mod.rs").write_text("mod first;\nmod second;\n", encoding="utf-8")
+    (source / "first.rs").write_text(
+        "#[cfg(test)]\nmod tests {}\nuse crate::tasks::second::Value;\n",
+        encoding="utf-8",
+    )
+    (source / "second.rs").write_text("use crate::tasks::first::Value;\n", encoding="utf-8")
+
+    assert _check_rust_submodule_cycles(tmp_path, "tasks") == [
+        "Rust tasks submodule dependency cycle: first -> second -> first"
+    ]
+
+
+def test_rust_task_tauri_imports_are_limited_to_composition_adapters(tmp_path: Path) -> None:
+    source = tmp_path / "frontend/src-tauri/src/tasks"
+    source.mkdir(parents=True)
+    (source / "commands.rs").write_text("use tauri::State;\n", encoding="utf-8")
+    (source / "spawn.rs").write_text("use tauri::AppHandle;\n", encoding="utf-8")
+    (source / "ports.rs").write_text("use tauri::Emitter;\n", encoding="utf-8")
+    (source / "controller.rs").write_text(
+        "#[cfg(test)]\nmod tests {}\nuse tauri::Manager;\n",
+        encoding="utf-8",
+    )
+    (source / "readers.rs").write_text("use tokio::io::AsyncRead;\n", encoding="utf-8")
+
+    assert _check_rust_task_adapter_boundaries(tmp_path) == [
+        "Rust task core imports Tauri outside the composition adapters: frontend/src-tauri/src/tasks/controller.rs"
+    ]
+
+
+def test_rust_lifecycle_results_cannot_be_silenced_with_underscore_bindings(tmp_path: Path) -> None:
+    source = tmp_path / "frontend/src-tauri/src/tasks"
+    process_control = tmp_path / "frontend/src-tauri/src/process_control"
+    source.mkdir(parents=True)
+    process_control.mkdir()
+    (source / "controller.rs").write_text(
+        "async fn unsafe_cleanup(lifecycle: &Lifecycle, sink: &Sink, ticket: &mut Ticket) {\n"
+        "    let _entered = lifecycle.begin_reaping().await;\n"
+        "    sink.emit(event);\n"
+        "    ticket.wait().await;\n"
+        "    rollback_suspended_threads(items);\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    assert _check_rust_lifecycle_result_handling(tmp_path) == [
+        "Rust lifecycle/process result is explicitly ignored (`begin_reaping`): "
+        "frontend/src-tauri/src/tasks/controller.rs:2",
+        "Rust lifecycle/process result is explicitly ignored (`emit`): frontend/src-tauri/src/tasks/controller.rs:3",
+        "Rust lifecycle/process result is explicitly ignored (`wait`): frontend/src-tauri/src/tasks/controller.rs:4",
+        "Rust lifecycle/process result is explicitly ignored (`rollback_suspended_threads`): "
+        "frontend/src-tauri/src/tasks/controller.rs:5",
+    ]
+
+
+def test_rust_lifecycle_result_gate_accepts_checked_outcomes(tmp_path: Path) -> None:
+    source = tmp_path / "frontend/src-tauri/src/tasks"
+    process_control = tmp_path / "frontend/src-tauri/src/process_control"
+    source.mkdir(parents=True)
+    process_control.mkdir()
+    (source / "controller.rs").write_text(
+        "async fn safe_cleanup(lifecycle: &Lifecycle, sink: &Sink, ticket: &mut Ticket) {\n"
+        "    if !lifecycle.begin_reaping().await { return; }\n"
+        "    if let Err(error) = sink.emit(event) { report(error); }\n"
+        "    match ticket.wait().await { Reaped => {}, Failed(error) => report(error) }\n"
+        "    let rollback = rollback_suspended_threads(items); consume(rollback);\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    assert _check_rust_lifecycle_result_handling(tmp_path) == []
+
+
+def test_rust_process_owner_may_only_be_detached_by_ticket_adapter(tmp_path: Path) -> None:
+    source = tmp_path / "frontend/src-tauri/src/tasks"
+    source.mkdir(parents=True)
+    (source / "controller.rs").write_text(
+        "fn detach(mut child: Child) {\n    tokio::spawn(async move { child.terminate_and_reap().await; });\n}\n",
+        encoding="utf-8",
+    )
+
+    assert _check_rust_reaper_ownership(tmp_path) == [
+        "Rust process owner is reaped by a fire-and-forget task outside subprocess.rs: "
+        "frontend/src-tauri/src/tasks/controller.rs:2"
+    ]
+
+
+def test_rust_process_owner_helper_cannot_hide_detached_cleanup(tmp_path: Path) -> None:
+    source = tmp_path / "frontend/src-tauri/src/tasks"
+    source.mkdir(parents=True)
+    (source / "cleanup.rs").write_text(
+        "async fn cleanup_child(mut child: Child) {\n    child.terminate_and_reap().await;\n}\n",
+        encoding="utf-8",
+    )
+    (source / "controller.rs").write_text(
+        "fn detach(child: Child) {\n    tokio::spawn(cleanup_child(child));\n}\n",
+        encoding="utf-8",
+    )
+
+    assert _check_rust_reaper_ownership(tmp_path) == [
+        "Rust process owner is reaped by a fire-and-forget task outside subprocess.rs: "
+        "frontend/src-tauri/src/tasks/controller.rs:2"
+    ]
+
+
+def test_rust_process_owner_helper_allows_a_retained_cleanup_handle(tmp_path: Path) -> None:
+    source = tmp_path / "frontend/src-tauri/src/tasks"
+    source.mkdir(parents=True)
+    (source / "cleanup.rs").write_text(
+        "async fn cleanup_child(mut child: Child) {\n    child.terminate_and_reap().await;\n}\n",
+        encoding="utf-8",
+    )
+    (source / "controller.rs").write_text(
+        "fn retain(child: Child) -> JoinHandle<()> {\n"
+        "    let observer = tokio::spawn(cleanup_child(child));\n"
+        "    observer\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    assert _check_rust_reaper_ownership(tmp_path) == []
+
+
+def test_rust_process_owner_helper_rejects_an_underscore_handle(tmp_path: Path) -> None:
+    source = tmp_path / "frontend/src-tauri/src/tasks"
+    source.mkdir(parents=True)
+    (source / "cleanup.rs").write_text(
+        "async fn cleanup_child(mut child: Child) { child.terminate_and_reap().await; }\n",
+        encoding="utf-8",
+    )
+    (source / "controller.rs").write_text(
+        "fn detach(child: Child) {\n    let _observer = tokio::spawn(cleanup_child(child));\n}\n",
+        encoding="utf-8",
+    )
+
+    assert _check_rust_reaper_ownership(tmp_path) == [
+        "Rust process owner is reaped by a fire-and-forget task outside subprocess.rs: "
+        "frontend/src-tauri/src/tasks/controller.rs:2"
+    ]
+
+
 def test_unused_rust_dependency_is_reported(tmp_path: Path) -> None:
     crate = tmp_path / "frontend/src-tauri"
     source = crate / "src"
@@ -173,12 +337,73 @@ def test_unused_rust_dependency_is_reported(tmp_path: Path) -> None:
     ]
 
 
+def test_renamed_rust_dependency_uses_the_local_crate_name(tmp_path: Path) -> None:
+    crate = tmp_path / "frontend/src-tauri"
+    source = crate / "src"
+    source.mkdir(parents=True)
+    (crate / "Cargo.toml").write_text(
+        '[dependencies]\njson = { package = "serde_json", version = "1" }\n',
+        encoding="utf-8",
+    )
+    (crate / "build.rs").write_text("", encoding="utf-8")
+    (source / "lib.rs").write_text("fn encode(value: json::Value) { drop(value); }\n", encoding="utf-8")
+
+    assert _check_rust_unused_dependencies(tmp_path) == []
+
+
+def test_typify_pattern_runtime_dependency_requires_exact_schema_evidence(tmp_path: Path) -> None:
+    crate = tmp_path / "frontend/src-tauri"
+    source = crate / "src/models"
+    contracts = tmp_path / "contracts"
+    source.mkdir(parents=True)
+    contracts.mkdir()
+    (crate / "Cargo.toml").write_text(
+        '[dependencies]\ntypify = "0.7"\nregress = "0.11"\n',
+        encoding="utf-8",
+    )
+    (crate / "build.rs").write_text("", encoding="utf-8")
+    (source / "mod.rs").write_text(
+        'typify::import_types!(schema = "../../contracts/boundary.schema.json");\n',
+        encoding="utf-8",
+    )
+    schema_path = contracts / "boundary.schema.json"
+    schema_path.write_text('{"type":"string","pattern":"\\\\S"}\n', encoding="utf-8")
+
+    assert _check_rust_unused_dependencies(tmp_path) == []
+
+    schema_path.write_text('{"type":"string"}\n', encoding="utf-8")
+    assert _check_rust_unused_dependencies(tmp_path) == [
+        "unused Rust Cargo dependency `regress`: frontend/src-tauri/Cargo.toml"
+    ]
+
+
 def test_rust_public_surface_rejects_internal_public_item(tmp_path: Path) -> None:
-    source = tmp_path / "frontend/src-tauri/src/tasks/worker.rs"
+    rust = _write_exact_rust_public_api(tmp_path)
+    source = rust / "tasks/worker.rs"
     source.parent.mkdir(parents=True)
     source.write_text("pub fn leaked() {}\npub(crate) fn internal() {}\n", encoding="utf-8")
     assert _check_rust_public_surface(tmp_path) == [
         "Rust crate-internal source exposes a public item: frontend/src-tauri/src/tasks/worker.rs"
+    ]
+
+
+def test_rust_public_surface_requires_existing_exact_api_files(tmp_path: Path) -> None:
+    rust = tmp_path / "frontend/src-tauri/src"
+    rust.mkdir(parents=True)
+    (rust / "lib.rs").write_text("pub mod models;\npub fn run(argument: bool) { drop(argument); }\n", encoding="utf-8")
+
+    assert _check_rust_public_surface(tmp_path) == [
+        "Rust public API allowlist path does not exist: frontend/src-tauri/src/models/mod.rs",
+        "Rust crate public API drifted: missing=['pub fn run() {'], "
+        "unexpected=['pub fn run(argument: bool) { drop(argument); }']",
+    ]
+
+
+def test_rust_public_surface_rejects_non_schema_model_export(tmp_path: Path) -> None:
+    _write_exact_rust_public_api(tmp_path, extra_config_exports={"InternalCacheEntry"})
+
+    assert _check_rust_public_surface(tmp_path) == [
+        "Rust models `config` public schema drifted: missing=[], unexpected=['InternalCacheEntry']"
     ]
 
 

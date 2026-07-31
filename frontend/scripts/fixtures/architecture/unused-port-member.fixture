@@ -1,0 +1,8 @@
+export interface FixturePort {
+  used(): void
+  unused(): void
+}
+
+export function consumeFixturePort(port: FixturePort): void {
+  port.used()
+}

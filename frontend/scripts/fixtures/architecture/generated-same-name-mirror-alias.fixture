@@ -1,0 +1,3 @@
+import type { TaskErrorPayload as WireError } from '@/types/generated/contracts'
+
+export type TaskErrorPayload = WireError

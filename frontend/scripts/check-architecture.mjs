@@ -25,6 +25,349 @@ function walk(directory) {
 
 const sourceFiles = walk(sourceRoot)
 const modulePaths = new Map()
+const portInterfacePattern = /(?:Port|Capability|Continuation|Operations)$/
+
+function parseTypeScriptSources(paths) {
+  return paths.flatMap((path) => parseTypeScriptSourcesFromText(path, readFileSync(path, 'utf8')))
+}
+
+function parseTypeScriptSourcesFromText(path, source) {
+  const extension = extname(path)
+  if (['.ts', '.tsx'].includes(extension)) {
+    return [createTypeScriptEntry(path, path, source)]
+  }
+  if (extension !== '.vue') {
+    return []
+  }
+
+  const entries = []
+  const scriptPattern = /<script\b([^>]*)>([\s\S]*?)<\/script>/giu
+  for (const [index, match] of [...source.matchAll(scriptPattern)].entries()) {
+    const attributes = match[1] ?? ''
+    const language = /\blang\s*=\s*["']tsx["']/iu.test(attributes) ? 'tsx' : 'ts'
+    if (!/\blang\s*=\s*["']tsx?["']/iu.test(attributes)) {
+      continue
+    }
+    entries.push(createTypeScriptEntry(`${path}.${index}.${language}`, path, match[2] ?? ''))
+  }
+  return entries
+}
+
+function createTypeScriptEntry(path, ownerPath, source) {
+  return {
+    path,
+    ownerPath,
+    sourceFile: ts.createSourceFile(
+      path,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      extname(path) === '.tsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    ),
+  }
+}
+
+function declaredName(node) {
+  if (node && (ts.isIdentifier(node) || ts.isStringLiteral(node))) {
+    return node.text
+  }
+  return null
+}
+
+function normalizedPath(path) {
+  return resolve(path).replaceAll('\\', '/')
+}
+
+function createTypeScriptProgram(entries, compilerOptions = {}) {
+  const options = {
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    target: ts.ScriptTarget.ESNext,
+    strict: true,
+    ...compilerOptions,
+  }
+  const entriesByPath = new Map(entries.map((entry) => [normalizedPath(entry.path), entry]))
+  const host = ts.createCompilerHost(options)
+  const fileExists = host.fileExists.bind(host)
+  const readFile = host.readFile.bind(host)
+  const getSourceFile = host.getSourceFile.bind(host)
+  host.fileExists = (path) => entriesByPath.has(normalizedPath(path)) || fileExists(path)
+  host.readFile = (path) => entriesByPath.get(normalizedPath(path))?.sourceFile.text ?? readFile(path)
+  host.getSourceFile = (path, languageVersion, onError, shouldCreateNewSourceFile) => (
+    entriesByPath.get(normalizedPath(path))?.sourceFile
+      ?? getSourceFile(path, languageVersion, onError, shouldCreateNewSourceFile)
+  )
+  return ts.createProgram({ rootNames: entries.map(({ path }) => path), options, host })
+}
+
+function collectUnusedPortMembers(program, productionPaths, ownerPaths = new Map()) {
+  const declarations = []
+  const inheritedPortDeclarations = []
+  const consumedDeclarations = new Set()
+  const checker = program.getTypeChecker()
+  const normalizedProductionPaths = new Set(
+    productionPaths.map(normalizedPath),
+  )
+  const sources = program.getSourceFiles().filter((sourceFile) => (
+    normalizedProductionPaths.has(normalizedPath(sourceFile.fileName))
+  ))
+
+  for (const sourceFile of sources) {
+    for (const statement of sourceFile.statements) {
+      const members = ts.isInterfaceDeclaration(statement)
+        ? statement.members
+        : ts.isTypeAliasDeclaration(statement) && ts.isTypeLiteralNode(statement.type)
+          ? statement.type.members
+          : null
+      if (!members || !portInterfacePattern.test(statement.name.text)) {
+        continue
+      }
+      if (ts.isInterfaceDeclaration(statement) && statement.heritageClauses?.length) {
+        inheritedPortDeclarations.push({
+          path: ownerPaths.get(normalizedPath(sourceFile.fileName)) ?? sourceFile.fileName,
+          interfaceName: statement.name.text,
+          name: '<inherited-port-members>',
+        })
+      }
+      for (const member of members) {
+        const name = declaredName(member.name)
+        if (name) {
+          declarations.push({
+            path: ownerPaths.get(normalizedPath(sourceFile.fileName)) ?? sourceFile.fileName,
+            interfaceName: statement.name.text,
+            member,
+            name,
+          })
+        }
+      }
+    }
+  }
+
+  const consumeSymbol = (symbol) => {
+    for (const rootSymbol of symbol ? checker.getRootSymbols(symbol) : []) {
+      for (const declaration of rootSymbol.declarations ?? []) {
+        consumedDeclarations.add(declaration)
+      }
+    }
+  }
+
+  for (const sourceFile of sources) {
+    function visit(node) {
+      if (ts.isPropertyAccessExpression(node)) {
+        consumeSymbol(checker.getSymbolAtLocation(node.name))
+      } else if (
+        ts.isElementAccessExpression(node)
+        && node.argumentExpression
+        && ts.isStringLiteral(node.argumentExpression)
+      ) {
+        consumeSymbol(
+          checker.getPropertyOfType(
+            checker.getTypeAtLocation(node.expression),
+            node.argumentExpression.text,
+          ),
+        )
+      } else if (
+        ts.isBindingElement(node)
+        && ts.isObjectBindingPattern(node.parent)
+        && !node.dotDotDotToken
+      ) {
+        const name = declaredName(node.propertyName ?? node.name)
+        if (name) {
+          const owner = node.parent.parent
+          const source = ts.isVariableDeclaration(owner) && owner.initializer
+            ? owner.initializer
+            : owner
+          consumeSymbol(checker.getPropertyOfType(checker.getTypeAtLocation(source), name))
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+  }
+
+  return [
+    ...inheritedPortDeclarations,
+    ...declarations
+      .filter(({ member }) => !consumedDeclarations.has(member))
+      .map(({ path, interfaceName, name }) => ({ path, interfaceName, name })),
+  ]
+}
+
+function isGeneratedTypeSource(sourceFile) {
+  const path = normalizedPath(sourceFile.fileName)
+  if (!path.startsWith(`${normalizedPath(sourceRoot)}/`)) {
+    return false
+  }
+  return path.includes('/types/generated/')
+    || /^\/\* Generated from contracts\/[^\n]+\. Do not edit\. \*\//u.test(sourceFile.text)
+}
+
+function resolveGeneratedType(checker, node) {
+  let symbol = checker.getSymbolAtLocation(node)
+  const visited = new Set()
+  while (symbol && (symbol.flags & ts.SymbolFlags.Alias) !== 0 && !visited.has(symbol)) {
+    visited.add(symbol)
+    symbol = checker.getAliasedSymbol(symbol)
+  }
+  const generatedDeclaration = symbol?.declarations?.find((declaration) => (
+    isGeneratedTypeSource(declaration.getSourceFile())
+  ))
+  return generatedDeclaration ? symbol.getName() : null
+}
+
+function collectGeneratedMirrorAliases(program, productionPaths, ownerPaths = new Map()) {
+  const mirrors = []
+  const checker = program.getTypeChecker()
+  const normalizedProductionPaths = new Set(productionPaths.map(normalizedPath))
+  const sources = program.getSourceFiles().filter((sourceFile) => (
+    normalizedProductionPaths.has(normalizedPath(sourceFile.fileName))
+  ))
+  for (const sourceFile of sources) {
+    if (isGeneratedTypeSource(sourceFile)) {
+      continue
+    }
+    const path = ownerPaths.get(normalizedPath(sourceFile.fileName)) ?? sourceFile.fileName
+    for (const statement of sourceFile.statements) {
+      if (
+        ts.isTypeAliasDeclaration(statement)
+        && ts.isTypeReferenceNode(statement.type)
+        && !statement.type.typeArguments?.length
+      ) {
+        const target = ts.isQualifiedName(statement.type.typeName)
+          ? statement.type.typeName.right
+          : statement.type.typeName
+        const generated = resolveGeneratedType(checker, target)
+        if (generated) {
+          mirrors.push({ path, alias: statement.name.text, generated })
+        }
+      }
+      if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+        for (const element of statement.exportClause.elements) {
+          const generated = resolveGeneratedType(checker, element.propertyName ?? element.name)
+            ?? resolveGeneratedType(checker, element.name)
+          if (generated && element.name.text !== generated) {
+            mirrors.push({ path, alias: element.name.text, generated })
+          }
+        }
+      }
+    }
+  }
+  return mirrors
+}
+
+function runArchitectureRuleSelfTests() {
+  const fixtureRoot = resolve(process.cwd(), 'scripts/fixtures/architecture')
+  const fixture = (name, kind = 'ts') => {
+    const fixturePath = resolve(fixtureRoot, name)
+    const path = `${fixturePath}.${kind}`
+    const source = readFileSync(fixturePath, 'utf8')
+    if (kind === 'vue') {
+      const entries = parseTypeScriptSourcesFromText(path, source)
+      if (entries.length !== 1) {
+        throw new Error(`${name} must contain exactly one TypeScript Vue script`)
+      }
+      return entries[0]
+    }
+    return createTypeScriptEntry(path, path, source)
+  }
+  const unusedFixture = fixture('unused-port-member.fixture')
+  const fixtureProgram = (entry) => {
+    const options = {
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      target: ts.ScriptTarget.ESNext,
+      strict: true,
+      baseUrl: process.cwd(),
+      paths: { '@/*': ['./src/*'] },
+    }
+    return createTypeScriptProgram([entry], options)
+  }
+  const unused = collectUnusedPortMembers(fixtureProgram(unusedFixture), [unusedFixture.path])
+  if (unused.length !== 1 || unused[0].name !== 'unused') {
+    throw new Error(`unused port member self-test did not reject only the unconsumed member: ${JSON.stringify(unused)}`)
+  }
+  const usedFixture = fixture('used-port-member.fixture')
+  if (collectUnusedPortMembers(fixtureProgram(usedFixture), [usedFixture.path]).length !== 0) {
+    throw new Error('used port member self-test rejected a production consumer')
+  }
+  const unrelatedFixture = fixture('unrelated-port-member.fixture')
+  const unrelated = collectUnusedPortMembers(fixtureProgram(unrelatedFixture), [unrelatedFixture.path])
+  if (unrelated.length !== 1 || unrelated[0].name !== 'unused') {
+    throw new Error('unrelated same-name property incorrectly kept a port member alive')
+  }
+  const typeAliasFixture = fixture('unused-port-type-alias.fixture')
+  const typeAliasUnused = collectUnusedPortMembers(
+    fixtureProgram(typeAliasFixture),
+    [typeAliasFixture.path],
+  )
+  if (typeAliasUnused.length !== 1 || typeAliasUnused[0].name !== 'unused') {
+    throw new Error('object type alias port self-test did not reject its unconsumed member')
+  }
+  const inheritedFixture = fixture('inherited-port-member.fixture')
+  const inherited = collectUnusedPortMembers(
+    fixtureProgram(inheritedFixture),
+    [inheritedFixture.path],
+  )
+  if (
+    inherited.length !== 1
+    || inherited[0].interfaceName !== 'DerivedPort'
+    || inherited[0].name !== '<inherited-port-members>'
+  ) {
+    throw new Error('port heritage self-test did not reject inherited members')
+  }
+  const mirrorFixture = fixture('generated-mirror-alias.fixture')
+  const mirrors = collectGeneratedMirrorAliases(fixtureProgram(mirrorFixture), [mirrorFixture.path])
+  if (mirrors.length !== 1 || mirrors[0].alias !== 'MirroredError') {
+    throw new Error('generated mirror alias self-test did not reject the direct alias')
+  }
+  const sameNameMirrorFixture = fixture('generated-same-name-mirror-alias.fixture')
+  const sameNameMirrors = collectGeneratedMirrorAliases(
+    fixtureProgram(sameNameMirrorFixture),
+    [sameNameMirrorFixture.path],
+  )
+  if (
+    sameNameMirrors.length !== 1
+    || sameNameMirrors[0].alias !== 'TaskErrorPayload'
+    || sameNameMirrors[0].generated !== 'TaskErrorPayload'
+  ) {
+    throw new Error('generated mirror alias self-test did not reject a same-name imported alias')
+  }
+  const localFixture = fixture('generated-local-same-name.fixture')
+  if (collectGeneratedMirrorAliases(fixtureProgram(localFixture), [localFixture.path]).length !== 0) {
+    throw new Error('generated mirror alias self-test rejected a local same-name type')
+  }
+  const namespaceFixture = fixture('generated-namespace-alias.fixture')
+  const namespaceMirrors = collectGeneratedMirrorAliases(
+    fixtureProgram(namespaceFixture),
+    [namespaceFixture.path],
+  )
+  if (namespaceMirrors.length !== 1 || namespaceMirrors[0].alias !== 'NamespacedError') {
+    throw new Error('generated mirror alias self-test did not reject a namespace import alias')
+  }
+  const eventFixture = fixture('generated-event-alias.fixture')
+  const eventMirrors = collectGeneratedMirrorAliases(fixtureProgram(eventFixture), [eventFixture.path])
+  if (eventMirrors.length !== 1 || eventMirrors[0].generated !== 'TaskEventPayloadMap') {
+    throw new Error('generated mirror alias self-test did not recognize generated event types')
+  }
+  const vueFixture = fixture('generated-vue-alias.fixture', 'vue')
+  const vueMirrors = collectGeneratedMirrorAliases(fixtureProgram(vueFixture), [vueFixture.path])
+  if (vueMirrors.length !== 1 || vueMirrors[0].alias !== 'VueErrorMirror') {
+    throw new Error('generated mirror alias self-test did not inspect Vue TypeScript scripts')
+  }
+  const derivedFixture = fixture('generated-derived-type.fixture')
+  if (
+    collectGeneratedMirrorAliases(fixtureProgram(derivedFixture), [derivedFixture.path]).length !== 0
+  ) {
+    throw new Error('generated mirror alias self-test rejected a derived type')
+  }
+  const exportFixture = fixture('generated-export-alias.fixture')
+  const exportMirrors = collectGeneratedMirrorAliases(fixtureProgram(exportFixture), [exportFixture.path])
+  if (exportMirrors.length !== 3) {
+    throw new Error('generated mirror alias self-test did not reject export aliases')
+  }
+}
+
+runArchitectureRuleSelfTests()
 
 for (const path of sourceFiles) {
   const owner = relative(sourceRoot, path).replaceAll('\\', '/')
@@ -76,6 +419,37 @@ for (const path of sourceFiles) {
     .filter((dependency) => dependency !== null)
   dependencyGraph.set(owner, new Set(internalDependencies))
 
+}
+
+const typeScriptSources = parseTypeScriptSources(sourceFiles)
+const appConfig = ts.readConfigFile(resolve(process.cwd(), 'tsconfig.app.json'), ts.sys.readFile)
+if (appConfig.error) {
+  throw new Error(ts.flattenDiagnosticMessageText(appConfig.error.messageText, '\n'))
+}
+const parsedAppConfig = ts.parseJsonConfigFileContent(appConfig.config, ts.sys, process.cwd())
+const productionTypeScriptPaths = typeScriptSources.map(({ path }) => path)
+const ownerPaths = new Map(typeScriptSources.map(({ path, ownerPath }) => [normalizedPath(path), ownerPath]))
+const productionProgram = createTypeScriptProgram(typeScriptSources, parsedAppConfig.options)
+for (const { path, interfaceName, name } of collectUnusedPortMembers(
+  productionProgram,
+  productionTypeScriptPaths,
+  ownerPaths,
+)) {
+  const owner = relative(process.cwd(), path).replaceAll('\\', '/')
+  violations.push(
+    `frontend port member has no production consumer: ${owner} -> ${interfaceName}.${name}`,
+  )
+}
+
+for (const { path, alias, generated } of collectGeneratedMirrorAliases(
+  productionProgram,
+  productionTypeScriptPaths,
+  ownerPaths,
+)) {
+  const owner = relative(process.cwd(), path).replaceAll('\\', '/')
+  violations.push(
+    `frontend type alias mirrors generated contract type: ${owner} -> ${alias} = ${generated}`,
+  )
 }
 
 const states = new Map()

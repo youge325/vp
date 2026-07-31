@@ -1,0 +1,9 @@
+<script setup lang="ts">
+import type { TaskErrorPayload } from '@/types/generated/contracts'
+
+type VueErrorMirror = TaskErrorPayload
+</script>
+
+<template>
+  <div />
+</template>
