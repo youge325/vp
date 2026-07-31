@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CancelReason {
+pub(super) enum CancelReason {
     User,
     Stalled,
 }
@@ -35,17 +35,17 @@ struct CancellationInner {
 }
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct CancellationToken {
+pub(super) struct CancellationToken {
     inner: Arc<CancellationInner>,
 }
 
 impl CancellationToken {
-    pub(crate) fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self::default()
     }
 
     /// Atomically install the first cancellation reason and wake all waiters.
-    pub(crate) fn cancel(&self, reason: CancelReason) -> bool {
+    pub(super) fn cancel(&self, reason: CancelReason) -> bool {
         if self
             .inner
             .state
@@ -59,15 +59,15 @@ impl CancellationToken {
         }
     }
 
-    pub(crate) fn is_cancelled(&self) -> bool {
+    pub(super) fn is_cancelled(&self) -> bool {
         self.inner.state.load(Ordering::Acquire) != 0
     }
 
-    pub(crate) fn reason(&self) -> Option<CancelReason> {
+    pub(super) fn reason(&self) -> Option<CancelReason> {
         CancelReason::from_u8(self.inner.state.load(Ordering::Acquire))
     }
 
-    pub(crate) async fn cancelled(&self) {
+    pub(super) async fn cancelled(&self) {
         loop {
             let notified = self.inner.notify.notified();
             tokio::pin!(notified);

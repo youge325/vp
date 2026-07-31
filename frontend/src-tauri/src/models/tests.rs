@@ -123,7 +123,7 @@ fn workflow_requires_explicit_canonical_fields() {
 }
 
 #[test]
-fn filter_step_preserves_free_form_values() {
+fn filter_step_preserves_typed_parameter_values() {
     let mut raw = valid_preset_value()["workflowConfig"].clone();
     raw["preprocess"] = json!({
         "enabled": true,
@@ -132,7 +132,7 @@ fn filter_step_preserves_free_form_values() {
             {
                 "kind": "color",
                 "enabled": true,
-                "params": { "gamma": 1.2, "nested": { "mode": "linear" } }
+                "params": { "brightness": 0.2, "contrast": 1.2, "saturation": 0.8 }
             }
         ]
     });
@@ -143,8 +143,24 @@ fn filter_step_preserves_free_form_values() {
     assert_eq!(serialized["preprocess"]["filters"][0]["params"], json!({}));
     assert_eq!(
         serialized["preprocess"]["filters"][1]["params"],
-        json!({ "gamma": 1.2, "nested": { "mode": "linear" } })
+        json!({ "brightness": 0.2, "contrast": 1.2, "saturation": 0.8 })
     );
+}
+
+#[test]
+fn filter_step_rejects_unknown_parameter_values() {
+    let mut raw = valid_preset_value()["workflowConfig"].clone();
+    raw["preprocess"] = json!({
+        "enabled": true,
+        "filters": [{
+            "kind": "color",
+            "enabled": true,
+            "params": { "gamma": 1.2 }
+        }]
+    });
+
+    serde_json::from_value::<WorkflowConfig>(raw)
+        .expect_err("generated filter parameters must reject unknown fields");
 }
 
 #[test]

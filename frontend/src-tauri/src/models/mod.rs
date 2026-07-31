@@ -7,13 +7,14 @@
 mod boundary {
     typify::import_types!(schema = "../../contracts/boundary.schema.json");
 }
+mod generated_error_codes;
 
 pub mod config {
     pub use super::boundary::{
         DecodeConfig, DecodeMode, EncodeConfig, FilterStep, FilterStepKind, FpsMode,
-        InterpolationConfig, OutputConfig, PostprocessConfig, PreprocessConfig, ProcessOrder,
-        RateControlConfig, RateControlMode, SuperResolutionConfig, TensorBackend, WorkbenchPreset,
-        WorkflowConfig,
+        InferenceEngine, InterpolationConfig, OutputConfig, PostprocessConfig, PreprocessConfig,
+        ProcessOrder, RateControlConfig, RateControlMode, SuperResolutionConfig, TensorBackend,
+        WorkbenchPreset, WorkflowConfig,
     };
 }
 
@@ -27,8 +28,8 @@ pub mod task {
 
 pub(crate) use boundary::{
     BackendTaskErrorCode, BackendTaskErrorPayload, EnvironmentCacheEntry, EnvironmentCheckPayload,
-    EnvironmentCheckResult, EnvironmentCheckSource, ShellTaskErrorCode, TaskControlKind,
-    TaskErrorCode, WorkbenchPresetEntry,
+    EnvironmentCheckResult, EnvironmentCheckSource, RuntimeConfigBundle, ShellTaskErrorCode,
+    TaskControlKind, TaskErrorCode, WorkbenchPresetEntry,
 };
 pub(crate) use config::WorkbenchPreset;
 pub(crate) use task::{
@@ -39,13 +40,8 @@ pub(crate) use task::{
 
 impl From<BackendTaskErrorPayload> for TaskErrorPayload {
     fn from(payload: BackendTaskErrorPayload) -> Self {
-        let code = serde_json::from_value(
-            serde_json::to_value(payload.code)
-                .expect("generated backend error codes must serialize"),
-        )
-        .expect("backend error-code schema must remain a subset of the full error-code schema");
         Self {
-            code,
+            code: generated_error_codes::backend_error_code_to_task_error_code(payload.code),
             message: payload.message,
             details: payload.details,
         }

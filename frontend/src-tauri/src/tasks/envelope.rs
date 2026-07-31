@@ -1,12 +1,14 @@
 use serde_json::Value;
 
-pub(crate) use crate::generated::BackendTaskEnvelope as NdjsonEnvelope;
+use crate::generated::{BackendProcessSpec, StartTaskSpec};
 use crate::models::{
     ResumeStatusPayload, TaskCompletedPayload, TaskErrorCode, TaskErrorPayload, TaskProgressPayload,
 };
 
+pub(super) type NdjsonEnvelope = <StartTaskSpec as BackendProcessSpec>::Event;
+
 #[derive(Debug)]
-pub(crate) enum ClassifiedLine {
+pub(super) enum ClassifiedLine {
     Empty,
     Progress(TaskProgressPayload),
     Completed(TaskCompletedPayload),
@@ -20,7 +22,7 @@ pub(crate) enum ClassifiedLine {
 ///
 /// Both the runtime reader and tests use this function, so schema-drift
 /// behavior cannot diverge through a test-only mirror parser.
-pub(crate) fn classify_line(line: &str) -> ClassifiedLine {
+pub(super) fn classify_line(line: &str) -> ClassifiedLine {
     let trimmed = line.trim();
     if trimmed.is_empty() {
         return ClassifiedLine::Empty;

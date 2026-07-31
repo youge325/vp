@@ -10,24 +10,26 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use command_group::AsyncGroupChild;
-use tauri::async_runtime::JoinHandle;
-use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 
-use crate::generated::TaskEventName;
+use crate::generated::{BackendProcessSpec, StartTaskSpec};
 use crate::models::{
     TaskCancelledPayload, TaskCancelledReason, TaskCompletedPayload, TaskErrorCode,
     TaskErrorPayload, TaskLogPayload,
 };
-use crate::process_control::{ProcessControl, ProcessControlError, ProcessController};
+use crate::process_control::{ProcessControl, ProcessControlError};
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
+use crate::tasks::cleanup::{own_late_cleanup, PendingControlCleanup};
 use crate::tasks::envelope::ClassifiedLine;
+use crate::tasks::ports::{TaskDomainEvent, TaskEventSink, TaskLifecyclePort};
 use crate::tasks::readers::{pipe_failure_payload, ProgressBeat, ReaderMessage};
 use crate::tasks::state::StartLease;
 use crate::tasks::stderr::StderrCapture;
-use crate::tasks::subprocess::{spawn_detached_reaper, TERMINATION_REAP_TIMEOUT};
-use crate::tasks::{ProcessControlKind, TaskControlMessage, TaskState};
+use crate::tasks::subprocess::{ProcessGroupChild, ProcessGroupOwner, ReapOutcome, ReapTicket};
+#[cfg(test)]
+use crate::tasks::TaskState;
+use crate::tasks::{ProcessControlKind, TaskControlMessage};
 
 const DEFAULT_STALL_TIMEOUT_SECS: u64 = 600;
 const DEFAULT_WATCHDOG_POLL_INTERVAL_SECS: u64 = 5;
@@ -39,11 +41,12 @@ const TERMINAL_EXIT_GRACE: Duration = Duration::from_secs(5);
 const CHILD_EXIT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const STALL_TIMEOUT_ENV: &str = "VP_TASK_STALL_TIMEOUT_SECS";
 
-pub(super) struct TaskSupervisorSession<R: Runtime> {
-    pub(super) app: AppHandle<R>,
-    pub(super) child: AsyncGroupChild,
+pub(super) struct TaskSupervisorSession {
+    pub(super) event_sink: Arc<dyn TaskEventSink>,
+    pub(super) lifecycle: Arc<dyn TaskLifecyclePort>,
+    pub(super) child: ProcessGroupChild,
     pub(super) lease: StartLease,
-    pub(super) process_controller: Arc<ProcessController>,
+    pub(super) process_controller: Arc<dyn ProcessControl>,
     pub(super) control_rx: mpsc::Receiver<TaskControlMessage>,
     pub(super) output_rx: mpsc::Receiver<ReaderMessage>,
     pub(super) stdin_writer: JoinHandle<()>,
@@ -52,6 +55,24 @@ pub(super) struct TaskSupervisorSession<R: Runtime> {
     pub(super) stderr_capture: StderrCapture,
     pub(super) cancel_token: CancellationToken,
     pub(super) progress_beat: ProgressBeat,
+}
+
+struct OwnedTaskSupervisorSession {
+    event_sink: Arc<dyn TaskEventSink>,
+    lifecycle: Arc<dyn TaskLifecyclePort>,
+    child: ProcessGroupOwner,
+    reap_ticket: ReapTicket,
+    lease: StartLease,
+    process_controller: Arc<dyn ProcessControl>,
+    control_rx: mpsc::Receiver<TaskControlMessage>,
+    output_rx: mpsc::Receiver<ReaderMessage>,
+    stdin_writer: JoinHandle<()>,
+    stdout_reader: JoinHandle<()>,
+    stderr_reader: JoinHandle<()>,
+    stderr_capture: StderrCapture,
+    cancel_token: CancellationToken,
+    progress_beat: ProgressBeat,
+    control_cleanup: PendingControlCleanup,
 }
 
 enum TerminalEvent {
@@ -116,7 +137,7 @@ impl<T> AbortOnDropTask<T> {
 }
 
 impl<T> Future for AbortOnDropTask<T> {
-    type Output = tauri::Result<T>;
+    type Output = Result<T, tokio::task::JoinError>;
 
     fn poll(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
         Pin::new(&mut self.handle).poll(context)
@@ -129,62 +150,14 @@ impl<T> Drop for AbortOnDropTask<T> {
     }
 }
 
-struct SupervisedChild {
-    child: Option<AsyncGroupChild>,
-}
-
-impl SupervisedChild {
-    fn new(child: AsyncGroupChild) -> Self {
-        Self { child: Some(child) }
-    }
-
-    fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
-        self.child
-            .as_mut()
-            .expect("supervised child is only released during drop")
-            .try_wait()
-    }
-
-    fn start_kill(&mut self) -> io::Result<()> {
-        self.child
-            .as_mut()
-            .expect("supervised child is only released during drop")
-            .start_kill()
-    }
-
-    #[cfg(test)]
-    fn id(&self) -> Option<u32> {
-        self.child.as_ref().and_then(AsyncGroupChild::id)
-    }
-}
-
-impl Drop for SupervisedChild {
-    fn drop(&mut self) {
-        let Some(child) = self.child.take() else {
-            return;
-        };
-        // A panic or task abort unwinds this guard before the monitor releases
-        // the task slot. Transfer the stable group/job handle to a detached
-        // Tokio reaper so start_kill is followed by an actual bounded wait.
-        if child.id().is_some() {
-            spawn_detached_reaper(
-                child,
-                TERMINATION_REAP_TIMEOUT,
-                "supervised backend process group",
-            );
-        }
-    }
-}
-
 struct PendingControl {
-    work: JoinHandle<(Result<(), ProcessControlError>, bool)>,
+    work: PendingControlCleanup,
     deadline: Pin<Box<tokio::time::Sleep>>,
     timeout: Duration,
-    timed_out: bool,
     response: Option<oneshot::Sender<Result<(), ProcessControlError>>>,
     initial_paused: bool,
-    restore_target: Option<bool>,
-    is_compensation: bool,
+    shutdown: ShutdownDirective,
+    phase: ControlPhase,
 }
 
 #[derive(Clone, Copy)]
@@ -193,28 +166,42 @@ enum ControlRestoration {
     Abandon,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ShutdownDirective {
+    Undecided,
+    RestoreTo(bool),
+    Abandon,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ControlPhase {
+    Requested,
+    Compensation,
+}
+
 enum PendingControlEvent {
-    Finished(tauri::Result<(Result<(), ProcessControlError>, bool)>),
+    Finished(Result<(Result<(), ProcessControlError>, bool), tokio::task::JoinError>),
     TimedOut,
 }
 
 impl PendingControl {
-    fn new<C: ProcessControl + 'static>(
-        controller: Arc<C>,
+    fn new(
+        controller: Arc<dyn ProcessControl>,
         kind: ProcessControlKind,
         is_paused: bool,
         response: oneshot::Sender<Result<(), ProcessControlError>>,
         timeout: Duration,
+        work: PendingControlCleanup,
     ) -> Self {
+        work.start(|| spawn_process_control_work(controller, kind, is_paused));
         Self {
-            work: spawn_process_control_work(controller, kind, is_paused),
+            work,
             deadline: Box::pin(tokio::time::sleep(timeout)),
             timeout,
-            timed_out: false,
             response: Some(response),
             initial_paused: is_paused,
-            restore_target: None,
-            is_compensation: false,
+            shutdown: ShutdownDirective::Undecided,
+            phase: ControlPhase::Requested,
         }
     }
 
@@ -224,69 +211,128 @@ impl PendingControl {
         }
     }
 
-    fn timeout_response(&mut self) {
-        self.timed_out = true;
-        if !self.is_compensation {
-            self.restore_target = Some(self.initial_paused);
-        }
-        self.reject_response(&format!(
-            "operation timed out after {} seconds",
-            self.timeout.as_secs_f64()
-        ));
-    }
-
-    fn compensation<C: ProcessControl + 'static>(
-        controller: Arc<C>,
+    fn compensation(
+        controller: Arc<dyn ProcessControl>,
         current_paused: bool,
         target_paused: bool,
+        work: PendingControlCleanup,
     ) -> Self {
         let kind = if target_paused {
             ProcessControlKind::Pause
         } else {
             ProcessControlKind::Resume
         };
+        work.start(|| spawn_process_control_work(controller, kind, current_paused));
         Self {
-            work: spawn_process_control_work(controller, kind, current_paused),
+            work,
             deadline: Box::pin(tokio::time::sleep(PROCESS_CONTROL_TIMEOUT)),
             timeout: PROCESS_CONTROL_TIMEOUT,
-            timed_out: false,
             response: None,
             initial_paused: target_paused,
-            restore_target: None,
-            is_compensation: true,
+            shutdown: ShutdownDirective::Undecided,
+            phase: ControlPhase::Compensation,
         }
     }
 
     fn apply_restoration(&mut self, restoration: ControlRestoration) {
-        self.restore_target = match restoration {
-            ControlRestoration::Target(target) => Some(target),
-            ControlRestoration::Abandon => None,
+        if self.shutdown == ShutdownDirective::Abandon {
+            return;
+        }
+        self.shutdown = match restoration {
+            ControlRestoration::Target(target) => ShutdownDirective::RestoreTo(target),
+            ControlRestoration::Abandon => ShutdownDirective::Abandon,
         };
     }
 
     fn compensation_target(&self, next_paused: bool) -> Option<bool> {
-        self.restore_target.filter(|target| next_paused != *target)
+        match self.shutdown {
+            ShutdownDirective::RestoreTo(target) if next_paused != target => Some(target),
+            _ => None,
+        }
+    }
+
+    fn into_abandoned_work(mut self, message: &str) -> PendingControlCleanup {
+        self.apply_restoration(ControlRestoration::Abandon);
+        self.reject_response(message);
+        self.work
+    }
+
+    fn into_timed_out_work(mut self) -> PendingControlCleanup {
+        self.apply_restoration(ControlRestoration::Abandon);
+        self.reject_response(&format!(
+            "operation timed out after {} seconds",
+            self.timeout.as_secs_f64()
+        ));
+        self.work
     }
 
     async fn wait(&mut self) -> PendingControlEvent {
-        if self.timed_out {
-            return PendingControlEvent::Finished((&mut self.work).await);
-        }
         tokio::select! {
-            result = &mut self.work => PendingControlEvent::Finished(result),
+            result = self.work.wait() => PendingControlEvent::Finished(result.unwrap_or_else(|| {
+                Ok((
+                    Err(ProcessControlError::Worker(
+                        "process-control worker ownership was lost".to_string(),
+                    )),
+                    self.initial_paused,
+                ))
+            })),
             _ = self.deadline.as_mut() => PendingControlEvent::TimedOut,
         }
     }
 }
 
-pub(super) fn spawn_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSession<R>) {
-    let recovery_app = session.app.clone();
-    let recovery_lease = session.lease.clone();
-    let recovery_stderr = session.stderr_capture.clone();
-    let supervisor = tauri::async_runtime::spawn(run_task_supervisor(session));
-    tauri::async_runtime::spawn(monitor_supervisor(supervisor, move |message| async move {
-        recover_supervisor_join_failure(recovery_app, recovery_lease, recovery_stderr, message)
-            .await;
+pub(super) fn spawn_task_supervisor(session: TaskSupervisorSession) {
+    let TaskSupervisorSession {
+        event_sink,
+        lifecycle,
+        child,
+        lease,
+        process_controller,
+        control_rx,
+        output_rx,
+        stdin_writer,
+        stdout_reader,
+        stderr_reader,
+        stderr_capture,
+        cancel_token,
+        progress_beat,
+    } = session;
+    let (child, reap_ticket) = ProcessGroupOwner::new(child, "supervised backend process group");
+    let recovery_event_sink = Arc::clone(&event_sink);
+    let recovery_lifecycle = Arc::clone(&lifecycle);
+    let recovery_lease = lease.clone();
+    let recovery_stderr = stderr_capture.clone();
+    let recovery_reap = reap_ticket.clone();
+    let control_cleanup = PendingControlCleanup::default();
+    let recovery_control_cleanup = control_cleanup.clone();
+    let supervisor = tokio::spawn(run_task_supervisor(OwnedTaskSupervisorSession {
+        event_sink,
+        lifecycle,
+        child,
+        reap_ticket,
+        lease,
+        process_controller,
+        control_rx,
+        output_rx,
+        stdin_writer,
+        stdout_reader,
+        stderr_reader,
+        stderr_capture,
+        cancel_token,
+        progress_beat,
+        control_cleanup,
+    }));
+    tokio::spawn(monitor_supervisor(supervisor, move |message| async move {
+        recover_supervisor_join_failure(
+            recovery_event_sink,
+            recovery_lifecycle,
+            recovery_lease,
+            recovery_stderr,
+            recovery_reap,
+            recovery_control_cleanup,
+            message,
+        )
+        .await;
     }));
 }
 
@@ -300,23 +346,99 @@ where
     }
 }
 
-async fn recover_supervisor_join_failure<R: Runtime>(
-    app: AppHandle<R>,
+async fn recover_supervisor_join_failure(
+    event_sink: Arc<dyn TaskEventSink>,
+    lifecycle: Arc<dyn TaskLifecyclePort>,
     lease: StartLease,
     stderr_capture: StderrCapture,
+    mut reap_ticket: ReapTicket,
+    control_cleanup: PendingControlCleanup,
     message: String,
 ) {
-    // `run_task_supervisor` owns `SupervisedChild` and every pipe/control task. A panic first
+    // `run_task_supervisor` owns `ProcessGroupOwner` and every pipe/control task. A panic first
     // unwinds those structured owners: the child guard terminates the process group and the
     // reader guards abort their tasks. Only then does this monitor receive the JoinError and
     // atomically publish the one permitted terminal event while releasing the task slot.
-    let payload = supervisor_join_failure_payload(&message, &stderr_capture);
-    let event_app = app.clone();
-    app.state::<TaskState>()
-        .finish_once(&lease, move || {
-            let _ = event_app.emit(TaskEventName::TaskError.as_str(), payload);
-        })
+    let mut payload = supervisor_join_failure_payload(&message, &stderr_capture);
+    if !lifecycle.begin_reaping(&lease).await {
+        eprintln!("supervisor panic cleanup no longer owns its task lease");
+        return;
+    }
+    let late_control = if control_cleanup.has_work() {
+        match tokio::time::timeout(PROCESS_CONTROL_TIMEOUT, control_cleanup.wait()).await {
+            Err(_) => Some(control_cleanup),
+            Ok(Some(Ok((Ok(()), _)))) => None,
+            Ok(Some(Ok((Err(error), _)))) => {
+                payload.message = format!(
+                    "{} Process-control cleanup completed with an error: {error}",
+                    payload.message
+                );
+                None
+            }
+            Ok(Some(Err(error))) => {
+                payload.message = format!(
+                    "{} Process-control cleanup worker failed: {error}",
+                    payload.message
+                );
+                None
+            }
+            Ok(None) => {
+                payload.message = format!(
+                    "{} Process-control cleanup lost worker ownership.",
+                    payload.message
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let reap_outcome = reap_ticket
+        .wait_bounded(StartTaskSpec::TERMINATION_TIMEOUT)
         .await;
+    if reap_outcome == Some(ReapOutcome::Reaped) && late_control.is_none() {
+        if !lifecycle
+            .finish_once(
+                &lease,
+                Box::new(move || {
+                    if let Err(error) = event_sink.emit(TaskDomainEvent::Error(payload)) {
+                        eprintln!("unable to emit supervisor failure: {error}");
+                    }
+                }),
+            )
+            .await
+        {
+            eprintln!("supervisor panic completion no longer owns its task lease");
+        }
+        return;
+    }
+
+    let reap_timed_out = reap_outcome.is_none();
+    let details = match reap_outcome.as_ref() {
+        Some(ReapOutcome::Failed(error)) => error.clone(),
+        None => "timed out while waiting for panic cleanup to reap the backend".to_string(),
+        Some(ReapOutcome::Reaped) => {
+            "timed out while waiting for the panic cleanup process-control worker".to_string()
+        }
+    };
+    let cleanup_sink = Arc::clone(&event_sink);
+    if !lifecycle
+        .fail_cleanup_once(
+            &lease,
+            Box::new(move || {
+                payload.message = format!("{} Cleanup remains blocked: {details}", payload.message);
+                if let Err(error) = cleanup_sink.emit(TaskDomainEvent::Error(payload)) {
+                    eprintln!("unable to emit supervisor cleanup failure: {error}");
+                }
+            }),
+        )
+        .await
+    {
+        eprintln!("supervisor panic cleanup no longer owns its task lease");
+    }
+    if reap_timed_out || late_control.is_some() {
+        own_late_cleanup(lifecycle, lease, reap_ticket, late_control).await;
+    }
 }
 
 fn supervisor_join_failure_payload(
@@ -330,10 +452,12 @@ fn supervisor_join_failure_payload(
     )
 }
 
-async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSession<R>) {
-    let TaskSupervisorSession {
-        app,
-        child,
+async fn run_task_supervisor(session: OwnedTaskSupervisorSession) {
+    let OwnedTaskSupervisorSession {
+        event_sink,
+        lifecycle,
+        mut child,
+        reap_ticket,
         lease,
         process_controller,
         mut control_rx,
@@ -344,20 +468,22 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
         stderr_capture,
         cancel_token,
         progress_beat,
+        control_cleanup,
     } = session;
-    let mut child = SupervisedChild::new(child);
     let mut stdin_writer = AbortOnDropTask::new(stdin_writer);
     let mut stdout_reader = AbortOnDropTask::new(stdout_reader);
     let mut stderr_reader = AbortOnDropTask::new(stderr_reader);
 
     let mut kill_deadline = None;
     let mut exit_status = None;
+    let mut reap_confirmed = false;
     let mut output_closed = false;
     let mut control_closed = false;
     let mut is_paused = false;
     let mut terminal = TerminalState::default();
     let mut terminal_deadline = None;
     let mut pending_control: Option<PendingControl> = None;
+    let mut cleanup_control_work: Option<PendingControlCleanup> = None;
     let mut exit_poll = tokio::time::interval(CHILD_EXIT_POLL_INTERVAL);
     exit_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let stall_timeout = parse_stall_timeout();
@@ -373,9 +499,18 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
                 match maybe_message {
                     Some(message) => {
                         let had_terminal = terminal.has_event();
-                        let protocol_fatal = handle_reader_message(&app, message, &mut terminal);
+                        let protocol_fatal = handle_reader_message(event_sink.as_ref(), message, &mut terminal);
                         if !had_terminal && terminal.has_event() {
-                            let _ = app.state::<TaskState>().seal_owned(&lease).await;
+                            if !lifecycle.seal_owned(&lease).await
+                                && !cancel_token.is_cancelled()
+                            {
+                                terminal.record_supervisor_error(TaskErrorPayload {
+                                    code: TaskErrorCode::ProcessFailed,
+                                    message: "Task lifecycle ownership was lost while sealing a terminal result."
+                                        .to_string(),
+                                    details: None,
+                                });
+                            }
                             close_control_channel(
                                 &mut control_rx,
                                 &mut control_closed,
@@ -411,6 +546,7 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
                                 is_paused,
                                 message.response,
                                 PROCESS_CONTROL_TIMEOUT,
+                                control_cleanup.clone(),
                             ));
                         }
                     }
@@ -428,7 +564,24 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
                                 is_paused,
                             ),
                         };
-                        if pending.is_compensation && result.is_err() {
+                        if let Err(ProcessControlError::StateUnknown(message)) = &result {
+                            pending.apply_restoration(ControlRestoration::Abandon);
+                            terminal.record_supervisor_error(TaskErrorPayload {
+                                code: TaskErrorCode::ProcessFailed,
+                                message: format!(
+                                    "Process control left the operating-system state unknown: {message}"
+                                ),
+                                details: None,
+                            });
+                            request_kill(
+                                &mut child,
+                                &mut kill_deadline,
+                                &mut terminal,
+                                &mut pending_control,
+                                &mut control_rx,
+                                &mut control_closed,
+                            );
+                        } else if pending.phase == ControlPhase::Compensation && result.is_err() {
                             terminal.record_supervisor_error(TaskErrorPayload {
                                 code: TaskErrorCode::ProcessFailed,
                                 message: format!(
@@ -453,6 +606,7 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
                                 Arc::clone(&process_controller),
                                 is_paused,
                                 target_paused,
+                                control_cleanup.clone(),
                             ));
                         } else if result.is_ok() {
                             is_paused = next_paused;
@@ -462,10 +616,21 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
                         }
                     }
                     PendingControlEvent::TimedOut => {
-                        pending_control
-                            .as_mut()
-                            .expect("guarded pending control")
-                            .timeout_response();
+                        let pending = pending_control.take().expect("guarded pending control");
+                        cleanup_control_work = Some(pending.into_timed_out_work());
+                        terminal.record_supervisor_error(TaskErrorPayload {
+                            code: TaskErrorCode::ProcessFailed,
+                            message: "Process control timed out; the backend state is unknown and the task was terminated.".to_string(),
+                            details: None,
+                        });
+                        request_kill(
+                            &mut child,
+                            &mut kill_deadline,
+                            &mut terminal,
+                            &mut pending_control,
+                            &mut control_rx,
+                            &mut control_closed,
+                        );
                     }
                 }
             }
@@ -484,7 +649,17 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
             _ = exit_poll.tick() => {
                 match child.try_wait() {
                     Ok(Some(status)) => {
-                        let _ = app.state::<TaskState>().seal_owned(&lease).await;
+                        reap_confirmed = true;
+                        if !lifecycle.seal_owned(&lease).await
+                            && !cancel_token.is_cancelled()
+                        {
+                            terminal.record_supervisor_error(TaskErrorPayload {
+                                code: TaskErrorCode::ProcessFailed,
+                                message: "Task lifecycle ownership was lost after backend exit."
+                                    .to_string(),
+                                details: None,
+                            });
+                        }
                         exit_status = Some(Ok(status));
                         close_control_channel(
                             &mut control_rx,
@@ -496,7 +671,16 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
                     }
                     Ok(None) => {}
                     Err(error) => {
-                        let _ = app.state::<TaskState>().seal_owned(&lease).await;
+                        if !lifecycle.seal_owned(&lease).await
+                            && !cancel_token.is_cancelled()
+                        {
+                            terminal.record_supervisor_error(TaskErrorPayload {
+                                code: TaskErrorCode::ProcessFailed,
+                                message: "Task lifecycle ownership was lost after backend status polling failed."
+                                    .to_string(),
+                                details: None,
+                            });
+                        }
                         exit_status = Some(Err(error));
                         close_control_channel(
                             &mut control_rx,
@@ -515,10 +699,7 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
                         .ok()
                         .is_some_and(|beat| beat.elapsed() > timeout);
                     if stalled
-                        && app
-                            .state::<TaskState>()
-                            .cancel_owned(&lease, CancelReason::Stalled)
-                            .await
+                        && lifecycle.cancel_owned(&lease, CancelReason::Stalled).await
                     {
                         request_kill(
                             &mut child,
@@ -548,7 +729,10 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
             }
             _ = terminal_grace_tick(&mut kill_deadline), if kill_deadline.is_some() => {
                 match child.try_wait() {
-                    Ok(Some(status)) => exit_status = Some(Ok(status)),
+                    Ok(Some(status)) => {
+                        reap_confirmed = true;
+                        exit_status = Some(Ok(status));
+                    }
                     Ok(None) => {
                         terminal.record_supervisor_error(TaskErrorPayload {
                             code: TaskErrorCode::ProcessFailed,
@@ -566,23 +750,56 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
         }
     }
 
-    // On a synthetic kill timeout, dropping the kill-on-drop group handle is the final
-    // best-effort termination path and also prevents the supervisor from leaking ownership.
+    if !lifecycle.begin_reaping(&lease).await {
+        terminal.record_supervisor_error(TaskErrorPayload {
+            code: TaskErrorCode::ProcessFailed,
+            message: "Task lifecycle ownership was lost before process reaping completed."
+                .to_string(),
+            details: None,
+        });
+    }
+    // On a synthetic kill timeout, dropping the owner transfers the stable
+    // process-group/job handle to the ticketed reaper. The task slot remains
+    // closed until that ticket confirms exit.
     drop(child);
 
-    // Keep ownership of an in-flight blocking control operation until its bounded wrapper
-    // completes. Aborting a `spawn_blocking` join handle cannot stop the OS call and would turn
-    // it into detached work; joining here preserves structured ownership without delaying kill.
-    if let Some(mut pending) = pending_control.take() {
-        let _ = (&mut pending.work).await;
-        pending.apply_restoration(ControlRestoration::Abandon);
-        pending.reject_response("process control finished after the backend stopped");
+    // A blocking OS control call cannot be aborted safely. Retain its join handle and bound the
+    // supervisor wait; if it outlives the deadline, the cleanup coordinator owns it and keeps the
+    // single-task slot closed until both the worker and process reaper have finished.
+    if let Some(pending) = pending_control.take() {
+        let work = pending
+            .into_abandoned_work("process control was cancelled because the backend stopped");
+        match tokio::time::timeout(PROCESS_CONTROL_TIMEOUT, work.wait()).await {
+            Err(_) => cleanup_control_work = Some(work),
+            Ok(Some(Ok((Ok(()), _)))) => {}
+            Ok(Some(Ok((Err(error), _)))) => {
+                terminal.record_supervisor_error(TaskErrorPayload {
+                    code: TaskErrorCode::ProcessFailed,
+                    message: format!("Process-control cleanup completed with an error: {error}"),
+                    details: None,
+                });
+            }
+            Ok(Some(Err(error))) => {
+                terminal.record_supervisor_error(TaskErrorPayload {
+                    code: TaskErrorCode::ProcessFailed,
+                    message: format!("Process-control cleanup worker failed: {error}"),
+                    details: None,
+                });
+            }
+            Ok(None) => {
+                terminal.record_supervisor_error(TaskErrorPayload {
+                    code: TaskErrorCode::ProcessFailed,
+                    message: "Process-control cleanup lost worker ownership.".to_string(),
+                    details: None,
+                });
+            }
+        }
     }
 
     if !output_closed {
         let drain_result = tokio::time::timeout(PIPE_DRAIN_TIMEOUT, async {
             while let Some(message) = output_rx.recv().await {
-                let _ = handle_reader_message(&app, message, &mut terminal);
+                let _ = handle_reader_message(event_sink.as_ref(), message, &mut terminal);
             }
         })
         .await;
@@ -614,17 +831,54 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
 
     let status =
         exit_status.unwrap_or_else(|| Err(io::Error::other("backend exit status missing")));
-    app.state::<TaskState>()
-        .finish_once(&lease, || {
-            emit_terminal_event(
-                &app,
-                status,
-                terminal.take(),
-                &cancel_token,
-                &stderr_capture,
-            );
-        })
-        .await;
+    if reap_confirmed && cleanup_control_work.is_none() {
+        let terminal_sink = Arc::clone(&event_sink);
+        if !lifecycle
+            .finish_once(
+                &lease,
+                Box::new(move || {
+                    if let Err(error) = emit_terminal_event(
+                        terminal_sink.as_ref(),
+                        status,
+                        terminal.take(),
+                        &cancel_token,
+                        &stderr_capture,
+                    ) {
+                        eprintln!("unable to emit terminal task event: {error}");
+                    }
+                }),
+            )
+            .await
+        {
+            eprintln!("task completion no longer owns its lifecycle lease");
+        }
+    } else {
+        let cleanup_message = if cleanup_control_work.is_some() {
+            "Backend cleanup is waiting for a process-control worker with unknown OS state; new tasks are blocked until cleanup completes."
+        } else {
+            "Backend cleanup could not confirm that the process group exited; new tasks are blocked until cleanup completes."
+        };
+        let cleanup_sink = Arc::clone(&event_sink);
+        if !lifecycle
+            .fail_cleanup_once(
+                &lease,
+                Box::new(move || {
+                    let payload = TaskErrorPayload {
+                        code: TaskErrorCode::ProcessFailed,
+                        message: cleanup_message.to_string(),
+                        details: None,
+                    };
+                    if let Err(error) = cleanup_sink.emit(TaskDomainEvent::Error(payload)) {
+                        eprintln!("unable to emit cleanup failure: {error}");
+                    }
+                }),
+            )
+            .await
+        {
+            eprintln!("task cleanup failure no longer owns its lifecycle lease");
+        }
+        own_late_cleanup(lifecycle, lease, reap_ticket, cleanup_control_work).await;
+    }
 }
 
 async fn watchdog_tick(interval: &mut Option<tokio::time::Interval>) {
@@ -653,7 +907,7 @@ async fn wait_for_pending_control(
 }
 
 fn request_kill(
-    child: &mut SupervisedChild,
+    child: &mut ProcessGroupOwner,
     kill_deadline: &mut Option<Pin<Box<tokio::time::Sleep>>>,
     terminal: &mut TerminalState,
     pending_control: &mut Option<PendingControl>,
@@ -679,7 +933,9 @@ fn request_kill(
             });
         }
     }
-    *kill_deadline = Some(Box::pin(tokio::time::sleep(TERMINATION_REAP_TIMEOUT)));
+    *kill_deadline = Some(Box::pin(tokio::time::sleep(
+        StartTaskSpec::TERMINATION_TIMEOUT,
+    )));
 }
 
 fn close_control_channel(
@@ -712,24 +968,25 @@ fn duplicate_terminal_payload(kind: &str) -> TaskErrorPayload {
     }
 }
 
-fn handle_reader_message<R: Runtime>(
-    app: &AppHandle<R>,
+fn handle_reader_message(
+    event_sink: &dyn TaskEventSink,
     message: ReaderMessage,
     terminal: &mut TerminalState,
 ) -> bool {
     match message {
         ReaderMessage::Stdout(ClassifiedLine::Empty) => false,
         ReaderMessage::Stdout(ClassifiedLine::Progress(payload)) => {
-            let _ = app.emit(TaskEventName::TaskProgress.as_str(), payload);
-            false
+            emit_observation(event_sink, TaskDomainEvent::Progress(payload), terminal)
         }
         ReaderMessage::Stdout(ClassifiedLine::ResumeStatus(payload)) => {
-            let _ = app.emit(TaskEventName::TaskResumeStatus.as_str(), payload);
-            false
+            emit_observation(event_sink, TaskDomainEvent::ResumeStatus(payload), terminal)
         }
         ReaderMessage::Stdout(ClassifiedLine::Log(message)) | ReaderMessage::Stderr(message) => {
-            let _ = app.emit(TaskEventName::TaskLog.as_str(), TaskLogPayload { message });
-            false
+            emit_observation(
+                event_sink,
+                TaskDomainEvent::Log(TaskLogPayload { message }),
+                terminal,
+            )
         }
         ReaderMessage::Stdout(ClassifiedLine::Completed(payload)) => {
             terminal.record_completed(payload)
@@ -752,12 +1009,29 @@ fn handle_reader_message<R: Runtime>(
     }
 }
 
-fn spawn_process_control_work<C: ProcessControl + 'static>(
-    controller: Arc<C>,
+fn emit_observation(
+    event_sink: &dyn TaskEventSink,
+    event: TaskDomainEvent,
+    terminal: &mut TerminalState,
+) -> bool {
+    if let Err(error) = event_sink.emit(event) {
+        terminal.record_supervisor_error(TaskErrorPayload {
+            code: TaskErrorCode::ProcessFailed,
+            message: format!("Unable to emit task event: {error}"),
+            details: None,
+        });
+        true
+    } else {
+        false
+    }
+}
+
+fn spawn_process_control_work(
+    controller: Arc<dyn ProcessControl>,
     kind: ProcessControlKind,
     is_paused: bool,
 ) -> JoinHandle<(Result<(), ProcessControlError>, bool)> {
-    tauri::async_runtime::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let mut next_paused = is_paused;
         let result = handle_pause_resume(controller.as_ref(), kind, &mut next_paused);
         (result, next_paused)
@@ -830,13 +1104,13 @@ fn resolve_non_cancelled_terminal(
     }
 }
 
-fn emit_terminal_event<R: Runtime>(
-    app: &AppHandle<R>,
+fn emit_terminal_event(
+    event_sink: &dyn TaskEventSink,
     status: io::Result<ExitStatus>,
     terminal: Option<TerminalEvent>,
     cancel_token: &CancellationToken,
     stderr_capture: &StderrCapture,
-) {
+) -> Result<(), String> {
     if let Some(reason) = cancel_token.reason() {
         let (reason, details) = match reason {
             CancelReason::User => (TaskCancelledReason::User, None),
@@ -859,19 +1133,16 @@ fn emit_terminal_event<R: Runtime>(
                 }),
             ),
         };
-        let _ = app.emit(
-            TaskEventName::TaskCancelled.as_str(),
-            TaskCancelledPayload { reason, details },
-        );
-        return;
+        return event_sink.emit(TaskDomainEvent::Cancelled(TaskCancelledPayload {
+            reason,
+            details,
+        }));
     }
 
     match resolve_non_cancelled_terminal(terminal, classify_exit(status), stderr_capture) {
-        TerminalEvent::Completed(payload) => {
-            let _ = app.emit(TaskEventName::TaskCompleted.as_str(), payload);
-        }
+        TerminalEvent::Completed(payload) => event_sink.emit(TaskDomainEvent::Completed(payload)),
         TerminalEvent::BackendError(payload) | TerminalEvent::SupervisorError(payload) => {
-            let _ = app.emit(TaskEventName::TaskError.as_str(), payload);
+            event_sink.emit(TaskDomainEvent::Error(payload))
         }
     }
 }
@@ -906,7 +1177,6 @@ fn parse_stall_timeout() -> Option<Duration> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use command_group::AsyncCommandGroup;
     use std::process::Stdio;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Mutex;
@@ -914,6 +1184,16 @@ mod tests {
     use crate::tasks::test_support::assert_process_exited;
 
     static STALL_TIMEOUT_MUTEX: Mutex<()> = Mutex::new(());
+
+    async fn wait_for_started(started: &AtomicBool, context: &'static str) {
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !started.load(Ordering::Acquire) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect(context);
+    }
 
     struct NoopController;
 
@@ -1242,7 +1522,7 @@ mod tests {
 
         let recoveries = Arc::new(AtomicUsize::new(0));
         let observed = Arc::clone(&recoveries);
-        let supervisor = tauri::async_runtime::spawn(async {
+        let supervisor = tokio::spawn(async {
             panic!("synthetic supervisor panic");
         });
 
@@ -1279,13 +1559,11 @@ mod tests {
         });
         let cancel_token = CancellationToken::new();
         let mut control = spawn_process_control_work(controller, ProcessControlKind::Pause, false);
-        tokio::time::timeout(Duration::from_secs(2), async {
-            while !started.load(Ordering::Acquire) {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("blocking worker must publish its started handshake");
+        wait_for_started(
+            &started,
+            "blocking worker must publish its started handshake",
+        )
+        .await;
 
         cancel_token.cancel(CancelReason::User);
         let cancellation_won = tokio::time::timeout(Duration::from_millis(100), async {
@@ -1301,55 +1579,114 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn timed_out_pause_is_owned_and_compensated_after_late_success() {
+    async fn timed_out_pause_is_abandoned_and_owned_until_the_worker_finishes() {
+        for _ in 0..100 {
+            let GatedControlHarness {
+                started,
+                release,
+                controller,
+            } = gated_control_harness();
+            let (response_tx, response_rx) = oneshot::channel();
+            let mut pending_control = Some(PendingControl::new(
+                controller,
+                ProcessControlKind::Pause,
+                false,
+                response_tx,
+                Duration::from_millis(1),
+                PendingControlCleanup::default(),
+            ));
+            assert_eq!(
+                pending_control.as_ref().expect("pending control").phase,
+                ControlPhase::Requested
+            );
+            wait_for_started(&started, "control worker started handshake").await;
+
+            assert!(matches!(
+                wait_for_pending_control(&mut pending_control).await,
+                PendingControlEvent::TimedOut
+            ));
+            let pending = pending_control.take().expect("pending control");
+            let work = pending.into_timed_out_work();
+
+            let response = response_rx.await.expect("timeout response");
+            assert!(matches!(response, Err(ProcessControlError::Worker(_))));
+
+            release.store(true, Ordering::Release);
+            let joined = work
+                .wait()
+                .await
+                .expect("owned blocking worker")
+                .expect("blocking worker join");
+            let (result, next_paused) = joined;
+            result.expect("late control result");
+            assert!(next_paused);
+        }
+    }
+
+    struct FailingEventSink;
+
+    impl TaskEventSink for FailingEventSink {
+        fn emit(&self, _event: TaskDomainEvent) -> Result<(), String> {
+            Err("synthetic event sink failure".to_string())
+        }
+    }
+
+    struct GatedController {
+        started: Arc<AtomicBool>,
+        release: Arc<AtomicBool>,
+    }
+
+    struct GatedControlHarness {
+        started: Arc<AtomicBool>,
+        release: Arc<AtomicBool>,
+        controller: Arc<dyn ProcessControl>,
+    }
+
+    fn gated_control_harness() -> GatedControlHarness {
         let started = Arc::new(AtomicBool::new(false));
-        let controller = Arc::new(BlockingController {
+        let release = Arc::new(AtomicBool::new(false));
+        let controller = Arc::new(GatedController {
             started: Arc::clone(&started),
+            release: Arc::clone(&release),
         });
-        let (response_tx, response_rx) = oneshot::channel();
-        let mut pending_control = Some(PendingControl::new(
-            Arc::clone(&controller),
-            ProcessControlKind::Pause,
-            false,
-            response_tx,
-            Duration::from_millis(10),
-        ));
+        GatedControlHarness {
+            started,
+            release,
+            controller,
+        }
+    }
 
-        assert!(matches!(
-            wait_for_pending_control(&mut pending_control).await,
-            PendingControlEvent::TimedOut
-        ));
-        pending_control
-            .as_mut()
-            .expect("pending control")
-            .timeout_response();
+    impl ProcessControl for GatedController {
+        fn suspend(&self) -> Result<(), ProcessControlError> {
+            self.started.store(true, Ordering::Release);
+            while !self.release.load(Ordering::Acquire) {
+                std::thread::yield_now();
+            }
+            Ok(())
+        }
 
-        let response = response_rx.await.expect("timeout response");
-        assert!(matches!(response, Err(ProcessControlError::Worker(_))));
-        assert!(
-            pending_control.is_some(),
-            "timeout must not detach the worker"
+        fn resume(&self) -> Result<(), ProcessControlError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn event_sink_failure_becomes_a_fatal_supervisor_error() {
+        let mut terminal = TerminalState::default();
+        let fatal = handle_reader_message(
+            &FailingEventSink,
+            ReaderMessage::Stderr("backend diagnostic".to_string()),
+            &mut terminal,
         );
 
-        let PendingControlEvent::Finished(joined) =
-            wait_for_pending_control(&mut pending_control).await
-        else {
-            panic!("timed-out worker must eventually finish");
-        };
-        let pending = pending_control.take().expect("pending control");
-        let (result, next_paused) = joined.expect("blocking worker join");
-        assert_eq!(pending.compensation_target(next_paused), Some(false));
-        result.expect("late control result");
-        assert!(next_paused);
-
-        let mut compensation = PendingControl::compensation(controller, next_paused, false);
-        let PendingControlEvent::Finished(joined) = compensation.wait().await else {
-            panic!("compensation must finish before its deadline");
-        };
-        let (result, restored_paused) = joined.expect("compensation join");
-        result.expect("resume compensation");
-        assert!(!restored_paused);
-        assert!(started.load(Ordering::Acquire));
+        assert!(fatal);
+        match terminal.take() {
+            Some(TerminalEvent::SupervisorError(payload)) => {
+                assert!(matches!(payload.code, TaskErrorCode::ProcessFailed));
+                assert!(payload.message.contains("synthetic event sink failure"));
+            }
+            _ => panic!("event sink failure must become the terminal supervisor error"),
+        }
     }
 
     async fn finish_after_terminal_rejection<C: ProcessControl + 'static>(
@@ -1364,6 +1701,7 @@ mod tests {
             initial_paused,
             response_tx,
             Duration::from_secs(1),
+            PendingControlCleanup::default(),
         );
         pending.apply_restoration(ControlRestoration::Target(false));
         pending.reject_response("terminal result received");
@@ -1401,6 +1739,24 @@ mod tests {
         result.expect("late resume result");
         assert!(!next_paused);
         assert_eq!(pending.compensation_target(next_paused), None);
+    }
+
+    #[tokio::test]
+    async fn compensation_uses_an_explicit_control_phase() {
+        let mut pending = PendingControl::compensation(
+            Arc::new(NoopController),
+            true,
+            false,
+            PendingControlCleanup::default(),
+        );
+
+        assert_eq!(pending.phase, ControlPhase::Compensation);
+        let PendingControlEvent::Finished(result) = pending.wait().await else {
+            panic!("compensation must complete");
+        };
+        let (result, next_paused) = result.expect("compensation worker join");
+        result.expect("compensation result");
+        assert!(!next_paused);
     }
 
     #[tokio::test]
@@ -1451,43 +1807,201 @@ mod tests {
     }
 
     #[cfg(target_os = "windows")]
-    fn sleeping_process_group() -> AsyncGroupChild {
+    fn sleeping_process_group() -> ProcessGroupChild {
         let mut command = tokio::process::Command::new("cmd");
         command
             .args(["/C", "ping -n 30 127.0.0.1 >NUL"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        command
-            .group()
-            .kill_on_drop(true)
-            .spawn()
+        crate::tasks::builder::spawn_no_window_group(&mut command)
             .expect("spawn sleeping process group")
     }
 
     #[cfg(not(target_os = "windows"))]
-    fn sleeping_process_group() -> AsyncGroupChild {
+    fn sleeping_process_group() -> ProcessGroupChild {
         let mut command = tokio::process::Command::new("sh");
         command
             .args(["-c", "sleep 30"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        command
-            .group()
-            .kill_on_drop(true)
-            .spawn()
+        crate::tasks::builder::spawn_no_window_group(&mut command)
             .expect("spawn sleeping process group")
+    }
+
+    struct StateLifecycle(Arc<TaskState>);
+
+    impl TaskLifecyclePort for StateLifecycle {
+        fn begin_reaping<'a>(
+            &'a self,
+            lease: &'a StartLease,
+        ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+            Box::pin(async move { self.0.begin_reaping(lease).await })
+        }
+
+        fn cancel_owned<'a>(
+            &'a self,
+            lease: &'a StartLease,
+            reason: CancelReason,
+        ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+            Box::pin(async move { self.0.cancel_owned(lease, reason).await })
+        }
+
+        fn seal_owned<'a>(
+            &'a self,
+            lease: &'a StartLease,
+        ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+            Box::pin(async move { self.0.seal_owned(lease).await })
+        }
+
+        fn finish_once<'a>(
+            &'a self,
+            lease: &'a StartLease,
+            before_release: Box<dyn FnOnce() + Send + 'static>,
+        ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+            Box::pin(async move { self.0.finish_once(lease, before_release).await })
+        }
+
+        fn fail_cleanup_once<'a>(
+            &'a self,
+            lease: &'a StartLease,
+            terminal: Box<dyn FnOnce() + Send + 'static>,
+        ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+            Box::pin(async move { self.0.fail_cleanup_once(lease, terminal).await })
+        }
+
+        fn own_cleanup_observer<'a>(
+            &'a self,
+            lease: &'a StartLease,
+            observer: JoinHandle<()>,
+        ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+            Box::pin(async move { self.0.own_cleanup_observer(lease, observer).await })
+        }
+
+        fn confirm_cleanup<'a>(
+            &'a self,
+            lease: &'a StartLease,
+        ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+            Box::pin(async move { self.0.confirm_cleanup(lease).await })
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingEventSink {
+        events: Mutex<Vec<&'static str>>,
+    }
+
+    impl TaskEventSink for RecordingEventSink {
+        fn emit(&self, event: TaskDomainEvent) -> Result<(), String> {
+            let kind = match event {
+                TaskDomainEvent::Progress(_) => "progress",
+                TaskDomainEvent::ResumeStatus(_) => "resume-status",
+                TaskDomainEvent::Log(_) => "log",
+                TaskDomainEvent::Completed(_) => "completed",
+                TaskDomainEvent::Error(_) => "error",
+                TaskDomainEvent::Cancelled(_) => "cancelled",
+            };
+            self.events.lock().expect("event lock").push(kind);
+            Ok(())
+        }
+    }
+
+    struct UnknownStateController;
+
+    impl ProcessControl for UnknownStateController {
+        fn suspend(&self) -> Result<(), ProcessControlError> {
+            Err(ProcessControlError::StateUnknown(
+                "synthetic rollback failure".to_string(),
+            ))
+        }
+
+        fn resume(&self) -> Result<(), ProcessControlError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn unknown_process_control_state_forces_kill_reap_and_one_terminal_event() {
+        let state = Arc::new(TaskState::default());
+        let lease = state.reserve_start().await.expect("reserve task slot");
+        let cancel_token = lease.cancellation_token();
+        let (control_tx, control_rx) = mpsc::channel(2);
+        state
+            .activate(&lease, control_tx.clone())
+            .await
+            .expect("activate task");
+        let (output_tx, output_rx) = mpsc::channel(1);
+        drop(output_tx);
+        let (child, reap_ticket) =
+            ProcessGroupOwner::new(sleeping_process_group(), "unknown-control test process");
+        let pid = child.id().expect("live test process");
+        let events = Arc::new(RecordingEventSink::default());
+        let event_sink: Arc<dyn TaskEventSink> = events.clone();
+        let lifecycle: Arc<dyn TaskLifecyclePort> = Arc::new(StateLifecycle(Arc::clone(&state)));
+        let progress_beat = Arc::new(Mutex::new(std::time::Instant::now()));
+
+        let supervisor = tokio::spawn(run_task_supervisor(OwnedTaskSupervisorSession {
+            event_sink,
+            lifecycle,
+            child,
+            reap_ticket,
+            lease: lease.clone(),
+            process_controller: Arc::new(UnknownStateController),
+            control_rx,
+            output_rx,
+            stdin_writer: tokio::spawn(async {}),
+            stdout_reader: tokio::spawn(async {}),
+            stderr_reader: tokio::spawn(async {}),
+            stderr_capture: StderrCapture::new(),
+            cancel_token,
+            progress_beat,
+            control_cleanup: PendingControlCleanup::default(),
+        }));
+        let (response_tx, response_rx) = oneshot::channel();
+        control_tx
+            .send(TaskControlMessage {
+                kind: ProcessControlKind::Pause,
+                response: response_tx,
+            })
+            .await
+            .expect("send pause");
+
+        assert!(matches!(
+            response_rx.await.expect("control response"),
+            Err(ProcessControlError::StateUnknown(_))
+        ));
+        tokio::time::timeout(StartTaskSpec::TERMINATION_TIMEOUT, supervisor)
+            .await
+            .expect("supervisor cleanup deadline")
+            .expect("supervisor join");
+        assert_process_exited(pid, StartTaskSpec::TERMINATION_TIMEOUT).await;
+        assert_eq!(
+            events.events.lock().expect("event lock").as_slice(),
+            ["error"]
+        );
+        let next = state
+            .reserve_start()
+            .await
+            .expect("cleanup releases task slot");
+        state.rollback_start(&next).await;
     }
 
     #[tokio::test]
     async fn dropping_a_live_supervised_child_kills_and_reaps_it() {
-        let child = SupervisedChild::new(sleeping_process_group());
+        let (child, mut ticket) =
+            ProcessGroupOwner::new(sleeping_process_group(), "test process group");
         let pid = child.id().expect("live supervised pid");
 
         drop(child);
 
-        assert_process_exited(pid, TERMINATION_REAP_TIMEOUT).await;
+        assert_eq!(
+            ticket
+                .wait_bounded(StartTaskSpec::TERMINATION_TIMEOUT)
+                .await,
+            Some(ReapOutcome::Reaped)
+        );
+        assert_process_exited(pid, StartTaskSpec::TERMINATION_TIMEOUT).await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1501,14 +2015,15 @@ mod tests {
             .expect("activate task slot");
 
         let (pid_tx, pid_rx) = oneshot::channel();
-        let supervisor = tauri::async_runtime::spawn(async move {
-            let child = SupervisedChild::new(sleeping_process_group());
+        let supervisor = tokio::spawn(async move {
+            let (child, ticket) =
+                ProcessGroupOwner::new(sleeping_process_group(), "panic test process group");
             pid_tx
-                .send(child.id().expect("live supervised pid"))
+                .send((child.id().expect("live supervised pid"), ticket))
                 .expect("publish child pid");
             panic!("synthetic live-child supervisor panic");
         });
-        let pid = tokio::time::timeout(Duration::from_secs(2), pid_rx)
+        let (pid, mut reap_ticket) = tokio::time::timeout(Duration::from_secs(2), pid_rx)
             .await
             .expect("supervisor must publish its child pid")
             .expect("pid channel");
@@ -1519,6 +2034,8 @@ mod tests {
         let recovery_lease = lease.clone();
         monitor_supervisor(supervisor, move |message| async move {
             assert!(message.contains("synthetic live-child supervisor panic"));
+            assert!(recovery_state.begin_reaping(&recovery_lease).await);
+            assert_eq!(reap_ticket.wait().await, ReapOutcome::Reaped);
             assert!(
                 recovery_state
                     .finish_once(&recovery_lease, move || {
@@ -1539,12 +2056,75 @@ mod tests {
             .await
             .expect("panic recovery must release the task slot");
         state.rollback_start(&next_lease).await;
-        assert_process_exited(pid, TERMINATION_REAP_TIMEOUT).await;
+        assert_process_exited(pid, StartTaskSpec::TERMINATION_TIMEOUT).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn panic_recovery_keeps_slot_closed_until_active_control_work_finishes() {
+        let state = Arc::new(TaskState::default());
+        let lease = state.reserve_start().await.expect("reserve task slot");
+        let (control_tx, _control_rx) = mpsc::channel(1);
+        state
+            .activate(&lease, control_tx)
+            .await
+            .expect("activate task slot");
+
+        let (child, reap_ticket) =
+            ProcessGroupOwner::new(sleeping_process_group(), "panic control test process group");
+        let pid = child.id().expect("live supervised pid");
+        drop(child);
+
+        let GatedControlHarness {
+            started,
+            release,
+            controller,
+        } = gated_control_harness();
+        let control_cleanup = PendingControlCleanup::default();
+        control_cleanup
+            .start(|| spawn_process_control_work(controller, ProcessControlKind::Pause, false));
+        wait_for_started(&started, "control worker started handshake").await;
+
+        let events = Arc::new(RecordingEventSink::default());
+        let event_sink: Arc<dyn TaskEventSink> = events.clone();
+        let lifecycle: Arc<dyn TaskLifecyclePort> = Arc::new(StateLifecycle(Arc::clone(&state)));
+        let recovery = tokio::spawn(recover_supervisor_join_failure(
+            event_sink,
+            lifecycle,
+            lease.clone(),
+            StderrCapture::new(),
+            reap_ticket,
+            control_cleanup,
+            "synthetic panic with active control".to_string(),
+        ));
+
+        tokio::task::yield_now().await;
+        assert!(matches!(
+            state.reserve_start().await,
+            Err(crate::tasks::state::TaskStateError::AlreadyRunning)
+        ));
+
+        release.store(true, Ordering::Release);
+        tokio::time::timeout(StartTaskSpec::TERMINATION_TIMEOUT, recovery)
+            .await
+            .expect("panic recovery deadline")
+            .expect("panic recovery join");
+        assert_process_exited(pid, StartTaskSpec::TERMINATION_TIMEOUT).await;
+        assert_eq!(
+            events.events.lock().expect("event lock").as_slice(),
+            ["error"]
+        );
+
+        let next = state
+            .reserve_start()
+            .await
+            .expect("completed control and reap release the task slot");
+        state.rollback_start(&next).await;
     }
 
     #[tokio::test]
     async fn requested_process_group_kill_is_observed_and_reaped() {
-        let mut child = SupervisedChild::new(sleeping_process_group());
+        let (mut child, _ticket) =
+            ProcessGroupOwner::new(sleeping_process_group(), "kill test process group");
         let mut kill_deadline = None;
         let mut terminal = TerminalState::default();
         let mut pending_control = None;

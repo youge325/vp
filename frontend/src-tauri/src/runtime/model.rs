@@ -54,11 +54,8 @@ pub(super) fn resolve_tensorrt_dir(runtime_root: Option<&PathBuf>) -> Option<Pat
         return Some(existing);
     }
 
-    // Environment-only fallback. ``env_path`` already filters empty
-    // values via ``env::var_os``, but we double-check here because the
-    // backend treats an empty ``VP_TENSORRT_DIR`` the same as unset and
-    // we don't want to spam it with a useless variable.
-    env_path("VP_TENSORRT_DIR").filter(|path| !path.as_os_str().is_empty())
+    // Environment-only fallback. `env_path` is the single empty-value filter.
+    env_path("VP_TENSORRT_DIR")
 }
 
 /// 检查 ``$MODEL_DIR/<DEFAULT_RIFE_MODEL_FILENAME>`` 是否真实存在。

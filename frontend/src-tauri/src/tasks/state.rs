@@ -7,9 +7,9 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::sync::{mpsc, Mutex};
+use tokio::task::JoinHandle;
 
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
-use crate::tasks::handle::TaskHandle;
 use crate::tasks::TaskControlMessage;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,6 +20,8 @@ pub(crate) enum TaskStateError {
     StillStarting,
     AlreadyCancelling,
     AlreadyFinishing,
+    Reaping,
+    CleanupFailed,
 }
 
 #[derive(Debug, Clone)]
@@ -42,24 +44,30 @@ impl StartLease {
     }
 }
 
+struct ActiveTask {
+    lease: StartLease,
+    control_tx: Option<mpsc::Sender<TaskControlMessage>>,
+    terminal_committed: bool,
+    cleanup_observer: Option<JoinHandle<()>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ActivePhase {
+    Starting,
+    Running,
+    Cancelling,
+    Finishing,
+    Reaping,
+    CleanupFailed,
+}
+
 #[derive(Default)]
 enum TaskStatePhase {
     #[default]
     Idle,
-    Starting {
-        lease: StartLease,
-    },
-    Running {
-        lease: StartLease,
-        handle: TaskHandle,
-    },
-    Cancelling {
-        lease: StartLease,
-        handle: TaskHandle,
-    },
-    Finishing {
-        lease: StartLease,
-        handle: TaskHandle,
+    Active {
+        task: ActiveTask,
+        phase: ActivePhase,
     },
 }
 
@@ -80,8 +88,14 @@ impl TaskState {
             id: self.next_lease_id.fetch_add(1, Ordering::Relaxed) + 1,
             cancel_token: CancellationToken::new(),
         };
-        *guard = TaskStatePhase::Starting {
-            lease: lease.clone(),
+        *guard = TaskStatePhase::Active {
+            task: ActiveTask {
+                lease: lease.clone(),
+                control_tx: None,
+                terminal_committed: false,
+                cleanup_observer: None,
+            },
+            phase: ActivePhase::Starting,
         };
         Ok(lease)
     }
@@ -93,21 +107,15 @@ impl TaskState {
         control_tx: mpsc::Sender<TaskControlMessage>,
     ) -> Result<(), TaskStateError> {
         let mut guard = self.phase.lock().await;
-        match &*guard {
-            TaskStatePhase::Starting {
-                lease: current_lease,
-            } if current_lease == lease => {
-                let handle = TaskHandle::new(control_tx, lease.cancellation_token());
-                *guard = if lease.cancel_token.is_cancelled() {
-                    TaskStatePhase::Cancelling {
-                        lease: lease.clone(),
-                        handle,
-                    }
+        match &mut *guard {
+            TaskStatePhase::Active { task, phase }
+                if task.lease == *lease && *phase == ActivePhase::Starting =>
+            {
+                task.control_tx = Some(control_tx);
+                *phase = if task.lease.cancel_token.is_cancelled() {
+                    ActivePhase::Cancelling
                 } else {
-                    TaskStatePhase::Running {
-                        lease: lease.clone(),
-                        handle,
-                    }
+                    ActivePhase::Running
                 };
                 Ok(())
             }
@@ -120,11 +128,118 @@ impl TaskState {
         let mut guard = self.phase.lock().await;
         if matches!(
             &*guard,
-            TaskStatePhase::Starting {
-                lease: current_lease
-            } if current_lease == lease
+            TaskStatePhase::Active { task, phase: ActivePhase::Starting }
+                if task.lease == *lease
         ) {
             *guard = TaskStatePhase::Idle;
+        }
+    }
+
+    /// Move a failed startup into cleanup ownership before touching the child.
+    pub(super) async fn begin_start_cleanup(&self, lease: &StartLease) -> bool {
+        self.transition_owned(lease, &[ActivePhase::Starting], ActivePhase::Reaping)
+            .await
+    }
+
+    /// Mark a live task as being reaped. Reaping never makes the slot reusable.
+    pub(super) async fn begin_reaping(&self, lease: &StartLease) -> bool {
+        self.transition_owned(
+            lease,
+            &[
+                ActivePhase::Running,
+                ActivePhase::Cancelling,
+                ActivePhase::Finishing,
+                ActivePhase::Reaping,
+            ],
+            ActivePhase::Reaping,
+        )
+        .await
+    }
+
+    async fn transition_owned(
+        &self,
+        lease: &StartLease,
+        allowed: &[ActivePhase],
+        target: ActivePhase,
+    ) -> bool {
+        let mut guard = self.phase.lock().await;
+        match &mut *guard {
+            TaskStatePhase::Active { task, phase }
+                if task.lease == *lease && allowed.contains(phase) =>
+            {
+                *phase = target;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Keep the slot closed when the stable process owner cannot confirm reap.
+    /// The terminal callback is committed at most once for this lease.
+    pub(super) async fn fail_cleanup_once(
+        &self,
+        lease: &StartLease,
+        terminal: impl FnOnce(),
+    ) -> bool {
+        let mut guard = self.phase.lock().await;
+        match &mut *guard {
+            TaskStatePhase::Active { task, phase }
+                if task.lease == *lease
+                    && matches!(phase, ActivePhase::Reaping | ActivePhase::CleanupFailed) =>
+            {
+                *phase = ActivePhase::CleanupFailed;
+                if task.terminal_committed {
+                    return false;
+                }
+                task.terminal_committed = true;
+                terminal();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// A late reaper may reopen a CleanupFailed slot, but must not emit again.
+    pub(super) async fn confirm_cleanup(&self, lease: &StartLease) -> bool {
+        let mut guard = self.phase.lock().await;
+        match &mut *guard {
+            TaskStatePhase::Active {
+                task,
+                phase: ActivePhase::CleanupFailed,
+            } if task.lease == *lease => {
+                // The observer calling this method is normally the handle stored here. Taking
+                // and dropping that handle detaches only its final, non-awaiting return path;
+                // the process/control cleanup has already been confirmed at this point.
+                task.cleanup_observer.take();
+                *guard = TaskStatePhase::Idle;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Retain the sole late-cleanup observer in the owning task state.
+    ///
+    /// A CleanupFailed slot must never depend on a discarded `JoinHandle`: if ownership was
+    /// lost or an observer is already installed, the rejected task is explicitly aborted.
+    pub(super) async fn own_cleanup_observer(
+        &self,
+        lease: &StartLease,
+        observer: JoinHandle<()>,
+    ) -> bool {
+        let mut guard = self.phase.lock().await;
+        match &mut *guard {
+            TaskStatePhase::Active {
+                task,
+                phase: ActivePhase::CleanupFailed,
+            } if task.lease == *lease && task.cleanup_observer.is_none() => {
+                task.cleanup_observer = Some(observer);
+                true
+            }
+            _ => {
+                observer.abort();
+                false
+            }
         }
     }
 
@@ -135,41 +250,19 @@ impl TaskState {
     /// directly as `Cancelling` and the supervisor observes the same token.
     pub(super) async fn begin_cancel(&self, reason: CancelReason) -> Result<(), TaskStateError> {
         let mut guard = self.phase.lock().await;
-        let current = std::mem::replace(&mut *guard, TaskStatePhase::Idle);
-        let (next, result) = transition_cancel(current, reason);
-        *guard = next;
-        result
+        transition_cancel(&mut guard, reason)
     }
 
     /// Install a supervisor-originated reason only when this lease still owns the task.
     pub(super) async fn cancel_owned(&self, lease: &StartLease, reason: CancelReason) -> bool {
         let mut guard = self.phase.lock().await;
-        let owns_phase = match &*guard {
-            TaskStatePhase::Starting {
-                lease: current_lease,
-            }
-            | TaskStatePhase::Running {
-                lease: current_lease,
-                ..
-            }
-            | TaskStatePhase::Cancelling {
-                lease: current_lease,
-                ..
-            }
-            | TaskStatePhase::Finishing {
-                lease: current_lease,
-                ..
-            } => current_lease == lease,
-            TaskStatePhase::Idle => false,
+        let TaskStatePhase::Active { task, .. } = &*guard else {
+            return false;
         };
-        if !owns_phase {
+        if task.lease != *lease {
             return false;
         }
-
-        let current = std::mem::replace(&mut *guard, TaskStatePhase::Idle);
-        let (next, result) = transition_cancel(current, reason);
-        *guard = next;
-        result.is_ok()
+        transition_cancel(&mut guard, reason).is_ok()
     }
 
     /// Seal the owning task once process exit or a terminal envelope is observed.
@@ -179,49 +272,37 @@ impl TaskState {
     /// later pause, resume, and cancel requests while the supervisor drains its pipes.
     pub(super) async fn seal_owned(&self, lease: &StartLease) -> bool {
         let mut guard = self.phase.lock().await;
-        let current = std::mem::replace(&mut *guard, TaskStatePhase::Idle);
-        let (next, sealed) = match current {
-            TaskStatePhase::Running {
-                lease: current_lease,
-                handle,
-            } if &current_lease == lease => (
-                TaskStatePhase::Finishing {
-                    lease: current_lease,
-                    handle,
-                },
-                true,
-            ),
-            TaskStatePhase::Finishing {
-                lease: current_lease,
-                handle,
-            } => {
-                let sealed = &current_lease == lease;
-                (
-                    TaskStatePhase::Finishing {
-                        lease: current_lease,
-                        handle,
-                    },
-                    sealed,
-                )
+        match &mut *guard {
+            TaskStatePhase::Active { task, phase }
+                if task.lease == *lease
+                    && matches!(phase, ActivePhase::Running | ActivePhase::Finishing) =>
+            {
+                *phase = ActivePhase::Finishing;
+                true
             }
-            other => (other, false),
-        };
-        *guard = next;
-        sealed
+            _ => false,
+        }
     }
 
-    pub(super) async fn current_handle(&self) -> Result<TaskHandle, TaskStateError> {
+    pub(super) async fn control_sender(
+        &self,
+    ) -> Result<mpsc::Sender<TaskControlMessage>, TaskStateError> {
         let guard = self.phase.lock().await;
         match &*guard {
             TaskStatePhase::Idle => Err(TaskStateError::NoActiveTask),
-            TaskStatePhase::Starting { lease } if lease.cancel_token.is_cancelled() => {
-                Err(TaskStateError::AlreadyCancelling)
-            }
-            TaskStatePhase::Starting { .. } => Err(TaskStateError::StillStarting),
-            TaskStatePhase::Running { handle, .. } | TaskStatePhase::Cancelling { handle, .. } => {
-                Ok(handle.clone())
-            }
-            TaskStatePhase::Finishing { .. } => Err(TaskStateError::AlreadyFinishing),
+            TaskStatePhase::Active {
+                phase: ActivePhase::Starting,
+                task,
+            } if task.lease.cancel_token.is_cancelled() => Err(TaskStateError::AlreadyCancelling),
+            TaskStatePhase::Active {
+                phase: ActivePhase::Starting,
+                ..
+            } => Err(TaskStateError::StillStarting),
+            TaskStatePhase::Active {
+                phase: ActivePhase::Running,
+                task,
+            } => task.control_tx.clone().ok_or(TaskStateError::StillStarting),
+            TaskStatePhase::Active { phase, .. } => Err(unavailable_phase_error(*phase)),
         }
     }
 
@@ -236,21 +317,11 @@ impl TaskState {
         before_release: impl FnOnce(),
     ) -> bool {
         let mut guard = self.phase.lock().await;
-        let owns_phase = match &*guard {
-            TaskStatePhase::Running {
-                lease: current_lease,
-                ..
-            }
-            | TaskStatePhase::Cancelling {
-                lease: current_lease,
-                ..
-            }
-            | TaskStatePhase::Finishing {
-                lease: current_lease,
-                ..
-            } => current_lease == lease,
-            TaskStatePhase::Idle | TaskStatePhase::Starting { .. } => false,
-        };
+        let owns_phase = matches!(
+            &*guard,
+            TaskStatePhase::Active { task, phase: ActivePhase::Reaping }
+                if task.lease == *lease
+        );
         if owns_phase {
             before_release();
             *guard = TaskStatePhase::Idle;
@@ -262,37 +333,35 @@ impl TaskState {
 }
 
 fn transition_cancel(
-    current: TaskStatePhase,
+    state: &mut TaskStatePhase,
     reason: CancelReason,
-) -> (TaskStatePhase, Result<(), TaskStateError>) {
-    match current {
-        TaskStatePhase::Idle => (TaskStatePhase::Idle, Err(TaskStateError::NoActiveTask)),
-        TaskStatePhase::Starting { lease } => {
-            let first = lease.cancel_token.cancel(reason);
-            let result = if first {
+) -> Result<(), TaskStateError> {
+    match state {
+        TaskStatePhase::Idle => Err(TaskStateError::NoActiveTask),
+        TaskStatePhase::Active { task, phase }
+            if matches!(phase, ActivePhase::Starting | ActivePhase::Running) =>
+        {
+            if task.lease.cancel_token.cancel(reason) {
+                if *phase == ActivePhase::Running {
+                    *phase = ActivePhase::Cancelling;
+                }
                 Ok(())
             } else {
                 Err(TaskStateError::AlreadyCancelling)
-            };
-            (TaskStatePhase::Starting { lease }, result)
+            }
         }
-        TaskStatePhase::Running { lease, handle } => {
-            let first = handle.cancel_token.cancel(reason);
-            let result = if first {
-                Ok(())
-            } else {
-                Err(TaskStateError::AlreadyCancelling)
-            };
-            (TaskStatePhase::Cancelling { lease, handle }, result)
+        TaskStatePhase::Active { phase, .. } => Err(unavailable_phase_error(*phase)),
+    }
+}
+
+fn unavailable_phase_error(phase: ActivePhase) -> TaskStateError {
+    match phase {
+        ActivePhase::Starting | ActivePhase::Running | ActivePhase::Cancelling => {
+            TaskStateError::AlreadyCancelling
         }
-        TaskStatePhase::Cancelling { lease, handle } => (
-            TaskStatePhase::Cancelling { lease, handle },
-            Err(TaskStateError::AlreadyCancelling),
-        ),
-        TaskStatePhase::Finishing { lease, handle } => (
-            TaskStatePhase::Finishing { lease, handle },
-            Err(TaskStateError::AlreadyFinishing),
-        ),
+        ActivePhase::Finishing => TaskStateError::AlreadyFinishing,
+        ActivePhase::Reaping => TaskStateError::Reaping,
+        ActivePhase::CleanupFailed => TaskStateError::CleanupFailed,
     }
 }
 
@@ -314,12 +383,24 @@ mod tests {
         lease
     }
 
+    async fn reap_and_finish(state: &TaskState, lease: &StartLease) -> bool {
+        state.begin_reaping(lease).await && state.finish_once(lease, || {}).await
+    }
+
+    async fn reap_and_finish_with(
+        state: &TaskState,
+        lease: &StartLease,
+        before_release: impl FnOnce(),
+    ) -> bool {
+        state.begin_reaping(lease).await && state.finish_once(lease, before_release).await
+    }
+
     #[tokio::test]
     async fn idle_state_reports_no_active_task() {
         let state = TaskState::default();
 
         assert!(matches!(
-            state.current_handle().await,
+            state.control_sender().await,
             Err(TaskStateError::NoActiveTask)
         ));
     }
@@ -332,7 +413,7 @@ mod tests {
         state.rollback_start(&lease).await;
 
         assert!(matches!(
-            state.current_handle().await,
+            state.control_sender().await,
             Err(TaskStateError::NoActiveTask)
         ));
         assert!(state.reserve_start().await.is_ok());
@@ -345,8 +426,21 @@ mod tests {
 
         state.rollback_start(&lease).await;
 
-        assert!(state.current_handle().await.is_ok());
-        assert!(state.finish_once(&lease, || {}).await);
+        assert!(state.control_sender().await.is_ok());
+        assert!(reap_and_finish(&state, &lease).await);
+    }
+
+    #[tokio::test]
+    async fn finish_once_requires_confirmed_reaping_phase() {
+        let state = TaskState::default();
+        let lease = start(&state).await;
+
+        assert!(!state.finish_once(&lease, || {}).await);
+        assert_eq!(
+            state.reserve_start().await,
+            Err(TaskStateError::AlreadyRunning)
+        );
+        assert!(reap_and_finish(&state, &lease).await);
     }
 
     #[tokio::test]
@@ -393,14 +487,14 @@ mod tests {
     async fn stale_finish_does_not_clear_a_newer_task() {
         let state = TaskState::default();
         let first = start(&state).await;
-        assert!(state.finish_once(&first, || {}).await);
+        assert!(reap_and_finish(&state, &first).await);
         let second = start(&state).await;
 
-        assert!(!state.finish_once(&first, || {}).await);
-        assert!(state.current_handle().await.is_ok());
-        assert!(state.finish_once(&second, || {}).await);
+        assert!(!reap_and_finish(&state, &first).await);
+        assert!(state.control_sender().await.is_ok());
+        assert!(reap_and_finish(&state, &second).await);
         assert!(matches!(
-            state.current_handle().await,
+            state.control_sender().await,
             Err(TaskStateError::NoActiveTask)
         ));
     }
@@ -414,8 +508,11 @@ mod tests {
             state.begin_cancel(CancelReason::User).await,
             Err(TaskStateError::AlreadyCancelling)
         ));
-        assert!(state.current_handle().await.is_ok());
-        assert!(state.finish_once(&lease, || {}).await);
+        assert!(matches!(
+            state.control_sender().await,
+            Err(TaskStateError::AlreadyCancelling)
+        ));
+        assert!(reap_and_finish(&state, &lease).await);
     }
 
     #[tokio::test]
@@ -423,7 +520,7 @@ mod tests {
         let state = TaskState::default();
         let lease = state.reserve_start().await.expect("reserve");
         assert!(matches!(
-            state.current_handle().await,
+            state.control_sender().await,
             Err(TaskStateError::StillStarting)
         ));
         assert!(
@@ -442,33 +539,38 @@ mod tests {
             state.begin_cancel(CancelReason::User).await,
             Err(TaskStateError::AlreadyCancelling)
         ));
-        assert!(state.finish_once(&lease, || {}).await);
+        assert!(reap_and_finish(&state, &lease).await);
     }
 
     #[tokio::test]
     async fn activation_and_cancel_race_preserves_the_cancellation_reason() {
-        let state = TaskState::default();
-        let lease = state.reserve_start().await.expect("reserve");
-        let barrier = tokio::sync::Barrier::new(2);
-        let (activation, cancellation) = tokio::join!(
-            async {
-                barrier.wait().await;
-                state.activate(&lease, make_control_sender()).await
-            },
-            async {
-                barrier.wait().await;
-                state.begin_cancel(CancelReason::User).await
-            },
-        );
+        for _ in 0..100 {
+            let state = TaskState::default();
+            let lease = state.reserve_start().await.expect("reserve");
+            let barrier = tokio::sync::Barrier::new(2);
+            let (activation, cancellation) = tokio::join!(
+                async {
+                    barrier.wait().await;
+                    state.activate(&lease, make_control_sender()).await
+                },
+                async {
+                    barrier.wait().await;
+                    state.begin_cancel(CancelReason::User).await
+                },
+            );
 
-        activation.expect("activation wins before or after cancellation");
-        cancellation.expect("cancellation wins before or after activation");
-        let handle = state
-            .current_handle()
-            .await
-            .expect("published cancelling handle");
-        assert_eq!(handle.cancel_token.reason(), Some(CancelReason::User));
-        assert!(state.finish_once(&lease, || {}).await);
+            activation.expect("activation wins before or after cancellation");
+            cancellation.expect("cancellation wins before or after activation");
+            assert!(matches!(
+                state.control_sender().await,
+                Err(TaskStateError::AlreadyCancelling)
+            ));
+            assert_eq!(
+                lease.cancellation_token().reason(),
+                Some(CancelReason::User)
+            );
+            assert!(reap_and_finish(&state, &lease).await);
+        }
     }
 
     #[tokio::test]
@@ -478,7 +580,7 @@ mod tests {
         assert!(state.begin_cancel(CancelReason::Stalled).await.is_ok());
 
         assert!(matches!(
-            state.current_handle().await,
+            state.control_sender().await,
             Err(TaskStateError::AlreadyCancelling)
         ));
         state.rollback_start(&lease).await;
@@ -494,9 +596,15 @@ mod tests {
             .activate(&lease, make_control_sender())
             .await
             .expect("activate cancelling task");
-        let handle = state.current_handle().await.expect("published handle");
-        assert_eq!(handle.cancel_token.reason(), Some(CancelReason::Stalled));
-        assert!(state.finish_once(&lease, || {}).await);
+        assert!(matches!(
+            state.control_sender().await,
+            Err(TaskStateError::AlreadyCancelling)
+        ));
+        assert_eq!(
+            lease.cancellation_token().reason(),
+            Some(CancelReason::Stalled)
+        );
+        assert!(reap_and_finish(&state, &lease).await);
     }
 
     #[tokio::test]
@@ -530,7 +638,7 @@ mod tests {
             Some(CancelReason::Stalled)
         );
         assert!(matches!(
-            state.current_handle().await,
+            state.control_sender().await,
             Err(TaskStateError::AlreadyCancelling)
         ));
         state.rollback_start(&lease).await;
@@ -551,7 +659,7 @@ mod tests {
         );
         assert!(!callback_ran.load(Ordering::SeqCst));
         assert!(matches!(
-            state.current_handle().await,
+            state.control_sender().await,
             Err(TaskStateError::StillStarting)
         ));
         state.rollback_start(&lease).await;
@@ -563,9 +671,9 @@ mod tests {
         let lease = start(&state).await;
         assert!(state.begin_cancel(CancelReason::User).await.is_ok());
 
-        assert!(state.finish_once(&lease, || {}).await);
+        assert!(reap_and_finish(&state, &lease).await);
         assert!(matches!(
-            state.current_handle().await,
+            state.control_sender().await,
             Err(TaskStateError::NoActiveTask)
         ));
     }
@@ -582,10 +690,10 @@ mod tests {
         ));
         assert_eq!(lease.cancellation_token().reason(), None);
         assert!(matches!(
-            state.current_handle().await,
+            state.control_sender().await,
             Err(TaskStateError::AlreadyFinishing)
         ));
-        assert!(state.finish_once(&lease, || {}).await);
+        assert!(reap_and_finish(&state, &lease).await);
     }
 
     #[tokio::test]
@@ -603,7 +711,7 @@ mod tests {
             lease.cancellation_token().reason(),
             Some(CancelReason::User)
         );
-        assert!(state.finish_once(&lease, || {}).await);
+        assert!(reap_and_finish(&state, &lease).await);
     }
 
     #[tokio::test]
@@ -615,11 +723,10 @@ mod tests {
         let calls = AtomicUsize::new(0);
 
         assert!(
-            state
-                .finish_once(&lease, || {
-                    calls.fetch_add(1, Ordering::SeqCst);
-                })
-                .await
+            reap_and_finish_with(&state, &lease, || {
+                calls.fetch_add(1, Ordering::SeqCst);
+            })
+            .await
         );
         assert!(
             !state
@@ -648,7 +755,7 @@ mod tests {
             !state.cancel_owned(&first, CancelReason::User).await,
             "the first cancellation reason wins"
         );
-        assert!(state.finish_once(&first, || {}).await);
+        assert!(reap_and_finish(&state, &first).await);
 
         let second = start(&state).await;
         assert!(
@@ -656,6 +763,90 @@ mod tests {
             "a stale supervisor must not cancel a newer task"
         );
         assert_eq!(second.cancellation_token().reason(), None);
-        assert!(state.finish_once(&second, || {}).await);
+        assert!(reap_and_finish(&state, &second).await);
+    }
+
+    #[tokio::test]
+    async fn reaping_keeps_the_single_task_slot_closed_until_reap_is_confirmed() {
+        let state = TaskState::default();
+        let lease = start(&state).await;
+
+        assert!(state.begin_reaping(&lease).await);
+        assert_eq!(
+            state.reserve_start().await,
+            Err(TaskStateError::AlreadyRunning)
+        );
+        assert!(matches!(
+            state.control_sender().await,
+            Err(TaskStateError::Reaping)
+        ));
+        assert!(state.finish_once(&lease, || {}).await);
+        assert!(state.reserve_start().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn cleanup_failure_is_sticky_and_commits_terminal_once() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let state = TaskState::default();
+        let lease = start(&state).await;
+        let terminals = AtomicUsize::new(0);
+        assert!(state.begin_reaping(&lease).await);
+        assert!(
+            state
+                .fail_cleanup_once(&lease, || {
+                    terminals.fetch_add(1, Ordering::SeqCst);
+                })
+                .await
+        );
+        assert!(
+            !state
+                .fail_cleanup_once(&lease, || {
+                    terminals.fetch_add(1, Ordering::SeqCst);
+                })
+                .await
+        );
+        assert_eq!(terminals.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            state.reserve_start().await,
+            Err(TaskStateError::AlreadyRunning)
+        );
+        assert!(state.confirm_cleanup(&lease).await);
+        assert!(state.reserve_start().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn cleanup_observer_is_owned_until_late_reap_confirmation() {
+        let state = std::sync::Arc::new(TaskState::default());
+        let lease = start(state.as_ref()).await;
+        assert!(state.begin_reaping(&lease).await);
+        assert!(state.fail_cleanup_once(&lease, || {}).await);
+
+        let (release, released) = tokio::sync::oneshot::channel();
+        let observer_state = std::sync::Arc::clone(&state);
+        let observer_lease = lease.clone();
+        let observer = tokio::spawn(async move {
+            released.await.expect("release cleanup observer");
+            assert!(observer_state.confirm_cleanup(&observer_lease).await);
+        });
+
+        assert!(state.own_cleanup_observer(&lease, observer).await);
+        assert_eq!(
+            state.reserve_start().await,
+            Err(TaskStateError::AlreadyRunning)
+        );
+        release.send(()).expect("release observer");
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                if let Ok(next) = state.reserve_start().await {
+                    state.rollback_start(&next).await;
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("owned observer must release CleanupFailed after confirmation");
     }
 }

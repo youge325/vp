@@ -318,35 +318,6 @@ pub(crate) async fn load_workbench_preset(
     }
 }
 
-#[cfg(test)]
-async fn load_environment_cache(
-    base_dir: &Path,
-    fingerprint: &str,
-    force_refresh: bool,
-) -> Result<Option<(String, EnvironmentCheckResult)>, ShellError> {
-    let path = environment_cache_path(base_dir);
-    ENVIRONMENT_TRANSACTIONS
-        .exclusive(&path, || async {
-            load_environment_cache_entry(&path, fingerprint, force_refresh).await
-        })
-        .await
-}
-
-#[cfg(test)]
-async fn save_environment_cache(
-    base_dir: &Path,
-    checked_at: &str,
-    fingerprint: &str,
-    result: &EnvironmentCheckResult,
-) -> Result<(), ShellError> {
-    let path = environment_cache_path(base_dir);
-    ENVIRONMENT_TRANSACTIONS
-        .exclusive(&path, || async {
-            save_environment_cache_entry(&path, checked_at, fingerprint, result).await
-        })
-        .await
-}
-
 pub(crate) async fn save_workbench_preset(
     base_dir: &Path,
     preset: &WorkbenchPreset,
@@ -439,13 +410,13 @@ async fn describe_path(path: Option<&Path>) -> Value {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_environment_fingerprint, environment_cache_path, load_environment_cache,
-        load_workbench_preset, resolve_environment_cache, save_environment_cache,
-        save_workbench_preset, workbench_preset_path, QuarantineReason,
+        build_environment_fingerprint, environment_cache_path, load_environment_cache_entry,
+        load_workbench_preset, resolve_environment_cache, save_environment_cache_entry,
+        save_workbench_preset, workbench_preset_path, QuarantineReason, ENVIRONMENT_TRANSACTIONS,
     };
     use crate::models::config::{
-        DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig, OutputConfig,
-        PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig,
+        DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InferenceEngine, InterpolationConfig,
+        OutputConfig, PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig,
         SuperResolutionConfig, TensorBackend, WorkbenchPreset, WorkflowConfig,
     };
     use crate::models::EnvironmentCheckResult;
@@ -523,7 +494,7 @@ mod tests {
                     scale: 1.0,
                     fp16: false,
                     tensor_backend: TensorBackend::Pytorch,
-                    engine: "cuda".to_string(),
+                    engine: InferenceEngine::Cuda,
                 },
                 super_resolution: SuperResolutionConfig {
                     enabled: false,
@@ -531,7 +502,7 @@ mod tests {
                     algorithm: "placeholder".to_string(),
                     onnx_model: None,
                     tensor_backend: TensorBackend::Onnx,
-                    engine: "cuda".to_string(),
+                    engine: InferenceEngine::Cuda,
                     num_frames: 10.try_into().expect("positive frame window"),
                 },
                 preprocess: PreprocessConfig {
@@ -556,7 +527,12 @@ mod tests {
                 options: Default::default(),
             },
             output_config: OutputConfig {
-                output_dir: Some("D:/output".to_string()),
+                output_dir: Some(
+                    "D:/output"
+                        .to_string()
+                        .try_into()
+                        .expect("valid output directory"),
+                ),
                 open_on_complete: true,
                 segment_frames: 1000.try_into().expect("positive segment size"),
             },
@@ -579,6 +555,33 @@ mod tests {
             "runtimeMode": "external"
         }))
         .expect("sample environment result")
+    }
+
+    async fn load_cache_entry(
+        base_dir: &std::path::Path,
+        fingerprint: &str,
+        force_refresh: bool,
+    ) -> Result<Option<(String, EnvironmentCheckResult)>, crate::error::ShellError> {
+        let path = environment_cache_path(base_dir);
+        ENVIRONMENT_TRANSACTIONS
+            .exclusive(&path, || async {
+                load_environment_cache_entry(&path, fingerprint, force_refresh).await
+            })
+            .await
+    }
+
+    async fn save_cache_entry(
+        base_dir: &std::path::Path,
+        checked_at: &str,
+        fingerprint: &str,
+        result: &EnvironmentCheckResult,
+    ) -> Result<(), crate::error::ShellError> {
+        let path = environment_cache_path(base_dir);
+        ENVIRONMENT_TRANSACTIONS
+            .exclusive(&path, || async {
+                save_environment_cache_entry(&path, checked_at, fingerprint, result).await
+            })
+            .await
     }
 
     fn has_quarantined_file(dir: &PathBuf, prefix: &str) -> bool {
@@ -616,7 +619,7 @@ mod tests {
     #[tokio::test]
     async fn reuses_valid_environment_cache() {
         let dir = temp_dir("env-hit");
-        save_environment_cache(
+        save_cache_entry(
             &dir,
             "2026-04-23T11:00:00Z",
             "fingerprint-a",
@@ -625,7 +628,7 @@ mod tests {
         .await
         .expect("write env cache");
 
-        let (checked_at, result) = load_environment_cache(&dir, "fingerprint-a", false)
+        let (checked_at, result) = load_cache_entry(&dir, "fingerprint-a", false)
             .await
             .expect("read cache")
             .expect("cache hit");
@@ -639,7 +642,7 @@ mod tests {
     #[tokio::test]
     async fn invalidates_environment_cache_when_fingerprint_changes() {
         let dir = temp_dir("env-fingerprint");
-        save_environment_cache(
+        save_cache_entry(
             &dir,
             "2026-04-23T11:00:00Z",
             "fingerprint-a",
@@ -648,7 +651,7 @@ mod tests {
         .await
         .expect("write env cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-b", false)
+        let entry = load_cache_entry(&dir, "fingerprint-b", false)
             .await
             .expect("read cache");
         assert!(entry.is_none());
@@ -666,7 +669,7 @@ mod tests {
         .expect("serialize env cache");
         fs::write(environment_cache_path(&dir), payload).expect("write env cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-a", false)
+        let entry = load_cache_entry(&dir, "fingerprint-a", false)
             .await
             .expect("read cache");
         assert!(entry.is_none());
@@ -681,7 +684,7 @@ mod tests {
         let dir = temp_dir("env-damaged");
         fs::write(environment_cache_path(&dir), "{not-json").expect("write invalid cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-a", false)
+        let entry = load_cache_entry(&dir, "fingerprint-a", false)
             .await
             .expect("read cache");
         assert!(entry.is_none());
@@ -699,9 +702,7 @@ mod tests {
         let readers = (0..16)
             .map(|_| {
                 let dir = dir.clone();
-                tokio::spawn(
-                    async move { load_environment_cache(&dir, "fingerprint-a", false).await },
-                )
+                tokio::spawn(async move { load_cache_entry(&dir, "fingerprint-a", false).await })
             })
             .collect::<Vec<_>>();
 
@@ -720,46 +721,49 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn concurrent_environment_transactions_probe_once_and_return_one_payload() {
-        let dir = temp_dir("env-concurrent-transaction");
-        fs::write(environment_cache_path(&dir), "{not-json").expect("write invalid cache");
-        let probe_count = Arc::new(AtomicUsize::new(0));
-        let start = Arc::new(Barrier::new(16));
+        for iteration in 0..100 {
+            let dir = temp_dir(&format!("env-concurrent-transaction-{iteration}"));
+            fs::write(environment_cache_path(&dir), "{not-json").expect("write invalid cache");
+            let probe_count = Arc::new(AtomicUsize::new(0));
+            let start = Arc::new(Barrier::new(16));
 
-        let callers = (0..16)
-            .map(|index| {
-                let dir = if index % 2 == 0 {
-                    dir.clone()
-                } else {
-                    dir.join(".")
-                };
-                let probe_count = Arc::clone(&probe_count);
-                let start = Arc::clone(&start);
-                tokio::spawn(async move {
-                    start.wait().await;
-                    resolve_environment_cache(&dir, "fingerprint-a", false, || async move {
-                        probe_count.fetch_add(1, Ordering::SeqCst);
-                        sleep(Duration::from_millis(25)).await;
-                        Ok(sample_environment_result())
+            let callers = (0..16)
+                .map(|index| {
+                    let dir = if index % 2 == 0 {
+                        dir.clone()
+                    } else {
+                        dir.join(".")
+                    };
+                    let probe_count = Arc::clone(&probe_count);
+                    let start = Arc::clone(&start);
+                    tokio::spawn(async move {
+                        start.wait().await;
+                        resolve_environment_cache(&dir, "fingerprint-a", false, || async move {
+                            probe_count.fetch_add(1, Ordering::SeqCst);
+                            sleep(Duration::from_millis(25)).await;
+                            Ok(sample_environment_result())
+                        })
+                        .await
                     })
-                    .await
                 })
-            })
-            .collect::<Vec<_>>();
+                .collect::<Vec<_>>();
 
-        let mut payloads = Vec::new();
-        for caller in callers {
-            payloads.push(
-                caller
-                    .await
-                    .expect("environment caller task")
-                    .expect("environment transaction"),
-            );
+            let mut payloads = Vec::new();
+            for caller in callers {
+                payloads.push(
+                    caller
+                        .await
+                        .expect("environment caller task")
+                        .expect("environment transaction"),
+                );
+            }
+            assert_eq!(probe_count.load(Ordering::SeqCst), 1);
+            let expected = serde_json::to_value(&payloads[0]).expect("serialize first payload");
+            assert!(payloads.iter().all(|payload| {
+                serde_json::to_value(payload).expect("serialize payload") == expected
+            }));
+            fs::remove_dir_all(&dir).expect("remove concurrent transaction fixture");
         }
-        assert_eq!(probe_count.load(Ordering::SeqCst), 1);
-        let expected = serde_json::to_value(&payloads[0]).expect("serialize first payload");
-        assert!(payloads
-            .iter()
-            .all(|payload| serde_json::to_value(payload).expect("serialize payload") == expected));
     }
 
     #[tokio::test]
@@ -798,7 +802,7 @@ mod tests {
         let dir = temp_dir("env-non-utf8");
         fs::write(environment_cache_path(&dir), [0xff, 0xfe]).expect("write invalid cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-a", false)
+        let entry = load_cache_entry(&dir, "fingerprint-a", false)
             .await
             .expect("read cache");
 
@@ -812,7 +816,7 @@ mod tests {
     #[tokio::test]
     async fn bypasses_environment_cache_when_force_refresh_is_enabled() {
         let dir = temp_dir("env-force-refresh");
-        save_environment_cache(
+        save_cache_entry(
             &dir,
             "2026-04-23T11:00:00Z",
             "fingerprint-a",
@@ -821,7 +825,7 @@ mod tests {
         .await
         .expect("write env cache");
 
-        let entry = load_environment_cache(&dir, "fingerprint-a", true)
+        let entry = load_cache_entry(&dir, "fingerprint-a", true)
             .await
             .expect("read cache");
         assert!(entry.is_none());

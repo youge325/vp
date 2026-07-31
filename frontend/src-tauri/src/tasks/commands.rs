@@ -1,12 +1,15 @@
 use tauri::{AppHandle, Runtime, State};
 
 use crate::error::ShellError;
+use crate::generated::{CheckResumeStateSpec, InspectVideoInvocation, InspectVideoSpec};
 use crate::models::{ResumeInspectionResult, TaskRequest, VideoInfo};
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks::{
-    build_resume_inspection_input, run_single_cli_command, send_task_control, spawn_task,
-    TaskApplicationError, TaskControlKind, TaskState, TaskStateError,
+    run_single_cli_command, send_task_control, spawn_task, TaskApplicationError, TaskControlKind,
+    TaskState, TaskStateError,
 };
+
+use super::builder::build_resume_inspection_invocation;
 
 fn map_task_application_error(error: TaskApplicationError) -> ShellError {
     match error {
@@ -28,6 +31,13 @@ fn map_task_application_error(error: TaskApplicationError) -> ShellError {
             TaskStateError::AlreadyFinishing => {
                 ShellError::InvalidInput("The task is already finishing.".to_string())
             }
+            TaskStateError::Reaping => {
+                ShellError::InvalidInput("The previous task process is still being reaped.".to_string())
+            }
+            TaskStateError::CleanupFailed => ShellError::InvalidInput(
+                "The previous task process could not be confirmed as stopped; restart the application before starting another task."
+                    .to_string(),
+            ),
         },
     }
 }
@@ -37,14 +47,8 @@ pub(crate) async fn inspect_video(
     paths: State<'_, ResolvedRuntimePaths>,
     input_path: String,
 ) -> Result<VideoInfo, ShellError> {
-    run_single_cli_command(
-        paths.inner(),
-        "inspect_video",
-        &[String::from("--input"), input_path],
-        None,
-        "video info",
-    )
-    .await
+    let invocation = InspectVideoInvocation { input_path };
+    run_single_cli_command::<InspectVideoSpec>(paths.inner(), &invocation).await
 }
 
 #[tauri::command]
@@ -64,19 +68,8 @@ pub(crate) async fn check_resume_state(
     paths: State<'_, ResolvedRuntimePaths>,
     request: TaskRequest,
 ) -> Result<ResumeInspectionResult, ShellError> {
-    let (args, stdin_payload) = build_resume_inspection_input(&request).map_err(|error| {
-        ShellError::SchemaValidation(format!(
-            "Unable to encode resume inspection configuration: {error}"
-        ))
-    })?;
-    run_single_cli_command(
-        paths.inner(),
-        "check_resume_state",
-        &args,
-        Some(&stdin_payload),
-        "resume inspection",
-    )
-    .await
+    let invocation = build_resume_inspection_invocation(&request);
+    run_single_cli_command::<CheckResumeStateSpec>(paths.inner(), &invocation).await
 }
 
 /// Pause, resume and cancel share one typed command surface.

@@ -30,16 +30,12 @@ pub(crate) async fn send_task_control(
         TaskControlKind::Pause => ProcessControlKind::Pause,
         TaskControlKind::Resume => ProcessControlKind::Resume,
     };
-    let handle = state.current_handle().await?;
-
-    if handle.cancel_token.is_cancelled() {
-        return Err(crate::tasks::TaskStateError::AlreadyCancelling.into());
-    }
+    let control_tx = state.control_sender().await?;
 
     let (response_tx, response_rx) = oneshot::channel();
     timeout(
         CONTROL_TIMEOUT,
-        handle.control_tx.send(TaskControlMessage {
+        control_tx.send(TaskControlMessage {
             kind: process_kind,
             response: response_tx,
         }),
@@ -60,15 +56,16 @@ pub(crate) async fn send_task_control(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tasks::cancellation::CancelReason;
+    use crate::tasks::cancellation::CancellationToken;
     use std::sync::Arc;
     use tokio::sync::mpsc;
 
-    async fn start(state: &TaskState) -> crate::tasks::handle::TaskHandle {
+    async fn start(state: &TaskState) -> CancellationToken {
         let (tx, _rx) = mpsc::channel(1);
         let lease = state.reserve_start().await.expect("reserve");
+        let token = lease.cancellation_token();
         state.activate(&lease, tx).await.expect("activate");
-        state.current_handle().await.expect("handle")
+        token
     }
 
     #[tokio::test]
@@ -91,8 +88,7 @@ mod tests {
         // machine into ``Cancelling``. A second cancel call must fail
         // because ``begin_cancel`` rejects the duplicate transition.
         let state = TaskState::default();
-        let handle = start(&state).await;
-        let token = handle.cancel_token.clone();
+        let token = start(&state).await;
 
         send_task_control(&state, TaskControlKind::Cancel)
             .await
@@ -119,41 +115,6 @@ mod tests {
             result,
             Err(TaskApplicationError::State(
                 crate::tasks::TaskStateError::NoActiveTask
-            ))
-        ));
-    }
-
-    #[tokio::test]
-    async fn pause_running_task_rejects_when_token_already_cancelled() {
-        // The state machine is still ``Running`` but cancellation has won
-        // the atomic transition. Pause / resume must surface that state.
-        let state = TaskState::default();
-        let handle = start(&state).await;
-        handle.cancel_token.cancel(CancelReason::User);
-
-        let result = send_task_control(&state, TaskControlKind::Pause).await;
-        assert!(
-            matches!(
-                result,
-                Err(TaskApplicationError::State(
-                    crate::tasks::TaskStateError::AlreadyCancelling
-                ))
-            ),
-            "cancelled token must block pause, got: {result:?}",
-        );
-    }
-
-    #[tokio::test]
-    async fn resume_running_task_also_rejects_when_token_already_cancelled() {
-        let state = TaskState::default();
-        let handle = start(&state).await;
-        handle.cancel_token.cancel(CancelReason::User);
-
-        let result = send_task_control(&state, TaskControlKind::Resume).await;
-        assert!(matches!(
-            result,
-            Err(TaskApplicationError::State(
-                crate::tasks::TaskStateError::AlreadyCancelling
             ))
         ));
     }
@@ -225,6 +186,29 @@ mod tests {
                 )
             ))
         ));
+    }
+
+    #[tokio::test]
+    async fn pause_and_resume_unsupported_replies_keep_the_typed_wire_code() {
+        for kind in [TaskControlKind::Pause, TaskControlKind::Resume] {
+            let (request, message) = dispatch_control(kind).await;
+            message
+                .response
+                .send(Err(
+                    crate::process_control::ProcessControlError::Unsupported,
+                ))
+                .expect("reply");
+
+            let error = request
+                .await
+                .expect("request task")
+                .expect_err("unsupported control must fail");
+            let TaskApplicationError::Shell(shell_error) = error else {
+                panic!("unsupported control must remain a typed shell error");
+            };
+            let wire = serde_json::to_value(shell_error).expect("serializable shell error");
+            assert_eq!(wire["code"], "process_control_unsupported");
+        }
     }
 
     #[tokio::test]

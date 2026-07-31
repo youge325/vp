@@ -23,7 +23,7 @@ pub(super) fn resolve_python_executable(
     let bin = platform_python_binary();
     let candidates = [
         env_path("VP_PYTHON_EXECUTABLE"),
-        bundled_python_path(runtime_root, bin),
+        bundled_python_candidate(runtime_root, bin),
     ];
 
     if let Some(path) = first_existing_file(candidates) {
@@ -34,8 +34,8 @@ pub(super) fn resolve_python_executable(
         .ok_or_else(|| ShellError::RuntimeResolution(MISSING_PYTHON_MESSAGE.to_string()))
 }
 
-fn bundled_python_path(runtime_root: Option<&PathBuf>, binary: &str) -> Option<PathBuf> {
-    first_existing_file([runtime_root.map(|path| path.join("python").join(binary))])
+fn bundled_python_candidate(runtime_root: Option<&PathBuf>, binary: &str) -> Option<PathBuf> {
+    runtime_root.map(|path| path.join("python").join(binary))
 }
 
 #[cfg(test)]
@@ -60,10 +60,13 @@ mod tests {
         }
 
         assert_eq!(
-            bundled_python_path(Some(&runtime), binary),
+            bundled_python_candidate(Some(&runtime), binary),
             Some(canonical.clone())
         );
         std::fs::remove_file(canonical).expect("remove canonical python");
-        assert_eq!(bundled_python_path(Some(&runtime), binary), None);
+        assert_eq!(
+            first_existing_file([bundled_python_candidate(Some(&runtime), binary)]),
+            None
+        );
     }
 }

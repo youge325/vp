@@ -68,6 +68,9 @@ impl ShellError {
             Self::BackendProbeFailed(_) => {
                 WireErrorCode::Shell(ShellTaskErrorCode::BackendProbeFailed)
             }
+            Self::ProcessControl(ProcessControlError::Unsupported) => {
+                WireErrorCode::Shell(ShellTaskErrorCode::ProcessControlUnsupported)
+            }
             Self::ProcessControl(_) => WireErrorCode::Shell(ShellTaskErrorCode::ProcessFailed),
             Self::SchemaValidation(_) => WireErrorCode::Shell(ShellTaskErrorCode::SchemaMismatch),
             Self::Persistence(_) => WireErrorCode::Shell(ShellTaskErrorCode::PersistenceFailed),
@@ -323,6 +326,33 @@ mod tests {
             .as_str()
             .expect("message")
             .contains("suspend denied"));
+    }
+
+    #[test]
+    fn unsupported_process_control_has_its_own_wire_code() {
+        let value =
+            serde_json::to_value(ShellError::ProcessControl(ProcessControlError::Unsupported))
+                .expect("serializable");
+
+        assert_eq!(value["code"], "process_control_unsupported");
+        assert!(value["message"]
+            .as_str()
+            .expect("message")
+            .contains("unsupported"));
+    }
+
+    #[test]
+    fn unknown_process_control_state_remains_a_process_failure() {
+        let value = serde_json::to_value(ShellError::ProcessControl(
+            ProcessControlError::StateUnknown("resume rollback failed".to_string()),
+        ))
+        .expect("serializable");
+
+        assert_eq!(value["code"], "process_failed");
+        assert!(value["message"]
+            .as_str()
+            .expect("message")
+            .contains("state is unknown"));
     }
 
     #[test]

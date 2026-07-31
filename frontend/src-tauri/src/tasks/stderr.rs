@@ -1,34 +1,43 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use crate::generated::{ERROR_SUMMARY_LIMIT_BYTES, STDERR_TAIL_LIMIT_BYTES};
+
 const STDERR_CAPTURE_LINE_LIMIT: usize = 400;
-const STDERR_CAPTURE_BYTE_LIMIT: usize = 8 * 1024;
+const TRUNCATION_MARKER: &str = "[...truncated]\n";
 
 const TRACEBACK_MARKER: &str = "Traceback (most recent call last):";
 
 #[derive(Debug, Default, Clone)]
-pub(crate) struct StderrCapture {
+pub(super) struct StderrCapture {
     inner: Arc<Mutex<StderrCaptureInner>>,
 }
 
 #[derive(Debug, Default)]
 struct StderrCaptureInner {
     recent_lines: VecDeque<String>,
+    retained_bytes: usize,
 }
 
 impl StderrCapture {
-    pub(crate) fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self::default()
     }
 
-    pub(crate) fn record(&self, line: &str) {
+    pub(super) fn record(&self, line: &str) {
         if line.is_empty() {
             return;
         }
         if let Ok(mut inner) = self.inner.lock() {
-            inner.recent_lines.push_back(line.to_string());
-            while inner.recent_lines.len() > STDERR_CAPTURE_LINE_LIMIT {
-                inner.recent_lines.pop_front();
+            let retained = retain_tail(line, STDERR_TAIL_LIMIT_BYTES);
+            inner.retained_bytes = inner.retained_bytes.saturating_add(retained.len());
+            inner.recent_lines.push_back(retained);
+            while inner.recent_lines.len() > STDERR_CAPTURE_LINE_LIMIT
+                || inner.retained_bytes > STDERR_TAIL_LIMIT_BYTES
+            {
+                if let Some(removed) = inner.recent_lines.pop_front() {
+                    inner.retained_bytes = inner.retained_bytes.saturating_sub(removed.len());
+                }
             }
         }
     }
@@ -36,7 +45,7 @@ impl StderrCapture {
     /// Returns a compact summary that prefers the most recent Python
     /// traceback. Falls back to the trailing slice of stderr lines if no
     /// traceback marker is present.
-    pub(crate) fn summary(&self) -> Option<String> {
+    pub(super) fn summary(&self) -> Option<String> {
         let lines = self.inner.lock().ok()?.recent_lines.clone();
         if lines.is_empty() {
             return None;
@@ -46,23 +55,22 @@ impl StderrCapture {
             .rposition(|line| line.contains(TRACEBACK_MARKER))
             .unwrap_or_else(|| lines.len().saturating_sub(20));
         let slice = lines.iter().skip(start).cloned().collect::<Vec<_>>();
-        Some(truncate(slice.join("\n"), STDERR_CAPTURE_BYTE_LIMIT))
+        Some(retain_tail(&slice.join("\n"), ERROR_SUMMARY_LIMIT_BYTES))
     }
 }
 
-fn truncate(mut text: String, max_bytes: usize) -> String {
+pub(super) fn retain_tail(text: &str, max_bytes: usize) -> String {
     if text.len() <= max_bytes {
-        return text;
+        return text.to_string();
     }
-    // Drop from the front; we want the tail (recent context).
-    let cut = text.len() - max_bytes;
+    let payload_limit = max_bytes.saturating_sub(TRUNCATION_MARKER.len());
+    let cut = text.len().saturating_sub(payload_limit);
     let valid_cut = text
         .char_indices()
         .find(|(idx, _)| *idx >= cut)
         .map(|(idx, _)| idx)
         .unwrap_or(text.len());
-    text.replace_range(..valid_cut, "[...truncated]\n");
-    text
+    format!("{TRUNCATION_MARKER}{}", &text[valid_cut..])
 }
 
 #[cfg(test)]
@@ -120,6 +128,14 @@ mod tests {
             capture.record(&chunk);
         }
         let summary = capture.summary().expect("summary");
-        assert!(summary.len() <= STDERR_CAPTURE_BYTE_LIMIT + "[...truncated]\n".len());
+        assert!(summary.len() <= ERROR_SUMMARY_LIMIT_BYTES);
+    }
+
+    #[test]
+    fn retained_storage_is_bounded_before_summary() {
+        let capture = StderrCapture::new();
+        capture.record(&"x".repeat(STDERR_TAIL_LIMIT_BYTES * 4));
+        let inner = capture.inner.lock().expect("capture");
+        assert!(inner.retained_bytes <= STDERR_TAIL_LIMIT_BYTES);
     }
 }

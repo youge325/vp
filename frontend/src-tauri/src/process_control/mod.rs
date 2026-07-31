@@ -3,7 +3,7 @@
 //! Organized as:
 //! - this ``mod.rs`` — trait, error type, and task-bound controller
 //! - ``windows.rs`` — Win32 ToolHelp suspend/resume implementation
-//! - ``posix.rs`` — ``kill(-pgid, SIGSTOP/SIGCONT)`` implementation
+//! - ``posix.rs`` — Linux pidfd-set control and explicit macOS rejection
 //!
 //! Errors keep their underlying ``io::Error`` source where applicable so that higher
 //! layers (the task controller, the IPC layer) can preserve the chain
@@ -12,7 +12,7 @@
 use std::error::Error;
 use std::fmt;
 use std::io;
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 use std::sync::Mutex;
 
 #[cfg(not(target_os = "windows"))]
@@ -22,6 +22,8 @@ mod windows;
 
 #[cfg(not(target_os = "windows"))]
 use posix as imp;
+#[cfg(target_os = "linux")]
+pub(crate) use posix::StableProcessGroup;
 #[cfg(target_os = "windows")]
 use windows as imp;
 
@@ -37,10 +39,19 @@ pub(crate) enum ProcessControlError {
     NotFound,
     /// One or more threads were enumerated but every Suspend/Resume
     /// call failed (typical: the OS denied access mid-shutdown).
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     NoControllableThreads,
     /// A numeric PID/TID now resolves to a different OS process/thread
     /// than the one captured when this task started.
     IdentityMismatch,
+    /// The platform cannot safely implement pause/resume with a stable
+    /// process identity. Cancellation remains available.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    Unsupported,
+    /// A control operation failed and its compensating rollback also failed,
+    /// so the task must be terminated instead of attempting another control.
+    #[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
+    StateUnknown(String),
     /// Wrapping for unexpected OS errors. Keeps the original
     /// ``io::Error`` so the source chain survives downstream.
     Os(io::Error),
@@ -60,6 +71,10 @@ impl fmt::Display for ProcessControlError {
                     f,
                     "process identity changed; refusing to control a reused PID or TID"
                 )
+            }
+            Self::Unsupported => write!(f, "pause and resume are unsupported on this platform"),
+            Self::StateUnknown(message) => {
+                write!(f, "process control state is unknown: {message}")
             }
             Self::Os(error) => write!(f, "process control OS error: {error}"),
             Self::Worker(message) => write!(f, "process control worker failed: {message}"),
@@ -92,6 +107,8 @@ pub(crate) struct ProcessController {
     identity: imp::ProcessIdentity,
     #[cfg(target_os = "windows")]
     suspended_threads: Mutex<Option<imp::SuspendedThreads>>,
+    #[cfg(target_os = "linux")]
+    suspended_processes: Mutex<Option<imp::SuspendedProcesses>>,
 }
 
 impl ProcessController {
@@ -100,6 +117,8 @@ impl ProcessController {
             identity: imp::ProcessIdentity::capture(root_pid)?,
             #[cfg(target_os = "windows")]
             suspended_threads: Mutex::new(None),
+            #[cfg(target_os = "linux")]
+            suspended_processes: Mutex::new(None),
         })
     }
 }
@@ -117,7 +136,18 @@ impl ProcessControl for ProcessController {
             }
             *suspended = Some(imp::suspend_process_tree(&self.identity)?);
         }
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(target_os = "linux")]
+        {
+            let mut suspended = self.suspended_processes.lock().map_err(|_| {
+                ProcessControlError::Worker("suspended-process lock poisoned".into())
+            })?;
+            if suspended.is_some() {
+                imp::validate_process_identity(&self.identity)?;
+                return Ok(());
+            }
+            *suspended = Some(imp::suspend_process_tree(&self.identity)?);
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
         imp::suspend_process_tree(&self.identity)?;
         Ok(())
     }
@@ -135,7 +165,19 @@ impl ProcessControl for ProcessController {
                 imp::validate_process_identity(&self.identity)?;
             }
         }
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(target_os = "linux")]
+        {
+            let mut suspended = self.suspended_processes.lock().map_err(|_| {
+                ProcessControlError::Worker("suspended-process lock poisoned".into())
+            })?;
+            if let Some(processes) = suspended.as_mut() {
+                imp::resume_process_tree(&self.identity, processes)?;
+                *suspended = None;
+            } else {
+                imp::validate_process_identity(&self.identity)?;
+            }
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
         imp::resume_process_tree(&self.identity)?;
         Ok(())
     }
@@ -156,6 +198,12 @@ mod tests {
         assert!(ProcessControlError::IdentityMismatch
             .to_string()
             .contains("identity changed"));
+        assert!(ProcessControlError::Unsupported
+            .to_string()
+            .contains("unsupported"));
+        assert!(ProcessControlError::StateUnknown("rollback failed".into())
+            .to_string()
+            .contains("rollback failed"));
         let os = ProcessControlError::Os(io::Error::new(io::ErrorKind::PermissionDenied, "boom"));
         assert!(os.to_string().contains("boom"));
     }

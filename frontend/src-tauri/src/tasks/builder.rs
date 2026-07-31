@@ -1,28 +1,30 @@
-use std::io;
 use std::process::Stdio;
 
-use command_group::{AsyncCommandGroup, AsyncGroupChild};
-use serde_json::json;
 use tokio::process::Command;
 
-use crate::models::TaskRequest;
+use crate::generated::{
+    BackendCommandSpec, BackendProcessSpec, CheckResumeStateInvocation, StartTaskInvocation,
+    StartTaskSpec,
+};
+use crate::models::{RuntimeConfigBundle, TaskRequest};
 use crate::runtime::ResolvedRuntimePaths;
-
-#[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+use crate::tasks::subprocess::{ProcessGroupChild, ProcessGroupSpawnError};
 
 /// Single source of truth for spawning the Python backend.
 ///
 /// Long-running and one-shot commands share this bootstrap so the module,
 /// working-directory and environment conventions cannot drift.
 ///
-/// The returned ``Command`` has only the executable, the subcommand,
-/// the working directory and the env map set. Callers are expected to
-/// append their own ``--flag value`` arguments, stdio configuration and
-/// spawn through ``spawn_no_window_group``.
-pub(crate) fn backend_command(paths: &ResolvedRuntimePaths, subcommand: &str) -> Command {
+/// CLI arguments are emitted only by the manifest-generated sealed spec;
+/// callers configure stdio and spawn policy but cannot append an arbitrary
+/// backend protocol surface through this adapter.
+pub(super) fn backend_command<S: BackendCommandSpec>(
+    paths: &ResolvedRuntimePaths,
+    invocation: &S::Invocation,
+) -> Command {
     let mut command = Command::new(&paths.python_executable);
-    command.args(["-m", "app", subcommand]);
+    command.args(["-m", "app", S::SUBCOMMAND]);
+    command.args(S::arguments(invocation));
     command.current_dir(&paths.backend_dir);
     command.envs(crate::runtime::build_env_map(paths));
     command
@@ -33,73 +35,59 @@ pub(crate) fn backend_command(paths: &ResolvedRuntimePaths, subcommand: &str) ->
 /// The Tauri host feeds backend config through stdin
 /// as ``{decode, workflow, encode, output}``, keeping the process command
 /// short even when a workflow contains many filters.
-fn build_config_stdin_payload(request: &TaskRequest) -> Result<String, serde_json::Error> {
-    serde_json::to_string(&json!({
-        "decode": &request.decode_config,
-        "workflow": &request.workflow_config,
-        "encode": &request.encode_config,
-        "output": &request.output_config,
-    }))
+fn build_runtime_config_bundle(request: &TaskRequest) -> RuntimeConfigBundle {
+    RuntimeConfigBundle {
+        decode: request.decode_config.clone(),
+        workflow: request.workflow_config.clone(),
+        encode: request.encode_config.clone(),
+        output: request.output_config.clone(),
+    }
 }
 
-pub(crate) fn build_process_command(
+fn build_start_task_invocation(request: &TaskRequest) -> StartTaskInvocation {
+    StartTaskInvocation {
+        input_path: request.input_path.clone(),
+        resume_mode: request.resume_mode,
+        config: build_runtime_config_bundle(request),
+    }
+}
+
+pub(super) fn build_process_command(
     paths: &ResolvedRuntimePaths,
     request: &TaskRequest,
 ) -> Result<(Command, String), serde_json::Error> {
-    let mut command = backend_command(paths, "process");
-    command.args(["--input", &request.input_path]);
-    command.arg("--config-stdin");
-
-    if let Some(mode) = request.resume_mode.as_ref() {
-        let serialized_mode = serde_json::to_value(mode)?;
-        let mode = serialized_mode
-            .as_str()
-            .expect("ResumeMode must serialize as a string");
-        command.args(["--resume-mode", mode]);
-    }
+    let invocation = build_start_task_invocation(request);
+    let mut command = backend_command::<StartTaskSpec>(paths, &invocation);
 
     // stdin is intentionally piped — the caller writes the JSON payload
     // immediately after spawn and then drops the handle to signal EOF.
     command.stdin(Stdio::piped());
 
-    let stdin_payload = build_config_stdin_payload(request)?;
+    let stdin_payload = serde_json::to_string(StartTaskSpec::stdin_payload(&invocation))?;
     Ok((command, stdin_payload))
 }
 
-pub(crate) fn build_resume_inspection_input(
+pub(super) fn build_resume_inspection_invocation(
     request: &TaskRequest,
-) -> Result<(Vec<String>, String), serde_json::Error> {
-    let args = vec![
-        String::from("--input"),
-        request.input_path.clone(),
-        String::from("--config-stdin"),
-    ];
-    let stdin_payload = build_config_stdin_payload(request)?;
-    Ok((args, stdin_payload))
+) -> CheckResumeStateInvocation {
+    CheckResumeStateInvocation {
+        input_path: request.input_path.clone(),
+        config: build_runtime_config_bundle(request),
+    }
 }
 
-#[cfg(windows)]
-pub(crate) fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChild> {
-    command.kill_on_drop(true);
-    command
-        .group()
-        .kill_on_drop(true)
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn()
-}
-
-#[cfg(not(windows))]
-pub(crate) fn spawn_no_window_group(command: &mut Command) -> io::Result<AsyncGroupChild> {
-    command.kill_on_drop(true);
-    command.group().kill_on_drop(true).spawn()
+pub(super) fn spawn_no_window_group(
+    command: &mut Command,
+) -> Result<ProcessGroupChild, ProcessGroupSpawnError> {
+    ProcessGroupChild::spawn(command)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::models::config::{
-        DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig, OutputConfig,
-        PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig,
+        DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InferenceEngine, InterpolationConfig,
+        OutputConfig, PostprocessConfig, PreprocessConfig, ProcessOrder, RateControlConfig,
         SuperResolutionConfig, TensorBackend, WorkflowConfig,
     };
     use serde_json::json;
@@ -127,7 +115,7 @@ mod tests {
                     scale: 1.0,
                     fp16: false,
                     tensor_backend: TensorBackend::Pytorch,
-                    engine: "cuda".to_string(),
+                    engine: InferenceEngine::Cuda,
                 },
                 super_resolution: SuperResolutionConfig {
                     enabled: false,
@@ -135,7 +123,7 @@ mod tests {
                     algorithm: "placeholder".to_string(),
                     onnx_model: None,
                     tensor_backend: TensorBackend::Onnx,
-                    engine: "cuda".to_string(),
+                    engine: InferenceEngine::Cuda,
                     num_frames: 10.try_into().expect("positive frame window"),
                 },
                 preprocess: PreprocessConfig {
@@ -160,7 +148,12 @@ mod tests {
                 options: Default::default(),
             },
             output_config: OutputConfig {
-                output_dir: Some("D:/out".to_string()),
+                output_dir: Some(
+                    "D:/out"
+                        .to_string()
+                        .try_into()
+                        .expect("valid output directory"),
+                ),
                 open_on_complete: true,
                 segment_frames: 1000.try_into().expect("positive segment size"),
             },
@@ -171,21 +164,22 @@ mod tests {
     #[test]
     fn resume_inspection_args_only_contain_command_specific_flags() {
         let request = sample_request();
-        let (args, _payload) = build_resume_inspection_input(&request).expect("args");
+        let invocation = build_resume_inspection_invocation(&request);
+        let args = crate::generated::CheckResumeStateSpec::arguments(&invocation);
         assert_eq!(args, ["--input", "D:/in.mp4", "--config-stdin"]);
     }
 
     #[test]
     fn build_inspect_output_stdin_payload_packs_all_four_sections() {
         let request = sample_request();
-        let (_args, payload) = build_resume_inspection_input(&request).expect("args");
-        let parsed = serde_json::from_str::<serde_json::Value>(&payload)
-            .expect("stdin payload must be valid JSON");
+        let invocation = build_resume_inspection_invocation(&request);
+        let parsed =
+            serde_json::to_value(&invocation.config).expect("stdin payload must be valid JSON");
         let obj = parsed.as_object().expect("payload root must be object");
         for key in ["decode", "workflow", "encode", "output"] {
             assert!(
                 obj.contains_key(key),
-                "stdin payload missing `{key}` section: {payload}",
+                "stdin payload missing `{key}` section: {parsed}",
             );
         }
     }
@@ -193,7 +187,8 @@ mod tests {
     #[test]
     fn build_inspect_output_stdin_payload_serializes_camel_case_fields() {
         let request = sample_request();
-        let (_args, payload) = build_resume_inspection_input(&request).expect("args");
+        let invocation = build_resume_inspection_invocation(&request);
+        let payload = serde_json::to_string(&invocation.config).expect("serialize bundle");
         // Rust uses snake_case fields (fps_mode) but serializes to camelCase (fpsMode).
         assert!(
             payload.contains("\"fpsMode\""),
@@ -243,6 +238,26 @@ mod tests {
                 obj.contains_key(key),
                 "process stdin payload missing `{key}` section: {payload}",
             );
+        }
+    }
+
+    #[test]
+    fn generated_process_spec_maps_every_resume_mode_without_json_roundtrip() {
+        let cases = [
+            (crate::models::task::ResumeMode::Auto, "auto"),
+            (crate::models::task::ResumeMode::ForceFresh, "force-fresh"),
+            (crate::models::task::ResumeMode::ForceResume, "force-resume"),
+        ];
+        for (mode, expected) in cases {
+            let mut request = sample_request();
+            request.resume_mode = Some(mode);
+            let invocation = build_start_task_invocation(&request);
+            let arguments = StartTaskSpec::arguments(&invocation);
+            let resume_index = arguments
+                .iter()
+                .position(|argument| argument == "--resume-mode")
+                .expect("generated resume flag");
+            assert_eq!(arguments[resume_index + 1], expected);
         }
     }
 }
