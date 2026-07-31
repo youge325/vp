@@ -14,6 +14,7 @@ use tokio::time::Duration;
 use crate::models::TaskErrorCode;
 use crate::tasks::envelope::{classify_line, ClassifiedLine};
 use crate::tasks::stderr::StderrCapture;
+use crate::tasks::subprocess::STDIN_WRITE_TIMEOUT;
 
 pub(crate) type ProgressBeat = Arc<Mutex<Instant>>;
 
@@ -27,8 +28,6 @@ pub(super) enum ReaderMessage {
         message: String,
     },
 }
-
-const STDIN_WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(super) fn spawn_stdout_reader(
     stdout: tokio::process::ChildStdout,

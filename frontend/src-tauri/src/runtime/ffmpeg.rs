@@ -46,6 +46,13 @@ mod tests {
             .join(platform_binary(binary));
         std::fs::create_dir_all(path.parent().expect("tool parent")).expect("create tool parent");
         std::fs::write(&path, b"tool").expect("write tool");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+                .expect("mark tool executable");
+        }
         path
     }
 
@@ -55,6 +62,13 @@ mod tests {
         let runtime_root = temp.path().join("runtime");
         let configured = temp.path().join(platform_binary("ffmpeg"));
         std::fs::write(&configured, b"configured").expect("write configured tool");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            std::fs::set_permissions(&configured, std::fs::Permissions::from_mode(0o755))
+                .expect("mark configured tool executable");
+        }
         let runtime = create_tool(&runtime_root, "ffmpeg", "ffmpeg");
 
         assert_eq!(

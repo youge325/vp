@@ -4,11 +4,16 @@
 //! 这类基础问题。所有探测策略(python / ffmpeg / model)再叠加在它们之上。
 
 use std::env;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 /// 从环境变量读路径(空值视为未设)。
 pub(super) fn env_path(key: &str) -> Option<PathBuf> {
-    env::var_os(key).map(PathBuf::from)
+    env::var_os(key).and_then(path_from_env_value)
+}
+
+fn path_from_env_value(value: OsString) -> Option<PathBuf> {
+    (!value.is_empty()).then(|| PathBuf::from(value))
 }
 
 /// 如果 ``path`` 包含子目录 ``child``,返回 ``path`` 本身。
@@ -34,10 +39,10 @@ where
         .find(|candidate| candidate.is_dir())
 }
 
-/// 在候选 ``Option<PathBuf>`` 列表中找第一个**存在的文件或目录**。
+/// 在候选 ``Option<PathBuf>`` 列表中找第一个可执行的普通文件。
 ///
-/// 与 ``first_existing_dir`` 区分:``ffmpeg`` / ``python`` 这种二进制走 file 路径,
-/// ``models`` / ``runtime_root`` 这种走 dir。
+/// Unix 使用执行权限位做 fail-closed 校验；Windows 的可执行权限由文件关联和
+/// ACL 决定，这里只接受普通文件，后续进程创建仍是最终权限边界。
 pub(super) fn first_existing_file<I>(items: I) -> Option<PathBuf>
 where
     I: IntoIterator<Item = Option<PathBuf>>,
@@ -45,7 +50,7 @@ where
     items
         .into_iter()
         .flatten()
-        .find(|candidate| candidate.exists())
+        .find(|candidate| is_executable_file(candidate))
 }
 
 /// 在 ``PATH`` 中查找可执行文件(Windows 会同时尝试 ``.exe`` 后缀)。
@@ -53,20 +58,40 @@ pub(super) fn find_in_system_path(executable: &str) -> Option<PathBuf> {
     let path_env = env::var_os("PATH")?;
     for dir in env::split_paths(&path_env) {
         let candidate = dir.join(executable);
-        if candidate.is_file() {
+        if is_executable_file(&candidate) {
             return Some(candidate);
         }
         #[cfg(target_os = "windows")]
         {
             if !executable.ends_with(".exe") {
                 let candidate_exe = dir.join(format!("{executable}.exe"));
-                if candidate_exe.is_file() {
+                if is_executable_file(&candidate_exe) {
                     return Some(candidate_exe);
                 }
             }
         }
     }
     None
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = path.metadata() else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
 }
 
 /// 平台对应的 Python 可执行文件名(Windows: ``python.exe``,其它: ``python3``)。
@@ -96,6 +121,11 @@ mod tests {
     use super::*;
 
     #[test]
+    fn empty_environment_path_is_absent() {
+        assert_eq!(path_from_env_value(OsString::new()), None);
+    }
+
+    #[test]
     fn selects_first_existing_dir() {
         let current = std::env::current_dir().expect("current dir");
         let selected = first_existing_dir([Some(PathBuf::from("missing")), Some(current.clone())]);
@@ -104,10 +134,34 @@ mod tests {
 
     #[test]
     fn selects_first_existing_file() {
-        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        let temp = tempfile::tempdir().expect("temp dir");
+        let executable = temp.path().join(platform_binary("ffmpeg"));
+        std::fs::write(&executable, b"tool").expect("write executable");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))
+                .expect("mark executable");
+        }
+
         let selected =
-            first_existing_file([Some(PathBuf::from("missing")), Some(manifest.clone())]);
-        assert_eq!(selected, Some(manifest));
+            first_existing_file([Some(temp.path().to_path_buf()), Some(executable.clone())]);
+        assert_eq!(selected, Some(executable));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_regular_file_without_execute_permission() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().expect("temp dir");
+        let file = temp.path().join("not-executable");
+        std::fs::write(&file, b"data").expect("write file");
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644))
+            .expect("remove execute permissions");
+
+        assert_eq!(first_existing_file([Some(file)]), None);
     }
 
     #[test]

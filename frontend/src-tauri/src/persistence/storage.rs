@@ -1,5 +1,6 @@
 use std::env;
 use std::fmt;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::UNIX_EPOCH;
@@ -12,13 +13,36 @@ use tokio::fs;
 use crate::error::ShellError;
 use crate::generated::{ENVIRONMENT_CACHE_SCHEMA_VERSION, WORKBENCH_PRESET_SCHEMA_VERSION};
 use crate::models::{
-    EnvironmentCacheEntry, EnvironmentCheckResult, WorkbenchPreset, WorkbenchPresetEntry,
+    EnvironmentCacheEntry, EnvironmentCheckPayload, EnvironmentCheckResult, EnvironmentCheckSource,
+    WorkbenchPreset, WorkbenchPresetEntry,
 };
+use crate::persistence::transaction::PathTransactions;
 use crate::runtime::ResolvedRuntimePaths;
 
 const ENVIRONMENT_CACHE_FILE: &str = "environment-cache.json";
 const WORKBENCH_PRESET_FILE: &str = "workbench-preset.json";
 static QUARANTINE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, PartialEq, Eq)]
+struct EnvironmentFlightKey {
+    fingerprint: String,
+    force_refresh: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct PresetFlightKey;
+
+#[derive(Clone)]
+enum PresetLoadOutcome {
+    Missing,
+    Found(Box<WorkbenchPreset>),
+    Invalid(String),
+}
+
+static ENVIRONMENT_TRANSACTIONS: PathTransactions<EnvironmentFlightKey, EnvironmentCheckPayload> =
+    PathTransactions::new();
+static PRESET_TRANSACTIONS: PathTransactions<PresetFlightKey, PresetLoadOutcome> =
+    PathTransactions::new();
 
 enum QuarantineReason {
     Corrupt,
@@ -67,7 +91,7 @@ async fn read_optional_bytes(
     }
 }
 
-pub(crate) fn current_timestamp() -> String {
+fn current_timestamp() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
@@ -98,8 +122,8 @@ pub(crate) async fn build_environment_fingerprint(
     })
 }
 
-pub(crate) async fn load_environment_cache(
-    base_dir: &Path,
+async fn load_environment_cache_entry(
+    path: &Path,
     fingerprint: &str,
     force_refresh: bool,
 ) -> Result<Option<(String, EnvironmentCheckResult)>, ShellError> {
@@ -107,19 +131,18 @@ pub(crate) async fn load_environment_cache(
         return Ok(None);
     }
 
-    let path = environment_cache_path(base_dir);
-    let Some(raw) = read_optional_bytes(&path, "environment cache").await? else {
+    let Some(raw) = read_optional_bytes(path, "environment cache").await? else {
         return Ok(None);
     };
     let entry = match serde_json::from_slice::<EnvironmentCacheEntry>(&raw) {
         Ok(entry) => entry,
         Err(_) => {
-            quarantine_file(&path, QuarantineReason::Corrupt).await?;
+            quarantine_file(path, QuarantineReason::Corrupt).await?;
             return Ok(None);
         }
     };
     if entry.schema_version != ENVIRONMENT_CACHE_SCHEMA_VERSION {
-        quarantine_file(&path, QuarantineReason::from_version(&entry.schema_version)).await?;
+        quarantine_file(path, QuarantineReason::from_version(&entry.schema_version)).await?;
         return Ok(None);
     }
     if entry.fingerprint.to_string() != fingerprint {
@@ -129,6 +152,45 @@ pub(crate) async fn load_environment_cache(
         entry.checked_at.to_rfc3339_opts(SecondsFormat::Secs, true),
         entry.result,
     )))
+}
+
+pub(crate) async fn resolve_environment_cache<F, Fut>(
+    base_dir: &Path,
+    fingerprint: &str,
+    force_refresh: bool,
+    probe: F,
+) -> Result<EnvironmentCheckPayload, ShellError>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = Result<EnvironmentCheckResult, ShellError>>,
+{
+    let path = environment_cache_path(base_dir);
+    let key = EnvironmentFlightKey {
+        fingerprint: fingerprint.to_string(),
+        force_refresh,
+    };
+    ENVIRONMENT_TRANSACTIONS
+        .run(&path, key, || async {
+            if let Some((checked_at, result)) =
+                load_environment_cache_entry(&path, fingerprint, force_refresh).await?
+            {
+                return Ok(EnvironmentCheckPayload {
+                    result,
+                    source: EnvironmentCheckSource::Cache,
+                    checked_at,
+                });
+            }
+
+            let result = probe().await?;
+            let checked_at = current_timestamp();
+            save_environment_cache_entry(&path, &checked_at, fingerprint, &result).await?;
+            Ok(EnvironmentCheckPayload {
+                result,
+                source: EnvironmentCheckSource::Probe,
+                checked_at,
+            })
+        })
+        .await
 }
 
 /// 原子地把序列化结果写入文件。
@@ -192,8 +254,8 @@ async fn atomic_write_bytes(path: &Path, data: &[u8]) -> Result<(), ShellError> 
     Ok(())
 }
 
-pub(crate) async fn save_environment_cache(
-    base_dir: &Path,
+async fn save_environment_cache_entry(
+    path: &Path,
     checked_at: &str,
     fingerprint: &str,
     result: &EnvironmentCheckResult,
@@ -209,33 +271,80 @@ pub(crate) async fn save_environment_cache(
             "Unable to construct environment cache contract: {error}"
         ))
     })?;
-    atomic_write_json(&environment_cache_path(base_dir), &entry).await
+    atomic_write_json(path, &entry).await
 }
 
 pub(crate) async fn load_workbench_preset(
     base_dir: &Path,
 ) -> Result<Option<WorkbenchPreset>, ShellError> {
     let path = workbench_preset_path(base_dir);
-    let Some(raw) = read_optional_bytes(&path, "workbench preset").await? else {
-        return Ok(None);
-    };
-    let entry = match serde_json::from_slice::<WorkbenchPresetEntry>(&raw) {
-        Ok(entry) => entry,
-        Err(error) => {
-            quarantine_file(&path, QuarantineReason::Corrupt).await?;
-            return Err(ShellError::SchemaValidation(format!(
-                "Workbench preset is corrupt and was quarantined: {error}"
-            )));
-        }
-    };
-    if entry.schema_version != WORKBENCH_PRESET_SCHEMA_VERSION {
-        quarantine_file(&path, QuarantineReason::from_version(&entry.schema_version)).await?;
-        return Err(ShellError::SchemaValidation(format!(
-            "Workbench preset schema {} is incompatible with schema {} and was quarantined.",
-            entry.schema_version, WORKBENCH_PRESET_SCHEMA_VERSION
-        )));
+    let outcome = PRESET_TRANSACTIONS
+        .run_remembering(
+            &path,
+            PresetFlightKey,
+            |outcome| matches!(outcome, PresetLoadOutcome::Invalid(_)),
+            || async {
+            let Some(raw) = read_optional_bytes(&path, "workbench preset").await? else {
+                return Ok::<PresetLoadOutcome, ShellError>(PresetLoadOutcome::Missing);
+            };
+            let entry = match serde_json::from_slice::<WorkbenchPresetEntry>(&raw) {
+                Ok(entry) => entry,
+                Err(error) => {
+                    quarantine_file(&path, QuarantineReason::Corrupt).await?;
+                    return Ok(PresetLoadOutcome::Invalid(format!(
+                        "Workbench preset is corrupt and was quarantined: {error}"
+                    )));
+                }
+            };
+            if entry.schema_version != WORKBENCH_PRESET_SCHEMA_VERSION {
+                quarantine_file(
+                    &path,
+                    QuarantineReason::from_version(&entry.schema_version),
+                )
+                .await?;
+                return Ok(PresetLoadOutcome::Invalid(format!(
+                    "Workbench preset schema {} is incompatible with schema {} and was quarantined.",
+                    entry.schema_version, WORKBENCH_PRESET_SCHEMA_VERSION
+                )));
+            }
+            Ok(PresetLoadOutcome::Found(Box::new(entry.preset)))
+            },
+        )
+        .await?;
+    match outcome {
+        PresetLoadOutcome::Missing => Ok(None),
+        PresetLoadOutcome::Found(preset) => Ok(Some(*preset)),
+        PresetLoadOutcome::Invalid(message) => Err(ShellError::SchemaValidation(message)),
     }
-    Ok(Some(entry.preset))
+}
+
+#[cfg(test)]
+async fn load_environment_cache(
+    base_dir: &Path,
+    fingerprint: &str,
+    force_refresh: bool,
+) -> Result<Option<(String, EnvironmentCheckResult)>, ShellError> {
+    let path = environment_cache_path(base_dir);
+    ENVIRONMENT_TRANSACTIONS
+        .exclusive(&path, || async {
+            load_environment_cache_entry(&path, fingerprint, force_refresh).await
+        })
+        .await
+}
+
+#[cfg(test)]
+async fn save_environment_cache(
+    base_dir: &Path,
+    checked_at: &str,
+    fingerprint: &str,
+    result: &EnvironmentCheckResult,
+) -> Result<(), ShellError> {
+    let path = environment_cache_path(base_dir);
+    ENVIRONMENT_TRANSACTIONS
+        .exclusive(&path, || async {
+            save_environment_cache_entry(&path, checked_at, fingerprint, result).await
+        })
+        .await
 }
 
 pub(crate) async fn save_workbench_preset(
@@ -251,10 +360,19 @@ pub(crate) async fn save_workbench_preset(
             "Unable to construct workbench preset contract: {error}"
         ))
     })?;
-    atomic_write_json(&workbench_preset_path(base_dir), &entry).await
+    let path = workbench_preset_path(base_dir);
+    PRESET_TRANSACTIONS
+        .exclusive(&path, || async {
+            let result = atomic_write_json(&path, &entry).await;
+            if result.is_ok() {
+                PRESET_TRANSACTIONS.clear_remembered(&path);
+            }
+            result
+        })
+        .await
 }
 
-async fn quarantine_file(path: &Path, reason: QuarantineReason) -> Result<PathBuf, ShellError> {
+async fn quarantine_file(path: &Path, reason: QuarantineReason) -> Result<(), ShellError> {
     let timestamp = std::time::SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -267,13 +385,14 @@ async fn quarantine_file(path: &Path, reason: QuarantineReason) -> Result<PathBu
     let backup = path.with_file_name(format!(
         "{file_name}.incompatible-{reason}-{timestamp}-{sequence}.bak"
     ));
-    fs::rename(path, &backup).await.map_err(|error| {
-        ShellError::Persistence(format!(
+    match fs::rename(path, &backup).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(ShellError::Persistence(format!(
             "Unable to quarantine incompatible persistence file {}: {error}",
             path.display()
-        ))
-    })?;
-    Ok(backup)
+        ))),
+    }
 }
 
 fn resolve_host_identifier() -> String {
@@ -321,8 +440,8 @@ async fn describe_path(path: Option<&Path>) -> Value {
 mod tests {
     use super::{
         build_environment_fingerprint, environment_cache_path, load_environment_cache,
-        load_workbench_preset, save_environment_cache, save_workbench_preset,
-        workbench_preset_path, QuarantineReason,
+        load_workbench_preset, resolve_environment_cache, save_environment_cache,
+        save_workbench_preset, workbench_preset_path, QuarantineReason,
     };
     use crate::models::config::{
         DecodeConfig, DecodeMode, EncodeConfig, FpsMode, InterpolationConfig, OutputConfig,
@@ -333,8 +452,11 @@ mod tests {
     use crate::runtime::ResolvedRuntimePaths;
     use serde_json::json;
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+    use std::sync::Arc;
     use std::{env, fs};
+    use tokio::sync::Barrier;
+    use tokio::time::{sleep, Duration};
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -468,6 +590,15 @@ mod tests {
         })
     }
 
+    fn quarantined_file_count(dir: &PathBuf, prefix: &str) -> usize {
+        fs::read_dir(dir)
+            .expect("read test dir")
+            .filter_map(Result::ok)
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .filter(|name| name.starts_with(prefix) && name.ends_with(".bak"))
+            .count()
+    }
+
     #[test]
     fn invalid_schema_versions_use_a_path_safe_quarantine_reason() {
         for version in [json!("../escape"), json!({"nested": true}), json!(-1)] {
@@ -560,6 +691,108 @@ mod tests {
         ));
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_corrupt_cache_reads_quarantine_once_and_rebuild_consistently() {
+        let dir = temp_dir("env-concurrent-damaged");
+        fs::write(environment_cache_path(&dir), "{not-json").expect("write invalid cache");
+
+        let readers = (0..16)
+            .map(|_| {
+                let dir = dir.clone();
+                tokio::spawn(
+                    async move { load_environment_cache(&dir, "fingerprint-a", false).await },
+                )
+            })
+            .collect::<Vec<_>>();
+
+        for reader in readers {
+            let entry = reader
+                .await
+                .expect("cache reader task")
+                .expect("corrupt cache is treated as a miss");
+            assert!(entry.is_none());
+        }
+        assert_eq!(
+            quarantined_file_count(&dir, "environment-cache.json.incompatible-corrupt-"),
+            1
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_environment_transactions_probe_once_and_return_one_payload() {
+        let dir = temp_dir("env-concurrent-transaction");
+        fs::write(environment_cache_path(&dir), "{not-json").expect("write invalid cache");
+        let probe_count = Arc::new(AtomicUsize::new(0));
+        let start = Arc::new(Barrier::new(16));
+
+        let callers = (0..16)
+            .map(|index| {
+                let dir = if index % 2 == 0 {
+                    dir.clone()
+                } else {
+                    dir.join(".")
+                };
+                let probe_count = Arc::clone(&probe_count);
+                let start = Arc::clone(&start);
+                tokio::spawn(async move {
+                    start.wait().await;
+                    resolve_environment_cache(&dir, "fingerprint-a", false, || async move {
+                        probe_count.fetch_add(1, Ordering::SeqCst);
+                        sleep(Duration::from_millis(25)).await;
+                        Ok(sample_environment_result())
+                    })
+                    .await
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let mut payloads = Vec::new();
+        for caller in callers {
+            payloads.push(
+                caller
+                    .await
+                    .expect("environment caller task")
+                    .expect("environment transaction"),
+            );
+        }
+        assert_eq!(probe_count.load(Ordering::SeqCst), 1);
+        let expected = serde_json::to_value(&payloads[0]).expect("serialize first payload");
+        assert!(payloads
+            .iter()
+            .all(|payload| serde_json::to_value(payload).expect("serialize payload") == expected));
+    }
+
+    #[tokio::test]
+    async fn completed_environment_flight_reloads_the_persisted_cache() {
+        let dir = temp_dir("env-flight-complete");
+        let probe_count = Arc::new(AtomicUsize::new(0));
+        let first_probe_count = Arc::clone(&probe_count);
+        let first = resolve_environment_cache(&dir, "fingerprint-a", false, || async move {
+            first_probe_count.fetch_add(1, Ordering::SeqCst);
+            Ok(sample_environment_result())
+        })
+        .await
+        .expect("initial probe");
+        let second_probe_count = Arc::clone(&probe_count);
+        let second = resolve_environment_cache(&dir, "fingerprint-a", false, || async move {
+            second_probe_count.fetch_add(1, Ordering::SeqCst);
+            Ok(sample_environment_result())
+        })
+        .await
+        .expect("cached environment");
+
+        assert_eq!(probe_count.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            serde_json::to_value(first.source).expect("serialize source"),
+            json!("probe")
+        );
+        assert_eq!(
+            serde_json::to_value(second.source).expect("serialize source"),
+            json!("cache")
+        );
+        assert_eq!(first.checked_at, second.checked_at);
+    }
+
     #[tokio::test]
     async fn quarantines_non_utf8_environment_cache() {
         let dir = temp_dir("env-non-utf8");
@@ -647,5 +880,66 @@ mod tests {
             &dir,
             "workbench-preset.json.incompatible-corrupt-"
         ));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_corrupt_preset_reads_return_the_same_schema_error() {
+        let dir = temp_dir("preset-concurrent-corrupt");
+        fs::write(workbench_preset_path(&dir), "{not-json").expect("write invalid preset");
+        let start = Arc::new(Barrier::new(16));
+        let readers = (0..16)
+            .map(|index| {
+                let dir = if index % 2 == 0 {
+                    dir.clone()
+                } else {
+                    dir.join(".")
+                };
+                let start = Arc::clone(&start);
+                tokio::spawn(async move {
+                    start.wait().await;
+                    load_workbench_preset(&dir).await
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let mut messages = Vec::new();
+        for reader in readers {
+            match reader.await.expect("preset reader task") {
+                Err(crate::error::ShellError::SchemaValidation(message)) => {
+                    messages.push(message);
+                }
+                other => panic!("all concurrent readers must observe the schema error: {other:?}"),
+            }
+        }
+        assert_eq!(messages.len(), 16);
+        assert!(messages.iter().all(|message| message == &messages[0]));
+        assert_eq!(
+            quarantined_file_count(&dir, "workbench-preset.json.incompatible-corrupt-"),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn saving_a_rebuilt_preset_clears_the_remembered_schema_error() {
+        let dir = temp_dir("preset-rebuild");
+        fs::write(workbench_preset_path(&dir), "{not-json").expect("write invalid preset");
+        assert!(matches!(
+            load_workbench_preset(&dir).await,
+            Err(crate::error::ShellError::SchemaValidation(_))
+        ));
+        assert!(matches!(
+            load_workbench_preset(&dir).await,
+            Err(crate::error::ShellError::SchemaValidation(_))
+        ));
+
+        let preset = sample_preset();
+        save_workbench_preset(&dir, &preset)
+            .await
+            .expect("save rebuilt preset");
+        let loaded = load_workbench_preset(&dir)
+            .await
+            .expect("load rebuilt preset")
+            .expect("rebuilt preset exists");
+        assert_eq!(loaded.encode_config.codec, preset.encode_config.codec);
     }
 }

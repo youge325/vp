@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::error::ShellError;
-use crate::models::{EnvironmentCheckPayload, EnvironmentCheckResult, EnvironmentCheckSource};
+use crate::models::{EnvironmentCheckPayload, EnvironmentCheckResult};
 use crate::persistence;
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks;
@@ -24,33 +24,20 @@ async fn check_environment_impl(
     force_refresh: bool,
 ) -> Result<EnvironmentCheckPayload, ShellError> {
     let fingerprint = persistence::build_environment_fingerprint(&paths).await?;
-
-    if let Some((checked_at, result)) =
-        persistence::load_environment_cache(&paths.app_data_dir, &fingerprint, force_refresh)
-            .await?
-    {
-        return Ok(EnvironmentCheckPayload {
-            result,
-            source: EnvironmentCheckSource::Cache,
-            checked_at,
-        });
-    }
-
-    let result: EnvironmentCheckResult = tasks::run_single_cli_command(
-        &paths,
-        &[String::from("check")],
-        None,
-        "environment check result",
+    persistence::resolve_environment_cache(
+        &paths.app_data_dir,
+        &fingerprint,
+        force_refresh,
+        || async {
+            tasks::run_single_cli_command::<EnvironmentCheckResult>(
+                &paths,
+                "check_environment",
+                &[],
+                None,
+                "environment check result",
+            )
+            .await
+        },
     )
-    .await?;
-    let checked_at = persistence::current_timestamp();
-
-    persistence::save_environment_cache(&paths.app_data_dir, &checked_at, &fingerprint, &result)
-        .await?;
-
-    Ok(EnvironmentCheckPayload {
-        result,
-        source: EnvironmentCheckSource::Probe,
-        checked_at,
-    })
+    .await
 }

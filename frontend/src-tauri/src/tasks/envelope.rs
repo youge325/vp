@@ -1,23 +1,9 @@
-use serde::Deserialize;
 use serde_json::Value;
 
+pub(crate) use crate::generated::BackendTaskEnvelope as NdjsonEnvelope;
 use crate::models::{
-    BackendTaskErrorPayload, ResumeStatusPayload, TaskCompletedPayload, TaskErrorCode,
-    TaskErrorPayload, TaskProgressPayload,
+    ResumeStatusPayload, TaskCompletedPayload, TaskErrorCode, TaskErrorPayload, TaskProgressPayload,
 };
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub(crate) enum NdjsonEnvelope {
-    #[serde(rename = "progress")]
-    Progress(TaskProgressPayload),
-    #[serde(rename = "completed")]
-    Completed(TaskCompletedPayload),
-    #[serde(rename = "error")]
-    Error(BackendTaskErrorPayload),
-    #[serde(rename = "resume_status")]
-    ResumeStatus(ResumeStatusPayload),
-}
 
 #[derive(Debug)]
 pub(crate) enum ClassifiedLine {

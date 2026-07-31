@@ -26,6 +26,7 @@ use crate::tasks::envelope::ClassifiedLine;
 use crate::tasks::readers::{pipe_failure_payload, ProgressBeat, ReaderMessage};
 use crate::tasks::state::StartLease;
 use crate::tasks::stderr::StderrCapture;
+use crate::tasks::subprocess::{spawn_detached_reaper, TERMINATION_REAP_TIMEOUT};
 use crate::tasks::{ProcessControlKind, TaskControlMessage, TaskState};
 
 const DEFAULT_STALL_TIMEOUT_SECS: u64 = 600;
@@ -35,7 +36,6 @@ const PIPE_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 // the IPC-side five-second response deadline expires.
 const PROCESS_CONTROL_TIMEOUT: Duration = Duration::from_secs(4);
 const TERMINAL_EXIT_GRACE: Duration = Duration::from_secs(5);
-const CHILD_KILL_TIMEOUT: Duration = Duration::from_secs(5);
 const CHILD_EXIT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const STALL_TIMEOUT_ENV: &str = "VP_TASK_STALL_TIMEOUT_SECS";
 
@@ -43,7 +43,7 @@ pub(super) struct TaskSupervisorSession<R: Runtime> {
     pub(super) app: AppHandle<R>,
     pub(super) child: AsyncGroupChild,
     pub(super) lease: StartLease,
-    pub(super) root_pid: u32,
+    pub(super) process_controller: Arc<ProcessController>,
     pub(super) control_rx: mpsc::Receiver<TaskControlMessage>,
     pub(super) output_rx: mpsc::Receiver<ReaderMessage>,
     pub(super) stdin_writer: JoinHandle<()>,
@@ -130,30 +130,48 @@ impl<T> Drop for AbortOnDropTask<T> {
 }
 
 struct SupervisedChild {
-    child: AsyncGroupChild,
+    child: Option<AsyncGroupChild>,
 }
 
 impl SupervisedChild {
     fn new(child: AsyncGroupChild) -> Self {
-        Self { child }
+        Self { child: Some(child) }
     }
 
     fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
-        self.child.try_wait()
+        self.child
+            .as_mut()
+            .expect("supervised child is only released during drop")
+            .try_wait()
     }
 
     fn start_kill(&mut self) -> io::Result<()> {
-        self.child.start_kill()
+        self.child
+            .as_mut()
+            .expect("supervised child is only released during drop")
+            .start_kill()
+    }
+
+    #[cfg(test)]
+    fn id(&self) -> Option<u32> {
+        self.child.as_ref().and_then(AsyncGroupChild::id)
     }
 }
 
 impl Drop for SupervisedChild {
     fn drop(&mut self) {
-        // `start_kill` targets the entire command group/job synchronously. It is safe after a
-        // completed wait (InvalidInput) and closes the last orphan window if the supervisor is
-        // aborted or panics before reaching its normal terminal path.
-        if self.child.id().is_some() {
-            let _ = self.child.start_kill();
+        let Some(child) = self.child.take() else {
+            return;
+        };
+        // A panic or task abort unwinds this guard before the monitor releases
+        // the task slot. Transfer the stable group/job handle to a detached
+        // Tokio reaper so start_kill is followed by an actual bounded wait.
+        if child.id().is_some() {
+            spawn_detached_reaper(
+                child,
+                TERMINATION_REAP_TIMEOUT,
+                "supervised backend process group",
+            );
         }
     }
 }
@@ -262,7 +280,54 @@ impl PendingControl {
 }
 
 pub(super) fn spawn_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSession<R>) {
-    tauri::async_runtime::spawn(run_task_supervisor(session));
+    let recovery_app = session.app.clone();
+    let recovery_lease = session.lease.clone();
+    let recovery_stderr = session.stderr_capture.clone();
+    let supervisor = tauri::async_runtime::spawn(run_task_supervisor(session));
+    tauri::async_runtime::spawn(monitor_supervisor(supervisor, move |message| async move {
+        recover_supervisor_join_failure(recovery_app, recovery_lease, recovery_stderr, message)
+            .await;
+    }));
+}
+
+async fn monitor_supervisor<T, F, Fut>(supervisor: JoinHandle<T>, on_join_failure: F)
+where
+    F: FnOnce(String) -> Fut,
+    Fut: Future<Output = ()>,
+{
+    if let Err(error) = supervisor.await {
+        on_join_failure(error.to_string()).await;
+    }
+}
+
+async fn recover_supervisor_join_failure<R: Runtime>(
+    app: AppHandle<R>,
+    lease: StartLease,
+    stderr_capture: StderrCapture,
+    message: String,
+) {
+    // `run_task_supervisor` owns `SupervisedChild` and every pipe/control task. A panic first
+    // unwinds those structured owners: the child guard terminates the process group and the
+    // reader guards abort their tasks. Only then does this monitor receive the JoinError and
+    // atomically publish the one permitted terminal event while releasing the task slot.
+    let payload = supervisor_join_failure_payload(&message, &stderr_capture);
+    let event_app = app.clone();
+    app.state::<TaskState>()
+        .finish_once(&lease, move || {
+            let _ = event_app.emit(TaskEventName::TaskError.as_str(), payload);
+        })
+        .await;
+}
+
+fn supervisor_join_failure_payload(
+    message: &str,
+    stderr_capture: &StderrCapture,
+) -> TaskErrorPayload {
+    backend_error_payload(
+        TaskErrorCode::ProcessFailed,
+        format!("Task supervisor terminated unexpectedly: {message}"),
+        stderr_capture,
+    )
 }
 
 async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSession<R>) {
@@ -270,7 +335,7 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
         app,
         child,
         lease,
-        root_pid,
+        process_controller,
         mut control_rx,
         mut output_rx,
         stdin_writer,
@@ -284,7 +349,6 @@ async fn run_task_supervisor<R: Runtime + 'static>(session: TaskSupervisorSessio
     let mut stdin_writer = AbortOnDropTask::new(stdin_writer);
     let mut stdout_reader = AbortOnDropTask::new(stdout_reader);
     let mut stderr_reader = AbortOnDropTask::new(stderr_reader);
-    let process_controller = Arc::new(ProcessController::new(root_pid));
 
     let mut kill_deadline = None;
     let mut exit_status = None;
@@ -615,7 +679,7 @@ fn request_kill(
             });
         }
     }
-    *kill_deadline = Some(Box::pin(tokio::time::sleep(CHILD_KILL_TIMEOUT)));
+    *kill_deadline = Some(Box::pin(tokio::time::sleep(TERMINATION_REAP_TIMEOUT)));
 }
 
 fn close_control_channel(
@@ -844,8 +908,10 @@ mod tests {
     use super::*;
     use command_group::AsyncCommandGroup;
     use std::process::Stdio;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Mutex;
+
+    use crate::tasks::test_support::assert_process_exited;
 
     static STALL_TIMEOUT_MUTEX: Mutex<()> = Mutex::new(());
 
@@ -1151,6 +1217,44 @@ mod tests {
         }
     }
 
+    #[test]
+    fn supervisor_join_failure_is_a_typed_process_error_with_stderr_context() {
+        let stderr = StderrCapture::new();
+        stderr.record("panic in supervisor worker");
+
+        let payload = supervisor_join_failure_payload("task 17 panicked", &stderr);
+
+        assert!(matches!(payload.code, TaskErrorCode::ProcessFailed));
+        assert!(payload.message.contains("task 17 panicked"));
+        assert_eq!(
+            payload
+                .details
+                .as_ref()
+                .and_then(|details| details.get("traceback"))
+                .and_then(serde_json::Value::as_str),
+            Some("panic in supervisor worker")
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn supervisor_monitor_observes_panics_once() {
+        use std::sync::atomic::AtomicUsize;
+
+        let recoveries = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&recoveries);
+        let supervisor = tauri::async_runtime::spawn(async {
+            panic!("synthetic supervisor panic");
+        });
+
+        monitor_supervisor(supervisor, move |message| async move {
+            assert!(message.contains("synthetic supervisor panic"));
+            observed.fetch_add(1, Ordering::SeqCst);
+        })
+        .await;
+
+        assert_eq!(recoveries.load(Ordering::SeqCst), 1);
+    }
+
     struct BlockingController {
         started: Arc<AtomicBool>,
     }
@@ -1175,14 +1279,15 @@ mod tests {
         });
         let cancel_token = CancellationToken::new();
         let mut control = spawn_process_control_work(controller, ProcessControlKind::Pause, false);
-        let cancel = cancel_token.clone();
-        let trigger = tokio::spawn(async move {
+        tokio::time::timeout(Duration::from_secs(2), async {
             while !started.load(Ordering::Acquire) {
                 tokio::task::yield_now().await;
             }
-            cancel.cancel(CancelReason::User);
-        });
+        })
+        .await
+        .expect("blocking worker must publish its started handshake");
 
+        cancel_token.cancel(CancelReason::User);
         let cancellation_won = tokio::time::timeout(Duration::from_millis(100), async {
             tokio::select! {
                 _ = cancel_token.cancelled() => true,
@@ -1191,7 +1296,6 @@ mod tests {
         })
         .await
         .expect("supervisor select must remain responsive");
-        trigger.await.expect("trigger");
         assert!(cancellation_won);
         let _ = control.await.expect("blocking control worker");
     }
@@ -1374,6 +1478,68 @@ mod tests {
             .kill_on_drop(true)
             .spawn()
             .expect("spawn sleeping process group")
+    }
+
+    #[tokio::test]
+    async fn dropping_a_live_supervised_child_kills_and_reaps_it() {
+        let child = SupervisedChild::new(sleeping_process_group());
+        let pid = child.id().expect("live supervised pid");
+
+        drop(child);
+
+        assert_process_exited(pid, TERMINATION_REAP_TIMEOUT).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn panicking_supervisor_reaps_child_releases_slot_and_finishes_once() {
+        let state = Arc::new(TaskState::default());
+        let lease = state.reserve_start().await.expect("reserve task slot");
+        let (control_tx, _control_rx) = mpsc::channel(1);
+        state
+            .activate(&lease, control_tx)
+            .await
+            .expect("activate task slot");
+
+        let (pid_tx, pid_rx) = oneshot::channel();
+        let supervisor = tauri::async_runtime::spawn(async move {
+            let child = SupervisedChild::new(sleeping_process_group());
+            pid_tx
+                .send(child.id().expect("live supervised pid"))
+                .expect("publish child pid");
+            panic!("synthetic live-child supervisor panic");
+        });
+        let pid = tokio::time::timeout(Duration::from_secs(2), pid_rx)
+            .await
+            .expect("supervisor must publish its child pid")
+            .expect("pid channel");
+
+        let terminal_count = Arc::new(AtomicUsize::new(0));
+        let recovery_count = Arc::clone(&terminal_count);
+        let recovery_state = Arc::clone(&state);
+        let recovery_lease = lease.clone();
+        monitor_supervisor(supervisor, move |message| async move {
+            assert!(message.contains("synthetic live-child supervisor panic"));
+            assert!(
+                recovery_state
+                    .finish_once(&recovery_lease, move || {
+                        recovery_count.fetch_add(1, Ordering::SeqCst);
+                    })
+                    .await
+            );
+            assert!(
+                !recovery_state.finish_once(&recovery_lease, || {}).await,
+                "duplicate recovery must not emit a second terminal event"
+            );
+        })
+        .await;
+
+        assert_eq!(terminal_count.load(Ordering::SeqCst), 1);
+        let next_lease = state
+            .reserve_start()
+            .await
+            .expect("panic recovery must release the task slot");
+        state.rollback_start(&next_lease).await;
+        assert_process_exited(pid, TERMINATION_REAP_TIMEOUT).await;
     }
 
     #[tokio::test]
