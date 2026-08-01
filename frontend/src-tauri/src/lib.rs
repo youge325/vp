@@ -148,6 +148,27 @@ mod tests {
     }
 
     #[test]
+    fn main_window_uses_native_dark_theme() {
+        let config: serde_json::Value =
+            serde_json::from_str(TAURI_CONFIG).expect("valid Tauri config JSON");
+        let main_window = config["app"]["windows"]
+            .as_array()
+            .expect("window configuration array")
+            .iter()
+            .find(|window| window["label"] == "main")
+            .expect("main window configuration");
+
+        assert_eq!(main_window["theme"], "Dark");
+        assert!(
+            main_window
+                .get("decorations")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(true),
+            "the native title bar must remain enabled"
+        );
+    }
+
+    #[test]
     fn command_manifest_contains_exactly_ten_unique_commands() {
         let unique = APP_COMMAND_NAMES.iter().copied().collect::<BTreeSet<_>>();
 

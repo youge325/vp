@@ -13,6 +13,7 @@
       {
         "label": "main",
         "title": "VP Workbench",
+        "theme": "Dark",
         "width": 1280,
         "height": 860,
         "minWidth": 1040,
