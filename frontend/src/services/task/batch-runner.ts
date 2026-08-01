@@ -18,7 +18,7 @@ export function createBatchRunner(deps: BatchRunnerDeps): BatchRunner {
   const queueOps = createQueueOps(deps, {
     handleErrored: (error) => finalizeOps.handleErrored(error),
   })
-  const controlOps = createControlOps(deps, helpers)
+  const controlOps = createControlOps(deps)
   const lifecycle = {
     getCurrentTaskContext: helpers.getCurrentTaskContext,
     getConsoleTaskContext: helpers.getConsoleTaskContext,

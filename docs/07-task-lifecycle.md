@@ -75,7 +75,7 @@ sequenceDiagram
     Spawn->>State: activate(lease, control_tx)
     Spawn->>Spawn: start stdout/stderr readers
     Spawn->>Spawn: start bounded stdin writer
-    Spawn->>Supervisor: TaskSupervisorSession
+    Spawn->>Supervisor: child + dependencies + io + lease
     Spawn-->>UI: Ok
 ```
 
@@ -85,9 +85,9 @@ reader 在写入潜在的大 stdin payload 前启动，避免三 pipe 死锁；s
 ## TaskSupervisor 结构化所有权
 
 [`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 的
-`TaskSupervisorSession` 一次接管：
+私有且唯一的 `TaskSupervisorSession` 构造器一次接管：
 
-- backend child 进程组和 root pid；
+- backend child，并立即建立 `ProcessGroupOwner + ReapTicket`；
 - start lease；
 - control/output channel；
 - stdin writer、stdout reader、stderr reader；
@@ -102,6 +102,8 @@ reader 消息、进程退出、取消、暂停/恢复结果、watchdog 和各类
 panic 时，child 的 kill-on-drop owner 先请求终止，再把稳定 group/job handle 交给进程级 cleanup
 coordinator。协调器持有自己的线程 join handle，持续保有未退出的 child，并通过 `ReapTicket` 发布
 `Reaped/Failed`；join monitor 按原 lease 提交至多一个 `process_failed`，只有确认回收才释放任务槽。
+session 外只存在分组后的 dependency/I/O 输入与最小 panic recovery context，不再有第二个 owned
+session 镜像。
 
 ## NDJSON 与终态仲裁
 
@@ -126,7 +128,7 @@ coordinator。协调器持有自己的线程 join handle，持续保有未退出
 
 stderr 使用 400 行/64 KiB 滚动缓冲，写入 error details 前再截为 8 KiB。无结构化 backend error
 的崩溃会把摘要写入 `task-error.details.traceback`。每条 stdout/stderr 行上限为 1 MiB；这些大小、
-stdin/one-shot deadline 和 5 秒回收期限都来自 manifest v3 生成 spec。
+stdin/one-shot deadline 和 5 秒回收期限都来自 manifest v4 生成 spec。
 
 ## 取消状态
 
@@ -197,10 +199,11 @@ stdout reader 只在收到合法 `progress` envelope 时更新共享 `Instant`�
 
 ## 前端控制请求生命周期
 
-前端 `BatchState.controlPending` 保存未决的 `pause | resume | cancel`。每个控制 attempt 记录单调
-token 和开始时的 `currentId`；异步回复只有在 token、任务 ID、运行态和 pending kind 仍匹配时
-才能提交或回滚。过期回复不会覆盖新任务，也不会清空更新的控制状态。终态 reducer 随后把
-`controlPending`、pause/cancelling 标记和当前任务上下文统一清理。
+前端 `BatchState` 是以 `phase: idle | running | paused | cancelling` 判别的不可变联合，
+`controlPending` 正交保存未决的 `pause | resume | cancel`。每个控制 attempt 记录单调 token、
+开始时的 `currentId` 和完整快照；异步回复只有在 token、任务 ID 和 pending kind 仍匹配时才能
+提交或回滚。过期回复不会覆盖新任务，也不会清空更新的控制状态；终态事件通过同一 reducer
+清理 current/pending。素材状态不再写入 paused/cancelling。
 
 续传冲突的用户选择也使用显式模式：`resume` 重新启动时发送 `force-resume`，`fresh` 发送
 `force-fresh`；`skip` 只推进队列，`cancel` 终止批次。不会用默认 `auto` 再次进入同一冲突。

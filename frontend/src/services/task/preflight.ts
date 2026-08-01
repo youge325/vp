@@ -4,6 +4,8 @@
 // outputDir 是否填写,而不直接耦合 ``MediaItem`` / Pinia store。让规则
 // 与具体 store 形状解耦,未来加新校验项时不会牵动 store schema。
 
+import type { BatchPhase } from '@/types/domain/batch'
+
 interface BatchPreflightItem {
   displayName: string
   inputPath: string | null | undefined
@@ -11,13 +13,13 @@ interface BatchPreflightItem {
 }
 
 interface BatchPreflightInput {
-  isRunning: boolean
+  phase: BatchPhase
   selectedItems: BatchPreflightItem[]
 }
 
 export function evaluateStartReadiness(input: BatchPreflightInput) {
-  if (input.isRunning) {
-    // 运行中按钮被 isRunning 自己管控,不展示额外 disabled 原因。
+  if (input.phase !== 'idle') {
+    // 活动批次由 phase 单点管控,不展示额外 disabled 原因。
     return { ok: false, reason: null }
   }
   if (input.selectedItems.length === 0) {

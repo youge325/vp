@@ -9,7 +9,7 @@ import type {
   TaskRequest,
   TaskErrorPayload,
 } from '@/types/protocol'
-import type { BatchState, ResumeConflictDescriptor } from '@/types/domain/batch'
+import type { BatchEvent, BatchState, ResumeConflictDescriptor } from '@/types/domain/batch'
 import type {
   MediaItem,
   MediaRunState,
@@ -49,7 +49,7 @@ export interface TaskIssuePort {
 
 export interface BatchStatePort {
   getBatch: () => BatchState
-  setBatch: (partial: Partial<BatchState>) => void
+  dispatchBatch: (event: BatchEvent) => void
   setRuntimeIds: (ids: string[]) => void
   setPendingConflict: (descriptor: ResumeConflictDescriptor | null) => void
 }

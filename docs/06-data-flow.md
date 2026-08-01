@@ -69,7 +69,7 @@ graph TD
 ```
 
 `stage-worker` 通过参数接收生成的 `StageWorkerConfig`，只消费 stdin rawvideo、输出 stdout
-rawvideo，并在 stderr 以 manifest v3 的 `stageWorkerEventPrefix` 上报生成的 progress/error event。
+rawvideo，并在 stderr 以 manifest v4 的 `stageWorkerEventPrefix` 上报生成的 progress/error event。
 父进程对单行设置 1 MiB 上限并只解析该前缀后的 JSON；FFmpeg decoder/encoder 与 finalization
 port 由父流水线消费，worker 不穿透 adapter。
 
@@ -132,8 +132,9 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 ### 处理步骤规划
 
 `StageProjection.resolve_workflow()` 先统一计算 target FPS 对应的插帧倍数，再以唯一顺序构造不可变
-投影，并同时返回已解析 workflow、该投影与可选编码 FPS。`prepare_pipeline_preflight()` 将同一个
-`StageProjection` 直接传给 `StagePlan`，不再从 workflow 或 steps 重建第二份投影。投影包含：
+步骤描述，并同时返回已解析 workflow、projection 与可选编码 FPS。preflight 对源媒体调用
+`projection.stages()` 恰好一次，直接物化 `StagePlan`，执行路径不再从 workflow 或 steps 重建投影。
+步骤包含：
 
 - 可选预处理滤镜链
 - 按 `processOrder` 排列的插帧和超分辨率步骤
@@ -141,29 +142,23 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 
 ### StagePlan 构建
 
-[`backend/app/planning/stage_plan.py`](../backend/app/planning/stage_plan.py) 的 `StagePlan` 保存冻结的
-投影、源帧数/时长和可选输出 FPS，并让 `steps` 直接引用 `projection.steps`。步骤顺序、每阶段
-输入/输出帧数、最终 FPS、编码帧数和插帧索引均由该投影派生：
+[`backend/app/planning/stage_plan.py`](../backend/app/planning/stage_plan.py) 的 `StagePlan` 保存源
+`VideoMetadata`、完整 `ProjectedStage` tuple 与可选编码 FPS override。步骤顺序、每阶段输入/输出
+帧数、几何、最终 FPS、编码帧数和插帧步骤均由该 tuple 派生：
 
 ```python
 @dataclass(frozen=True, slots=True)
 class StagePlan:
-    projection: StageProjection
-    source_frames: int
-    source_duration: float
-    output_fps: float | None
-    steps: tuple[ProcessingStep, ...] = field(init=False)
-    total_encoded_frames: int = field(init=False)
-    interpolation_index: int | None = field(init=False)
-    requires_file_pipeline: bool = field(init=False)
-    resume_source_frames: int = field(init=False)
+    source: VideoMetadata
+    stages: tuple[ProjectedStage, ...]
+    encoder_fps_override: float | None
 ```
 
 `prepare_pipeline_preflight()` 将它与输出路径、签名和恢复预检一起封装为不可变 `PreparedRun`；
 `PreparedRun.processing_steps` 和 `final_output_fps` 只投影 `StagePlan` 中的事实，不重复存储。
 `process` 和 `inspect-output` 共享这份准备结果。reporter、callback 和 metrics 属于运行期 observers，
 不进入静态计划。文件流水线选择和恢复帧数也只在 `StagePlan` 派生一次，dispatch、raw 与
-stage-file 执行路径不再各自维护判断函数。
+stage-file 执行路径不再各自维护判断函数；resume/chunk 只投影局部帧数，不重算顺序、尺寸或 FPS。
 
 ## 边界字段与执行映射
 
@@ -257,7 +252,7 @@ graph LR
 
 进度报告包含 `stage_index` 和 `stage_total`，前端据此显示当前处理步骤及步骤总数。规划出的每个
 preprocess filter chain、插帧、超分和 postprocess filter chain 各占一个 stage；顺序与
-`StagePlan.steps` 完全一致。解码与编码是这些 stage 的 I/O 边界，不另维护一套阶段序号。
+`StagePlan.stages` 中的 step 顺序完全一致。解码与编码是这些 stage 的 I/O 边界，不另维护一套阶段序号。
 
 ## Watchdog 数据流
 

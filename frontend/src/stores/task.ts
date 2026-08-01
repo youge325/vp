@@ -1,26 +1,16 @@
-import { reactive, ref } from 'vue'
+import { reactive, readonly, ref } from 'vue'
 import { defineStore } from 'pinia'
-import type { BatchState, ResumeConflictDescriptor } from '@/types/domain/batch'
-
-function createInitialBatch(): BatchState {
-  return {
-    queue: [],
-    currentId: null,
-    completedCount: 0,
-    isRunning: false,
-    isPaused: false,
-    isCancelling: false,
-    controlPending: null,
-  }
-}
+import type { BatchEvent, ResumeConflictDescriptor } from '@/types/domain/batch'
+import { createInitialBatchState, reduceBatchState } from '@/services/task/batch/state'
 
 export const useTaskStore = defineStore('task', () => {
-  const batch = reactive<BatchState>(createInitialBatch())
+  const mutableBatch = reactive(createInitialBatchState())
+  const batch = readonly(mutableBatch)
   const batchRuntimeIds = ref<string[]>([])
   const pendingConflict = ref<ResumeConflictDescriptor | null>(null)
 
-  function setBatch(partial: Partial<BatchState>): void {
-    Object.assign(batch, partial)
+  function dispatchBatch(event: BatchEvent): void {
+    Object.assign(mutableBatch, reduceBatchState(mutableBatch, event))
   }
 
   function setRuntimeIds(ids: string[]): void {
@@ -35,7 +25,7 @@ export const useTaskStore = defineStore('task', () => {
     batch,
     batchRuntimeIds,
     pendingConflict,
-    setBatch,
+    dispatchBatch,
     setRuntimeIds,
     setPendingConflict,
   }

@@ -51,7 +51,7 @@ VP Workbench 的错误边界遵循四条规则：
 
 ## Python：ProcessError
 
-[`backend/app/errors/__init__.py`](../backend/app/errors/__init__.py) 的 `ProcessError` 是 Python
+[`backend/app/errors/process.py`](../backend/app/errors/process.py) 的 `ProcessError` 是 Python
 跨进程失败的标准形式：
 
 ```python
@@ -64,7 +64,8 @@ class ProcessError(Exception):
     ) -> None: ...
 ```
 
-`TaskErrorCode` 直接来自生成边界；`ProcessError.from_exception()` 按异常类型归类。
+`TaskErrorCode` 直接来自生成边界；`ProcessError.from_exception()` 与启动失败共同调用
+`errors/bootstrap.py` 中只依赖标准库和 bootstrap 生成常量的错误码推断。
 `ResumeConflictError` 预置 `resume_conflict` 及结构化 details。
 
 [`backend/app/__main__.py`](../backend/app/__main__.py) 有两个防御边界：

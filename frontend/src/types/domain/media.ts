@@ -10,7 +10,7 @@ import type {
   WorkflowConfig,
 } from '../protocol'
 
-type TaskStatus = 'idle' | 'running' | 'paused' | 'cancelling' | 'completed' | 'error' | 'cancelled'
+export type MediaTaskStatus = 'idle' | 'running' | 'completed' | 'error' | 'cancelled'
 
 export type OperationIssueScope = 'input' | 'encode' | 'task' | 'preset'
 
@@ -21,7 +21,7 @@ export interface OperationIssue {
 
 // 只保留视图实际消费的任务投影;批次级进度由 ``BatchState`` 管理。
 export interface MediaTaskState {
-  status: TaskStatus
+  status: MediaTaskStatus
   logs: string[]
   resumeStatus: ResumeStatusPayload | null
 }

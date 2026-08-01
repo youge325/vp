@@ -7,7 +7,6 @@ import { WORKBENCH_MODULE_BY_KEY } from '@/views/registry'
 import { useBootstrap } from '@/composables/app/useBootstrap'
 import { useEnvironmentChecker } from '@/composables/app/useEnvironmentChecker'
 import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
-import { useCurrentTaskContext } from '@/composables/selectors/useTaskContext'
 import { getTaskStatusLabel } from '@/services/format/labels'
 import { useEnvStore } from '@/stores/env'
 import { useTaskStore } from '@/stores/task'
@@ -17,11 +16,7 @@ const route = useRoute()
 const { recheckEnvironment } = useEnvironmentChecker()
 const envStore = useEnvStore()
 const taskStore = useTaskStore()
-const currentTaskContext = useCurrentTaskContext()
-const taskStatusLabel = computed(() => getTaskStatusLabel(
-  taskStore.batch,
-  currentTaskContext.value.runState?.taskState.status ?? null,
-))
+const taskStatusLabel = computed(() => getTaskStatusLabel(taskStore.batch))
 const presetIssue = useOperationIssue('preset')
 
 useBootstrap()

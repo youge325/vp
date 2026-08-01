@@ -2,7 +2,14 @@ import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { browser } from '@wdio/globals'
 
-type E2EScreenshotName = 'preset-banner' | 'toggle' | 'model-metrics' | 'navigation-rail'
+type E2EScreenshotName =
+  | 'preset-banner'
+  | 'toggle'
+  | 'model-metrics'
+  | 'navigation-rail'
+  | 'task-running'
+  | 'task-paused'
+  | 'task-cancelling'
 
 export async function saveE2EScreenshot(name: E2EScreenshotName): Promise<string | null> {
   const configuredDirectory = process.env.VP_E2E_SCREENSHOT_DIR?.trim()

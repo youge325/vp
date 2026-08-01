@@ -176,7 +176,7 @@ export async function safeInvoke<C extends IpcCommand>(
 逆序执行且不会因单个 unlisten 失败跳过其余资源。非 Tauri 预览只返回不捕获 handler 的空函数。
 Rust 枚举来自同一清单。
 
-## 任务状态机（纯函数 Reducer）
+## 任务与批次状态机（纯函数 Reducer）
 
 [`frontend/src/services/task/events.ts`](../frontend/src/services/task/events.ts) 将 IPC payload 映射为 `MediaTaskState` 变换。这是一个纯函数 reducer，不依赖 Vue/Pinia/Tauri：
 
@@ -184,22 +184,21 @@ Rust 枚举来自同一清单。
 stateDiagram-v2
     [*] --> idle: createIdleTaskState()
     idle --> running: applyTaskProgress
-    running --> paused: applyTaskPaused
-    paused --> running: applyTaskResumed
-    running --> cancelling: applyTaskCancelling
-    cancelling --> cancelled: applyTaskCancelled
-    running --> completed: applyTaskCompleted
-    running --> error: applyTaskError
-    paused --> error: applyTaskError
-    cancelling --> error: applyTaskError
+    running --> completed: transitionTaskStatus
+    running --> error: transitionTaskStatus
+    running --> cancelled: transitionTaskStatus
 ```
 
 关键变换函数：
-- `applyTaskProgress` — 将空闲任务推进为运行中，不覆盖暂停或取消中状态
-- `applyTaskPaused` / `applyTaskResumed` / `applyTaskCancelling` — 更新控制状态
-- `applyTaskCompleted` / `applyTaskError` / `applyTaskCancelled` — 仅写入终态
+- `applyTaskProgress` — 仅将空闲素材推进为运行中
+- `transitionTaskStatus` — 统一写入 `running | completed | error | cancelled` 执行历史
 - `appendTaskLog` — 追加日志并折叠连续阶段进度行（保留最近 300 条）
 - `applyTaskResumeStatus` — 保存续传进度元数据
+
+暂停与取消中不是素材执行历史，而是批次控制状态。`services/task/batch/state.ts` 定义只含
+`phase: idle | running | paused | cancelling`、队列、当前 ID 和正交 `controlPending` 的不可变
+判别联合；所有变化只能经纯 `BatchEvent → BatchState` reducer 提交，不存在 `isRunning`、
+`isPaused`、`isCancelling` 或可变完成计数。
 
 ## 批处理编排
 
@@ -217,7 +216,8 @@ graph LR
     A --> D[events.ts NDJSON 适配]
     B1 --> E[task-context.ts 纯解析规则]
     F[useTaskContext Vue selector] --> E
-    G[TaskConsole / 状态标签] --> F
+    G[TaskConsole] --> F
+    H[状态标签 / 导航 / 渲染按钮] --> I[BatchState phase]
     B3 -. lazy callback .-> B4
     B4 -. lazy callback .-> B3
 ```
@@ -225,10 +225,12 @@ graph LR
 `task-context.ts` 是纯任务上下文 SSOT：先确认媒体项存在，再用该媒体项的 ID 读取
 `MediaRunState`。batch lifecycle 的 `common.ts` 与 Vue 的 `useTaskContext` selector 共同调用它；
 当 `currentId` 已失效时，current context 不携带孤立 run-state，console context 会整体回退到
-active item。conflict、events、control 和 finalize 每次操作只读取一次 context。
+active item。conflict、events 和 finalize 每次操作只读取一次 context；control 只依赖批次 reducer，
+不再改写素材状态。
 
-单项开始时的 `resetItemRunState()` 固定清空日志，批次终结时的
-`resetItemsRunState()` 固定保留各项日志。两种语义由 `mediaRunState` 的两个明确命令表达。
+批次开始时 `resetItemRunState()` 为每个 runtime ID 建立新的空闲历史；完成、错误或取消后保留
+对应素材的终态、日志与恢复元数据。TaskConsole 的完成数按 `batchRuntimeIds` 中素材的
+`completed` 状态实时派生，不在批次状态中维护第二份计数。
 
 `conflict.ts`、`events.ts`、`queue.ts` 与 `finalize.ts` 只接收消费方拥有的
 `TaskContextCapability`、`QueueContinuation`、`FinalizationCapability` 和
@@ -245,9 +247,9 @@ active item。conflict、events、control 和 finalize 每次操作只读取一�
 ### 控制请求的 owner-attempt 语义
 
 `BatchState.controlPending` 保存当前 `pause | resume | cancel` 请求。`control.ts` 为请求分配单调
-token，并记录开始时的 `currentId`；回复只有在 token、任务 ID、运行态和 `controlPending`
-仍匹配时才能提交。这样过期回复既不能覆盖新任务状态，也不能清掉更新的控制请求。控制按钮在
-请求未决时禁用，失败回滚也只由该请求的 owner 执行。
+token，并记录开始时的 `currentId` 与不可变状态快照；回复只有在 token、任务 ID 和
+`controlPending` 仍匹配时才能提交。成功通过同一个 reducer 切换 phase，失败恢复快照；过期回复
+既不能覆盖新任务状态，也不能清掉更新的控制请求。状态标签、导航状态与渲染按钮只读取 phase。
 
 ### Task orchestrator runtime 单例
 

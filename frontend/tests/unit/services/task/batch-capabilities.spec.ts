@@ -12,16 +12,12 @@ type ConflictLifecycle = Parameters<typeof createConflictResolver>[1]
 
 const deps: ConflictDeps = {
   getBatch: () => ({
+    phase: 'idle',
     queue: [],
     currentId: null,
-    completedCount: 0,
-    isRunning: false,
-    isPaused: false,
-    isCancelling: false,
     controlPending: null,
-    pendingConflict: null,
   }),
-  setBatch: vi.fn(),
+  dispatchBatch: vi.fn(),
   setPendingConflict: vi.fn(),
   getMediaItem: () => null,
 }

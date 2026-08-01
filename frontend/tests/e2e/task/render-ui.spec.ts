@@ -1,6 +1,7 @@
 import { expect, test } from '../fixtures'
 import { seedMediaItems, seedTaskConsoleState } from '../utils/media'
 import { openModule } from '../utils/navigation'
+import { saveE2EScreenshot } from '../utils/screenshots'
 import type { TauriPage } from '../utils/wdio-tauri'
 
 const renderControls = (tauriPage: TauriPage) => ({
@@ -40,17 +41,16 @@ test.describe('Render module', () => {
     await openModule(tauriPage, '渲染', '批处理队列')
     const controls = renderControls(tauriPage)
     const pendingCases = [
-      { pending: 'pause' as const, paused: false, pauseLabel: '暂停中...', cancelLabel: '中断批次' },
-      { pending: 'resume' as const, paused: true, pauseLabel: '继续中...', cancelLabel: '中断批次' },
-      { pending: 'cancel' as const, paused: false, pauseLabel: '暂停队列', cancelLabel: '中断中...' },
+      { pending: 'pause' as const, phase: 'running' as const, pauseLabel: '暂停中...', cancelLabel: '中断批次' },
+      { pending: 'resume' as const, phase: 'paused' as const, pauseLabel: '继续中...', cancelLabel: '中断批次' },
+      { pending: 'cancel' as const, phase: 'cancelling' as const, pauseLabel: '暂停队列', cancelLabel: '中断中...' },
     ]
 
     for (const item of pendingCases) {
       const ready = await seedTaskConsoleState({
         completedCount: 0,
         totalCount: 1,
-        isRunning: true,
-        isPaused: item.paused,
+        phase: item.phase,
         controlPending: item.pending,
       })
       test.skip(!ready, 'Cannot seed task console fixture')
@@ -59,6 +59,19 @@ test.describe('Render module', () => {
       await expect(controls.pause).toBeDisabled()
       await expect(controls.cancel).toBeDisabled()
     }
+
+    for (const state of [
+      { phase: 'running' as const, screenshot: 'task-running' as const },
+      { phase: 'paused' as const, screenshot: 'task-paused' as const },
+      { phase: 'cancelling' as const, screenshot: 'task-cancelling' as const },
+    ]) {
+      await seedTaskConsoleState({
+        completedCount: 0,
+        totalCount: 1,
+        phase: state.phase,
+      })
+      await saveE2EScreenshot(state.screenshot)
+    }
   })
 
   test('renders logs, resume progress and a stable completed 100% state', async ({ tauriPage }) => {
@@ -66,7 +79,7 @@ test.describe('Render module', () => {
       logs: ['恢复处理', '编码第 2 段'],
       completedCount: 1,
       totalCount: 2,
-      isRunning: true,
+      phase: 'running',
       resumeStatus: {
         resumed: true,
         completedChunks: 3,
@@ -88,7 +101,7 @@ test.describe('Render module', () => {
       logs: ['任务完成'],
       completedCount: 2,
       totalCount: 2,
-      isRunning: false,
+      phase: 'idle',
     })
     await expect(console.locator('.progress-label')).toHaveText('2 / 2')
     await expect(console.locator('.progress-fill')).toHaveAttribute('style', /width: 100%/)

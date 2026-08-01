@@ -45,11 +45,8 @@ export function groupEncoderProfilesByFamily(
   ]
 }
 
-export function getTaskStatusLabel(batch: BatchState, currentItemStatus: string | null): string {
-  if (batch.isRunning) {
-    return currentItemStatus ?? 'running'
-  }
-  return 'idle'
+export function getTaskStatusLabel(batch: BatchState): string {
+  return batch.phase
 }
 
 export function getEditingScopeLabel(

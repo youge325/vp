@@ -112,7 +112,7 @@ stdout 只承载结构化 task envelope；普通诊断写到 stderr。
 - supervisor 收到 fatal 分类后终止进程组，不继续消费漂移协议。
 
 Python 的所有结构化 task 输出都经
-[`backend/app/protocol/__init__.py`](../backend/app/protocol/__init__.py) 的模块级 `ndjson`
+[`backend/app/protocol/emitter.py`](../backend/app/protocol/emitter.py) 的模块级 `ndjson`
 发射器；调用方必须先构造 manifest 指定的生成 Pydantic payload。生成的 envelope→payload
 映射在写 stdout 前拒绝错误模型、非法字段、负值和 discriminator 漂移，并按 schema 的可选字段
 集合移除空值。发射器用专用锁覆盖序列化、整行 write 和 flush，并发 reporter 不会交错行。
@@ -142,7 +142,7 @@ envelope 或无关事件影响结果选择。
 超时、错误或 future drop 都会 kill-and-reap 其进程组/job。
 
 长任务 `process` 没有总时限，只受 10 秒 stdin、watchdog、terminal exit grace 和回收期限约束。
-manifest v3 的 transport limits 如下：
+manifest v4 的 transport limits 如下：
 
 | 限制 | 值 | 作用域 |
 |------|----|--------|
@@ -152,9 +152,11 @@ manifest v3 的 transport limits 如下：
 | error summary | 8 KiB | 写入结构化错误 details 的最终摘要 |
 | termination/reap | 5 秒 | Rust 子进程组与 Python worker 回收 |
 
-终端进度前缀来自 `protocolConstants.terminalProgressPrefix`；内部 worker 事件前缀来自
-`protocolConstants.stageWorkerEventPrefix`。两者和 limits 都生成到生产语言，reporter、worker
-parser 与前端日志折叠不再硬编码协议字面量。
+终端进度前缀来自 `protocolConstants.terminalProgressPrefix`，TensorRT 生命周期日志前缀来自
+`protocolConstants.tensorRtLogPrefix`，内部 worker 事件前缀来自
+`protocolConstants.stageWorkerEventPrefix`。生成器只向实际消费者语言输出相应常量；reporter、
+worker parser 与前端日志折叠不再硬编码协议字面量。通用门禁拒绝非生成生产代码中的 `VP_*`
+跨进程标记镜像。
 
 ## Python 主进程 ↔ stage-worker
 

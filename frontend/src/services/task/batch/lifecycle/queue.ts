@@ -8,7 +8,7 @@ import {
   type ResumeMode,
 } from '@/types/protocol'
 
-import { createIdleTaskState } from '../../events'
+import { createIdleTaskState, transitionTaskStatus } from '../../events'
 import { buildResumeConflictDescriptor } from '../../resume-classifier'
 
 import type {
@@ -22,7 +22,7 @@ import type {
 } from './types'
 
 type QueueDeps =
-  & Pick<BatchStatePort, 'getBatch' | 'setBatch' | 'setRuntimeIds' | 'setPendingConflict'>
+  & Pick<BatchStatePort, 'getBatch' | 'dispatchBatch' | 'setRuntimeIds' | 'setPendingConflict'>
   & Pick<MediaItemPort, 'getMediaItem' | 'setActiveItem'>
   & Pick<MediaRunStatePort, 'setItemTaskState' | 'resetItemRunState'>
   & Pick<TaskCommandPort, 'startTask' | 'checkResume'>
@@ -34,15 +34,7 @@ export function createQueueOps(
 ): QueueOperations {
   function resetBatchRunState(ids: string[]): void {
     deps.setRuntimeIds([...ids])
-    deps.setBatch({
-      queue: [...ids],
-      currentId: null,
-      completedCount: 0,
-      isRunning: ids.length > 0,
-      isPaused: false,
-      isCancelling: false,
-      controlPending: null,
-    })
+    deps.dispatchBatch({ type: 'started', ids })
 
     for (const id of ids) {
       deps.resetItemRunState(id)
@@ -52,37 +44,22 @@ export function createQueueOps(
   async function runNextQueuedItem(): Promise<void> {
     const queue = [...deps.getBatch().queue]
     const nextId = queue.shift() ?? null
-    deps.setBatch({ queue })
 
     if (!nextId) {
-      deps.setBatch({
-        currentId: null,
-        isRunning: false,
-        isPaused: false,
-        isCancelling: false,
-        controlPending: null,
-      })
+      deps.dispatchBatch({ type: 'item-finalized' })
       return
     }
 
+    deps.dispatchBatch({ type: 'queue-advanced', currentId: nextId, remaining: queue })
+
     const item = deps.getMediaItem(nextId)
     if (!item) {
-      deps.setBatch({ currentId: null })
       await runNextQueuedItem()
       return
     }
 
-    deps.setBatch({
-      currentId: nextId,
-      isPaused: false,
-      isCancelling: false,
-      controlPending: null,
-    })
     deps.setActiveItem(nextId)
-    deps.setItemTaskState(nextId, {
-      ...createIdleTaskState(),
-      status: 'running',
-    })
+    deps.setItemTaskState(nextId, transitionTaskStatus(createIdleTaskState(), 'running'))
 
     let inspection: ResumeInspectionResult | null = null
     try {
@@ -110,7 +87,7 @@ export function createQueueOps(
   }
 
   async function start(ids: string[]): Promise<void> {
-    if (ids.length === 0 || deps.getBatch().isRunning) {
+    if (ids.length === 0 || deps.getBatch().phase !== 'idle') {
       return
     }
     resetBatchRunState(ids)
