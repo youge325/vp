@@ -15,17 +15,22 @@ from app.processing.streaming.runtime_ports import ResumeStatusSink
 from tests.support.streaming_runtime import create_test_manifest, ignore_resume_status, ignore_worker_log
 
 
-def _stage_plan() -> StagePlan:
+def _stage_plan(*, requires_file_pipeline: bool) -> StagePlan:
+    step = (
+        ProcessingStep(
+            algorithm_type="frame_interpolation",
+            algorithm_kwargs={"multi": 2},
+            stage_name="01_frame_interpolation",
+        )
+        if requires_file_pipeline
+        else ProcessingStep(
+            algorithm_type="super_resolution",
+            algorithm_kwargs={"scale_factor": 2.0, "sr_algorithm": "placeholder"},
+            stage_name="01_super_resolution",
+        )
+    )
     return StagePlan(
-        projection=StageProjection(
-            (
-                ProcessingStep(
-                    algorithm_type="super_resolution",
-                    algorithm_kwargs={"scale_factor": 2.0, "sr_algorithm": "placeholder"},
-                    stage_name="01_super_resolution",
-                ),
-            )
-        ),
+        projection=StageProjection((step,)),
         source_frames=4,
         source_duration=4 / 24,
         output_fps=None,
@@ -42,7 +47,7 @@ def _context(
     use_stage_file_pipeline: bool,
     resume_status_sink: ResumeStatusSink = ignore_resume_status,
 ) -> StreamingPipelineContext:
-    stage_plan = _stage_plan()
+    stage_plan = _stage_plan(requires_file_pipeline=use_stage_file_pipeline)
     return StreamingPipelineContext(
         ffmpeg=object(),  # type: ignore[arg-type]
         input_path=str(tmp_path / "input.mp4"),
@@ -61,8 +66,6 @@ def _context(
             stage_plan=stage_plan,
             signature="sig",
             config_snapshot={},
-            use_stage_file_pipeline=use_stage_file_pipeline,
-            resume_source_frames=4,
             output_width=640,
             output_height=360,
             segment_frames=1000,
@@ -97,7 +100,7 @@ def test_run_streaming_pipeline_dispatches_stage_file_pipeline_and_emits_resume_
     result = run_streaming_pipeline(context=context)
 
     assert result == 11
-    assert events == [(0, 4)]
+    assert events == [(0, 7)]
     assert calls == {"context": context}
 
 

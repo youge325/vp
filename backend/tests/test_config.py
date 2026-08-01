@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from app import config
 from app.config import _Settings
 
 
@@ -29,6 +30,20 @@ def _build_settings(runtime_root: str | Path, *, app_root: Path) -> _Settings:
         FFPROBE_PATH="",
         RIFE_MODEL_DIR="",
     )
+
+
+def test_external_ffmpeg_paths_are_resolved_once_in_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    lookups: list[str] = []
+    monkeypatch.setattr(config.shutil, "which", lambda name: lookups.append(name) or f"resolved-{name}")
+
+    resolved = _build_settings("", app_root=tmp_path)
+
+    assert resolved.FFMPEG_PATH == "resolved-ffmpeg"
+    assert resolved.FFPROBE_PATH == "resolved-ffprobe"
+    assert lookups == ["ffmpeg", "ffprobe"]
 
 
 @pytest.mark.parametrize(("tool_name", "setting_name"), [("ffmpeg", "FFMPEG_PATH"), ("ffprobe", "FFPROBE_PATH")])

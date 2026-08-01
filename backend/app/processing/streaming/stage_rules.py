@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from app.planning.processing_steps import ProcessingStep
-from app.planning.stage_plan import StagePlan
 
 
 def stage_tensor_backend_name(step: ProcessingStep) -> str | None:
@@ -21,22 +20,7 @@ def stage_progress_total(step: ProcessingStep, input_frame_count: int, output_fr
     return max(output_frame_count, 1)
 
 
-def resolve_stage_plan_output_dimensions(
-    stage_plan: StagePlan,
-    *,
-    source_width: int,
-    source_height: int,
-) -> tuple[int, int]:
-    return stage_plan.projection.output_dimensions(source_width, source_height)
-
-
-def stage_requires_file_pipeline(step: ProcessingStep) -> bool:
-    return step.descriptor.requires_file_pipeline
-
-
 __all__ = [
-    "resolve_stage_plan_output_dimensions",
     "stage_progress_total",
-    "stage_requires_file_pipeline",
     "stage_tensor_backend_name",
 ]

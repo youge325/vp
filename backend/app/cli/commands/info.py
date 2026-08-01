@@ -9,8 +9,8 @@ from app.cli.commands._guards import ensure_ffmpeg_available
 from app.errors import ProcessError, TaskErrorCode, raise_error
 from app.generated.contracts import VideoInfo
 from app.generated.protocol_constants import BackendEnvelopeType
+from app.ports.media import VideoInspection, VideoInspectionPort
 from app.protocol import ndjson
-from app.utils.ffmpeg.media_probe import get_primary_video_dimensions
 
 
 def cmd_info(args: argparse.Namespace) -> None:
@@ -22,21 +22,18 @@ def cmd_info(args: argparse.Namespace) -> None:
             details={"input_path": input_path},
         )
 
-    ffmpeg = ensure_ffmpeg_available()
+    inspection_port: VideoInspectionPort = ensure_ffmpeg_available()
 
     try:
-        info = ffmpeg.get_video_info(input_path)
-        fps = ffmpeg.get_fps(input_path)
-        video_codec = ffmpeg.get_primary_video_codec(input_path)
-        width, height = get_primary_video_dimensions(info)
+        inspection: VideoInspection = inspection_port.inspect_video(input_path)
 
         ndjson.emit(
             BackendEnvelopeType.INFO,
             VideoInfo(
-                fps=fps,
-                width=width,
-                height=height,
-                videoCodec=video_codec,
+                fps=inspection.fps,
+                width=inspection.width,
+                height=inspection.height,
+                videoCodec=inspection.video_codec,
             ),
         )
     except Exception as exc:  # pragma: no cover - defensive boundary

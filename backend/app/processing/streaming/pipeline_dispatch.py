@@ -16,7 +16,7 @@ def run_streaming_pipeline(
         context.preflight.stage_plan.total_encoded_frames,
     )
 
-    if context.preflight.use_stage_file_pipeline:
+    if context.preflight.stage_plan.requires_file_pipeline:
         return run_stage_file_pipeline(context=context)
 
     return run_raw_streaming_pipeline(context=context)

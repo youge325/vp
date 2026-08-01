@@ -9,11 +9,6 @@ from app.planning.stage_plan import build_stage_plan
 from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
 from app.processing.streaming.pipeline_context import StreamingPipelinePreflight
-from app.processing.streaming.pipeline_rules import (
-    resolved_output_dimensions,
-    should_use_stage_file_pipeline,
-    stage_file_resume_source_frames,
-)
 
 
 def build_streaming_pipeline_preflight(
@@ -44,24 +39,13 @@ def build_streaming_pipeline_preflight(
         processing_steps=projection.steps,
         video_info=video_info,
     )
-    use_stage_file_pipeline = should_use_stage_file_pipeline(stage_plan)
-    resume_source_frames = (
-        stage_file_resume_source_frames(stage_plan, video_info.source_frames)
-        if use_stage_file_pipeline
-        else video_info.source_frames
-    )
-    output_width, output_height = resolved_output_dimensions(
-        video_info=video_info,
-        stage_plan=stage_plan,
-    )
+    output_width, output_height = stage_plan.projection.output_dimensions(video_info.width, video_info.height)
 
     return StreamingPipelinePreflight(
         video_info=video_info,
         stage_plan=stage_plan,
         signature=identity.signature,
         config_snapshot=identity.config_snapshot,
-        use_stage_file_pipeline=use_stage_file_pipeline,
-        resume_source_frames=resume_source_frames,
         output_width=output_width,
         output_height=output_height,
         segment_frames=int(output_config["segmentFrames"]),

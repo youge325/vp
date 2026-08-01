@@ -54,8 +54,6 @@ def _context(
             stage_plan=stage_plan,
             signature="sig",
             config_snapshot={},
-            use_stage_file_pipeline=False,
-            resume_source_frames=source_frames,
             output_width=1,
             output_height=1,
             segment_frames=1,
