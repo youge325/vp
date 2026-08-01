@@ -22,7 +22,7 @@ use crate::process_control::ProcessController;
 use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks::builder::{build_process_command, spawn_no_window_group};
 use crate::tasks::cleanup::own_late_cleanup;
-use crate::tasks::controller::{spawn_task_supervisor, TaskSupervisorSession};
+use crate::tasks::controller::{spawn_task_supervisor, SupervisorDependencies, SupervisorIo};
 use crate::tasks::ports::{TaskEventSink, TaskLifecyclePort, TauriTaskPorts};
 use crate::tasks::readers::{
     spawn_stderr_reader, spawn_stdin_writer, spawn_stdout_reader, ProgressBeat,
@@ -144,7 +144,6 @@ pub(crate) async fn spawn_task<R: Runtime + 'static>(
             ShellError::RuntimeResolution("Unable to capture backend stderr.".to_string()).into(),
         );
     };
-    let cancel_token = lease.cancellation_token();
     let stderr_capture = StderrCapture::new();
     let progress_beat: ProgressBeat = Arc::new(Mutex::new(Instant::now()));
     let (control_tx, control_rx) = mpsc::channel(8);
@@ -167,20 +166,19 @@ pub(crate) async fn spawn_task<R: Runtime + 'static>(
     let tauri_ports = Arc::new(TauriTaskPorts::new(app));
     let event_sink: Arc<dyn TaskEventSink> = tauri_ports.clone();
     let lifecycle: Arc<dyn TaskLifecyclePort> = tauri_ports;
-    spawn_task_supervisor(TaskSupervisorSession {
-        event_sink,
-        lifecycle,
+    spawn_task_supervisor(
         child,
         lease,
-        process_controller,
-        control_rx,
-        output_rx,
-        stdin_writer,
-        stdout_reader,
-        stderr_reader,
-        stderr_capture,
-        cancel_token,
+        SupervisorDependencies::new(event_sink, lifecycle, process_controller),
+        SupervisorIo::new(
+            control_rx,
+            output_rx,
+            stdin_writer,
+            stdout_reader,
+            stderr_reader,
+            stderr_capture,
+        ),
         progress_beat,
-    });
+    );
     Ok(())
 }
