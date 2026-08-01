@@ -51,18 +51,26 @@ def test_cli_composition_root_closes_the_loaded_cleanup_coordinator(monkeypatch:
 
 def test_close_deadline_race_repeats_without_leaking_threads() -> None:
     class NeverReapedOwner:
+        def __init__(self) -> None:
+            self.started = threading.Event()
+            self.release = threading.Event()
+
         def retry_cleanup(self, *, deadline: float) -> bool:
             assert deadline > 0
+            self.started.set()
+            assert self.release.wait(timeout=1)
             return False
 
     for _attempt in range(100):
         coordinator = _LateCleanupCoordinator(timeout_seconds=0.002, retry_interval_seconds=0.0005)
         owner = NeverReapedOwner()
         coordinator.submit(owner)
+        assert owner.started.wait(timeout=1)
         cleanup_thread = next(
             thread for thread in threading.enumerate() if thread.name == f"vp-late-cleanup-{id(owner)}"
         )
 
+        owner.release.set()
         coordinator.close()
 
         assert not cleanup_thread.is_alive()
