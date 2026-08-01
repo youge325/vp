@@ -1195,6 +1195,21 @@ mod tests {
         .expect(context);
     }
 
+    async fn active_task_fixture() -> (
+        Arc<TaskState>,
+        StartLease,
+        mpsc::Receiver<TaskControlMessage>,
+    ) {
+        let state = Arc::new(TaskState::default());
+        let lease = state.reserve_start().await.expect("reserve task slot");
+        let (control_tx, control_rx) = mpsc::channel(1);
+        state
+            .activate(&lease, control_tx)
+            .await
+            .expect("activate task slot");
+        (state, lease, control_rx)
+    }
+
     struct NoopController;
 
     impl ProcessControl for NoopController {
@@ -2006,27 +2021,15 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn panicking_supervisor_reaps_child_releases_slot_and_finishes_once() {
-        let state = Arc::new(TaskState::default());
-        let lease = state.reserve_start().await.expect("reserve task slot");
-        let (control_tx, _control_rx) = mpsc::channel(1);
-        state
-            .activate(&lease, control_tx)
-            .await
-            .expect("activate task slot");
+        let (state, lease, _control_rx) = active_task_fixture().await;
 
-        let (pid_tx, pid_rx) = oneshot::channel();
+        let (child, mut reap_ticket) =
+            ProcessGroupOwner::new(sleeping_process_group(), "panic test process group");
+        let pid = child.id().expect("live supervised pid");
         let supervisor = tokio::spawn(async move {
-            let (child, ticket) =
-                ProcessGroupOwner::new(sleeping_process_group(), "panic test process group");
-            pid_tx
-                .send((child.id().expect("live supervised pid"), ticket))
-                .expect("publish child pid");
+            assert_eq!(child.id(), Some(pid));
             panic!("synthetic live-child supervisor panic");
         });
-        let (pid, mut reap_ticket) = tokio::time::timeout(Duration::from_secs(2), pid_rx)
-            .await
-            .expect("supervisor must publish its child pid")
-            .expect("pid channel");
 
         let terminal_count = Arc::new(AtomicUsize::new(0));
         let recovery_count = Arc::clone(&terminal_count);
@@ -2061,13 +2064,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn panic_recovery_keeps_slot_closed_until_active_control_work_finishes() {
-        let state = Arc::new(TaskState::default());
-        let lease = state.reserve_start().await.expect("reserve task slot");
-        let (control_tx, _control_rx) = mpsc::channel(1);
-        state
-            .activate(&lease, control_tx)
-            .await
-            .expect("activate task slot");
+        let (state, lease, _control_rx) = active_task_fixture().await;
 
         let (child, reap_ticket) =
             ProcessGroupOwner::new(sleeping_process_group(), "panic control test process group");
