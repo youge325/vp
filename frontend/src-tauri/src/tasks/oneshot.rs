@@ -5,11 +5,10 @@
 
 use std::fmt;
 use std::io;
-use std::process::{Output, Stdio};
+use std::process::Stdio;
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
-use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::{ChildStderr, ChildStdout};
 use tokio::time::{timeout, timeout_at, Instant};
@@ -19,15 +18,22 @@ use crate::generated::{
     BackendOneShotSpec, ERROR_SUMMARY_LIMIT_BYTES, NDJSON_LINE_LIMIT_BYTES,
     ONE_SHOT_STDOUT_LIMIT_BYTES, STDERR_TAIL_LIMIT_BYTES,
 };
-use crate::models::BackendTaskErrorPayload;
 use crate::runtime::ResolvedRuntimePaths;
+use crate::tasks::bounded_io::read_bounded_ndjson_output;
 use crate::tasks::builder::{backend_command, spawn_no_window_group};
-use crate::tasks::envelope::NdjsonEnvelope;
+use crate::tasks::oneshot_envelope::{parse_last_typed_cli_envelope, TypedCliEnvelope};
 use crate::tasks::stderr::retain_tail;
 use crate::tasks::subprocess::{ProcessGroupChild, ProcessGroupOwner, ReapOutcome, ReapTicket};
 const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[cfg(test)]
 const SPAWN_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Debug)]
+struct BoundedOneShotOutput {
+    status: std::process::ExitStatus,
+    stdout: String,
+    stderr: Vec<u8>,
+}
 
 #[cfg(test)]
 struct SpawnHandshake {
@@ -123,7 +129,7 @@ impl BoundedOneShotChild {
         &mut self,
         stdin_payload: Option<Vec<u8>>,
         stdin_timeout: Duration,
-    ) -> Result<Output, BoundedCommandError> {
+    ) -> Result<BoundedOneShotOutput, BoundedCommandError> {
         let mut stdout = self.stdout.take().ok_or_else(|| {
             BoundedCommandError::lifecycle("backend one-shot stdout pipe was not captured")
         })?;
@@ -185,7 +191,7 @@ impl BoundedOneShotChild {
             let mut stdout_bytes = None;
             let mut stderr_bytes = None;
             let mut wait = Box::pin(wait_for_exit(&mut self.child));
-            let mut read_stdout = Box::pin(read_bounded_ndjson(
+            let mut read_stdout = Box::pin(read_bounded_ndjson_output(
                 &mut stdout,
                 ONE_SHOT_STDOUT_LIMIT_BYTES,
                 NDJSON_LINE_LIMIT_BYTES,
@@ -223,7 +229,7 @@ impl BoundedOneShotChild {
             BoundedCommandError::lifecycle("backend one-shot reap ticket was not retained")
         })?;
         confirm_reaped(&reap_ticket)?;
-        Ok(Output {
+        Ok(BoundedOneShotOutput {
             status,
             stdout,
             stderr,
@@ -274,57 +280,6 @@ fn confirm_reaped(ticket: &ReapTicket) -> Result<(), BoundedCommandError> {
     }
 }
 
-#[cfg(test)]
-async fn read_bounded<R: AsyncRead + Unpin>(reader: &mut R, limit: usize) -> io::Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    reader
-        .take((limit as u64) + 1)
-        .read_to_end(&mut bytes)
-        .await?;
-    if bytes.len() > limit {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("backend output exceeded the {limit}-byte contract limit"),
-        ));
-    }
-    Ok(bytes)
-}
-
-async fn read_bounded_ndjson<R: AsyncRead + Unpin>(
-    reader: &mut R,
-    total_limit: usize,
-    line_limit: usize,
-) -> io::Result<Vec<u8>> {
-    let mut bytes = Vec::with_capacity(total_limit.min(8192));
-    let mut chunk = [0_u8; 8192];
-    let mut line_bytes = 0_usize;
-    loop {
-        let count = reader.read(&mut chunk).await?;
-        if count == 0 {
-            return Ok(bytes);
-        }
-        if bytes.len().saturating_add(count) > total_limit {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("backend output exceeded the {total_limit}-byte contract limit"),
-            ));
-        }
-        for byte in &chunk[..count] {
-            line_bytes = line_bytes.saturating_add(1);
-            if line_bytes > line_limit {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("backend output line exceeded the {line_limit}-byte contract limit"),
-                ));
-            }
-            if *byte == b'\n' {
-                line_bytes = 0;
-            }
-        }
-        bytes.extend_from_slice(&chunk[..count]);
-    }
-}
-
 async fn read_retained_tail<R: AsyncRead + Unpin>(
     reader: &mut R,
     limit: usize,
@@ -352,10 +307,10 @@ async fn read_retained_tail<R: AsyncRead + Unpin>(
     }
 }
 
-fn map_reader_result(
-    result: io::Result<Vec<u8>>,
+fn map_reader_result<T>(
+    result: io::Result<T>,
     stream_name: &'static str,
-) -> Result<Vec<u8>, BoundedCommandError> {
+) -> Result<T, BoundedCommandError> {
     result.map_err(|error| {
         BoundedCommandError::lifecycle(format!(
             "unable to read backend one-shot {stream_name}: {error}"
@@ -369,7 +324,7 @@ async fn run_bounded_command(
     deadlines: OneShotDeadlines,
     operation: &str,
     #[cfg(test)] spawn_handshake: Option<SpawnHandshake>,
-) -> Result<Output, BoundedCommandError> {
+) -> Result<BoundedOneShotOutput, BoundedCommandError> {
     if stdin_payload.is_some() {
         command.stdin(Stdio::piped());
     } else {
@@ -445,11 +400,6 @@ async fn run_bounded_command(
     }
 }
 
-enum TypedCliEnvelope<T> {
-    Success(T),
-    Error(BackendTaskErrorPayload),
-}
-
 /// Run a generated application IPC command and deserialize its success payload.
 ///
 /// The manifest-owned contract resolves the private backend subcommand.
@@ -486,7 +436,7 @@ where
     .await
     .map_err(BoundedCommandError::into_shell_error)?;
 
-    let stdout = decode_stdout(output.stdout)?;
+    let stdout = output.stdout;
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stderr_summary = retain_tail(stderr.trim().trim_matches('"'), ERROR_SUMMARY_LIMIT_BYTES);
     let last_envelope = parse_last_typed_cli_envelope(
@@ -521,103 +471,6 @@ where
     }
 }
 
-fn decode_stdout(stdout: Vec<u8>) -> Result<String, ShellError> {
-    String::from_utf8(stdout).map_err(|error| {
-        ShellError::SchemaValidation(format!(
-            "Backend one-shot stdout is not valid UTF-8: {error}"
-        ))
-    })
-}
-
-fn parse_last_typed_cli_envelope<T: DeserializeOwned>(
-    stdout: &str,
-    expected_type: &str,
-    preserve_discriminator: bool,
-    payload_name: &'static str,
-) -> Result<Option<TypedCliEnvelope<T>>, ShellError> {
-    let mut newest_schema_error = None;
-    for line in stdout
-        .lines()
-        .rev()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-    {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-        let Some(kind) = value.get("type").and_then(Value::as_str) else {
-            continue;
-        };
-        if kind == "error" {
-            match serde_json::from_value::<NdjsonEnvelope>(value) {
-                Ok(NdjsonEnvelope::Error(payload)) => {
-                    return Ok(Some(TypedCliEnvelope::Error(payload)));
-                }
-                Ok(_) => unreachable!("the inspected discriminator was `error`"),
-                Err(error) => {
-                    newest_schema_error.get_or_insert_with(|| {
-                        ShellError::SchemaValidation(format!(
-                            "Unable to deserialize backend error envelope: {error}"
-                        ))
-                    });
-                }
-            }
-        } else if kind == expected_type {
-            match deserialize_success_envelope(
-                value,
-                expected_type,
-                preserve_discriminator,
-                payload_name,
-            ) {
-                Ok(payload) => return Ok(Some(TypedCliEnvelope::Success(payload))),
-                Err(error) => {
-                    newest_schema_error.get_or_insert(error);
-                }
-            }
-        }
-    }
-
-    match newest_schema_error {
-        Some(error) => Err(error),
-        None => Ok(None),
-    }
-}
-
-fn deserialize_success_envelope<T: DeserializeOwned>(
-    mut envelope: Value,
-    expected_type: &str,
-    preserve_discriminator: bool,
-    payload_name: &'static str,
-) -> Result<T, ShellError> {
-    // `check` and `info` use a discriminated one-shot envelope whose payload
-    // DTO deliberately excludes the transport-only `type` property. Keep
-    // `resume_inspection.type`: it is part of that command's public result.
-    if !preserve_discriminator {
-        let object = envelope.as_object_mut().ok_or_else(|| {
-            ShellError::SchemaValidation(format!(
-                "Unable to deserialize {payload_name}: expected an object envelope"
-            ))
-        })?;
-        match object.remove("type") {
-            Some(Value::String(kind)) if kind == expected_type => {}
-            Some(other) => {
-                return Err(ShellError::SchemaValidation(format!(
-                    "Unable to deserialize {payload_name}: expected envelope type {expected_type:?}, got {other}"
-                )));
-            }
-            None => {
-                return Err(ShellError::SchemaValidation(format!(
-                    "Unable to deserialize {payload_name}: missing envelope type"
-                )));
-            }
-        }
-    }
-
-    serde_json::from_value(envelope).map_err(|error| {
-        ShellError::SchemaValidation(format!("Unable to deserialize {payload_name}: {error}"))
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use std::io::{Read, Write};
@@ -629,15 +482,17 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::{
-        deadlines_for_spec, decode_stdout, deserialize_success_envelope,
-        parse_last_typed_cli_envelope, read_bounded, read_bounded_ndjson, read_retained_tail,
-        retain_tail, run_bounded_command, spawn_no_window_group, BoundedCommandError,
-        OneShotDeadlines, ProcessGroupOwner, ReapOutcome, SpawnHandshake, TypedCliEnvelope,
-        ERROR_SUMMARY_LIMIT_BYTES, ONE_SHOT_STDOUT_LIMIT_BYTES, SPAWN_HANDSHAKE_TIMEOUT,
+        deadlines_for_spec, read_retained_tail, retain_tail, run_bounded_command,
+        spawn_no_window_group, BoundedCommandError, OneShotDeadlines, ProcessGroupOwner,
+        ReapOutcome, SpawnHandshake, ERROR_SUMMARY_LIMIT_BYTES, ONE_SHOT_STDOUT_LIMIT_BYTES,
+        SPAWN_HANDSHAKE_TIMEOUT,
     };
     use crate::error::ShellError;
     use crate::generated::{CheckEnvironmentSpec, CheckResumeStateSpec, InspectVideoSpec};
     use crate::models::BackendTaskErrorCode;
+    use crate::tasks::oneshot_envelope::{
+        deserialize_success_envelope, parse_last_typed_cli_envelope, TypedCliEnvelope,
+    };
     use crate::tasks::test_support::assert_process_exited;
 
     const FIXTURE_MODE_ENV: &str = "VP_ONESHOT_TEST_MODE";
@@ -736,50 +591,6 @@ mod tests {
         assert_eq!(check.termination, Duration::from_secs(5));
     }
 
-    #[tokio::test]
-    async fn stdout_reader_rejects_bytes_beyond_its_contract_limit() {
-        let mut input = &b"12345"[..];
-        let error = read_bounded(&mut input, 4)
-            .await
-            .expect_err("fifth byte must exceed the limit");
-        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
-        assert!(error.to_string().contains("4-byte contract limit"));
-    }
-
-    #[tokio::test]
-    async fn stdout_reader_rejects_an_oversized_ndjson_line_below_the_total_limit() {
-        let mut input = &b"12345\n6\n"[..];
-        let error = read_bounded_ndjson(&mut input, 32, 4)
-            .await
-            .expect_err("the first NDJSON line exceeds its independent limit");
-
-        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
-        assert!(error.to_string().contains("output line"));
-        assert!(error.to_string().contains("4-byte contract limit"));
-    }
-
-    #[tokio::test]
-    async fn stdout_reader_accepts_multiple_lines_within_both_limits() {
-        let mut input = &b"123\n456\n"[..];
-        let output = read_bounded_ndjson(&mut input, 8, 4)
-            .await
-            .expect("each line and the aggregate are within their limits");
-
-        assert_eq!(output, b"123\n456\n");
-    }
-
-    #[test]
-    fn invalid_utf8_after_a_valid_envelope_is_rejected() {
-        let mut stdout = br#"{"type":"check","value":42}\n"#.to_vec();
-        stdout.push(0xff);
-
-        let error = decode_stdout(stdout).expect_err("invalid trailing bytes must not be ignored");
-        assert!(matches!(
-            error,
-            ShellError::SchemaValidation(message) if message.contains("stdout is not valid UTF-8")
-        ));
-    }
-
     #[test]
     fn backend_error_summary_is_bounded_by_the_protocol_limit() {
         let summary = retain_tail(
@@ -813,7 +624,7 @@ mod tests {
         .expect("fixture exits after observing EOF");
 
         assert!(output.status.success());
-        assert!(String::from_utf8_lossy(&output.stdout).contains("fixture-observed-stdin-eof"));
+        assert!(output.stdout.contains("fixture-observed-stdin-eof"));
     }
 
     #[tokio::test]

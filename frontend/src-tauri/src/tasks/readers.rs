@@ -6,13 +6,14 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 
 use crate::generated::{BackendProcessSpec, StartTaskSpec, NDJSON_LINE_LIMIT_BYTES};
 use crate::models::TaskErrorCode;
+use crate::tasks::bounded_io::read_ndjson_line;
 use crate::tasks::envelope::{classify_line, ClassifiedLine};
 use crate::tasks::stderr::StderrCapture;
 
@@ -37,7 +38,7 @@ pub(super) fn spawn_stdout_reader(
     tokio::spawn(async move {
         let mut reader = BufReader::new(stdout);
         loop {
-            match read_bounded_line(&mut reader, NDJSON_LINE_LIMIT_BYTES).await {
+            match read_ndjson_line(&mut reader, NDJSON_LINE_LIMIT_BYTES).await {
                 Ok(Some(line)) => {
                     let classified = classify_line(&line);
                     if matches!(classified, ClassifiedLine::Progress(_)) {
@@ -73,7 +74,7 @@ pub(super) fn spawn_stderr_reader(
     tokio::spawn(async move {
         let mut reader = BufReader::new(stderr);
         loop {
-            match read_bounded_line(&mut reader, NDJSON_LINE_LIMIT_BYTES).await {
+            match read_ndjson_line(&mut reader, NDJSON_LINE_LIMIT_BYTES).await {
                 Ok(Some(line)) => {
                     let trimmed = line.trim();
                     if trimmed.is_empty() {
@@ -101,49 +102,6 @@ pub(super) fn spawn_stderr_reader(
                 }
             }
         }
-    })
-}
-
-async fn read_bounded_line<R: AsyncBufRead + Unpin>(
-    reader: &mut R,
-    limit: usize,
-) -> std::io::Result<Option<String>> {
-    let mut bytes = Vec::new();
-    loop {
-        let available = reader.fill_buf().await?;
-        if available.is_empty() {
-            if bytes.is_empty() {
-                return Ok(None);
-            }
-            break;
-        }
-        let end = available
-            .iter()
-            .position(|byte| *byte == b'\n')
-            .map_or(available.len(), |index| index + 1);
-        if bytes.len().saturating_add(end) > limit {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("backend pipe line exceeded the {limit}-byte contract limit"),
-            ));
-        }
-        bytes.extend_from_slice(&available[..end]);
-        reader.consume(end);
-        if bytes.last() == Some(&b'\n') {
-            break;
-        }
-    }
-    if bytes.last() == Some(&b'\n') {
-        bytes.pop();
-    }
-    if bytes.last() == Some(&b'\r') {
-        bytes.pop();
-    }
-    String::from_utf8(bytes).map(Some).map_err(|error| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("backend pipe emitted invalid UTF-8: {error}"),
-        )
     })
 }
 
