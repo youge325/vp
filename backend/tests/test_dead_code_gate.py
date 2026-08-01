@@ -14,20 +14,24 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from check_python_dead_code import (  # noqa: E402
+from python_quality.reviewed import (  # noqa: E402
     _FULL_SCAN_ONLY_REVIEWED_SYMBOLS,
     _PRODUCTION_REVIEWED_SYMBOLS,
     _REVIEWED_EXCLUSIONS,
     ReviewedSymbol,
-    _find_unreachable_production_modules,
-    _finding_key,
-    _protected_module_names,
     _rife_module_paths,
-    _scan_unused_code,
-    _unreviewed_findings,
     _validate_handler_symbols,
     _validate_reviewed_exclusions,
     _validate_reviewed_symbols,
+)
+from python_quality.reachability import (  # noqa: E402
+    _find_unreachable_production_modules,
+    _protected_module_names,
+)
+from python_quality.vulture_gate import (  # noqa: E402
+    _finding_key,
+    _scan_unused_code,
+    _unreviewed_findings,
 )
 
 
@@ -86,6 +90,7 @@ def test_dead_code_hook_triggers_for_gate_and_python_sources() -> None:
     pattern = re.compile(hook.group(1))
 
     assert pattern.fullmatch("scripts/check_python_dead_code.py")
+    assert pattern.fullmatch("scripts/python_quality/reachability.py")
     assert pattern.fullmatch("backend/app/config.py")
     assert pattern.fullmatch("backend/tests/test_dead_code_gate.py")
 

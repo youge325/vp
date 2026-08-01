@@ -7,6 +7,7 @@ from pathlib import Path
 from .application_defaults import check_application_default_consumers
 from .catalog import RULES
 from .ipc_checks import _check_command_surface
+from .protocol_markers import check_protocol_marker_literals
 from .python_checks import (
     _check_backend_package_cycles,
     _check_paddlegan_metadata,
@@ -44,6 +45,7 @@ from .typescript_checks import (
 def collect_architecture_issues(root: Path) -> list[str]:
     issues = run_rules(root, RULES)
     issues.extend(_check_command_surface(root))
+    issues.extend(check_protocol_marker_literals(root))
     issues.extend(_check_paddlegan_metadata(root))
     issues.extend(_check_python_algorithm_factory_registry(root))
     issues.extend(_check_python_cli_commands(root))

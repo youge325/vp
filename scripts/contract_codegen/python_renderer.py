@@ -167,6 +167,7 @@ def _render_python_protocol_constants(manifest: dict[str, Any]) -> str:
         "",
         f"TERMINAL_PROGRESS_PREFIX = {json.dumps(constants['terminalProgressPrefix'])}",
         f"STAGE_WORKER_EVENT_PREFIX = {json.dumps(constants['stageWorkerEventPrefix'])}",
+        f"TENSORRT_LOG_PREFIX = {json.dumps(constants['tensorRtLogPrefix'])}",
         f"STAGE_WORKER_COMMAND = ({stage_worker_command})",
         f"STAGE_WORKER_SUBCOMMAND = {json.dumps(stage_worker['subcommand'])}",
         f"STAGE_WORKER_CONFIG_FLAG = {json.dumps(stage_worker['configFlag'])}",

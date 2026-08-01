@@ -6,17 +6,13 @@ import re
 from pathlib import Path
 
 from .rules import read_source, relative_path
+from .rust_source import production_rust_source
 
 _DECLARATION = re.compile(
     r"^\s*pub\((?:crate|super)\)\s+(?:async\s+)?"
     r"(?:const|static|fn|struct|enum|type|trait|mod)\s+([A-Za-z_][A-Za-z0-9_]*)",
     re.MULTILINE,
 )
-
-
-def _production_rust_source(text: str) -> str:
-    marker = re.search(r"^\s*#\s*\[cfg\(test\)\]\s*\n", text, flags=re.MULTILINE)
-    return text[: marker.start()] if marker else text
 
 
 def _top_level_restricted_declarations(text: str) -> list[tuple[str, int]]:
@@ -36,7 +32,7 @@ def _top_level_restricted_declarations(text: str) -> list[tuple[str, int]]:
 def check_rust_restricted_visibility(root: Path) -> list[str]:
     rust_root = root / "frontend/src-tauri/src"
     sources: dict[Path, str] = {
-        path: _production_rust_source(read_source(path, root))
+        path: production_rust_source(read_source(path, root))
         for path in sorted(rust_root.rglob("*.rs"))
         if "generated" not in path.parts
         and "tests" not in path.parts

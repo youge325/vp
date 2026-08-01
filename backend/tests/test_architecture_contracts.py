@@ -25,6 +25,7 @@ from architecture_contracts.ipc_checks import (  # noqa: E402
     _collect_manifest_commands,
     diff_command_surface,
 )
+from architecture_contracts.protocol_markers import check_protocol_marker_literals  # noqa: E402
 from architecture_contracts.python_checks import (  # noqa: E402
     _check_python_algorithm_factory_registry,
     _check_python_boundary_field_consumers,
@@ -44,6 +45,7 @@ from architecture_contracts.rust_checks import (  # noqa: E402
     _find_unconsumed_rust_model_reexports,
 )
 from architecture_contracts.rust_visibility import check_rust_restricted_visibility  # noqa: E402
+from architecture_contracts.rust_source import production_rust_source  # noqa: E402
 from architecture_contracts.script_reachability import check_script_reachability  # noqa: E402
 from architecture_contracts.typescript_checks import (  # noqa: E402
     _check_frontend_dependency_boundaries,
@@ -117,6 +119,46 @@ def test_restricted_rust_visibility_requires_a_non_test_consumer(tmp_path: Path)
     ]
 
 
+def test_rust_production_source_removes_only_cfg_test_items() -> None:
+    source = """#[cfg(test)]
+use crate::TaskState;
+pub(crate) fn production_after_import() {}
+struct Session {
+    value: usize,
+    #[cfg(test)]
+    test_handshake: Option<usize>,
+}
+#[cfg(test)]
+mod tests {
+    const MARKER: &str = "[VP_PROGRESS]";
+}
+pub(super) fn production_after_module() { production_after_import(); }
+"""
+
+    production = production_rust_source(source)
+
+    assert "TaskState" not in production
+    assert "test_handshake" not in production
+    assert "mod tests" not in production
+    assert "production_after_import" in production
+    assert "production_after_module" in production
+    assert production.count("\n") == source.count("\n")
+
+
+def test_rust_visibility_scans_production_after_test_only_import(tmp_path: Path) -> None:
+    rust = tmp_path / "frontend/src-tauri/src"
+    rust.mkdir(parents=True)
+    (rust / "worker.rs").write_text(
+        "#[cfg(test)]\nuse crate::Fixture;\npub(crate) fn orphan_after_test_import() {}\n",
+        encoding="utf-8",
+    )
+
+    assert check_rust_restricted_visibility(tmp_path) == [
+        "restricted Rust symbol has no production consumer: "
+        "frontend/src-tauri/src/worker.rs:3 `orphan_after_test_import`"
+    ]
+
+
 def test_rust_dev_dependency_usage_in_compile_fail_fixtures_is_counted(tmp_path: Path) -> None:
     crate = tmp_path / "frontend/src-tauri"
     (crate / "src").mkdir(parents=True)
@@ -137,13 +179,13 @@ def test_rust_dev_dependency_usage_in_compile_fail_fixtures_is_counted(tmp_path:
     ]
 
 
-def test_manifest_command_reader_accepts_schema_version_three(tmp_path: Path) -> None:
+def test_manifest_command_reader_accepts_schema_version_four(tmp_path: Path) -> None:
     contracts = tmp_path / "contracts"
     contracts.mkdir()
     (contracts / "ipc-manifest.json").write_text(
         json.dumps(
             {
-                "schemaVersion": 3,
+                "schemaVersion": 4,
                 "commands": [
                     {"name": "start_task", "args": {"request": "TaskRequest"}, "result": "void"},
                 ],
@@ -153,6 +195,40 @@ def test_manifest_command_reader_accepts_schema_version_three(tmp_path: Path) ->
     )
 
     assert set(_collect_manifest_commands(tmp_path)) == {"start_task"}
+
+
+def test_protocol_marker_gate_rejects_declared_and_unknown_literal_mirrors(tmp_path: Path) -> None:
+    contracts = tmp_path / "contracts"
+    contracts.mkdir()
+    (contracts / "ipc-manifest.json").write_text(
+        json.dumps(
+            {
+                "protocolConstants": {
+                    "terminalProgressPrefix": "[VP_PROGRESS]",
+                    "stageWorkerEventPrefix": "VP_STAGE_EVENT ",
+                    "tensorRtLogPrefix": "[VP_TRT]",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    backend = tmp_path / "backend/app"
+    frontend = tmp_path / "frontend/src"
+    rust = tmp_path / "frontend/src-tauri/src"
+    backend.mkdir(parents=True)
+    frontend.mkdir(parents=True)
+    rust.mkdir(parents=True)
+    (backend / "consumer.py").write_text('PREFIX = "[VP_TRT]"\n', encoding="utf-8")
+    (frontend / "consumer.ts").write_text("const prefix = '[VP_UNKNOWN]'\n", encoding="utf-8")
+    (rust / "consumer.rs").write_text(
+        '#[cfg(test)]\nconst TEST_ONLY: &str = "[VP_PROGRESS]";\nconst ENV: &str = "VP_RUNTIME_ROOT";\n',
+        encoding="utf-8",
+    )
+
+    assert check_protocol_marker_literals(tmp_path) == [
+        "hard-coded protocol marker `[VP_TRT]`: backend/app/consumer.py:1",
+        "undeclared protocol marker `[VP_UNKNOWN]`: frontend/src/consumer.ts:1",
+    ]
 
 
 def test_frontend_dependency_boundaries_reject_protocol_submodule_import(tmp_path: Path) -> None:

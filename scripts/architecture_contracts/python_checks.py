@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .graph_ast import _find_dependency_cycles, _parse_python
 from .python_ast import literal_name_registry, literal_string_keys, literal_string_pair_registry
+from .python_modules import python_module_name
 from .rules import ContractParseError, read_source, relative_path
 
 
@@ -612,7 +613,7 @@ def _check_python_package_reexports(root: Path) -> list[str]:
     ]
     issues: list[str] = []
     for init_path in (path for path in production_paths if path.name == "__init__.py"):
-        package_module = _python_module_name(app_root, init_path)
+        package_module = python_module_name(app_root, init_path)
         consumers = [read_source(path, root) for path in production_paths if path != init_path]
         issues.extend(
             f"unconsumed Python package re-export `{name}`: {relative_path(init_path, root)}"
@@ -636,7 +637,7 @@ def _check_python_module_exports(root: Path) -> list[str]:
     ]
     module_sources = [
         (
-            _python_module_name(app_root, path),
+            python_module_name(app_root, path),
             path.name == "__init__.py",
             read_source(path, root),
             path,
@@ -657,13 +658,6 @@ def _check_python_module_exports(root: Path) -> list[str]:
             for name in sorted(_find_unconsumed_python_module_exports(module_name, source, consumers))
         )
     return issues
-
-
-def _python_module_name(app_root: Path, path: Path) -> str:
-    parts = list(path.relative_to(app_root.parent).with_suffix("").parts)
-    if parts[-1] == "__init__":
-        parts.pop()
-    return ".".join(parts)
 
 
 def _is_inert_package_statement(statement: ast.stmt, *, first: bool) -> bool:
@@ -748,7 +742,7 @@ def _check_python_cli_commands(root: Path) -> list[str]:
     for path in sorted(command_root.glob("*.py")):
         if path.name.startswith("_"):
             continue
-        module = _python_module_name(root / "backend/app", path)
+        module = python_module_name(root / "backend/app", path)
         tree = _parse_python(path, root)
         implementations.update(
             (module, statement.name)

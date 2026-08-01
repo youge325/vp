@@ -1,7 +1,7 @@
 // Pure MediaTaskState reducers. Task errors are displayed through issueStore;
 // this state retains only status, compacted logs and resume metadata.
 
-import { TERMINAL_PROGRESS_PREFIX } from '@/types/protocol'
+import { TERMINAL_PROGRESS_PREFIX, TENSORRT_LOG_PREFIX } from '@/types/protocol'
 import type { ResumeStatusPayload, TaskLogPayload } from '@/types/protocol'
 import type { MediaTaskState } from '@/types/domain/media'
 
@@ -9,8 +9,6 @@ const escapedProgressPrefix = TERMINAL_PROGRESS_PREFIX.replace(/[.*+?^${}()|[\]\
 const STAGE_PROGRESS_KEY_RE = new RegExp(
   `^${escapedProgressPrefix}\\s+\\[(\\d+\\/\\d+\\s+[^\\]]+)\\]`,
 )
-const TENSORRT_LOG_PREFIX = '[VP_TRT]'
-
 type TaskLogLineKind = 'progress' | 'tensorrt' | 'default'
 
 function classifyTaskLogLine(line: string): TaskLogLineKind {

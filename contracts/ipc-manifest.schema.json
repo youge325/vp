@@ -17,17 +17,21 @@
   ],
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "const": 3 },
+    "schemaVersion": { "const": 4 },
     "protocolConstants": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["terminalProgressPrefix", "stageWorkerEventPrefix"],
+      "required": ["terminalProgressPrefix", "stageWorkerEventPrefix", "tensorRtLogPrefix"],
       "properties": {
         "terminalProgressPrefix": {
           "type": "string",
           "minLength": 1
         },
         "stageWorkerEventPrefix": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tensorRtLogPrefix": {
           "type": "string",
           "minLength": 1
         }

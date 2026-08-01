@@ -30,3 +30,4 @@ export interface TaskEventPayloadMap {
 }
 
 export const TERMINAL_PROGRESS_PREFIX = '[VP_PROGRESS]'
+export const TENSORRT_LOG_PREFIX = '[VP_TRT]'

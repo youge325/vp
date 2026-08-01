@@ -10,7 +10,7 @@ from typing import Any, NamedTuple, Sequence
 import numpy as np
 
 from app.algorithms.paddle.paddlegan_vsr.tensor_codec import as_numpy, shape_list
-from app.protocol.process_markers import TENSORRT_LOG_PREFIX
+from app.generated.protocol_constants import TENSORRT_LOG_PREFIX
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)

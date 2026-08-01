@@ -192,6 +192,7 @@ def test_protocol_constants_are_generated_from_the_manifest() -> None:
 
     assert 'TERMINAL_PROGRESS_PREFIX = "[VP_PROGRESS]"' in rendered
     assert 'STAGE_WORKER_EVENT_PREFIX = "VP_STAGE_EVENT "' in rendered
+    assert 'TENSORRT_LOG_PREFIX = "[VP_TRT]"' in rendered
     assert 'STAGE_WORKER_COMMAND = ("-m", "app")' in rendered
     assert 'STAGE_WORKER_SUBCOMMAND = "stage-worker"' in rendered
     assert 'STAGE_WORKER_CONFIG_FLAG = "--config-json"' in rendered
@@ -203,7 +204,9 @@ def test_protocol_constants_are_generated_from_the_manifest() -> None:
     assert "NDJSON_LINE_LIMIT_BYTES = 1048576" in bootstrap
     assert "ERROR_SUMMARY_LIMIT_BYTES = 8192" in bootstrap
     assert "ONE_SHOT_STDOUT_LIMIT_BYTES = 8388608" in rendered
-    assert "TERMINAL_PROGRESS_PREFIX = '[VP_PROGRESS]'" in _render_typescript_events(manifest)
+    typescript = _render_typescript_events(manifest)
+    assert "TERMINAL_PROGRESS_PREFIX = '[VP_PROGRESS]'" in typescript
+    assert "TENSORRT_LOG_PREFIX = '[VP_TRT]'" in typescript
 
 
 def test_rust_backend_protocol_adapters_are_generated_from_the_manifest() -> None:
