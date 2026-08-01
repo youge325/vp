@@ -79,7 +79,7 @@ class _LateCleanupCoordinator:
 
     def _run(self, owner_id: int, owner: _LateCleanupOwner, deadline: float) -> None:
         try:
-            while time.monotonic() < deadline:
+            while True:
                 try:
                     cleanup_finished = owner.retry_cleanup(deadline=deadline)
                 except BaseException:  # pragma: no cover - last-resort ownership boundary
@@ -88,8 +88,9 @@ class _LateCleanupCoordinator:
                 if cleanup_finished:
                     return
                 remaining = deadline - time.monotonic()
-                if remaining > 0:
-                    time.sleep(min(self._retry_interval_seconds, remaining))
+                if remaining <= 0:
+                    break
+                time.sleep(min(self._retry_interval_seconds, remaining))
             logging.getLogger(__name__).error(
                 "Late process cleanup exceeded the %.3fs termination deadline",
                 self._timeout_seconds,
