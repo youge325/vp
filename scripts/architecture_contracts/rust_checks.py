@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .graph_ast import _find_dependency_cycles, _find_matching, _split_top_level_commas
 from .rules import ContractParseError, read_source, relative_path
+from .rust_source import production_rust_source
 
 
 def _find_unconsumed_rust_model_reexports(model_mod_text: str, consumer_texts: list[str]) -> set[str]:
@@ -54,7 +55,7 @@ def _check_rust_model_reexports(root: Path) -> list[str]:
     model_mod_path = model_root / "mod.rs"
     rust_root = root / "frontend/src-tauri/src"
     consumer_texts = [
-        re.split(r"^\s*#\[cfg\(test\)\]", read_source(path, root), maxsplit=1, flags=re.MULTILINE)[0]
+        production_rust_source(read_source(path, root))
         for path in sorted(rust_root.rglob("*.rs"))
         if model_root not in path.parents
     ]

@@ -1,9 +1,10 @@
 {
   "$schema": "./ipc-manifest.schema.json",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "protocolConstants": {
     "terminalProgressPrefix": "[VP_PROGRESS]",
-    "stageWorkerEventPrefix": "VP_STAGE_EVENT "
+    "stageWorkerEventPrefix": "VP_STAGE_EVENT ",
+    "tensorRtLogPrefix": "[VP_TRT]"
   },
   "protocolLimits": {
     "ndjsonLineBytes": 1048576,

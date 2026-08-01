@@ -93,6 +93,7 @@ def _render_typescript_events(manifest: dict[str, Any]) -> str:
         "}",
         "",
         f"export const TERMINAL_PROGRESS_PREFIX = {constants['terminalProgressPrefix']!r}",
+        f"export const TENSORRT_LOG_PREFIX = {constants['tensorRtLogPrefix']!r}",
         "",
     ]
     return "\n".join(lines)
