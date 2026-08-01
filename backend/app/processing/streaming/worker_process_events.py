@@ -10,7 +10,8 @@ from typing import Protocol, Sequence
 
 from pydantic import TypeAdapter, ValidationError
 
-from app.errors import ProcessError, error_code_to_wire
+from app.errors.codes import error_code_to_wire
+from app.errors.process import ProcessError
 from app.generated.protocol_constants import (
     NDJSON_LINE_LIMIT_BYTES,
     STAGE_WORKER_EVENT_PREFIX,

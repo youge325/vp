@@ -6,11 +6,12 @@ import argparse
 import os
 
 from app.cli.commands._guards import ensure_ffmpeg_available
-from app.errors import ProcessError, TaskErrorCode, raise_error
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError, raise_error
 from app.generated.contracts import VideoInfo
 from app.generated.protocol_constants import BackendEnvelopeType
 from app.ports.media import VideoInspection, VideoInspectionPort
-from app.protocol import ndjson
+from app.protocol.emitter import ndjson
 
 
 def cmd_info(args: argparse.Namespace) -> None:

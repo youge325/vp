@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from app.planning.manifest import ResumeState
 from app.planning.processing_steps import ProcessingStep
-from app.planning.stage_plan import StagePlan
+from app.planning.stage_plan import StagePlan, build_stage_plan
 from app.planning.stage_projection import StageProjection
-from app.ports.media import VideoMetadata
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
     StreamingPipelinePreflight,
@@ -13,6 +12,7 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline
 from app.processing.streaming.runtime_ports import ResumeStatusSink
 from tests.support.streaming_runtime import create_test_manifest, ignore_resume_status, ignore_worker_log
+from tests.support.video_metadata import make_video_metadata
 
 
 def _stage_plan(*, requires_file_pipeline: bool) -> StagePlan:
@@ -29,10 +29,9 @@ def _stage_plan(*, requires_file_pipeline: bool) -> StagePlan:
             stage_name="01_super_resolution",
         )
     )
-    return StagePlan(
-        projection=StageProjection((step,)),
-        source_frames=4,
-        source_duration=4 / 24,
+    return build_stage_plan(
+        StageProjection((step,)),
+        make_video_metadata(4, duration=4 / 24, width=640, height=360, has_audio=False),
         output_fps=None,
     )
 
@@ -55,25 +54,14 @@ def _context(
         decode_config={"mode": "software"},
         encode_config={"codec": "libx264"},
         preflight=StreamingPipelinePreflight(
-            video_info=VideoMetadata(
-                width=640,
-                height=360,
-                source_fps=24.0,
-                source_frames=4,
-                duration=4 / 24,
-                has_audio=False,
-            ),
             stage_plan=stage_plan,
             signature="sig",
             config_snapshot={},
-            output_width=640,
-            output_height=360,
             segment_frames=1000,
         ),
         manifest=create_test_manifest(str(tmp_path / "out.mp4")),
         resume_state=_resume_state(),
         progress_callbacks=[],
-        output_fps=None,
         encode_progress_callback=None,
         metrics=PipelineMetrics(),
         manifest_factory=create_test_manifest,

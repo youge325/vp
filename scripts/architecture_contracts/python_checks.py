@@ -674,7 +674,9 @@ def _check_side_effect_free_python_packages(root: Path) -> list[str]:
         "backend/app/algorithms/pytorch/__init__.py",
         "backend/app/cli/__init__.py",
         "backend/app/cli/commands/__init__.py",
+        "backend/app/errors/__init__.py",
         "backend/app/processing/__init__.py",
+        "backend/app/protocol/__init__.py",
     )
     issues: list[str] = []
     for relative in paths:

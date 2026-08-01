@@ -6,6 +6,7 @@ from app.planning.stage_projection import StageProjection
 from app.processing.streaming.stage_rules import (
     stage_tensor_backend_name,
 )
+from tests.support.video_metadata import make_video_metadata
 
 
 def test_stage_rules_centralize_stage_order_and_backend_selection() -> None:
@@ -25,11 +26,15 @@ def test_stage_rules_centralize_stage_order_and_backend_selection() -> None:
             stage_name="02_frame_interpolation",
         ),
     ]
-    stage_plan = build_stage_plan(StageProjection(tuple(steps)), 3, source_duration=1.0, output_fps=None)
+    stage_plan = build_stage_plan(
+        StageProjection(tuple(steps)),
+        make_video_metadata(3, duration=1.0),
+        output_fps=None,
+    )
 
-    assert [step.stage_name for step in stage_plan.steps] == [
+    assert [step.stage_name for step in stage_plan.processing_steps] == [
         "01_super_resolution",
         "02_frame_interpolation",
     ]
     assert stage_tensor_backend_name(steps[0]) == "paddle"
-    assert stage_plan.projection.project_frame_count(steps[1], 3) == 7
+    assert StageProjection.project_frame_count(steps[1], 3) == 7

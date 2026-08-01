@@ -2,13 +2,15 @@ import pytest
 
 from app.adapters.model_availability import LocalModelAvailability
 from app.config import settings
-from app.errors import ProcessError, TaskErrorCode
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError
 from app.planning.processing_steps import ProcessingStep
 from app.planning.stage_plan import build_stage_plan
 from app.planning.stage_projection import StageProjection
 from app.planning.workflow_validation import validate_workflow_requirements
 from app.processing.streaming.stage_worker_config import load_stage_worker_config
 from app.processing.streaming.worker_plans import build_stage_worker_plans
+from tests.support.video_metadata import make_video_metadata
 
 
 class _UnexpectedAvailability:
@@ -268,11 +270,13 @@ def test_paddlegan_vsr_step_carries_super_resolution_runtime_fields():
         "tensor_backend": "paddle",
         "num_frames": 8,
     }
-    stage_plan = build_stage_plan(projection, 12, source_duration=1.0, output_fps=None)
+    stage_plan = build_stage_plan(
+        projection,
+        make_video_metadata(12, duration=1.0, width=64, height=64),
+        output_fps=None,
+    )
     worker_config = build_stage_worker_plans(
         stage_plan=stage_plan,
-        source_width=64,
-        source_height=64,
         source_frame_count=12,
     )[0]
     assert worker_config.stage.algorithm_kwargs.engine == "tensorrt"
@@ -308,11 +312,13 @@ def test_pytorch_interpolation_plus_paddlegan_super_resolution_builds_isolated_s
 
     projection = StageProjection.from_workflow(workflow)
     steps = projection.steps
-    stage_plan = build_stage_plan(projection, 3, source_duration=1.0, output_fps=None)
+    stage_plan = build_stage_plan(
+        projection,
+        make_video_metadata(3, duration=1.0, width=64, height=64),
+        output_fps=None,
+    )
     worker_configs = build_stage_worker_plans(
         stage_plan=stage_plan,
-        source_width=64,
-        source_height=64,
         source_frame_count=3,
     )
 
@@ -337,11 +343,13 @@ def test_paddlegan_num_frames_survives_stage_worker_config_roundtrip(tmp_path):
         },
         stage_name="01_super_resolution",
     )
-    stage_plan = build_stage_plan(StageProjection((step,)), 12, source_duration=1.0, output_fps=None)
+    stage_plan = build_stage_plan(
+        StageProjection((step,)),
+        make_video_metadata(12, duration=1.0, width=64, height=64),
+        output_fps=None,
+    )
     worker_config = build_stage_worker_plans(
         stage_plan=stage_plan,
-        source_width=64,
-        source_height=64,
         source_frame_count=12,
     )[0]
 

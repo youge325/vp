@@ -12,6 +12,7 @@ from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.queues import StreamEnd, _ENCODE_END
 from app.processing.streaming.worker_runtime_config import WorkerPipelineRuntimeConfig
 from tests.support.streaming_runtime import ignore_worker_log
+from tests.support.video_metadata import make_video_metadata
 
 
 def _runtime_config(stage_plan, *, start_source_frame: int = 0) -> WorkerPipelineRuntimeConfig:
@@ -21,9 +22,6 @@ def _runtime_config(stage_plan, *, start_source_frame: int = 0) -> WorkerPipelin
         decode_config={"mode": "software"},
         stage_plan=stage_plan,
         progress_callbacks=[],
-        source_width=1,
-        source_height=1,
-        source_frames=3,
         resume_state=ResumeState(
             start_source_frame=start_source_frame,
             completed_output_frames=0,
@@ -46,7 +44,11 @@ def _super_resolution_plan():
         },
         stage_name="01_super_resolution",
     )
-    return build_stage_plan(StageProjection((step,)), 3, source_duration=1.0, output_fps=None)
+    return build_stage_plan(
+        StageProjection((step,)),
+        make_video_metadata(3, duration=1.0, width=1, height=1),
+        output_fps=None,
+    )
 
 
 def test_worker_pipeline_delegates_runtime_and_emits_stream_end(monkeypatch) -> None:

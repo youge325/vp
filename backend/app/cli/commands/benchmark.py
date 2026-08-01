@@ -11,7 +11,8 @@ from app.benchmark.comparison import compare_reports
 from app.benchmark.reporting import write_json_report, write_markdown_report
 from app.benchmark.runner import BenchmarkOptions, Workload, default_baseline_path, default_work_dir, run_benchmark
 from app.benchmark.scenarios import DEFAULT_SCENARIO
-from app.errors import ProcessError, TaskErrorCode
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError
 
 
 def _load_baseline(path: Path) -> dict[str, Any]:

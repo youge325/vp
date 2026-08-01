@@ -22,9 +22,6 @@ class WorkerPipelineRuntimeConfig:
     decode_config: dict[str, Any]
     stage_plan: StagePlan
     progress_callbacks: list[StageProgressCallback]
-    source_width: int
-    source_height: int
-    source_frames: int
     resume_state: ResumeState
     metrics: PipelineMetrics
     worker_log_sink: WorkerLogSink

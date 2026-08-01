@@ -27,7 +27,7 @@ from app.generated.contracts import (
 )
 from app.generated.protocol_constants import BackendEnvelopeType
 from app.planning.manifest import ResumeInspection
-from app.protocol import ndjson
+from app.protocol.emitter import ndjson
 from app.utils.file_utils import prepare_default_output_path
 
 

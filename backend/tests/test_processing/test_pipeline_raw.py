@@ -6,9 +6,8 @@ from typing import Any
 import pytest
 
 from app.planning.manifest import ResumeState, SegmentManifest
-from app.planning.stage_plan import StagePlan
+from app.planning.stage_plan import build_stage_plan
 from app.planning.stage_projection import StageProjection
-from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
@@ -18,22 +17,21 @@ from app.processing.streaming.pipeline_raw import run_raw_streaming_pipeline
 from app.processing.streaming.queues import EncodedFrame, SegmentBoundary, StreamEnd, _ENCODE_END
 from tests.support.raw_video import FakeRawVideoMedia, frame as _frame
 from tests.support.streaming_runtime import create_test_manifest, ignore_resume_status, ignore_worker_log
+from tests.support.video_metadata import make_video_metadata
 
 
 def _context(
     tmp_path: Path,
     *,
     ffmpeg: Any,
-    total_frames: int,
     source_frames: int,
     manifest: SegmentManifest | None = None,
     encode_progress_callback: Any = None,
 ) -> StreamingPipelineContext:
     manifest = manifest or create_test_manifest(str(tmp_path / "out.mp4"))
-    stage_plan = StagePlan(
-        projection=StageProjection(()),
-        source_frames=total_frames,
-        source_duration=total_frames / 24,
+    stage_plan = build_stage_plan(
+        StageProjection(()),
+        make_video_metadata(source_frames, duration=source_frames / 24, width=1, height=1, has_audio=False),
         output_fps=None,
     )
     return StreamingPipelineContext(
@@ -43,25 +41,14 @@ def _context(
         decode_config={"mode": "software"},
         encode_config={"container": "mp4"},
         preflight=StreamingPipelinePreflight(
-            video_info=VideoMetadata(
-                source_fps=24.0,
-                source_frames=source_frames,
-                width=1,
-                height=1,
-                duration=source_frames / 24,
-                has_audio=False,
-            ),
             stage_plan=stage_plan,
             signature="sig",
             config_snapshot={},
-            output_width=1,
-            output_height=1,
             segment_frames=1,
         ),
         manifest=manifest,
         resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
         progress_callbacks=[],
-        output_fps=None,
         encode_progress_callback=encode_progress_callback,
         metrics=PipelineMetrics(),
         manifest_factory=create_test_manifest,
@@ -92,7 +79,6 @@ def test_raw_pipeline_runs_stage_worker_chain_into_segmented_encoder(tmp_path: P
     context = _context(
         tmp_path,
         ffmpeg=ffmpeg,  # type: ignore[arg-type]
-        total_frames=2,
         source_frames=2,
         manifest=manifest,
         encode_progress_callback=lambda frame, _fps, _speed, _time, progress: progress_events.append((frame, progress)),
@@ -128,7 +114,6 @@ def test_raw_pipeline_raises_worker_error_after_encoder_shutdown(tmp_path: Path,
             context=_context(
                 tmp_path,
                 ffmpeg=FakeRawVideoMedia(),  # type: ignore[arg-type]
-                total_frames=0,
                 source_frames=0,
                 manifest=manifest,
             )
@@ -165,7 +150,6 @@ def test_raw_pipeline_stops_and_joins_encoder_when_stage_worker_raises(tmp_path:
             context=_context(
                 tmp_path,
                 ffmpeg=FakeRawVideoMedia(),  # type: ignore[arg-type]
-                total_frames=1,
                 source_frames=1,
                 manifest=create_test_manifest(str(tmp_path / "out.mp4")),
             )

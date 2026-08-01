@@ -194,7 +194,8 @@ def test_benchmark_handler_applies_default_scenario_after_lazy_import() -> None:
 
 def test_cmd_benchmark_writes_reports_and_fails_on_missing_baseline(tmp_path: Path, monkeypatch) -> None:
     from app.cli.commands import benchmark as benchmark_command
-    from app.errors import ProcessError, TaskErrorCode
+    from app.errors.codes import TaskErrorCode
+    from app.errors.process import ProcessError
 
     monkeypatch.setattr(
         benchmark_command,
@@ -254,7 +255,7 @@ def test_cmd_benchmark_update_baseline_uses_single_final_report_write(tmp_path: 
 
 def test_cmd_benchmark_writes_reports_before_rethrowing_invalid_baseline(tmp_path: Path, monkeypatch) -> None:
     from app.cli.commands import benchmark as benchmark_command
-    from app.errors import ProcessError
+    from app.errors.process import ProcessError
 
     (tmp_path / "baseline.json").write_text("{", encoding="utf-8")
     monkeypatch.setattr(

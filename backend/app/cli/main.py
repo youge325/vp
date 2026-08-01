@@ -17,7 +17,8 @@ from collections.abc import Callable
 import importlib
 
 from app.cli.parser import build_parser
-from app.errors import ProcessError, TaskErrorCode, error_code_to_wire, raise_error
+from app.errors.codes import TaskErrorCode, error_code_to_wire
+from app.errors.process import ProcessError, raise_error
 from app.utils.logger import get_logger, setup_logging
 
 logger = get_logger(__name__)

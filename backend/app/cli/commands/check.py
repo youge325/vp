@@ -24,7 +24,7 @@ from app.generated.contracts import (
     TensorBackend,
 )
 from app.generated.protocol_constants import BackendEnvelopeType
-from app.protocol import ndjson
+from app.protocol.emitter import ndjson
 from app.utils.ffmpeg.capabilities import discover_capabilities
 from app.utils.ffmpeg.media_probe import is_available
 from app.utils.onnx_models import scan_onnx_catalog

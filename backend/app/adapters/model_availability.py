@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.errors import TaskErrorCode, raise_error
+from app.errors.codes import TaskErrorCode
+from app.errors.process import raise_error
 from app.planning.processing_steps import ProcessingStep
 from app.utils.onnx_models import resolve_onnx_model_path
 

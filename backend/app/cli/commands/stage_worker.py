@@ -7,12 +7,13 @@ import sys
 import traceback
 
 from app.config import settings
-from app.errors import ProcessError, error_code_to_wire
+from app.errors.codes import error_code_to_wire
+from app.errors.process import ProcessError
 from app.generated.stage_worker_contracts import BackendTaskErrorCode, StageWorkerErrorEvent
 from app.processing.streaming.stage_worker import run_stage_worker_stream
 from app.processing.streaming.stage_worker_config import load_stage_worker_config
 from app.processing.streaming.stage_worker_progress import emit_stage_event
-from app.protocol_encoding import bound_error_fields
+from app.protocol.encoding import bound_error_fields
 
 
 def cmd_stage_worker(args: argparse.Namespace) -> None:

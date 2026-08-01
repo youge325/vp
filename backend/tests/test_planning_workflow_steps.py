@@ -2,6 +2,7 @@
 
 from app.planning.stage_plan import build_stage_plan
 from app.planning.stage_projection import StageProjection
+from tests.support.video_metadata import make_video_metadata
 from app.planning.workflow_steps import resolve_primary_algorithm
 from tests.support.workflow_configs import make_workflow_config as _workflow
 
@@ -61,5 +62,6 @@ def test_stage_plan_projects_interpolation_or_target_timeline():
     workflow = _workflow(fpsMode="multi")
     projection = StageProjection.from_workflow(workflow)
 
-    assert build_stage_plan(projection, 12, source_duration=1.0, output_fps=None).total_encoded_frames == 23
-    assert build_stage_plan(projection, 12, source_duration=1.0, output_fps=60.0).total_encoded_frames == 60
+    source = make_video_metadata(12, duration=1.0)
+    assert build_stage_plan(projection, source, output_fps=None).total_encoded_frames == 23
+    assert build_stage_plan(projection, source, output_fps=60.0).total_encoded_frames == 60

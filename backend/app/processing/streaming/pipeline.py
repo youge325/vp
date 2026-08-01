@@ -37,7 +37,6 @@ def process_video_streaming(
     manifest_factory: ManifestFactoryPort,
     resume_status_sink: ResumeStatusSink,
     worker_log_sink: WorkerLogSink,
-    output_fps: float | None = None,
     encode_progress_callback: EncodeProgressCallback | None = None,
     resume_mode: ResumeMode = "auto",
 ) -> ExecutionResult:
@@ -58,7 +57,6 @@ def process_video_streaming(
         manifest=manifest,
         resume_state=resume_state,
         progress_callbacks=progress_callbacks,
-        output_fps=output_fps,
         encode_progress_callback=encode_progress_callback,
         metrics=metrics,
         manifest_factory=manifest_factory,

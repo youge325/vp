@@ -9,7 +9,8 @@ from unittest.mock import patch
 import pytest
 
 from app.cli.commands import stage_worker as stage_worker_command
-from app.errors import ProcessError, TaskErrorCode
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError
 from app.generated.protocol_constants import STAGE_WORKER_EVENT_PREFIX
 from app.generated.stage_worker_contracts import StageWorkerConfig
 from app.planning.processing_steps import ProcessingStep

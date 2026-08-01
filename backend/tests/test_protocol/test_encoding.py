@@ -4,7 +4,7 @@ import json
 
 from app import __main__ as app_main
 from app.generated.bootstrap_constants import ERROR_SUMMARY_LIMIT_BYTES, NDJSON_LINE_LIMIT_BYTES
-from app.protocol_encoding import bound_error_fields
+from app.protocol.encoding import bound_error_fields
 
 
 def test_bootstrap_error_is_json_safe_and_bounded(capsys) -> None:

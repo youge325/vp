@@ -11,6 +11,7 @@ from app.catalog.model_metrics import (
     PADDLEGAN_MODEL_METRIC_SPECS,
     RIFE_MODEL_METRIC_SPECS,
     ModelMetricSpec,
+    RuntimeMetricSpec,
 )
 from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
 from app.catalog.rife_models import SUPPORTED_MODELS
@@ -109,13 +110,15 @@ def test_metric_projection_bounds_external_diagnostics() -> None:
         label="external.onnx",
         parameter_count=None,
         parameter_bytes=None,
-        gflops_per_megapixel=None,
-        activation_bytes_per_megapixel=None,
-        runtime_overhead_bytes=None,
-        runtime_frame_count=None,
-        input_modulo=None,
-        analysis_status="unknown",
-        analysis_notes=tuple(f"diagnostic-{index}:" + "界" * 1_000 for index in range(100)),
+        runtime=RuntimeMetricSpec(
+            gflops_per_megapixel=None,
+            activation_bytes_per_megapixel=None,
+            runtime_overhead_bytes=None,
+            runtime_frame_count=None,
+            input_modulo=None,
+            analysis_status="unknown",
+            analysis_notes=tuple(f"diagnostic-{index}:" + "界" * 1_000 for index in range(100)),
+        ),
     )
 
     detail = _wire(spec)
@@ -198,3 +201,11 @@ def test_builtin_metric_catalogs_are_immutable_and_match_model_catalogs() -> Non
         operator.setitem(RIFE_MODEL_METRIC_SPECS, "extra", RIFE_MODEL_METRIC_SPECS[SUPPORTED_MODELS[0]])
     with pytest.raises(FrozenInstanceError):
         setattr(PADDLEGAN_MODEL_METRIC_SPECS["edvr"], "label", "mutable")
+
+
+def test_model_and_engine_metrics_share_one_runtime_metric_shape() -> None:
+    spec = PADDLEGAN_MODEL_METRIC_SPECS["ppmsvsr"]
+
+    assert isinstance(spec.runtime, RuntimeMetricSpec)
+    assert all(isinstance(engine, RuntimeMetricSpec) for _, engine in spec.engine_metrics)
+    assert spec.runtime.gflops_per_megapixel == spec.engine_metrics[0][1].gflops_per_megapixel

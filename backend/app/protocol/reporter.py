@@ -25,7 +25,7 @@ from typing import Any, Protocol
 
 from app.generated.contracts import TaskProgressPayload
 from app.generated.protocol_constants import BackendEnvelopeType, TERMINAL_PROGRESS_PREFIX
-from app.protocol import ndjson
+from app.protocol.emitter import ndjson
 
 _TERMINAL_PROGRESS_BAR_WIDTH = 24
 

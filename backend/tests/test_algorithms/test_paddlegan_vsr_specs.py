@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 
 from app.config import settings
-from app.errors import ProcessError, TaskErrorCode
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError
 
 
 def test_paddlegan_catalog_and_factory_registry_are_an_exact_set():

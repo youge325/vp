@@ -4,14 +4,13 @@ from typing import Any
 
 import pytest
 
-from app.errors import ResumeConflictError
+from app.errors.process import ResumeConflictError
 from app.adapters.streaming_runtime import NdjsonResumeStatusSink
 from app.generated.contracts import ResumeStatusPayload
 from app.generated.protocol_constants import BackendEnvelopeType
 from app.planning.manifest import ResumeState, SegmentManifest
-from app.planning.stage_plan import StagePlan
+from app.planning.stage_plan import build_stage_plan
 from app.planning.stage_projection import StageProjection
-from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
@@ -20,6 +19,7 @@ from app.processing.streaming.pipeline_context import (
 from app.processing.streaming.pipeline_lifecycle import finalize_streaming_output, prepare_streaming_manifest
 from tests.support.frame_count_probe import FakeFrameCountProbe
 from tests.support.streaming_runtime import create_test_manifest, ignore_resume_status, ignore_worker_log
+from tests.support.video_metadata import make_video_metadata
 
 
 def _context(
@@ -29,10 +29,9 @@ def _context(
     manifest: SegmentManifest,
     encode_config: dict[str, Any],
 ) -> StreamingPipelineContext:
-    stage_plan = StagePlan(
-        projection=StageProjection(()),
-        source_frames=12,
-        source_duration=0.5,
+    stage_plan = build_stage_plan(
+        StageProjection(()),
+        make_video_metadata(12, duration=0.5, width=1, height=1, has_audio=False),
         output_fps=None,
     )
     return StreamingPipelineContext(
@@ -42,25 +41,14 @@ def _context(
         decode_config={},
         encode_config=encode_config,
         preflight=StreamingPipelinePreflight(
-            video_info=VideoMetadata(
-                width=1,
-                height=1,
-                source_fps=24.0,
-                source_frames=12,
-                duration=0.5,
-                has_audio=False,
-            ),
             stage_plan=stage_plan,
             signature="sig",
             config_snapshot={},
-            output_width=1,
-            output_height=1,
             segment_frames=1000,
         ),
         manifest=manifest,
         resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
         progress_callbacks=[],
-        output_fps=None,
         encode_progress_callback=None,
         metrics=PipelineMetrics(),
         manifest_factory=create_test_manifest,

@@ -9,7 +9,8 @@ from typing import Any, get_args
 
 from pydantic import ValidationError
 
-from app.errors import ProcessError, TaskErrorCode
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError
 from app.generated.contracts import SegmentManifest as SegmentManifestContract
 from app.planning.segment_workspace import SegmentWorkspace
 

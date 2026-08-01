@@ -7,7 +7,12 @@ import traceback
 from typing import Any
 
 from app.generated.bootstrap_constants import BACKEND_TASK_ERROR_CODES
-from app.protocol_encoding import bound_error_fields, encode_bounded_json_line
+from app.protocol.encoding import bound_error_fields, encode_bounded_json_line
+
+try:
+    from app.errors.bootstrap import infer_bootstrap_error_code
+except Exception:  # pragma: no cover - catastrophic bootstrap boundary
+    infer_bootstrap_error_code = None
 
 
 def _emit(payload: dict) -> None:
@@ -55,12 +60,11 @@ def _emit_unhandled_exception(exc: BaseException) -> None:
 
 
 try:
-    from app.errors import ProcessError, error_code_to_wire
-    from app.errors._bootstrap import infer_error_code
+    from app.errors.codes import error_code_to_wire
+    from app.errors.process import ProcessError
 except Exception:  # pragma: no cover - defensive bootstrap boundary
     ProcessError = None
     error_code_to_wire = None
-    infer_error_code = None
 
 
 def _wire_error_code(code: object) -> str:
@@ -74,35 +78,18 @@ def _wire_error_code(code: object) -> str:
 def _bootstrap_error_code(exc: BaseException) -> str:
     """Resolve an error code without depending on a fully-loaded ``app``.
 
-    The primary path delegates to :func:`app.errors._bootstrap.infer_error_code`
-    which is the single source of truth for code inference. The full
-    exception object is forwarded so the bootstrap-mode resolver can run
-    its ``isinstance`` dispatch even before the rest of ``app``
-    is importable. Only when the bootstrap module itself fails to import
-    (catastrophic dependency error before the package finishes loading)
-    do we fall back to a minimal inline pattern set. Keep this inline list
-    short and aligned with the bootstrap module so the two never disagree
-    on the codes they share.
+    The import-safe bootstrap module is the only owner of inference rules.
+    If even that standard-library-only module cannot load, fail closed to the
+    generated protocol's generic error code rather than maintaining a mirror.
     """
-    if infer_error_code is not None:
-        return infer_error_code(exc)
-    # Bootstrap-only fallback: ``app.errors._bootstrap`` failed to import,
-    # so we cannot share rules. Mirror the most common cases verbatim.
-    message = str(exc).lower()
-    if "no module named" in message:
-        if "torch" in message or "paddle" in message:
-            return "missing_tensor_backend"
-        return "missing_python_dependency"
-    if "ffmpeg" in message or "ffprobe" in message:
-        return "missing_ffmpeg"
-    return "process_failed"
+    return infer_bootstrap_error_code(exc) if infer_bootstrap_error_code is not None else "process_failed"
 
 
 def _run() -> None:
     """Execute the CLI. Wrapped so `import app.__main__` does not invoke it."""
     try:
         from app.cli.main import main
-        from app.protocol import ndjson
+        from app.protocol.emitter import ndjson
     except Exception as exc:  # pragma: no cover - defensive bootstrap boundary
         _emit_unhandled_exception(exc)
         raise SystemExit(1) from exc

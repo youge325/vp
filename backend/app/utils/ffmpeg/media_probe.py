@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from typing import Any
 
@@ -12,24 +11,8 @@ from app.utils.subprocess_utils import hidden_subprocess_kwargs
 from ._run import run_ffmpeg_command
 
 
-def _probe_cache_key(input_path: str) -> tuple[str, int, int] | None:
-    """Key cached probe data by path, modification time, and file size."""
-    try:
-        stat = os.stat(input_path)
-    except OSError:
-        return None
-    return (os.path.abspath(input_path), stat.st_mtime_ns, stat.st_size)
-
-
-def get_video_info(
-    ffprobe_path: str,
-    input_path: str,
-    video_info_cache: dict[tuple[str, int, int], dict[str, Any]],
-) -> dict[str, Any]:
-    cache_key = _probe_cache_key(input_path)
-    if cache_key is not None and cache_key in video_info_cache:
-        return video_info_cache[cache_key]
-
+def probe_video_info(ffprobe_path: str, input_path: str) -> dict[str, Any]:
+    """Read one raw metadata document; the adapter owns cache policy."""
     result = run_ffmpeg_command(
         [
             ffprobe_path,
@@ -46,8 +29,6 @@ def get_video_info(
         info = json.loads(result.stdout)
     except json.JSONDecodeError:
         info = {}
-    if cache_key is not None:
-        video_info_cache[cache_key] = info
     return info
 
 
@@ -83,18 +64,14 @@ def _frame_count_from_metadata(info: dict[str, Any]) -> int:
     return 0
 
 
-def get_frame_count(
+def probe_frame_count(
     ffprobe_path: str,
     input_path: str,
     info: dict[str, Any],
     duration: float,
     fps: float,
-    frame_count_cache: dict[tuple[str, int, int], int],
 ) -> int:
-    cache_key = _probe_cache_key(input_path)
-    if cache_key is not None and cache_key in frame_count_cache:
-        return frame_count_cache[cache_key]
-
+    """Resolve frame count once; the adapter owns fingerprinted caching."""
     frame_count = _frame_count_from_metadata(info)
     if frame_count <= 0:
         result = run_ffmpeg_command(
@@ -121,8 +98,6 @@ def get_frame_count(
 
     if frame_count <= 0:
         frame_count = int(duration * fps) if duration > 0 else 0
-    if cache_key is not None and frame_count > 0:
-        frame_count_cache[cache_key] = frame_count
     return frame_count
 
 

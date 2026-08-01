@@ -6,7 +6,8 @@ from collections.abc import Sequence
 
 from app.catalog.algorithm_capabilities import find_static_algorithm_capability
 from app.catalog.tensor_capabilities import supports_backend_engine
-from app.errors import TaskErrorCode, raise_error
+from app.errors.codes import TaskErrorCode
+from app.errors.process import raise_error
 from app.planning.model_availability import ModelAvailabilityPort
 from app.planning.processing_steps import ProcessingStep
 

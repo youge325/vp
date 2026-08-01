@@ -19,7 +19,8 @@ from __future__ import print_function
 import os.path as osp
 
 from app.algorithms.paddle.paddlegan_vsr.weights import _fixed_weight_root
-from app.errors import TaskErrorCode, raise_error
+from app.errors.codes import TaskErrorCode
+from app.errors.process import raise_error
 
 # VP vendor integration: keep auxiliary PaddleGAN weights beside the VP
 # repository-local PaddleGAN VSR weight cache instead of using ~/.cache/ppgan.

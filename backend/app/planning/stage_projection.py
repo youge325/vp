@@ -89,7 +89,9 @@ class StageProjection:
             "interpolation": {**interpolation, "multi": multi},
         }
         projection = cls.from_workflow(resolved_workflow)
-        projected_fps = projection.output_fps(source_fps)
+        projected_fps = source_fps
+        for step in projection.steps:
+            projected_fps = projection.project_fps(step, projected_fps)
         target_fps = float(interpolation["targetFps"])
         output_fps = target_fps if fps_mode == "target" and projected_fps > target_fps else None
         return resolved_workflow, projection, output_fps
@@ -101,16 +103,14 @@ class StageProjection:
         source_fps: float | None = None,
         source_width: int | None = None,
         source_height: int | None = None,
-        stop_before: int | None = None,
     ) -> tuple[ProjectedStage, ...]:
-        """Project the ordered stages, optionally stopping before an index."""
-        limit = len(self.steps) if stop_before is None else max(0, min(stop_before, len(self.steps)))
+        """Materialize every ordered stage for one canonical source."""
         current_frames = int(source_frames)
         current_fps = source_fps
         current_width = source_width
         current_height = source_height
         projected: list[ProjectedStage] = []
-        for position, step in enumerate(self.steps[:limit], start=1):
+        for position, step in enumerate(self.steps, start=1):
             output_frames = self.project_frame_count(step, current_frames)
             output_fps = self.project_fps(step, current_fps) if current_fps is not None else None
             if (current_width is None) != (current_height is None):
@@ -141,47 +141,6 @@ class StageProjection:
             current_width = output_width
             current_height = output_height
         return tuple(projected)
-
-    def output_frame_count(self, source_frames: int, *, stop_before: int | None = None) -> int:
-        projected = self.stages(source_frames=source_frames, stop_before=stop_before)
-        return projected[-1].output_frames if projected else int(source_frames)
-
-    def output_fps(self, source_fps: float, *, stop_before: int | None = None) -> float:
-        projected = self.stages(source_frames=0, source_fps=source_fps, stop_before=stop_before)
-        output_fps = projected[-1].output_fps if projected else source_fps
-        return float(output_fps)
-
-    def output_dimensions(
-        self,
-        source_width: int,
-        source_height: int,
-        *,
-        stop_before: int | None = None,
-    ) -> tuple[int, int]:
-        projected = self.stages(
-            source_frames=0,
-            source_width=source_width,
-            source_height=source_height,
-            stop_before=stop_before,
-        )
-        if not projected:
-            return int(source_width), int(source_height)
-        final = projected[-1]
-        if final.output_width is None or final.output_height is None:  # pragma: no cover - constructor invariant
-            raise RuntimeError("Dimension projection did not produce an output size.")
-        return final.output_width, final.output_height
-
-    def encoded_output_frame_count(
-        self,
-        *,
-        source_frames: int,
-        source_duration: float,
-        output_fps: float | None,
-    ) -> int:
-        processed_frames = self.output_frame_count(source_frames)
-        if output_fps is None or source_duration <= 0:
-            return processed_frames
-        return max(1, int(round(source_duration * output_fps)))
 
     @staticmethod
     def project_frame_count(step: ProcessingStep, input_frame_count: int) -> int:

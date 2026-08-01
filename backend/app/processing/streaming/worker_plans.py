@@ -27,18 +27,12 @@ class StageChunkPlan:
 def build_stage_worker_plans(
     *,
     stage_plan: StagePlan,
-    source_width: int,
-    source_height: int,
     source_frame_count: int,
 ) -> list[StageWorkerConfig]:
     """Build sequential stage-worker configs from a resolved ``StagePlan``."""
-    steps = stage_plan.steps
+    steps = stage_plan.processing_steps
     configs: list[StageWorkerConfig] = []
-    projected_stages = stage_plan.projection.stages(
-        source_frames=source_frame_count,
-        source_width=source_width,
-        source_height=source_height,
-    )
+    projected_stages = stage_plan.slice_stages(source_frame_count)
     for projected_stage in projected_stages:
         index = projected_stage.position
         step = projected_stage.step

@@ -10,7 +10,7 @@ from typing import Any
 
 from app.generated.contracts import VideoInfo
 from app.generated.protocol_constants import BackendEnvelopeType
-from app.protocol import _NdjsonEmitter
+from app.protocol.emitter import ndjson
 
 
 class _OverlapDetectingStream:
@@ -37,7 +37,7 @@ class _OverlapDetectingStream:
 def test_concurrent_emits_are_complete_non_overlapping_lines(monkeypatch: Any) -> None:
     stream = _OverlapDetectingStream()
     monkeypatch.setattr(sys, "stdout", stream)
-    emitter = _NdjsonEmitter()
+    emitter = type(ndjson)()
     worker_count = 12
     start = threading.Barrier(worker_count)
 

@@ -34,8 +34,8 @@ def bounded_analysis_notes(notes: Iterable[str]) -> tuple[str, ...]:
 
 
 @dataclass(frozen=True, slots=True)
-class EngineMetricSpec:
-    """Immutable calibrated metrics for one execution engine."""
+class RuntimeMetricSpec:
+    """Seven runtime metrics shared by default and engine projections."""
 
     gflops_per_megapixel: float | None
     activation_bytes_per_megapixel: float | None
@@ -54,14 +54,8 @@ class ModelMetricSpec:
     label: str
     parameter_count: int | None
     parameter_bytes: int | None
-    gflops_per_megapixel: float | None
-    activation_bytes_per_megapixel: float | None
-    runtime_overhead_bytes: int | None
-    runtime_frame_count: int | None
-    input_modulo: int | None
-    analysis_status: AnalysisStatus
-    analysis_notes: tuple[str, ...] = ()
-    engine_metrics: tuple[tuple[str, EngineMetricSpec], ...] = ()
+    runtime: RuntimeMetricSpec
+    engine_metrics: tuple[tuple[str, RuntimeMetricSpec], ...] = ()
 
 
 _RIFE_PARAMETER_COUNTS: dict[str, int] = {
@@ -149,9 +143,9 @@ _RIFE_ACTIVATION_BYTES_PER_MEGAPIXEL: dict[str, float] = {
 _RIFE_CALIBRATION_NOTE = (
     "TensorRT fp32 memory calibrated with torch.cuda max_memory_reserved on 128x128 and 640x288 inputs."
 )
-_RIFE_TENSORRT_CALIBRATIONS: Mapping[str, EngineMetricSpec] = MappingProxyType(
+_RIFE_TENSORRT_CALIBRATIONS: Mapping[str, RuntimeMetricSpec] = MappingProxyType(
     {
-        "4.25": EngineMetricSpec(
+        "4.25": RuntimeMetricSpec(
             gflops_per_megapixel=None,
             activation_bytes_per_megapixel=124_878_049.0,
             runtime_overhead_bytes=10_922_014,
@@ -160,7 +154,7 @@ _RIFE_TENSORRT_CALIBRATIONS: Mapping[str, EngineMetricSpec] = MappingProxyType(
             analysis_status="ok",
             analysis_notes=(_RIFE_CALIBRATION_NOTE,),
         ),
-        "4.25.lite": EngineMetricSpec(
+        "4.25.lite": RuntimeMetricSpec(
             gflops_per_megapixel=None,
             activation_bytes_per_megapixel=124_878_049.0,
             runtime_overhead_bytes=11_090_318,
@@ -197,17 +191,19 @@ def _paddle_metric_spec(
         label=label,
         parameter_count=parameter_count,
         parameter_bytes=parameter_count * 4,
-        gflops_per_megapixel=gflops_per_megapixel,
-        activation_bytes_per_megapixel=activation_bytes_per_megapixel,
-        runtime_overhead_bytes=runtime_overhead_bytes,
-        runtime_frame_count=runtime_frame_count,
-        input_modulo=4,
-        analysis_status="ok",
-        analysis_notes=analysis_notes,
+        runtime=RuntimeMetricSpec(
+            gflops_per_megapixel=gflops_per_megapixel,
+            activation_bytes_per_megapixel=activation_bytes_per_megapixel,
+            runtime_overhead_bytes=runtime_overhead_bytes,
+            runtime_frame_count=runtime_frame_count,
+            input_modulo=4,
+            analysis_status="ok",
+            analysis_notes=analysis_notes,
+        ),
         engine_metrics=(
             (
                 "tensorrt",
-                EngineMetricSpec(
+                RuntimeMetricSpec(
                     gflops_per_megapixel=gflops_per_megapixel,
                     activation_bytes_per_megapixel=tensorrt_activation_bytes_per_megapixel,
                     runtime_overhead_bytes=0,
@@ -302,10 +298,10 @@ def _rife_gflops_per_megapixel(version: str, parameter_count: int) -> float:
     return round((parameter_count / 300_000) * multiplier, 3)
 
 
-def _rife_tensorrt_engine_spec(version: str, gflops_per_megapixel: float) -> EngineMetricSpec:
+def _rife_tensorrt_engine_spec(version: str, gflops_per_megapixel: float) -> RuntimeMetricSpec:
     calibrated = _RIFE_TENSORRT_CALIBRATIONS.get(version)
     if calibrated is not None:
-        return EngineMetricSpec(
+        return RuntimeMetricSpec(
             gflops_per_megapixel=gflops_per_megapixel,
             activation_bytes_per_megapixel=calibrated.activation_bytes_per_megapixel,
             runtime_overhead_bytes=calibrated.runtime_overhead_bytes,
@@ -319,7 +315,7 @@ def _rife_tensorrt_engine_spec(version: str, gflops_per_megapixel: float) -> Eng
         _RIFE_TENSORRT_ACTIVATION_BYTES_PER_MEGAPIXEL,
         _RIFE_ACTIVATION_BYTES_PER_MEGAPIXEL[version] * _RIFE_TENSORRT_ACTIVATION_SCALE,
     )
-    return EngineMetricSpec(
+    return RuntimeMetricSpec(
         gflops_per_megapixel=gflops_per_megapixel,
         activation_bytes_per_megapixel=round(activation),
         runtime_overhead_bytes=_RIFE_TENSORRT_RUNTIME_OVERHEAD_BYTES,
@@ -340,12 +336,14 @@ def _rife_metric_spec(version: str) -> ModelMetricSpec:
         label=f"RIFE {version}",
         parameter_count=parameter_count,
         parameter_bytes=parameter_count * 4,
-        gflops_per_megapixel=gflops_per_megapixel,
-        activation_bytes_per_megapixel=_RIFE_ACTIVATION_BYTES_PER_MEGAPIXEL[version],
-        runtime_overhead_bytes=_RIFE_RUNTIME_OVERHEAD_BYTES,
-        runtime_frame_count=None,
-        input_modulo=MODEL_SPECS[version].modulo,
-        analysis_status="ok",
+        runtime=RuntimeMetricSpec(
+            gflops_per_megapixel=gflops_per_megapixel,
+            activation_bytes_per_megapixel=_RIFE_ACTIVATION_BYTES_PER_MEGAPIXEL[version],
+            runtime_overhead_bytes=_RIFE_RUNTIME_OVERHEAD_BYTES,
+            runtime_frame_count=None,
+            input_modulo=MODEL_SPECS[version].modulo,
+            analysis_status="ok",
+        ),
         engine_metrics=(("tensorrt", _rife_tensorrt_engine_spec(version, gflops_per_megapixel)),),
     )
 

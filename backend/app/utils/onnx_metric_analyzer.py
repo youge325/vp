@@ -7,7 +7,7 @@ from math import prod
 from pathlib import Path
 from typing import Any
 
-from app.catalog.model_metrics import ModelMetricSpec, bounded_analysis_notes
+from app.catalog.model_metrics import ModelMetricSpec, RuntimeMetricSpec, bounded_analysis_notes
 
 _TENSOR_TYPE_BYTES: dict[int, int] = {
     1: 4,  # FLOAT
@@ -82,13 +82,15 @@ def analyze_onnx_model(path: str | Path, *, name: str | None = None, label: str 
         label=variant_label,
         parameter_count=parameter_count,
         parameter_bytes=parameter_bytes,
-        gflops_per_megapixel=gflops_per_megapixel,
-        activation_bytes_per_megapixel=activation_bytes_per_megapixel,
-        runtime_overhead_bytes=None,
-        runtime_frame_count=None,
-        input_modulo=None,
-        analysis_status=status,
-        analysis_notes=bounded_analysis_notes(notes),
+        runtime=RuntimeMetricSpec(
+            gflops_per_megapixel=gflops_per_megapixel,
+            activation_bytes_per_megapixel=activation_bytes_per_megapixel,
+            runtime_overhead_bytes=None,
+            runtime_frame_count=None,
+            input_modulo=None,
+            analysis_status=status,
+            analysis_notes=bounded_analysis_notes(notes),
+        ),
     )
 
 
@@ -98,13 +100,15 @@ def _unknown_onnx_model_variant(name: str, label: str, note: str) -> ModelMetric
         label=label,
         parameter_count=None,
         parameter_bytes=None,
-        gflops_per_megapixel=None,
-        activation_bytes_per_megapixel=None,
-        runtime_overhead_bytes=None,
-        runtime_frame_count=None,
-        input_modulo=None,
-        analysis_status="unknown",
-        analysis_notes=bounded_analysis_notes((note,)),
+        runtime=RuntimeMetricSpec(
+            gflops_per_megapixel=None,
+            activation_bytes_per_megapixel=None,
+            runtime_overhead_bytes=None,
+            runtime_frame_count=None,
+            input_modulo=None,
+            analysis_status="unknown",
+            analysis_notes=bounded_analysis_notes((note,)),
+        ),
     )
 
 
