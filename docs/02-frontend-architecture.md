@@ -109,9 +109,9 @@ graph TB
 - `useTaskStore` 只管理批处理运行时状态，不直接持有媒体数据
 - `useIssueStore` 从 `mediaStore` 中分离出来，避免测试依赖耦合
 
-App 顶栏和 StepRail 通过 `useCurrentTaskStatusLabel()` 读取同一任务状态投影。selector 先用
-`useMediaStore.findItem(batch.currentId)` 校验当前媒体，再组合 `useTaskStore` 与
-`useMediaRunState`，确保失效的 current ID 不会读取遗留运行状态。
+App 顶栏直接组合 `useCurrentTaskContext()`、`useTaskStore` 与纯 `getTaskStatusLabel()` 投影任务
+状态；上下文先用 `useMediaStore.findItem(batch.currentId)` 校验当前媒体，确保失效的 current ID
+不会读取遗留运行状态。StepRail 只消费活动模块及模块状态，不再保留第二个任务状态包装器。
 
 ## 表单类型边界
 
@@ -324,8 +324,9 @@ graph LR
 复用公共结构；生成器验证引用目标和每个对象显式的 `additionalProperties`，再生成聚合
 `boundary.schema.json`。Python 使用 `datamodel-code-generator`，TypeScript 使用
 `json-schema-to-typescript`，Rust 在编译期通过 Typify 消费聚合 schema；同一生成器还产出
-IPC 命令与事件适配器。`python scripts/generate_contracts.py --check` 对所有跟踪生成物执行
-逐字节 freshness 检查。
+IPC 命令与事件适配器。独立的应用默认契约还生成 `APPLICATION_DEFAULTS` 只读对象，预设、模型
+fallback、分段归一化和指标投影共同消费它。`python scripts/generate_contracts.py --check` 对所有
+跟踪生成物执行逐字节 freshness 检查。
 
 ### 类型扩展层
 

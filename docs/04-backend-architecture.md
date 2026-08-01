@@ -88,11 +88,18 @@ re-export 层；`OutputConfig.outputDir` 的非空白约束也由 schema 生成�
 ```python
 @dataclass(frozen=True, slots=True)
 class StagePlan:
-    steps: tuple[ProcessingStep, ...]
     projection: StageProjection
+    source_frames: int
+    source_duration: float
+    output_fps: float | None
+    steps: tuple[ProcessingStep, ...]
+    requires_file_pipeline: bool
+    resume_source_frames: int
 ```
 
-插值位置、输出帧数与 FPS 均从有序步骤和同一个 `StageProjection` 派生，不保存可互相矛盾的平行状态。输出尺寸由 preflight 对同一 `StagePlan` 应用 stage 尺寸规则得到。
+插值位置、输出帧数、FPS 与输出尺寸均直接委托同一个 `StageProjection`。`StagePlan` 还从 descriptor
+派生文件流水线选择和恢复源帧数；preflight 与执行层只读取这些事实，不再重复判断 stage 类型或
+重算投影。
 
 [`backend/app/catalog/stage_descriptors.py`](../backend/app/catalog/stage_descriptors.py) 是 stage
 能力的中立不可变 catalog，统一声明执行模式、文件流水线要求、后端支持、固定倍率、模型类别、
@@ -278,17 +285,20 @@ factory、stage runtime 和 execution loop 共享 `Algorithm` union、`ITensorBa
 
 [`backend/app/algorithms/tensor_backend.py`](../backend/app/algorithms/tensor_backend.py) 提供 `ITensorBackend` 接口，统一 PyTorch、Paddle、ONNX Runtime 三种后端。算法代码无感知具体后端，通过工厂方法获取。
 
-## FFmpeg 封装
+## FFmpeg 适配器
 
-[`backend/app/utils/ffmpeg/`](../backend/app/utils/ffmpeg/) 提供完整的 FFmpeg 操作封装：
+composition root 从 `settings` 取得已解析的 FFmpeg/FFprobe 路径，并只构造一次
+[`FFmpegMediaAdapter`](../backend/app/adapters/ffmpeg_media.py)。adapter 实现消费方拥有的媒体窄端口，
+持有视频元数据与帧数缓存；`utils/ffmpeg/__init__.py` 不聚合导出，也不存在第二层 wrapper 或再次
+执行 `shutil.which` 的路径探测。
 
 ```mermaid
 graph LR
-    A[FFmpegWrapper] --> B[media_probe.py 媒体元数据]
-    A --> C[capabilities.py 能力聚合]
-    C --> D[capability_probe.py Codec 能力探测]
+    A[FFmpegMediaAdapter] --> B[media_probe.py 媒体元数据与缓存]
     A --> E[encode.py 编码/转码/音频]
     A --> F[io.py 原始视频管道]
+    C[check command] --> I[capabilities.py 能力聚合]
+    I --> D[capability_probe.py Codec 能力探测]
     D --> G[_run.py 同步命令执行]
     D --> H[_constants.py 编码器候选/正则]
 ```

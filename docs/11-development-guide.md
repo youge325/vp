@@ -78,6 +78,8 @@ graph LR
 - Python 由 `datamodel-code-generator` 生成，TypeScript 由 `json-schema-to-typescript` 生成，
   Rust 通过 Typify 编译期消费聚合 schema
 - 生成文件禁止手工修改；`python scripts/generate_contracts.py --check` 必须无差异
+- 跨层产品默认值只修改 `application-defaults.json`；schema 验证后生成 Python、TypeScript、Rust
+  只读常量，PowerShell 工具通过 `runtime-tools.ps1` 读取同一数据文件
 - 前端统一从 `types/protocol` 导入边界类型，不新增手写镜像或 normalize 层
 - 新增事件、错误码或字段时同时更新对应 schema/manifest；运行时别名只保留生产代码实际分支
 - `build.rs` 只接入已生成 IPC manifest；生成和漂移检查必须显式运行
@@ -182,7 +184,10 @@ python -m pytest tests_full_e2e -m full_e2e -q
 
 - `frontend/scripts/check-architecture.mjs` 建立前端 import DAG，拒绝环和
   services/stores/IPC 反向依赖；Knip 查未消费导出、文件和 npm 依赖。
-- `scripts/check_architecture_contracts.py` 建立 Python package DAG 与 Rust crate-module DAG，
+- `scripts/check_architecture_contracts.py` 的聚合入口调用公共语义检查、应用默认值、脚本可达性和
+  Rust 最小可见性模块。脚本入口从 pre-commit、workflow 与明确工具入口计算，并跟踪 PowerShell
+  dot-source；受限 Rust 符号必须存在非测试生产消费者。公共语义检查同时建立 Python package DAG
+  与 Rust crate-module DAG，
   检查未使用 Cargo 依赖、Rust public surface、生成协议深导入、命令面、未消费协议 re-export、
   Python 中立 dataclass 字段/包级 re-export/CLI handler、无副作用 package、CSS/test-id/test-support
   export 和算法 catalog↔factory 一致性；同时建立 Rust tasks 子模块 DAG，并只允许

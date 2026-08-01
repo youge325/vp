@@ -6,15 +6,22 @@ import StepRail from '@/components/StepRail.vue'
 import { WORKBENCH_MODULE_BY_KEY } from '@/views/registry'
 import { useBootstrap } from '@/composables/app/useBootstrap'
 import { useEnvironmentChecker } from '@/composables/app/useEnvironmentChecker'
-import { useCurrentTaskStatusLabel } from '@/composables/selectors/useCurrentTaskStatusLabel'
 import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
+import { useCurrentTaskContext } from '@/composables/selectors/useTaskContext'
+import { getTaskStatusLabel } from '@/services/format/labels'
 import { useEnvStore } from '@/stores/env'
+import { useTaskStore } from '@/stores/task'
 import type { WorkbenchModuleDefinition } from '@/types/view/modules'
 
 const route = useRoute()
 const { recheckEnvironment } = useEnvironmentChecker()
 const envStore = useEnvStore()
-const taskStatusLabel = useCurrentTaskStatusLabel()
+const taskStore = useTaskStore()
+const currentTaskContext = useCurrentTaskContext()
+const taskStatusLabel = computed(() => getTaskStatusLabel(
+  taskStore.batch,
+  currentTaskContext.value.runState?.taskState.status ?? null,
+))
 const presetIssue = useOperationIssue('preset')
 
 useBootstrap()

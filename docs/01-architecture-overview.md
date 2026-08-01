@@ -96,11 +96,14 @@ Rust 与 Python 之间的通信不通过 HTTP 或 gRPC，而是通过子进程 s
 ### 2. 中立契约与类型同步
 
 根目录 `contracts/` 中的 JSON Schema 2020-12 文档定义配置、IPC、NDJSON、错误码与持久化边界。
+独立的 `application-defaults.schema.json` 与数据文件拥有跨 Python、Vue、Rust 和发布脚本共享的
+产品默认值；它不属于 IPC，也不改变任何持久化版本。
 IPC manifest v3 同时声明 10 个 Tauri command、6 个任务事件、七类 Python envelope、长任务与
 one-shot 的 stdin/期限策略、协议大小上限，以及终端/内部 stage-worker 两个前缀。
-`scripts/generate_contracts.py` 生成严格的聚合边界 schema、stage-worker 专用 Pydantic 边界、单一
-TypeScript 绑定以及 Rust 命令/事件/子进程 spec；one-shot 和长任务调用方只选择生成 spec，不维护
-平行的 subcommand、payload、期限或 discriminator 条件链。
+`scripts/generate_contracts.py` 是薄 CLI，schema 组合、验证和语言 renderer 位于
+`scripts/contract_codegen/`。它生成严格的聚合边界 schema、stage-worker 专用 Pydantic 边界、单一
+TypeScript 绑定、Rust 命令/事件/子进程 spec，以及三种语言的只读应用默认常量；one-shot 和长任务
+调用方只选择生成 spec，不维护平行的 subcommand、payload、期限或 discriminator 条件链。
 Rust 通过 Typify 直接消费同一聚合 schema。生成文件禁止
 手工修改，CI 逐字节检查 freshness。非 schema 14 的环境缓存会被隔离并重新探测。
 
@@ -108,7 +111,7 @@ Rust 通过 Typify 直接消费同一聚合 schema。生成文件禁止
 JSON Schema 2020-12 校验 schema、引用目标、IPC manifest 和错误码子集，再把依赖内联到
 `boundary.schema.json`。Python 绑定由 `datamodel-code-generator` 生成，TypeScript 绑定由
 `json-schema-to-typescript` 生成；Rust 编译期的 Typify、前端 invoke 映射和 Rust/TS 事件适配器
-都消费同一份生成结果。
+都消费同一份生成结果。PowerShell CI 与发布脚本通过共享 `runtime-tools.ps1` 读取同一默认数据文件。
 
 生产可达性门禁独立于测试引用：Vue 从 `src/main.ts` 遍历 import DAG，Python 从 `app`、
 `app.__main__` 和显式导出入口遍历静态 import DAG。Python CLI 的 `_HANDLERS` 字符串注册表由 AST
