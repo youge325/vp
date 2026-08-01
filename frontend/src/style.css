@@ -640,8 +640,7 @@ a:focus-visible {
 }
 
 .tag,
-.inline-status,
-.rail-footer-chip {
+.inline-status {
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
@@ -866,42 +865,6 @@ a:focus-visible {
   background: #39485f;
 }
 
-.rail-footer {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.rail-footer-chip {
-  min-height: 30px;
-  padding-inline: 10px;
-}
-
-.rail-footer-chip[data-state='running'] {
-  color: #7bcbff;
-}
-
-.rail-footer-chip[data-state='paused'] {
-  color: var(--warning);
-}
-
-.rail-footer-chip[data-state='cancelling'] {
-  color: var(--danger);
-}
-
-.rail-footer-chip[data-state='completed'] {
-  color: var(--success);
-}
-
-.rail-footer-chip[data-state='error'] {
-  color: var(--danger);
-}
-
-.rail-footer-chip[data-state='cancelled'] {
-  color: var(--warning);
-}
-
 @media (max-width: 1200px) {
   :root {
     --rail-w: 220px;
@@ -958,15 +921,6 @@ a:focus-visible {
 
   .rail-state-dot {
     display: none;
-  }
-
-  .rail-footer {
-    width: 100%;
-  }
-
-  .rail-footer-chip {
-    justify-content: center;
-    text-align: center;
   }
 
   .field-grid-2,

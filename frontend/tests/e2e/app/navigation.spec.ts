@@ -5,9 +5,9 @@ import type { TauriPage } from '../utils/wdio-tauri'
 
 interface RailLayout {
   linkCount: number
+  footerCount: number
   railBottom: number
   renderBottom: number
-  footerBottom: number
   clientHeight: number
   scrollHeight: number
 }
@@ -17,17 +17,16 @@ const readRailLayout = async (tauriPage: TauriPage): Promise<RailLayout> => {
     const rail = document.querySelector<HTMLElement>('.rail-column')
     const links = [...document.querySelectorAll<HTMLElement>('.rail-link')]
     const renderLink = links.at(-1)
-    const footer = document.querySelector<HTMLElement>('.rail-footer')
-    if (!rail || !renderLink || !footer) {
+    if (!rail || !renderLink) {
       throw new Error('Step rail layout is incomplete')
     }
 
     const railRect = rail.getBoundingClientRect()
     return {
       linkCount: links.length,
+      footerCount: document.querySelectorAll('.rail-footer').length,
       railBottom: railRect.bottom,
       renderBottom: renderLink.getBoundingClientRect().bottom,
-      footerBottom: footer.getBoundingClientRect().bottom,
       clientHeight: rail.clientHeight,
       scrollHeight: rail.scrollHeight,
     }
@@ -42,8 +41,8 @@ const waitForRailLayout = async (tauriPage: TauriPage): Promise<void> => {
 
 const expectRailToFit = (layout: RailLayout): void => {
   expect(layout.linkCount).toBe(8)
+  expect(layout.footerCount).toBe(0)
   expect(layout.renderBottom <= layout.railBottom + 0.5).toBe(true)
-  expect(layout.footerBottom <= layout.railBottom + 0.5).toBe(true)
   expect(layout.scrollHeight <= layout.clientHeight + 1).toBe(true)
 }
 
