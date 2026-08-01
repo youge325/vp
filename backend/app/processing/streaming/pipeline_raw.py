@@ -11,7 +11,6 @@ from app.processing.streaming.encoder_runtime_config import EncoderRuntimeConfig
 from app.processing.streaming.error_channel import create_error_queue, take_first_error
 from app.processing.streaming.pipeline_context import StreamingPipelineContext
 from app.processing.streaming.pipeline_raw_encoder import start_raw_encoder_thread
-from app.processing.streaming.pipeline_rules import resolved_stream_fps
 from app.processing.streaming.queues import EncodeQueue
 from app.processing.streaming.worker_pipeline import run_stage_worker_pipeline
 from app.processing.streaming.worker_runtime_config import WorkerPipelineRuntimeConfig
@@ -24,10 +23,7 @@ def run_raw_streaming_pipeline(
     encode_queue: EncodeQueue = queue.Queue(maxsize=8)
     error_queue = create_error_queue()
     stop_event = threading.Event()
-    stream_fps = resolved_stream_fps(
-        context.preflight.video_info.source_fps,
-        context.preflight.stage_plan,
-    )
+    stream_fps = context.preflight.stage_plan.projection.output_fps(context.preflight.video_info.source_fps)
     encoder_config = EncoderRuntimeConfig(
         ffmpeg=context.ffmpeg,
         encode_config=context.encode_config,

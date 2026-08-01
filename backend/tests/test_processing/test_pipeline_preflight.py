@@ -48,8 +48,8 @@ def test_build_streaming_pipeline_preflight_resolves_planning_context(tmp_path) 
     assert preflight.stage_plan.projection is projection
     assert preflight.stage_plan.steps is projection.steps
     assert preflight.stage_plan.total_encoded_frames == 9
-    assert preflight.use_stage_file_pipeline is True
-    assert preflight.resume_source_frames == 9
+    assert preflight.stage_plan.requires_file_pipeline is True
+    assert preflight.stage_plan.resume_source_frames == 9
     assert preflight.output_width == 640
     assert preflight.output_height == 360
     assert preflight.segment_frames == 1000

@@ -19,8 +19,6 @@ class StreamingPipelinePreflight:
     stage_plan: StagePlan
     signature: str
     config_snapshot: dict[str, Any]
-    use_stage_file_pipeline: bool
-    resume_source_frames: int
     output_width: int
     output_height: int
     segment_frames: int

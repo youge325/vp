@@ -92,8 +92,6 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
             stage_plan=stage_plan,
             signature="sig",
             config_snapshot={"test": True},
-            use_stage_file_pipeline=True,
-            resume_source_frames=5,
             output_width=4,
             output_height=4,
             segment_frames=2,

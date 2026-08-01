@@ -24,6 +24,16 @@ class VideoMetadata:
     has_audio: bool
 
 
+@dataclass(frozen=True, slots=True)
+class VideoInspection:
+    """Small metadata projection consumed only by the ``info`` command."""
+
+    fps: float
+    width: int
+    height: int
+    video_codec: str
+
+
 class RawVideoReaderPort(Protocol):
     def read_frame(self) -> np.ndarray | None: ...
 
@@ -45,6 +55,10 @@ class RawVideoWriterPort(Protocol):
 
 class MediaProbePort(Protocol):
     def probe_video(self, input_path: str) -> VideoMetadata: ...
+
+
+class VideoInspectionPort(Protocol):
+    def inspect_video(self, input_path: str) -> VideoInspection: ...
 
 
 class FrameCountProbePort(Protocol):
@@ -132,5 +146,7 @@ __all__ = [
     "RawVideoReaderPort",
     "RawVideoWriterPort",
     "StageFileMediaPort",
+    "VideoInspection",
+    "VideoInspectionPort",
     "VideoMetadata",
 ]

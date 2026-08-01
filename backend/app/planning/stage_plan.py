@@ -20,6 +20,8 @@ class StagePlan:
     steps: tuple[ProcessingStep, ...] = field(init=False)
     total_encoded_frames: int = field(init=False)
     interpolation_index: int | None = field(init=False)
+    requires_file_pipeline: bool = field(init=False)
+    resume_source_frames: int = field(init=False)
 
     def __post_init__(self) -> None:
         steps = self.projection.steps
@@ -39,6 +41,20 @@ class StagePlan:
             next(
                 (index for index, step in enumerate(steps) if step.algorithm_type == "frame_interpolation"),
                 None,
+            ),
+        )
+        requires_file_pipeline = any(step.descriptor.requires_file_pipeline for step in steps)
+        object.__setattr__(self, "requires_file_pipeline", requires_file_pipeline)
+        object.__setattr__(
+            self,
+            "resume_source_frames",
+            (
+                self.projection.output_frame_count(
+                    max(int(self.source_frames), 0),
+                    stop_before=max(len(steps) - 1, 0),
+                )
+                if requires_file_pipeline
+                else self.source_frames
             ),
         )
 

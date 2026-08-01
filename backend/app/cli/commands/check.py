@@ -25,7 +25,8 @@ from app.generated.contracts import (
 )
 from app.generated.protocol_constants import BackendEnvelopeType
 from app.protocol import ndjson
-from app.utils.ffmpeg import FFmpegWrapper
+from app.utils.ffmpeg.capabilities import discover_capabilities
+from app.utils.ffmpeg.media_probe import is_available
 from app.utils.onnx_models import scan_onnx_catalog
 from app.utils.system_probe import list_gpu_adapters
 
@@ -53,8 +54,7 @@ def _algorithm_payload(
 
 
 def cmd_check(_args: argparse.Namespace) -> None:
-    ffmpeg = FFmpegWrapper()
-    ffmpeg_available = ffmpeg.is_available()
+    ffmpeg_available = is_available(settings.FFMPEG_PATH)
 
     tensor_engines = probe_tensor_engines()
     gpu_adapters = list_gpu_adapters()
@@ -62,7 +62,7 @@ def cmd_check(_args: argparse.Namespace) -> None:
     onnx_models = onnx_catalog.names
     onnx_model_details = onnx_catalog.details
     ffmpeg_capabilities = (
-        ffmpeg.discover_capabilities(gpu_adapters)
+        discover_capabilities(settings.FFMPEG_PATH, gpu_adapters)
         if ffmpeg_available
         else FfmpegInfo(available=False, hwaccels=[], encoderProfiles=[], decoderProfiles=[])
     )

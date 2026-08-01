@@ -524,7 +524,11 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
     (model_dir / "super_resolution" / "realesrgan" / "x4.onnx").write_bytes(b"onnx")
     (model_dir / "super_resolution" / "edvr" / "collision.onnx").write_bytes(b"onnx")
 
-    monkeypatch.setattr("app.cli.commands.check.FFmpegWrapper", _FakeCheckFFmpeg)
+    monkeypatch.setattr("app.cli.commands.check.is_available", lambda _path: True)
+    monkeypatch.setattr(
+        "app.cli.commands.check.discover_capabilities",
+        lambda _path, adapters: _FakeCheckFFmpeg().discover_capabilities(adapters),
+    )
     monkeypatch.setattr(
         "app.cli.commands.check.probe_tensor_engines",
         lambda: TensorEngines(pytorch=[], paddle=[], onnx=[]),
@@ -631,7 +635,11 @@ def test_check_bounds_large_discovered_model_diagnostics(monkeypatch, capsys):
         names={"interpolation": {"rife": names}, "super_resolution": {}},
         details={"interpolation": {"rife": details}, "super_resolution": {}},
     )
-    monkeypatch.setattr("app.cli.commands.check.FFmpegWrapper", _FakeCheckFFmpeg)
+    monkeypatch.setattr("app.cli.commands.check.is_available", lambda _path: True)
+    monkeypatch.setattr(
+        "app.cli.commands.check.discover_capabilities",
+        lambda _path, adapters: _FakeCheckFFmpeg().discover_capabilities(adapters),
+    )
     monkeypatch.setattr(
         "app.cli.commands.check.probe_tensor_engines",
         lambda: TensorEngines(pytorch=[], paddle=[], onnx=[]),

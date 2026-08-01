@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, cast
+import json
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
 
 from app.adapters.ffmpeg_media import FFmpegMediaAdapter
-from app.ports.media import VideoMetadata
-from app.utils.ffmpeg import FFmpegWrapper
+from app.ports.media import VideoInspection, VideoMetadata
 
 
 class _Writer:
@@ -17,37 +21,30 @@ class _Writer:
         return None
 
 
-class _FakeFFmpeg:
-    def __init__(self) -> None:
-        self.encoder_progress_callback = None
-
-    def get_video_info(self, _input_path: str) -> dict[str, object]:
-        return {"streams": [{"codec_type": "video", "width": 320, "height": 180}]}
-
-    def get_fps(self, _input_path: str) -> float:
-        return 24.0
-
-    def get_frame_count(self, _input_path: str) -> int:
-        return 48
-
-    def get_duration(self, _input_path: str) -> float:
-        return 2.0
-
-    def has_audio(self, _input_path: str) -> bool:
-        return True
-
-    def open_rawvideo_encoder(self, **kwargs: Any) -> _Writer:
-        self.encoder_progress_callback = kwargs["progress_callback"]
-        return _Writer()
+def _raw_info() -> dict[str, object]:
+    return {
+        "format": {"duration": "2.0"},
+        "streams": [
+            {
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 320,
+                "height": 180,
+                "r_frame_rate": "24/1",
+                "nb_frames": "48",
+            },
+            {"codec_type": "audio"},
+        ],
+    }
 
 
-def _adapter() -> tuple[FFmpegMediaAdapter, _FakeFFmpeg]:
-    ffmpeg = _FakeFFmpeg()
-    return FFmpegMediaAdapter(cast(FFmpegWrapper, ffmpeg)), ffmpeg
-
-
-def test_probe_video_hides_raw_ffprobe_shape_behind_metadata() -> None:
-    adapter, _ffmpeg = _adapter()
+def test_probe_video_hides_raw_ffprobe_shape_behind_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    probes: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        "app.adapters.ffmpeg_media._media_probe.get_video_info",
+        lambda ffprobe, input_path, _cache: probes.append((ffprobe, input_path)) or _raw_info(),
+    )
+    adapter = FFmpegMediaAdapter("ffmpeg-bin", "ffprobe-bin")
 
     assert adapter.probe_video("input.mp4") == VideoMetadata(
         width=320,
@@ -57,10 +54,66 @@ def test_probe_video_hides_raw_ffprobe_shape_behind_metadata() -> None:
         duration=2.0,
         has_audio=True,
     )
+    assert probes == [("ffprobe-bin", "input.mp4")]
 
 
-def test_encoder_progress_is_translated_at_the_adapter_boundary() -> None:
-    adapter, ffmpeg = _adapter()
+def test_adapter_reuses_one_metadata_probe_across_consumer_ports(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "input.mp4"
+    input_path.write_bytes(b"video")
+    commands: list[list[str]] = []
+
+    def run(command: list[str]) -> SimpleNamespace:
+        commands.append(command)
+        return SimpleNamespace(stdout=json.dumps(_raw_info()))
+
+    monkeypatch.setattr("app.utils.ffmpeg.media_probe.run_ffmpeg_command", run)
+    adapter = FFmpegMediaAdapter("ffmpeg-bin", "ffprobe-bin")
+
+    assert adapter.probe_video(str(input_path)).source_frames == 48
+    assert adapter.inspect_video(str(input_path)).video_codec == "h264"
+    assert adapter.get_frame_count(str(input_path)) == 48
+    assert commands == [
+        [
+            "ffprobe-bin",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_format",
+            "-show_streams",
+            str(input_path),
+        ]
+    ]
+
+
+def test_video_inspection_port_projects_wire_neutral_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.adapters.ffmpeg_media._media_probe.get_video_info",
+        lambda _ffprobe, _input_path, _cache: _raw_info(),
+    )
+
+    assert FFmpegMediaAdapter("ffmpeg-bin", "ffprobe-bin").inspect_video("input.mp4") == VideoInspection(
+        fps=24.0,
+        width=320,
+        height=180,
+        video_codec="h264",
+    )
+
+
+def test_encoder_progress_is_translated_at_the_adapter_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(
+        "app.adapters.ffmpeg_media._open_rawvideo_encoder",
+        lambda _path, **kwargs: captured.update(kwargs) or _Writer(),
+    )
+    monkeypatch.setattr(
+        "app.adapters.ffmpeg_media._encode.build_encode_output_args",
+        lambda _path, _config: [],
+    )
+    adapter = FFmpegMediaAdapter("ffmpeg-bin", "ffprobe-bin")
     events: list[tuple[int, float | None, float | None, float | None, str]] = []
 
     adapter.open_rawvideo_encoder(
@@ -71,8 +124,9 @@ def test_encoder_progress_is_translated_at_the_adapter_boundary() -> None:
         progress_callback=lambda *event: events.append(event),
         progress_frame_offset=100,
     )
-    assert ffmpeg.encoder_progress_callback is not None
-    ffmpeg.encoder_progress_callback(
+    callback = captured["progress_callback"]
+    assert callback is not None
+    callback(
         {
             "frame": 25,
             "fps": 24.0,

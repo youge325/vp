@@ -43,7 +43,7 @@ class _FakeReader:
 class _FakeWriter:
     def __init__(
         self,
-        wrapper: "_FakeFFmpegWrapper",
+        wrapper: "_FakeMediaRuntime",
         output_path: str,
         *,
         fps: float,
@@ -96,7 +96,7 @@ class _FakeWriter:
         return padded_frames
 
 
-class _FakeFFmpegWrapper:
+class _FakeMediaRuntime:
     def __init__(self, source_frames: list[np.ndarray], *, source_fps: float = 24.0):
         self._source_frames = [frame.copy() for frame in source_frames]
         self._source_fps = source_fps
@@ -181,7 +181,7 @@ def _frame(value: int) -> np.ndarray:
     return np.full((1, 1, 3), value, dtype=np.uint8)
 
 
-def _install_video_frames_rename_hook(monkeypatch: pytest.MonkeyPatch, wrapper: "_FakeFFmpegWrapper") -> None:
+def _install_video_frames_rename_hook(monkeypatch: pytest.MonkeyPatch, wrapper: "_FakeMediaRuntime") -> None:
     """Patch os.replace inside the encoder so renames propagate to the wrapper."""
     import app.processing.streaming.encoder_finalization as finalization_module
 
@@ -237,10 +237,6 @@ def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None
         encode_queue.put(StreamEnd(next_source_frame=config.source_frames))
 
     monkeypatch.setattr("app.processing.streaming.pipeline_raw.run_stage_worker_pipeline", fake_worker_pipeline)
-    monkeypatch.setattr(
-        "app.processing.streaming.pipeline_preflight.should_use_stage_file_pipeline",
-        lambda _stage_plan: False,
-    )
 
 
 def _apply_fake_stage(step, frames: list[np.ndarray], output_width: int, output_height: int) -> list[np.ndarray]:
@@ -285,7 +281,7 @@ def _workflow_config(segment_frames: int = 2) -> tuple[dict, dict, list[Processi
         "fpsMode": "multi",
         "processOrder": "frame_interpolation_then_super_resolution",
         "interpolation": {
-            "enabled": True,
+            "enabled": False,
             "targetFps": 60,
             "multi": 2,
             "model": "4.25",
@@ -314,20 +310,6 @@ def _workflow_config(segment_frames: int = 2) -> tuple[dict, dict, list[Processi
     }
     processing_steps = [
         ProcessingStep(
-            algorithm_type="frame_interpolation",
-            algorithm_kwargs={
-                "multi": 2,
-                "algorithm": "rife",
-                "model_version": "4.25",
-                "scale": 1.0,
-                "fp16": False,
-                "onnx_model": None,
-                "engine": "cuda",
-                "tensor_backend": "pytorch",
-            },
-            stage_name="01_frame_interpolation",
-        ),
-        ProcessingStep(
             algorithm_type="super_resolution",
             algorithm_kwargs={
                 "scale_factor": 2.0,
@@ -336,7 +318,7 @@ def _workflow_config(segment_frames: int = 2) -> tuple[dict, dict, list[Processi
                 "engine": "cuda",
                 "tensor_backend": "onnx",
             },
-            stage_name="02_super_resolution",
+            stage_name="01_super_resolution",
         ),
     ]
     output_config = {"outputDir": "", "openOnComplete": False, "segmentFrames": segment_frames}
@@ -370,7 +352,7 @@ def _preflight(
 
 @dataclass(frozen=True)
 class _StreamingCase:
-    wrapper: _FakeFFmpegWrapper
+    wrapper: _FakeMediaRuntime
     workspace: Path
     input_path: Path
     output_path: Path
@@ -389,7 +371,7 @@ def _streaming_case(
     source_fps: float = 24.0,
     install_worker: bool = True,
 ) -> _StreamingCase:
-    wrapper = _FakeFFmpegWrapper(source_frames, source_fps=source_fps)
+    wrapper = _FakeMediaRuntime(source_frames, source_fps=source_fps)
     workspace = _workspace(name)
     input_path = workspace / "input.mp4"
     input_path.write_bytes(b"input")
@@ -478,17 +460,17 @@ def test_streaming_pipeline_resumes_without_duplicate_frames(monkeypatch):
         first_segment_tmp,
         index=1,
         start_output_frame=0,
-        end_output_frame=1,
+        end_output_frame=0,
         next_source_frame=1,
     )
     first_segment = manifest.workspace.sidecar_dir / manifest.scan_completed_chunks()[0].path
-    case.wrapper.video_frames[str(first_segment)] = [_frame(0), _frame(50)]
+    case.wrapper.video_frames[str(first_segment)] = [_frame(0)]
 
     result = _run_streaming_case(case)
 
     assert result.output_path == str(case.output_path)
-    assert result.processed_frames == 5
-    assert [int(frame[0, 0, 0]) for frame in case.wrapper.video_frames[str(case.output_path)]] == [0, 50, 100, 150, 200]
+    assert result.processed_frames == 3
+    assert [int(frame[0, 0, 0]) for frame in case.wrapper.video_frames[str(case.output_path)]] == [0, 100, 200]
     assert not manifest.workspace.sidecar_dir.exists()
     assert not any(path.is_dir() and path.name == "frames" for path in case.workspace.rglob("*"))
     assert not any(path.is_dir() and path.name.startswith("processed_") for path in case.workspace.rglob("*"))

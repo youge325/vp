@@ -66,7 +66,7 @@ def process_video_streaming(
         worker_log_sink=worker_log_sink,
     )
 
-    if resume_state.start_source_frame >= preflight.resume_source_frames:
+    if resume_state.start_source_frame >= preflight.stage_plan.resume_source_frames:
         completed_output_frames = resume_state.completed_output_frames
     else:
         completed_output_frames = run_streaming_pipeline(context=context)
