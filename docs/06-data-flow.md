@@ -155,12 +155,15 @@ class StagePlan:
     steps: tuple[ProcessingStep, ...] = field(init=False)
     total_encoded_frames: int = field(init=False)
     interpolation_index: int | None = field(init=False)
+    requires_file_pipeline: bool = field(init=False)
+    resume_source_frames: int = field(init=False)
 ```
 
 `prepare_pipeline_preflight()` 将它与输出路径、签名和恢复预检一起封装为不可变 `PreparedRun`；
 `PreparedRun.processing_steps` 和 `final_output_fps` 只投影 `StagePlan` 中的事实，不重复存储。
 `process` 和 `inspect-output` 共享这份准备结果。reporter、callback 和 metrics 属于运行期 observers，
-不进入静态计划。
+不进入静态计划。文件流水线选择和恢复帧数也只在 `StagePlan` 派生一次，dispatch、raw 与
+stage-file 执行路径不再各自维护判断函数。
 
 ## 边界字段与执行映射
 

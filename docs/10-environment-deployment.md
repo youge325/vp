@@ -151,7 +151,8 @@ ONNX 引擎默认走 CUDA EP。启用 TensorRT EP：
 ### 必须打包的资源
 
 - **FFmpeg**：`resources/runtime/ffmpeg/bin/ffmpeg.exe` 和 `ffprobe.exe`
-- **默认 RIFE 模型**：`resources/runtime/models/flownet_v4.25.pkl`
+- **默认 RIFE 模型**：文件名由 `contracts/application-defaults.json` 的模型版本派生，PyTorch 与
+  ONNX 路径由 `scripts/runtime-tools.ps1` 统一构造并验证为非空文件
 - **Python 运行时（可选）**：`resources/runtime/python/python.exe`
 
 ### Dev vs Release 差异
