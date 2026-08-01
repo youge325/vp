@@ -41,38 +41,112 @@ const TERMINAL_EXIT_GRACE: Duration = Duration::from_secs(5);
 const CHILD_EXIT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const STALL_TIMEOUT_ENV: &str = "VP_TASK_STALL_TIMEOUT_SECS";
 
-pub(super) struct TaskSupervisorSession {
-    pub(super) event_sink: Arc<dyn TaskEventSink>,
-    pub(super) lifecycle: Arc<dyn TaskLifecyclePort>,
-    pub(super) child: ProcessGroupChild,
-    pub(super) lease: StartLease,
-    pub(super) process_controller: Arc<dyn ProcessControl>,
-    pub(super) control_rx: mpsc::Receiver<TaskControlMessage>,
-    pub(super) output_rx: mpsc::Receiver<ReaderMessage>,
-    pub(super) stdin_writer: JoinHandle<()>,
-    pub(super) stdout_reader: JoinHandle<()>,
-    pub(super) stderr_reader: JoinHandle<()>,
-    pub(super) stderr_capture: StderrCapture,
-    pub(super) cancel_token: CancellationToken,
-    pub(super) progress_beat: ProgressBeat,
-}
-
-struct OwnedTaskSupervisorSession {
+pub(super) struct SupervisorDependencies {
     event_sink: Arc<dyn TaskEventSink>,
     lifecycle: Arc<dyn TaskLifecyclePort>,
-    child: ProcessGroupOwner,
-    reap_ticket: ReapTicket,
-    lease: StartLease,
     process_controller: Arc<dyn ProcessControl>,
+}
+
+impl SupervisorDependencies {
+    pub(super) fn new(
+        event_sink: Arc<dyn TaskEventSink>,
+        lifecycle: Arc<dyn TaskLifecyclePort>,
+        process_controller: Arc<dyn ProcessControl>,
+    ) -> Self {
+        Self {
+            event_sink,
+            lifecycle,
+            process_controller,
+        }
+    }
+}
+
+pub(super) struct SupervisorIo {
     control_rx: mpsc::Receiver<TaskControlMessage>,
     output_rx: mpsc::Receiver<ReaderMessage>,
     stdin_writer: JoinHandle<()>,
     stdout_reader: JoinHandle<()>,
     stderr_reader: JoinHandle<()>,
     stderr_capture: StderrCapture,
+}
+
+impl SupervisorIo {
+    pub(super) fn new(
+        control_rx: mpsc::Receiver<TaskControlMessage>,
+        output_rx: mpsc::Receiver<ReaderMessage>,
+        stdin_writer: JoinHandle<()>,
+        stdout_reader: JoinHandle<()>,
+        stderr_reader: JoinHandle<()>,
+        stderr_capture: StderrCapture,
+    ) -> Self {
+        Self {
+            control_rx,
+            output_rx,
+            stdin_writer,
+            stdout_reader,
+            stderr_reader,
+            stderr_capture,
+        }
+    }
+}
+
+struct SupervisedProcess {
+    child: ProcessGroupOwner,
+    reap_ticket: ReapTicket,
+}
+
+struct TaskSupervisorSession {
+    dependencies: SupervisorDependencies,
+    process: SupervisedProcess,
+    lease: StartLease,
+    io: SupervisorIo,
     cancel_token: CancellationToken,
     progress_beat: ProgressBeat,
     control_cleanup: PendingControlCleanup,
+}
+
+struct SupervisorRecoveryContext {
+    event_sink: Arc<dyn TaskEventSink>,
+    lifecycle: Arc<dyn TaskLifecyclePort>,
+    lease: StartLease,
+    stderr_capture: StderrCapture,
+    reap_ticket: ReapTicket,
+    control_cleanup: PendingControlCleanup,
+}
+
+impl TaskSupervisorSession {
+    fn new(
+        child: ProcessGroupChild,
+        lease: StartLease,
+        dependencies: SupervisorDependencies,
+        io: SupervisorIo,
+        progress_beat: ProgressBeat,
+    ) -> (Self, SupervisorRecoveryContext) {
+        let cancel_token = lease.cancellation_token();
+        let (child, reap_ticket) =
+            ProcessGroupOwner::new(child, "supervised backend process group");
+        let control_cleanup = PendingControlCleanup::default();
+        let recovery = SupervisorRecoveryContext {
+            event_sink: Arc::clone(&dependencies.event_sink),
+            lifecycle: Arc::clone(&dependencies.lifecycle),
+            lease: lease.clone(),
+            stderr_capture: io.stderr_capture.clone(),
+            reap_ticket: reap_ticket.clone(),
+            control_cleanup: control_cleanup.clone(),
+        };
+        (
+            Self {
+                dependencies,
+                process: SupervisedProcess { child, reap_ticket },
+                lease,
+                io,
+                cancel_token,
+                progress_beat,
+                control_cleanup,
+            },
+            recovery,
+        )
+    }
 }
 
 enum TerminalEvent {
@@ -281,58 +355,18 @@ impl PendingControl {
     }
 }
 
-pub(super) fn spawn_task_supervisor(session: TaskSupervisorSession) {
-    let TaskSupervisorSession {
-        event_sink,
-        lifecycle,
-        child,
-        lease,
-        process_controller,
-        control_rx,
-        output_rx,
-        stdin_writer,
-        stdout_reader,
-        stderr_reader,
-        stderr_capture,
-        cancel_token,
-        progress_beat,
-    } = session;
-    let (child, reap_ticket) = ProcessGroupOwner::new(child, "supervised backend process group");
-    let recovery_event_sink = Arc::clone(&event_sink);
-    let recovery_lifecycle = Arc::clone(&lifecycle);
-    let recovery_lease = lease.clone();
-    let recovery_stderr = stderr_capture.clone();
-    let recovery_reap = reap_ticket.clone();
-    let control_cleanup = PendingControlCleanup::default();
-    let recovery_control_cleanup = control_cleanup.clone();
-    let supervisor = tokio::spawn(run_task_supervisor(OwnedTaskSupervisorSession {
-        event_sink,
-        lifecycle,
-        child,
-        reap_ticket,
-        lease,
-        process_controller,
-        control_rx,
-        output_rx,
-        stdin_writer,
-        stdout_reader,
-        stderr_reader,
-        stderr_capture,
-        cancel_token,
-        progress_beat,
-        control_cleanup,
-    }));
+pub(super) fn spawn_task_supervisor(
+    child: ProcessGroupChild,
+    lease: StartLease,
+    dependencies: SupervisorDependencies,
+    io: SupervisorIo,
+    progress_beat: ProgressBeat,
+) {
+    let (session, recovery) =
+        TaskSupervisorSession::new(child, lease, dependencies, io, progress_beat);
+    let supervisor = tokio::spawn(run_task_supervisor(session));
     tokio::spawn(monitor_supervisor(supervisor, move |message| async move {
-        recover_supervisor_join_failure(
-            recovery_event_sink,
-            recovery_lifecycle,
-            recovery_lease,
-            recovery_stderr,
-            recovery_reap,
-            recovery_control_cleanup,
-            message,
-        )
-        .await;
+        recover_supervisor_join_failure(recovery, message).await;
     }));
 }
 
@@ -346,15 +380,15 @@ where
     }
 }
 
-async fn recover_supervisor_join_failure(
-    event_sink: Arc<dyn TaskEventSink>,
-    lifecycle: Arc<dyn TaskLifecyclePort>,
-    lease: StartLease,
-    stderr_capture: StderrCapture,
-    mut reap_ticket: ReapTicket,
-    control_cleanup: PendingControlCleanup,
-    message: String,
-) {
+async fn recover_supervisor_join_failure(recovery: SupervisorRecoveryContext, message: String) {
+    let SupervisorRecoveryContext {
+        event_sink,
+        lifecycle,
+        lease,
+        stderr_capture,
+        mut reap_ticket,
+        control_cleanup,
+    } = recovery;
     // `run_task_supervisor` owns `ProcessGroupOwner` and every pipe/control task. A panic first
     // unwinds those structured owners: the child guard terminates the process group and the
     // reader guards abort their tasks. Only then does this monitor receive the JoinError and
@@ -452,20 +486,28 @@ fn supervisor_join_failure_payload(
     )
 }
 
-async fn run_task_supervisor(session: OwnedTaskSupervisorSession) {
-    let OwnedTaskSupervisorSession {
-        event_sink,
-        lifecycle,
-        mut child,
-        reap_ticket,
+async fn run_task_supervisor(session: TaskSupervisorSession) {
+    let TaskSupervisorSession {
+        dependencies:
+            SupervisorDependencies {
+                event_sink,
+                lifecycle,
+                process_controller,
+            },
+        process: SupervisedProcess {
+            mut child,
+            reap_ticket,
+        },
         lease,
-        process_controller,
-        mut control_rx,
-        mut output_rx,
-        stdin_writer,
-        stdout_reader,
-        stderr_reader,
-        stderr_capture,
+        io:
+            SupervisorIo {
+                mut control_rx,
+                mut output_rx,
+                stdin_writer,
+                stdout_reader,
+                stderr_reader,
+                stderr_capture,
+            },
         cancel_token,
         progress_beat,
         control_cleanup,
@@ -1936,11 +1978,54 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn session_constructor_immediately_couples_process_owner_and_reap_ticket() {
+        let state = Arc::new(TaskState::default());
+        let lease = state.reserve_start().await.expect("reserve task slot");
+        let (_control_tx, control_rx) = mpsc::channel(1);
+        let (output_tx, output_rx) = mpsc::channel(1);
+        drop(output_tx);
+        let event_sink: Arc<dyn TaskEventSink> = Arc::new(RecordingEventSink::default());
+        let lifecycle: Arc<dyn TaskLifecyclePort> = Arc::new(StateLifecycle(Arc::clone(&state)));
+        let dependencies =
+            SupervisorDependencies::new(event_sink, lifecycle, Arc::new(NoopController));
+        let io = SupervisorIo::new(
+            control_rx,
+            output_rx,
+            tokio::spawn(async {}),
+            tokio::spawn(async {}),
+            tokio::spawn(async {}),
+            StderrCapture::new(),
+        );
+
+        let (session, mut recovery) = TaskSupervisorSession::new(
+            sleeping_process_group(),
+            lease.clone(),
+            dependencies,
+            io,
+            Arc::new(Mutex::new(std::time::Instant::now())),
+        );
+        let pid = session.process.child.id().expect("owned process id");
+        assert_eq!(session.process.reap_ticket.current(), None);
+        assert_eq!(recovery.reap_ticket.current(), None);
+
+        drop(session);
+
+        assert_eq!(
+            recovery
+                .reap_ticket
+                .wait_bounded(StartTaskSpec::TERMINATION_TIMEOUT)
+                .await,
+            Some(ReapOutcome::Reaped)
+        );
+        assert_process_exited(pid, StartTaskSpec::TERMINATION_TIMEOUT).await;
+        state.rollback_start(&lease).await;
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn unknown_process_control_state_forces_kill_reap_and_one_terminal_event() {
         let state = Arc::new(TaskState::default());
         let lease = state.reserve_start().await.expect("reserve task slot");
-        let cancel_token = lease.cancellation_token();
         let (control_tx, control_rx) = mpsc::channel(2);
         state
             .activate(&lease, control_tx.clone())
@@ -1948,31 +2033,29 @@ mod tests {
             .expect("activate task");
         let (output_tx, output_rx) = mpsc::channel(1);
         drop(output_tx);
-        let (child, reap_ticket) =
-            ProcessGroupOwner::new(sleeping_process_group(), "unknown-control test process");
-        let pid = child.id().expect("live test process");
         let events = Arc::new(RecordingEventSink::default());
         let event_sink: Arc<dyn TaskEventSink> = events.clone();
         let lifecycle: Arc<dyn TaskLifecyclePort> = Arc::new(StateLifecycle(Arc::clone(&state)));
         let progress_beat = Arc::new(Mutex::new(std::time::Instant::now()));
-
-        let supervisor = tokio::spawn(run_task_supervisor(OwnedTaskSupervisorSession {
-            event_sink,
-            lifecycle,
-            child,
-            reap_ticket,
-            lease: lease.clone(),
-            process_controller: Arc::new(UnknownStateController),
+        let dependencies =
+            SupervisorDependencies::new(event_sink, lifecycle, Arc::new(UnknownStateController));
+        let io = SupervisorIo::new(
             control_rx,
             output_rx,
-            stdin_writer: tokio::spawn(async {}),
-            stdout_reader: tokio::spawn(async {}),
-            stderr_reader: tokio::spawn(async {}),
-            stderr_capture: StderrCapture::new(),
-            cancel_token,
+            tokio::spawn(async {}),
+            tokio::spawn(async {}),
+            tokio::spawn(async {}),
+            StderrCapture::new(),
+        );
+        let (session, _recovery) = TaskSupervisorSession::new(
+            sleeping_process_group(),
+            lease.clone(),
+            dependencies,
+            io,
             progress_beat,
-            control_cleanup: PendingControlCleanup::default(),
-        }));
+        );
+        let pid = session.process.child.id().expect("live test process");
+        let supervisor = tokio::spawn(run_task_supervisor(session));
         let (response_tx, response_rx) = oneshot::channel();
         control_tx
             .send(TaskControlMessage {
@@ -2085,12 +2168,14 @@ mod tests {
         let event_sink: Arc<dyn TaskEventSink> = events.clone();
         let lifecycle: Arc<dyn TaskLifecyclePort> = Arc::new(StateLifecycle(Arc::clone(&state)));
         let recovery = tokio::spawn(recover_supervisor_join_failure(
-            event_sink,
-            lifecycle,
-            lease.clone(),
-            StderrCapture::new(),
-            reap_ticket,
-            control_cleanup,
+            SupervisorRecoveryContext {
+                event_sink,
+                lifecycle,
+                lease: lease.clone(),
+                stderr_capture: StderrCapture::new(),
+                reap_ticket,
+                control_cleanup,
+            },
             "synthetic panic with active control".to_string(),
         ));
 
