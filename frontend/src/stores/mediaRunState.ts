@@ -41,15 +41,11 @@ export const useMediaRunState = defineStore('mediaRunState', () => {
     ensure(id).lastOutputPath = path
   }
 
-  function setIdleRunState(id: string): void {
+  function resetItemRunState(id: string): void {
     state[id] = {
       taskState: createIdleTaskState(),
       lastOutputPath: '',
     }
-  }
-
-  function resetItemRunState(id: string): void {
-    setIdleRunState(id)
   }
 
   function dropItem(id: string): void {

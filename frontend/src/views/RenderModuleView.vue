@@ -28,10 +28,10 @@ const pauseButtonLabel = computed(() => {
   if (batch.controlPending === 'resume') {
     return '继续中...'
   }
-  return batch.isPaused ? '继续队列' : '暂停队列'
+  return batch.phase === 'paused' ? '继续队列' : '暂停队列'
 })
 const interruptButtonLabel = computed(
-  () => batch.isCancelling || batch.controlPending === 'cancel' ? '中断中...' : '中断批次',
+  () => batch.phase === 'cancelling' ? '中断中...' : '中断批次',
 )
 
 function handleResolveConflict(action: ResumeConflictAction): void {
@@ -58,14 +58,14 @@ function handleResolveConflict(action: ResumeConflictAction): void {
           </button>
           <button
             class="ghost-button"
-            :disabled="!batch.isRunning || batch.isCancelling || batch.controlPending !== null"
-            @click="batch.isPaused ? resumeCurrentTask() : pauseCurrentTask()"
+            :disabled="!['running', 'paused'].includes(batch.phase) || batch.controlPending !== null"
+            @click="batch.phase === 'paused' ? resumeCurrentTask() : pauseCurrentTask()"
           >
             {{ pauseButtonLabel }}
           </button>
           <button
             class="danger-button"
-            :disabled="!batch.isRunning || batch.isCancelling || batch.controlPending !== null"
+            :disabled="!['running', 'paused'].includes(batch.phase) || batch.controlPending !== null"
             @click="interruptBatch()"
           >
             {{ interruptButtonLabel }}

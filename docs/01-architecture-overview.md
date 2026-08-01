@@ -98,8 +98,8 @@ Rust 与 Python 之间的通信不通过 HTTP 或 gRPC，而是通过子进程 s
 根目录 `contracts/` 中的 JSON Schema 2020-12 文档定义配置、IPC、NDJSON、错误码与持久化边界。
 独立的 `application-defaults.schema.json` 与数据文件拥有跨 Python、Vue、Rust 和发布脚本共享的
 产品默认值；它不属于 IPC，也不改变任何持久化版本。
-IPC manifest v3 同时声明 10 个 Tauri command、6 个任务事件、七类 Python envelope、长任务与
-one-shot 的 stdin/期限策略、协议大小上限，以及终端/内部 stage-worker 两个前缀。
+IPC manifest v4 同时声明 10 个 Tauri command、6 个任务事件、七类 Python envelope、长任务与
+one-shot 的 stdin/期限策略、协议大小上限，以及终端、TensorRT 日志和内部 stage-worker 三个前缀。
 `scripts/generate_contracts.py` 是薄 CLI，schema 组合、验证和语言 renderer 位于
 `scripts/contract_codegen/`。它生成严格的聚合边界 schema、stage-worker 专用 Pydantic 边界、单一
 TypeScript 绑定、Rust 命令/事件/子进程 spec，以及三种语言的只读应用默认常量；one-shot 和长任务
@@ -274,7 +274,7 @@ graph LR
 |------|------|
 | [`backend/app/__main__.py`](../backend/app/__main__.py) | CLI 入口，双层异常兜底 |
 | [`backend/app/processing/streaming/pipeline.py`](../backend/app/processing/streaming/pipeline.py) | stage-worker 流式流水线入口 |
-| [`backend/app/protocol/__init__.py`](../backend/app/protocol/__init__.py) | 集中的 NDJSON emitter |
+| [`backend/app/protocol/emitter.py`](../backend/app/protocol/emitter.py) | 集中的 NDJSON emitter；package initializer 保持 inert |
 | [`backend/app/planning/stage_projection.py`](../backend/app/planning/stage_projection.py) | 唯一步骤顺序、输出帧数和 FPS 投影 |
 | [`backend/app/planning/manifest.py`](../backend/app/planning/manifest.py) | 恢复策略、workspace 与 repository 的协调器 |
 | [`backend/app/algorithms/interfaces.py`](../backend/app/algorithms/interfaces.py) | 单帧、帧对与帧序列窄算法协议 |

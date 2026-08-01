@@ -2,7 +2,7 @@
 
 import type { TaskErrorPayload } from '@/types/protocol'
 
-import { applyTaskError } from '../../events'
+import { transitionTaskStatus } from '../../events'
 
 import type {
   BatchStatePort,
@@ -15,7 +15,7 @@ import type {
 } from './types'
 
 type FinalizeDeps =
-  & Pick<BatchStatePort, 'getBatch' | 'setBatch'>
+  & Pick<BatchStatePort, 'getBatch' | 'dispatchBatch'>
   & Pick<MediaRunStatePort, 'setItemTaskState'>
   & TaskIssuePort
   & OutputLocationPort
@@ -25,27 +25,16 @@ export function createFinalizeOps(
   helpers: TaskContextCapability,
   internal: Pick<QueueContinuation, 'runNextQueuedItem'>,
 ): FinalizationCapability {
-  function finishBatchRun(): void {
-    deps.setBatch({
-      isRunning: false,
-      isPaused: false,
-      isCancelling: false,
-      controlPending: null,
-    })
-  }
-
   async function finalizeCurrent(
     state: Parameters<FinalizationCapability['finalizeCurrent']>[0],
   ): Promise<void> {
     const context = helpers.getCurrentTaskContext()
     const item = context.item
     if (!item) {
-      const queue = deps.getBatch().queue
-      deps.setBatch({ currentId: null })
-      if (queue.length > 0) {
+      const hasQueuedItems = deps.getBatch().queue.length > 0
+      deps.dispatchBatch({ type: 'item-finalized' })
+      if (hasQueuedItems) {
         await internal.runNextQueuedItem()
-      } else {
-        finishBatchRun()
       }
       return
     }
@@ -59,30 +48,19 @@ export function createFinalizeOps(
           // Ignore shell-open failures after processing finished.
         }
       }
-      const batch = deps.getBatch()
-      if (state === 'completed') {
-        deps.setBatch({ completedCount: batch.completedCount + 1 })
-      }
     }
 
-    deps.setBatch({ currentId: null })
-    if (deps.getBatch().queue.length > 0) {
-      deps.setBatch({
-        isPaused: false,
-        isCancelling: false,
-        controlPending: null,
-      })
+    const hasQueuedItems = deps.getBatch().queue.length > 0
+    deps.dispatchBatch({ type: 'item-finalized' })
+    if (hasQueuedItems) {
       await internal.runNextQueuedItem()
-      return
     }
-
-    finishBatchRun()
   }
 
   async function handleErrored(error: TaskErrorPayload): Promise<void> {
     const { item, runState } = helpers.getCurrentTaskContext()
     if (item && runState) {
-      deps.setItemTaskState(item.id, applyTaskError(runState.taskState))
+      deps.setItemTaskState(item.id, transitionTaskStatus(runState.taskState, 'error'))
     }
     deps.setTaskIssue(error)
     await finalizeCurrent('error')

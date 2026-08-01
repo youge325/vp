@@ -23,7 +23,8 @@ describe('task context selectors', () => {
       ...createIdleTaskState(),
       status: 'running',
     })
-    useTaskStore().setBatch({ currentId: item.id })
+    useTaskStore().dispatchBatch({ type: 'started', ids: [item.id] })
+    useTaskStore().dispatchBatch({ type: 'queue-advanced', currentId: item.id, remaining: [] })
 
     const context = useCurrentTaskContext()
 
@@ -32,10 +33,11 @@ describe('task context selectors', () => {
   })
 
   it('returns an empty current context for a stale id even when stale state exists', () => {
-    useTaskStore().setBatch({ currentId: 'missing-item' })
+    useTaskStore().dispatchBatch({ type: 'started', ids: ['missing-item'] })
+    useTaskStore().dispatchBatch({ type: 'queue-advanced', currentId: 'missing-item', remaining: [] })
     useMediaRunState().setTaskState('missing-item', {
       ...createIdleTaskState(),
-      status: 'paused',
+      status: 'running',
     })
 
     expect(useCurrentTaskContext().value).toEqual({
@@ -57,10 +59,11 @@ describe('task context selectors', () => {
     })
     runStateStore.setTaskState('missing-item', {
       ...createIdleTaskState(),
-      status: 'paused',
+      status: 'running',
       logs: ['stale'],
     })
-    useTaskStore().setBatch({ currentId: 'missing-item' })
+    useTaskStore().dispatchBatch({ type: 'started', ids: ['missing-item'] })
+    useTaskStore().dispatchBatch({ type: 'queue-advanced', currentId: 'missing-item', remaining: [] })
 
     const context = useConsoleTaskContext()
 

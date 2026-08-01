@@ -7,14 +7,17 @@ describe('useTaskStore', () => {
     setActivePinia(createPinia())
   })
 
-  it('setBatch merges partial updates', () => {
+  it('dispatchBatch applies immutable domain transitions', () => {
     const store = useTaskStore()
-    expect(store.batch.isRunning).toBe(false)
+    expect(store.batch.phase).toBe('idle')
 
-    store.setBatch({ isRunning: true, queue: ['a', 'b'] })
-    expect(store.batch.isRunning).toBe(true)
+    store.dispatchBatch({ type: 'started', ids: ['a', 'b'] })
+    expect(store.batch.phase).toBe('running')
     expect(store.batch.queue).toEqual(['a', 'b'])
-    expect(store.batch.completedCount).toBe(0) // untouched
+
+    store.dispatchBatch({ type: 'queue-advanced', currentId: 'a', remaining: ['b'] })
+    expect(store.batch.currentId).toBe('a')
+    expect(store.batch.queue).toEqual(['b'])
   })
 
   it('setRuntimeIds clones the input array', () => {

@@ -56,7 +56,7 @@ export function getTaskRunner(): BatchRunner {
     setActiveItem: (id) => mediaStore.setActive(id),
     getActiveItemId: () => mediaStore.activeItemId,
     getBatch: () => taskStore.batch,
-    setBatch: (partial) => taskStore.setBatch(partial),
+    dispatchBatch: (event) => taskStore.dispatchBatch(event),
     setRuntimeIds: (ids) => taskStore.setRuntimeIds(ids),
     setPendingConflict: (descriptor) => taskStore.setPendingConflict(descriptor),
     buildRequest: (item, resumeMode) => buildTaskRequest(item, resumeMode),

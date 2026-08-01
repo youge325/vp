@@ -29,7 +29,7 @@ export function useStepRailState() {
       enhance: env ? 'ready' : 'idle',
       postprocess: wf.postprocess.enabled ? 'ready' : 'idle',
       encode: env && getVisibleEncoderProfiles(env).length > 0 ? 'ready' : 'idle',
-      render: taskStore.batch.isRunning ||
+      render: taskStore.batch.phase !== 'idle' ||
         (mediaStore.selectedItems.length > 0 && mediaStore.selectedItems.every((item) => Boolean(item.inputPath)))
         ? 'ready' : 'idle',
     }

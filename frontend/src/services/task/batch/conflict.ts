@@ -15,7 +15,7 @@ import { buildResumeConflictDescriptorFromError } from '../resume-classifier'
 import { TASK_ERROR_CODES, type ResumeMode, type TaskErrorPayload } from '@/types/protocol'
 
 type ConflictResolverDeps =
-  & Pick<BatchStatePort, 'getBatch' | 'setBatch' | 'setPendingConflict'>
+  & Pick<BatchStatePort, 'getBatch' | 'dispatchBatch' | 'setPendingConflict'>
   & Pick<MediaItemPort, 'getMediaItem'>
 type ConflictLifecycle =
   & TaskContextCapability
@@ -39,7 +39,7 @@ export function createConflictResolver(
     }
 
     if (action === 'cancel') {
-      deps.setBatch({ queue: [] })
+      deps.dispatchBatch({ type: 'queue-cleared' })
       await lifecycle.finalizeCurrent('cancelled')
       return
     }

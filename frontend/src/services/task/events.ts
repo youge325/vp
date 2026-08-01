@@ -3,7 +3,7 @@
 
 import { TERMINAL_PROGRESS_PREFIX, TENSORRT_LOG_PREFIX } from '@/types/protocol'
 import type { ResumeStatusPayload, TaskLogPayload } from '@/types/protocol'
-import type { MediaTaskState } from '@/types/domain/media'
+import type { MediaTaskState, MediaTaskStatus } from '@/types/domain/media'
 
 const escapedProgressPrefix = TERMINAL_PROGRESS_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const STAGE_PROGRESS_KEY_RE = new RegExp(
@@ -79,36 +79,17 @@ export function appendTaskLog(state: MediaTaskState, payload: TaskLogPayload): M
 }
 
 export function applyTaskProgress(state: MediaTaskState): MediaTaskState {
-  // Progress only promotes idle state; paused/cancelling states are preserved.
-  const status = state.status === 'paused' || state.status === 'cancelling' ? state.status : 'running'
-  if (status === state.status) {
+  if (state.status !== 'idle') {
     return state
   }
-  return { ...state, status }
+  return transitionTaskStatus(state, 'running')
 }
 
-export function applyTaskPaused(state: MediaTaskState): MediaTaskState {
-  return { ...state, status: 'paused' }
-}
-
-export function applyTaskResumed(state: MediaTaskState): MediaTaskState {
-  return { ...state, status: 'running' }
-}
-
-export function applyTaskCancelling(state: MediaTaskState): MediaTaskState {
-  return { ...state, status: 'cancelling' }
-}
-
-export function applyTaskCompleted(state: MediaTaskState): MediaTaskState {
-  return { ...state, status: 'completed' }
-}
-
-export function applyTaskError(state: MediaTaskState): MediaTaskState {
-  return { ...state, status: 'error' }
-}
-
-export function applyTaskCancelled(state: MediaTaskState): MediaTaskState {
-  return { ...state, status: 'cancelled' }
+export function transitionTaskStatus(
+  state: MediaTaskState,
+  status: MediaTaskStatus,
+): MediaTaskState {
+  return state.status === status ? state : { ...state, status }
 }
 
 export function applyTaskResumeStatus(

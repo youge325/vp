@@ -129,7 +129,7 @@ python -m pytest tests -q
 - FFmpeg 封装测试
 - 流水线集成测试
 - 生成边界的严格解码与错误码一致性测试
-- manifest v3 严格字段校验与并发 NDJSON 整行写入测试
+- manifest v4 严格字段校验、协议标记唯一来源与并发 NDJSON 整行写入测试
 - CLI `_HANDLERS` 惰性导入、parser/handler/实现精确同集和无副作用 package import 测试
 
 默认进程运行共享与 ONNX 测试。PyTorch 与 Paddle 使用独立 pytest 进程，避免在同一进程加载
@@ -186,7 +186,8 @@ python -m pytest tests_full_e2e -m full_e2e -q
   services/stores/IPC 反向依赖；Knip 查未消费导出、文件和 npm 依赖。
 - `scripts/check_architecture_contracts.py` 的聚合入口调用公共语义检查、应用默认值、脚本可达性和
   Rust 最小可见性模块。脚本入口从 pre-commit、workflow 与明确工具入口计算，并跟踪 PowerShell
-  dot-source；受限 Rust 符号必须存在非测试生产消费者。公共语义检查同时建立 Python package DAG
+  dot-source；受限 Rust 符号必须存在非测试生产消费者。Rust 检查共同使用词法提取器，只按
+  delimiter 精确抹除 `#[cfg(test)]` item 并保留其后的生产声明与原始行号。公共语义检查同时建立 Python package DAG
   与 Rust crate-module DAG，
   检查未使用 Cargo 依赖、Rust public surface、生成协议深导入、命令面、未消费协议 re-export、
   Python 中立 dataclass 字段/包级 re-export/CLI handler、无副作用 package、CSS/test-id/test-support
@@ -195,7 +196,9 @@ python -m pytest tests_full_e2e -m full_e2e -q
   emit/lifecycle/reap/rollback 结果或在 `subprocess.rs` 外 fire-and-forget 地持有进程 owner，并验证
   cleanup coordinator 始终保留 join handle、稳定进程句柄和 `ReapTicket` outcome。Cargo 扫描只在
   Typify 宏确实导入 `contracts/` 内含 `pattern` 的 schema 时，把 `regress` 认作生成代码依赖。
-- `scripts/check_python_dead_code.py` 从 `app`、`app.__main__` 和显式导出入口静态遍历 production
+- `scripts/check_python_dead_code.py` 只是参数/退出码入口；`scripts/python_quality/` 将模块解析、
+  reviewed boundary、production reachability 与 Vulture 分为无副作用职责模块。它从 `app`、
+  `app.__main__` 和显式导出入口静态遍历 production
   import DAG，把 CLI 字面量 `_HANDLERS` 转换为精确动态边，并以 production roots 单独运行
   Vulture；测试引用或普通字符串不能让生产模块/符号存活，stage-worker 生成模型通过真实 command
   与 processing import 边可达。

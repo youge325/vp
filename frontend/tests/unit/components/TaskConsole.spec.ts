@@ -55,11 +55,13 @@ describe('TaskConsole TensorRT logs', () => {
       logs: ['active log'],
     })
     runStateStore.setTaskState('missing-item', {
-      status: 'paused',
+      status: 'running',
       resumeStatus: null,
       logs: ['stale log'],
     })
-    useTaskStore().setBatch({ currentId: 'missing-item' })
+    const taskStore = useTaskStore()
+    taskStore.dispatchBatch({ type: 'started', ids: ['missing-item'] })
+    taskStore.dispatchBatch({ type: 'queue-advanced', currentId: 'missing-item', remaining: [] })
 
     const wrapper = mount(TaskConsole)
 
@@ -69,11 +71,10 @@ describe('TaskConsole TensorRT logs', () => {
 
   it('keeps a completed batch visible as N/N at 100 percent', () => {
     const taskStore = useTaskStore()
+    const runStateStore = useMediaRunState()
     taskStore.setRuntimeIds(['a', 'b'])
-    taskStore.setBatch({
-      completedCount: 2,
-      isRunning: false,
-    })
+    runStateStore.setTaskState('a', { status: 'completed', logs: [], resumeStatus: null })
+    runStateStore.setTaskState('b', { status: 'completed', logs: [], resumeStatus: null })
 
     const wrapper = mount(TaskConsole)
 

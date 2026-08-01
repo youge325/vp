@@ -13,10 +13,9 @@ import type {
 } from '@/types/protocol'
 import {
   appendTaskLog,
-  applyTaskCancelled,
-  applyTaskCompleted,
   applyTaskProgress,
   applyTaskResumeStatus,
+  transitionTaskStatus,
 } from '../events'
 import type {
   ConflictCapability,
@@ -60,7 +59,7 @@ export function createEventHandlers(
   async function onCompleted(payload: TaskCompletedPayload): Promise<void> {
     const { item, runState } = lifecycle.getCurrentTaskContext()
     if (item && runState) {
-      deps.setItemTaskState(item.id, applyTaskCompleted(runState.taskState))
+      deps.setItemTaskState(item.id, transitionTaskStatus(runState.taskState, 'completed'))
       if (payload.outputPath) {
         deps.setItemLastOutputPath(item.id, payload.outputPath)
       }
@@ -80,7 +79,7 @@ export function createEventHandlers(
   async function onCancelled(payload: TaskCancelledPayload): Promise<void> {
     const { item, runState } = lifecycle.getCurrentTaskContext()
     if (item && runState) {
-      deps.setItemTaskState(item.id, applyTaskCancelled(runState.taskState))
+      deps.setItemTaskState(item.id, transitionTaskStatus(runState.taskState, 'cancelled'))
     }
     // A watchdog stall is exceptional; user cancellation remains silent.
     if (payload.reason === 'stalled') {

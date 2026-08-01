@@ -88,18 +88,14 @@ re-export 层；`OutputConfig.outputDir` 的非空白约束也由 schema 生成�
 ```python
 @dataclass(frozen=True, slots=True)
 class StagePlan:
-    projection: StageProjection
-    source_frames: int
-    source_duration: float
-    output_fps: float | None
-    steps: tuple[ProcessingStep, ...]
-    requires_file_pipeline: bool
-    resume_source_frames: int
+    source: VideoMetadata
+    stages: tuple[ProjectedStage, ...]
+    encoder_fps_override: float | None
 ```
 
-插值位置、输出帧数、FPS 与输出尺寸均直接委托同一个 `StageProjection`。`StagePlan` 还从 descriptor
-派生文件流水线选择和恢复源帧数；preflight 与执行层只读取这些事实，不再重复判断 stage 类型或
-重算投影。
+preflight 调用 `StageProjection.stages()` 恰好一次，把步骤顺序、每阶段几何、帧数与 FPS 完整
+物化进冻结 tuple。`StagePlan` 从该 tuple 派生最终尺寸、流 FPS、编码帧数、插值步骤、文件流水线
+选择和恢复源帧数；resume/chunk 只对局部帧数调用 `slice_stages()`，不重算顺序、几何或 FPS。
 
 [`backend/app/catalog/stage_descriptors.py`](../backend/app/catalog/stage_descriptors.py) 是 stage
 能力的中立不可变 catalog，统一声明执行模式、文件流水线要求、后端支持、固定倍率、模型类别、
@@ -164,9 +160,9 @@ graph LR
 ```
 
 [`backend/app/planning/stage_projection.py`](../backend/app/planning/stage_projection.py) 的
-`StageProjection.resolve_workflow()` 在 composition root 对已校验 workflow 只投影一次。插帧、
-超分与处理顺序全部由 workflow 自身决定；同一不可变 projection 直接下传 `StagePlan`，不接受
-第二套 algorithm override，也不为 CLI 构造备用 stage。
+`StageProjection.resolve_workflow()` 在 composition root 对已校验 workflow 解析一次步骤顺序和
+target FPS。preflight 随后把完整投影物化为 `StagePlan.stages`；执行路径不再持有 projection 或
+第二份 steps，也不接受 algorithm override 或为 CLI 构造备用 stage。
 
 `process_video_streaming()` 在 preflight 和 manifest 准备完成后只构造一次不可变的
 `StreamingPipelineContext`。dispatch、raw/stage-file runtime 与最终 lifecycle 共享同一对象；
@@ -177,7 +173,8 @@ rawvideo 路径由 stage-worker 子进程链执行算法，主进程只保留编
 raw pipeline 在流 FPS 确定后创建一次不可变的 `EncoderRuntimeConfig`，encoder thread、worker 与 segment writer 共享该配置；队列和停止事件仍由各自运行时边界管理，避免跨层重复维护编码参数。
 
 同一 composition root 还创建一次不可变的 `WorkerPipelineRuntimeConfig`，集中 FFmpeg、输入、
-decode config、stage plan、backend、进度回调、源尺寸/帧数、resume state 与 metrics。
+decode config、stage plan、进度回调、resume state 与 metrics。源尺寸与帧数只从
+`stage_plan.source` 读取。
 `worker_pipeline` 和 `worker_chain_runtime` 传递同一对象；派生 worker plans、queues、error queue
 和 stop event 仍归各自运行时层所有。`PipelineMetrics` 必须由 processing plan 显式提供。
 
@@ -265,6 +262,11 @@ factory、stage runtime 和 execution loop 共享 `Algorithm` union、`ITensorBa
 `FramePayload` 的 host/device 转换必须显式接收同一 `PipelineMetrics`，确保生产和测试路径都
 记录一致的传输指标。
 
+[`backend/app/catalog/model_metrics.py`](../backend/app/catalog/model_metrics.py) 用冻结的
+`RuntimeMetricSpec` 唯一定义 GFLOPS、激活内存、runtime overhead、帧窗口、输入 modulo、分析状态
+和诊断七项共有指标。`ModelMetricSpec` 通过组合持有默认 runtime 与各引擎 runtime，wire projector
+再展开为原有扁平协议，模型与 TensorRT 指标不复制字段集合。
+
 帧滤镜链由 `FrameFilterChainAlgorithm` 负责验证、顺序执行和 CPU/Tensor fallback；
 具体滤镜实现与支持能力集中在 `frame_filter_handlers.py` 的单一不可变 descriptor registry 中。
 每种滤镜只注册一次 NumPy handler，并按实际能力选择性声明 Tensor handler 与 capability predicate；不维护平行 kind 列表或运行时全局注册表。
@@ -289,12 +291,13 @@ factory、stage runtime 和 execution loop 共享 `Algorithm` union、`ITensorBa
 
 composition root 从 `settings` 取得已解析的 FFmpeg/FFprobe 路径，并只构造一次
 [`FFmpegMediaAdapter`](../backend/app/adapters/ffmpeg_media.py)。adapter 实现消费方拥有的媒体窄端口，
-持有视频元数据与帧数缓存；`utils/ffmpeg/__init__.py` 不聚合导出，也不存在第二层 wrapper 或再次
+持有按规范化路径、mtime 与文件大小索引的不可变探测快照；基础 ffprobe 只解析一次，帧数补探测
+最多一次，文件身份变化自动失效。`utils/ffmpeg/__init__.py` 不聚合导出，也不存在第二层 wrapper 或再次
 执行 `shutil.which` 的路径探测。
 
 ```mermaid
 graph LR
-    A[FFmpegMediaAdapter] --> B[media_probe.py 媒体元数据与缓存]
+    A[FFmpegMediaAdapter 指纹快照缓存] --> B[media_probe.py 单次探测与纯解析]
     A --> E[encode.py 编码/转码/音频]
     A --> F[io.py 原始视频管道]
     C[check command] --> I[capabilities.py 能力聚合]
@@ -305,7 +308,7 @@ graph LR
 
 | 模块 | 职责 |
 |------|------|
-| `media_probe.py` | 视频元数据、帧数缓存和 FFmpeg 可用性探测 |
+| `media_probe.py` | 单次视频元数据/帧数探测、字段纯解析和 FFmpeg 可用性探测 |
 | `capability_probe.py` | Codec 帮助解析、码率控制与硬件解码实测 |
 | `capabilities.py` | 按 GPU vendor 聚合 encoder/decoder profiles |
 | `encode.py` | 编码命令构建、音频合并、concat 拼接 |
@@ -318,7 +321,7 @@ graph LR
 
 ### ProcessError
 
-[`backend/app/errors/__init__.py`](../backend/app/errors/__init__.py):
+[`backend/app/errors/process.py`](../backend/app/errors/process.py):
 
 ```python
 class ProcessError(Exception):
@@ -337,16 +340,17 @@ Rust 原样保留 `code / message / details`，前端再把 details 投影为 `R
 
 ### 错误码推断
 
-[`backend/app/errors/_bootstrap.py`](../backend/app/errors/_bootstrap.py):
+[`backend/app/errors/bootstrap.py`](../backend/app/errors/bootstrap.py):
 
-- 启动期安全：在 `app` 完全加载前，按异常消息关键字匹配错误码
-- 运行时：按异常类型分派（`ImportError` → `missing_python_dependency`, `FileNotFoundError` → `io_error`）
+- 启动期安全：只依赖标准库和 bootstrap 生成常量，按同一优先级推断合法 wire code
+- 完整运行与依赖加载失败都调用该实现；推断模块自身不可用时固定回退 `process_failed`
+- `errors/__init__.py` 为 inert package initializer，不聚合错误类型、错误码或创建锁
 
 ## 进度上报
 
 ### NDJSON emitter
 
-[`backend/app/protocol/__init__.py`](../backend/app/protocol/__init__.py) 提供唯一模块级 `ndjson`
+[`backend/app/protocol/emitter.py`](../backend/app/protocol/emitter.py) 提供唯一模块级 `ndjson`
 发射器；生产代码不自行拼装 task envelope：
 
 ```python
@@ -360,7 +364,7 @@ class _NdjsonEmitter:
   保证并发 reporter 不会交错 NDJSON 行
 - 普通日志和终端进度条继续输出到 stderr，不经过此处
 
-stage-worker 的进度/错误事件使用生成 Pydantic 模型，并以 manifest v3 生成的
+stage-worker 的进度/错误事件使用生成 Pydantic 模型，并以 manifest v4 生成的
 `STAGE_WORKER_EVENT_PREFIX` 写到 worker stderr；父 Python 进程只解析该前缀后的类型化 JSON。
 worker 行长、stderr tail、error summary 和回收期限与 Rust 共用 manifest limits。
 

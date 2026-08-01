@@ -78,9 +78,7 @@ export async function seedTaskConsoleState(options: {
   logs?: string[]
   completedCount: number
   totalCount: number
-  isRunning?: boolean
-  isPaused?: boolean
-  isCancelling?: boolean
+  phase?: 'idle' | 'running' | 'paused' | 'cancelling'
   controlPending?: 'pause' | 'resume' | 'cancel' | null
   resumeStatus?: {
     resumed: boolean
@@ -103,6 +101,8 @@ export async function seedTaskConsoleState(options: {
     const task = state.task as {
       batch?: Record<string, unknown>
       batchRuntimeIds?: string[]
+      dispatchBatch?: (event: unknown) => void
+      setRuntimeIds?: (ids: string[]) => void
     } | undefined
     const root = document.querySelector('#app') as HTMLElement & { __vue_app__?: unknown } | null
     const vueApp = root?.__vue_app__ as {
@@ -118,38 +118,56 @@ export async function seedTaskConsoleState(options: {
       }
     } | undefined
     const runStateStore = vueApp?.config?.globalProperties?.$pinia?._s?.get('mediaRunState')
-    if (!task?.batch || !runStateStore?.setTaskState) {
+    if (!task?.batch || !task.dispatchBatch || !runStateStore?.setTaskState) {
       return false
     }
 
+    const runtimeIds = Array.from(
+      { length: payload.totalCount },
+      (_, index) => `batch-item-${index + 1}`,
+    )
+    if (runtimeIds.length > 0) {
+      runtimeIds[Math.min(payload.completedCount, runtimeIds.length - 1)] = payload.itemId
+    }
+    runtimeIds.forEach((id, index) => {
+      runStateStore.setTaskState?.(id, {
+        status: index < payload.completedCount ? 'completed' : 'idle',
+        logs: [],
+        resumeStatus: null,
+      })
+    })
     runStateStore.setTaskState(payload.itemId, {
-      status: payload.isRunning ? 'running' : 'completed',
+      status: payload.phase === 'idle' ? 'completed' : 'running',
       logs: payload.logs,
       resumeStatus: payload.resumeStatus,
     })
     runStateStore.setLastOutputPath?.(payload.itemId, '')
-    Object.assign(task.batch, {
-      queue: [],
-      currentId: payload.itemId,
-      completedCount: payload.completedCount,
-      isRunning: payload.isRunning,
-      isPaused: payload.isPaused,
-      isCancelling: payload.isCancelling,
-      controlPending: payload.controlPending,
-    })
-    task.batchRuntimeIds = Array.from(
-      { length: payload.totalCount },
-      (_, index) => `batch-item-${index + 1}`,
-    )
+    task.setRuntimeIds?.(runtimeIds)
+    task.dispatchBatch({ type: 'queue-cleared' })
+    task.dispatchBatch({ type: 'item-finalized' })
+    if (payload.phase !== 'idle') {
+      task.dispatchBatch({ type: 'started', ids: [payload.itemId] })
+      task.dispatchBatch({ type: 'queue-advanced', currentId: payload.itemId, remaining: [] })
+    }
+    if (payload.phase === 'paused') {
+      task.dispatchBatch({ type: 'control-requested', kind: 'pause' })
+      task.dispatchBatch({ type: 'control-succeeded', kind: 'pause' })
+    }
+    if (payload.phase === 'cancelling') {
+      task.dispatchBatch({ type: 'control-requested', kind: 'cancel' })
+      if (payload.controlPending !== 'cancel') {
+        task.dispatchBatch({ type: 'control-succeeded', kind: 'cancel' })
+      }
+    } else if (payload.controlPending) {
+      task.dispatchBatch({ type: 'control-requested', kind: payload.controlPending })
+    }
     return true
   }, {
     itemId,
     logs: options.logs ?? [],
     completedCount: options.completedCount,
     totalCount: options.totalCount,
-    isRunning: options.isRunning ?? false,
-    isPaused: options.isPaused ?? false,
-    isCancelling: options.isCancelling ?? false,
+    phase: options.phase ?? 'idle',
     controlPending: options.controlPending ?? null,
     resumeStatus: options.resumeStatus ?? null,
   })

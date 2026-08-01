@@ -25,7 +25,7 @@ export function useTaskOrchestrator() {
   // ``services/task/preflight.ts``.
   const preflightVerdict = computed(() =>
     evaluateStartReadiness({
-      isRunning: taskStore.batch.isRunning,
+      phase: taskStore.batch.phase,
       selectedItems: mediaStore.selectedItems.map((item) => ({
         displayName: item.displayName,
         inputPath: item.inputPath,

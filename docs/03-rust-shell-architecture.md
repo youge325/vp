@@ -31,7 +31,7 @@ crate 内部接口；命令是否可由前端调用由 Tauri handler 与权限�
 
 根目录 `contracts/ipc-manifest.json` 是命令名、参数、返回值和事件名的唯一清单。生成脚本产出 Rust build manifest 与前端类型化 invoke 映射；架构门禁再与 `generate_handler!` 和 Tauri permissions 比对。
 
-manifest v3 还声明长任务与 one-shot 的 Python subcommand、stdin payload、success/event 类型、
+manifest v4 还声明长任务与 one-shot 的 Python subcommand、stdin payload、success/event 类型、
 discriminator、期限和统一大小上限。`generated/backend_oneshot.rs` 将每个应用命令生成成 sealed
 `BackendProcessSpec` / `BackendOneShotSpec`；调用方选择 `StartTaskSpec`、`InspectVideoSpec`、
 `CheckEnvironmentSpec` 或 `CheckResumeStateSpec`，不维护平行命令表或 timeout 常量。
@@ -125,7 +125,7 @@ schema mismatch。`check`/`info` 的 transport-only `type` 在反序列化前移
 | 终止与回收 | 5 秒 |
 
 这些值以及 1 MiB pipe 行、8 MiB one-shot stdout、64 KiB stderr tail 和 8 KiB error summary
-都来自 manifest v3；`process` 与每个 one-shot 条目显式绑定 `terminationReapLimit`，Rust 生产代码只消费
+都来自 manifest v4；`process` 与每个 one-shot 条目显式绑定 `terminationReapLimit`，Rust 生产代码只消费
 各 sealed spec 生成的期限。
 
 ### 任务状态机与启动租约
@@ -182,7 +182,7 @@ sequenceDiagram
     Rust->>Rust: 取得 stdin/stdout/stderr 和 root pid
     Rust->>State: activate(lease, control_tx)
     Rust->>Rust: 启动 stdin writer 与 stdout/stderr reader
-    Rust->>Supervisor: spawn_task_supervisor(session)
+    Rust->>Supervisor: spawn_task_supervisor(child, dependencies, io, lease)
     Rust-->>Frontend: Ok(())
 ```
 
@@ -192,8 +192,10 @@ writer 前启动，避免三条 pipe 互相填满形成死锁；stdin 写入也�
 ### TaskSupervisor 与终态仲裁
 
 [`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 的
-`TaskSupervisorSession` 是运行任务的结构化 owner，持有 child、lease、控制/输出通道、三个 pipe
-task、stderr capture、取消 token 和 progress beat。只有 supervisor 能发送终态。
+私有 `TaskSupervisorSession` 是运行任务的唯一结构化 owner。构造器收到 `ProcessGroupChild` 后立即
+转换为 `ProcessGroupOwner + ReapTicket`，再把依赖、pipe I/O、lease、取消 token 和 progress beat
+组织成窄结构；调用方无法构造“已经运行但没有回收票据”的状态。panic monitor 只克隆 event sink、
+lifecycle、lease、stderr、reap ticket 与控制清理句柄这组最小恢复上下文。只有 supervisor 能发送终态。
 
 `controller.rs` 与 `readers.rs` 只依赖 Tokio、领域 payload 和 `TaskEventSink` /
 `TaskLifecyclePort`；`ports.rs` 是任务域唯一 Tauri event/lifecycle adapter，`spawn.rs` 是装配它的
@@ -217,7 +219,7 @@ supervisor 在一个 `tokio::select!` 循环中并发处理 reader 消息、进�
 ### NDJSON 信封解析
 
 [`frontend/src-tauri/src/tasks/envelope.rs`](../frontend/src-tauri/src/tasks/envelope.rs) 复用
-`generated/backend_task_envelope.rs` 中从 manifest v3 生成的四 variant enum，不再手写
+`generated/backend_task_envelope.rs` 中从 manifest v4 生成的四 variant enum，不再手写
 `progress / completed / error / resume_status` 镜像。
 
 `classify_line()` 是生产 reader 与测试共同覆盖的唯一 classifier。合法 envelope 被解析为类型化
