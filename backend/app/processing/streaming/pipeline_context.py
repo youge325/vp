@@ -7,7 +7,7 @@ from typing import Any
 
 from app.planning.manifest import ResumeState, SegmentManifest
 from app.planning.stage_plan import StagePlan
-from app.ports.media import EncodeProgressCallback, MediaRuntimePort, VideoMetadata
+from app.ports.media import EncodeProgressCallback, MediaRuntimePort
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.runtime_ports import ManifestFactoryPort, ResumeStatusSink, WorkerLogSink
 from app.processing.streaming.stage_worker_progress import StageProgressCallback
@@ -15,12 +15,9 @@ from app.processing.streaming.stage_worker_progress import StageProgressCallback
 
 @dataclass(frozen=True, slots=True)
 class StreamingPipelinePreflight:
-    video_info: VideoMetadata
     stage_plan: StagePlan
     signature: str
     config_snapshot: dict[str, Any]
-    output_width: int
-    output_height: int
     segment_frames: int
 
 
@@ -35,7 +32,6 @@ class StreamingPipelineContext:
     manifest: SegmentManifest
     resume_state: ResumeState
     progress_callbacks: list[StageProgressCallback]
-    output_fps: float | None
     encode_progress_callback: EncodeProgressCallback | None
     metrics: PipelineMetrics
     manifest_factory: ManifestFactoryPort

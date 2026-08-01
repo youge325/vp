@@ -16,6 +16,7 @@ from app.processing.streaming.worker_chain_runtime import run_worker_chain_runti
 from app.processing.streaming.stage_worker_config import build_stage_worker_step
 from app.processing.streaming.worker_runtime_config import WorkerPipelineRuntimeConfig
 from tests.support.streaming_runtime import ignore_worker_log
+from tests.support.video_metadata import make_video_metadata
 
 
 def _stage_plan_and_worker_config() -> tuple[Any, StageWorkerConfig]:
@@ -30,7 +31,11 @@ def _stage_plan_and_worker_config() -> tuple[Any, StageWorkerConfig]:
         },
         stage_name="01_super_resolution",
     )
-    stage_plan = build_stage_plan(StageProjection((step,)), 3, source_duration=1.0, output_fps=None)
+    stage_plan = build_stage_plan(
+        StageProjection((step,)),
+        make_video_metadata(3, duration=1.0, width=1, height=1),
+        output_fps=None,
+    )
     worker_config = StageWorkerConfig(
         stage=build_stage_worker_step(step),
         stage_index=1,
@@ -103,9 +108,6 @@ def test_worker_chain_runtime_runs_decode_and_drain_inside_worker_session(monkey
         decode_config={"mode": "software"},
         stage_plan=stage_plan,
         progress_callbacks=[lambda current, total, **_kwargs: progress_calls.append((current, total))],
-        source_width=1,
-        source_height=1,
-        source_frames=3,
         resume_state=ResumeState(start_source_frame=1, completed_output_frames=0, completed_segments=[]),
         metrics=PipelineMetrics(),
         worker_log_sink=ignore_worker_log,

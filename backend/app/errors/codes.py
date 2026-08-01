@@ -1,4 +1,4 @@
-"""Helpers around the generated backend error-code contract."""
+"""Typed helpers around the generated backend error-code contract."""
 
 from __future__ import annotations
 

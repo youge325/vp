@@ -16,7 +16,7 @@ def run_stage_file_pipeline(
 ) -> int:
     """Run each algorithm stage as segmented files instead of one rawvideo chain."""
     stage_plan = context.preflight.stage_plan
-    steps = stage_plan.steps
+    steps = stage_plan.processing_steps
     if not steps:
         raise RuntimeError("Stage file pipeline requires at least one processing stage.")
 
@@ -24,12 +24,7 @@ def run_stage_file_pipeline(
     stage_root.mkdir(parents=True, exist_ok=True)
 
     current_path = context.input_path
-    projected_stages = stage_plan.projection.stages(
-        source_frames=context.preflight.video_info.source_frames,
-        source_fps=context.preflight.video_info.source_fps,
-        source_width=context.preflight.video_info.width,
-        source_height=context.preflight.video_info.height,
-    )
+    projected_stages = stage_plan.stages
 
     for projected_stage in projected_stages:
         stage_position = projected_stage.position
@@ -62,7 +57,7 @@ def run_stage_file_pipeline(
             resume_state=context.resume_state,
             encode_config=context.encode_config,
             segment_frames=context.preflight.segment_frames,
-            output_fps=context.output_fps,
+            output_fps=stage_plan.encoder_fps_override,
             manifest_factory=context.manifest_factory,
         )
 

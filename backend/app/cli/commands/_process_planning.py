@@ -18,7 +18,8 @@ from app.adapters.streaming_runtime import CliWorkerLogSink, FilesystemManifestF
 from app.cli.commands._pipeline_preparation import PreparedRun, prepare_pipeline_preflight
 from app.generated.contracts import RuntimeConfigBundle
 from app.config import settings
-from app.errors import TaskErrorCode, raise_error
+from app.errors.codes import TaskErrorCode
+from app.errors.process import raise_error
 from app.ports.media import MediaProbePort
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.stage_worker_progress import StageProgressCallback

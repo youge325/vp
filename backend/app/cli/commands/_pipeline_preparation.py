@@ -26,11 +26,11 @@ class PreparedRun:
 
     @property
     def processing_steps(self) -> tuple[ProcessingStep, ...]:
-        return self.preflight.stage_plan.steps
+        return self.preflight.stage_plan.processing_steps
 
     @property
     def final_output_fps(self) -> float | None:
-        return self.preflight.stage_plan.output_fps
+        return self.preflight.stage_plan.encoder_fps_override
 
     @property
     def expected_output_frames(self) -> int:

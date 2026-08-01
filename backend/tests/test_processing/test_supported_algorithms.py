@@ -123,7 +123,7 @@ def test_paddlegan_window_models_expose_fixed_runtime_frame_count():
     edvr = next(entry for entry in SUPER_RESOLUTION_CAPABILITIES if entry.name == "edvr")
     assert edvr.input_frame_mode == "fixed_window"
     assert edvr.default_num_frames == 5
-    assert MODEL_METRIC_SPECS_BY_ALGORITHM[edvr.name][0].runtime_frame_count == 5
+    assert MODEL_METRIC_SPECS_BY_ALGORITHM[edvr.name][0].runtime.runtime_frame_count == 5
 
     recurrent = [
         entry
@@ -133,7 +133,7 @@ def test_paddlegan_window_models_expose_fixed_runtime_frame_count():
     assert recurrent
     for entry in recurrent:
         assert entry.input_frame_mode == "editable_chunk"
-        assert MODEL_METRIC_SPECS_BY_ALGORITHM[entry.name][0].runtime_frame_count is None
+        assert MODEL_METRIC_SPECS_BY_ALGORITHM[entry.name][0].runtime.runtime_frame_count is None
 
 
 def test_catalog_sets_match_model_and_factory_registries() -> None:

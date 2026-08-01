@@ -14,7 +14,8 @@ import threading
 import time
 from typing import Iterator, Sequence
 
-from app.errors import ProcessError, TaskErrorCode
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError
 from app.generated.protocol_constants import (
     STAGE_WORKER_COMMAND,
     STAGE_WORKER_CONFIG_FLAG,

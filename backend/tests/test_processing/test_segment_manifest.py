@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app.errors import ResumeConflictError
+from app.errors.process import ResumeConflictError
 from app.generated.contracts import SegmentManifest as SegmentManifestContract
 from app.planning.manifest import SegmentManifest
 from app.planning.manifest_store import _MANIFEST_VERSION

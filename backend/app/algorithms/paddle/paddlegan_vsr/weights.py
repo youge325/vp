@@ -6,7 +6,8 @@ from pathlib import Path
 
 from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS, PaddleGanVsrSpec
 from app.config import settings
-from app.errors import TaskErrorCode, raise_error
+from app.errors.codes import TaskErrorCode
+from app.errors.process import raise_error
 
 
 def _fixed_weight_root() -> Path:

@@ -38,11 +38,21 @@ def _raw_info() -> dict[str, object]:
     }
 
 
+def _raw_info_without_frame_count() -> dict[str, object]:
+    info = _raw_info()
+    streams = info["streams"]
+    assert isinstance(streams, list)
+    video_stream = streams[0]
+    assert isinstance(video_stream, dict)
+    del video_stream["nb_frames"]
+    return info
+
+
 def test_probe_video_hides_raw_ffprobe_shape_behind_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
     probes: list[tuple[str, str]] = []
     monkeypatch.setattr(
-        "app.adapters.ffmpeg_media._media_probe.get_video_info",
-        lambda ffprobe, input_path, _cache: probes.append((ffprobe, input_path)) or _raw_info(),
+        "app.adapters.ffmpeg_media._media_probe.probe_video_info",
+        lambda ffprobe, input_path: probes.append((ffprobe, input_path)) or _raw_info(),
     )
     adapter = FFmpegMediaAdapter("ffmpeg-bin", "ffprobe-bin")
 
@@ -89,10 +99,58 @@ def test_adapter_reuses_one_metadata_probe_across_consumer_ports(
     ]
 
 
+def test_adapter_runs_supplemental_frame_scan_at_most_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "input.mp4"
+    input_path.write_bytes(b"video")
+    commands: list[list[str]] = []
+
+    def run(command: list[str]) -> SimpleNamespace:
+        commands.append(command)
+        payload = (
+            {"streams": [{"nb_read_frames": "47"}]} if "-count_frames" in command else _raw_info_without_frame_count()
+        )
+        return SimpleNamespace(stdout=json.dumps(payload))
+
+    monkeypatch.setattr("app.utils.ffmpeg.media_probe.run_ffmpeg_command", run)
+    adapter = FFmpegMediaAdapter("ffmpeg-bin", "ffprobe-bin")
+
+    assert adapter.inspect_video(str(input_path)).fps == 24.0
+    assert adapter.get_frame_count(str(input_path)) == 47
+    assert adapter.probe_video(str(input_path)).source_frames == 47
+    assert sum("-count_frames" in command for command in commands) == 1
+    assert len(commands) == 2
+
+
+def test_adapter_invalidates_probe_snapshot_when_file_identity_changes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "input.mp4"
+    input_path.write_bytes(b"first")
+    calls = 0
+
+    def probe(_ffprobe: str, _input_path: str) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        return _raw_info()
+
+    monkeypatch.setattr("app.adapters.ffmpeg_media._media_probe.probe_video_info", probe)
+    adapter = FFmpegMediaAdapter("ffmpeg-bin", "ffprobe-bin")
+
+    adapter.inspect_video(str(input_path))
+    input_path.write_bytes(b"second-version")
+    adapter.inspect_video(str(input_path))
+
+    assert calls == 2
+
+
 def test_video_inspection_port_projects_wire_neutral_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.adapters.ffmpeg_media._media_probe.get_video_info",
-        lambda _ffprobe, _input_path, _cache: _raw_info(),
+        "app.adapters.ffmpeg_media._media_probe.probe_video_info",
+        lambda _ffprobe, _input_path: _raw_info(),
     )
 
     assert FFmpegMediaAdapter("ffmpeg-bin", "ffprobe-bin").inspect_video("input.mp4") == VideoInspection(

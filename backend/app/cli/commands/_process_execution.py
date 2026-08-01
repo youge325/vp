@@ -9,14 +9,14 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from app.errors import ResumeConflictError
+from app.errors.process import ResumeConflictError
 from app.generated.contracts import TaskCompletedPayload
 from app.generated.protocol_constants import BackendEnvelopeType
 from app.planning.resume_policy import decide_output_action
 from app.ports.media import MediaRuntimePort
 from app.processing.streaming.pipeline import process_video_streaming
 from app.processing.execution_result import ExecutionResult
-from app.protocol import ndjson
+from app.protocol.emitter import ndjson
 
 from app.cli.commands._pipeline_preparation import PreparedRun
 from app.cli.commands._process_planning import RunObservers
@@ -75,7 +75,6 @@ def _run_streaming(
         encode_config=sections["encode"],
         preflight=prepared.preflight,
         progress_callbacks=list(observers.progress_callbacks),
-        output_fps=prepared.final_output_fps,
         encode_progress_callback=observers.progress_reporter.update,
         resume_mode=resume_mode,
         metrics=observers.metrics,

@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.catalog.model_metrics import ModelMetricSpec
+from app.catalog.model_metrics import ModelMetricSpec, RuntimeMetricSpec
 from app.generated.protocol_constants import NDJSON_LINE_LIMIT_BYTES
 from app.generated.contracts import FfmpegInfo, GpuAdapter, GpuVendor, TensorEngines, WorkflowConfig
 from app.cli.commands.check import cmd_check
@@ -20,7 +20,8 @@ from app.cli.commands._process_validation import load_runtime_configs
 from app.cli.parser import build_parser
 from app.cli.runtime_configs import runtime_config_section, runtime_config_sections, with_workflow
 from app.config import settings
-from app.errors import ProcessError, TaskErrorCode
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError
 from app.planning.processing_steps import ProcessingStep
 from app.planning.run_identity import build_run_identity
 from app.planning.stage_plan import build_stage_plan
@@ -28,6 +29,7 @@ from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
 from app.utils.onnx_models import OnnxModelCatalog
 from tests.support.workflow_configs import make_workflow_config as _make_workflow_config
+from tests.support.video_metadata import make_video_metadata
 
 
 def test_prepared_run_does_not_duplicate_derived_pipeline_facts() -> None:
@@ -62,11 +64,10 @@ def test_format_conversion_forwards_projected_target_fps_to_ffmpeg(tmp_path) -> 
     configs = with_workflow(configs, WorkflowConfig.model_validate(resolved_workflow))
     stage_plan = build_stage_plan(
         projection,
-        60,
-        source_duration=1.0,
+        make_video_metadata(60, duration=1.0, source_fps=60.0),
         output_fps=output_fps,
     )
-    assert stage_plan.steps == ()
+    assert stage_plan.processing_steps == ()
     assert output_fps == 24.0
 
     prepared = PreparedRun(
@@ -413,8 +414,7 @@ def test_stage_plan_uses_input_frames_for_format_conversion():
 
     plan = build_stage_plan(
         projection,
-        240,
-        source_duration=10.0,
+        make_video_metadata(240, duration=10.0),
         output_fps=None,
     )
 
@@ -427,8 +427,7 @@ def test_stage_plan_uses_interpolated_output_frames_without_resample():
 
     plan = build_stage_plan(
         projection,
-        240,
-        source_duration=10.0,
+        make_video_metadata(240, duration=10.0),
         output_fps=None,
     )
 
@@ -441,8 +440,7 @@ def test_stage_plan_uses_target_timeline_when_resampling():
 
     plan = build_stage_plan(
         projection,
-        240,
-        source_duration=10.0,
+        make_video_metadata(240, duration=10.0),
         output_fps=60.0,
     )
 
@@ -619,17 +617,21 @@ def test_check_bounds_large_discovered_model_diagnostics(monkeypatch, capsys):
             label=name,
             parameter_count=None,
             parameter_bytes=None,
-            gflops_per_megapixel=None,
-            activation_bytes_per_megapixel=None,
-            runtime_overhead_bytes=None,
-            runtime_frame_count=None,
-            input_modulo=None,
-            analysis_status="partial",
-            analysis_notes=tuple(f"node-{note}:" + "x" * 2_000 for note in range(10)),
+            runtime=RuntimeMetricSpec(
+                gflops_per_megapixel=None,
+                activation_bytes_per_megapixel=None,
+                runtime_overhead_bytes=None,
+                runtime_frame_count=None,
+                input_modulo=None,
+                analysis_status="partial",
+                analysis_notes=tuple(f"node-{note}:" + "x" * 2_000 for note in range(10)),
+            ),
         )
         for name in names
     ]
-    raw_diagnostic_bytes = sum(len(note.encode("utf-8")) for detail in details for note in detail.analysis_notes)
+    raw_diagnostic_bytes = sum(
+        len(note.encode("utf-8")) for detail in details for note in detail.runtime.analysis_notes
+    )
     assert raw_diagnostic_bytes > NDJSON_LINE_LIMIT_BYTES
     catalog = OnnxModelCatalog(
         names={"interpolation": {"rife": names}, "super_resolution": {}},

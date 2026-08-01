@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 import app.planning.manifest_store as manifest_store
-from app.errors import ProcessError, TaskErrorCode
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError
 from tests.support.streaming_runtime import create_test_manifest
 from app.planning.segment_workspace import SegmentWorkspace
 

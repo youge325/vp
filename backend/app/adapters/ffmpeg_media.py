@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass
 from typing import Any
 
 from app.ports.media import (
@@ -21,62 +23,97 @@ from app.utils.ffmpeg.io import (
 )
 
 
+_ProbeFingerprint = tuple[str, int, int]
+
+
+@dataclass(frozen=True, slots=True)
+class _ProbeSnapshot:
+    fingerprint: _ProbeFingerprint
+    raw_info: dict[str, Any]
+    width: int
+    height: int
+    fps: float
+    duration: float
+    has_audio: bool
+    video_codec: str
+
+
 class FFmpegMediaAdapter:
     """Own resolved executable paths, probe caches, and concrete FFmpeg calls."""
 
     def __init__(self, ffmpeg_path: str, ffprobe_path: str) -> None:
         self._ffmpeg_path = ffmpeg_path
         self._ffprobe_path = ffprobe_path
-        self._video_info_cache: dict[tuple[str, int, int], dict[str, Any]] = {}
-        self._frame_count_cache: dict[tuple[str, int, int], int] = {}
+        self._snapshot_cache: dict[_ProbeFingerprint, _ProbeSnapshot] = {}
+        self._frame_count_cache: dict[_ProbeFingerprint, int] = {}
 
-    def _get_video_info(self, input_path: str) -> dict[str, Any]:
-        return _media_probe.get_video_info(self._ffprobe_path, input_path, self._video_info_cache)
+    @staticmethod
+    def _fingerprint(input_path: str) -> _ProbeFingerprint:
+        normalized_path = os.path.normcase(os.path.abspath(input_path))
+        try:
+            stat = os.stat(normalized_path)
+        except OSError:
+            return normalized_path, -1, -1
+        return normalized_path, stat.st_mtime_ns, stat.st_size
 
-    def probe_video(self, input_path: str) -> VideoMetadata:
-        raw_info = self._get_video_info(input_path)
+    def _snapshot(self, input_path: str) -> _ProbeSnapshot:
+        fingerprint = self._fingerprint(input_path)
+        cached = self._snapshot_cache.get(fingerprint)
+        if cached is not None:
+            return cached
+
+        raw_info = _media_probe.probe_video_info(self._ffprobe_path, input_path)
         width, height = _media_probe.get_primary_video_dimensions(raw_info)
-        source_fps = _media_probe.get_fps(raw_info)
-        duration = _media_probe.get_duration(raw_info)
-        source_frames = _media_probe.get_frame_count(
-            self._ffprobe_path,
-            input_path,
-            raw_info,
-            duration,
-            source_fps,
-            self._frame_count_cache,
-        )
-        return VideoMetadata(
+        snapshot = _ProbeSnapshot(
+            fingerprint=fingerprint,
+            raw_info=raw_info,
             width=width,
             height=height,
-            source_fps=source_fps,
-            source_frames=source_frames,
-            duration=duration,
+            fps=_media_probe.get_fps(raw_info),
+            duration=_media_probe.get_duration(raw_info),
             has_audio=_media_probe.has_audio(raw_info),
+            video_codec=_media_probe.get_primary_video_codec(raw_info),
+        )
+        self._snapshot_cache[fingerprint] = snapshot
+        return snapshot
+
+    def _frame_count(self, input_path: str, snapshot: _ProbeSnapshot) -> int:
+        cached = self._frame_count_cache.get(snapshot.fingerprint)
+        if cached is not None:
+            return cached
+        frame_count = _media_probe.probe_frame_count(
+            self._ffprobe_path,
+            input_path,
+            snapshot.raw_info,
+            snapshot.duration,
+            snapshot.fps,
+        )
+        self._frame_count_cache[snapshot.fingerprint] = frame_count
+        return frame_count
+
+    def probe_video(self, input_path: str) -> VideoMetadata:
+        snapshot = self._snapshot(input_path)
+        return VideoMetadata(
+            width=snapshot.width,
+            height=snapshot.height,
+            source_fps=snapshot.fps,
+            source_frames=self._frame_count(input_path, snapshot),
+            duration=snapshot.duration,
+            has_audio=snapshot.has_audio,
         )
 
     def inspect_video(self, input_path: str) -> VideoInspection:
-        raw_info = self._get_video_info(input_path)
-        width, height = _media_probe.get_primary_video_dimensions(raw_info)
+        snapshot = self._snapshot(input_path)
         return VideoInspection(
-            fps=_media_probe.get_fps(raw_info),
-            width=width,
-            height=height,
-            video_codec=_media_probe.get_primary_video_codec(raw_info),
+            fps=snapshot.fps,
+            width=snapshot.width,
+            height=snapshot.height,
+            video_codec=snapshot.video_codec,
         )
 
     def get_frame_count(self, input_path: str) -> int:
-        raw_info = self._get_video_info(input_path)
-        duration = _media_probe.get_duration(raw_info)
-        fps = _media_probe.get_fps(raw_info)
-        return _media_probe.get_frame_count(
-            self._ffprobe_path,
-            input_path,
-            raw_info,
-            duration,
-            fps,
-            self._frame_count_cache,
-        )
+        snapshot = self._snapshot(input_path)
+        return self._frame_count(input_path, snapshot)
 
     def open_rawvideo_decoder(
         self,

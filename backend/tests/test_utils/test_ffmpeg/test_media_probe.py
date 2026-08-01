@@ -32,7 +32,7 @@ def test_primary_video_dimensions_default_to_zero_without_video_stream() -> None
     assert media_probe.get_primary_video_dimensions({"streams": [{"codec_type": "audio"}]}) == (0, 0)
 
 
-def test_get_video_info_caches_by_file_identity(tmp_path, monkeypatch) -> None:
+def test_probe_video_info_returns_decoded_document(tmp_path, monkeypatch) -> None:
     input_path = tmp_path / "input.mp4"
     input_path.write_bytes(b"video")
     calls = []
@@ -42,12 +42,7 @@ def test_get_video_info_caches_by_file_identity(tmp_path, monkeypatch) -> None:
         return SimpleNamespace(stdout=json.dumps({"streams": []}))
 
     monkeypatch.setattr(media_probe, "run_ffmpeg_command", fake_run)
-    cache = {}
-
-    first = media_probe.get_video_info("ffprobe", str(input_path), cache)
-    second = media_probe.get_video_info("ffprobe", str(input_path), cache)
-
-    assert first == second == {"streams": []}
+    assert media_probe.probe_video_info("ffprobe", str(input_path)) == {"streams": []}
     assert len(calls) == 1
 
 
@@ -60,13 +55,12 @@ def test_get_frame_count_prefers_metadata_without_scan(tmp_path, monkeypatch) ->
         lambda _command: (_ for _ in ()).throw(AssertionError("unexpected frame scan")),
     )
 
-    frame_count = media_probe.get_frame_count(
+    frame_count = media_probe.probe_frame_count(
         "ffprobe",
         str(input_path),
         {"streams": [{"codec_type": "video", "nb_frames": "120"}]},
         4.0,
         30.0,
-        {},
     )
 
     assert frame_count == 120
@@ -77,4 +71,4 @@ def test_get_frame_count_falls_back_to_duration_for_invalid_scan(tmp_path, monke
     input_path.write_bytes(b"video")
     monkeypatch.setattr(media_probe, "run_ffmpeg_command", lambda _command: SimpleNamespace(stdout="not-json"))
 
-    assert media_probe.get_frame_count("ffprobe", str(input_path), {}, 2.5, 24.0, {}) == 60
+    assert media_probe.probe_frame_count("ffprobe", str(input_path), {}, 2.5, 24.0) == 60

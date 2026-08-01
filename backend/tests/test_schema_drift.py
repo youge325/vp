@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from app.errors import TaskErrorCode
+from app.errors.codes import TaskErrorCode
 from app.generated import contracts as generated
 from app.generated.contracts import DecodeConfig, OutputConfig, WorkflowConfig
 

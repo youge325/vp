@@ -1,11 +1,10 @@
 """Pure error-code inference, safe to import at bootstrap.
 
-This module deliberately depends on nothing from ``app.*`` (other than the
-sibling ``_codes`` module, which itself has no further dependencies) so that
+This module deliberately depends only on import-safe generated constants so that
 ``__main__`` can import it before resolving the rest of the package.
 Both ``errors.from_exception`` and ``__main__`` share these rules.
 
-``infer_error_code`` accepts the exception itself and resolves it in two
+``infer_bootstrap_error_code`` accepts the exception itself and resolves it in two
 passes:
 
 1. **Message-pattern pass.** Existing keyword rules (ffmpeg / flownet /
@@ -29,15 +28,23 @@ ValidationError 文本里的字段名(如 ``"model_x has invalid type"``)被误
 
 from __future__ import annotations
 
-from app.errors._codes import TaskErrorCode
+from app.generated.bootstrap_constants import BACKEND_TASK_ERROR_CODES
+
+_PROCESS_FAILED = "process_failed"
+
+
+def _wire_code(value: str) -> str:
+    if value not in BACKEND_TASK_ERROR_CODES:  # pragma: no cover - generated-contract invariant
+        raise RuntimeError(f"Unknown bootstrap task error code: {value}")
+    return value
 
 
 def _match_by_message(message: str) -> str:
     """Return a TaskErrorCode for messages with a recognised keyword, or PROCESS_FAILED."""
     if "ffmpeg" in message or "ffprobe" in message:
-        return TaskErrorCode.MISSING_FFMPEG.value
+        return _wire_code("missing_ffmpeg")
     if "flownet_v" in message or "model file" in message or "model weight" in message or "missing model" in message:
-        return TaskErrorCode.MISSING_MODEL.value
+        return _wire_code("missing_model")
     if (
         "no module named 'torch'" in message
         or "no module named torch" in message
@@ -46,12 +53,12 @@ def _match_by_message(message: str) -> str:
         or "no module named paddle" in message
         or "tensor backend" in message
     ):
-        return TaskErrorCode.MISSING_TENSOR_BACKEND.value
+        return _wire_code("missing_tensor_backend")
     if "no module named" in message:
-        return TaskErrorCode.MISSING_PYTHON_DEPENDENCY.value
+        return _wire_code("missing_python_dependency")
     if "cancelled" in message or "canceled" in message:
-        return TaskErrorCode.CANCELLED.value
-    return TaskErrorCode.PROCESS_FAILED.value
+        return _wire_code("cancelled")
+    return _wire_code(_PROCESS_FAILED)
 
 
 def _dispatch_by_type(exc: BaseException) -> str | None:
@@ -61,24 +68,27 @@ def _dispatch_by_type(exc: BaseException) -> str | None:
     through to ``PROCESS_FAILED``.
     """
     if isinstance(exc, (ModuleNotFoundError, ImportError)):
-        return TaskErrorCode.MISSING_PYTHON_DEPENDENCY.value
+        return _wire_code("missing_python_dependency")
     if isinstance(exc, (FileNotFoundError, PermissionError)):
-        return TaskErrorCode.IO_ERROR.value
+        return _wire_code("io_error")
     if isinstance(exc, (ValueError, TypeError)):
-        return TaskErrorCode.INVALID_INPUT.value
+        return _wire_code("invalid_input")
     return None
 
 
-def infer_error_code(exc: BaseException) -> str:
+def infer_bootstrap_error_code(exc: BaseException) -> str:
     """Resolve the canonical task error code for *exc*.
 
     Message matches like ``"ffmpeg"`` keep their specific code before the
     resolver falls back to coarse ``isinstance`` buckets.
     """
     message_hit = _match_by_message(str(exc).lower())
-    if message_hit != TaskErrorCode.PROCESS_FAILED.value:
+    if message_hit != _PROCESS_FAILED:
         return message_hit
     bucket = _dispatch_by_type(exc)
     if bucket is not None:
         return bucket
-    return TaskErrorCode.PROCESS_FAILED.value
+    return _wire_code(_PROCESS_FAILED)
+
+
+__all__ = ["infer_bootstrap_error_code"]

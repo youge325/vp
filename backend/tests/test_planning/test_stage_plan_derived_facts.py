@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from app.planning.processing_steps import ProcessingStep
-from app.planning.stage_plan import StagePlan, build_stage_plan
+from app.planning.stage_plan import build_stage_plan
 from app.planning.stage_projection import StageProjection
+from tests.support.video_metadata import make_video_metadata
 
 
 def test_stage_plan_owns_file_pipeline_and_resume_domain_facts() -> None:
@@ -21,8 +22,7 @@ def test_stage_plan_owns_file_pipeline_and_resume_domain_facts() -> None:
                 ),
             )
         ),
-        5,
-        source_duration=5 / 24,
+        make_video_metadata(5, duration=5 / 24),
         output_fps=None,
     )
 
@@ -41,8 +41,7 @@ def test_stage_plan_stays_rawvideo_for_non_file_backed_stages() -> None:
                 ),
             )
         ),
-        5,
-        source_duration=5 / 24,
+        make_video_metadata(5, duration=5 / 24),
         output_fps=None,
     )
 
@@ -51,8 +50,8 @@ def test_stage_plan_stays_rawvideo_for_non_file_backed_stages() -> None:
 
 
 def test_stage_plan_delegates_geometry_and_fps_to_projection() -> None:
-    stage_plan = StagePlan(
-        projection=StageProjection(
+    stage_plan = build_stage_plan(
+        StageProjection(
             (
                 ProcessingStep(
                     algorithm_type="super_resolution",
@@ -70,16 +69,19 @@ def test_stage_plan_delegates_geometry_and_fps_to_projection() -> None:
                 ),
             ),
         ),
-        source_frames=10,
-        source_duration=10 / 24,
+        make_video_metadata(10, duration=10 / 24),
         output_fps=None,
     )
 
-    assert stage_plan.projection.output_dimensions(320, 180) == (1280, 720)
-    assert stage_plan.projection.output_fps(24.0) == 72.0
+    assert stage_plan.output_dimensions == (1280, 720)
+    assert stage_plan.stream_fps == 72.0
 
 
 def test_projection_preserves_fps_without_interpolation() -> None:
-    stage_plan = build_stage_plan(StageProjection(()), 5, source_duration=5 / 24, output_fps=None)
+    stage_plan = build_stage_plan(
+        StageProjection(()),
+        make_video_metadata(5, duration=5 / 24),
+        output_fps=None,
+    )
 
-    assert stage_plan.projection.output_fps(24.0) == 24.0
+    assert stage_plan.stream_fps == 24.0

@@ -23,15 +23,16 @@ def run_raw_streaming_pipeline(
     encode_queue: EncodeQueue = queue.Queue(maxsize=8)
     error_queue = create_error_queue()
     stop_event = threading.Event()
-    stream_fps = context.preflight.stage_plan.projection.output_fps(context.preflight.video_info.source_fps)
+    stage_plan = context.preflight.stage_plan
+    output_width, output_height = stage_plan.output_dimensions
     encoder_config = EncoderRuntimeConfig(
         ffmpeg=context.ffmpeg,
         encode_config=context.encode_config,
         manifest=context.manifest,
-        width=context.preflight.output_width,
-        height=context.preflight.output_height,
-        fps=stream_fps,
-        output_fps=context.output_fps,
+        width=output_width,
+        height=output_height,
+        fps=stage_plan.stream_fps,
+        output_fps=stage_plan.encoder_fps_override,
         segment_frames=context.preflight.segment_frames,
         resume_state=context.resume_state,
         output_path=context.output_path,
@@ -44,9 +45,6 @@ def run_raw_streaming_pipeline(
         decode_config=context.decode_config,
         stage_plan=context.preflight.stage_plan,
         progress_callbacks=context.progress_callbacks,
-        source_width=context.preflight.video_info.width,
-        source_height=context.preflight.video_info.height,
-        source_frames=context.preflight.video_info.source_frames,
         resume_state=context.resume_state,
         metrics=context.metrics,
         worker_log_sink=context.worker_log_sink,

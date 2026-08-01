@@ -6,8 +6,9 @@ import pytest
 
 import app.__main__ as app_main
 import app.cli.main
-import app.protocol
-from app.errors import ProcessError, TaskErrorCode
+import app.protocol.emitter
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError
 from app.generated.contracts import BackendTaskErrorPayload
 from app.generated.protocol_constants import BackendEnvelopeType
 
@@ -23,7 +24,7 @@ def _run_with_failure(
 
     monkeypatch.setattr(app.cli.main, "main", fail)
     monkeypatch.setattr(
-        app.protocol.ndjson,
+        app.protocol.emitter.ndjson,
         "emit",
         lambda event_type, payload: captured.append((event_type, payload)),
     )

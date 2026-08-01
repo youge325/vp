@@ -20,6 +20,7 @@ from app.processing.streaming.worker_process_io import (
     drain_final_worker_output,
 )
 from app.processing.streaming.stage_worker_config import build_stage_worker_step
+from tests.support.video_metadata import make_video_metadata
 
 
 class _FakeReader:
@@ -261,7 +262,11 @@ def test_drain_final_worker_output_stops_after_expected_frame_count() -> None:
         },
         stage_name="01_super_resolution",
     )
-    stage_plan = build_stage_plan(StageProjection((step,)), 1, source_duration=1.0, output_fps=None)
+    stage_plan = build_stage_plan(
+        StageProjection((step,)),
+        make_video_metadata(1, duration=1.0, width=1, height=1),
+        output_fps=None,
+    )
     final_config = StageWorkerConfig(
         stage=build_stage_worker_step(step),
         stage_index=1,

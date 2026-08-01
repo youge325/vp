@@ -210,8 +210,6 @@ def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None
 
         plans = build_stage_worker_plans(
             stage_plan=stage_plan,
-            source_width=config.source_width,
-            source_height=config.source_height,
             source_frame_count=len(frames),
         )
         for worker_config in plans:
@@ -225,7 +223,7 @@ def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None
         schedule = boundary_schedule_for_stage_plan(
             stage_plan=stage_plan,
             start_source_frame=start,
-            source_frames=config.source_frames,
+            source_frames=stage_plan.source.source_frames,
         )
         for emitted_count, frame in enumerate(frames, start=1):
             encode_queue.put(EncodedFrame(frame=frame))
@@ -234,7 +232,7 @@ def _install_fake_stage_worker_pipeline(monkeypatch: pytest.MonkeyPatch) -> None
                 from app.processing.streaming.queues import SegmentBoundary
 
                 encode_queue.put(SegmentBoundary(next_source_frame=next_source_frame))
-        encode_queue.put(StreamEnd(next_source_frame=config.source_frames))
+        encode_queue.put(StreamEnd(next_source_frame=stage_plan.source.source_frames))
 
     monkeypatch.setattr("app.processing.streaming.pipeline_raw.run_stage_worker_pipeline", fake_worker_pipeline)
 
@@ -423,7 +421,6 @@ def _run_streaming_case(
         ),
         progress_callbacks=[lambda *_args: None for _step in resolved_steps],
         metrics=PipelineMetrics(),
-        output_fps=output_fps,
         manifest_factory=create_test_manifest,
         resume_status_sink=ignore_resume_status,
         worker_log_sink=ignore_worker_log,

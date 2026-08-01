@@ -5,7 +5,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from app.errors import TaskErrorCode
+from app.errors.codes import TaskErrorCode
 from app.generated.contracts import (
     BackendTaskErrorPayload,
     ResumeInspectionResult,
@@ -15,7 +15,7 @@ from app.generated.contracts import (
     VideoInfo,
 )
 from app.generated.protocol_constants import BackendEnvelopeType, NDJSON_LINE_LIMIT_BYTES
-from app.protocol import ndjson
+from app.protocol.emitter import ndjson
 
 
 def test_progress_payload_uses_contract_camel_case_shape() -> None:

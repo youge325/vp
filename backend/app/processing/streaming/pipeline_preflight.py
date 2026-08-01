@@ -25,8 +25,7 @@ def build_streaming_pipeline_preflight(
 ) -> StreamingPipelinePreflight:
     stage_plan = build_stage_plan(
         projection,
-        video_info.source_frames,
-        source_duration=video_info.duration,
+        video_info,
         output_fps=output_fps,
     )
     identity = build_run_identity(
@@ -39,15 +38,10 @@ def build_streaming_pipeline_preflight(
         processing_steps=projection.steps,
         video_info=video_info,
     )
-    output_width, output_height = stage_plan.projection.output_dimensions(video_info.width, video_info.height)
-
     return StreamingPipelinePreflight(
-        video_info=video_info,
         stage_plan=stage_plan,
         signature=identity.signature,
         config_snapshot=identity.config_snapshot,
-        output_width=output_width,
-        output_height=output_height,
         segment_frames=int(output_config["segmentFrames"]),
     )
 

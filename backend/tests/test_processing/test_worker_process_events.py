@@ -7,7 +7,7 @@ import queue
 import threading
 from types import SimpleNamespace
 
-from app.errors import ProcessError
+from app.errors.process import ProcessError
 from app.adapters.streaming_runtime import CliWorkerLogSink
 from app.generated.protocol_constants import NDJSON_LINE_LIMIT_BYTES
 from app.processing.streaming.error_channel import create_error_queue

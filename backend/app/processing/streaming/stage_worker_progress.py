@@ -13,7 +13,7 @@ from app.generated.stage_worker_contracts import (
     StageWorkerErrorEvent,
     StageWorkerProgressEvent,
 )
-from app.protocol_encoding import encode_bounded_json_line
+from app.protocol.encoding import encode_bounded_json_line
 
 SEQUENCE_STAGE_HEARTBEAT_SECONDS = 30.0
 _EVENT_WRITE_LOCK = threading.Lock()

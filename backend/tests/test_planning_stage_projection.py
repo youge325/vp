@@ -5,6 +5,7 @@ import pytest
 from app.planning.processing_steps import ProcessingStep
 from app.planning.stage_plan import build_stage_plan
 from app.planning.stage_projection import StageProjection
+from tests.support.video_metadata import make_video_metadata
 
 
 def test_stage_projection_owns_order_frame_counts_and_fps() -> None:
@@ -42,7 +43,7 @@ def test_stage_projection_owns_order_frame_counts_and_fps() -> None:
     assert [stage.output_fps for stage in stages] == [24.0, 72.0, 72.0]
 
 
-def test_stage_plan_uses_stage_projection_as_its_step_source() -> None:
+def test_stage_plan_materializes_projection_as_its_only_stage_source() -> None:
     step = ProcessingStep(
         algorithm_type="frame_interpolation",
         algorithm_kwargs={"multi": 2},
@@ -50,11 +51,11 @@ def test_stage_plan_uses_stage_projection_as_its_step_source() -> None:
     )
 
     projection = StageProjection((step,))
-    plan = build_stage_plan(projection, 5, source_duration=1.0, output_fps=None)
+    plan = build_stage_plan(projection, make_video_metadata(5, duration=1.0), output_fps=None)
 
-    assert plan.projection is projection
-    assert plan.steps is plan.projection.steps
-    assert plan.projection.output_fps(24.0) == 48.0
+    assert plan.processing_steps == projection.steps
+    assert plan.stream_fps == 48.0
+    assert plan.stages[0].input_frames == 5
 
 
 @pytest.mark.parametrize(
@@ -134,4 +135,9 @@ def test_projection_rejects_geometry_that_execution_cannot_apply(filter_step: di
     )
 
     with pytest.raises(ValueError):
-        projection.output_dimensions(16, 12)
+        projection.stages(
+            source_frames=1,
+            source_fps=24.0,
+            source_width=16,
+            source_height=12,
+        )

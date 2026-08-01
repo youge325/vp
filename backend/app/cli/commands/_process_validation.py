@@ -13,7 +13,8 @@ from app.cli.defaults import (
     _default_output_config,
     _default_workflow_config,
 )
-from app.errors import TaskErrorCode, raise_error
+from app.errors.codes import TaskErrorCode
+from app.errors.process import raise_error
 from app.generated.contracts import RuntimeConfigBundle
 
 

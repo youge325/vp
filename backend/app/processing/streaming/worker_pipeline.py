@@ -28,19 +28,18 @@ def run_stage_worker_pipeline(
     packets into ``encode_queue`` for the existing encoder worker.
     """
     start_source_frame = int(config.resume_state.start_source_frame)
-    remaining_source_frames = max(config.source_frames - start_source_frame, 0)
+    source_frames = config.stage_plan.source.source_frames
+    remaining_source_frames = max(source_frames - start_source_frame, 0)
     if remaining_source_frames <= 0:
         _enqueue_stream_end(
             encode_queue=encode_queue,
             stop_event=stop_event,
-            source_frames=config.source_frames,
+            source_frames=source_frames,
         )
         return
 
     worker_configs = build_stage_worker_plans(
         stage_plan=config.stage_plan,
-        source_width=config.source_width,
-        source_height=config.source_height,
         source_frame_count=remaining_source_frames,
     )
     if not worker_configs:
@@ -60,7 +59,7 @@ def run_stage_worker_pipeline(
     _enqueue_stream_end(
         encode_queue=encode_queue,
         stop_event=stop_event,
-        source_frames=config.source_frames,
+        source_frames=source_frames,
     )
 
 

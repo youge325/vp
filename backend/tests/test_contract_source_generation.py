@@ -422,10 +422,10 @@ def test_stage_worker_generated_models_reject_coercion_negative_values_and_extra
             StageWorkerErrorEvent.model_validate(invalid)
 
 
-def test_manifest_v3_declares_all_backend_command_policies_without_expanding_ipc() -> None:
+def test_manifest_v4_declares_all_backend_command_policies_without_expanding_ipc() -> None:
     manifest = validate_contracts()
 
-    assert manifest["schemaVersion"] == 3
+    assert manifest["schemaVersion"] == 4
     assert len(manifest["commands"]) == 10
     assert manifest["backendProcessCommand"]["stdinPayload"] == "RuntimeConfigBundle"
     assert manifest["backendProcessCommand"]["stdinField"] == "config"

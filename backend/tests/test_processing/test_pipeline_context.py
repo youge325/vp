@@ -5,39 +5,30 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from app.planning.manifest import ResumeState
-from app.planning.stage_plan import StagePlan
+from app.planning.stage_plan import build_stage_plan
 from app.planning.stage_projection import StageProjection
-from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
     StreamingPipelinePreflight,
 )
 from tests.support.streaming_runtime import create_test_manifest, ignore_resume_status, ignore_worker_log
+from tests.support.video_metadata import make_video_metadata
 
 
 def test_streaming_pipeline_contexts_are_frozen_and_preserve_runtime_references(tmp_path) -> None:
-    stage_plan = StagePlan(
-        projection=StageProjection(()),
-        source_frames=4,
-        source_duration=4 / 24,
-        output_fps=None,
-    )
-    video_info = VideoMetadata(
+    video_info = make_video_metadata(
+        4,
+        duration=4 / 24,
         width=640,
         height=360,
-        source_fps=24.0,
-        source_frames=4,
-        duration=4 / 24,
         has_audio=False,
     )
+    stage_plan = build_stage_plan(StageProjection(()), video_info, output_fps=None)
     preflight = StreamingPipelinePreflight(
-        video_info=video_info,
         stage_plan=stage_plan,
         signature="sig",
         config_snapshot={"workflow": {}},
-        output_width=640,
-        output_height=360,
         segment_frames=1000,
     )
     decode_config = {"mode": "software"}
@@ -54,7 +45,6 @@ def test_streaming_pipeline_contexts_are_frozen_and_preserve_runtime_references(
         manifest=manifest,
         resume_state=ResumeState(start_source_frame=0, completed_output_frames=0, completed_segments=[]),
         progress_callbacks=[],
-        output_fps=None,
         encode_progress_callback=None,
         metrics=metrics,
         manifest_factory=create_test_manifest,
@@ -63,7 +53,7 @@ def test_streaming_pipeline_contexts_are_frozen_and_preserve_runtime_references(
     )
 
     assert context.preflight is preflight
-    assert context.preflight.video_info is video_info
+    assert context.preflight.stage_plan.source is video_info
     assert context.decode_config is decode_config
     assert context.encode_config is encode_config
     assert context.manifest is manifest
@@ -81,25 +71,11 @@ def test_process_video_streaming_reuses_one_context_for_dispatch_and_finalizatio
 ) -> None:
     import app.processing.streaming.pipeline as pipeline_module
 
+    video_info = make_video_metadata(4, duration=4 / 24, width=640, height=360, has_audio=False)
     preflight = StreamingPipelinePreflight(
-        video_info=VideoMetadata(
-            width=640,
-            height=360,
-            source_fps=24.0,
-            source_frames=4,
-            duration=4 / 24,
-            has_audio=False,
-        ),
-        stage_plan=StagePlan(
-            projection=StageProjection(()),
-            source_frames=4,
-            source_duration=4 / 24,
-            output_fps=None,
-        ),
+        stage_plan=build_stage_plan(StageProjection(()), video_info, output_fps=None),
         signature="sig",
         config_snapshot={"workflow": {}},
-        output_width=640,
-        output_height=360,
         segment_frames=1000,
     )
     manifest = create_test_manifest(str(tmp_path / "out.mp4"))

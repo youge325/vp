@@ -9,7 +9,8 @@ import pytest
 
 from app.cli.commands import _guards, info
 from app.adapters.ffmpeg_media import FFmpegMediaAdapter
-from app.errors import ProcessError, TaskErrorCode
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError
 from app.ports.media import VideoInspection
 
 

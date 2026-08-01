@@ -8,7 +8,6 @@ from app.planning.manifest import ResumeState
 from app.planning.processing_steps import ProcessingStep
 from app.planning.stage_plan import build_stage_plan
 from app.planning.stage_projection import StageProjection
-from app.ports.media import VideoMetadata
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import (
     StreamingPipelineContext,
@@ -16,6 +15,7 @@ from app.processing.streaming.pipeline_context import (
 )
 from app.processing.streaming.stage_file_runtime_config import StageFileRuntimeConfig
 from tests.support.streaming_runtime import create_test_manifest, ignore_resume_status, ignore_worker_log
+from tests.support.video_metadata import make_video_metadata
 
 
 def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(monkeypatch, tmp_path) -> None:
@@ -35,7 +35,11 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
             stage_name="02_super_resolution",
         ),
     ]
-    stage_plan = build_stage_plan(StageProjection(tuple(steps)), 5, source_duration=5 / 24, output_fps=None)
+    stage_plan = build_stage_plan(
+        StageProjection(tuple(steps)),
+        make_video_metadata(5, duration=5 / 24, width=1, height=1),
+        output_fps=None,
+    )
     manifest = create_test_manifest(str(tmp_path / "final.mp4"))
     manifest.prepare("sig", {"test": True}, mode="force-fresh")
     input_path = str(tmp_path / "input.mp4")
@@ -81,25 +85,14 @@ def test_stage_file_pipeline_runs_each_stage_and_finalizes_intermediate_output(m
         decode_config=decode_config,
         encode_config=encode_config,
         preflight=StreamingPipelinePreflight(
-            video_info=VideoMetadata(
-                width=1,
-                height=1,
-                source_fps=24.0,
-                source_frames=5,
-                duration=5 / 24,
-                has_audio=False,
-            ),
             stage_plan=stage_plan,
             signature="sig",
             config_snapshot={"test": True},
-            output_width=4,
-            output_height=4,
             segment_frames=2,
         ),
         manifest=manifest,
         resume_state=ResumeState(completed_output_frames=0, start_source_frame=0, completed_segments=[]),
         progress_callbacks=[lambda *_args, **_kwargs: None, lambda *_args, **_kwargs: None],
-        output_fps=None,
         encode_progress_callback=None,
         metrics=metrics,
         manifest_factory=create_test_manifest,

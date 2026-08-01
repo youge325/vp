@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.errors import ResumeConflictError
+from app.errors.process import ResumeConflictError
 from app.planning.manifest import ResumeState, SegmentManifest
 from app.planning.resume_policy import ResumeMode
 from app.processing.streaming.encoder_finalization import finalize_segmented_output
@@ -43,8 +43,8 @@ def finalize_streaming_output(
         manifest=context.manifest,
         completed_output_frames=completed_output_frames,
         total_output_frames=context.preflight.stage_plan.total_encoded_frames,
-        strict_total_frames=context.output_fps is None,
-        source_has_audio=context.preflight.video_info.has_audio,
+        strict_total_frames=context.preflight.stage_plan.encoder_fps_override is None,
+        source_has_audio=context.preflight.stage_plan.source.has_audio,
     )
 
     context.manifest.workspace.cleanup()

@@ -13,7 +13,8 @@ import time
 from typing import Any
 
 from app.config import settings
-from app.errors import ProcessError, TaskErrorCode
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError
 from app.generated.application_defaults import DEFAULT_RIFE_MODEL_VERSION, DEFAULT_RIFE_MULTI
 from app.benchmark.scenarios import DEFAULT_SCENARIO
 from app.planning.stage_projection import StageProjection

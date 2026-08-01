@@ -9,7 +9,7 @@ from app.generated.protocol_constants import BackendEnvelopeType, TENSORRT_LOG_P
 from app.planning.manifest import ResumeState, SegmentManifest
 from app.planning.manifest_store import ManifestRepository
 from app.planning.segment_workspace import SegmentWorkspace
-from app.protocol import ndjson
+from app.protocol.emitter import ndjson
 
 
 class FilesystemManifestFactory:

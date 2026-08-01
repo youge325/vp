@@ -5,22 +5,26 @@ Ensures every ``TaskErrorCode`` enum value flows cleanly through:
 2. JSON serialization (same shape ``__main__._emit`` produces)
 3. Re-parsing back to a string code
 
-Also covers ``_bootstrap.infer_error_code`` pattern matching to guard
+Also covers ``bootstrap.infer_bootstrap_error_code`` pattern matching to guard
 against silent drift between bootstrap fallbacks and the enum SSOT.
 """
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
 import app.__main__ as app_main
-from app.errors import ProcessError
-from app.errors._bootstrap import infer_error_code
-from app.errors._codes import TaskErrorCode, error_code_to_wire
+from app.errors.bootstrap import infer_bootstrap_error_code
+from app.errors.codes import TaskErrorCode, error_code_to_wire
+from app.errors.process import ProcessError
 
 TASK_ERROR_CODES = {code.value for code in TaskErrorCode}
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.parametrize("code", list(TaskErrorCode))
@@ -39,39 +43,52 @@ def test_every_code_round_trips_through_json(code: TaskErrorCode) -> None:
     assert decoded["message"] == "diagnostic message"
 
 
-def test_infer_error_code_routes_torch_to_missing_tensor_backend() -> None:
-    assert infer_error_code(ImportError("no module named 'torch'")) == TaskErrorCode.MISSING_TENSOR_BACKEND.value
+def test_infer_bootstrap_error_code_routes_torch_to_missing_tensor_backend() -> None:
+    assert (
+        infer_bootstrap_error_code(ImportError("no module named 'torch'")) == TaskErrorCode.MISSING_TENSOR_BACKEND.value
+    )
 
 
-def test_infer_error_code_routes_paddle_to_missing_tensor_backend() -> None:
-    assert infer_error_code(ImportError("no module named 'paddle'")) == TaskErrorCode.MISSING_TENSOR_BACKEND.value
+def test_infer_bootstrap_error_code_routes_paddle_to_missing_tensor_backend() -> None:
+    assert (
+        infer_bootstrap_error_code(ImportError("no module named 'paddle'"))
+        == TaskErrorCode.MISSING_TENSOR_BACKEND.value
+    )
 
 
-def test_infer_error_code_routes_pyav_to_missing_python_dependency() -> None:
+def test_infer_bootstrap_error_code_routes_pyav_to_missing_python_dependency() -> None:
     """Non-tensor missing modules must map to the new MISSING_PYTHON_DEPENDENCY code.
 
     Previously this returned the bare string ``"missing_python_dependency"`` even
     though the enum had no such value (SSOT drift). This test pins the fix.
     """
-    assert infer_error_code(ImportError("no module named 'pyav'")) == TaskErrorCode.MISSING_PYTHON_DEPENDENCY.value
+    assert (
+        infer_bootstrap_error_code(ImportError("no module named 'pyav'"))
+        == TaskErrorCode.MISSING_PYTHON_DEPENDENCY.value
+    )
 
 
-def test_infer_error_code_routes_ffmpeg_to_missing_ffmpeg() -> None:
-    assert infer_error_code(FileNotFoundError("ffmpeg binary not found")) == TaskErrorCode.MISSING_FFMPEG.value
-    assert infer_error_code(RuntimeError("ffprobe call failed")) == TaskErrorCode.MISSING_FFMPEG.value
+def test_infer_bootstrap_error_code_routes_ffmpeg_to_missing_ffmpeg() -> None:
+    assert (
+        infer_bootstrap_error_code(FileNotFoundError("ffmpeg binary not found")) == TaskErrorCode.MISSING_FFMPEG.value
+    )
+    assert infer_bootstrap_error_code(RuntimeError("ffprobe call failed")) == TaskErrorCode.MISSING_FFMPEG.value
 
 
-def test_infer_error_code_routes_model_to_missing_model() -> None:
-    assert infer_error_code(RuntimeError("model weight flownet_v4.25.pkl missing")) == TaskErrorCode.MISSING_MODEL.value
+def test_infer_bootstrap_error_code_routes_model_to_missing_model() -> None:
+    assert (
+        infer_bootstrap_error_code(RuntimeError("model weight flownet_v4.25.pkl missing"))
+        == TaskErrorCode.MISSING_MODEL.value
+    )
 
 
-def test_infer_error_code_routes_cancel_to_cancelled() -> None:
-    assert infer_error_code(RuntimeError("operation was cancelled")) == TaskErrorCode.CANCELLED.value
-    assert infer_error_code(RuntimeError("operation was canceled")) == TaskErrorCode.CANCELLED.value
+def test_infer_bootstrap_error_code_routes_cancel_to_cancelled() -> None:
+    assert infer_bootstrap_error_code(RuntimeError("operation was cancelled")) == TaskErrorCode.CANCELLED.value
+    assert infer_bootstrap_error_code(RuntimeError("operation was canceled")) == TaskErrorCode.CANCELLED.value
 
 
-def test_infer_error_code_defaults_to_process_failed() -> None:
-    assert infer_error_code(RuntimeError("some random failure")) == TaskErrorCode.PROCESS_FAILED.value
+def test_infer_bootstrap_error_code_defaults_to_process_failed() -> None:
+    assert infer_bootstrap_error_code(RuntimeError("some random failure")) == TaskErrorCode.PROCESS_FAILED.value
 
 
 @pytest.mark.parametrize(
@@ -106,7 +123,7 @@ def test_main_wire_error_code_fallback_uses_generated_backend_codes(monkeypatch)
 
 
 def test_all_inferred_codes_are_in_enum() -> None:
-    """Every code ``infer_error_code`` can return must be a real enum value.
+    """Every code ``infer_bootstrap_error_code`` can return must be a real enum value.
 
     Guards against typos where the inference rule returns a string the enum
     doesn't know about.
@@ -125,15 +142,17 @@ def test_all_inferred_codes_are_in_enum() -> None:
         "some random failure",
     ]
     for message in candidate_messages:
-        code = infer_error_code(RuntimeError(message))
-        assert code in TASK_ERROR_CODES, f"infer_error_code({message!r}) -> {code!r} is not a real TaskErrorCode value"
+        code = infer_bootstrap_error_code(RuntimeError(message))
+        assert code in TASK_ERROR_CODES, (
+            f"infer_bootstrap_error_code({message!r}) -> {code!r} is not a real TaskErrorCode value"
+        )
 
 
 # Verify the three backend error-code entry points agree.
 # After collapsing the old ``_infer_code_from_exception`` wrapper, the only
 # legitimate entry points are:
 #   1. ``ProcessError.from_exception``           (application code path)
-#   2. ``infer_error_code``                       (the bootstrap source of truth)
+#   2. ``infer_bootstrap_error_code``                       (the bootstrap source of truth)
 #   3. ``app.__main__._bootstrap_error_code``     (import-time fallback)
 # All three must agree on the codes they share — otherwise an exception that
 # raises during ``main()`` versus during ``import`` would surface different
@@ -177,12 +196,12 @@ _THREE_WAY_FIXTURES: list[tuple[BaseException, str]] = [
 
 @pytest.mark.parametrize(("exc", "expected_code"), _THREE_WAY_FIXTURES)
 def test_three_entry_points_agree(exc: BaseException, expected_code: str) -> None:
-    """``ProcessError.from_exception``, ``infer_error_code``, and the
+    """``ProcessError.from_exception``, ``infer_bootstrap_error_code``, and the
     ``__main__`` bootstrap fallback all yield the same code for the same
     exception. This is the test that catches drift between the entry
     points after consolidation."""
     from_exception_code = ProcessError.from_exception(exc).code
-    bootstrap_code = infer_error_code(exc)
+    bootstrap_code = infer_bootstrap_error_code(exc)
     main_code = app_main._bootstrap_error_code(exc)
     assert from_exception_code == expected_code
     assert bootstrap_code == expected_code
@@ -190,7 +209,7 @@ def test_three_entry_points_agree(exc: BaseException, expected_code: str) -> Non
 
 
 def test_main_bootstrap_uses_shared_inference_when_available() -> None:
-    """The ``__main__`` fallback must prefer ``_bootstrap.infer_error_code``
+    """The ``__main__`` fallback must prefer ``bootstrap.infer_bootstrap_error_code``
     over its inline mirror so additions to the shared rule set automatically
     flow through. Verified by checking that a pattern only the shared module
     recognises (``tensor backend`` literal) is routed correctly."""
@@ -198,12 +217,31 @@ def test_main_bootstrap_uses_shared_inference_when_available() -> None:
     assert code == TaskErrorCode.MISSING_TENSOR_BACKEND.value
 
 
+def test_bootstrap_inference_does_not_import_full_generated_contracts() -> None:
+    script = (
+        "import sys\n"
+        "from app.errors.bootstrap import infer_bootstrap_error_code\n"
+        "assert 'app.generated.contracts' not in sys.modules\n"
+        "assert 'pydantic' not in sys.modules\n"
+        "assert infer_bootstrap_error_code(ImportError(\"No module named 'torch'\")) == "
+        "'missing_tensor_backend'\n"
+    )
+
+    subprocess.run([sys.executable, "-c", script], cwd=BACKEND_ROOT, check=True)
+
+
+def test_main_catastrophic_bootstrap_fallback_has_no_mirrored_rules(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(app_main, "infer_bootstrap_error_code", None)
+
+    assert app_main._bootstrap_error_code(RuntimeError("ffmpeg missing")) == "process_failed"
+
+
 # ---------------------------------------------------------------------------
 # stdlib type dispatch fallback.
 # ---------------------------------------------------------------------------
 # When the exception message has no recognised keyword, the resolver should
 # fall through to coarse ``isinstance`` buckets so common stdlib errors get a
-# more useful code than the generic ``PROCESS_FAILED``. The ``infer_error_code``
+# more useful code than the generic ``PROCESS_FAILED``. The ``infer_bootstrap_error_code``
 # Message matching runs before the exception-aware type dispatch.
 
 _TYPE_DISPATCH_FIXTURES: list[tuple[BaseException, str]] = [
@@ -242,11 +280,11 @@ _TYPE_DISPATCH_FIXTURES: list[tuple[BaseException, str]] = [
 def test_type_dispatch_fallback(exc: BaseException, expected_code: str) -> None:
     """No keyword in the message → fall back to ``isinstance`` buckets.
 
-    Asserts that both ``infer_error_code(exc)`` and
+    Asserts that both ``infer_bootstrap_error_code(exc)`` and
     ``ProcessError.from_exception(exc)`` agree
     on the coarse bucket the type dispatch picked.
     """
-    assert infer_error_code(exc) == expected_code
+    assert infer_bootstrap_error_code(exc) == expected_code
     assert ProcessError.from_exception(exc).code == expected_code
 
 
@@ -258,9 +296,9 @@ def test_message_match_wins_over_type_dispatch() -> None:
     long-standing CLI behavior is preserved.
     """
     exc = FileNotFoundError("ffmpeg binary missing")
-    assert infer_error_code(exc) == TaskErrorCode.MISSING_FFMPEG.value
+    assert infer_bootstrap_error_code(exc) == TaskErrorCode.MISSING_FFMPEG.value
     exc2 = ImportError("No module named 'torch'")
-    assert infer_error_code(exc2) == TaskErrorCode.MISSING_TENSOR_BACKEND.value
+    assert infer_bootstrap_error_code(exc2) == TaskErrorCode.MISSING_TENSOR_BACKEND.value
 
 
 # ---------------------------------------------------------------------------
@@ -281,7 +319,7 @@ def test_pydantic_validation_error_with_model_word_is_invalid_input() -> None:
     而是按 type-dispatch fallback 走到 INVALID_INPUT(ValueError 桶)。
     """
     exc = ValueError("model_x must be one of ['4.6', '4.25']")
-    assert infer_error_code(exc) == TaskErrorCode.INVALID_INPUT.value
+    assert infer_bootstrap_error_code(exc) == TaskErrorCode.INVALID_INPUT.value
 
 
 def test_unrelated_model_mention_falls_through_to_process_failed() -> None:
@@ -291,15 +329,21 @@ def test_unrelated_model_mention_falls_through_to_process_failed() -> None:
     (``model file`` / ``model weight`` / ``missing model``),
     RuntimeError 也没有更具体的 type-dispatch bucket。
     """
-    assert infer_error_code(RuntimeError("yolov8 model not loaded")) == TaskErrorCode.PROCESS_FAILED.value
+    assert infer_bootstrap_error_code(RuntimeError("yolov8 model not loaded")) == TaskErrorCode.PROCESS_FAILED.value
 
 
 def test_whitelisted_model_keywords_still_route_to_missing_model() -> None:
     """白名单内的 4 个变体都必须保留 MISSING_MODEL 归类(回归护栏)。"""
-    assert infer_error_code(RuntimeError("flownet_v4.25.pkl not found")) == TaskErrorCode.MISSING_MODEL.value
-    assert infer_error_code(RuntimeError("model file weights/rife.pkl missing")) == TaskErrorCode.MISSING_MODEL.value
-    assert infer_error_code(RuntimeError("model weight tensor not initialized")) == TaskErrorCode.MISSING_MODEL.value
+    assert infer_bootstrap_error_code(RuntimeError("flownet_v4.25.pkl not found")) == TaskErrorCode.MISSING_MODEL.value
     assert (
-        infer_error_code(RuntimeError("missing model weights for super-resolution"))
+        infer_bootstrap_error_code(RuntimeError("model file weights/rife.pkl missing"))
+        == TaskErrorCode.MISSING_MODEL.value
+    )
+    assert (
+        infer_bootstrap_error_code(RuntimeError("model weight tensor not initialized"))
+        == TaskErrorCode.MISSING_MODEL.value
+    )
+    assert (
+        infer_bootstrap_error_code(RuntimeError("missing model weights for super-resolution"))
         == TaskErrorCode.MISSING_MODEL.value
     )

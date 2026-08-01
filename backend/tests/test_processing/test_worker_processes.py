@@ -8,7 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.errors import ProcessError, TaskErrorCode
+from app.errors.codes import TaskErrorCode
+from app.errors.process import ProcessError
 from app.processing.streaming.error_channel import create_error_queue, report_first_error
 from app.processing.streaming.worker_processes import StageWorkerGroup, stage_worker_session
 from tests.support.streaming_runtime import ignore_worker_log

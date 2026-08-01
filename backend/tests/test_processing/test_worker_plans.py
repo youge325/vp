@@ -6,6 +6,7 @@ from app.processing.streaming.worker_plans import (
     build_stage_chunk_plans,
     build_stage_worker_plans,
 )
+from tests.support.video_metadata import make_video_metadata
 
 
 def test_worker_plans_track_dimensions_frames_and_stage_backends() -> None:
@@ -36,12 +37,14 @@ def test_worker_plans_track_dimensions_frames_and_stage_backends() -> None:
             stage_name="02_super_resolution",
         ),
     ]
-    stage_plan = build_stage_plan(StageProjection(tuple(steps)), 3, source_duration=1.0, output_fps=None)
+    stage_plan = build_stage_plan(
+        StageProjection(tuple(steps)),
+        make_video_metadata(3, duration=1.0, width=2, height=3),
+        output_fps=None,
+    )
 
     plans = build_stage_worker_plans(
         stage_plan=stage_plan,
-        source_width=2,
-        source_height=3,
         source_frame_count=3,
     )
 
@@ -81,12 +84,14 @@ def test_worker_plans_track_dimensions_when_super_resolution_runs_before_interpo
             stage_name="02_frame_interpolation",
         ),
     ]
-    stage_plan = build_stage_plan(StageProjection(tuple(steps)), 3, source_duration=1.0, output_fps=None)
+    stage_plan = build_stage_plan(
+        StageProjection(tuple(steps)),
+        make_video_metadata(3, duration=1.0, width=2, height=3),
+        output_fps=None,
+    )
 
     plans = build_stage_worker_plans(
         stage_plan=stage_plan,
-        source_width=2,
-        source_height=3,
         source_frame_count=3,
     )
 
@@ -153,8 +158,7 @@ def test_boundary_schedule_maps_output_counts_to_next_source_frame() -> None:
                 ),
             )
         ),
-        4,
-        source_duration=1.0,
+        make_video_metadata(4, duration=1.0),
         output_fps=None,
     )
 
@@ -176,8 +180,7 @@ def test_boundary_schedule_uses_single_frame_output_groups_without_interpolation
                 ),
             )
         ),
-        4,
-        source_duration=1.0,
+        make_video_metadata(4, duration=1.0),
         output_fps=None,
     )
 
