@@ -49,6 +49,23 @@ def test_cli_composition_root_closes_the_loaded_cleanup_coordinator(monkeypatch:
     assert closed == [True]
 
 
+def test_expired_cleanup_worker_still_attempts_reap_once() -> None:
+    attempts: list[float] = []
+
+    class ReapedOwner:
+        def retry_cleanup(self, *, deadline: float) -> bool:
+            attempts.append(deadline)
+            return True
+
+    coordinator = _LateCleanupCoordinator(timeout_seconds=0.01)
+    owner = ReapedOwner()
+    expired_deadline = time.monotonic() - 1
+
+    coordinator._run(id(owner), owner, expired_deadline)
+
+    assert attempts == [expired_deadline]
+
+
 def test_close_deadline_race_repeats_without_leaking_threads() -> None:
     class NeverReapedOwner:
         def __init__(self) -> None:
