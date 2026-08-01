@@ -1,8 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // Default workflow config and environment hydration rules.
 
-import type { EnvironmentCheckResult } from '@/types/protocol'
-import type { WorkflowConfig } from '@/types/protocol'
+import { APPLICATION_DEFAULTS, type EnvironmentCheckResult, type WorkflowConfig } from '@/types/protocol'
 import {
   pickDefaultSuperResolutionAlgorithm,
   pickDefaultInterpolationAlgorithm,
@@ -14,29 +13,30 @@ import { applySuperResolutionAlgorithmDefaults } from './enhance-super-resolutio
 import { findSuperResolutionAlgorithm } from './enhance-workflow-lookup'
 
 function createDefaultWorkflowConfig(): WorkflowConfig {
+  const { interpolation, superResolution, workflow } = APPLICATION_DEFAULTS
   return {
-    fpsMode: 'target',
-    processOrder: 'super_resolution_then_interpolation',
+    fpsMode: workflow.desktopFpsMode,
+    processOrder: workflow.processOrder,
     interpolation: {
       enabled: true,
-      targetFps: 60,
-      multi: 2,
-      algorithm: 'rife',
-      model: '4.25',
-      onnxModel: '',
-      scale: 1,
-      fp16: false,
-      tensorBackend: 'pytorch',
-      engine: 'cuda',
+      targetFps: interpolation.targetFps,
+      multi: interpolation.multi,
+      algorithm: interpolation.algorithm,
+      model: interpolation.model,
+      onnxModel: interpolation.onnxModel,
+      scale: interpolation.scale,
+      fp16: interpolation.fp16,
+      tensorBackend: interpolation.tensorBackend,
+      engine: interpolation.engine,
     },
     superResolution: {
       enabled: false,
-      scaleFactor: 2,
-      algorithm: 'placeholder',
-      onnxModel: '',
-      tensorBackend: 'onnx',
-      engine: 'cuda',
-      numFrames: 10,
+      scaleFactor: superResolution.scaleFactor,
+      algorithm: superResolution.algorithm,
+      onnxModel: superResolution.onnxModel,
+      tensorBackend: superResolution.tensorBackend,
+      engine: superResolution.engine,
+      numFrames: superResolution.numFrames,
     },
     preprocess: {
       enabled: false,
@@ -79,8 +79,10 @@ function applyEnvironmentWorkflowDefaults(
     undefined,
   )
 
-  workflowConfig.interpolation.engine = pickDefaultInterpolationEngine(env, interpolationBackend) ?? 'cuda'
-  workflowConfig.superResolution.engine = pickDefaultEngine(env, superResolutionBackend) ?? 'cuda'
+  workflowConfig.interpolation.engine = pickDefaultInterpolationEngine(env, interpolationBackend)
+    ?? APPLICATION_DEFAULTS.interpolation.engine
+  workflowConfig.superResolution.engine = pickDefaultEngine(env, superResolutionBackend)
+    ?? APPLICATION_DEFAULTS.superResolution.engine
 }
 
 export function createDefaultWorkflowConfigForEnvironment(

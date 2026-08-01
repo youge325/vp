@@ -48,7 +48,7 @@ class RIFEExportWrapper(nn.Module):
 
 
 def export_rife_to_onnx(
-    model_version: str = "4.25",
+    model_version: str,
     model_dir: Optional[str] = None,
     output_path: Optional[str] = None,
     opset_version: int = 17,
@@ -58,7 +58,7 @@ def export_rife_to_onnx(
     """将指定版本的 RIFE 模型导出为 ONNX。
 
     参数:
-        model_version: 模型版本（默认 "4.25"）
+        model_version: 模型版本
         model_dir: 权重目录（默认 backend/models/）
         output_path: ONNX 输出路径（默认 backend/models/rife_v{version}.onnx）
         opset_version: ONNX opset 版本

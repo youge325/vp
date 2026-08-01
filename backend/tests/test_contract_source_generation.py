@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import copy
+import json
 import sys
 from pathlib import Path
 
@@ -26,19 +26,31 @@ SCRIPTS = REPO_ROOT / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from generate_contracts import (  # noqa: E402
-    _render_boundary_schema,
-    _render_ndjson_schema,
+from contract_codegen.application_defaults import (  # noqa: E402
+    load_application_defaults,
+    render_python_application_defaults,
+    render_rust_application_defaults,
+    render_typescript_application_defaults,
+)
+from contract_codegen.python_renderer import (  # noqa: E402
     _render_python_bootstrap_constants,
     _render_python_protocol_constants,
-    _render_stage_worker_schema,
+)
+from contract_codegen.rust_command_renderer import _render_rust_oneshot_contracts  # noqa: E402
+from contract_codegen.rust_renderer import (  # noqa: E402
     _render_rust_error_code_conversion,
     _render_rust_generated_mod,
-    _render_rust_oneshot_contracts,
     _render_rust_task_envelopes,
+)
+from contract_codegen.schema_composition import (  # noqa: E402
+    _render_boundary_schema,
+    _render_ndjson_schema,
+    _render_stage_worker_schema,
     _render_typescript_boundary_schema,
-    _render_typescript_events,
-    _validate_explicit_object_boundaries,
+)
+from contract_codegen.schema_tools import validate_explicit_object_boundaries  # noqa: E402
+from contract_codegen.typescript_renderer import _render_typescript_events  # noqa: E402
+from contract_codegen.validation import (  # noqa: E402
     _validate_backend_command_bindings,
     _validate_termination_reap_bindings,
     validate_contracts,
@@ -49,9 +61,68 @@ def _load(name: str) -> dict[str, object]:
     return json.loads((CONTRACTS / name).read_text(encoding="utf-8"))
 
 
+def test_application_defaults_are_strict_validated_product_defaults() -> None:
+    schema = _load("application-defaults.schema.json")
+    defaults = _load("application-defaults.json")
+    base_uri = "https://vp-workbench.local/contracts/"
+    registry = Registry().with_resources(
+        (
+            f"{base_uri}{path.name}",
+            Resource.from_contents(json.loads(path.read_text(encoding="utf-8"))),
+        )
+        for path in CONTRACTS.glob("*.schema.json")
+    )
+    validator = Draft202012Validator(schema, registry=registry)
+
+    validator.validate(defaults)
+    assert defaults["interpolation"] == {
+        "algorithm": "rife",
+        "model": "4.25",
+        "onnxModel": "",
+        "targetFps": 60,
+        "multi": 2,
+        "scale": 1,
+        "fp16": False,
+        "tensorBackend": "pytorch",
+        "engine": "cuda",
+    }
+    assert defaults["superResolution"]["numFrames"] == 10
+    assert defaults["workflow"] == {
+        "desktopFpsMode": "target",
+        "cliFpsMode": "multi",
+        "processOrder": "super_resolution_then_interpolation",
+    }
+    assert defaults["output"]["segmentFrames"] == 1000
+
+    invalid = copy.deepcopy(defaults)
+    invalid["output"]["segmentFrames"] = -1
+    with pytest.raises(ValidationError):
+        validator.validate(invalid)
+
+    extra = copy.deepcopy(defaults)
+    extra["legacyDefault"] = True
+    with pytest.raises(ValidationError):
+        validator.validate(extra)
+
+
+def test_application_defaults_generate_language_native_read_only_constants() -> None:
+    defaults = load_application_defaults(CONTRACTS)
+
+    python_output = render_python_application_defaults(defaults)
+    typescript_output = render_typescript_application_defaults(defaults)
+    rust_output = render_rust_application_defaults(defaults)
+
+    assert 'DEFAULT_RIFE_MODEL_VERSION: Final = "4.25"' in python_output
+    assert "DEFAULT_SEGMENT_FRAMES: Final = 1000" in python_output
+    assert "export const APPLICATION_DEFAULTS =" in typescript_output
+    assert '"segmentFrames": 1000' in typescript_output
+    assert 'DEFAULT_RIFE_MODEL_VERSION: &str = "4.25"' in rust_output
+
+
 def test_python_generated_package_contains_only_declared_contract_outputs() -> None:
     generated = REPO_ROOT / "backend/app/generated"
     assert {path.name for path in generated.glob("*.py") if path.name != "__init__.py"} == {
+        "application_defaults.py",
         "bootstrap_constants.py",
         "contracts.py",
         "protocol_constants.py",
@@ -71,7 +142,7 @@ def test_source_contract_references_resolve_and_preserve_named_filter_boundaries
 
 def test_contract_validation_rejects_implicit_object_openness() -> None:
     with pytest.raises(RuntimeError, match="additionalProperties.*#/properties/nested"):
-        _validate_explicit_object_boundaries(
+        validate_explicit_object_boundaries(
             {
                 "type": "object",
                 "additionalProperties": False,

@@ -278,10 +278,10 @@ _FULL_SCAN_ONLY_REVIEWED_SYMBOLS = (
     ),
     *(
         ReviewedSymbol(
-            path="scripts/architecture_contracts/checks.py",
+            path="scripts/architecture_contracts/python_checks.py",
             symbol=symbol,
             reason="ast.NodeVisitor dispatches this visitor method by node type.",
-            evidence_file="scripts/architecture_contracts/checks.py",
+            evidence_file="scripts/architecture_contracts/python_checks.py",
             evidence_marker="class BoundaryReadVisitor(ast.NodeVisitor)",
         )
         for symbol in (

@@ -4,9 +4,6 @@ use std::path::{Path, PathBuf};
 
 use super::helpers::{env_path, first_existing_dir};
 
-/// Default model version, resolved into runtime configuration at startup.
-pub(super) const DEFAULT_RIFE_MODEL_VERSION: &str = "4.25";
-
 pub(super) fn rife_model_filename(version: &str) -> String {
     format!("flownet_v{version}.pkl")
 }
@@ -70,6 +67,7 @@ pub(super) fn has_rife_model(model_dir: Option<&PathBuf>, version: &str) -> bool
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::generated::DEFAULT_RIFE_MODEL_VERSION;
     use crate::runtime::test_support::VP_TENSORRT_DIR_LOCK;
     use std::env;
 

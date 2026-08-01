@@ -10,21 +10,25 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from architecture_contracts.catalog import RULES  # noqa: E402
-from architecture_contracts.checks import (  # noqa: E402
+from architecture_contracts.ipc_checks import (  # noqa: E402
     ManifestCommand,
-    _RUST_PUBLIC_MODEL_EXPORTS,
     RustCommandSignature,
+    diff_command_surface,
+    diff_command_types,
+)
+from architecture_contracts.python_checks import (  # noqa: E402
     _check_backend_package_cycles,
+    _check_typed_ndjson_error_emission,
+)
+from architecture_contracts.rust_checks import (  # noqa: E402
+    _RUST_PUBLIC_MODEL_EXPORTS,
+    _check_rust_lifecycle_result_handling,
     _check_rust_package_cycles,
     _check_rust_public_surface,
-    _check_rust_lifecycle_result_handling,
     _check_rust_reaper_ownership,
     _check_rust_submodule_cycles,
     _check_rust_task_adapter_boundaries,
     _check_rust_unused_dependencies,
-    _check_typed_ndjson_error_emission,
-    diff_command_surface,
-    diff_command_types,
 )
 from architecture_contracts.rules import (  # noqa: E402
     AbsentPathRule,

@@ -10,6 +10,16 @@ import argparse
 from typing import Any
 
 from app.config import settings
+from app.generated.application_defaults import (
+    DEFAULT_RIFE_ALGORITHM,
+    DEFAULT_RIFE_ENGINE,
+    DEFAULT_RIFE_ONNX_MODEL,
+    DEFAULT_SEGMENT_FRAMES,
+    DEFAULT_SR_ENGINE,
+    DEFAULT_SR_NUM_FRAMES,
+    DEFAULT_SR_ONNX_MODEL,
+    DEFAULT_SR_TENSOR_BACKEND,
+)
 
 
 def _default_decode_config() -> dict[str, Any]:
@@ -52,22 +62,22 @@ def _default_workflow_config(args: argparse.Namespace) -> dict[str, Any]:
             "enabled": enable_interpolation,
             "targetFps": args.target_fps,
             "multi": multi,
-            "algorithm": "rife",
+            "algorithm": DEFAULT_RIFE_ALGORITHM,
             "model": model,
-            "onnxModel": "",
+            "onnxModel": DEFAULT_RIFE_ONNX_MODEL,
             "scale": scale,
             "fp16": fp16,
             "tensorBackend": args.backend,
-            "engine": "cuda",
+            "engine": DEFAULT_RIFE_ENGINE,
         },
         "superResolution": {
             "enabled": enable_super_resolution,
             "scaleFactor": args.sr_scale_factor,
             "algorithm": args.sr_algorithm,
-            "onnxModel": "",
-            "tensorBackend": "onnx",
-            "engine": "cuda",
-            "numFrames": 10,
+            "onnxModel": DEFAULT_SR_ONNX_MODEL,
+            "tensorBackend": DEFAULT_SR_TENSOR_BACKEND,
+            "engine": DEFAULT_SR_ENGINE,
+            "numFrames": DEFAULT_SR_NUM_FRAMES,
         },
         "preprocess": {
             "enabled": False,
@@ -89,5 +99,5 @@ def _default_output_config(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "outputDir": args.output_dir or "",
         "openOnComplete": True,
-        "segmentFrames": 1000,
+        "segmentFrames": DEFAULT_SEGMENT_FRAMES,
     }

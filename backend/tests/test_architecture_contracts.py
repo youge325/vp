@@ -16,32 +16,105 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from architecture_contracts.checks import (  # noqa: E402
-    _check_python_cli_commands,
-    _check_python_algorithm_factory_registry,
-    _check_python_package_reexports,
-    _check_rust_unused_dependencies,
-    _check_python_boundary_field_consumers,
-    _check_side_effect_free_python_packages,
-    _check_paddlegan_metadata,
+from architecture_contracts.application_defaults import (  # noqa: E402
+    _REQUIRED_CONSUMERS,
+    check_application_default_consumers,
+)
+from architecture_contracts.checks import collect_architecture_issues  # noqa: E402
+from architecture_contracts.ipc_checks import (  # noqa: E402
     _collect_manifest_commands,
+    diff_command_surface,
+)
+from architecture_contracts.python_checks import (  # noqa: E402
+    _check_python_algorithm_factory_registry,
+    _check_python_boundary_field_consumers,
+    _check_python_cli_commands,
+    _check_python_package_reexports,
+    _check_paddlegan_metadata,
+    _check_side_effect_free_python_packages,
     _collect_python_name_registry,
-    _check_frontend_dependency_boundaries,
     _find_unconsumed_python_boundary_fields,
-    _find_unconsumed_python_package_reexports,
     _find_unconsumed_python_module_exports,
+    _find_unconsumed_python_package_reexports,
+    diff_paddlegan_catalog_contract,
+)
+from architecture_contracts.rules import ContractParseError  # noqa: E402
+from architecture_contracts.rust_checks import (  # noqa: E402
+    _check_rust_unused_dependencies,
     _find_unconsumed_rust_model_reexports,
+)
+from architecture_contracts.rust_visibility import check_rust_restricted_visibility  # noqa: E402
+from architecture_contracts.script_reachability import check_script_reachability  # noqa: E402
+from architecture_contracts.typescript_checks import (  # noqa: E402
+    _check_frontend_dependency_boundaries,
+    _check_frontend_test_layout,
     _find_unconsumed_protocol_reexports,
     _find_unconsumed_test_support_exports,
     _find_unconsumed_test_ids,
     _find_unreferenced_css_classes,
     _find_unused_css_custom_properties,
-    _check_frontend_test_layout,
-    collect_architecture_issues,
-    diff_command_surface,
-    diff_paddlegan_catalog_contract,
 )
-from architecture_contracts.rules import ContractParseError  # noqa: E402
+
+
+def test_application_default_gate_rejects_a_reintroduced_product_literal(tmp_path: Path) -> None:
+    defaults = {
+        "$schema": "./application-defaults.schema.json",
+        "interpolation": {"model": "4.25", "targetFps": 60},
+        "superResolution": {"numFrames": 10},
+        "workflow": {"processOrder": "super_resolution_then_interpolation"},
+        "output": {"segmentFrames": 1000},
+    }
+    contract = tmp_path / "contracts/application-defaults.json"
+    contract.parent.mkdir(parents=True)
+    contract.write_text(json.dumps(defaults), encoding="utf-8")
+    for path_name, marker in _REQUIRED_CONSUMERS.items():
+        path = tmp_path / path_name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(marker, encoding="utf-8")
+
+    assert check_application_default_consumers(tmp_path) == []
+
+    workflow = tmp_path / "frontend/src/services/preset/workflow-defaults.ts"
+    workflow.write_text("APPLICATION_DEFAULTS\nconst model = '4.25'\n", encoding="utf-8")
+    issues = check_application_default_consumers(tmp_path)
+    assert len(issues) == 1
+    assert "hard-coded instead of generated" in issues[0]
+
+
+def test_script_reachability_follows_python_imports_and_powershell_dot_sources(tmp_path: Path) -> None:
+    pre_commit = tmp_path / ".pre-commit-config.yaml"
+    pre_commit.write_text(
+        "entry: python scripts/main.py\nentry: pwsh scripts/main.ps1\n",
+        encoding="utf-8",
+    )
+    scripts = tmp_path / "scripts"
+    package = scripts / "helpers"
+    package.mkdir(parents=True)
+    (scripts / "main.py").write_text("from helpers import worker\n", encoding="utf-8")
+    (package / "__init__.py").write_text("\n", encoding="utf-8")
+    (package / "worker.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (scripts / "main.ps1").write_text(
+        '. (Join-Path $PSScriptRoot "runtime-tools.ps1")\n',
+        encoding="utf-8",
+    )
+    (scripts / "runtime-tools.ps1").write_text("function Invoke-Tool {}\n", encoding="utf-8")
+    (scripts / "orphan.py").write_text("VALUE = 2\n", encoding="utf-8")
+
+    assert check_script_reachability(tmp_path) == ["unreachable repository script: scripts/orphan.py"]
+
+
+def test_restricted_rust_visibility_requires_a_non_test_consumer(tmp_path: Path) -> None:
+    rust = tmp_path / "frontend/src-tauri/src"
+    rust.mkdir(parents=True)
+    (rust / "worker.rs").write_text(
+        "pub(crate) fn used() {}\npub(super) fn orphan() {}\npub(crate) fn caller() { used(); }\n",
+        encoding="utf-8",
+    )
+
+    assert check_rust_restricted_visibility(tmp_path) == [
+        "restricted Rust symbol has no production consumer: frontend/src-tauri/src/worker.rs:2 `orphan`",
+        "restricted Rust symbol has no production consumer: frontend/src-tauri/src/worker.rs:3 `caller`",
+    ]
 
 
 def test_rust_dev_dependency_usage_in_compile_fail_fixtures_is_counted(tmp_path: Path) -> None:

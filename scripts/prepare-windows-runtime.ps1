@@ -11,6 +11,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot "runtime-tools.ps1")
 
 function Write-Step {
     param([string]$Message)
@@ -61,18 +62,6 @@ function Resolve-RequiredPath {
     return (Resolve-Path -LiteralPath $Path).Path
 }
 
-function Get-FirstCommandPath {
-    param([string[]]$Names)
-
-    foreach ($name in $Names) {
-        $command = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace($command.Source)) {
-            return $command.Source
-        }
-    }
-    return ""
-}
-
 function Find-FirstFile {
     param(
         [string]$Label,
@@ -119,7 +108,7 @@ function Resolve-PythonSource {
         return @{ Root = $resolvedRoot; Exe = $resolvedExe }
     }
 
-    $pathPython = Get-FirstCommandPath -Names @("python.exe", "python")
+    $pathPython = Get-VpFirstCommandPath -Names @("python.exe", "python")
     if ([string]::IsNullOrWhiteSpace($pathPython)) {
         throw "Unable to locate Python. Set VP_RELEASE_PYTHON_ROOT or VP_RELEASE_PYTHON_EXE on the self-hosted runner."
     }
@@ -143,8 +132,8 @@ function Resolve-FfmpegSource {
         return @{ Ffmpeg = $ffmpeg; Ffprobe = $ffprobe }
     }
 
-    $ffmpegPath = Get-FirstCommandPath -Names @("ffmpeg.exe", "ffmpeg")
-    $ffprobePath = Get-FirstCommandPath -Names @("ffprobe.exe", "ffprobe")
+    $ffmpegPath = Get-VpFirstCommandPath -Names @("ffmpeg.exe", "ffmpeg")
+    $ffprobePath = Get-VpFirstCommandPath -Names @("ffprobe.exe", "ffprobe")
     if ([string]::IsNullOrWhiteSpace($ffmpegPath) -or [string]::IsNullOrWhiteSpace($ffprobePath)) {
         throw "Unable to locate FFmpeg/FFprobe. Set VP_RELEASE_FFMPEG_DIR on the self-hosted runner."
     }
@@ -171,15 +160,7 @@ function Resolve-ModelSource {
         $resolvedDir = (Resolve-Path -LiteralPath $resolvedDir).Path
     }
 
-    $defaultPytorchModel = Join-Path $resolvedDir "flownet_v4.25.pkl"
-    if (-not ((Test-Path -LiteralPath $defaultPytorchModel -PathType Leaf) -and ((Get-Item -LiteralPath $defaultPytorchModel).Length -gt 0))) {
-        throw "Default PyTorch RIFE model is missing. Expected non-empty flownet_v4.25.pkl under $resolvedDir. Set VP_RELEASE_MODEL_DIR to a directory containing it."
-    }
-
-    $defaultOnnxModel = Join-Path (Join-Path (Join-Path $resolvedDir "interpolation") "rife") "rife_v4.25.onnx"
-    if (-not ((Test-Path -LiteralPath $defaultOnnxModel -PathType Leaf) -and ((Get-Item -LiteralPath $defaultOnnxModel).Length -gt 0))) {
-        throw "Default ONNX RIFE model is missing. Expected non-empty interpolation/rife/rife_v4.25.onnx under $resolvedDir. Set VP_RELEASE_MODEL_DIR to a directory containing it."
-    }
+    Assert-VpDefaultRifeModels -ModelDir $resolvedDir | Out-Null
     return $resolvedDir
 }
 
@@ -503,11 +484,8 @@ function Copy-ModelFiles {
     $linked = 0
     $copied = 0
 
-    $defaultPytorchModel = Join-Path $SourceDir "flownet_v4.25.pkl"
-    if (-not ((Test-Path -LiteralPath $defaultPytorchModel -PathType Leaf) -and ((Get-Item -LiteralPath $defaultPytorchModel).Length -gt 0))) {
-        throw "Default PyTorch RIFE model is missing: $defaultPytorchModel"
-    }
-    $pytorchModel = Get-Item -LiteralPath $defaultPytorchModel
+    $defaultModels = Assert-VpDefaultRifeModels -ModelDir $SourceDir
+    $pytorchModel = Get-Item -LiteralPath $defaultModels.PytorchPath
     $result = Copy-FileFast -Source $pytorchModel.FullName -Destination (Join-Path $DestinationDir $pytorchModel.Name)
     $bytes += [int64]$pytorchModel.Length
     if ($result -eq "linked") {
@@ -698,8 +676,9 @@ Copy-ModelFiles -SourceDir $modelSourceDir -DestinationDir $modelsOut
 
 $destFfmpeg = Join-Path $ffmpegOut "ffmpeg.exe"
 $destFfprobe = Join-Path $ffmpegOut "ffprobe.exe"
-$destDefaultPytorchModel = Join-Path $modelsOut "flownet_v4.25.pkl"
-$destDefaultOnnxModel = Join-Path (Join-Path (Join-Path $modelsOut "interpolation") "rife") "rife_v4.25.onnx"
+$destDefaultModels = Get-VpDefaultRifeModelPaths -ModelDir $modelsOut
+$destDefaultPytorchModel = $destDefaultModels.PytorchPath
+$destDefaultOnnxModel = $destDefaultModels.OnnxPath
 $requiredFiles = @($destFfmpeg, $destFfprobe, $destDefaultPytorchModel, $destDefaultOnnxModel)
 if (-not $SkipPython) {
     $destPythonExe = Join-Path $pythonOut "python.exe"
@@ -725,7 +704,7 @@ if (-not $SkipPython) {
     Invoke-CheckedProcess -Label "Python runtime import smoke" -FilePath $destPythonExe -Arguments @("-s", "-c", $importSmokeScript) -TimeoutSeconds 180
     Invoke-CheckedProcess -Label "Bundled backend check" -FilePath $destPythonExe -Arguments @("-s", "-m", "app", "check") -WorkingDirectory (Join-Path $repoRoot "backend") -TimeoutSeconds 180
 } else {
-    $systemPython = Get-FirstCommandPath -Names @("python.exe", "python")
+    $systemPython = Get-VpFirstCommandPath -Names @("python.exe", "python")
     if (-not [string]::IsNullOrWhiteSpace($systemPython)) {
         Write-Step "Running backend check with system Python: $systemPython"
         $env:VP_PYTHON_EXECUTABLE = $systemPython

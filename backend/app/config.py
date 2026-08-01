@@ -8,6 +8,13 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.generated.application_defaults import (
+    DEFAULT_RIFE_FP16,
+    DEFAULT_RIFE_MODEL_VERSION,
+    DEFAULT_RIFE_MULTI,
+    DEFAULT_RIFE_SCALE,
+)
+
 
 def _resolve_path(value: str | Path | None) -> Path | None:
     if not value:
@@ -75,10 +82,10 @@ class _Settings(BaseSettings):
     LOG_STARTUP_FILE_KEEP_COUNT: int = 5
 
     RIFE_MODEL_DIR: str = ""
-    RIFE_MODEL_VERSION: str = "4.25"
-    RIFE_SCALE: float = 1.0
-    RIFE_FP16: bool = False
-    RIFE_DEFAULT_MULTI: int = 2
+    RIFE_MODEL_VERSION: str = DEFAULT_RIFE_MODEL_VERSION
+    RIFE_SCALE: float = DEFAULT_RIFE_SCALE
+    RIFE_FP16: bool = DEFAULT_RIFE_FP16
+    RIFE_DEFAULT_MULTI: int = DEFAULT_RIFE_MULTI
 
     model_config = SettingsConfigDict(env_prefix="VP_", env_file=".env", extra="ignore")
 

@@ -6,6 +6,7 @@ import type {
   WorkflowConfig,
 } from '@/types/protocol'
 import type { MetricRow, VideoDimensions } from '@/types/view/model-metrics'
+import { APPLICATION_DEFAULTS } from '@/types/protocol'
 import { resolveMetricsForEngine } from '@/services/model-engine-metrics'
 import {
   estimateCombinedPeakVram,
@@ -90,7 +91,7 @@ export function buildEnhanceReadModel({
   const effectiveSuperResolutionNumFrames =
     fixedRuntimeFrameCount(currentSuperResolutionAlgorithm)
     ?? workflow.superResolution.numFrames
-    ?? 10
+    ?? APPLICATION_DEFAULTS.superResolution.numFrames
   const superResolutionFixedWindowRows =
     isPaddleGanSuperResolution && !isSuperResolutionInputFramesEditable
       ? [{ label: '邻帧窗口', value: `${effectiveSuperResolutionNumFrames} 帧（固定）` }]
@@ -106,7 +107,7 @@ export function buildEnhanceReadModel({
     interpolationRuntimeDetail,
     interpolationInputDimensions,
     {
-      scale: workflow.interpolation.scale || 1,
+      scale: workflow.interpolation.scale || APPLICATION_DEFAULTS.interpolation.scale,
       precisionBytes: workflow.interpolation.fp16 ? 2 : 4,
       temporalFrames: 1,
     },
@@ -118,7 +119,7 @@ export function buildEnhanceReadModel({
       scale: 1,
       precisionBytes: 4,
       temporalFrames: isSuperResolutionInputFramesEditable
-        ? workflow.superResolution.numFrames ?? 10
+        ? workflow.superResolution.numFrames ?? APPLICATION_DEFAULTS.superResolution.numFrames
         : 1,
       runtimeFrameCount: superResolutionRuntimeDetail?.metrics.runtimeFrameCount ?? null,
     },

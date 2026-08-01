@@ -4,6 +4,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot "runtime-tools.ps1")
 
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
     $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
@@ -19,18 +20,6 @@ function Get-EnvValue {
         return ""
     }
     return $value
-}
-
-function Find-FirstCommandPath {
-    param([string[]]$Names)
-
-    foreach ($name in $Names) {
-        $command = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace($command.Source)) {
-            return (Resolve-Path -LiteralPath $command.Source).Path
-        }
-    }
-    return ""
 }
 
 function Add-GitHubEnv {
@@ -107,20 +96,15 @@ function Resolve-ModelDir {
             continue
         }
 
-        $defaultPytorchModel = Join-Path $path "flownet_v4.25.pkl"
-        $defaultOnnxModel = Join-Path (Join-Path (Join-Path $path "interpolation") "rife") "rife_v4.25.onnx"
-        if ((Test-Path -LiteralPath $path -PathType Container) -and
-            (Test-Path -LiteralPath $defaultPytorchModel -PathType Leaf) -and
-            ((Get-Item -LiteralPath $defaultPytorchModel).Length -gt 0) -and
-            (Test-Path -LiteralPath $defaultOnnxModel -PathType Leaf) -and
-            ((Get-Item -LiteralPath $defaultOnnxModel).Length -gt 0)) {
+        if (Test-VpDefaultRifeModels -ModelDir $path) {
             return (Resolve-Path -LiteralPath $path).Path
         }
 
         $checked.Add("$($candidate.Label): $path")
     }
 
-    throw "Unable to locate RIFE model weights. Expected non-empty flownet_v4.25.pkl and interpolation/rife/rife_v4.25.onnx. Checked: $($checked -join '; ')"
+    $modelNames = Get-VpDefaultRifeModelPaths -ModelDir "MODEL_DIR"
+    throw "Unable to locate RIFE model weights. Expected non-empty $($modelNames.PytorchFilename) and interpolation/rife/$($modelNames.OnnxFilename). Checked: $($checked -join '; ')"
 }
 
 function Find-FfmpegPairInDir {
@@ -177,8 +161,8 @@ function Resolve-FfmpegSource {
         return $defaultDirPair
     }
 
-    $pathFfmpeg = Find-FirstCommandPath -Names @("ffmpeg.exe", "ffmpeg")
-    $pathFfprobe = Find-FirstCommandPath -Names @("ffprobe.exe", "ffprobe")
+    $pathFfmpeg = Get-VpFirstCommandPath -Names @("ffmpeg.exe", "ffmpeg")
+    $pathFfprobe = Get-VpFirstCommandPath -Names @("ffprobe.exe", "ffprobe")
     if (-not [string]::IsNullOrWhiteSpace($pathFfmpeg) -and
         -not [string]::IsNullOrWhiteSpace($pathFfprobe)) {
         return @{
@@ -193,6 +177,7 @@ function Resolve-FfmpegSource {
 
 $pythonSource = Resolve-PythonSource
 $modelDir = Resolve-ModelDir
+$defaultModels = Assert-VpDefaultRifeModels -ModelDir $modelDir
 $ffmpegSource = Resolve-FfmpegSource
 
 Add-GitHubEnv -Name "VP_RELEASE_PYTHON_ROOT" -Value $pythonSource.Root
@@ -208,8 +193,8 @@ Write-Host "CI runtime environment resolved:"
 Write-Host "  python root:   $($pythonSource.Root)"
 Write-Host "  python exe:    $($pythonSource.Exe)"
 Write-Host "  model dir:     $modelDir"
-Write-Host "  pytorch model: $(Join-Path $modelDir 'flownet_v4.25.pkl')"
-Write-Host "  onnx model:    $(Join-Path (Join-Path (Join-Path $modelDir 'interpolation') 'rife') 'rife_v4.25.onnx')"
+Write-Host "  pytorch model: $($defaultModels.PytorchPath)"
+Write-Host "  onnx model:    $($defaultModels.OnnxPath)"
 Write-Host "  ffmpeg dir:    $($ffmpegSource.Dir)"
 Write-Host "  ffmpeg:        $($ffmpegSource.Ffmpeg)"
 Write-Host "  ffprobe:       $($ffmpegSource.Ffprobe)"
