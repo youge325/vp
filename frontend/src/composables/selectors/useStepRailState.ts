@@ -4,9 +4,7 @@ import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
 import { useTaskStore } from '@/stores/task'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
-import { useCurrentTaskStatusLabel } from '@/composables/selectors/useCurrentTaskStatusLabel'
 import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
-import { getWorkflowSummaryLabel } from '@/services/format/labels'
 import { DEFAULT_WORKBENCH_MODULE_KEY, type ModuleKey } from '@/config/workbench-modules'
 
 export function useStepRailState() {
@@ -14,8 +12,7 @@ export function useStepRailState() {
   const envStore = useEnvStore()
   const mediaStore = useMediaStore()
   const taskStore = useTaskStore()
-  const { editorConfig, isPresetMode } = useWorkbenchEditor()
-  const taskStatusLabel = useCurrentTaskStatusLabel()
+  const { editorConfig } = useWorkbenchEditor()
 
   const activeModuleKey = computed<ModuleKey>(
     () => route.meta.module?.key ?? DEFAULT_WORKBENCH_MODULE_KEY,
@@ -38,15 +35,5 @@ export function useStepRailState() {
     }
   })
 
-  const workflowLabel = computed(() =>
-    getWorkflowSummaryLabel(editorConfig.value.workflowConfig),
-  )
-
-  const selectionLabel = computed(() =>
-    isPresetMode.value
-      ? '默认预设'
-      : `${mediaStore.selectedIds.length || 1}/${mediaStore.mediaItems.length} 已选`,
-  )
-
-  return { activeModuleKey, moduleStates, workflowLabel, selectionLabel, taskStatusLabel }
+  return { activeModuleKey, moduleStates }
 }

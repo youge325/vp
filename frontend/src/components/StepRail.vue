@@ -3,7 +3,7 @@ import { RouterLink } from 'vue-router'
 import { WORKBENCH_MODULES } from '@/views/registry'
 import { useStepRailState } from '@/composables/selectors/useStepRailState'
 
-const { activeModuleKey, moduleStates, workflowLabel, selectionLabel, taskStatusLabel } = useStepRailState()
+const { activeModuleKey, moduleStates } = useStepRailState()
 </script>
 
 <template>
@@ -33,11 +33,5 @@ const { activeModuleKey, moduleStates, workflowLabel, selectionLabel, taskStatus
         <span class="rail-state-dot" :data-state="moduleStates[module.key]" />
       </RouterLink>
     </nav>
-
-    <section class="rail-footer">
-      <span class="rail-footer-chip">{{ workflowLabel }}</span>
-      <span class="rail-footer-chip">{{ selectionLabel }}</span>
-      <span class="rail-footer-chip" :data-state="taskStatusLabel">任务 {{ taskStatusLabel }}</span>
-    </section>
   </aside>
 </template>
