@@ -1,10 +1,12 @@
 // Generated from repository contracts. Do not edit.
+mod application_defaults;
 mod backend_oneshot;
 mod backend_task_envelope;
 mod persistence_versions;
 mod task_events;
 
 pub(crate) use crate::models::TaskControlKind;
+pub(crate) use application_defaults::DEFAULT_RIFE_MODEL_VERSION;
 pub(crate) use backend_oneshot::{
     BackendCommandSpec, BackendOneShotSpec, BackendProcessSpec, CheckEnvironmentInvocation,
     CheckEnvironmentSpec, CheckResumeStateInvocation, CheckResumeStateSpec, InspectVideoInvocation,

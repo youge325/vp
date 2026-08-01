@@ -5,6 +5,16 @@ from __future__ import annotations
 import argparse
 
 from app.generated.contracts import FpsMode, ProcessOrder, ResumeMode, TensorBackend
+from app.generated.application_defaults import (
+    DEFAULT_CLI_FPS_MODE,
+    DEFAULT_PROCESS_ORDER,
+    DEFAULT_RIFE_MODEL_VERSION,
+    DEFAULT_RIFE_MULTI,
+    DEFAULT_RIFE_TARGET_FPS,
+    DEFAULT_RIFE_TENSOR_BACKEND,
+    DEFAULT_SR_ALGORITHM,
+    DEFAULT_SR_SCALE_FACTOR,
+)
 from app.generated.protocol_constants import STAGE_WORKER_CONFIG_FLAG, STAGE_WORKER_SUBCOMMAND
 
 
@@ -41,25 +51,30 @@ def _add_shared_planning_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--process-order",
         type=ProcessOrder,
-        default=ProcessOrder.SUPER_RESOLUTION_THEN_INTERPOLATION,
+        default=ProcessOrder(DEFAULT_PROCESS_ORDER),
         choices=list(ProcessOrder),
         help="Stage order when interpolation and super-resolution are both enabled",
     )
     parser.add_argument(
         "--fps-mode",
         type=FpsMode,
-        default=FpsMode.MULTI,
+        default=FpsMode(DEFAULT_CLI_FPS_MODE),
         choices=list(FpsMode),
         help="FPS calculation mode",
     )
-    parser.add_argument("--target-fps", type=float, default=60.0, help="Target FPS when using target mode")
+    parser.add_argument(
+        "--target-fps",
+        type=float,
+        default=DEFAULT_RIFE_TARGET_FPS,
+        help="Target FPS when using target mode",
+    )
     parser.add_argument("--codec", default="libx264", help="Video codec")
     parser.add_argument("--crf", type=int, default=18, help="CRF quality")
     parser.add_argument("--preset", default="medium", help="Encoding preset")
     parser.add_argument(
         "--backend",
         type=TensorBackend,
-        default=TensorBackend.PYTORCH,
+        default=TensorBackend(DEFAULT_RIFE_TENSOR_BACKEND),
         choices=list(TensorBackend),
         help="Tensor backend",
     )
@@ -87,8 +102,13 @@ def _add_shared_planning_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Enable FP16 inference (falls back to settings.RIFE_FP16)",
     )
-    parser.add_argument("--sr-scale-factor", type=float, default=2.0, help="Super-resolution scale")
-    parser.add_argument("--sr-algorithm", default="placeholder", help="Super-resolution algorithm")
+    parser.add_argument(
+        "--sr-scale-factor",
+        type=float,
+        default=DEFAULT_SR_SCALE_FACTOR,
+        help="Super-resolution scale",
+    )
+    parser.add_argument("--sr-algorithm", default=DEFAULT_SR_ALGORITHM, help="Super-resolution algorithm")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -153,9 +173,9 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--height", type=int, default=360)
     benchmark_parser.add_argument("--fps", type=int, default=24)
     benchmark_parser.add_argument("--frames", type=int, default=96)
-    benchmark_parser.add_argument("--multi", type=int, default=2)
+    benchmark_parser.add_argument("--multi", type=int, default=DEFAULT_RIFE_MULTI)
     benchmark_parser.add_argument("--backend", default="pytorch", choices=["pytorch"])
-    benchmark_parser.add_argument("--model", default="4.25")
+    benchmark_parser.add_argument("--model", default=DEFAULT_RIFE_MODEL_VERSION)
     benchmark_parser.set_defaults(handler="benchmark")
 
     return parser

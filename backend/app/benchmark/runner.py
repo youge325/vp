@@ -14,6 +14,7 @@ from typing import Any
 
 from app.config import settings
 from app.errors import ProcessError, TaskErrorCode
+from app.generated.application_defaults import DEFAULT_RIFE_MODEL_VERSION, DEFAULT_RIFE_MULTI
 from app.benchmark.scenarios import DEFAULT_SCENARIO
 from app.planning.stage_projection import StageProjection
 
@@ -27,9 +28,9 @@ class Workload:
     height: int = 360
     fps: int = 24
     frames: int = 96
-    multi: int = 2
+    multi: int = DEFAULT_RIFE_MULTI
     backend: str = "pytorch"
-    model: str = "4.25"
+    model: str = DEFAULT_RIFE_MODEL_VERSION
 
     @property
     def expected_processed_frames(self) -> int:

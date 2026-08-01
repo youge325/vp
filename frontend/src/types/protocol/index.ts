@@ -5,6 +5,7 @@
 
 export * from './events'
 export * from './errors'
+export { APPLICATION_DEFAULTS } from '../generated/application-defaults'
 
 export type {
   AlgorithmInfo,

@@ -11,6 +11,7 @@ import type {
   TaskRequest,
 } from '@/types/protocol'
 import { TASK_EVENT_NAMES } from '../../../src/types/protocol/events'
+import { APPLICATION_DEFAULTS } from '../../../src/types/protocol'
 
 type CapturedTaskEvent<Name extends TaskEventName = TaskEventName> =
   Name extends TaskEventName
@@ -22,9 +23,10 @@ export function buildSoftwareTaskRequest(
   outputDir: string,
   resumeMode: ResumeMode = 'force-fresh',
 ): TaskRequest {
+  const { interpolation, output, superResolution, workflow } = APPLICATION_DEFAULTS
   return {
     inputPath,
-    outputConfig: { outputDir, openOnComplete: false, segmentFrames: 1000 },
+    outputConfig: { outputDir, openOnComplete: false, segmentFrames: output.segmentFrames },
     decodeConfig: {
       mode: 'software',
       hwaccel: null,
@@ -41,28 +43,28 @@ export function buildSoftwareTaskRequest(
       options: { preset: 'medium' },
     },
     workflowConfig: {
-      fpsMode: 'multi' as const,
-      processOrder: 'super_resolution_then_interpolation' as const,
+      fpsMode: workflow.desktopFpsMode,
+      processOrder: workflow.processOrder,
       interpolation: {
         enabled: false,
-        targetFps: 60,
-        multi: 2,
-        algorithm: 'rife',
-        model: '4.25',
+        targetFps: interpolation.targetFps,
+        multi: interpolation.multi,
+        algorithm: interpolation.algorithm,
+        model: interpolation.model,
         onnxModel: null,
-        scale: 1,
-        fp16: false,
-        tensorBackend: 'pytorch',
-        engine: 'cuda',
+        scale: interpolation.scale,
+        fp16: interpolation.fp16,
+        tensorBackend: interpolation.tensorBackend,
+        engine: interpolation.engine,
       },
       superResolution: {
         enabled: false,
-        scaleFactor: 2,
+        scaleFactor: superResolution.scaleFactor,
         algorithm: 'realesrgan',
         onnxModel: null,
         tensorBackend: 'pytorch',
-        engine: 'cuda',
-        numFrames: 10,
+        engine: superResolution.engine,
+        numFrames: superResolution.numFrames,
       },
       preprocess: { enabled: false, filters: [] },
       postprocess: { enabled: false, filters: [] },

@@ -36,8 +36,8 @@ export const KNIP_DEPENDENCY_ALLOWLIST = {
     marker: '"brace-expansion": "$brace-expansion"',
   },
   'json-schema-to-typescript': {
-    reason: 'The root contract generator invokes the package-provided json2ts binary.',
-    evidenceFile: '../scripts/generate_contracts.py',
+    reason: 'The TypeScript contract renderer invokes the package-provided json2ts binary.',
+    evidenceFile: '../scripts/contract_codegen/typescript_renderer.py',
     marker: '"json2ts"',
   },
 }

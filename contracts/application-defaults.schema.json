@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/application-defaults.schema.json",
+  "title": "ApplicationDefaults",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "const": "./application-defaults.schema.json"
+    },
+    "interpolation": {
+      "$ref": "#/$defs/InterpolationDefaults"
+    },
+    "superResolution": {
+      "$ref": "#/$defs/SuperResolutionDefaults"
+    },
+    "workflow": {
+      "$ref": "#/$defs/WorkflowDefaults"
+    },
+    "output": {
+      "$ref": "#/$defs/OutputDefaults"
+    }
+  },
+  "required": [
+    "$schema",
+    "interpolation",
+    "superResolution",
+    "workflow",
+    "output"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "InterpolationDefaults": {
+      "type": "object",
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "onnxModel": {
+          "type": "string"
+        },
+        "targetFps": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "multi": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "fp16": {
+          "type": "boolean"
+        },
+        "tensorBackend": {
+          "$ref": "./tensor-backend.schema.json"
+        },
+        "engine": {
+          "$ref": "./inference-engine.schema.json"
+        }
+      },
+      "required": [
+        "algorithm",
+        "model",
+        "onnxModel",
+        "targetFps",
+        "multi",
+        "scale",
+        "fp16",
+        "tensorBackend",
+        "engine"
+      ],
+      "additionalProperties": false
+    },
+    "SuperResolutionDefaults": {
+      "type": "object",
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "onnxModel": {
+          "type": "string"
+        },
+        "scaleFactor": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "numFrames": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tensorBackend": {
+          "$ref": "./tensor-backend.schema.json"
+        },
+        "engine": {
+          "$ref": "./inference-engine.schema.json"
+        }
+      },
+      "required": [
+        "algorithm",
+        "onnxModel",
+        "scaleFactor",
+        "numFrames",
+        "tensorBackend",
+        "engine"
+      ],
+      "additionalProperties": false
+    },
+    "WorkflowDefaults": {
+      "type": "object",
+      "properties": {
+        "desktopFpsMode": {
+          "$ref": "./workflow-config.schema.json#/$defs/FpsMode"
+        },
+        "cliFpsMode": {
+          "$ref": "./workflow-config.schema.json#/$defs/FpsMode"
+        },
+        "processOrder": {
+          "$ref": "./workflow-config.schema.json#/$defs/ProcessOrder"
+        }
+      },
+      "required": [
+        "desktopFpsMode",
+        "cliFpsMode",
+        "processOrder"
+      ],
+      "additionalProperties": false
+    },
+    "OutputDefaults": {
+      "type": "object",
+      "properties": {
+        "segmentFrames": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "segmentFrames"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

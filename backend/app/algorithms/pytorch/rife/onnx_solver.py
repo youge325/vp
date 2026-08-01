@@ -76,7 +76,7 @@ class RIFEONNXSolver:
     """RIFE ONNX Runtime 推理求解器。
 
     用法:
-        solver = RIFEONNXSolver(model_version="4.25")
+        solver = RIFEONNXSolver(model_version=requested_version)
         mid_frame = solver.interpolate(img0_np, img1_np, timestep=0.5)
 
     其中 img0_np/img1_np 为形状 (1, 3, H, W)、值域 [0,1] 的 float32 numpy 数组。
@@ -85,7 +85,7 @@ class RIFEONNXSolver:
 
     def __init__(
         self,
-        model_version: str = "4.25",
+        model_version: str,
         model_dir: Optional[str] = None,
         onnx_model: Optional[str] = None,
         engine: str = "cuda",

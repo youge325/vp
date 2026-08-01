@@ -17,9 +17,10 @@ use tauri::{AppHandle, Manager, Runtime};
 
 use crate::error::ShellError;
 
+use crate::generated::DEFAULT_RIFE_MODEL_VERSION;
 pub(crate) use env_map::build_env_map;
 use helpers::{directory_if_contains, first_existing_dir};
-use model::{has_rife_model, rife_model_filename, DEFAULT_RIFE_MODEL_VERSION};
+use model::{has_rife_model, rife_model_filename};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedRuntimePaths {
@@ -159,8 +160,8 @@ fn resolve_runtime_root(frontend_dir: &Path, resource_dir: Option<&PathBuf>) -> 
 
 /// Release 构建必须打包 FFmpeg / FFprobe / 默认 RIFE 模型,否则拒绝启动。
 ///
-/// Dev 构建允许缺失,后端 ``app.utils.ffmpeg.FFmpegWrapper`` 会用 ``shutil.which``
-/// 兜底。
+/// Dev 构建允许 bundle 缺失；composition root 使用 Python settings 已解析的显式环境变量或
+/// PATH executable 构造媒体 adapter。
 fn require_release_bundle_artifacts(
     ffmpeg_path: &Option<PathBuf>,
     ffprobe_path: &Option<PathBuf>,

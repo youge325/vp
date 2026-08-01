@@ -26,7 +26,7 @@ class RIFESolver:
     RIFE 推理求解器 — 封装模型加载和帧对插值推理。
 
     用法:
-        solver = RIFESolver(model_version="4.25", scale=1.0, fp16=False)
+        solver = RIFESolver(model_version=requested_version, scale=1.0, fp16=False)
         mid_frame = solver.interpolate(frame0_tensor, frame1_tensor, timestep=0.5)
 
     其中 frame0_tensor/frame1_tensor 为形状 (1, 3, H, W)、值域 [0,1] 的 float32 张量。
@@ -34,7 +34,7 @@ class RIFESolver:
 
     def __init__(
         self,
-        model_version: str = "4.25",
+        model_version: str,
         scale: float = 1.0,
         device: Optional[str] = None,
         fp16: bool = False,
@@ -43,7 +43,7 @@ class RIFESolver:
     ):
         """
         参数:
-            model_version: 模型版本（默认 "4.25"）
+            model_version: 模型版本
             scale: 处理分辨率缩放（1.0 原始，0.5 适用于 4K）
             device: 推理设备（默认自动选择）
             fp16: 是否使用半精度推理

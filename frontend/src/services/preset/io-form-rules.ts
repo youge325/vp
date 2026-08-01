@@ -18,6 +18,7 @@ import {
   resolveRateControlForMode,
 } from './rate-control'
 import type { SelectOption } from '@/types/view/select-option'
+import { APPLICATION_DEFAULTS } from '@/types/protocol'
 
 const RATE_CONTROL_UNAVAILABLE_HINT = '未探测到可用码率控制模式'
 
@@ -91,5 +92,7 @@ export function resolveRateControlModeSelection(
 }
 
 export function normalizeSegmentFrames(value: number): number {
-  return Number.isFinite(value) && value > 0 ? Math.round(value) : 1000
+  return Number.isFinite(value) && value > 0
+    ? Math.round(value)
+    : APPLICATION_DEFAULTS.output.segmentFrames
 }

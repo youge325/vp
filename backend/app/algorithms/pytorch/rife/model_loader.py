@@ -222,7 +222,7 @@ def _compile_with_tensorrt_if_available(
 
 
 def load_rife_model(
-    model_version: str = "4.25",
+    model_version: str,
     scale: float = 1.0,
     device: Optional[str] = None,
     fp16: bool = False,
@@ -240,7 +240,7 @@ def load_rife_model(
     4. 按 spec.head_type 分发到 ``_build_head_for_spec``
 
     参数:
-        model_version: 模型版本号(默认 "4.25")
+        model_version: 模型版本号
         scale: 处理分辨率缩放因子(1.0 原始分辨率,0.5 半分辨率适用于 4K)
         device: 推理设备("cuda", "cuda:0", "cpu" 等,默认自动选择)
         fp16: 是否使用半精度推理
