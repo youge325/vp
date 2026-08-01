@@ -53,7 +53,7 @@ test.describe('Render module', () => {
         phase: item.phase,
         controlPending: item.pending,
       })
-      test.skip(!ready, 'Cannot seed task console fixture')
+      expect(ready).toBe(true)
       await expect(controls.pause).toHaveText(item.pauseLabel)
       await expect(controls.cancel).toHaveText(item.cancelLabel)
       await expect(controls.pause).toBeDisabled()
@@ -87,7 +87,7 @@ test.describe('Render module', () => {
         totalOutputFrames: 300,
       },
     })
-    test.skip(!ready, 'Cannot seed task console fixture')
+    expect(ready).toBe(true)
     await openModule(tauriPage, '渲染', '批处理队列')
 
     const console = tauriPage.locator('.task-console')

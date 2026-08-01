@@ -97,27 +97,30 @@ export async function seedTaskConsoleState(options: {
     return false
   }
 
-  return await withPiniaState((state, _win, payload) => {
-    const task = state.task as {
+  return await withPiniaState((_state, _win, payload) => {
+    type TaskSeedStore = {
       batch?: Record<string, unknown>
       batchRuntimeIds?: string[]
       dispatchBatch?: (event: unknown) => void
       setRuntimeIds?: (ids: string[]) => void
-    } | undefined
+    }
+    type RunStateSeedStore = {
+      setTaskState?: (id: string, taskState: unknown) => void
+      setLastOutputPath?: (id: string, path: string) => void
+    }
     const root = document.querySelector('#app') as HTMLElement & { __vue_app__?: unknown } | null
     const vueApp = root?.__vue_app__ as {
       config?: {
         globalProperties?: {
           $pinia?: {
-            _s?: Map<string, {
-              setTaskState?: (id: string, taskState: unknown) => void
-              setLastOutputPath?: (id: string, path: string) => void
-            }>
+            _s?: Map<string, TaskSeedStore | RunStateSeedStore>
           }
         }
       }
     } | undefined
-    const runStateStore = vueApp?.config?.globalProperties?.$pinia?._s?.get('mediaRunState')
+    const stores = vueApp?.config?.globalProperties?.$pinia?._s
+    const task = stores?.get('task') as TaskSeedStore | undefined
+    const runStateStore = stores?.get('mediaRunState') as RunStateSeedStore | undefined
     if (!task?.batch || !task.dispatchBatch || !runStateStore?.setTaskState) {
       return false
     }
