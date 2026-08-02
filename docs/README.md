@@ -50,3 +50,9 @@
 - [损坏预设全局提示](assets/architecture-round2/preset-banner.png)
 - [共享 toggle field](assets/architecture-round2/toggle.png)
 - [统一模型指标网格](assets/architecture-round2/model-metrics.png)
+
+## 第六轮 UI 验收证据
+
+以下截图由显式本地 runtime 配置下的 Windows release E2E 生成：
+
+- [环境错误按 scope 展示并保留重试入口](assets/architecture-round6/environment-error.png)

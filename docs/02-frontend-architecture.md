@@ -96,7 +96,7 @@ graph TB
 
 | Store | 文件 | 职责 |
 |-------|------|------|
-| `useEnvStore` | [`stores/env.ts`](../frontend/src/stores/env.ts) | 环境探测状态（是否探测中、探测结果、错误） |
+| `useEnvStore` | [`stores/env.ts`](../frontend/src/stores/env.ts) | 环境探测状态（是否探测中、类型化探测结果） |
 | `useMediaStore` | [`stores/media.ts`](../frontend/src/stores/media.ts) | 媒体列表（增删改查、选中状态、激活项和配置快照） |
 | `useMediaRunState` | [`stores/mediaRunState.ts`](../frontend/src/stores/mediaRunState.ts) | 按媒体 ID 保存任务状态和最近输出路径 |
 | `usePresetStore` | [`stores/preset.ts`](../frontend/src/stores/preset.ts) | 预设草稿（解码/编码/工作流/输出配置的编辑状态） |
@@ -107,11 +107,12 @@ graph TB
 - `useMediaStore` 是核心，管理媒体项列表和每个项的配置快照
 - `useMediaRunState` 独立保存逐媒体运行状态，避免任务事件写入污染媒体实体
 - `useTaskStore` 只管理批处理运行时状态，不直接持有媒体数据
-- `useIssueStore` 从 `mediaStore` 中分离出来，避免测试依赖耦合
+- `useIssueStore` 按 `environment / media / preset / task` scope 独立保存错误；视图只能通过
+  `getIssue(scope)` 读取，因此不同操作的错误可同时存在
 
-App 顶栏直接组合 `useCurrentTaskContext()`、`useTaskStore` 与纯 `getTaskStatusLabel()` 投影任务
-状态；上下文先用 `useMediaStore.findItem(batch.currentId)` 校验当前媒体，确保失效的 current ID
-不会读取遗留运行状态。StepRail 只消费活动模块及模块状态，不再保留第二个任务状态包装器。
+App 顶栏直接读取 `useTaskStore().batch.phase` 投影批次状态；当前素材上下文先用
+`useMediaStore.findItem(batch.currentId)` 校验媒体，确保失效的 current ID 不会读取遗留运行状态。
+StepRail 只消费活动模块及模块状态，不再保留第二个任务状态包装器或身份标签函数。
 
 ## 表单类型边界
 
@@ -257,7 +258,16 @@ token，并记录开始时的 `currentId` 与不可变状态快照；回复只�
 缓存 `BatchRunner` 并连接 Pinia、IPC 与事件监听。并发 attach 共享同一个 pending promise；每次
 dispose 递增 generation，因此迟到的旧 listener 会立即自卸载，失败的 attachment 则清空 promise
 允许重试。`useBootstrap()` 直接负责监听器注册和卸载，并在 unmount 后停止后续 preset/environment
-启动步骤；`useTaskOrchestrator()` 只投影 Render 页消费的状态并发送任务命令。
+启动步骤；`useTaskOrchestrator()` 只投影 Render 页消费的状态并发送任务命令。`MediaItem → TaskRequest`
+投影位于该 composition root，并通过消费方拥有的 `TaskRequestFactory` 窄端口注入 batch runner，
+不保留单层 request-builder façade。
+
+### 环境检查单一协调入口
+
+[`frontend/src/composables/app/useEnvironmentChecker.ts`](../frontend/src/composables/app/useEnvironmentChecker.ts)
+统一拥有 checking 状态、`check_environment` IPC、错误归一化与结果提交。Home 页重试和 bootstrap
+都调用同一入口；generation guard 会丢弃卸载或新一轮检查之后才返回的旧结果。环境错误写入
+`environment` scope，不会清除 preset、media 或 task scope 的并存错误。
 
 [`frontend/src/composables/selectors/useTaskConsoleState.ts`](../frontend/src/composables/selectors/useTaskConsoleState.ts)
 是 TaskConsole 的唯一视图投影，统一日志格式、续传 banner 和批次完成百分比。模型指标展示统一由
@@ -327,7 +337,8 @@ graph LR
 `boundary.schema.json`。Python 使用 `datamodel-code-generator`，TypeScript 使用
 `json-schema-to-typescript`，Rust 在编译期通过 Typify 消费聚合 schema；同一生成器还产出
 IPC 命令与事件适配器。独立的应用默认契约还生成 `APPLICATION_DEFAULTS` 只读对象，预设、模型
-fallback、分段归一化和指标投影共同消费它。`python scripts/generate_contracts.py --check` 对所有
+fallback、分段归一化、指标投影和滤镜 catalog 共同消费它；Filter Step schema 同时投影为
+`FILTER_FIELD_CONSTRAINTS`，UI 只保留标签、布局列数和输入步长。`python scripts/generate_contracts.py --check` 对所有
 跟踪生成物执行逐字节 freshness 检查。
 
 ### 类型扩展层

@@ -9,7 +9,7 @@ graph TD
     subgraph FE["前端 Vue 层"]
         F1["Pinia preset store<br/>draftPreset"]
         F2["Pinia media store<br/>activeItem"]
-        F3["services/task/request-builder.ts<br/>buildTaskRequest()"]
+        F3["taskOrchestratorRuntime composition root<br/>TaskRequestFactory"]
         F4["TaskRequest 对象"]
     end
 
@@ -84,10 +84,12 @@ port 由父流水线消费，worker 不穿透 adapter。
 
 ### TaskRequest 构建
 
-[`frontend/src/services/task/request-builder.ts`](../frontend/src/services/task/request-builder.ts) 的 `buildTaskRequest()` 将 `MediaItem` 转换为 `TaskRequest`：
+[`frontend/src/composables/app/taskOrchestratorRuntime.ts`](../frontend/src/composables/app/taskOrchestratorRuntime.ts)
+在任务 composition root 将 `MediaItem` 投影为 `TaskRequest`，并把实现注入消费方拥有的
+`TaskRequestFactory` 窄端口：
 
 ```typescript
-export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): TaskRequest {
+const taskRequestFactory: TaskRequestFactory = (item, resumeMode) => {
   return {
     inputPath: item.inputPath,
     decodeConfig: item.decodeConfig,
@@ -100,6 +102,7 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 ```
 
 `TaskRequest` 结构由 `contracts/task-request.schema.json` 定义，各语言只在边界使用生成或校验后的类型。
+不存在独立 request-builder façade；测试通过捕获实际 start/resume IPC 请求验证该投影。
 
 ## Rust 层：序列化与命令构建
 
@@ -139,6 +142,10 @@ export function buildTaskRequest(item: MediaItem, resumeMode?: ResumeMode): Task
 - 可选预处理滤镜链
 - 按 `processOrder` 排列的插帧和超分辨率步骤
 - 可选后处理滤镜链
+
+每个 filter-chain step 在进入投影前只规范化一次：生成的应用默认值补齐可选参数，生成 Pydantic
+模型按 `filter-step.schema.json` 的范围、枚举和格式约束验证。`StageProjection` 与实际滤镜 handler
+消费同一份不可变完整参数，因此尺寸计算和像素处理不会各自维护默认分支。
 
 ### StagePlan 构建
 
