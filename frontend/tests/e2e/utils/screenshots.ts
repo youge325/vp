@@ -11,6 +11,10 @@ type E2EScreenshotName =
   | 'task-running'
   | 'task-paused'
   | 'task-cancelling'
+  | 'real-rawvsr-default'
+  | 'real-rawvsr-x2'
+  | 'real-rawvsr-x3'
+  | 'real-rawvsr-x4'
 
 export async function saveE2EScreenshot(name: E2EScreenshotName): Promise<string | null> {
   const configuredDirectory = process.env.VP_E2E_SCREENSHOT_DIR?.trim()

@@ -110,7 +110,7 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     const { fields: form } = useEnhanceForm()
     form.superResolutionAlgorithm = 'custom-vsr'
 
-    expect(form.isPaddleGanSuperResolution).toBe(true)
+    expect(form.isSuperResolutionScaleLocked).toBe(true)
     expect(form.superResolutionScale).toBe(4)
     expect(form.superResolutionNumFrames).toBe(8)
   })

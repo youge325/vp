@@ -1,5 +1,8 @@
 import { expect, test } from '../fixtures'
-import { setDeterministicEnhanceMetricState } from '../utils/pinia'
+import {
+  setDeterministicEnhanceMetricState,
+  setDeterministicRealRawVsrState,
+} from '../utils/pinia'
 import { saveE2EScreenshot } from '../utils/screenshots'
 import type { TauriPage } from '../utils/wdio-tauri'
 
@@ -109,6 +112,32 @@ test.describe('Workflow module UI', () => {
       test.skip(options.length < 2, `${label} has fewer than two choices`)
       await select.selectOption({ index: 1 })
       expect(await select.inputValue()).toBe(await options[1].getAttribute('value'))
+    }
+  })
+
+  test('renders Real-RawVSR license and all three scale-specific metrics', async ({ tauriPage }) => {
+    const ready = await setDeterministicRealRawVsrState()
+    test.skip(!ready, 'Cannot seed deterministic Real-RawVSR state')
+    await openWorkflow(tauriPage)
+
+    const section = workflowSection(tauriPage, '超分')
+    const scale = section.locator('label.field').filter({ hasText: '倍率' }).locator('select')
+    await expect(scale.locator('option')).toHaveCount(3)
+    expect(await scale.locator('option').allTextContents()).toEqual(['2x', '3x', '4x'])
+    const license = tauriPage.locator('.model-license-banner')
+    await expect(license).toContainText('仅限非商业研究与个人使用')
+    await expect(license).toContainText('CC-BY-NC-SA-4.0')
+    await license.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+    await saveE2EScreenshot('real-rawvsr-default')
+
+    const parameterLabels = { 2: '6.14M', 3: '6.33M', 4: '6.29M' } as const
+    for (const factor of [2, 3, 4] as const) {
+      await scale.selectOption(String(factor))
+      await expect(scale).toHaveValue(String(factor))
+      await expect(tauriPage.locator('.model-metric-grid[aria-label="超分模型指标"]')).toContainText(
+        parameterLabels[factor],
+      )
+      await saveE2EScreenshot(`real-rawvsr-x${factor}`)
     }
   })
 })

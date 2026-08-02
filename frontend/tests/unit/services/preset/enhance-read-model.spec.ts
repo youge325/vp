@@ -8,6 +8,7 @@ import {
   createEdvrAlgorithm,
   createModelVariantInfo,
   createPpmsvsrAlgorithm,
+  createRealRawVsrBasicVsrAlgorithm,
   createRifeAlgorithm,
 } from '../../fixtures/environment'
 
@@ -95,7 +96,6 @@ describe('enhance view-model rules', () => {
       currentSuperResolutionAlgorithm: edvr,
     })
 
-    expect(model.isPaddleGanSuperResolution).toBe(true)
     expect(model.isSuperResolutionInputFramesEditable).toBe(false)
     expect(model.superResolutionFixedWindowRows).toEqual([
       { label: '邻帧窗口', value: '5 帧（固定）' },
@@ -110,6 +110,24 @@ describe('enhance view-model rules', () => {
       currentSuperResolutionAlgorithm: edvr,
     }).superResolutionMetricRows)
     expect(model.effectiveSuperResolutionNumFrames).toBe(5)
+  })
+
+  it('selects BasicVSR metrics and license metadata for the active scale', () => {
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
+    workflow.superResolution.enabled = true
+    workflow.superResolution.scaleFactor = 3
+    const algorithm = createRealRawVsrBasicVsrAlgorithm()
+
+    const model = buildEnhanceReadModel({
+      workflow,
+      activeVideoDimensions: { width: 320, height: 180 },
+      currentInterpolationAlgorithm: rife,
+      currentSuperResolutionAlgorithm: algorithm,
+    })
+
+    expect(model.superResolutionMetricRows[0]?.value).toBe('3.00M')
+    expect(model.isSuperResolutionScaleLocked).toBe(false)
+    expect(model.superResolutionModelLicense?.usage).toBe('non_commercial')
   })
 
   it('uses selected TensorRT engine metrics for super-resolution estimates', () => {

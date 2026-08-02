@@ -27,9 +27,9 @@ describe('workflow defaults', () => {
     expect(workflow.superResolution).toMatchObject({
       enabled: false,
       scaleFactor: 2,
-      algorithm: 'placeholder',
+      algorithm: 'real-rawvsr-basicvsr',
       onnxModel: '',
-      tensorBackend: 'onnx',
+      tensorBackend: 'pytorch',
       engine: 'cuda',
       numFrames: 10,
     })

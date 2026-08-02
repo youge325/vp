@@ -7,6 +7,10 @@ export function isPaddleGanVsrAlgorithm(algorithm: AlgorithmInfo | null | undefi
   return algorithm?.family === 'paddlegan_vsr'
 }
 
+export function isPytorchVsrAlgorithm(algorithm: AlgorithmInfo | null | undefined): boolean {
+  return algorithm?.family === 'pytorch_vsr'
+}
+
 export function superResolutionInputFrameMode(
   algorithm: AlgorithmInfo | null | undefined,
 ): AlgorithmInfo['inputFrameMode'] {
@@ -19,11 +23,17 @@ export function fixedRuntimeFrameCount(algorithm: AlgorithmInfo | null | undefin
   return typeof count === 'number' && Number.isFinite(count) ? Math.max(1, Math.round(count)) : null
 }
 
-export function fixedSuperResolutionScaleFactor(algorithm: AlgorithmInfo | null | undefined): number | null {
-  if (!isPaddleGanVsrAlgorithm(algorithm)) return null
-  const explicit = algorithm?.fixedScaleFactor
-  if (typeof explicit === 'number' && Number.isFinite(explicit)) {
-    return explicit
-  }
-  return null
+export function superResolutionScaleFactors(
+  algorithm: AlgorithmInfo | null | undefined,
+): readonly number[] {
+  return algorithm?.scaleFactors?.filter(
+    (value) => typeof value === 'number' && Number.isFinite(value) && value > 0,
+  ) ?? []
+}
+
+export function lockedSuperResolutionScaleFactor(
+  algorithm: AlgorithmInfo | null | undefined,
+): number | null {
+  const factors = superResolutionScaleFactors(algorithm)
+  return factors.length === 1 ? factors[0] ?? null : null
 }

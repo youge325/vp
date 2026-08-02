@@ -24,7 +24,8 @@ const superResolution: AlgorithmInfo = createAlgorithmInfo({
   family: 'paddlegan_vsr',
   tensorBackends: ['paddle'],
   models: ['x4'],
-  fixedScaleFactor: 4,
+  scaleFactors: [4],
+  modelLicense: null,
   inputFrameMode: 'editable_chunk',
 })
 

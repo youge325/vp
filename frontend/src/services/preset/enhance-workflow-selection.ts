@@ -6,7 +6,7 @@ import type { TensorBackend } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 import {
   fixedRuntimeFrameCount,
-  fixedSuperResolutionScaleFactor,
+  superResolutionScaleFactors,
 } from './enhance-algorithm-capabilities'
 import {
   pickDefaultInterpolationAlgorithm,
@@ -133,7 +133,9 @@ export function resolveSuperResolutionScale(
   checkResult: EnvironmentCheckResult | null,
 ): number {
   const algorithm = findSuperResolutionAlgorithm(checkResult, config.superResolution.algorithm)
-  return fixedSuperResolutionScaleFactor(algorithm) ?? value
+  const factors = superResolutionScaleFactors(algorithm)
+  if (factors.length === 0 || factors.includes(value)) return value
+  return factors[0] ?? value
 }
 
 export function resolveSuperResolutionNumFrames(

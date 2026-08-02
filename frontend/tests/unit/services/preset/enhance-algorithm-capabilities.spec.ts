@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   fixedRuntimeFrameCount,
-  fixedSuperResolutionScaleFactor,
+  lockedSuperResolutionScaleFactor,
   isPaddleGanVsrAlgorithm,
   superResolutionInputFrameMode,
 } from '@/services/preset/enhance-algorithm-capabilities'
@@ -37,7 +37,8 @@ describe('enhance algorithm capability rules', () => {
       family: 'paddlegan_vsr',
       tensorBackends: ['paddle'],
       models: ['x4'],
-      fixedScaleFactor: 4,
+      scaleFactors: [4],
+      modelLicense: null,
       inputFrameMode: 'fixed_window',
       defaultNumFrames: 7,
       modelDetails: [
@@ -55,6 +56,6 @@ describe('enhance algorithm capability rules', () => {
 
     expect(superResolutionInputFrameMode(algorithm)).toBe('fixed_window')
     expect(fixedRuntimeFrameCount(algorithm)).toBe(5)
-    expect(fixedSuperResolutionScaleFactor(algorithm)).toBe(4)
+    expect(lockedSuperResolutionScaleFactor(algorithm)).toBe(4)
   })
 })

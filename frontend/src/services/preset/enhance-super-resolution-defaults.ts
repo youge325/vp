@@ -5,8 +5,9 @@ import type { AlgorithmInfo, EnvironmentCheckResult } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 import {
   fixedRuntimeFrameCount,
-  fixedSuperResolutionScaleFactor,
+  isPytorchVsrAlgorithm,
   isPaddleGanVsrAlgorithm,
+  superResolutionScaleFactors,
 } from './enhance-algorithm-capabilities'
 import { fallbackSuperResolutionOnnxModel } from './enhance-onnx-defaults'
 
@@ -19,8 +20,17 @@ export function applySuperResolutionAlgorithmDefaults(
 
   if (isPaddleGanVsrAlgorithm(algorithm)) {
     config.superResolution.tensorBackend = 'paddle'
-    config.superResolution.scaleFactor =
-      fixedSuperResolutionScaleFactor(algorithm) ?? config.superResolution.scaleFactor
+  } else if (isPytorchVsrAlgorithm(algorithm)) {
+    config.superResolution.tensorBackend = 'pytorch'
+    config.superResolution.engine = 'cuda'
+  }
+
+  const scaleFactors = superResolutionScaleFactors(algorithm)
+  if (scaleFactors.length > 0 && !scaleFactors.includes(config.superResolution.scaleFactor)) {
+    config.superResolution.scaleFactor = scaleFactors[0] ?? config.superResolution.scaleFactor
+  }
+
+  if (isPaddleGanVsrAlgorithm(algorithm) || isPytorchVsrAlgorithm(algorithm)) {
     config.superResolution.onnxModel = ''
     config.superResolution.numFrames =
       fixedRuntimeFrameCount(algorithm) ??

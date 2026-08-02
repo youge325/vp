@@ -12,11 +12,11 @@ export const APPLICATION_DEFAULTS = {
     "engine": "cuda"
   },
   "superResolution": {
-    "algorithm": "placeholder",
+    "algorithm": "real-rawvsr-basicvsr",
     "onnxModel": "",
     "scaleFactor": 2,
     "numFrames": 10,
-    "tensorBackend": "onnx",
+    "tensorBackend": "pytorch",
     "engine": "cuda"
   },
   "workflow": {

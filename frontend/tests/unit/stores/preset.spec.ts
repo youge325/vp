@@ -20,6 +20,24 @@ describe('usePresetStore', () => {
     expect(store.draftPreset.encodeConfig.codec).toBe('libx264')
   })
 
+  it('keeps an existing schema-v2 preset algorithm instead of applying new-product defaults', () => {
+    const store = usePresetStore()
+    const incoming = createTestPreset()
+    incoming.workflowConfig.superResolution.algorithm = 'real-esrgan'
+    incoming.workflowConfig.superResolution.tensorBackend = 'onnx'
+    incoming.workflowConfig.superResolution.onnxModel = 'legacy-x4.onnx'
+    incoming.workflowConfig.superResolution.scaleFactor = 4
+
+    store.replaceDraftPreset(incoming)
+
+    expect(store.draftPreset.workflowConfig.superResolution).toMatchObject({
+      algorithm: 'real-esrgan',
+      tensorBackend: 'onnx',
+      onnxModel: 'legacy-x4.onnx',
+      scaleFactor: 4,
+    })
+  })
+
   it('patchWorkflow swaps the workflow reference so reactive readers re-run', () => {
     const store = usePresetStore()
     const before = store.draftPreset.workflowConfig
@@ -52,5 +70,4 @@ describe('usePresetStore', () => {
     store.setPersistenceReady(true)
     expect(store.presetPersistenceReady).toBe(true)
   })
-
 })

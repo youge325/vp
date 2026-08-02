@@ -58,6 +58,8 @@ interface EnhanceOptionInput {
   interpolationModelDetails: readonly ModelVariantInfo[]
   interpolationOnnxModelDetails: readonly ModelVariantInfo[]
   superResolutionAlgorithms: readonly AlgorithmInfo[]
+  currentSuperResolutionAlgorithm: AlgorithmInfo | undefined
+  superResolutionScaleFactor: number
   superResolutionOnnxModels: readonly string[]
   superResolutionOnnxModelDetails: readonly ModelVariantInfo[]
 }
@@ -72,6 +74,7 @@ export interface EnhanceOptions {
   interpolationOnnxDisabled: boolean
   interpolationOnnxHint: string | undefined
   superResolutionAlgorithmOptions: SelectOption[]
+  superResolutionScaleOptions: SelectOption[]
   superResolutionOnnxOptions: SelectOption[]
   superResolutionOnnxDisabled: boolean
   superResolutionOnnxHint: string | undefined
@@ -117,11 +120,17 @@ export function buildOnnxModelOptions(
 export function buildAlgorithmOptions(
   algorithms: readonly AlgorithmInfo[],
   labelMode: 'name' | 'modelMetrics',
+  selectedModelName?: string,
 ): SelectOption[] {
   return algorithms.map((algorithm) => ({
     value: algorithm.name,
     label: labelMode === 'modelMetrics'
-      ? modelOptionLabel(algorithm.name, algorithm.modelDetails?.[0])
+      ? modelOptionLabel(
+          algorithm.name,
+          selectedModelName
+            ? findDetail(algorithm.modelDetails ?? [], selectedModelName) ?? algorithm.modelDetails?.[0]
+            : algorithm.modelDetails?.[0],
+        )
       : algorithm.name,
   }))
 }
@@ -136,6 +145,8 @@ export function buildEnhanceOptions({
   interpolationModelDetails,
   interpolationOnnxModelDetails,
   superResolutionAlgorithms,
+  currentSuperResolutionAlgorithm,
+  superResolutionScaleFactor,
   superResolutionOnnxModels,
   superResolutionOnnxModelDetails,
 }: EnhanceOptionInput): EnhanceOptions {
@@ -161,7 +172,13 @@ export function buildEnhanceOptions({
     superResolutionAlgorithmOptions: buildAlgorithmOptions(
       superResolutionAlgorithms,
       'modelMetrics',
+      `x${superResolutionScaleFactor}`,
     ),
+    superResolutionScaleOptions: (
+      currentSuperResolutionAlgorithm?.scaleFactors.length
+        ? currentSuperResolutionAlgorithm.scaleFactors
+        : MULTI_OPTIONS.map((option) => Number(option.value))
+    ).map((value) => ({ value: String(value), label: `${value}x` })),
     superResolutionOnnxOptions: buildOnnxModelOptions(
       superResolutionOnnxModels,
       superResolutionOnnxModelDetails,

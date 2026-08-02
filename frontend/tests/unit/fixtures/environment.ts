@@ -128,7 +128,8 @@ export function createAlgorithmInfo(overrides: AlgorithmOverrides = {}): Algorit
     tensorBackends: ['onnx'],
     models: [],
     onnxModels: [],
-    fixedScaleFactor: null,
+    scaleFactors: [],
+    modelLicense: null,
     defaultNumFrames: null,
     inputFrameMode: 'none',
     ...overrides,
@@ -239,7 +240,8 @@ export function createEdvrAlgorithm(): AlgorithmInfo {
     family: 'paddlegan_vsr',
     tensorBackends: ['paddle'],
     models: ['x4'],
-    fixedScaleFactor: 4,
+    scaleFactors: [4],
+    modelLicense: null,
     inputFrameMode: 'fixed_window',
     defaultNumFrames: 5,
     modelDetails: [{
@@ -266,7 +268,8 @@ export function createPpmsvsrAlgorithm(): AlgorithmInfo {
     family: 'paddlegan_vsr',
     tensorBackends: ['paddle'],
     models: ['x4'],
-    fixedScaleFactor: 4,
+    scaleFactors: [4],
+    modelLicense: null,
     inputFrameMode: 'editable_chunk',
     defaultNumFrames: 10,
     modelDetails: [{
@@ -297,6 +300,39 @@ export function createPpmsvsrAlgorithm(): AlgorithmInfo {
   })
 }
 
+export function createRealRawVsrBasicVsrAlgorithm(): AlgorithmInfo {
+  return createAlgorithmInfo({
+    name: 'real-rawvsr-basicvsr',
+    family: 'pytorch_vsr',
+    tensorBackends: ['pytorch'],
+    models: ['x2', 'x3', 'x4'],
+    scaleFactors: [2, 3, 4],
+    modelLicense: {
+      spdxId: 'CC-BY-NC-SA-4.0',
+      usage: 'non_commercial',
+      sourceUrl: 'https://github.com/zmzhang1998/Real-RawVSR',
+    },
+    inputFrameMode: 'editable_chunk',
+    defaultNumFrames: 10,
+    modelDetails: [2, 3, 4].map(scale => ({
+      name: `x${scale}`,
+      label: `Real-RawVSR BasicVSR ${scale}x`,
+      metrics: {
+        parameterCount: scale * 1_000_000,
+        parameterBytes: scale * 4_000_000,
+        gflopsPerMegapixel: null,
+        activationBytesPerMegapixel: null,
+        runtimeOverheadBytes: null,
+        runtimeFrameCount: 10,
+        inputModulo: null,
+        analysisStatus: 'partial',
+        analysisNotes: [],
+        engineMetrics: {},
+      },
+    })),
+  })
+}
+
 export function createEnhanceEnvironment(): EnvironmentCheckResult {
   return createEnvironmentResult({
     tensorEngines: {
@@ -321,6 +357,7 @@ export function createEnhanceEnvironment(): EnvironmentCheckResult {
       }),
     ],
     superResolutionAlgorithms: [
+      createRealRawVsrBasicVsrAlgorithm(),
       createAlgorithmInfo({
         name: 'placeholder',
         tensorBackends: ['onnx'],
@@ -333,7 +370,8 @@ export function createEnhanceEnvironment(): EnvironmentCheckResult {
         family: 'paddlegan_vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
-        fixedScaleFactor: 4,
+        scaleFactors: [4],
+        modelLicense: null,
         inputFrameMode: 'editable_chunk',
         defaultNumFrames: 8,
       }),
@@ -343,7 +381,8 @@ export function createEnhanceEnvironment(): EnvironmentCheckResult {
           family: 'paddlegan_vsr',
           tensorBackends: ['paddle'],
           models: ['x4'],
-          fixedScaleFactor: 4,
+          scaleFactors: [4],
+          modelLicense: null,
           inputFrameMode: 'editable_chunk',
           defaultNumFrames: 10,
         }),
