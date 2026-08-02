@@ -6,7 +6,6 @@ import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
 import { usePresetStore } from '@/stores/preset'
 import { createMediaItem } from '@/services/media/factory'
-import { buildTaskRequest } from '@/services/task/request-builder'
 import type { WorkflowConfig } from '@/types/protocol'
 import {
   createEnhanceEnvironment,
@@ -186,7 +185,6 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
 
     expect(first.workflowConfig.superResolution.numFrames).toBe(5)
     expect(second.workflowConfig.superResolution.numFrames).toBe(5)
-    expect(buildTaskRequest(second).workflowConfig.superResolution.numFrames).toBe(5)
   })
 
   it('persists all enhance page edits while applying them to every selected media item', () => {
@@ -256,7 +254,6 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
       first.workflowConfig,
       second.workflowConfig,
       presetStore.draftPreset.workflowConfig,
-      buildTaskRequest(second).workflowConfig,
     ]) {
       expect(workflow.interpolation.enabled).toBe(true)
       expect(workflow.interpolation.tensorBackend).toBe('onnx')
@@ -309,7 +306,6 @@ describe('useEnhanceForm PaddleGAN super-resolution', () => {
     expect(first.workflowConfig.superResolution.numFrames).toBe(5)
     expect(second.workflowConfig.superResolution.algorithm).toBe('edvr')
     expect(second.workflowConfig.superResolution.numFrames).toBe(5)
-    expect(buildTaskRequest(second).workflowConfig.superResolution.numFrames).toBe(5)
     expect(presetStore.draftPreset.workflowConfig.superResolution.algorithm).toBe('edvr')
     expect(presetStore.draftPreset.workflowConfig.superResolution.numFrames).toBe(5)
   })

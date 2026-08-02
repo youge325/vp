@@ -7,17 +7,16 @@ import { WORKBENCH_MODULE_BY_KEY } from '@/views/registry'
 import { useBootstrap } from '@/composables/app/useBootstrap'
 import { useEnvironmentChecker } from '@/composables/app/useEnvironmentChecker'
 import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
-import { getTaskStatusLabel } from '@/services/format/labels'
 import { useEnvStore } from '@/stores/env'
 import { useTaskStore } from '@/stores/task'
 import type { WorkbenchModuleDefinition } from '@/types/view/modules'
 
 const route = useRoute()
-const { recheckEnvironment } = useEnvironmentChecker()
+const { checkEnvironment } = useEnvironmentChecker()
 const envStore = useEnvStore()
 const taskStore = useTaskStore()
-const taskStatusLabel = computed(() => getTaskStatusLabel(taskStore.batch))
 const presetIssue = useOperationIssue('preset')
+const environmentIssue = useOperationIssue('environment')
 
 useBootstrap()
 
@@ -44,14 +43,14 @@ const isBusy = computed(() => envStore.env.isBootstrapping || envStore.env.isChe
 
           <div class="topbar-actions">
             <button
-              v-if="envStore.env.issue && !envStore.env.isChecking"
+              v-if="environmentIssue && !envStore.env.isChecking"
               class="ghost-button compact-button"
-              @click="recheckEnvironment()"
+              @click="checkEnvironment()"
             >
               重试探测
             </button>
-            <span class="status-pill" :data-state="taskStatusLabel">
-              {{ isBusy ? 'checking' : taskStatusLabel }}
+            <span class="status-pill" :data-state="taskStore.batch.phase">
+              {{ isBusy ? 'checking' : taskStore.batch.phase }}
             </span>
           </div>
         </header>

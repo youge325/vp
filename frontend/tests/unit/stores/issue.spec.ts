@@ -1,16 +1,11 @@
-import { setActivePinia, createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useIssueStore } from '@/stores/issue'
 import { TASK_ERROR_CODES } from '@/types/protocol'
 import type { TaskErrorPayload } from '@/types/protocol'
 
-// Banner-surface store split out of ``useMediaStore``.
-// Cover every scope so a future regression that drops or mis-routes
-// a scope tag fails loudly here instead of surfacing as a silently
-// missing banner in the UI.
-
-const allScopes = ['input', 'encode', 'task', 'preset'] as const
+const allScopes = ['input', 'encode', 'task', 'preset', 'environment'] as const
 
 function makeError(message = 'something went wrong'): TaskErrorPayload {
   return { code: TASK_ERROR_CODES.ProcessFailed, message, details: null }
@@ -21,71 +16,42 @@ describe('useIssueStore', () => {
     setActivePinia(createPinia())
   })
 
-  it('starts idle with no active issue', () => {
+  it('starts with no issue in any scope', () => {
     const store = useIssueStore()
-    expect(store.operationIssue).toBeNull()
     for (const scope of allScopes) {
       expect(store.getIssue(scope)).toBeNull()
     }
   })
 
-  it('setIssue / getIssue round-trip on every scope', () => {
+  it('retains independent errors for every scope', () => {
     const store = useIssueStore()
     for (const scope of allScopes) {
-      const error = makeError(`failure in ${scope}`)
-      store.setIssue(scope, error)
-      expect(store.operationIssue?.scope).toBe(scope)
-      // Pinia wraps stored values in reactive proxies, so reference
-      // equality fails even though the contents match. Use structural
-      // equality here — what matters is that the surface reads back
-      // what was written, not that the literal object survived.
-      expect(store.operationIssue?.error).toEqual(error)
-      expect(store.getIssue(scope)).toEqual(error)
+      store.setIssue(scope, makeError(`failure in ${scope}`))
+    }
+    for (const scope of allScopes) {
+      expect(store.getIssue(scope)?.message).toBe(`failure in ${scope}`)
     }
   })
 
-  it('clearIssue without a scope clears any active issue', () => {
+  it('clears only the requested scope', () => {
     const store = useIssueStore()
-    store.setIssue('encode', makeError())
+    store.setIssue('input', makeError('input failure'))
+    store.setIssue('environment', makeError('environment failure'))
+
+    store.clearIssue('environment')
+
+    expect(store.getIssue('environment')).toBeNull()
+    expect(store.getIssue('input')?.message).toBe('input failure')
+  })
+
+  it('clears every scope only when explicitly reset without a scope', () => {
+    const store = useIssueStore()
+    store.setIssue('preset', makeError('preset failure'))
+    store.setIssue('task', makeError('task failure'))
+
     store.clearIssue()
-    expect(store.operationIssue).toBeNull()
-  })
 
-  it('clearIssue with a matching scope clears the active issue', () => {
-    const store = useIssueStore()
-    store.setIssue('preset', makeError())
-    store.clearIssue('preset')
-    expect(store.operationIssue).toBeNull()
-  })
-
-  it('clearIssue with a different scope leaves the issue intact', () => {
-    // Critical invariant: a success path in scope A must not silently
-    // wipe an unrelated banner currently visible for scope B.
-    const store = useIssueStore()
-    const error = makeError('input issue')
-    store.setIssue('input', error)
-    store.clearIssue('encode')
-    expect(store.operationIssue?.scope).toBe('input')
-    expect(store.operationIssue?.error).toEqual(error)
-  })
-
-  it('getIssue returns null for a non-matching scope even when an issue is set', () => {
-    const store = useIssueStore()
-    store.setIssue('task', makeError())
-    expect(store.getIssue('input')).toBeNull()
-    expect(store.getIssue('encode')).toBeNull()
     expect(store.getIssue('preset')).toBeNull()
-    expect(store.getIssue('task')).not.toBeNull()
-  })
-
-  it('setIssue overwrites a prior issue from a different scope', () => {
-    // We only model a single active banner at any time; switching
-    // scopes is a deliberate replacement, not a queue.
-    const store = useIssueStore()
-    store.setIssue('input', makeError('first'))
-    store.setIssue('task', makeError('second'))
-    expect(store.operationIssue?.scope).toBe('task')
-    expect(store.operationIssue?.error.message).toBe('second')
-    expect(store.getIssue('input')).toBeNull()
+    expect(store.getIssue('task')).toBeNull()
   })
 })

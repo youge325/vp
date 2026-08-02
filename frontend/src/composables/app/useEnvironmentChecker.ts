@@ -1,31 +1,47 @@
 // 应用层 — 环境探测协调:调用 IPC 并写入 store。
 
 import { useEnvStore } from '@/stores/env'
+import { useIssueStore } from '@/stores/issue'
 import { envIpc } from '@/lib/ipc/endpoints/env'
 import { normalizeError } from '@/lib/errors/normalize'
 import { TASK_ERROR_CODES } from '@/types/protocol'
-import type { EnvironmentCheckPayload } from '@/types/protocol'
 
-export function requestEnvironmentCheck(forceRefresh = true): Promise<EnvironmentCheckPayload> {
-  return envIpc.check(forceRefresh)
+interface EnvironmentCheckOptions {
+  forceRefresh?: boolean
+  isActive?: () => boolean
 }
+
+let latestCheckGeneration = 0
 
 export function useEnvironmentChecker() {
   const envStore = useEnvStore()
+  const issueStore = useIssueStore()
 
-  async function recheckEnvironment(forceRefresh = true): Promise<void> {
+  async function checkEnvironment(options: EnvironmentCheckOptions = {}): Promise<void> {
+    const { forceRefresh = true, isActive = () => true } = options
+    if (!isActive()) {
+      return
+    }
+    const generation = ++latestCheckGeneration
+    const canCommit = (): boolean => generation === latestCheckGeneration && isActive()
     envStore.setChecking(true)
-    envStore.setIssue(null)
+    issueStore.clearIssue('environment')
     try {
-      envStore.setCheckPayload(await requestEnvironmentCheck(forceRefresh))
+      const payload = await envIpc.check(forceRefresh)
+      if (canCommit()) {
+        envStore.setCheckPayload(payload)
+      }
     } catch (error) {
-      // Structured shell errors retain their code; unknown failures
-      // use the canonical process error fallback.
-      envStore.setIssue(normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
+      if (canCommit()) {
+        issueStore.setIssue('environment', normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
+        console.warn('Environment check failed:', error)
+      }
     } finally {
-      envStore.setChecking(false)
+      if (canCommit()) {
+        envStore.setChecking(false)
+      }
     }
   }
 
-  return { recheckEnvironment }
+  return { checkEnvironment }
 }

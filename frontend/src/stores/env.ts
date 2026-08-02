@@ -4,7 +4,6 @@ import type {
   EnvironmentCheckResult,
   EnvironmentCheckPayload,
   EnvironmentCheckSource,
-  TaskErrorPayload,
 } from '@/types/protocol'
 
 interface AppEnv {
@@ -13,7 +12,6 @@ interface AppEnv {
   isChecking: boolean
   isBootstrapping: boolean
   checkResult: EnvironmentCheckResult | null
-  issue: TaskErrorPayload | null
 }
 
 function createInitialEnv(): AppEnv {
@@ -23,7 +21,6 @@ function createInitialEnv(): AppEnv {
     isChecking: false,
     isBootstrapping: false,
     checkResult: null,
-    issue: null,
   }
 }
 
@@ -34,10 +31,6 @@ export const useEnvStore = defineStore('env', () => {
     env.checkResult = payload.result
     env.checkSource = payload.source
     env.lastProbeAt = payload.checkedAt
-  }
-
-  function setIssue(issue: TaskErrorPayload | null): void {
-    env.issue = issue
   }
 
   function setChecking(value: boolean): void {
@@ -51,7 +44,6 @@ export const useEnvStore = defineStore('env', () => {
   return {
     env,
     setCheckPayload,
-    setIssue,
     setChecking,
     setBootstrapping,
   }

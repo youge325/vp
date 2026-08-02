@@ -4,7 +4,7 @@ import { useHomeDashboard } from '@/composables/selectors/useHomeDashboard'
 import IssueBanner from '@/components/IssueBanner.vue'
 
 const dashboard = useHomeDashboard()
-const { recheckEnvironment } = useEnvironmentChecker()
+const { checkEnvironment } = useEnvironmentChecker()
 </script>
 
 <template>
@@ -17,7 +17,7 @@ const { recheckEnvironment } = useEnvironmentChecker()
 
         <div class="panel-actions">
           <span v-if="dashboard.isBootstrapping.value || dashboard.isChecking.value" class="panel-badge">探测中</span>
-          <button v-else class="ghost-button" @click="recheckEnvironment()">重新探测</button>
+          <button v-else class="ghost-button" @click="checkEnvironment()">重新探测</button>
         </div>
       </div>
 

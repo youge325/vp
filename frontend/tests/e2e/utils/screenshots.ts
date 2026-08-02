@@ -4,6 +4,7 @@ import { browser } from '@wdio/globals'
 
 type E2EScreenshotName =
   | 'preset-banner'
+  | 'environment-error'
   | 'toggle'
   | 'model-metrics'
   | 'navigation-rail'

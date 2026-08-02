@@ -11,13 +11,13 @@ import {
 } from '@/lib/ipc/events'
 import { taskIpc } from '@/lib/ipc/endpoints/task'
 import { TASK_ERROR_CODES, TASK_EVENT_NAMES } from '@/types/protocol'
+import type { TaskRequest } from '@/types/protocol'
 import { normalizeError } from '@/lib/errors/normalize'
 import { useIssueStore } from '@/stores/issue'
 import { useMediaStore } from '@/stores/media'
 import { useMediaRunState } from '@/stores/mediaRunState'
 import { useTaskStore } from '@/stores/task'
 import { createBatchRunner, type BatchRunner } from '@/services/task/batch-runner'
-import { buildTaskRequest } from '@/services/task/request-builder'
 
 let cachedRunner: BatchRunner | null = null
 let detachHandle: UnlistenFn | null = null
@@ -59,7 +59,14 @@ export function getTaskRunner(): BatchRunner {
     dispatchBatch: (event) => taskStore.dispatchBatch(event),
     setRuntimeIds: (ids) => taskStore.setRuntimeIds(ids),
     setPendingConflict: (descriptor) => taskStore.setPendingConflict(descriptor),
-    buildRequest: (item, resumeMode) => buildTaskRequest(item, resumeMode),
+    buildRequest: (item, resumeMode): TaskRequest => ({
+      inputPath: item.inputPath,
+      decodeConfig: item.decodeConfig,
+      workflowConfig: item.workflowConfig,
+      encodeConfig: item.encodeConfig,
+      outputConfig: item.outputConfig,
+      ...(resumeMode ? { resumeMode } : {}),
+    }),
   })
 
   return cachedRunner

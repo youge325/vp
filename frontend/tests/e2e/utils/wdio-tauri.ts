@@ -550,17 +550,26 @@ interface AppStateWindow extends Window {
   __E2E_UNLISTENERS?: Array<() => Promise<void> | void>
 }
 
-const runPiniaStateOperation = async (
+const runPiniaOperation = async (
   source: string,
+  storeId: string | null,
   argument: unknown,
 ) => {
   const root = document.querySelector('#app') as HTMLElement & { __vue_app__?: unknown } | null
   const vueApp = root?.__vue_app__ as {
-    config?: { globalProperties?: { $pinia?: { state?: { value?: Record<string, unknown> } } } }
+    config?: {
+      globalProperties?: {
+        $pinia?: {
+          state?: { value?: Record<string, unknown> }
+          _s?: Map<string, Record<string, unknown>>
+        }
+      }
+    }
   } | undefined
-  const state = vueApp?.config?.globalProperties?.$pinia?.state?.value
-  if (!state) {
-    throw new Error('Pinia state is not available')
+  const pinia = vueApp?.config?.globalProperties?.$pinia
+  const target = storeId === null ? pinia?.state?.value : pinia?._s?.get(storeId)
+  if (!target) {
+    throw new Error(storeId === null ? 'Pinia state is not available' : `Pinia store is not available: ${storeId}`)
   }
 
   const operation = (0, eval)(`(${source})`) as (
@@ -568,7 +577,7 @@ const runPiniaStateOperation = async (
     win: AppStateWindow,
     argument: unknown,
   ) => unknown
-  return await operation(state, window as AppStateWindow, argument)
+  return await operation(target, window as AppStateWindow, argument)
 }
 
 export const withPiniaState = async <T, A = undefined>(
@@ -579,9 +588,27 @@ export const withPiniaState = async <T, A = undefined>(
   ) => T | Promise<T>,
   argument?: A,
 ): Promise<T> => {
-  return await evaluateBrowserCallback<T, [string, A | undefined]>(
-    runPiniaStateOperation,
+  return await evaluateBrowserCallback<T, [string, null, A | undefined]>(
+    runPiniaOperation,
     operation.toString(),
+    null,
+    argument,
+  )
+}
+
+export const withPiniaStore = async <T, A = undefined>(
+  storeId: string,
+  operation: (
+    store: Record<string, unknown>,
+    win: AppStateWindow,
+    argument: A,
+  ) => T | Promise<T>,
+  argument?: A,
+): Promise<T> => {
+  return await evaluateBrowserCallback<T, [string, string, A | undefined]>(
+    runPiniaOperation,
+    operation.toString(),
+    storeId,
     argument,
   )
 }

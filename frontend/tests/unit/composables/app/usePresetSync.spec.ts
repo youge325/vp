@@ -72,7 +72,7 @@ describe('usePresetSync', () => {
       workflow.interpolation.scale = 0.5
     })
 
-    expect(issueStore.operationIssue).toBeNull()
+    expect(issueStore.getIssue('preset')).toBeNull()
   })
 
   it('saves persisted enhance preferences in the workflow preset payload', async () => {
@@ -121,9 +121,8 @@ describe('usePresetSync', () => {
       workflow.interpolation.scale = 0.5
     })
 
-    expect(issueStore.operationIssue?.scope).toBe('preset')
-    expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.PersistenceFailed)
-    expect(issueStore.operationIssue?.error.message).toContain('disk is full')
+    expect(issueStore.getIssue('preset')?.code).toBe(TASK_ERROR_CODES.PersistenceFailed)
+    expect(issueStore.getIssue('preset')?.message).toContain('disk is full')
   })
 
   it('serializes overlapping saves and persists the latest debounced snapshot last', async () => {
@@ -213,7 +212,7 @@ describe('usePresetSync', () => {
     await flushPromises()
 
     expect(saveMock).toHaveBeenCalledOnce()
-    expect(issueStore.operationIssue).toBeNull()
+    expect(issueStore.getIssue('preset')).toBeNull()
   })
 
   it('disposal prevents a pending load generation from mutating the store', async () => {
@@ -256,13 +255,12 @@ describe('usePresetSync', () => {
     await flushPromises()
 
     expect(saveMock).toHaveBeenCalledTimes(2)
-    expect(issueStore.operationIssue).toBeNull()
+    expect(issueStore.getIssue('preset')).toBeNull()
 
     latestSave.reject(codedError(TASK_ERROR_CODES.PersistenceFailed, 'latest failure'))
     await flushPromises()
 
-    expect(issueStore.operationIssue?.scope).toBe('preset')
-    expect(issueStore.operationIssue?.error.message).toContain('latest failure')
+    expect(issueStore.getIssue('preset')?.message).toContain('latest failure')
   })
 
   it('treats SchemaMismatch on save as a reset signal, not a banner-only error', async () => {
@@ -278,8 +276,7 @@ describe('usePresetSync', () => {
     })
 
     expect(replaceSpy).toHaveBeenCalledOnce()
-    expect(issueStore.operationIssue?.scope).toBe('preset')
-    expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.SchemaMismatch)
+    expect(issueStore.getIssue('preset')?.code).toBe(TASK_ERROR_CODES.SchemaMismatch)
   })
 
   it('resets, rebuilds and reports SchemaMismatch when load isolates an incompatible payload', async () => {
@@ -297,7 +294,7 @@ describe('usePresetSync', () => {
     expect(replaceSpy).toHaveBeenCalledOnce()
     expect(saveMock).toHaveBeenCalledOnce()
     expect(saveMock).toHaveBeenCalledWith(presetStore.draftPreset)
-    expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.SchemaMismatch)
+    expect(issueStore.getIssue('preset')?.code).toBe(TASK_ERROR_CODES.SchemaMismatch)
   })
 
   it('keeps the preset issue actionable when rebuilding isolated data fails', async () => {
@@ -312,9 +309,8 @@ describe('usePresetSync', () => {
     await usePresetSync().loadPersistedPreset()
 
     expect(saveMock).toHaveBeenCalledOnce()
-    expect(issueStore.operationIssue?.scope).toBe('preset')
-    expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.PersistenceFailed)
-    expect(issueStore.operationIssue?.error.message).toContain('replacement write denied')
+    expect(issueStore.getIssue('preset')?.code).toBe(TASK_ERROR_CODES.PersistenceFailed)
+    expect(issueStore.getIssue('preset')?.message).toContain('replacement write denied')
   })
 
   it('reports generic persistence errors during load but still falls back to defaults', async () => {
@@ -329,6 +325,6 @@ describe('usePresetSync', () => {
     await sync.loadPersistedPreset()
 
     expect(replaceSpy).toHaveBeenCalledOnce()
-    expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.PersistenceFailed)
+    expect(issueStore.getIssue('preset')?.code).toBe(TASK_ERROR_CODES.PersistenceFailed)
   })
 })

@@ -1,6 +1,6 @@
-import { withPiniaState } from './wdio-tauri'
+import { withPiniaState, withPiniaStore } from './wdio-tauri'
 
-type OperationIssueScope = 'input' | 'encode' | 'task' | 'preset'
+type OperationIssueScope = 'input' | 'encode' | 'task' | 'preset' | 'environment'
 
 interface OperationIssueError {
   message: string
@@ -17,29 +17,23 @@ export async function setOperationIssue(
   scope: OperationIssueScope,
   error: OperationIssueError,
 ): Promise<boolean> {
-  return await withPiniaState((state, _win, payload: OperationIssuePayload) => {
-    const issueStore = state.issue as { operationIssue?: unknown } | undefined
-    if (!issueStore) {
+  return await withPiniaStore('issue', (store, _win, payload: OperationIssuePayload) => {
+    const setIssue = store.setIssue as ((scope: OperationIssueScope, error: OperationIssueError) => void) | undefined
+    if (!setIssue) {
       return false
     }
-    issueStore.operationIssue = {
-      scope: payload.scope,
-      error: {
-        details: null,
-        ...payload.error,
-      },
-    }
+    setIssue(payload.scope, { details: null, ...payload.error })
     return true
   }, { scope, error })
 }
 
-export async function clearOperationIssue(): Promise<void> {
-  await withPiniaState((state) => {
-    const issueStore = state.issue as { operationIssue?: unknown } | undefined
-    if (issueStore) {
-      issueStore.operationIssue = null
+export async function clearOperationIssue(scope?: OperationIssueScope): Promise<void> {
+  await withPiniaStore('issue', (store, _win, activeScope: OperationIssueScope | undefined) => {
+    const clearIssue = store.clearIssue as ((scope?: OperationIssueScope) => void) | undefined
+    if (clearIssue) {
+      clearIssue(activeScope)
     }
-  })
+  }, scope)
 }
 
 export async function setDeterministicEnhanceMetricState(): Promise<boolean> {

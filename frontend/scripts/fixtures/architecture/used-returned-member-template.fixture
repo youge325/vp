@@ -1,0 +1,11 @@
+<script setup lang="ts">
+export function useFixture() {
+  return { used: 1 }
+}
+
+const model = useFixture()
+</script>
+
+<template>
+  <span>{{ model.used }}</span>
+</template>

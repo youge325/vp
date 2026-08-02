@@ -1,0 +1,6 @@
+export function useFixture() {
+  return { used: 1, unused: 2 }
+}
+
+const model = useFixture()
+model.used

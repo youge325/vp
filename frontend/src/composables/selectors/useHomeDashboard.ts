@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import { useOperationIssue } from './useOperationIssue'
 import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
 import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
@@ -8,7 +9,7 @@ export function useHomeDashboard() {
   const envStore = useEnvStore()
   const mediaStore = useMediaStore()
 
-  const issue = computed(() => envStore.env.issue)
+  const issue = useOperationIssue('environment')
   const isChecking = computed(() => envStore.env.isChecking)
   const isBootstrapping = computed(() => envStore.env.isBootstrapping)
   const checkResult = computed(() => envStore.env.checkResult)
