@@ -1,3 +1,6 @@
+import sys
+from types import SimpleNamespace
+
 import pytest
 
 from app.adapters.model_availability import LocalModelAvailability
@@ -152,6 +155,46 @@ def test_paddlegan_vsr_missing_auxiliary_weight_is_rejected_before_stage_worker(
     expected_aux = tmp_path / "_auxiliary" / "modified_spynet_tiny.pdparams"
     assert exc_info.value.code == TaskErrorCode.MISSING_MODEL
     assert str(expected_aux) in exc_info.value.message
+
+
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    [
+        (FileNotFoundError("BasicVSR x2 model weight is missing"), "missing"),
+        (RuntimeError("BasicVSR x2 model weight SHA-256 mismatch"), "SHA-256 mismatch"),
+    ],
+)
+def test_real_rawvsr_missing_or_corrupt_weight_is_a_typed_model_error(monkeypatch, failure, message):
+    from app.algorithms.pytorch.real_rawvsr_basicvsr import assets
+
+    def fail_model_probe(_model_root, _scale_factor):
+        raise failure
+
+    monkeypatch.setattr(assets, "ensure_model_asset", fail_model_probe)
+    step = _super_resolution_step(backend="pytorch", scale_factor=2.0, algorithm="real-rawvsr-basicvsr")
+
+    with pytest.raises(ProcessError) as exc_info:
+        _validate([step])
+
+    assert exc_info.value.code == TaskErrorCode.MISSING_MODEL
+    assert message in exc_info.value.message
+    assert exc_info.value.details["scale_factor"] == 2
+
+
+def test_real_rawvsr_requires_available_cuda_after_model_validation(tmp_path, monkeypatch):
+    from app.algorithms.pytorch.real_rawvsr_basicvsr import assets
+
+    model_path = tmp_path / "model.safetensors"
+    model_path.write_bytes(b"safe")
+    monkeypatch.setattr(assets, "ensure_model_asset", lambda _root, _scale: model_path)
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: False)))
+    step = _super_resolution_step(backend="pytorch", scale_factor=2.0, algorithm="real-rawvsr-basicvsr")
+
+    with pytest.raises(ProcessError) as exc_info:
+        _validate([step])
+
+    assert exc_info.value.code == TaskErrorCode.MISSING_TENSOR_BACKEND
+    assert "NVIDIA CUDA" in exc_info.value.message
 
 
 def test_onnx_super_resolution_model_is_checked_from_its_stage_backend(tmp_path, monkeypatch):

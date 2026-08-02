@@ -287,6 +287,37 @@ PADDLEGAN_MODEL_METRIC_SPECS: Mapping[str, ModelMetricSpec] = MappingProxyType(
     }
 )
 
+_REAL_RAWVSR_METRIC_NOTE = (
+    "Parameter counts come from the official Real-RawVSR BasicVSR checkpoints; CUDA memory is device-dependent.",
+)
+
+
+def _real_rawvsr_metric(scale_factor: int, parameter_count: int) -> ModelMetricSpec:
+    return ModelMetricSpec(
+        name=f"x{scale_factor}",
+        label=f"Real-RawVSR BasicVSR {scale_factor}x",
+        parameter_count=parameter_count,
+        parameter_bytes=parameter_count * 4,
+        runtime=RuntimeMetricSpec(
+            gflops_per_megapixel=None,
+            activation_bytes_per_megapixel=None,
+            runtime_overhead_bytes=None,
+            runtime_frame_count=10,
+            input_modulo=None,
+            analysis_status="partial",
+            analysis_notes=_REAL_RAWVSR_METRIC_NOTE,
+        ),
+    )
+
+
+REAL_RAWVSR_BASICVSR_MODEL_METRIC_SPECS: Mapping[str, ModelMetricSpec] = MappingProxyType(
+    {
+        "x2": _real_rawvsr_metric(2, 6_143_599),
+        "x3": _real_rawvsr_metric(3, 6_328_239),
+        "x4": _real_rawvsr_metric(4, 6_291_311),
+    }
+)
+
 
 def _rife_gflops_per_megapixel(version: str, parameter_count: int) -> float:
     if version.endswith(".lite"):
@@ -355,6 +386,7 @@ RIFE_MODEL_METRIC_SPECS: Mapping[str, ModelMetricSpec] = MappingProxyType(
 MODEL_METRIC_SPECS_BY_ALGORITHM: Mapping[str, tuple[ModelMetricSpec, ...]] = MappingProxyType(
     {
         "rife": tuple(RIFE_MODEL_METRIC_SPECS[version] for version in SUPPORTED_MODELS),
+        "real-rawvsr-basicvsr": tuple(REAL_RAWVSR_BASICVSR_MODEL_METRIC_SPECS.values()),
         **{model_id: (spec,) for model_id, spec in PADDLEGAN_MODEL_METRIC_SPECS.items()},
     }
 )

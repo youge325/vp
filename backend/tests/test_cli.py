@@ -563,7 +563,8 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
         "onnxModels",
         "modelDetails",
         "onnxModelDetails",
-        "fixedScaleFactor",
+        "scaleFactors",
+        "modelLicense",
         "defaultNumFrames",
         "inputFrameMode",
     }
@@ -590,7 +591,8 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
     ppmsvsr_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "ppmsvsr")
     assert ppmsvsr_alg["tensorBackends"] == ["paddle"]
     assert ppmsvsr_alg["models"] == ["x4"]
-    assert ppmsvsr_alg["fixedScaleFactor"] == 4
+    assert ppmsvsr_alg["scaleFactors"] == [4]
+    assert ppmsvsr_alg["modelLicense"] is None
     assert ppmsvsr_alg["defaultNumFrames"] == 10
     assert "sequenceMode" not in ppmsvsr_alg
     assert ppmsvsr_alg["inputFrameMode"] == "editable_chunk"
@@ -600,6 +602,17 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
     assert "weightUrl" not in ppmsvsr_alg
     assert "weightPath" not in ppmsvsr_alg
     assert "weightAvailable" not in ppmsvsr_alg
+
+    real_rawvsr_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "real-rawvsr-basicvsr")
+    assert real_rawvsr_alg["family"] == "pytorch_vsr"
+    assert real_rawvsr_alg["tensorBackends"] == ["pytorch"]
+    assert real_rawvsr_alg["scaleFactors"] == [2, 3, 4]
+    assert [detail["name"] for detail in real_rawvsr_alg["modelDetails"]] == ["x2", "x3", "x4"]
+    assert real_rawvsr_alg["modelLicense"] == {
+        "spdxId": "CC-BY-NC-SA-4.0",
+        "usage": "non_commercial",
+        "sourceUrl": "https://github.com/zmzhang1998/Real-RawVSR",
+    }
 
     edvr_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "edvr")
     assert "sequenceMode" not in edvr_alg

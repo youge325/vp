@@ -9,7 +9,7 @@ from app.catalog.filter_geometry import project_filter_chain
 
 AlgorithmType = Literal["frame_interpolation", "super_resolution", "frame_filter_chain"]
 StageExecutionMode = Literal["single", "pair", "sequence"]
-StageModelKind = Literal["rife", "onnx_super_resolution", "paddlegan_vsr", "filter_chain"]
+StageModelKind = Literal["rife", "onnx_super_resolution", "paddlegan_vsr", "pytorch_vsr", "filter_chain"]
 GeometryKind = Literal["preserve", "configured_scale", "fixed_scale", "filter_chain"]
 
 
@@ -94,12 +94,22 @@ PADDLEGAN_STAGE_DESCRIPTOR = StageDescriptor(
     model_kind="paddlegan_vsr",
 )
 
+REAL_RAWVSR_BASICVSR_STAGE_DESCRIPTOR = StageDescriptor(
+    execution_mode="sequence",
+    requires_file_pipeline=True,
+    geometry=_GeometryPolicy("configured_scale"),
+    supported_backends=frozenset({"pytorch"}),
+    factory_key="real_rawvsr_basicvsr",
+    model_kind="pytorch_vsr",
+)
+
 
 __all__ = [
     "AlgorithmType",
     "FILTER_CHAIN_DESCRIPTOR",
     "ONNX_SUPER_RESOLUTION_DESCRIPTOR",
     "PADDLEGAN_STAGE_DESCRIPTOR",
+    "REAL_RAWVSR_BASICVSR_STAGE_DESCRIPTOR",
     "RIFE_STAGE_DESCRIPTOR",
     "StageDescriptor",
     "StageExecutionMode",

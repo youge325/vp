@@ -53,9 +53,10 @@ def run_sequence_stage(
         heartbeat_seconds=heartbeat_seconds,
     )
 
-    def sequence_progress(current: int, progress_total: int | None = None) -> None:
-        progress_state.current = max(progress_state.current, max(int(current), 0))
-        resolved_total = max(int(progress_total or total), 1)
+    def sequence_progress(current: int, _progress_total: int | None = None) -> None:
+        logical_current = min(max(int(current) - config.output_frame_offset, 0), config.output_frame_count)
+        progress_state.current = max(progress_state.current, logical_current)
+        resolved_total = total
         progress_state.total = resolved_total
         event_sink(
             progress_event(
@@ -71,8 +72,20 @@ def run_sequence_stage(
     finally:
         stop_heartbeat.set()
         heartbeat_thread.join(timeout=1)
+    if len(output_frames) != config.input_frame_count:
+        raise RawVideoFrameError(
+            f"Stage worker output frame count mismatch: expected {config.input_frame_count}, got {len(output_frames)}."
+        )
+    output_start = config.output_frame_offset
+    output_end = output_start + config.output_frame_count
+    if output_end > len(output_frames):
+        raise RawVideoFrameError(
+            "Stage worker output slice exceeds algorithm output: "
+            f"offset {output_start}, count {config.output_frame_count}, available {len(output_frames)}."
+        )
+    output_frames = output_frames[output_start:output_end]
     _require_output_frame_count(config, len(output_frames))
-    total = max(len(output_frames), 1)
+    total = max(config.output_frame_count, 1)
     emit_write_progress = progress_state.current <= 0
     for index, frame in enumerate(output_frames, start=1):
         write_rgb_frame(output_stream, frame, width=config.output_width, height=config.output_height)

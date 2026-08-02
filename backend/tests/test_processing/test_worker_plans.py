@@ -147,6 +147,38 @@ def test_super_resolution_chunk_plans_keep_input_frame_counts_bounded() -> None:
     ]
 
 
+def test_real_rawvsr_chunk_plans_share_context_and_advance_logical_frames() -> None:
+    step = ProcessingStep(
+        algorithm_type="super_resolution",
+        algorithm_kwargs={
+            "scale_factor": 2.0,
+            "sr_algorithm": "real-rawvsr-basicvsr",
+            "tensor_backend": "pytorch",
+            "engine": "cuda",
+            "num_frames": 10,
+        },
+        stage_name="01_super_resolution",
+    )
+
+    chunks = build_stage_chunk_plans(step, input_frame_count=25, segment_frames=10)
+
+    assert [
+        (
+            chunk.logical_start_frame,
+            chunk.logical_input_frame_count,
+            chunk.input_start_frame,
+            chunk.input_frame_count,
+            chunk.output_frame_offset,
+            chunk.written_output_frame_count,
+        )
+        for chunk in chunks
+    ] == [
+        (0, 10, 0, 12, 0, 10),
+        (10, 10, 8, 14, 2, 10),
+        (20, 5, 18, 7, 2, 5),
+    ]
+
+
 def test_boundary_schedule_maps_output_counts_to_next_source_frame() -> None:
     stage_plan = build_stage_plan(
         StageProjection(

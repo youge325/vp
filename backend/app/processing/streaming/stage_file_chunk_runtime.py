@@ -35,6 +35,7 @@ def run_stage_chunk_to_file(
         input_frame_count=chunk.input_frame_count,
         tensor_backend_name=config.tensor_backend_name,
         output_frame_count=chunk.raw_output_frame_count,
+        output_frame_offset=chunk.output_frame_offset,
     )
     error_queue = create_error_queue()
     stop_event = threading.Event()
@@ -43,7 +44,13 @@ def run_stage_chunk_to_file(
     if config.progress_callback is not None:
 
         def adapt_progress(current: int, *_worker_progress: Any, **kwargs: Any) -> None:
-            current_value = min(chunk.input_start_frame + max(int(current), 0), stage_total_frames)
+            logical_start_frame = (
+                chunk.input_start_frame if chunk.logical_start_frame is None else chunk.logical_start_frame
+            )
+            current_value = min(
+                logical_start_frame + max(int(current), 0),
+                stage_total_frames,
+            )
             config.progress_callback(current_value, stage_total_frames, **kwargs)
 
         callbacks = [None] * config.stage_total

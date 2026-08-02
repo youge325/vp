@@ -21,6 +21,7 @@ from app.generated.contracts import (
     FfmpegInfo,
     GpuInfo,
     InputFrameMode,
+    ModelLicenseInfo,
     TensorBackend,
 )
 from app.generated.protocol_constants import BackendEnvelopeType
@@ -38,7 +39,7 @@ def _algorithm_payload(
     onnx_model_details: list[ModelMetricSpec],
 ) -> AlgorithmInfo:
     """Project one neutral catalog entry onto the generated wire contract."""
-    fixed_scale_factor = algorithm.descriptor.fixed_scale_factor
+    license_info = algorithm.model_license
     return AlgorithmInfo(
         name=algorithm.name,
         family=AlgorithmFamily(algorithm.descriptor.model_kind),
@@ -47,7 +48,16 @@ def _algorithm_payload(
         onnx_models=onnx_models,
         model_details=project_model_metrics(MODEL_METRIC_SPECS_BY_ALGORITHM.get(algorithm.name, ())),
         onnx_model_details=project_model_metrics(onnx_model_details),
-        fixed_scale_factor=int(fixed_scale_factor) if fixed_scale_factor is not None else None,
+        scale_factors=list(algorithm.scale_factors),
+        model_license=(
+            ModelLicenseInfo(
+                spdxId=license_info.spdx_id,
+                usage=license_info.usage,
+                sourceUrl=license_info.source_url,
+            )
+            if license_info is not None
+            else None
+        ),
         default_num_frames=algorithm.default_num_frames,
         input_frame_mode=InputFrameMode(algorithm.input_frame_mode),
     )

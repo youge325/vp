@@ -89,33 +89,42 @@ def _validate_structure(step: ProcessingStep) -> None:
 
     algorithm = _required_string(step, "sr_algorithm")
     capability = find_static_algorithm_capability(step.algorithm_type, algorithm)
-    if descriptor.fixed_scale_factor is not None:
+    if capability is not None and capability.scale_factors:
         scale_factor = _required_float(step, "scale_factor")
-        if scale_factor != descriptor.fixed_scale_factor:
+        if scale_factor not in capability.scale_factors:
+            supported = ", ".join(f"{value}x" for value in capability.scale_factors)
             raise_error(
                 TaskErrorCode.INVALID_CONFIG,
-                f"PaddleGAN VSR models are fixed 4x super-resolution models; got {scale_factor:g}x.",
+                f"{algorithm} supports only {supported} super-resolution; got {scale_factor:g}x.",
                 details={
                     "stage": step.stage_name,
                     "algorithm": algorithm,
                     "scale_factor": scale_factor,
                 },
             )
-        if capability is not None and capability.input_frame_mode == "fixed_window":
-            num_frames = _required_int(step, "num_frames")
-            if num_frames != capability.default_num_frames:
-                raise_error(
-                    TaskErrorCode.INVALID_CONFIG,
-                    f"{algorithm} requires a fixed {capability.default_num_frames}-frame window; got {num_frames}.",
-                    details={
-                        "stage": step.stage_name,
-                        "algorithm": algorithm,
-                        "num_frames": num_frames,
-                    },
-                )
+    if capability is not None and capability.input_frame_mode == "fixed_window":
+        num_frames = _required_int(step, "num_frames")
+        if num_frames != capability.default_num_frames:
+            raise_error(
+                TaskErrorCode.INVALID_CONFIG,
+                f"{algorithm} requires a fixed {capability.default_num_frames}-frame window; got {num_frames}.",
+                details={
+                    "stage": step.stage_name,
+                    "algorithm": algorithm,
+                    "num_frames": num_frames,
+                },
+            )
+    if descriptor.model_kind == "pytorch_vsr" and engine != "cuda":
+        raise_error(
+            TaskErrorCode.INVALID_CONFIG,
+            f"Real-RawVSR BasicVSR supports only the CUDA engine; got '{engine}'.",
+            details={"stage": step.stage_name, "algorithm": algorithm, "engine": engine},
+        )
     if backend_name not in descriptor.supported_backends:
         if descriptor.model_kind == "paddlegan_vsr":
             message = f"PaddleGAN VSR requires the Paddle tensor backend; got '{backend_name}'."
+        elif descriptor.model_kind == "pytorch_vsr":
+            message = f"Real-RawVSR BasicVSR requires the PyTorch tensor backend; got '{backend_name}'."
         else:
             message = f"ONNX super-resolution does not support the '{backend_name}' tensor backend."
         raise_error(
