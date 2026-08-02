@@ -101,7 +101,7 @@ def make_stage_file_runtime_config(
 ) -> StageFileRuntimeConfig:
     resolved_step = step or ProcessingStep(
         algorithm_type="super_resolution",
-        algorithm_kwargs={"scale_factor": 1.0},
+        algorithm_kwargs={"scale_factor": 1.0, "sr_algorithm": "test-onnx"},
         stage_name="01_super_resolution",
     )
     return StageFileRuntimeConfig(

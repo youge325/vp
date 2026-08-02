@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping
+from typing import Any, Literal, Mapping, assert_never
 
 from app.catalog.filter_geometry import project_filter_chain
 
@@ -36,7 +36,9 @@ class _GeometryPolicy:
             if scale is None:
                 scale = float(algorithm_kwargs["scale_factor"])
             return max(1, round(width * scale)), max(1, round(height * scale))
-        return project_filter_chain(width, height, algorithm_kwargs.get("filters", ()))
+        if self.kind == "filter_chain":
+            return project_filter_chain(width, height, algorithm_kwargs.get("filters", ()))
+        assert_never(self.kind)
 
 
 @dataclass(frozen=True, slots=True)

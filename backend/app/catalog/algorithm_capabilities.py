@@ -98,7 +98,9 @@ def resolve_stage_descriptor(
         return RIFE_STAGE_DESCRIPTOR
     if algorithm_type != "super_resolution":
         raise ValueError(f"Unknown processing stage type: {algorithm_type!r}")
-    name = str(algorithm_kwargs.get("sr_algorithm") or "placeholder")
+    name = algorithm_kwargs.get("sr_algorithm")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("Super-resolution processing requires an explicit sr_algorithm.")
     capability = _CAPABILITIES_BY_TYPE[algorithm_type].get(name)
     if capability is None:
         # ONNX algorithms are discovered dynamically from model directories;
