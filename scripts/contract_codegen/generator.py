@@ -16,6 +16,7 @@ from .application_defaults import (
     render_typescript_application_defaults,
 )
 from .context import CONTRACTS, ROOT
+from .model_assets import load_model_assets, render_python_model_assets, render_rust_model_assets
 from .python_renderer import (
     _generate_python_contracts,
     _render_python_bootstrap_constants,
@@ -65,6 +66,7 @@ def main() -> int:
     args = parser.parse_args()
     manifest = validate_contracts()
     application_defaults = load_application_defaults(CONTRACTS)
+    model_assets = load_model_assets(CONTRACTS)
 
     with tempfile.TemporaryDirectory(prefix="vp-contracts-") as temp:
         temp_dir = Path(temp)
@@ -86,6 +88,10 @@ def main() -> int:
             (
                 ROOT / "backend/app/generated/application_defaults.py",
                 render_python_application_defaults(application_defaults),
+            ),
+            (
+                ROOT / "backend/app/generated/model_assets.py",
+                render_python_model_assets(model_assets),
             ),
             (ROOT / "backend/app/generated/contracts.py", python_output),
             (ROOT / "backend/app/generated/stage_worker_contracts.py", stage_worker_output),
@@ -126,6 +132,10 @@ def main() -> int:
             (
                 ROOT / "frontend/src-tauri/src/generated/application_defaults.rs",
                 render_rust_application_defaults(application_defaults),
+            ),
+            (
+                ROOT / "frontend/src-tauri/src/generated/model_assets.rs",
+                render_rust_model_assets(model_assets),
             ),
             (
                 ROOT / "frontend/src-tauri/src/generated/backend_oneshot.rs",

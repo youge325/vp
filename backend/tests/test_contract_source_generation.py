@@ -33,6 +33,11 @@ from contract_codegen.application_defaults import (  # noqa: E402
     render_rust_application_defaults,
     render_typescript_application_defaults,
 )
+from contract_codegen.model_assets import (  # noqa: E402
+    load_model_assets,
+    render_python_model_assets,
+    render_rust_model_assets,
+)
 from contract_codegen.python_renderer import (  # noqa: E402
     _render_python_bootstrap_constants,
     _render_python_protocol_constants,
@@ -88,6 +93,14 @@ def test_application_defaults_are_strict_validated_product_defaults() -> None:
         "engine": "cuda",
     }
     assert defaults["superResolution"]["numFrames"] == 10
+    assert defaults["superResolution"] == {
+        "algorithm": "real-rawvsr-basicvsr",
+        "onnxModel": "",
+        "scaleFactor": 2,
+        "numFrames": 10,
+        "tensorBackend": "pytorch",
+        "engine": "cuda",
+    }
     assert defaults["workflow"] == {
         "desktopFpsMode": "target",
         "cliFpsMode": "multi",
@@ -138,6 +151,38 @@ def test_application_defaults_are_strict_validated_product_defaults() -> None:
         validator.validate(extra)
 
 
+def test_model_asset_manifest_is_strict_complete_and_scale_ordered(tmp_path: Path) -> None:
+    assets = load_model_assets(CONTRACTS)
+    family = assets["realRawVsrBasicVsr"]
+
+    assert [variant["scaleFactor"] for variant in family["variants"]] == [2, 3, 4]
+    assert family["license"]["usage"] == "non_commercial"
+    assert all(len(variant["sourceSha256"]) == 64 for variant in family["variants"])
+    assert all(len(variant["inferenceSha256"]) == 64 for variant in family["variants"])
+
+    (tmp_path / "model-assets.schema.json").write_text(
+        (CONTRACTS / "model-assets.schema.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    invalid = copy.deepcopy(assets)
+    del invalid["realRawVsrBasicVsr"]["variants"][0]["sourceSha256"]
+    (tmp_path / "model-assets.json").write_text(json.dumps(invalid), encoding="utf-8")
+    with pytest.raises(ValidationError):
+        load_model_assets(tmp_path)
+
+
+def test_model_asset_bindings_include_runtime_integrity_data() -> None:
+    assets = load_model_assets(CONTRACTS)
+
+    python_output = render_python_model_assets(assets)
+    rust_output = render_rust_model_assets(assets)
+
+    assert "REAL_RAWVSR_BASICVSR_VARIANTS_BY_SCALE" in python_output
+    assert "19e06889ff7e96f3904c24562667949bb7e452ab02234508db51759741c91efb" in python_output
+    assert "REAL_RAWVSR_BASICVSR_VARIANTS" in rust_output
+    assert "models/super_resolution/pytorch/real-rawvsr-basicvsr/x4/model.safetensors" in rust_output
+
+
 def test_application_defaults_generate_language_native_read_only_constants() -> None:
     defaults = load_application_defaults(CONTRACTS)
 
@@ -164,6 +209,7 @@ def test_python_generated_package_contains_only_declared_contract_outputs() -> N
         "application_defaults.py",
         "bootstrap_constants.py",
         "contracts.py",
+        "model_assets.py",
         "protocol_constants.py",
         "stage_worker_contracts.py",
     }
@@ -461,10 +507,10 @@ def test_stage_worker_generated_models_reject_coercion_negative_values_and_extra
             StageWorkerErrorEvent.model_validate(invalid)
 
 
-def test_manifest_v4_declares_all_backend_command_policies_without_expanding_ipc() -> None:
+def test_manifest_v5_declares_all_backend_command_policies_without_expanding_ipc() -> None:
     manifest = validate_contracts()
 
-    assert manifest["schemaVersion"] == 4
+    assert manifest["schemaVersion"] == 5
     assert len(manifest["commands"]) == 10
     assert manifest["backendProcessCommand"]["stdinPayload"] == "RuntimeConfigBundle"
     assert manifest["backendProcessCommand"]["stdinField"] == "config"

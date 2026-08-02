@@ -26,6 +26,10 @@ from architecture_contracts.ipc_checks import (  # noqa: E402
     _collect_manifest_commands,
     diff_command_surface,
 )
+from architecture_contracts.model_assets import (  # noqa: E402
+    _REQUIRED_MODEL_ASSET_CONSUMERS,
+    check_model_asset_consumers,
+)
 from architecture_contracts.protocol_markers import check_protocol_marker_literals  # noqa: E402
 from architecture_contracts.python_checks import (  # noqa: E402
     _check_python_algorithm_factory_registry,
@@ -70,6 +74,16 @@ def _write_application_default_fixture(root: Path) -> None:
         path.write_text(marker, encoding="utf-8")
 
 
+def _write_model_asset_fixture(root: Path) -> None:
+    contract = root / "contracts/model-assets.json"
+    contract.parent.mkdir(parents=True)
+    contract.write_text((REPO_ROOT / "contracts/model-assets.json").read_text(encoding="utf-8"), encoding="utf-8")
+    for path_name, marker in _REQUIRED_MODEL_ASSET_CONSUMERS.items():
+        path = root / path_name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(marker, encoding="utf-8")
+
+
 def test_application_default_gate_rejects_a_reintroduced_product_literal(tmp_path: Path) -> None:
     _write_application_default_fixture(tmp_path)
 
@@ -95,6 +109,20 @@ def test_application_default_gate_scans_semantic_filter_fallbacks_outside_known_
     issues = check_application_default_consumers(tmp_path)
     assert any("semantic filter default fallback" in issue and "rogue.py" in issue for issue in issues)
     assert any("semantic filter default fallback" in issue and "Rogue.vue" in issue for issue in issues)
+
+
+def test_model_asset_gate_rejects_a_mirrored_hash(tmp_path: Path) -> None:
+    _write_model_asset_fixture(tmp_path)
+    assert check_model_asset_consumers(tmp_path) == []
+
+    rogue = tmp_path / "backend/app/rogue.py"
+    rogue.write_text(
+        'MODEL_HASH = "19e06889ff7e96f3904c24562667949bb7e452ab02234508db51759741c91efb"\n',
+        encoding="utf-8",
+    )
+    assert check_model_asset_consumers(tmp_path) == [
+        "model asset literal is mirrored outside generated bindings: backend/app/rogue.py"
+    ]
 
 
 def test_filter_constraint_gate_rejects_hardcoded_bounds(tmp_path: Path) -> None:
@@ -243,13 +271,13 @@ def test_rust_dev_dependency_usage_in_compile_fail_fixtures_is_counted(tmp_path:
     ]
 
 
-def test_manifest_command_reader_accepts_schema_version_four(tmp_path: Path) -> None:
+def test_manifest_command_reader_accepts_schema_version_five(tmp_path: Path) -> None:
     contracts = tmp_path / "contracts"
     contracts.mkdir()
     (contracts / "ipc-manifest.json").write_text(
         json.dumps(
             {
-                "schemaVersion": 4,
+                "schemaVersion": 5,
                 "commands": [
                     {"name": "start_task", "args": {"request": "TaskRequest"}, "result": "void"},
                 ],

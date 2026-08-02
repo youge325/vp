@@ -1,0 +1,46 @@
+{
+  "$schema": "./model-assets.schema.json",
+  "realRawVsrBasicVsr": {
+    "algorithmId": "real-rawvsr-basicvsr",
+    "family": "pytorch_vsr",
+    "displayName": "Real-RawVSR BasicVSR",
+    "defaultNumFrames": 10,
+    "temporalContextFrames": 2,
+    "license": {
+      "spdxId": "CC-BY-NC-SA-4.0",
+      "usage": "non_commercial",
+      "sourceUrl": "https://github.com/zmzhang1998/Real-RawVSR",
+      "licenseRelativePath": "licenses/real-rawvsr-basicvsr/CC-BY-NC-SA-4.0.txt",
+      "noticeRelativePath": "licenses/real-rawvsr-basicvsr/NOTICE.md"
+    },
+    "variants": [
+      {
+        "scaleFactor": 2,
+        "googleDriveFileId": "1I6hgEcMi8AaGc-jfZcj8JCcdUtmHqnDA",
+        "sourceBytes": 74061618,
+        "sourceSha256": "8f7053684381b9cd8340f8d9e50c9bfc7f3e39aec9a8dbc1740101290a35a543",
+        "inferenceBytes": 24608772,
+        "inferenceSha256": "19e06889ff7e96f3904c24562667949bb7e452ab02234508db51759741c91efb",
+        "relativePath": "models/super_resolution/pytorch/real-rawvsr-basicvsr/x2/model.safetensors"
+      },
+      {
+        "scaleFactor": 3,
+        "googleDriveFileId": "1s8osDeRfviGspFHQ9tQzrrn4L1YxdmvL",
+        "sourceBytes": 76277298,
+        "sourceSha256": "25e57ca1d22413cb0e4d0ea55ec112996ef3b54f14a9ba383ca31c6e893153c5",
+        "inferenceBytes": 25347332,
+        "inferenceSha256": "01dbec2b5827f868d89a12abe9aadb9952f6bc05b28c233f10884cfc18a59914",
+        "relativePath": "models/super_resolution/pytorch/real-rawvsr-basicvsr/x3/model.safetensors"
+      },
+      {
+        "scaleFactor": 4,
+        "googleDriveFileId": "12jm4QPFedCS1W79EKaFlTckXenZZrbWE",
+        "sourceBytes": 75836264,
+        "sourceSha256": "beff6255a93d5e23506c3f5c712fc8a0f27737582c15576be82d9088f1146d8b",
+        "inferenceBytes": 25199820,
+        "inferenceSha256": "bc8e5f0d545d049a8268d9a980062aa83ee86ce0c998e104a245d5190dab2295",
+        "relativePath": "models/super_resolution/pytorch/real-rawvsr-basicvsr/x4/model.safetensors"
+      }
+    ]
+  }
+}

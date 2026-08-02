@@ -23,6 +23,7 @@ export type {
   FpsMode,
   HardwareDeviceOptionSpec,
   InferenceEngine,
+  ModelLicenseInfo,
   ModelVariantInfo,
   OutputConfig,
   ProcessOrder,

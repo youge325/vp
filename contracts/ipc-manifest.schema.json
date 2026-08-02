@@ -17,7 +17,7 @@
   ],
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "const": 4 },
+    "schemaVersion": { "const": 5 },
     "protocolConstants": {
       "type": "object",
       "additionalProperties": false,

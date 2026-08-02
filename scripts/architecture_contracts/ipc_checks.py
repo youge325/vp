@@ -29,7 +29,7 @@ def _collect_manifest_commands(root: Path) -> dict[str, ManifestCommand]:
         manifest = json.loads(read_source(path, root))
     except json.JSONDecodeError as exc:
         raise ContractParseError(f"invalid IPC manifest JSON: {exc}") from exc
-    if manifest.get("schemaVersion") != 4:
+    if manifest.get("schemaVersion") != 5:
         raise ContractParseError("unsupported contracts/ipc-manifest.json schemaVersion")
     commands = manifest.get("commands")
     if not isinstance(commands, list):
