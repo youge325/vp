@@ -247,7 +247,7 @@ stage descriptor 明确声明 single / pair / sequence 模式，执行器只接�
 
 `ProcessingStep` 是不可变 descriptor，`execution_mode` 在算法实例创建前就确定。ONNX 单帧超分由
 `OnnxSuperResolution` 实现，PaddleGAN 视频超分由 `PaddleGanVideoSuperResolution` 实现，
-Real-RawVSR RGB BasicVSR 由独立的 `RealRawVsrBasicVsr` 序列适配器实现；stage-worker factory 按
+Real-RawVSR RGB 模型由 BasicVSR 可编辑块适配器或共享固定窗口适配器实现；stage-worker factory 按
 descriptor 显式选择，不用同一类兼容多种消费模式。
 
 ### Stage Worker 算法装配
@@ -256,8 +256,7 @@ descriptor 显式选择，不用同一类兼容多种消费模式。
 根据已经完成规划的 stage 类型惰性导入并实例化具体算法。该边界只暴露 `create_backend()` 和
 `create_algorithm()`；私有不可变 `_ALGORITHM_FACTORIES` 以 descriptor `factory_key` 为键，和中立
 catalog 由静态门禁保证精确同集。factory 函数内部才导入 RIFE、ONNX SR、Paddle 视频 SR 或
-PyTorch BasicVSR，应用
-启动和无关 command 不会加载重型框架。
+PyTorch Real-RawVSR RGB 工厂，应用启动和无关 command 不会加载重型框架。
 
 - filter chain 不创建 tensor backend，直接构造 `FrameFilterChainAlgorithm`
 - interpolation 与 super-resolution 复用规划层过滤后的 kwargs 和已创建 backend
@@ -267,19 +266,22 @@ PaddleGAN 视频超分进一步拆为 sequence executor、模型 factory、tenso
 trace observer；`paddle_video_super_resolution.py` 只组合这些能力。ONNX 单帧超分与 Paddle 序列
 超分是两个独立实现，不通过兼容分支共享类。
 
-### Real-RawVSR RGB BasicVSR
+### Real-RawVSR RGB 模型家族
 
-[`backend/app/algorithms/pytorch/real_rawvsr_basicvsr/`](../backend/app/algorithms/pytorch/real_rawvsr_basicvsr/)
-是从上游 BasicVSR 提取的最小推理实现，保留 checkpoint 键结构，移除 MMCV、训练器、Registry 与
-日志 façade。它只在选中算法后惰性导入 PyTorch，使用 `eval()`、`torch.inference_mode()` 和严格
-SafeTensors 权重加载；支持 2×/3×/4×，仅接受 RGB uint8 普通视频帧与 NVIDIA CUDA，不支持
-TensorRT、CPU、MPS 或 Bayer RAW 输入。
+[`backend/app/algorithms/pytorch/real_rawvsr/`](../backend/app/algorithms/pytorch/real_rawvsr/) 提供共享资产、
+RGB 边界、序列生命周期、固定窗口和张量算子；BasicVSR 的循环网络继续位于独立目录。EDVR、TDAN、
+TOFlow 是从上游提取的最小推理网络，保留 checkpoint 键结构并移除 MMCV、训练器、Registry、日志与
+自定义 CUDA 扩展。EDVR 和 TDAN 共用基于 `torchvision.ops.deform_conv2d` 的 checkpoint 兼容 DCNv2，
+TOFlow 只依赖原生 PyTorch。所有实现只在选中算法后惰性导入框架，使用 `eval()`、
+`torch.inference_mode()` 和严格 SafeTensors 权重加载；均支持 2×/3×/4×，仅接受 RGB uint8 普通视频帧
+与 NVIDIA CUDA，不支持 TensorRT、CPU、MPS 或 Bayer RAW 输入。
 
-共享 `temporal_slicing.py` 为外层 1000 帧分段、恢复和内部默认 10 帧逻辑块提供同一上下文规则：
-前后各 2 帧，短于 5 帧时复制边界，输出偏移裁掉上下文，进度与恢复游标只按逻辑帧推进。小于
-64 像素的边先复制填充，推理后按倍率裁回；实际视频没有 HR ground truth，因此不执行上游评测的
-GT 色彩校正。缺失/损坏权重、非法倍率、无 CUDA 和 CUDA OOM 分别映射为明确错误；OOM 提示降低
-每块帧数。
+共享 `temporal_slicing.py` 为外层分段、恢复和内部 BasicVSR 默认 10 帧逻辑块提供同一前后 2 帧上下文
+规则。EDVR、TDAN、TOFlow 对每个逻辑帧使用固定 `[i-2, i-1, i, i+1, i+2]` 窗口并复制边界；worker
+统一通过 `outputFrameOffset` 裁掉外层上下文，进度与恢复游标只按逻辑帧推进。固定窗口输入在右侧和
+下侧复制填充到 16 的倍数，BasicVSR 小尺寸输入填充到至少 64 像素，推理后均按倍率裁回。实际视频没有
+HR ground truth，因此不执行上游评测的 GT 色彩校正。缺失/损坏权重、非法倍率、无 CUDA/torchvision
+和 CUDA OOM 分别映射为包含算法与倍率的明确错误。
 
 factory、stage runtime 和 execution loop 共享 `Algorithm` union、`ITensorBackend` 与
 `StageWorkerConfig` 类型契约，并按 descriptor 的模式做一次结构化 Protocol 校验。
@@ -389,7 +391,7 @@ class _NdjsonEmitter:
   保证并发 reporter 不会交错 NDJSON 行
 - 普通日志和终端进度条继续输出到 stderr，不经过此处
 
-stage-worker 的进度/错误事件使用生成 Pydantic 模型，并以 manifest v5 生成的
+stage-worker 的进度/错误事件使用生成 Pydantic 模型，并以 manifest v6 生成的
 `STAGE_WORKER_EVENT_PREFIX` 写到 worker stderr；父 Python 进程只解析该前缀后的类型化 JSON。
 worker 行长、stderr tail、error summary 和回收期限与 Rust 共用 manifest limits。
 

@@ -132,7 +132,7 @@ python -m pytest tests -q
 - FFmpeg 封装测试
 - 流水线集成测试
 - 生成边界的严格解码与错误码一致性测试
-- manifest v5 严格字段校验、协议标记唯一来源与并发 NDJSON 整行写入测试
+- manifest v6 严格字段校验、协议标记唯一来源与并发 NDJSON 整行写入测试
 - CLI `_HANDLERS` 惰性导入、parser/handler/实现精确同集和无副作用 package import 测试
 
 默认进程运行共享与 ONNX 测试。PyTorch 与 Paddle 使用独立 pytest 进程，避免在同一进程加载
@@ -154,7 +154,7 @@ Remove-Item Env:VP_TEST_BACKEND
 python -m pytest tests_full_e2e -m full_e2e -q
 ```
 
-Real-RawVSR 三倍率 CUDA/音频专项可单独运行：
+Real-RawVSR 四算法、12 份权重的 CUDA/音频专项可单独运行：
 
 ```powershell
 python -m pytest tests_full_e2e/test_real_rawvsr_basicvsr_e2e.py -m full_e2e -q

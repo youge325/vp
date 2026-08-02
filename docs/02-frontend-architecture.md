@@ -342,8 +342,9 @@ fallback、分段归一化、指标投影和滤镜 catalog 共同消费它；Fil
 跟踪生成物执行逐字节 freshness 检查。
 
 环境算法元数据只暴露唯一 `scaleFactors`：多元素渲染倍率选择器、单元素锁定、空数组沿用通用
-倍率。Real-RawVSR BasicVSR 的 x2/x3/x4 指标按当前倍率选择；`modelLicense.usage` 为
-`non_commercial` 时，增强页显示不可隐藏的许可提示和上游来源链接。
+倍率。Real-RawVSR BasicVSR、EDVR、TDAN、TOFlow 的 x2/x3/x4 指标均按当前算法和倍率选择；后三者
+从 `inputFrameMode=fixed_window` 统一显示固定 5 帧邻帧窗口。`modelLicense.usage` 为
+`non_commercial` 时，增强页使用当前模型标签显示不可隐藏的许可提示和上游来源链接。
 
 ### 类型扩展层
 
