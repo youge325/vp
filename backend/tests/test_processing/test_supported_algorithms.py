@@ -18,7 +18,7 @@ from app.catalog.algorithm_capabilities import (
 from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
 from app.catalog.model_metrics import MODEL_METRIC_SPECS_BY_ALGORITHM
 from app.catalog.rife_models import MODEL_SPECS, SUPPORTED_MODELS
-from app.generated.model_assets import REAL_RAWVSR_BASICVSR_VARIANTS
+from app.generated.model_assets import REAL_RAWVSR_MODEL_FAMILIES
 
 _VALID_BACKENDS = {"pytorch", "paddle", "onnx"}
 _VALID_INPUT_FRAME_MODES = {"none", "editable_chunk", "fixed_window"}
@@ -137,20 +137,28 @@ def test_paddlegan_window_models_expose_fixed_runtime_frame_count():
         assert MODEL_METRIC_SPECS_BY_ALGORITHM[entry.name][0].runtime.runtime_frame_count is None
 
 
-def test_real_rawvsr_catalog_assets_metrics_and_license_are_the_same_three_scales() -> None:
-    basicvsr = next(entry for entry in SUPER_RESOLUTION_CAPABILITIES if entry.name == "real-rawvsr-basicvsr")
-    scales = tuple(variant.scale_factor for variant in REAL_RAWVSR_BASICVSR_VARIANTS)
+def test_real_rawvsr_catalog_assets_metrics_factory_and_license_are_exactly_aligned() -> None:
+    from app.algorithms.pytorch.real_rawvsr.factory import _FIXED_WINDOW_LOADERS
 
-    assert basicvsr.descriptor.model_kind == "pytorch_vsr"
-    assert basicvsr.descriptor.factory_key == "real_rawvsr_basicvsr"
-    assert basicvsr.descriptor.supported_backends == frozenset({"pytorch"})
-    assert basicvsr.scale_factors == scales == (2, 3, 4)
-    assert basicvsr.models == tuple(f"x{scale}" for scale in scales)
-    assert tuple(metric.name for metric in MODEL_METRIC_SPECS_BY_ALGORITHM[basicvsr.name]) == basicvsr.models
-    assert basicvsr.default_num_frames == 10
-    assert basicvsr.input_frame_mode == "editable_chunk"
-    assert basicvsr.model_license is not None
-    assert basicvsr.model_license.usage == "non_commercial"
+    family_ids = {family.algorithm_id for family in REAL_RAWVSR_MODEL_FAMILIES}
+    capabilities = {
+        entry.name: entry for entry in SUPER_RESOLUTION_CAPABILITIES if entry.descriptor.model_kind == "pytorch_vsr"
+    }
+
+    assert family_ids == set(capabilities) == {"real-rawvsr-basicvsr", *_FIXED_WINDOW_LOADERS}
+    for family in REAL_RAWVSR_MODEL_FAMILIES:
+        capability = capabilities[family.algorithm_id]
+        scales = tuple(variant.scale_factor for variant in family.variants)
+        assert capability.descriptor.factory_key == "real_rawvsr_rgb"
+        assert capability.descriptor.supported_backends == frozenset({"pytorch"})
+        assert capability.descriptor.temporal_context_frames == 2
+        assert capability.scale_factors == scales == (2, 3, 4)
+        assert capability.models == tuple(f"x{scale}" for scale in scales)
+        assert tuple(metric.name for metric in MODEL_METRIC_SPECS_BY_ALGORITHM[capability.name]) == capability.models
+        assert capability.default_num_frames == family.default_num_frames
+        assert capability.input_frame_mode == family.input_frame_mode
+        assert capability.model_license is not None
+        assert capability.model_license.usage == "non_commercial"
 
 
 def test_catalog_sets_match_model_and_factory_registries() -> None:
