@@ -2,7 +2,6 @@ import { test, expect } from '../fixtures'
 import { clearOperationIssue, setOperationIssue } from '../utils/pinia'
 import { saveE2EScreenshot } from '../utils/screenshots'
 import { openModule } from '../utils/navigation'
-import { withPiniaState } from '../utils/wdio-tauri'
 
 test.describe('Issue banner', () => {
   test('renders scoped input, encode and task failures in their production views', async ({ tauriPage }) => {
@@ -22,7 +21,7 @@ test.describe('Issue banner', () => {
       await expect(banner).toHaveAttribute('role', 'alert')
       await expect(banner.locator('strong')).toHaveText(item.title)
       await expect(banner.locator('p')).toHaveText(`${item.scope} operation failed`)
-      await clearOperationIssue()
+      await clearOperationIssue(item.scope)
       await expect(banner).not.toBeVisible()
     }
   })
@@ -44,23 +43,27 @@ test.describe('Issue banner', () => {
 
     await banner.evaluate((element) => element.scrollIntoView({ block: 'center' }))
     await saveE2EScreenshot('preset-banner')
-    await clearOperationIssue()
+    await clearOperationIssue('preset')
     await expect(banner).not.toBeVisible()
   })
 
   test('keeps environment recovery actionable when probing fails', async ({ tauriPage }) => {
-    const ready = await withPiniaState((state) => {
-      const env = (state.env as { env?: Record<string, unknown> } | undefined)?.env
-      if (!env) return false
-      env.issue = { code: 'env_probe_error', message: 'FFmpeg 未找到' }
-      env.isChecking = false
-      return true
+    const ready = await setOperationIssue('environment', {
+      code: 'env_probe_error',
+      message: 'FFmpeg 未找到',
     })
     test.skip(!ready, 'Cannot seed environment issue')
 
+    const banner = tauriPage.locator('[data-testid="home-module"] .info-banner-danger')
+    await expect(banner).toBeVisible()
+    await expect(banner.locator('strong')).toHaveText('环境探测失败')
+    await expect(banner.locator('p')).toHaveText('FFmpeg 未找到')
     const retry = tauriPage.locator('.topbar-actions button', { hasText: '重试探测' })
     await expect(retry).toBeVisible()
     await expect(retry).toBeEnabled()
     await expect(tauriPage.locator('.topbar-title-row h1')).toHaveText('主页')
+    await saveE2EScreenshot('environment-error')
+    await clearOperationIssue('environment')
+    await expect(banner).not.toBeVisible()
   })
 })

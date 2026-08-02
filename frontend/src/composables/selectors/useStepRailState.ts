@@ -4,6 +4,7 @@ import { useEnvStore } from '@/stores/env'
 import { useMediaStore } from '@/stores/media'
 import { useTaskStore } from '@/stores/task'
 import { useWorkbenchEditor } from '@/composables/selectors/useWorkbenchEditor'
+import { useOperationIssue } from '@/composables/selectors/useOperationIssue'
 import { getVisibleEncoderProfiles } from '@/services/preset/profile-picker'
 import { DEFAULT_WORKBENCH_MODULE_KEY, type ModuleKey } from '@/config/workbench-modules'
 
@@ -13,6 +14,7 @@ export function useStepRailState() {
   const mediaStore = useMediaStore()
   const taskStore = useTaskStore()
   const { editorConfig } = useWorkbenchEditor()
+  const environmentIssue = useOperationIssue('environment')
 
   const activeModuleKey = computed<ModuleKey>(
     () => route.meta.module?.key ?? DEFAULT_WORKBENCH_MODULE_KEY,
@@ -22,7 +24,7 @@ export function useStepRailState() {
     const env = envStore.env.checkResult
     const wf = editorConfig.value.workflowConfig
     return {
-      home: env || envStore.env.issue ? 'ready' : 'idle',
+      home: env || environmentIssue.value ? 'ready' : 'idle',
       input: mediaStore.mediaItems.length > 0 ? 'ready' : 'idle',
       decode: env ? 'ready' : 'idle',
       preprocess: wf.preprocess.enabled ? 'ready' : 'idle',

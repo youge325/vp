@@ -14,7 +14,7 @@ vi.mock('@/composables/app/useBootstrap', () => ({
 }))
 
 vi.mock('@/composables/app/useEnvironmentChecker', () => ({
-  useEnvironmentChecker: () => ({ recheckEnvironment: vi.fn() }),
+  useEnvironmentChecker: () => ({ checkEnvironment: vi.fn() }),
 }))
 
 vi.mock('@/composables/selectors/useOperationIssue', () => ({

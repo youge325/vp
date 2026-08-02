@@ -43,7 +43,6 @@ export function useWorkbenchEditor() {
   const presetStore = usePresetStore()
 
   const activeItem = computed(() => mediaStore.activeItem)
-  const isPresetMode = computed(() => !activeItem.value)
 
   const editorConfig = computed(() => ({
     decodeConfig: activeItem.value?.decodeConfig ?? presetStore.draftPreset.decodeConfig,
@@ -111,7 +110,6 @@ export function useWorkbenchEditor() {
 
   return {
     activeItem,
-    isPresetMode,
     editorConfig,
     editorVideoCodec,
     patchDecode,

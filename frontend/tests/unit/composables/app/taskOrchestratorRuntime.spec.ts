@@ -26,7 +26,11 @@ import {
   getTaskRunner,
 } from '@/composables/app/taskOrchestratorRuntime'
 import { useIssueStore } from '@/stores/issue'
-import type { TaskEventName } from '@/types/protocol'
+import { taskIpc } from '@/lib/ipc/endpoints/task'
+import { createMediaItem } from '@/services/media/factory'
+import { useMediaStore } from '@/stores/media'
+import { usePresetStore } from '@/stores/preset'
+import type { TaskEventName, TaskRequest } from '@/types/protocol'
 
 describe('taskOrchestratorRuntime', () => {
   beforeEach(() => {
@@ -34,6 +38,20 @@ describe('taskOrchestratorRuntime', () => {
     listenMock.mockReset()
     listenMock.mockResolvedValue(unlistenMock)
     unlistenMock.mockClear()
+    vi.mocked(taskIpc.start).mockReset().mockResolvedValue(undefined)
+    vi.mocked(taskIpc.checkResume).mockReset().mockResolvedValue({
+      type: 'resume_inspection',
+      pipeline_kind: 'streaming',
+      outputPath: '',
+      input_path: '',
+      finalExists: false,
+      sidecarExists: false,
+      signatureMatch: false,
+      completedChunks: 0,
+      completedOutputFrames: 0,
+      nextSourceFrame: 0,
+      totalOutputFrames: 0,
+    })
   })
 
   afterEach(() => {
@@ -52,6 +70,54 @@ describe('taskOrchestratorRuntime', () => {
     expect(listeners['task-progress']).toEqual(expect.any(Function))
     expect(listeners['task-progress']).not.toBe(runner.onProgress)
     expect(listeners['task-resume-status']).toEqual(expect.any(Function))
+  })
+
+  it('projects the edited media item into the actual start request at the composition root', async () => {
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.superResolution.numFrames = 7
+    })
+    const item = createMediaItem('/video/request.mp4', presetStore.draftPreset)
+    useMediaStore().appendItems([item])
+
+    await getTaskRunner().start([item.id])
+
+    const expected: TaskRequest = {
+      inputPath: item.inputPath,
+      decodeConfig: item.decodeConfig,
+      workflowConfig: item.workflowConfig,
+      encodeConfig: item.encodeConfig,
+      outputConfig: item.outputConfig,
+    }
+    expect(taskIpc.checkResume).toHaveBeenCalledWith(expected)
+    expect(taskIpc.start).toHaveBeenCalledWith(expected)
+  })
+
+  it('adds the chosen resume mode only when resolving a real conflict', async () => {
+    vi.mocked(taskIpc.checkResume).mockResolvedValueOnce({
+      type: 'resume_inspection',
+      pipeline_kind: 'streaming',
+      outputPath: '/out/request.mp4',
+      input_path: '/video/request.mp4',
+      finalExists: true,
+      sidecarExists: true,
+      signatureMatch: true,
+      completedChunks: 1,
+      completedOutputFrames: 20,
+      nextSourceFrame: 10,
+      totalOutputFrames: 100,
+    })
+    const item = createMediaItem('/video/request.mp4', usePresetStore().draftPreset)
+    useMediaStore().appendItems([item])
+    const runner = getTaskRunner()
+
+    await runner.start([item.id])
+    await runner.resolveConflict('resume')
+
+    expect(taskIpc.start).toHaveBeenCalledWith(expect.objectContaining({
+      inputPath: item.inputPath,
+      resumeMode: 'force-resume',
+    }))
   })
 
   it('projects listener failures into the global task issue', async () => {

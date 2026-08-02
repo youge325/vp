@@ -1,0 +1,7 @@
+export function useFixture() {
+  return { first: 1, second: 2 }
+}
+
+const { first, second } = useFixture()
+void first
+void second

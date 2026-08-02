@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, extname, relative, resolve } from 'node:path'
 import process from 'node:process'
 import ts from 'typescript'
-import { parse as parseVueSfc } from 'vue/compiler-sfc'
+import { compileTemplate, parse as parseVueSfc } from 'vue/compiler-sfc'
 import {
   AMBIENT_SOURCE_ALLOWLIST,
   GENERATED_SOURCE_ALLOWLIST,
@@ -13,7 +13,6 @@ import { collectUnreachableModules } from './production-reachability.mjs'
 const sourceRoot = resolve(process.cwd(), 'src')
 const e2eRoot = resolve(process.cwd(), 'tests/e2e')
 const sourceExtensions = new Set(['.ts', '.tsx', '.vue'])
-const importPattern = /\b(?:from\s+|import\s*\(\s*)['"]([^'"]+)['"]/g
 
 function walk(directory) {
   return readdirSync(directory)
@@ -41,11 +40,7 @@ function parseTypeScriptSourcesFromText(path, source) {
     return []
   }
 
-  const { descriptor, errors } = parseVueSfc(source, { filename: path })
-  if (errors.length > 0) {
-    const messages = errors.map((error) => error instanceof Error ? error.message : String(error))
-    throw new Error(`Unable to parse ${path}: ${messages.join('; ')}`)
-  }
+  const descriptor = parseVueDescriptor(path, source)
   return [descriptor.script, descriptor.scriptSetup]
     .filter(Boolean)
     .sort((left, right) => left.loc.start.offset - right.loc.start.offset)
@@ -55,6 +50,32 @@ function parseTypeScriptSourcesFromText(path, source) {
         ? [createTypeScriptEntry(`${path}.${index}.${language}`, path, block.content)]
         : []
     })
+}
+
+function parseVueDescriptor(path, source) {
+  const { descriptor, errors } = parseVueSfc(source, { filename: path })
+  if (errors.length > 0) {
+    const messages = errors.map((error) => error instanceof Error ? error.message : String(error))
+    throw new Error(`Unable to parse ${path}: ${messages.join('; ')}`)
+  }
+  return descriptor
+}
+
+function compileVueTemplate(path, source) {
+  const descriptor = parseVueDescriptor(path, source)
+  if (!descriptor.template) {
+    return ''
+  }
+  const result = compileTemplate({
+    id: `architecture-${normalizedPath(path)}`,
+    filename: path,
+    source: descriptor.template.content,
+  })
+  if (result.errors.length > 0) {
+    const messages = result.errors.map((error) => error instanceof Error ? error.message : String(error))
+    throw new Error(`Unable to compile template ${path}: ${messages.join('; ')}`)
+  }
+  return result.code
 }
 
 function createTypeScriptEntry(path, ownerPath, source) {
@@ -155,6 +176,24 @@ function collectUnusedPortMembers(program, productionPaths, ownerPaths = new Map
     }
   }
 
+  consumePropertyReferences(sources, checker, consumeSymbol, (owner) => (
+    ts.isVariableDeclaration(owner) && owner.initializer ? owner.initializer : owner
+  ))
+
+  return [
+    ...inheritedPortDeclarations,
+    ...declarations
+      .filter(({ member }) => !consumedDeclarations.has(member))
+      .map(({ path, interfaceName, name }) => ({ path, interfaceName, name })),
+  ]
+}
+
+function rootDeclarations(checker, symbol) {
+  return (symbol ? checker.getRootSymbols(symbol) : [])
+    .flatMap((rootSymbol) => rootSymbol.declarations ?? [])
+}
+
+function consumePropertyReferences(sources, checker, consumeSymbol, bindingSource) {
   for (const sourceFile of sources) {
     function visit(node) {
       if (ts.isPropertyAccessExpression(node)) {
@@ -164,23 +203,15 @@ function collectUnusedPortMembers(program, productionPaths, ownerPaths = new Map
         && node.argumentExpression
         && ts.isStringLiteral(node.argumentExpression)
       ) {
-        consumeSymbol(
-          checker.getPropertyOfType(
-            checker.getTypeAtLocation(node.expression),
-            node.argumentExpression.text,
-          ),
-        )
+        consumeSymbol(checker.getPropertyOfType(checker.getTypeAtLocation(node.expression), node.argumentExpression.text))
       } else if (
         ts.isBindingElement(node)
         && ts.isObjectBindingPattern(node.parent)
         && !node.dotDotDotToken
       ) {
         const name = declaredName(node.propertyName ?? node.name)
-        if (name) {
-          const owner = node.parent.parent
-          const source = ts.isVariableDeclaration(owner) && owner.initializer
-            ? owner.initializer
-            : owner
+        const source = bindingSource(node.parent.parent)
+        if (name && source) {
           consumeSymbol(checker.getPropertyOfType(checker.getTypeAtLocation(source), name))
         }
       }
@@ -188,13 +219,174 @@ function collectUnusedPortMembers(program, productionPaths, ownerPaths = new Map
     }
     visit(sourceFile)
   }
+}
 
-  return [
-    ...inheritedPortDeclarations,
-    ...declarations
-      .filter(({ member }) => !consumedDeclarations.has(member))
-      .map(({ path, interfaceName, name }) => ({ path, interfaceName, name })),
-  ]
+function directReturnObjects(functionNode) {
+  if (ts.isArrowFunction(functionNode) && ts.isObjectLiteralExpression(functionNode.body)) {
+    return [functionNode.body]
+  }
+  if (!ts.isBlock(functionNode.body)) {
+    return []
+  }
+  const objects = []
+  function visit(node) {
+    if (node !== functionNode.body && ts.isFunctionLike(node)) {
+      return
+    }
+    if (ts.isReturnStatement(node) && node.expression && ts.isObjectLiteralExpression(node.expression)) {
+      objects.push(node.expression)
+      return
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(functionNode.body)
+  return objects
+}
+
+function exportedFactoryFunctions(sourceFile) {
+  const factories = []
+  for (const statement of sourceFile.statements) {
+    const exported = statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+    if (!exported) {
+      continue
+    }
+    if (ts.isFunctionDeclaration(statement) && statement.name?.text.startsWith('use') && statement.body) {
+      factories.push({ name: statement.name.text, functionNode: statement })
+      continue
+    }
+    if (!ts.isVariableStatement(statement)) {
+      continue
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || !declaration.name.text.startsWith('use') || !declaration.initializer) {
+        continue
+      }
+      const initializer = declaration.initializer
+      if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
+        factories.push({ name: declaration.name.text, functionNode: initializer })
+        continue
+      }
+      if (
+        ts.isCallExpression(initializer)
+        && ts.isIdentifier(initializer.expression)
+        && initializer.expression.text === 'defineStore'
+      ) {
+        const setup = [...initializer.arguments].reverse().find((argument) => (
+          ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)
+        ))
+        if (setup) {
+          factories.push({ name: declaration.name.text, functionNode: setup })
+        }
+      }
+    }
+  }
+  return factories
+}
+
+function collectUnusedReturnedMembers(
+  program,
+  productionPaths,
+  ownerPaths = new Map(),
+  templateSources = new Map(),
+) {
+  const checker = program.getTypeChecker()
+  const normalizedProductionPaths = new Set(productionPaths.map(normalizedPath))
+  const sources = program.getSourceFiles().filter((sourceFile) => (
+    normalizedProductionPaths.has(normalizedPath(sourceFile.fileName))
+  ))
+  const declarations = []
+  const consumedDeclarations = new Set()
+
+  for (const sourceFile of sources) {
+    for (const factory of exportedFactoryFunctions(sourceFile)) {
+      const signature = checker.getSignatureFromDeclaration(factory.functionNode)
+      const returnType = signature ? checker.getReturnTypeOfSignature(signature) : undefined
+      for (const object of directReturnObjects(factory.functionNode)) {
+        for (const property of object.properties) {
+          if (ts.isSpreadAssignment(property)) {
+            continue
+          }
+          const name = declaredName(property.name)
+          if (!name) {
+            continue
+          }
+          const symbol = returnType ? checker.getPropertyOfType(returnType, name) : undefined
+          const roots = new Set(rootDeclarations(checker, symbol))
+          if (roots.size > 0) {
+            declarations.push({
+              factoryName: factory.name,
+              memberName: name,
+              ownerPath: ownerPaths.get(normalizedPath(sourceFile.fileName)) ?? sourceFile.fileName,
+              roots,
+            })
+          }
+        }
+      }
+    }
+  }
+
+  const consumeSymbol = (symbol) => {
+    for (const declaration of rootDeclarations(checker, symbol)) {
+      consumedDeclarations.add(declaration)
+    }
+  }
+
+  consumePropertyReferences(sources, checker, consumeSymbol, (owner) => (
+    ts.isVariableDeclaration(owner) ? owner.initializer : undefined
+  ))
+
+  for (const sourceFile of sources) {
+    const ownerPath = ownerPaths.get(normalizedPath(sourceFile.fileName))
+    const template = ownerPath ? templateSources.get(normalizedPath(ownerPath)) : undefined
+    if (!template) {
+      continue
+    }
+    const receivers = new Map()
+    function collectReceivers(node) {
+      if (
+        ts.isVariableDeclaration(node)
+        && ts.isIdentifier(node.name)
+        && node.initializer
+      ) {
+        receivers.set(node.name.text, checker.getTypeAtLocation(node.initializer))
+      }
+      ts.forEachChild(node, collectReceivers)
+    }
+    collectReceivers(sourceFile)
+    for (const match of template.matchAll(/\b_ctx\.([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)/gu)) {
+      const receiverType = receivers.get(match[1])
+      if (receiverType) {
+        consumeSymbol(checker.getPropertyOfType(receiverType, match[2]))
+      }
+    }
+  }
+
+  return declarations
+    .filter(({ roots }) => ![...roots].some((root) => consumedDeclarations.has(root)))
+    .map(({ factoryName, memberName, ownerPath }) => ({ factoryName, memberName, ownerPath }))
+}
+
+function collectModuleSpecifiers(entries) {
+  const specifiers = []
+  for (const { sourceFile } of entries) {
+    function visit(node) {
+      if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+        specifiers.push(node.moduleSpecifier.text)
+      } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+        specifiers.push(node.moduleSpecifier.text)
+      } else if (
+        ts.isCallExpression(node)
+        && node.expression.kind === ts.SyntaxKind.ImportKeyword
+        && node.arguments.length === 1
+        && ts.isStringLiteral(node.arguments[0])
+      ) {
+        specifiers.push(node.arguments[0].text)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+  }
+  return specifiers
 }
 
 function isGeneratedTypeSource(sourceFile) {
@@ -289,6 +481,41 @@ function runArchitectureRuleSelfTests() {
   const unused = collectUnusedPortMembers(fixtureProgram(unusedFixture), [unusedFixture.path])
   if (unused.length !== 1 || unused[0].name !== 'unused') {
     throw new Error(`unused port member self-test did not reject only the unconsumed member: ${JSON.stringify(unused)}`)
+  }
+  const unusedReturnedFixture = fixture('unused-returned-member.fixture')
+  const unusedReturned = collectUnusedReturnedMembers(
+    fixtureProgram(unusedReturnedFixture),
+    [unusedReturnedFixture.path],
+  )
+  if (unusedReturned.length !== 1 || unusedReturned[0].memberName !== 'unused') {
+    throw new Error(
+      `returned member self-test did not reject only the unconsumed member: ${JSON.stringify(unusedReturned)}`,
+    )
+  }
+  const usedReturnedFixture = fixture('used-returned-members.fixture')
+  if (
+    collectUnusedReturnedMembers(
+      fixtureProgram(usedReturnedFixture),
+      [usedReturnedFixture.path],
+    ).length !== 0
+  ) {
+    throw new Error('returned member self-test rejected a production destructure')
+  }
+  const templateFixturePath = resolve(fixtureRoot, 'used-returned-member-template.fixture.vue')
+  const templateFixtureSource = readFileSync(
+    resolve(fixtureRoot, 'used-returned-member-template.fixture'),
+    'utf8',
+  )
+  const templateFixture = parseTypeScriptSourcesFromText(templateFixturePath, templateFixtureSource)[0]
+  if (
+    collectUnusedReturnedMembers(
+      fixtureProgram(templateFixture),
+      [templateFixture.path],
+      new Map([[normalizedPath(templateFixture.path), templateFixturePath]]),
+      new Map([[normalizedPath(templateFixturePath), compileVueTemplate(templateFixturePath, templateFixtureSource)]]),
+    ).length !== 0
+  ) {
+    throw new Error('returned member self-test rejected a Vue template consumer')
   }
   const usedFixture = fixture('used-port-member.fixture')
   if (collectUnusedPortMembers(fixtureProgram(usedFixture), [usedFixture.path]).length !== 0) {
@@ -414,10 +641,15 @@ function resolveInternalImport(ownerPath, dependency) {
 
 const violations = []
 const dependencyGraph = new Map()
+const typeScriptSources = parseTypeScriptSources(sourceFiles)
+const typeScriptSourcesByOwner = new Map()
+for (const entry of typeScriptSources) {
+  const owner = normalizedPath(entry.ownerPath)
+  typeScriptSourcesByOwner.set(owner, [...(typeScriptSourcesByOwner.get(owner) ?? []), entry])
+}
 for (const path of sourceFiles) {
   const owner = relative(sourceRoot, path).replaceAll('\\', '/')
-  const source = readFileSync(path, 'utf8')
-  const imports = [...source.matchAll(importPattern)].map((match) => match[1])
+  const imports = collectModuleSpecifiers(typeScriptSourcesByOwner.get(normalizedPath(path)) ?? [])
   const internalDependencies = imports
     .map((dependency) => resolveInternalImport(path, dependency))
     .filter((dependency) => dependency !== null)
@@ -425,7 +657,6 @@ for (const path of sourceFiles) {
 
 }
 
-const typeScriptSources = parseTypeScriptSources(sourceFiles)
 const appConfig = ts.readConfigFile(resolve(process.cwd(), 'tsconfig.app.json'), ts.sys.readFile)
 if (appConfig.error) {
   throw new Error(ts.flattenDiagnosticMessageText(appConfig.error.messageText, '\n'))
@@ -434,6 +665,11 @@ const parsedAppConfig = ts.parseJsonConfigFileContent(appConfig.config, ts.sys, 
 const productionTypeScriptPaths = typeScriptSources.map(({ path }) => path)
 const ownerPaths = new Map(typeScriptSources.map(({ path, ownerPath }) => [normalizedPath(path), ownerPath]))
 const productionProgram = createTypeScriptProgram(typeScriptSources, parsedAppConfig.options)
+const templateSources = new Map(
+  sourceFiles
+    .filter((path) => extname(path) === '.vue')
+    .map((path) => [normalizedPath(path), compileVueTemplate(path, readFileSync(path, 'utf8'))]),
+)
 for (const { path, interfaceName, name } of collectUnusedPortMembers(
   productionProgram,
   productionTypeScriptPaths,
@@ -442,6 +678,18 @@ for (const { path, interfaceName, name } of collectUnusedPortMembers(
   const owner = relative(process.cwd(), path).replaceAll('\\', '/')
   violations.push(
     `frontend port member has no production consumer: ${owner} -> ${interfaceName}.${name}`,
+  )
+}
+
+for (const { ownerPath, factoryName, memberName } of collectUnusedReturnedMembers(
+  productionProgram,
+  productionTypeScriptPaths,
+  ownerPaths,
+  templateSources,
+)) {
+  const owner = relative(process.cwd(), ownerPath).replaceAll('\\', '/')
+  violations.push(
+    `frontend returned member has no production consumer: ${owner} -> ${factoryName}.${memberName}`,
   )
 }
 

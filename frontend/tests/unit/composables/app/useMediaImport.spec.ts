@@ -58,9 +58,8 @@ describe('useMediaImport', () => {
 
     await importer.importPaths(['/video/broken.mp4'])
 
-    expect(issueStore.operationIssue?.scope).toBe('input')
-    expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.ProcessFailed)
-    expect(issueStore.operationIssue?.error.message).toContain('ffprobe spawn failed')
+    expect(issueStore.getIssue('input')?.code).toBe(TASK_ERROR_CODES.ProcessFailed)
+    expect(issueStore.getIssue('input')?.message).toContain('ffprobe spawn failed')
   })
 
   it('clears any prior input banner before each inspect attempt', async () => {
@@ -78,7 +77,7 @@ describe('useMediaImport', () => {
     const importer = useMediaImport()
     await importer.importPaths(['/video/ok.mp4'])
 
-    expect(issueStore.operationIssue).toBeNull()
+    expect(issueStore.getIssue('input')).toBeNull()
   })
 
   it('writes info / decodeConfig back to the media item on a successful inspect', async () => {
@@ -148,8 +147,7 @@ describe('useMediaImport', () => {
     const importer = useMediaImport()
     await importer.pickAndImport()
 
-    expect(issueStore.operationIssue?.scope).toBe('input')
-    expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.IoError)
-    expect(issueStore.operationIssue?.error.message).toContain('dialog canceled')
+    expect(issueStore.getIssue('input')?.code).toBe(TASK_ERROR_CODES.IoError)
+    expect(issueStore.getIssue('input')?.message).toContain('dialog canceled')
   })
 })

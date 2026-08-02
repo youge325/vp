@@ -3,8 +3,6 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDeferred } from '../../fixtures/deferred'
-import { createEnvironmentPayload } from '../../fixtures/environment'
-import type { EnvironmentCheckPayload } from '@/types/protocol'
 
 const mocks = vi.hoisted(() => ({
   attachTaskListeners: vi.fn(async () => undefined),
@@ -12,7 +10,9 @@ const mocks = vi.hoisted(() => ({
   loadPersistedPreset: vi.fn(async () => undefined),
   startAutoSync: vi.fn(),
   disposePresetSync: vi.fn(),
-  requestEnvironmentCheck: vi.fn<() => Promise<EnvironmentCheckPayload>>(),
+  checkEnvironment: vi.fn<(
+    options?: { forceRefresh?: boolean; isActive?: () => boolean }
+  ) => Promise<void>>(),
 }))
 
 vi.mock('@/composables/app/taskOrchestratorRuntime', () => ({
@@ -21,7 +21,7 @@ vi.mock('@/composables/app/taskOrchestratorRuntime', () => ({
 }))
 
 vi.mock('@/composables/app/useEnvironmentChecker', () => ({
-  requestEnvironmentCheck: mocks.requestEnvironmentCheck,
+  useEnvironmentChecker: () => ({ checkEnvironment: mocks.checkEnvironment }),
 }))
 
 vi.mock('@/composables/app/usePresetSync', () => ({
@@ -50,7 +50,7 @@ describe('useBootstrap', () => {
     vi.clearAllMocks()
     mocks.attachTaskListeners.mockResolvedValue(undefined)
     mocks.loadPersistedPreset.mockResolvedValue(undefined)
-    mocks.requestEnvironmentCheck.mockResolvedValue(createEnvironmentPayload())
+    mocks.checkEnvironment.mockResolvedValue(undefined)
   })
 
   it('owns listener attachment and disposal around application startup', async () => {
@@ -59,13 +59,16 @@ describe('useBootstrap', () => {
 
     expect(mocks.attachTaskListeners).toHaveBeenCalledOnce()
     expect(mocks.loadPersistedPreset).toHaveBeenCalledOnce()
-    expect(mocks.requestEnvironmentCheck).toHaveBeenCalledWith(false)
+    expect(mocks.checkEnvironment).toHaveBeenCalledWith({
+      forceRefresh: false,
+      isActive: expect.any(Function),
+    })
     expect(mocks.startAutoSync).toHaveBeenCalledOnce()
     expect(mocks.attachTaskListeners.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.loadPersistedPreset.mock.invocationCallOrder[0])
     expect(mocks.loadPersistedPreset.mock.invocationCallOrder[0])
-      .toBeLessThan(mocks.requestEnvironmentCheck.mock.invocationCallOrder[0])
-    expect(mocks.requestEnvironmentCheck.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.checkEnvironment.mock.invocationCallOrder[0])
+    expect(mocks.checkEnvironment.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.startAutoSync.mock.invocationCallOrder[0])
     expect(useEnvStore().env.isBootstrapping).toBe(false)
     expect(usePresetStore().presetPersistenceReady).toBe(true)
@@ -86,7 +89,7 @@ describe('useBootstrap', () => {
     await flushPromises()
 
     expect(mocks.loadPersistedPreset).not.toHaveBeenCalled()
-    expect(mocks.requestEnvironmentCheck).not.toHaveBeenCalled()
+    expect(mocks.checkEnvironment).not.toHaveBeenCalled()
     expect(mocks.startAutoSync).not.toHaveBeenCalled()
     expect(mocks.disposePresetSync).toHaveBeenCalledOnce()
   })
@@ -106,7 +109,7 @@ describe('useBootstrap', () => {
     expect(usePresetStore().presetPersistenceReady).toBe(false)
     expect(useEnvStore().env.isBootstrapping).toBe(false)
     expect(mocks.loadPersistedPreset).not.toHaveBeenCalled()
-    expect(mocks.requestEnvironmentCheck).not.toHaveBeenCalled()
+    expect(mocks.checkEnvironment).not.toHaveBeenCalled()
     expect(mocks.startAutoSync).not.toHaveBeenCalled()
 
     wrapper.unmount()
@@ -123,19 +126,19 @@ describe('useBootstrap', () => {
     presetLoad.resolve(undefined)
     await flushPromises()
 
-    expect(mocks.requestEnvironmentCheck).not.toHaveBeenCalled()
+    expect(mocks.checkEnvironment).not.toHaveBeenCalled()
     expect(mocks.startAutoSync).not.toHaveBeenCalled()
   })
 
   it('does not start autosync when unmounted during the environment probe', async () => {
-    const environmentCheck = createDeferred<EnvironmentCheckPayload>()
-    mocks.requestEnvironmentCheck.mockReturnValueOnce(environmentCheck.promise)
+    const environmentCheck = createDeferred<void>()
+    mocks.checkEnvironment.mockReturnValueOnce(environmentCheck.promise)
     const wrapper = mount(BootstrapHost)
     await flushPromises()
 
-    expect(mocks.requestEnvironmentCheck).toHaveBeenCalledOnce()
+    expect(mocks.checkEnvironment).toHaveBeenCalledOnce()
     wrapper.unmount()
-    environmentCheck.resolve(createEnvironmentPayload())
+    environmentCheck.resolve(undefined)
     await flushPromises()
 
     expect(mocks.startAutoSync).not.toHaveBeenCalled()
@@ -143,29 +146,4 @@ describe('useBootstrap', () => {
     expect(usePresetStore().presetPersistenceReady).toBe(false)
   })
 
-  it('does not let a stale probe overwrite a newer mount generation', async () => {
-    const staleCheck = createDeferred<EnvironmentCheckPayload>()
-    const freshPayload = createEnvironmentPayload(undefined, {
-      checkedAt: '2026-07-31T12:00:00Z',
-    })
-    mocks.requestEnvironmentCheck
-      .mockReturnValueOnce(staleCheck.promise)
-      .mockResolvedValueOnce(freshPayload)
-
-    const staleWrapper = mount(BootstrapHost)
-    await flushPromises()
-    staleWrapper.unmount()
-
-    const freshWrapper = mount(BootstrapHost)
-    await flushPromises()
-    expect(useEnvStore().env.lastProbeAt).toBe(freshPayload.checkedAt)
-
-    staleCheck.resolve(createEnvironmentPayload(undefined, {
-      checkedAt: '2026-01-01T00:00:00Z',
-    }))
-    await flushPromises()
-    expect(useEnvStore().env.lastProbeAt).toBe(freshPayload.checkedAt)
-
-    freshWrapper.unmount()
-  })
 })

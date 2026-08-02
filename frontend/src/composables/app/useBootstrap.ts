@@ -6,7 +6,7 @@ import { useIssueStore } from '@/stores/issue'
 import { usePresetStore } from '@/stores/preset'
 import { normalizeError } from '@/lib/errors/normalize'
 import { TASK_ERROR_CODES } from '@/types/protocol'
-import { requestEnvironmentCheck } from './useEnvironmentChecker'
+import { useEnvironmentChecker } from './useEnvironmentChecker'
 import { usePresetSync } from './usePresetSync'
 import { attachTaskListeners, disposeRunner } from './taskOrchestratorRuntime'
 
@@ -14,6 +14,7 @@ export function useBootstrap() {
   const envStore = useEnvStore()
   const issueStore = useIssueStore()
   const presetStore = usePresetStore()
+  const { checkEnvironment } = useEnvironmentChecker()
   const { loadPersistedPreset, startAutoSync, dispose: disposePresetSync } = usePresetSync()
   let generation = 0
 
@@ -43,23 +44,10 @@ export function useBootstrap() {
       }
 
       // Step 3 — environment check (soft-fail)
-      envStore.setChecking(true)
-      envStore.setIssue(null)
-      try {
-        const payload = await requestEnvironmentCheck(false)
-        if (isActive(activeGeneration)) {
-          envStore.setCheckPayload(payload)
-        }
-      } catch (error: unknown) {
-        if (isActive(activeGeneration)) {
-          envStore.setIssue(normalizeError(error, TASK_ERROR_CODES.ProcessFailed))
-          console.warn('Environment check failed:', error)
-        }
-      } finally {
-        if (isActive(activeGeneration)) {
-          envStore.setChecking(false)
-        }
-      }
+      await checkEnvironment({
+        forceRefresh: false,
+        isActive: () => isActive(activeGeneration),
+      })
       if (!isActive(activeGeneration)) {
         return
       }

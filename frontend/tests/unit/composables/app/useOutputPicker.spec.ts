@@ -49,7 +49,7 @@ describe('useOutputPicker', () => {
 
     expect(presetStore.draftPreset.outputConfig.outputDir).toBe('D:/out/picked')
     // 成功路径必须同时清掉上次的 banner
-    expect(issueStore.operationIssue).toBeNull()
+    expect(issueStore.getIssue('encode')).toBeNull()
   })
 
   // 真 bug 回归护栏。激活素材态下点选择目录,**必须**至少写到
@@ -90,7 +90,7 @@ describe('useOutputPicker', () => {
     // preset 没动:取消不该改 outputDir
     expect(presetStore.draftPreset.outputConfig.outputDir).toBe(originalDir)
     // banner 仍要清,否则取消按钮后旧错误挂着误导
-    expect(issueStore.operationIssue).toBeNull()
+    expect(issueStore.getIssue('encode')).toBeNull()
   })
 
   it('user cancel does not mutate the active item either', async () => {
@@ -118,8 +118,7 @@ describe('useOutputPicker', () => {
     await picker.pickOutputDirectory()
 
     // 关键回归:必须写入 'encode' scope,EncodeModuleView 才能拿到
-    expect(issueStore.operationIssue?.scope).toBe('encode')
-    expect(issueStore.operationIssue?.error.code).toBe(TASK_ERROR_CODES.IoError)
-    expect(issueStore.operationIssue?.error.message).toContain('permission denied')
+    expect(issueStore.getIssue('encode')?.code).toBe(TASK_ERROR_CODES.IoError)
+    expect(issueStore.getIssue('encode')?.message).toContain('permission denied')
   })
 })

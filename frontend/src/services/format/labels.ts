@@ -1,7 +1,6 @@
 // pure: no Vue / no Pinia / no Tauri
 // UI 标签格式化 — 按业务规则把领域数据投影成显示字符串。
 
-import type { BatchState } from '@/types/domain/batch'
 import type { CodecProfileSpec, WorkflowConfig } from '@/types/protocol'
 
 const FORMAT_CONVERSION_LABEL = '转码'
@@ -43,10 +42,6 @@ export function groupEncoderProfilesByFamily(
         .join(', ') || '--',
     },
   ]
-}
-
-export function getTaskStatusLabel(batch: BatchState): string {
-  return batch.phase
 }
 
 export function getEditingScopeLabel(
