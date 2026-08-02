@@ -63,7 +63,9 @@ def processing_step_from_config(config: StageWorkerConfig) -> ProcessingStep:
         raise ValueError("Frame-filter stage must not consume a tensor backend.")
     if stage.algorithm_type != "frame_filter_chain" and config.tensor_backend_name is None:
         raise ValueError(f"Stage worker {stage.algorithm_type.value!r} requires a tensor backend.")
-    algorithm_kwargs = stage.algorithm_kwargs.model_dump(exclude_unset=True)
+    # Generated stage-worker models use Python field names internally, but
+    # ProcessingStep and filter handlers consume the canonical wire keys.
+    algorithm_kwargs = stage.algorithm_kwargs.model_dump(by_alias=True, exclude_unset=True)
     if config.tensor_backend_name is not None:
         algorithm_kwargs["tensor_backend"] = config.tensor_backend_name
     step = ProcessingStep(

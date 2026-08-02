@@ -19,8 +19,6 @@ from app.cli.commands._process_planning import build_plan
 from app.cli.commands._process_validation import load_runtime_configs
 from app.errors.codes import TaskErrorCode
 from app.errors.process import ProcessError, ResumeConflictError
-from app.planning.workflow_steps import resolve_primary_algorithm
-from app.cli.runtime_configs import runtime_config_section
 
 
 def cmd_process(args: argparse.Namespace) -> None:
@@ -62,11 +60,19 @@ def cmd_process(args: argparse.Namespace) -> None:
         if isinstance(exc, ProcessError):
             raise
         pe = ProcessError.from_exception(exc)
+        step_types = {step.algorithm_type for step in prepared.processing_steps}
+        primary_algorithm = (
+            "frame_interpolation"
+            if "frame_interpolation" in step_types
+            else "super_resolution"
+            if "super_resolution" in step_types
+            else "format_conversion"
+        )
         pe.details.update(
             {
                 "input_path": input_path,
                 "output_path": prepared.output_path,
-                "algorithm": resolve_primary_algorithm(runtime_config_section(prepared.runtime_configs, "workflow")),
+                "algorithm": primary_algorithm,
                 "processing_steps": [step.algorithm_type for step in prepared.processing_steps],
             }
         )

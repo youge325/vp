@@ -175,7 +175,7 @@ def test_boundary_schedule_uses_single_frame_output_groups_without_interpolation
             (
                 ProcessingStep(
                     algorithm_type="super_resolution",
-                    algorithm_kwargs={"scale_factor": 2.0},
+                    algorithm_kwargs={"scale_factor": 2.0, "sr_algorithm": "test-onnx"},
                     stage_name="01_super_resolution",
                 ),
             )

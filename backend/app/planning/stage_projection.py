@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal, assert_never
 
-from app.planning.processing_steps import AlgorithmType, ProcessingStep
+from app.planning.processing_steps import ProcessingStep
 
-_PROCESS_ORDER_MAP: dict[str, tuple[AlgorithmType, ...]] = {
+type StageAlgorithmType = Literal["frame_interpolation", "super_resolution"]
+
+_PROCESS_ORDER_MAP: dict[str, tuple[StageAlgorithmType, ...]] = {
     "super_resolution_then_interpolation": (
         "super_resolution",
         "frame_interpolation",
@@ -164,7 +166,7 @@ class StageProjection:
         return input_fps * int(step.algorithm_kwargs["multi"])
 
     @staticmethod
-    def _algorithm_types(workflow_config: dict[str, Any]) -> tuple[AlgorithmType, ...]:
+    def _algorithm_types(workflow_config: dict[str, Any]) -> tuple[StageAlgorithmType, ...]:
         interpolation_enabled = bool(workflow_config["interpolation"]["enabled"])
         super_resolution_enabled = bool(workflow_config["superResolution"]["enabled"])
         if interpolation_enabled and super_resolution_enabled:
@@ -176,7 +178,7 @@ class StageProjection:
         return ()
 
     @staticmethod
-    def _algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: AlgorithmType) -> dict[str, Any]:
+    def _algorithm_kwargs(workflow_config: dict[str, Any], algorithm_type: StageAlgorithmType) -> dict[str, Any]:
         interpolation = workflow_config["interpolation"]
         super_resolution = workflow_config["superResolution"]
         if algorithm_type == "frame_interpolation":
@@ -199,7 +201,7 @@ class StageProjection:
                 "tensor_backend": super_resolution["tensorBackend"],
                 "num_frames": super_resolution["numFrames"],
             }
-        return {}
+        assert_never(algorithm_type)
 
     @staticmethod
     def _filter_chain(

@@ -133,6 +133,41 @@ def test_stage_worker_config_serializes_existing_processing_step_shape() -> None
     }
 
 
+def test_filter_step_round_trip_preserves_canonical_parameter_aliases() -> None:
+    step = ProcessingStep(
+        algorithm_type="frame_filter_chain",
+        algorithm_kwargs={
+            "filters": [
+                {
+                    "kind": "anime_cleanup",
+                    "enabled": True,
+                    "params": {"profile": "clean-lines", "denoise": 15, "edgeBoost": 30},
+                }
+            ]
+        },
+        stage_name="01_preprocess",
+    )
+    config = StageWorkerConfig(
+        stage=build_stage_worker_step(step),
+        stage_index=1,
+        stage_total=1,
+        stage_name=step.stage_name,
+        input_width=8,
+        input_height=8,
+        output_width=8,
+        output_height=8,
+        input_frame_count=1,
+        tensor_backend_name=None,
+        output_frame_count=1,
+    )
+
+    restored = processing_step_from_config(config)
+    params = restored.algorithm_kwargs["filters"][0]["params"]
+
+    assert params == {"profile": "clean-lines", "denoise": 15.0, "edgeBoost": 30.0}
+    assert "edge_boost" not in params
+
+
 def test_stage_worker_config_rejects_unknown_algorithm_type(tmp_path: Path) -> None:
     config_path = tmp_path / "stage-worker.json"
     config_path.write_text(

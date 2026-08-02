@@ -7,14 +7,15 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from app.catalog.algorithm_capabilities import resolve_stage_descriptor
-from app.catalog.stage_descriptors import AlgorithmType, StageDescriptor, StageExecutionMode
+from app.catalog.stage_descriptors import AlgorithmType as _AlgorithmType
+from app.catalog.stage_descriptors import StageDescriptor, StageExecutionMode
 
 
 @dataclass(frozen=True, slots=True)
 class ProcessingStep:
     """One resolved algorithm stage in the backend pipeline."""
 
-    algorithm_type: AlgorithmType
+    algorithm_type: _AlgorithmType
     algorithm_kwargs: Mapping[str, Any]
     stage_name: str
     descriptor: StageDescriptor = field(init=False, repr=False)
@@ -42,7 +43,6 @@ class ProcessingStep:
 
 
 __all__ = [
-    "AlgorithmType",
     "ProcessingStep",
 ]
 

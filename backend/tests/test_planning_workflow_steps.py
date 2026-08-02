@@ -1,9 +1,8 @@
-"""Planning-layer workflow-to-stage helpers."""
+"""Planning-layer workflow-to-stage projection."""
 
 from app.planning.stage_plan import build_stage_plan
 from app.planning.stage_projection import StageProjection
 from tests.support.video_metadata import make_video_metadata
-from app.planning.workflow_steps import resolve_primary_algorithm
 from tests.support.workflow_configs import make_workflow_config as _workflow
 
 
@@ -13,7 +12,6 @@ def test_workflow_step_planning_uses_canonical_order():
         "super_resolution",
         "frame_interpolation",
     ]
-    assert resolve_primary_algorithm(_workflow()) == "frame_interpolation"
 
 
 def test_stage_projection_builds_ordered_stage_names_and_kwargs():

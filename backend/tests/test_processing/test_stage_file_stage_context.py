@@ -17,7 +17,7 @@ def test_stage_file_stage_context_only_exports_builder() -> None:
 def test_stage_file_stage_context_uses_resume_state_for_final_stage(tmp_path) -> None:
     step = ProcessingStep(
         algorithm_type="super_resolution",
-        algorithm_kwargs={"scale_factor": 4.0},
+        algorithm_kwargs={"scale_factor": 4.0, "sr_algorithm": "test-onnx"},
         stage_name="01_super_resolution",
     )
     manifest = create_test_manifest(str(tmp_path / "final.mp4"))
