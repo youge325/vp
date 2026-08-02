@@ -48,6 +48,7 @@ interface EnhanceFormFields {
   readonly isSuperResolutionOnnxBackend: boolean
   readonly isSuperResolutionScaleLocked: boolean
   readonly superResolutionModelLicense: ModelLicenseInfo | null
+  readonly superResolutionModelLabel: string
   readonly isSuperResolutionInputFramesEditable: boolean
   readonly superResolutionInputFramesLabel: string
   readonly superResolutionInputFramesHint: string
@@ -139,6 +140,9 @@ export function useEnhanceForm(): EnhanceFormModel {
     ),
     superResolutionModelLicense: computed(
       () => readModel.value.superResolutionModelLicense,
+    ),
+    superResolutionModelLabel: computed(
+      () => readModel.value.superResolutionModelLabel,
     ),
     isSuperResolutionInputFramesEditable: computed(
       () => readModel.value.isSuperResolutionInputFramesEditable,

@@ -179,7 +179,7 @@ const { targetLabel } = useEditingScope()
         role="note"
       >
         <strong>非商业模型</strong>
-        <span>Real-RawVSR BasicVSR 仅限非商业研究与个人使用（{{ fields.superResolutionModelLicense.spdxId }}）。</span>
+        <span>{{ fields.superResolutionModelLabel }} 仅限非商业研究与个人使用（{{ fields.superResolutionModelLicense.spdxId }}）。</span>
         <a
           :href="fields.superResolutionModelLicense.sourceUrl"
           target="_blank"

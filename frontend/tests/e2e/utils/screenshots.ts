@@ -15,6 +15,9 @@ type E2EScreenshotName =
   | 'real-rawvsr-x2'
   | 'real-rawvsr-x3'
   | 'real-rawvsr-x4'
+  | 'real-rawvsr-edvr'
+  | 'real-rawvsr-tdan'
+  | 'real-rawvsr-toflow'
 
 export async function saveE2EScreenshot(name: E2EScreenshotName): Promise<string | null> {
   const configuredDirectory = process.env.VP_E2E_SCREENSHOT_DIR?.trim()

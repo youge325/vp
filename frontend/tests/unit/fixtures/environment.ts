@@ -300,9 +300,15 @@ export function createPpmsvsrAlgorithm(): AlgorithmInfo {
   })
 }
 
-export function createRealRawVsrBasicVsrAlgorithm(): AlgorithmInfo {
+function createRealRawVsrAlgorithm(
+  name: string,
+  displayName: string,
+  inputFrameMode: AlgorithmInfo['inputFrameMode'],
+  defaultNumFrames: number,
+  parameterCounts: readonly [number, number, number],
+): AlgorithmInfo {
   return createAlgorithmInfo({
-    name: 'real-rawvsr-basicvsr',
+    name,
     family: 'pytorch_vsr',
     tensorBackends: ['pytorch'],
     models: ['x2', 'x3', 'x4'],
@@ -312,25 +318,35 @@ export function createRealRawVsrBasicVsrAlgorithm(): AlgorithmInfo {
       usage: 'non_commercial',
       sourceUrl: 'https://github.com/zmzhang1998/Real-RawVSR',
     },
-    inputFrameMode: 'editable_chunk',
-    defaultNumFrames: 10,
-    modelDetails: [2, 3, 4].map(scale => ({
+    inputFrameMode,
+    defaultNumFrames,
+    modelDetails: [2, 3, 4].map((scale, index) => ({
       name: `x${scale}`,
-      label: `Real-RawVSR BasicVSR ${scale}x`,
+      label: `${displayName} ${scale}x`,
       metrics: {
-        parameterCount: scale * 1_000_000,
-        parameterBytes: scale * 4_000_000,
+        parameterCount: parameterCounts[index] ?? null,
+        parameterBytes: (parameterCounts[index] ?? 0) * 4,
         gflopsPerMegapixel: null,
         activationBytesPerMegapixel: null,
         runtimeOverheadBytes: null,
-        runtimeFrameCount: 10,
-        inputModulo: null,
+        runtimeFrameCount: defaultNumFrames,
+        inputModulo: inputFrameMode === 'fixed_window' ? 16 : null,
         analysisStatus: 'partial',
         analysisNotes: [],
         engineMetrics: {},
       },
     })),
   })
+}
+
+export function createRealRawVsrBasicVsrAlgorithm(): AlgorithmInfo {
+  return createRealRawVsrAlgorithm(
+    'real-rawvsr-basicvsr',
+    'Real-RawVSR BasicVSR',
+    'editable_chunk',
+    10,
+    [6_143_599, 6_328_239, 6_291_311],
+  )
 }
 
 export function createEnhanceEnvironment(): EnvironmentCheckResult {
@@ -358,6 +374,27 @@ export function createEnhanceEnvironment(): EnvironmentCheckResult {
     ],
     superResolutionAlgorithms: [
       createRealRawVsrBasicVsrAlgorithm(),
+      createRealRawVsrAlgorithm(
+        'real-rawvsr-edvr',
+        'Real-RawVSR EDVR',
+        'fixed_window',
+        5,
+        [3_152_419, 3_337_059, 3_300_131],
+      ),
+      createRealRawVsrAlgorithm(
+        'real-rawvsr-tdan',
+        'Real-RawVSR TDAN',
+        'fixed_window',
+        5,
+        [2_137_251, 2_321_891, 2_284_963],
+      ),
+      createRealRawVsrAlgorithm(
+        'real-rawvsr-toflow',
+        'Real-RawVSR TOFlow',
+        'fixed_window',
+        5,
+        [1_375_969, 1_375_969, 1_375_969],
+      ),
       createAlgorithmInfo({
         name: 'placeholder',
         tensorBackends: ['onnx'],

@@ -125,9 +125,10 @@ describe('enhance view-model rules', () => {
       currentSuperResolutionAlgorithm: algorithm,
     })
 
-    expect(model.superResolutionMetricRows[0]?.value).toBe('3.00M')
+    expect(model.superResolutionMetricRows[0]?.value).toBe('6.33M')
     expect(model.isSuperResolutionScaleLocked).toBe(false)
     expect(model.superResolutionModelLicense?.usage).toBe('non_commercial')
+    expect(model.superResolutionModelLabel).toBe('Real-RawVSR BasicVSR')
   })
 
   it('uses selected TensorRT engine metrics for super-resolution estimates', () => {

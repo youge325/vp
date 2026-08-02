@@ -26,6 +26,9 @@ describe('enhance algorithm bindings', () => {
     expect(bindings.interpolationOnnxModels.value).toEqual(['rife_v4.25.onnx'])
     expect(bindings.superResolutionAlgorithms.value.map((algorithm) => algorithm.name)).toEqual([
       'real-rawvsr-basicvsr',
+      'real-rawvsr-edvr',
+      'real-rawvsr-tdan',
+      'real-rawvsr-toflow',
     ])
     expect(bindings.superResolutionOnnxModels.value).toEqual([])
     expect(bindings.currentInterpolationAlgorithm.value?.name).toBe('rife')
