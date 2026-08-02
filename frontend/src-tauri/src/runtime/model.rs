@@ -101,6 +101,40 @@ pub(super) fn validate_real_rawvsr_bundle(
     Ok(())
 }
 
+pub(super) fn resolve_real_rawvsr_license_root<'a>(
+    runtime_root: Option<&'a Path>,
+    workspace_root: &'a Path,
+    model_dir: Option<&'a Path>,
+) -> &'a Path {
+    let model_parent = model_dir.and_then(Path::parent);
+    let model_grandparent = model_parent.and_then(Path::parent);
+    [
+        runtime_root,
+        Some(workspace_root),
+        model_parent,
+        model_grandparent,
+    ]
+    .into_iter()
+    .flatten()
+    .find(|root| has_real_rawvsr_license_files(root))
+    .or(runtime_root)
+    .unwrap_or(workspace_root)
+}
+
+fn has_real_rawvsr_license_files(root: &Path) -> bool {
+    [
+        REAL_RAWVSR_BASICVSR_LICENSE_PATH,
+        REAL_RAWVSR_BASICVSR_NOTICE_PATH,
+    ]
+    .into_iter()
+    .all(|relative_path| {
+        root.join(relative_path)
+            .metadata()
+            .map(|metadata| metadata.is_file() && metadata.len() > 0)
+            .unwrap_or(false)
+    })
+}
+
 fn validate_model_asset(model_dir: &Path, variant: &ModelAssetVariant) -> Result<(), String> {
     let relative_path = Path::new(variant.relative_path)
         .strip_prefix("models")
@@ -358,5 +392,32 @@ mod tests {
 
         let error = validate_real_rawvsr_bundle(Some(&models), temp.path()).unwrap_err();
         assert!(error.contains("BasicVSR x2 model is missing"));
+    }
+
+    #[test]
+    fn license_root_resolution_ignores_a_stale_runtime_cache() {
+        let temp = tempfile::tempdir().unwrap();
+        let runtime_root = temp.path().join("cached-runtime");
+        let workspace_root = temp.path().join("workspace");
+        let model_dir = workspace_root.join("backend").join("models");
+        std::fs::create_dir_all(&runtime_root).unwrap();
+        std::fs::create_dir_all(&model_dir).unwrap();
+        for relative_path in [
+            REAL_RAWVSR_BASICVSR_LICENSE_PATH,
+            REAL_RAWVSR_BASICVSR_NOTICE_PATH,
+        ] {
+            let path = workspace_root.join(relative_path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"license").unwrap();
+        }
+
+        assert_eq!(
+            resolve_real_rawvsr_license_root(
+                Some(runtime_root.as_path()),
+                workspace_root.as_path(),
+                Some(model_dir.as_path()),
+            ),
+            workspace_root.as_path()
+        );
     }
 }
