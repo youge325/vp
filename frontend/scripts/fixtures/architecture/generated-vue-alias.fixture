@@ -2,7 +2,7 @@
 import type { TaskErrorPayload } from '@/types/generated/contracts'
 
 type VueErrorMirror = TaskErrorPayload
-</script>
+</script >
 
 <template>
   <div />

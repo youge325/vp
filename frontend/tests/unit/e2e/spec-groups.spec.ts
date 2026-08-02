@@ -19,14 +19,53 @@ const listSpecFiles = (directory: string): string[] => readdirSync(directory, { 
 
 const matchesPattern = (path: string, pattern: string) => {
   const wildcard = '/**/'
-  if (!pattern.includes(wildcard)) {
+  const segments = pattern.split(wildcard)
+  const unsupported = () => new Error(`unsupported E2E spec pattern: ${pattern}`)
+  if (segments.length === 1) {
+    if (pattern.includes('*')) {
+      throw unsupported()
+    }
     return path === pattern
   }
-  const [prefix, suffix] = pattern.split(wildcard)
-  return path.startsWith(`${prefix}/`) && path.endsWith(suffix.replace('*', ''))
+  if (segments.length !== 2) {
+    throw unsupported()
+  }
+  const [prefix, wildcardSuffix] = segments
+  if (
+    !prefix
+    || prefix.includes('*')
+    || !wildcardSuffix.startsWith('*')
+    || wildcardSuffix.slice(1).includes('*')
+  ) {
+    throw unsupported()
+  }
+  return path.startsWith(`${prefix}/`) && path.endsWith(wildcardSuffix.slice(1))
 }
 
 describe('E2E spec grouping', () => {
+  it('matches only the supported exact and recursive spec pattern grammar', () => {
+    expect(matchesPattern(
+      './tests/e2e/app/smoke.spec.ts',
+      './tests/e2e/app/smoke.spec.ts',
+    )).toBe(true)
+    expect(matchesPattern(
+      './tests/e2e/home/nested/content.spec.ts',
+      './tests/e2e/home/**/*.spec.ts',
+    )).toBe(true)
+    expect(matchesPattern(
+      './tests/e2e/home/nested/content.ts',
+      './tests/e2e/home/**/*.spec.ts',
+    )).toBe(false)
+    expect(() => matchesPattern(
+      './tests/e2e/home/content.spec.ts',
+      './tests/e2e/home/**/*.*.ts',
+    )).toThrow('unsupported E2E spec pattern')
+    expect(() => matchesPattern(
+      './tests/e2e/home/nested/content.spec.ts',
+      './tests/e2e/**/nested/**/*.spec.ts',
+    )).toThrow('unsupported E2E spec pattern')
+  })
+
   it('covers every native spec exactly once in no more than ten sessions', () => {
     const specFiles = listSpecFiles(e2eRoot)
     expect(E2E_SPEC_GROUPS.length).toBeLessThanOrEqual(10)
