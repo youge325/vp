@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, extname, relative, resolve } from 'node:path'
 import process from 'node:process'
 import ts from 'typescript'
+import { parse as parseVueSfc } from 'vue/compiler-sfc'
 import {
   AMBIENT_SOURCE_ALLOWLIST,
   GENERATED_SOURCE_ALLOWLIST,
@@ -40,17 +41,20 @@ function parseTypeScriptSourcesFromText(path, source) {
     return []
   }
 
-  const entries = []
-  const scriptPattern = /<script\b([^>]*)>([\s\S]*?)<\/script>/giu
-  for (const [index, match] of [...source.matchAll(scriptPattern)].entries()) {
-    const attributes = match[1] ?? ''
-    const language = /\blang\s*=\s*["']tsx["']/iu.test(attributes) ? 'tsx' : 'ts'
-    if (!/\blang\s*=\s*["']tsx?["']/iu.test(attributes)) {
-      continue
-    }
-    entries.push(createTypeScriptEntry(`${path}.${index}.${language}`, path, match[2] ?? ''))
+  const { descriptor, errors } = parseVueSfc(source, { filename: path })
+  if (errors.length > 0) {
+    const messages = errors.map((error) => error instanceof Error ? error.message : String(error))
+    throw new Error(`Unable to parse ${path}: ${messages.join('; ')}`)
   }
-  return entries
+  return [descriptor.script, descriptor.scriptSetup]
+    .filter(Boolean)
+    .sort((left, right) => left.loc.start.offset - right.loc.start.offset)
+    .flatMap((block, index) => {
+      const language = block.lang?.toLowerCase()
+      return language === 'ts' || language === 'tsx'
+        ? [createTypeScriptEntry(`${path}.${index}.${language}`, path, block.content)]
+        : []
+    })
 }
 
 function createTypeScriptEntry(path, ownerPath, source) {
