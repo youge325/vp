@@ -23,7 +23,7 @@ graph LR
 NDJSON、错误码和持久化边界。源 schema 使用本地外部 `$ref` 复用结构，并为每个对象显式声明
 `additionalProperties`。
 
-[`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) schema version 3 是命令名、参数、
+[`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) schema version 5 是命令名、参数、
 返回值、事件名、Python task/one-shot envelope、stdin payload、期限、大小上限和两个诊断前缀的
 唯一清单。
 `python scripts/generate_contracts.py` 会：
@@ -142,7 +142,7 @@ envelope 或无关事件影响结果选择。
 超时、错误或 future drop 都会 kill-and-reap 其进程组/job。
 
 长任务 `process` 没有总时限，只受 10 秒 stdin、watchdog、terminal exit grace 和回收期限约束。
-manifest v4 的 transport limits 如下：
+manifest v5 的 transport limits 如下：
 
 | 限制 | 值 | 作用域 |
 |------|----|--------|

@@ -128,7 +128,7 @@ session 镜像。
 
 stderr 使用 400 行/64 KiB 滚动缓冲，写入 error details 前再截为 8 KiB。无结构化 backend error
 的崩溃会把摘要写入 `task-error.details.traceback`。每条 stdout/stderr 行上限为 1 MiB；这些大小、
-stdin/one-shot deadline 和 5 秒回收期限都来自 manifest v4 生成 spec。
+stdin/one-shot deadline 和 5 秒回收期限都来自 manifest v5 生成 spec。
 
 ## 取消状态
 

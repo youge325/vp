@@ -30,7 +30,7 @@ Rust 通过一次 `resolve_ffmpeg_tools()` 调用解析这对工具。bundle 只
 布局，不直接从 Tauri resource 根查找二进制。开发模式未解析到显式路径时，Python FFmpeg
 wrapper 仍可回退系统 PATH；release bundle 缺少工具时拒绝启动。
 
-**模型目录**：
+**模型目录**（变量名为兼容现有 RIFE 配置，实际是统一模型根）：
 1. `VP_RIFE_MODEL_DIR` 环境变量
 2. `resources/runtime/models/`
 3. 开发环境 `backend/models/`
@@ -88,7 +88,7 @@ Tauri 的 `app_handle.path()` API 自动处理各平台差异：
 | 文件名 | `environment-cache.json` | 同上 | 同上 |
 | 预设文件 | `workbench-preset.json` | 同上 | 同上 |
 
-环境缓存 schema 为 14，预设 schema 为 2。损坏或其他版本文件会改名为
+环境缓存 schema 为 15，预设 schema 为 2。损坏或其他版本文件会改名为
 `*.incompatible-<reason>-*.bak` 后重建，不做迁移或回退读取。release 无法解析应用数据目录时
 直接启动失败；不会退到 `%TEMP%` 或安装目录伪装持久化成功。
 
@@ -153,7 +153,15 @@ ONNX 引擎默认走 CUDA EP。启用 TensorRT EP：
 - **FFmpeg**：`resources/runtime/ffmpeg/bin/ffmpeg.exe` 和 `ffprobe.exe`
 - **默认 RIFE 模型**：文件名由 `contracts/application-defaults.json` 的模型版本派生，PyTorch 与
   ONNX 路径由 `scripts/runtime-tools.ps1` 统一构造并验证为非空文件
+- **Real-RawVSR BasicVSR**：三份 SafeTensors 位于
+  `models/super_resolution/pytorch/real-rawvsr-basicvsr/x{2,3,4}/model.safetensors`；尺寸、SHA-256、
+  Google Drive 来源与运行时路径只记录在 `contracts/model-assets.json`。发布准备必须显式传入
+  `--accept-noncommercial CC-BY-NC-SA-4.0-NONCOMMERCIAL`，同时打包许可与 NOTICE；应用运行时不联网下载
 - **Python 运行时（可选）**：`resources/runtime/python/python.exe`
+
+Windows portable 文件名带 `-noncommercial`。发布脚本要求系统/捆绑 Python 可导入 CUDA PyTorch 与
+SafeTensors，要求三份模型和两个许可文件完整，并拒绝 `.pth/.pt/.ckpt/.pickle`。受限模型与移植代码
+采用 CC BY-NC-SA 4.0，仅限非商业研究和个人使用；VP 自有代码继续采用 MIT。
 
 ### Dev vs Release 差异
 
