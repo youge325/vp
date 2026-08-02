@@ -658,10 +658,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn invalidates_environment_cache_with_schema_version_twelve() {
-        let dir = temp_dir("env-schema-v12");
+    async fn invalidates_environment_cache_with_previous_schema_version() {
+        let dir = temp_dir("env-schema-v14");
         let payload = serde_json::to_vec_pretty(&json!({
-            "schemaVersion": 12,
+            "schemaVersion": 14,
             "checkedAt": "2026-07-11T12:00:00Z",
             "fingerprint": "fingerprint-a",
             "result": sample_environment_result(),
@@ -675,7 +675,7 @@ mod tests {
         assert!(entry.is_none());
         assert!(has_quarantined_file(
             &dir,
-            "environment-cache.json.incompatible-v12-"
+            "environment-cache.json.incompatible-v14-"
         ));
     }
 

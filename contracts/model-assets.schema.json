@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vp-workbench.local/contracts/model-assets.schema.json",
+  "title": "VP Workbench model assets",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "realRawVsrBasicVsr"],
+  "properties": {
+    "$schema": { "const": "./model-assets.schema.json" },
+    "realRawVsrBasicVsr": { "$ref": "#/$defs/ModelAssetFamily" }
+  },
+  "$defs": {
+    "ModelLicense": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spdxId", "usage", "sourceUrl", "licenseRelativePath", "noticeRelativePath"],
+      "properties": {
+        "spdxId": { "const": "CC-BY-NC-SA-4.0" },
+        "usage": { "const": "non_commercial" },
+        "sourceUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "licenseRelativePath": { "const": "licenses/real-rawvsr-basicvsr/CC-BY-NC-SA-4.0.txt" },
+        "noticeRelativePath": { "type": "string", "pattern": "^licenses/[^/]+/NOTICE\\.md$" }
+      }
+    },
+    "ModelAssetVariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scaleFactor",
+        "googleDriveFileId",
+        "sourceBytes",
+        "sourceSha256",
+        "inferenceBytes",
+        "inferenceSha256",
+        "relativePath"
+      ],
+      "properties": {
+        "scaleFactor": { "type": "integer", "enum": [2, 3, 4] },
+        "googleDriveFileId": { "type": "string", "minLength": 10, "pattern": "^[A-Za-z0-9_-]+$" },
+        "sourceBytes": { "type": "integer", "minimum": 1 },
+        "sourceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "inferenceBytes": { "type": "integer", "minimum": 1 },
+        "inferenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "relativePath": {
+          "type": "string",
+          "pattern": "^models/super_resolution/pytorch/real-rawvsr-basicvsr/x[234]/model\\.safetensors$"
+        }
+      }
+    },
+    "ModelAssetFamily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithmId",
+        "family",
+        "displayName",
+        "defaultNumFrames",
+        "temporalContextFrames",
+        "license",
+        "variants"
+      ],
+      "properties": {
+        "algorithmId": { "const": "real-rawvsr-basicvsr" },
+        "family": { "const": "pytorch_vsr" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "defaultNumFrames": { "const": 10 },
+        "temporalContextFrames": { "const": 2 },
+        "license": { "$ref": "#/$defs/ModelLicense" },
+        "variants": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/ModelAssetVariant" }
+        }
+      }
+    }
+  }
+}

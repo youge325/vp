@@ -431,13 +431,24 @@
             "$ref": "#/$defs/ModelVariantInfo"
           }
         },
-        "fixedScaleFactor": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0
+        "scaleFactors": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          }
+        },
+        "modelLicense": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelLicenseInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "defaultNumFrames": {
           "type": [
@@ -459,7 +470,8 @@
         "onnxModels",
         "modelDetails",
         "onnxModelDetails",
-        "fixedScaleFactor",
+        "scaleFactors",
+        "modelLicense",
         "defaultNumFrames",
         "inputFrameMode"
       ],
@@ -470,8 +482,34 @@
       "enum": [
         "rife",
         "onnx_super_resolution",
-        "paddlegan_vsr"
+        "paddlegan_vsr",
+        "pytorch_vsr"
       ]
+    },
+    "ModelLicenseInfo": {
+      "type": "object",
+      "properties": {
+        "spdxId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "usage": {
+          "type": "string",
+          "enum": [
+            "non_commercial"
+          ]
+        },
+        "sourceUrl": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "spdxId",
+        "usage",
+        "sourceUrl"
+      ],
+      "additionalProperties": false
     },
     "ModelVariantInfo": {
       "type": "object",

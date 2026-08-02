@@ -1,6 +1,6 @@
 {
   "$schema": "./ipc-manifest.schema.json",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "protocolConstants": {
     "terminalProgressPrefix": "[VP_PROGRESS]",
     "stageWorkerEventPrefix": "VP_STAGE_EVENT ",

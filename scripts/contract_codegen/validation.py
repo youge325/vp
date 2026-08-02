@@ -8,6 +8,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from .context import CONTRACTS, _resolve_manifest_schema_ref
+from .model_assets import load_model_assets
 from .schema_composition import _render_boundary_schema, _render_stage_worker_schema
 from .schema_tools import (
     load_json as _load,
@@ -261,6 +262,7 @@ def validate_contracts() -> dict[str, Any]:
             source_schema=schema,
             schemas=loaded_schemas,
         )
+    load_model_assets(CONTRACTS)
 
     manifest_schema = _load(CONTRACTS / "ipc-manifest.schema.json")
     manifest = _load(CONTRACTS / "ipc-manifest.json")

@@ -41,6 +41,17 @@
       },
       "required": ["sr_algorithm", "engine", "num_frames"]
     },
+    "StageWorkerPytorchVsrKwargs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sr_algorithm": { "const": "real-rawvsr-basicvsr" },
+        "scale_factor": { "type": "integer", "enum": [2, 3, 4] },
+        "engine": { "const": "cuda" },
+        "num_frames": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["sr_algorithm", "scale_factor", "engine", "num_frames"]
+    },
     "StageWorkerFilterChainKwargs": {
       "type": "object",
       "additionalProperties": false,
@@ -79,6 +90,15 @@
       },
       "required": ["algorithm_type", "algorithm_kwargs"]
     },
+    "StageWorkerPytorchVsrStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm_type": { "const": "super_resolution" },
+        "algorithm_kwargs": { "$ref": "#/$defs/StageWorkerPytorchVsrKwargs" }
+      },
+      "required": ["algorithm_type", "algorithm_kwargs"]
+    },
     "StageWorkerFilterChainStep": {
       "type": "object",
       "additionalProperties": false,
@@ -93,6 +113,7 @@
         { "$ref": "#/$defs/StageWorkerInterpolationStep" },
         { "$ref": "#/$defs/StageWorkerOnnxSuperResolutionStep" },
         { "$ref": "#/$defs/StageWorkerPaddleSuperResolutionStep" },
+        { "$ref": "#/$defs/StageWorkerPytorchVsrStep" },
         { "$ref": "#/$defs/StageWorkerFilterChainStep" }
       ]
     },
@@ -115,7 +136,8 @@
             { "type": "null" }
           ]
         },
-        "outputFrameCount": { "type": "integer", "minimum": 0 }
+        "outputFrameCount": { "type": "integer", "minimum": 0 },
+        "outputFrameOffset": { "type": "integer", "minimum": 0, "default": 0 }
       },
       "required": [
         "stage",

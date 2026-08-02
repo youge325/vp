@@ -2,6 +2,7 @@
 #   filename:  stage-worker.schema.json
 
 from __future__ import annotations
+from enum import IntEnum, StrEnum
 from typing import Any, Literal
 from pydantic import (
     BaseModel as _BaseModel,
@@ -14,7 +15,6 @@ from pydantic import (
     conint,
     constr,
 )
-from enum import StrEnum
 
 
 class BaseModel(_BaseModel):
@@ -22,6 +22,30 @@ class BaseModel(_BaseModel):
         extra="forbid",
         populate_by_name=True,
     )
+
+
+class ScaleFactor(IntEnum):
+    INTEGER_2 = 2
+    INTEGER_3 = 3
+    INTEGER_4 = 4
+
+
+class StageWorkerPytorchVsrKwargs(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    sr_algorithm: Literal["real-rawvsr-basicvsr"]
+    scale_factor: ScaleFactor
+    engine: Literal["cuda"]
+    num_frames: conint(ge=1, strict=True)
+
+
+class StageWorkerPytorchVsrStep(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    algorithm_type: Literal["super_resolution"]
+    algorithm_kwargs: StageWorkerPytorchVsrKwargs
 
 
 class StageWorkerProgressEvent(BaseModel):
@@ -305,6 +329,7 @@ class StageWorkerConfig(BaseModel):
         StageWorkerInterpolationStep
         | StageWorkerOnnxSuperResolutionStep
         | StageWorkerPaddleSuperResolutionStep
+        | StageWorkerPytorchVsrStep
         | StageWorkerFilterChainStep
     )
     stage_index: conint(ge=1, strict=True) = Field(..., alias="stageIndex")
@@ -317,6 +342,7 @@ class StageWorkerConfig(BaseModel):
     input_frame_count: conint(ge=0, strict=True) = Field(..., alias="inputFrameCount")
     tensor_backend_name: TensorBackend | None = Field(..., alias="tensorBackendName")
     output_frame_count: conint(ge=0, strict=True) = Field(..., alias="outputFrameCount")
+    output_frame_offset: conint(ge=0, strict=True) = Field(default=0, alias="outputFrameOffset")
 
 
 class StageWorkerErrorEvent(BaseModel):

@@ -4,6 +4,7 @@
 from __future__ import annotations
 from enum import StrEnum
 from pydantic import (
+    AnyUrl,
     AwareDatetime,
     BaseModel as _BaseModel,
     ConfigDict,
@@ -31,6 +32,11 @@ class AlgorithmFamily(StrEnum):
     RIFE = "rife"
     ONNX_SUPER_RESOLUTION = "onnx_super_resolution"
     PADDLEGAN_VSR = "paddlegan_vsr"
+    PYTORCH_VSR = "pytorch_vsr"
+
+
+class ScaleFactor(RootModel[conint(ge=1, strict=True)]):
+    root: conint(ge=1, strict=True)
 
 
 class Profile(StrEnum):
@@ -233,6 +239,19 @@ class ModelEngineMetricInfo(BaseModel):
     input_modulo: conint(ge=0, strict=True) | None = Field(..., alias="inputModulo")
     analysis_status: StrictStr = Field(..., alias="analysisStatus")
     analysis_notes: list[StrictStr] = Field(..., alias="analysisNotes")
+
+
+class Usage(StrEnum):
+    NON_COMMERCIAL = "non_commercial"
+
+
+class ModelLicenseInfo(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    spdx_id: constr(min_length=1, strict=True) = Field(..., alias="spdxId")
+    usage: Usage
+    source_url: AnyUrl = Field(..., alias="sourceUrl")
 
 
 class ModelMetricInfo(BaseModel):
@@ -523,7 +542,8 @@ class AlgorithmInfo(BaseModel):
     onnx_models: list[StrictStr] = Field(..., alias="onnxModels")
     model_details: list[ModelVariantInfo] = Field(..., alias="modelDetails")
     onnx_model_details: list[ModelVariantInfo] = Field(..., alias="onnxModelDetails")
-    fixed_scale_factor: conint(ge=0, strict=True) | None = Field(..., alias="fixedScaleFactor")
+    scale_factors: list[ScaleFactor] = Field(..., alias="scaleFactors")
+    model_license: ModelLicenseInfo | None = Field(..., alias="modelLicense")
     default_num_frames: conint(ge=0, strict=True) | None = Field(..., alias="defaultNumFrames")
     input_frame_mode: InputFrameMode = Field(..., alias="inputFrameMode")
 
@@ -767,7 +787,7 @@ class EnvironmentCacheEntry(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    schema_version: Literal[14] = Field(..., alias="schemaVersion")
+    schema_version: Literal[15] = Field(..., alias="schemaVersion")
     checked_at: AwareDatetime = Field(..., alias="checkedAt")
     fingerprint: constr(min_length=1, strict=True)
     result: EnvironmentCheckResult
@@ -823,6 +843,7 @@ class VpBoundaryContracts(BaseModel):
     input_frame_mode: InputFrameMode = Field(..., alias="InputFrameMode")
     interpolation_config: InterpolationConfig = Field(..., alias="InterpolationConfig")
     model_engine_metric_info: ModelEngineMetricInfo = Field(..., alias="ModelEngineMetricInfo")
+    model_license_info: ModelLicenseInfo = Field(..., alias="ModelLicenseInfo")
     model_metric_info: ModelMetricInfo = Field(..., alias="ModelMetricInfo")
     model_variant_info: ModelVariantInfo = Field(..., alias="ModelVariantInfo")
     output_config: OutputConfig = Field(..., alias="OutputConfig")

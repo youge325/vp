@@ -1,6 +1,6 @@
 /* Generated from contracts/boundary.schema.json. Do not edit. */
 
-export type AlgorithmFamily = "rife" | "onnx_super_resolution" | "paddlegan_vsr";
+export type AlgorithmFamily = "rife" | "onnx_super_resolution" | "paddlegan_vsr" | "pytorch_vsr";
 export type TensorBackend = "pytorch" | "paddle" | "onnx";
 export type InputFrameMode = "none" | "editable_chunk" | "fixed_window";
 export type BackendTaskErrorCode =
@@ -109,6 +109,7 @@ export interface VpBoundaryContracts {
   InputFrameMode: InputFrameMode;
   InterpolationConfig: InterpolationConfig;
   ModelEngineMetricInfo: ModelEngineMetricInfo;
+  ModelLicenseInfo: ModelLicenseInfo;
   ModelMetricInfo: ModelMetricInfo;
   ModelVariantInfo: ModelVariantInfo;
   OutputConfig: OutputConfig;
@@ -157,7 +158,8 @@ export interface AlgorithmInfo {
   onnxModels: string[];
   modelDetails: ModelVariantInfo[];
   onnxModelDetails: ModelVariantInfo[];
-  fixedScaleFactor: number | null;
+  scaleFactors: number[];
+  modelLicense: ModelLicenseInfo | null;
   defaultNumFrames: number | null;
   inputFrameMode: InputFrameMode;
 }
@@ -188,6 +190,11 @@ export interface ModelEngineMetricInfo {
   inputModulo: number | null;
   analysisStatus: string;
   analysisNotes: string[];
+}
+export interface ModelLicenseInfo {
+  spdxId: string;
+  usage: "non_commercial";
+  sourceUrl: string;
 }
 export interface AnimeCleanupFilterParams {
   profile?: "clean-lines" | "thin-outline" | "balanced-cel";
@@ -296,7 +303,7 @@ export interface RateControlConfig {
   value: string | number;
 }
 export interface EnvironmentCacheEntry {
-  schemaVersion: 14;
+  schemaVersion: 15;
   checkedAt: string;
   fingerprint: string;
   result: EnvironmentCheckResult;
