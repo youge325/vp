@@ -69,7 +69,7 @@ graph TD
 ```
 
 `stage-worker` 通过参数接收生成的 `StageWorkerConfig`，只消费 stdin rawvideo、输出 stdout
-rawvideo，并在 stderr 以 manifest v5 的 `stageWorkerEventPrefix` 上报生成的 progress/error event。
+rawvideo，并在 stderr 以 manifest v6 的 `stageWorkerEventPrefix` 上报生成的 progress/error event。
 父进程对单行设置 1 MiB 上限并只解析该前缀后的 JSON；FFmpeg decoder/encoder 与 finalization
 port 由父流水线消费，worker 不穿透 adapter。
 
@@ -202,11 +202,12 @@ stage-file 执行路径不再各自维护判断函数；resume/chunk 只投影�
 | `superResolution.enabled` | `super_resolution.enabled` | `super_resolution.enabled` | 启用超分辨率 |
 | `superResolution.scaleFactor` | `super_resolution.scale_factor` | `super_resolution.scale_factor` | 放大倍数 |
 | `superResolution.onnxModel` | `super_resolution.onnx_model` | `super_resolution.onnx_model` | ONNX 模型路径 |
-| `superResolution.numFrames` | `super_resolution.num_frames` | `super_resolution.num_frames` | 序列超分逻辑帧块大小；BasicVSR 默认 10 |
+| `superResolution.numFrames` | `super_resolution.num_frames` | `super_resolution.num_frames` | BasicVSR 逻辑帧块默认 10；EDVR/TDAN/TOFlow 固定窗口为 5 |
 
-Real-RawVSR BasicVSR 的 2×/3×/4×都从算法元数据 `scaleFactors` 选择。StagePlan 只保存逻辑阶段，
-stage-file chunk 在分段边界读取前后各 2 帧上下文，并通过生成的 `outputFrameOffset` 告知 worker
-只写逻辑帧；内部 10 帧切片复用同一纯规划器，所以分段、恢复与正常路径不会重复推算裁剪规则。
+四种 Real-RawVSR RGB 算法的 2×/3×/4×都从算法元数据 `scaleFactors` 选择。StagePlan 只保存逻辑阶段，
+stage-file chunk 在分段边界读取前后各 2 帧上下文，并通过生成的 `outputFrameOffset` 告知 worker只写
+逻辑帧。BasicVSR 内部 10 帧切片复用同一纯规划器；固定窗口模型直接从收到的帧序列投影中心窗口，
+分段、恢复与正常路径不重复推算上下文或裁剪规则。
 
 ### 输出参数
 

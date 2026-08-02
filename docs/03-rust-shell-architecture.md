@@ -31,7 +31,7 @@ crate 内部接口；命令是否可由前端调用由 Tauri handler 与权限�
 
 根目录 `contracts/ipc-manifest.json` 是命令名、参数、返回值和事件名的唯一清单。生成脚本产出 Rust build manifest 与前端类型化 invoke 映射；架构门禁再与 `generate_handler!` 和 Tauri permissions 比对。
 
-manifest v5 还声明长任务与 one-shot 的 Python subcommand、stdin payload、success/event 类型、
+manifest v6 还声明长任务与 one-shot 的 Python subcommand、stdin payload、success/event 类型、
 discriminator、期限和统一大小上限。`generated/backend_oneshot.rs` 将每个应用命令生成成 sealed
 `BackendProcessSpec` / `BackendOneShotSpec`；调用方选择 `StartTaskSpec`、`InspectVideoSpec`、
 `CheckEnvironmentSpec` 或 `CheckResumeStateSpec`，不维护平行命令表或 timeout 常量。
@@ -125,7 +125,7 @@ schema mismatch。`check`/`info` 的 transport-only `type` 在反序列化前移
 | 终止与回收 | 5 秒 |
 
 这些值以及 1 MiB pipe 行、8 MiB one-shot stdout、64 KiB stderr tail 和 8 KiB error summary
-都来自 manifest v5；`process` 与每个 one-shot 条目显式绑定 `terminationReapLimit`，Rust 生产代码只消费
+都来自 manifest v6；`process` 与每个 one-shot 条目显式绑定 `terminationReapLimit`，Rust 生产代码只消费
 各 sealed spec 生成的期限。
 
 ### 任务状态机与启动租约
@@ -219,7 +219,7 @@ supervisor 在一个 `tokio::select!` 循环中并发处理 reader 消息、进�
 ### NDJSON 信封解析
 
 [`frontend/src-tauri/src/tasks/envelope.rs`](../frontend/src-tauri/src/tasks/envelope.rs) 复用
-`generated/backend_task_envelope.rs` 中从 manifest v5 生成的四 variant enum，不再手写
+`generated/backend_task_envelope.rs` 中从 manifest v6 生成的四 variant enum，不再手写
 `progress / completed / error / resume_status` 镜像。
 
 `classify_line()` 是生产 reader 与测试共同覆盖的唯一 classifier。合法 envelope 被解析为类型化
@@ -264,7 +264,7 @@ supervisor 生成 `runtime_panic` 并把摘要放进 `details.traceback`；reade
 - `commands.rs` — `load_workbench_preset` / `save_workbench_preset` 命令体
 
 持久化数据包括：
-- **环境检查缓存 schema 15**（`environment-cache.json`）— 带包含 TensorRT 的 fingerprint
+- **环境检查缓存 schema 16**（`environment-cache.json`）— 带包含 TensorRT 的 fingerprint
 - **工作台预设 schema 2**（`workbench-preset.json`）— 用户当前编辑的完整配置快照
 
 两个 envelope 类型由 `contracts/persistence.schema.json` 经 Typify 生成，版本常量由
@@ -300,7 +300,7 @@ Tauri 对象，并使用最小 CSP：`script-src 'self'`，`connect-src` 仅 Tau
 - 缓存优先策略：若 fingerprint（运行时路径哈希）未变，直接返回缓存结果
 - 首次或强制刷新时，通过 `oneshot.rs` 运行 `python -m app check` 子命令
 - 输出结构仅包含 UI 消费的 FFmpeg 能力、GPU adapter `name/vendor`、三个 backend 的实际 `tensorEngines`、算法能力元数据和 `runtimeMode`；Windows 虚拟显示适配器在 Python 系统探测边界过滤，UI 与 FFmpeg 能力探测共享同一结果
-- 环境缓存使用 schema 15；版本不匹配或损坏缓存会隔离，fingerprint 变化或 force refresh 会重新探测
+- 环境缓存使用 schema 16；版本不匹配或损坏缓存会隔离，fingerprint 变化或 force refresh 会重新探测
 
 ```mermaid
 sequenceDiagram

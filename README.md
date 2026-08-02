@@ -171,10 +171,12 @@ Release 构建默认不打包 Python 运行时。应用启动时按以下优先�
 $env:VP_PYTHON_EXECUTABLE = "D:\Python312\python.exe"
 ```
 
-默认超分算法是 Real-RawVSR RGB BasicVSR 2×，可切换 2×/3×/4×，仅支持 Windows NVIDIA CUDA。
-发行包名带 `-noncommercial`，三份推理权重采用 SafeTensors，受 CC BY-NC-SA 4.0 限制，只能用于
+默认超分算法是 Real-RawVSR RGB BasicVSR 2×；也可选择 EDVR、TDAN 或 TOFlow，四种算法均支持
+2×/3×/4×，仅支持 Windows NVIDIA CUDA。发行包名带 `-noncommercial`，12 份推理权重采用
+SafeTensors，受 CC BY-NC-SA 4.0 限制，只能用于
 非商业研究和个人用途；VP 自有代码仍使用 MIT。运行时不会联网下载模型，缺失、尺寸或 SHA-256
-不匹配会直接拒绝启动/处理。外部 Python 环境必须安装 `torch`（CUDA 版）和 `safetensors`。
+不匹配会直接拒绝启动/处理。外部 Python 环境必须安装 CUDA 版 `torch`、匹配的 `torchvision` 和
+`safetensors`。
 
 ### TensorRT 加速（可选）
 
@@ -196,7 +198,7 @@ ONNX 引擎默认走 CUDA EP。若想启用 TensorRT EP 拿到额外性能，需
 - [RIFE](https://github.com/hzwer/ECCV2022-RIFE)
 - [Practical-RIFE](https://github.com/hzwer/Practical-RIFE)
 - [vs-rife](https://github.com/HolyWu/vs-rife)
-- [Real-RawVSR](https://github.com/zmzhang1998/Real-RawVSR)（BasicVSR 模型，非商业许可）
+- [Real-RawVSR](https://github.com/zmzhang1998/Real-RawVSR)（BasicVSR、EDVR、TDAN、TOFlow，非商业许可）
 
 **框架与工具**
 

@@ -88,7 +88,7 @@ Tauri 的 `app_handle.path()` API 自动处理各平台差异：
 | 文件名 | `environment-cache.json` | 同上 | 同上 |
 | 预设文件 | `workbench-preset.json` | 同上 | 同上 |
 
-环境缓存 schema 为 15，预设 schema 为 2。损坏或其他版本文件会改名为
+环境缓存 schema 为 16，预设 schema 为 2。损坏或其他版本文件会改名为
 `*.incompatible-<reason>-*.bak` 后重建，不做迁移或回退读取。release 无法解析应用数据目录时
 直接启动失败；不会退到 `%TEMP%` 或安装目录伪装持久化成功。
 
@@ -153,14 +153,16 @@ ONNX 引擎默认走 CUDA EP。启用 TensorRT EP：
 - **FFmpeg**：`resources/runtime/ffmpeg/bin/ffmpeg.exe` 和 `ffprobe.exe`
 - **默认 RIFE 模型**：文件名由 `contracts/application-defaults.json` 的模型版本派生，PyTorch 与
   ONNX 路径由 `scripts/runtime-tools.ps1` 统一构造并验证为非空文件
-- **Real-RawVSR BasicVSR**：三份 SafeTensors 位于
-  `models/super_resolution/pytorch/real-rawvsr-basicvsr/x{2,3,4}/model.safetensors`；尺寸、SHA-256、
-  Google Drive 来源与运行时路径只记录在 `contracts/model-assets.json`。发布准备必须显式传入
-  `--accept-noncommercial CC-BY-NC-SA-4.0-NONCOMMERCIAL`，同时打包许可与 NOTICE；应用运行时不联网下载
+- **Real-RawVSR RGB**：BasicVSR、EDVR、TDAN、TOFlow 各三份 SafeTensors 位于
+  `models/super_resolution/pytorch/<算法>/x{2,3,4}/model.safetensors`；尺寸、SHA-256、参数量、Google
+  Drive 来源、时间策略与运行时路径只记录在 `contracts/model-assets.json`。发布准备必须显式传入
+  `--accept-noncommercial CC-BY-NC-SA-4.0-NONCOMMERCIAL`，同时打包共享许可、NOTICE 与第三方声明；应用
+  运行时不联网下载
 - **Python 运行时（可选）**：`resources/runtime/python/python.exe`
 
-Windows portable 文件名带 `-noncommercial`。发布脚本要求系统/捆绑 Python 可导入 CUDA PyTorch 与
-SafeTensors，要求三份模型和两个许可文件完整，并拒绝 `.pth/.pt/.ckpt/.pickle`。受限模型与移植代码
+Windows portable 文件名带 `-noncommercial`。发布脚本要求系统/捆绑 Python 的 CUDA PyTorch 与
+torchvision deform-conv 能实际执行，并可导入 SafeTensors；要求 12 份模型和三份许可/声明文件完整，
+并拒绝 `.pth/.pt/.ckpt/.pickle`。受限模型与移植代码
 采用 CC BY-NC-SA 4.0，仅限非商业研究和个人使用；VP 自有代码继续采用 MIT。
 
 ### Dev vs Release 差异
