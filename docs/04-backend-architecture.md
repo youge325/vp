@@ -105,6 +105,12 @@ filter chain，不保存 `changes_dimensions` 镜像布尔值。`algorithm_capab
 模型文件存在性由消费方定义的 `ModelAvailabilityPort` 注入，production adapter 才访问文件系统
 和运行时路径，因此纯规划测试可只提供 fake port。
 
+滤镜参数在 [`backend/app/catalog/filter_parameters.py`](../backend/app/catalog/filter_parameters.py)
+唯一规范化：把公共 wire 中允许缺省的部分参数与生成的产品默认合并，再由生成 Pydantic 参数模型
+执行范围、枚举和格式校验。几何投影与 `FrameFilterChainAlgorithm` 消费同一份不可变完整参数；
+OpenCV handler 和 Anime Cleanup 底层算法不再自行选择默认值。超分 descriptor 必须接收明确且合法的
+算法名，只有显式注册的动态 ONNX 路由可以进入执行层。
+
 ### 配置签名
 
 [`backend/app/planning/run_identity.py`](../backend/app/planning/run_identity.py) 的
@@ -163,6 +169,8 @@ graph LR
 `StageProjection.resolve_workflow()` 在 composition root 对已校验 workflow 解析一次步骤顺序和
 target FPS。preflight 随后把完整投影物化为 `StagePlan.stages`；执行路径不再持有 projection 或
 第二份 steps，也不接受 algorithm override 或为 CLI 构造备用 stage。
+Projection 对插帧、超分与 filter-chain 使用穷尽的窄算法联合；CLI 错误详情直接从最终
+`StagePlan.processing_steps` 派生主算法，不维护第二套 workflow-step helper。
 
 `process_video_streaming()` 在 preflight 和 manifest 准备完成后只构造一次不可变的
 `StreamingPipelineContext`。dispatch、raw/stage-file runtime 与最终 lifecycle 共享同一对象；
@@ -268,7 +276,8 @@ factory、stage runtime 和 execution loop 共享 `Algorithm` union、`ITensorBa
 再展开为原有扁平协议，模型与 TensorRT 指标不复制字段集合。
 
 帧滤镜链由 `FrameFilterChainAlgorithm` 负责验证、顺序执行和 CPU/Tensor fallback；
-具体滤镜实现与支持能力集中在 `frame_filter_handlers.py` 的单一不可变 descriptor registry 中。
+完整参数由单一规范化入口在构造阶段冻结，几何规划和实际执行共同消费；具体滤镜实现与支持能力
+集中在 `frame_filter_handlers.py` 的单一不可变 descriptor registry 中。
 每种滤镜只注册一次 NumPy handler，并按实际能力选择性声明 Tensor handler 与 capability predicate；不维护平行 kind 列表或运行时全局注册表。
 
 ### RIFE 补帧家族
