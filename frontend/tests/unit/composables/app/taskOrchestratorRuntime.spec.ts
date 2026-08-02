@@ -72,14 +72,19 @@ describe('taskOrchestratorRuntime', () => {
     expect(listeners['task-resume-status']).toEqual(expect.any(Function))
   })
 
-  it('projects the edited media item into the actual start request at the composition root', async () => {
+  it.each([
+    ['real-rawvsr-basicvsr', 7],
+    ['real-rawvsr-edvr', 5],
+    ['real-rawvsr-tdan', 5],
+    ['real-rawvsr-toflow', 5],
+  ])('projects %s into the actual start request at the composition root', async (algorithm, numFrames) => {
     const presetStore = usePresetStore()
     presetStore.patchWorkflow((workflow) => {
-      workflow.superResolution.algorithm = 'real-rawvsr-basicvsr'
+      workflow.superResolution.algorithm = algorithm
       workflow.superResolution.tensorBackend = 'pytorch'
       workflow.superResolution.engine = 'cuda'
       workflow.superResolution.scaleFactor = 3
-      workflow.superResolution.numFrames = 7
+      workflow.superResolution.numFrames = numFrames
     })
     const item = createMediaItem('/video/request.mp4', presetStore.draftPreset)
     useMediaStore().appendItems([item])
@@ -96,11 +101,11 @@ describe('taskOrchestratorRuntime', () => {
     expect(taskIpc.checkResume).toHaveBeenCalledWith(expected)
     expect(taskIpc.start).toHaveBeenCalledWith(expected)
     expect(expected.workflowConfig.superResolution).toMatchObject({
-      algorithm: 'real-rawvsr-basicvsr',
+      algorithm,
       tensorBackend: 'pytorch',
       engine: 'cuda',
       scaleFactor: 3,
-      numFrames: 7,
+      numFrames,
     })
   })
 

@@ -192,48 +192,87 @@ export async function setDeterministicRealRawVsrState(scaleFactor: 2 | 3 | 4 = 2
       return false
     }
 
-    const metric = (name: string, scale: number, parameters: number) => ({
+    const metric = (displayName: string, name: string, scale: number, parameters: number, frames: number) => ({
       name,
-      label: `Real-RawVSR BasicVSR ${scale}x`,
+      label: `${displayName} ${scale}x`,
       metrics: {
         parameterCount: parameters,
         parameterBytes: parameters * 4,
         gflopsPerMegapixel: null,
         activationBytesPerMegapixel: null,
         runtimeOverheadBytes: null,
-        runtimeFrameCount: null,
-        inputModulo: 1,
+        runtimeFrameCount: frames,
+        inputModulo: frames === 5 ? 16 : null,
         analysisStatus: 'partial',
         analysisNotes: ['PyTorch CUDA sequence inference; actual memory depends on the logical frame chunk.'],
         engineMetrics: {},
       },
+    })
+    const license = {
+      spdxId: 'CC-BY-NC-SA-4.0',
+      usage: 'non_commercial',
+      sourceUrl: 'https://github.com/zmzhang1998/Real-RawVSR',
+    }
+    const algorithm = (
+      name: string,
+      displayName: string,
+      frames: number,
+      inputFrameMode: 'editable_chunk' | 'fixed_window',
+      parameters: readonly [number, number, number],
+    ) => ({
+      name,
+      family: 'pytorch_vsr',
+      tensorBackends: ['pytorch'],
+      models: ['x2', 'x3', 'x4'],
+      onnxModels: [],
+      modelDetails: [2, 3, 4].map((scale, index) => metric(
+        displayName,
+        `x${scale}`,
+        scale,
+        parameters[index] ?? 0,
+        frames,
+      )),
+      onnxModelDetails: [],
+      scaleFactors: [2, 3, 4],
+      modelLicense: license,
+      defaultNumFrames: frames,
+      inputFrameMode,
     })
     envStore.env.checkResult = {
       ffmpeg: { available: true, hwaccels: [], encoderProfiles: [], decoderProfiles: [] },
       gpu: { adapters: [{ name: 'NVIDIA GeForce RTX', vendor: 'nvidia' }] },
       tensorEngines: { pytorch: ['cuda'], paddle: [], onnx: [] },
       interpolationAlgorithms: [],
-      superResolutionAlgorithms: [{
-        name: 'real-rawvsr-basicvsr',
-        family: 'pytorch_vsr',
-        tensorBackends: ['pytorch'],
-        models: ['x2', 'x3', 'x4'],
-        onnxModels: [],
-        modelDetails: [
-          metric('x2', 2, 6_143_599),
-          metric('x3', 3, 6_328_239),
-          metric('x4', 4, 6_291_311),
-        ],
-        onnxModelDetails: [],
-        scaleFactors: [2, 3, 4],
-        modelLicense: {
-          spdxId: 'CC-BY-NC-SA-4.0',
-          usage: 'non_commercial',
-          sourceUrl: 'https://github.com/zmzhang1998/Real-RawVSR',
-        },
-        defaultNumFrames: 10,
-        inputFrameMode: 'editable_chunk',
-      }],
+      superResolutionAlgorithms: [
+        algorithm(
+          'real-rawvsr-basicvsr',
+          'Real-RawVSR BasicVSR',
+          10,
+          'editable_chunk',
+          [6_143_599, 6_328_239, 6_291_311],
+        ),
+        algorithm(
+          'real-rawvsr-edvr',
+          'Real-RawVSR EDVR',
+          5,
+          'fixed_window',
+          [3_152_419, 3_337_059, 3_300_131],
+        ),
+        algorithm(
+          'real-rawvsr-tdan',
+          'Real-RawVSR TDAN',
+          5,
+          'fixed_window',
+          [2_137_251, 2_321_891, 2_284_963],
+        ),
+        algorithm(
+          'real-rawvsr-toflow',
+          'Real-RawVSR TOFlow',
+          5,
+          'fixed_window',
+          [1_375_969, 1_375_969, 1_375_969],
+        ),
+      ],
       runtimeMode: 'bundled',
     }
     envStore.env.isChecking = false

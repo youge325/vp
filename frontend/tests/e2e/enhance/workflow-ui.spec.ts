@@ -121,6 +121,8 @@ test.describe('Workflow module UI', () => {
     await openWorkflow(tauriPage)
 
     const section = workflowSection(tauriPage, '超分')
+    const algorithm = section.locator('label.field').filter({ hasText: '算法' }).locator('select')
+    expect((await algorithm.locator('option').allTextContents()).length).toBe(4)
     const scale = section.locator('label.field').filter({ hasText: '倍率' }).locator('select')
     await expect(scale.locator('option')).toHaveCount(3)
     expect(await scale.locator('option').allTextContents()).toEqual(['2x', '3x', '4x'])
@@ -138,6 +140,20 @@ test.describe('Workflow module UI', () => {
         parameterLabels[factor],
       )
       await saveE2EScreenshot(`real-rawvsr-x${factor}`)
+    }
+
+    for (const [algorithmId, label, screenshot] of [
+      ['real-rawvsr-edvr', 'Real-RawVSR EDVR', 'real-rawvsr-edvr'],
+      ['real-rawvsr-tdan', 'Real-RawVSR TDAN', 'real-rawvsr-tdan'],
+      ['real-rawvsr-toflow', 'Real-RawVSR TOFlow', 'real-rawvsr-toflow'],
+    ] as const) {
+      await algorithm.selectOption(algorithmId)
+      await expect(algorithm).toHaveValue(algorithmId)
+      await expect(license).toContainText(label)
+      await expect(tauriPage.locator('.model-metric-grid[aria-label="超分固定窗口"]')).toContainText(
+        '5 帧（固定）',
+      )
+      await saveE2EScreenshot(screenshot)
     }
   })
 })

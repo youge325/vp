@@ -19,7 +19,6 @@ import {
 } from '@/services/model-metric-rows'
 import {
   fixedRuntimeFrameCount,
-  isPaddleGanVsrAlgorithm,
   superResolutionInputFrameMode,
 } from './enhance-algorithm-capabilities'
 
@@ -36,6 +35,7 @@ export interface EnhanceReadModel {
   superResolutionOnnxModelDetails: ModelVariantInfo[]
   isSuperResolutionScaleLocked: boolean
   superResolutionModelLicense: ModelLicenseInfo | null
+  superResolutionModelLabel: string
   isSuperResolutionInputFramesEditable: boolean
   effectiveSuperResolutionNumFrames: number
   superResolutionFixedWindowRows: MetricRow[]
@@ -90,7 +90,6 @@ export function buildEnhanceReadModel({
     workflow.superResolution.engine,
   )
 
-  const isPaddleGanSuperResolution = isPaddleGanVsrAlgorithm(currentSuperResolutionAlgorithm)
   const isSuperResolutionScaleLocked = currentSuperResolutionAlgorithm?.scaleFactors.length === 1
   const isSuperResolutionInputFramesEditable =
     superResolutionInputFrameMode(currentSuperResolutionAlgorithm) === 'editable_chunk'
@@ -99,9 +98,14 @@ export function buildEnhanceReadModel({
     ?? workflow.superResolution.numFrames
     ?? APPLICATION_DEFAULTS.superResolution.numFrames
   const superResolutionFixedWindowRows =
-    isPaddleGanSuperResolution && !isSuperResolutionInputFramesEditable
+    superResolutionInputFrameMode(currentSuperResolutionAlgorithm) === 'fixed_window'
       ? [{ label: '邻帧窗口', value: `${effectiveSuperResolutionNumFrames} 帧（固定）` }]
       : []
+  const selectedScaleSuffix = ` ${workflow.superResolution.scaleFactor}x`
+  const selectedModelLabel = superResolutionDetail?.label?.trim() ?? ''
+  const superResolutionModelLabel = selectedModelLabel.endsWith(selectedScaleSuffix)
+    ? selectedModelLabel.slice(0, -selectedScaleSuffix.length)
+    : currentSuperResolutionAlgorithm?.name ?? '当前超分模型'
 
   const interpolationInputDimensions =
     activeVideoDimensions
@@ -141,6 +145,7 @@ export function buildEnhanceReadModel({
     superResolutionOnnxModelDetails,
     isSuperResolutionScaleLocked,
     superResolutionModelLicense: currentSuperResolutionAlgorithm?.modelLicense ?? null,
+    superResolutionModelLabel,
     isSuperResolutionInputFramesEditable,
     effectiveSuperResolutionNumFrames,
     superResolutionFixedWindowRows,

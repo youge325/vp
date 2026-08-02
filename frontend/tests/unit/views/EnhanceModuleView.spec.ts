@@ -58,10 +58,34 @@ describe('EnhanceModuleView super-resolution frame wording', () => {
     expect(wrapper.text()).toContain('3x')
     expect(wrapper.text()).toContain('4x')
     expect(wrapper.text()).toContain('非商业模型')
+    expect(wrapper.text()).toContain('Real-RawVSR BasicVSR')
     expect(wrapper.text()).toContain('仅限非商业研究与个人使用')
     expect(wrapper.get('.model-license-banner a').attributes('href')).toBe(
       'https://github.com/zmzhang1998/Real-RawVSR',
     )
+  })
+
+  it.each([
+    ['real-rawvsr-edvr', 'Real-RawVSR EDVR'],
+    ['real-rawvsr-tdan', 'Real-RawVSR TDAN'],
+    ['real-rawvsr-toflow', 'Real-RawVSR TOFlow'],
+  ])('shows %s as a licensed fixed five-frame model', (algorithm, label) => {
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.superResolution.enabled = true
+      workflow.superResolution.tensorBackend = 'pytorch'
+      workflow.superResolution.algorithm = algorithm
+      workflow.superResolution.scaleFactor = 4
+    })
+
+    const wrapper = mount(EnhanceModuleView)
+
+    expect(wrapper.text()).toContain(label)
+    expect(wrapper.text()).toContain('5 帧（固定）')
+    expect(wrapper.text()).not.toContain('每块输入帧数')
+    expect(wrapper.text()).toContain('2x')
+    expect(wrapper.text()).toContain('3x')
+    expect(wrapper.text()).toContain('4x')
   })
 
 })

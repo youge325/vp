@@ -1,7 +1,7 @@
 // pure: no Vue / no Pinia / no Tauri
 // Super-resolution workflow mutation defaults for selected algorithms.
 
-import type { AlgorithmInfo, EnvironmentCheckResult } from '@/types/protocol'
+import { APPLICATION_DEFAULTS, type AlgorithmInfo, type EnvironmentCheckResult } from '@/types/protocol'
 import type { WorkflowConfig } from '@/types/protocol'
 import {
   fixedRuntimeFrameCount,
@@ -36,7 +36,7 @@ export function applySuperResolutionAlgorithmDefaults(
       fixedRuntimeFrameCount(algorithm) ??
       algorithm.defaultNumFrames ??
       config.superResolution.numFrames ??
-      10
+      APPLICATION_DEFAULTS.superResolution.numFrames
     return
   }
 
