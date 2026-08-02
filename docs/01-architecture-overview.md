@@ -100,15 +100,17 @@ Rust 与 Python 之间的通信不通过 HTTP 或 gRPC，而是通过子进程 s
 产品默认值；它不属于 IPC，也不改变任何持久化版本。滤镜默认参数通过 `allOf` 复用
 `filter-step.schema.json` 的范围、枚举和格式约束：应用默认契约只拥有值，Filter Step schema 只拥有
 约束，公共 `FilterStep` 参数仍保持可选。
-IPC manifest v4 同时声明 10 个 Tauri command、6 个任务事件、七类 Python envelope、长任务与
+IPC manifest v5 同时声明 10 个 Tauri command、6 个任务事件、七类 Python envelope、长任务与
 one-shot 的 stdin/期限策略、协议大小上限，以及终端、TensorRT 日志和内部 stage-worker 三个前缀。
 `scripts/generate_contracts.py` 是薄 CLI，schema 组合、验证和语言 renderer 位于
 `scripts/contract_codegen/`。它生成严格的聚合边界 schema、stage-worker 专用 Pydantic 边界、单一
-TypeScript 绑定、Rust 命令/事件/子进程 spec，以及三种语言的只读应用默认常量。前端还生成滤镜
+TypeScript 绑定、Rust 命令/事件/子进程 spec，以及三种语言的只读应用默认常量。独立的
+`model-assets.json` 唯一记录 Real-RawVSR BasicVSR 三倍率的来源 ID、源/推理哈希、运行时路径与
+非商业许可；它生成 Python/Rust 只读绑定，PowerShell 发布工具直接读取同一数据文件。前端还生成滤镜
 字段约束元数据，catalog 与表单不再镜像 `minimum`、`maximum`、`enum` 或 `pattern`；one-shot 和长任务
 调用方只选择生成 spec，不维护平行的 subcommand、payload、期限或 discriminator 条件链。
 Rust 通过 Typify 直接消费同一聚合 schema。生成文件禁止
-手工修改，CI 逐字节检查 freshness。非 schema 14 的环境缓存会被隔离并重新探测。
+手工修改，CI 逐字节检查 freshness。非 schema 15 的环境缓存会被隔离并重新探测。
 
 源 schema 通过本地外部 `$ref` 复用结构，并为每个对象显式声明 `additionalProperties`。生成器会先用
 JSON Schema 2020-12 校验 schema、引用目标、IPC manifest 和错误码子集，再把依赖内联到
@@ -245,7 +247,7 @@ graph LR
     I --> I1[ffmpeg/ + logger + system_probe + onnx_models + dll_paths]
     K --> K1[consumer-owned media Protocols]
     L --> L1[FFmpegMediaAdapter]
-    M --> M1[RIFE + PaddleGAN neutral metadata]
+    M --> M1[RIFE + PaddleGAN + Real-RawVSR neutral metadata]
 ```
 
 ## 核心文件索引

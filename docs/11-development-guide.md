@@ -81,6 +81,8 @@ graph LR
 - 跨层产品默认值只修改 `application-defaults.json`；滤镜默认通过 `allOf` 复用
   `filter-step.schema.json` 的约束。schema 验证后生成 Python、TypeScript、Rust 只读常量及前端
   滤镜约束元数据，PowerShell 工具通过 `runtime-tools.ps1` 读取同一数据文件
+- 模型来源、源/推理 SHA-256、运行时路径与许可只修改 `model-assets.json`；生成 Python/Rust 绑定，
+  PowerShell 发布工具直接读取该 manifest。模型二进制始终保持 Git ignored
 - 前端统一从 `types/protocol` 导入边界类型，不新增手写镜像或 normalize 层
 - 新增事件、错误码或字段时同时更新对应 schema/manifest；运行时别名只保留生产代码实际分支
 - `build.rs` 只接入已生成 IPC manifest；生成和漂移检查必须显式运行
@@ -130,7 +132,7 @@ python -m pytest tests -q
 - FFmpeg 封装测试
 - 流水线集成测试
 - 生成边界的严格解码与错误码一致性测试
-- manifest v4 严格字段校验、协议标记唯一来源与并发 NDJSON 整行写入测试
+- manifest v5 严格字段校验、协议标记唯一来源与并发 NDJSON 整行写入测试
 - CLI `_HANDLERS` 惰性导入、parser/handler/实现精确同集和无副作用 package import 测试
 
 默认进程运行共享与 ONNX 测试。PyTorch 与 Paddle 使用独立 pytest 进程，避免在同一进程加载
@@ -150,6 +152,12 @@ Remove-Item Env:VP_TEST_BACKEND
 
 ```powershell
 python -m pytest tests_full_e2e -m full_e2e -q
+```
+
+Real-RawVSR 三倍率 CUDA/音频专项可单独运行：
+
+```powershell
+python -m pytest tests_full_e2e/test_real_rawvsr_basicvsr_e2e.py -m full_e2e -q
 ```
 
 本机缺少对应资源时跳过这一步，由具备模型和 GPU runtime 的 CI/runner 执行；共享软件路径、

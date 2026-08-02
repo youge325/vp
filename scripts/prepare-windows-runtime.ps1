@@ -161,6 +161,7 @@ function Resolve-ModelSource {
     }
 
     Assert-VpDefaultRifeModels -ModelDir $resolvedDir | Out-Null
+    Assert-VpRealRawVsrBundle -ModelDir $resolvedDir -RepositoryRoot $RepoRoot | Out-Null
     return $resolvedDir
 }
 
@@ -353,6 +354,7 @@ function Get-PythonPackagePatterns {
         "six*",
         "sniffio*",
         "sympy*",
+        "torch*",
         "typing_extensions*",
         "typing_extensions.py",
         "typing_inspect*",
@@ -476,7 +478,8 @@ function Copy-PythonRuntime {
 function Copy-ModelFiles {
     param(
         [string]$SourceDir,
-        [string]$DestinationDir
+        [string]$DestinationDir,
+        [string]$RepositoryRoot
     )
 
     Write-Step "Copying model files"
@@ -526,6 +529,19 @@ function Copy-ModelFiles {
     $totalModels = $linked + $copied
     if ($totalModels -eq 0) {
         throw "No model files found in $SourceDir"
+    }
+
+    $realRawVsrBundle = Assert-VpRealRawVsrBundle -ModelDir $SourceDir -RepositoryRoot $RepositoryRoot
+    foreach ($model in $realRawVsrBundle.Models) {
+        $destination = Join-Path $DestinationDir $model.RelativePath
+        $result = Copy-FileFast -Source $model.Path -Destination $destination
+        $bytes += [int64]$model.Bytes
+        if ($result -eq "linked") {
+            $linked += 1
+        } else {
+            $copied += 1
+        }
+        Write-Step "model BasicVSR x$($model.ScaleFactor) complete: $(Format-ByteSize $model.Bytes), $result"
     }
 
     Write-Step "Model files complete: hardlinks=$linked, copies=$copied, total=$(Format-ByteSize $bytes)"
@@ -672,14 +688,22 @@ Copy-FileFast -Source $ffmpegSource.Ffmpeg -Destination (Join-Path $ffmpegOut "f
 Copy-FileFast -Source $ffmpegSource.Ffprobe -Destination (Join-Path $ffmpegOut "ffprobe.exe") | Out-Null
 Write-Step "FFmpeg binaries complete"
 
-Copy-ModelFiles -SourceDir $modelSourceDir -DestinationDir $modelsOut
+Copy-ModelFiles -SourceDir $modelSourceDir -DestinationDir $modelsOut -RepositoryRoot $repoRoot
+
+$sourceBundle = Get-VpRealRawVsrBundlePaths -ModelDir $modelSourceDir -RepositoryRoot $repoRoot
+$licenseOut = Join-Path $outputRootFull $sourceBundle.LicenseRelativePath
+$noticeOut = Join-Path $outputRootFull $sourceBundle.NoticeRelativePath
+Copy-FileFast -Source $sourceBundle.LicensePath -Destination $licenseOut | Out-Null
+Copy-FileFast -Source $sourceBundle.NoticePath -Destination $noticeOut | Out-Null
 
 $destFfmpeg = Join-Path $ffmpegOut "ffmpeg.exe"
 $destFfprobe = Join-Path $ffmpegOut "ffprobe.exe"
 $destDefaultModels = Get-VpDefaultRifeModelPaths -ModelDir $modelsOut
 $destDefaultPytorchModel = $destDefaultModels.PytorchPath
 $destDefaultOnnxModel = $destDefaultModels.OnnxPath
-$requiredFiles = @($destFfmpeg, $destFfprobe, $destDefaultPytorchModel, $destDefaultOnnxModel)
+$destRealRawVsrBundle = Assert-VpRealRawVsrBundle -ModelDir $modelsOut -RepositoryRoot $outputRootFull
+$requiredFiles = @($destFfmpeg, $destFfprobe, $destDefaultPytorchModel, $destDefaultOnnxModel, $licenseOut, $noticeOut)
+$requiredFiles += $destRealRawVsrBundle.Models | ForEach-Object { $_.Path }
 if (-not $SkipPython) {
     $destPythonExe = Join-Path $pythonOut "python.exe"
     $requiredFiles = @($destPythonExe) + $requiredFiles
@@ -700,7 +724,7 @@ if (-not $SkipPython) {
     $env:PYTHONNOUSERSITE = "1"
     Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
 
-    $importSmokeScript = "import importlib; [importlib.import_module(name) for name in ['pydantic','pydantic_settings','numpy','PIL','onnxruntime']]; print('python runtime imports ok', flush=True)"
+    $importSmokeScript = "import importlib, torch; [importlib.import_module(name) for name in ['pydantic','pydantic_settings','numpy','PIL','onnxruntime','safetensors']]; assert torch.cuda.is_available(), 'CUDA is required for Real-RawVSR BasicVSR'; print('python runtime imports and CUDA ok', flush=True)"
     Invoke-CheckedProcess -Label "Python runtime import smoke" -FilePath $destPythonExe -Arguments @("-s", "-c", $importSmokeScript) -TimeoutSeconds 180
     Invoke-CheckedProcess -Label "Bundled backend check" -FilePath $destPythonExe -Arguments @("-s", "-m", "app", "check") -WorkingDirectory (Join-Path $repoRoot "backend") -TimeoutSeconds 180
 } else {
@@ -708,6 +732,8 @@ if (-not $SkipPython) {
     if (-not [string]::IsNullOrWhiteSpace($systemPython)) {
         Write-Step "Running backend check with system Python: $systemPython"
         $env:VP_PYTHON_EXECUTABLE = $systemPython
+        $cudaSmokeScript = "import safetensors, torch; assert torch.cuda.is_available(), 'CUDA is required for Real-RawVSR BasicVSR'; print('system Python PyTorch CUDA ok', flush=True)"
+        Invoke-CheckedProcess -Label "System Python PyTorch CUDA smoke" -FilePath $systemPython -Arguments @("-s", "-c", $cudaSmokeScript) -TimeoutSeconds 180
         Invoke-CheckedProcess -Label "System Python backend check" -FilePath $systemPython -Arguments @("-s", "-m", "app", "check") -WorkingDirectory (Join-Path $repoRoot "backend") -TimeoutSeconds 180
     } else {
         Write-Step "Warning: No system Python found for backend check"

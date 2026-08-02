@@ -1,8 +1,16 @@
 //! RIFE 模型目录 / TensorRT 目录 解析,以及默认权重文件名常量。
 
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use sha2::{Digest, Sha256};
+
 use super::helpers::{env_path, first_existing_dir};
+use crate::generated::{
+    ModelAssetVariant, REAL_RAWVSR_BASICVSR_LICENSE_PATH, REAL_RAWVSR_BASICVSR_NOTICE_PATH,
+    REAL_RAWVSR_BASICVSR_VARIANTS,
+};
 
 pub(super) fn rife_model_filename(version: &str) -> String {
     format!("flownet_v{version}.pkl")
@@ -62,6 +70,101 @@ pub(super) fn has_rife_model(model_dir: Option<&PathBuf>, version: &str) -> bool
         .and_then(|path| path.metadata().ok())
         .map(|metadata| metadata.is_file() && metadata.len() > 0)
         .unwrap_or(false)
+}
+
+pub(super) fn validate_real_rawvsr_bundle(
+    model_dir: Option<&PathBuf>,
+    license_root: &Path,
+) -> Result<(), String> {
+    let model_dir = model_dir.ok_or_else(|| "Bundled model directory is missing.".to_string())?;
+    for relative_path in [
+        REAL_RAWVSR_BASICVSR_LICENSE_PATH,
+        REAL_RAWVSR_BASICVSR_NOTICE_PATH,
+    ] {
+        let path = license_root.join(relative_path);
+        let metadata = path.metadata().map_err(|error| {
+            format!(
+                "Required Real-RawVSR license file is missing ({}): {error}",
+                path.display()
+            )
+        })?;
+        if !metadata.is_file() || metadata.len() == 0 {
+            return Err(format!(
+                "Required Real-RawVSR license file is empty or invalid: {}",
+                path.display()
+            ));
+        }
+    }
+    for variant in REAL_RAWVSR_BASICVSR_VARIANTS {
+        validate_model_asset(model_dir, variant)?;
+    }
+    Ok(())
+}
+
+fn validate_model_asset(model_dir: &Path, variant: &ModelAssetVariant) -> Result<(), String> {
+    let relative_path = Path::new(variant.relative_path)
+        .strip_prefix("models")
+        .map_err(|_| {
+            format!(
+                "Model asset path is not rooted under models/: {}",
+                variant.relative_path
+            )
+        })?;
+    let path = model_dir.join(relative_path);
+    let metadata = path.metadata().map_err(|error| {
+        format!(
+            "Real-RawVSR BasicVSR x{} model is missing ({}): {error}",
+            variant.scale_factor,
+            path.display()
+        )
+    })?;
+    if !metadata.is_file() || metadata.len() != variant.inference_bytes {
+        return Err(format!(
+            "Real-RawVSR BasicVSR x{} model size mismatch: expected {}, got {} ({}).",
+            variant.scale_factor,
+            variant.inference_bytes,
+            metadata.len(),
+            path.display()
+        ));
+    }
+    let mut file = File::open(&path).map_err(|error| {
+        format!(
+            "Unable to read Real-RawVSR model {}: {error}",
+            path.display()
+        )
+    })?;
+    let actual = sha256_reader(&mut file).map_err(|error| {
+        format!(
+            "Unable to hash Real-RawVSR model {}: {error}",
+            path.display()
+        )
+    })?;
+    if actual != variant.inference_sha256 {
+        return Err(format!(
+            "Real-RawVSR BasicVSR x{} model SHA-256 mismatch: expected {}, got {} ({}).",
+            variant.scale_factor,
+            variant.inference_sha256,
+            actual,
+            path.display()
+        ));
+    }
+    Ok(())
+}
+
+fn sha256_reader(reader: &mut impl Read) -> std::io::Result<String> {
+    let mut digest = Sha256::new();
+    // Release startup performs this work on the OS main thread, whose stack
+    // can be smaller than Rust's test-thread stack. Keep the I/O buffer on the
+    // heap so validating bundled models cannot overflow that thread.
+    let mut buffer = vec![0_u8; 1024 * 1024];
+    loop {
+        let count = reader.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
+    }
+    Ok(format!("{:x}", digest.finalize()))
 }
 
 #[cfg(test)]
@@ -171,6 +274,24 @@ mod tests {
     }
 
     #[test]
+    fn model_hashing_uses_bounded_stack_space() {
+        let digest = std::thread::Builder::new()
+            .stack_size(128 * 1024)
+            .spawn(|| {
+                let mut payload = std::io::Cursor::new(vec![7_u8; 2 * 1024 * 1024]);
+                sha256_reader(&mut payload).unwrap()
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+
+        assert_eq!(
+            digest,
+            "c406296b30d433e27c08e2989ad557c7e9ae7825d1bea14c42aa4ef53c9e8a9d"
+        );
+    }
+
+    #[test]
     fn has_default_rife_model_returns_false_for_empty_file() {
         let temp = tempfile::tempdir().unwrap();
         let model_dir = temp.path().to_path_buf();
@@ -194,5 +315,48 @@ mod tests {
         .unwrap();
 
         assert!(has_rife_model(Some(&model_dir), DEFAULT_RIFE_MODEL_VERSION));
+    }
+
+    #[test]
+    fn model_asset_validation_rejects_hash_drift() {
+        let temp = tempfile::tempdir().unwrap();
+        let relative_path = "models/test/model.safetensors";
+        let path = temp.path().join(relative_path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"safe").unwrap();
+        let valid = ModelAssetVariant {
+            scale_factor: 2,
+            inference_bytes: 4,
+            inference_sha256: "8b3369944dd2a3fab39e32d1aeb1f763946a458ae3e6368a46432adc8f3a0860",
+            relative_path,
+        };
+        let model_dir = temp.path().join("models");
+        assert!(validate_model_asset(&model_dir, &valid).is_ok());
+
+        let drifted = ModelAssetVariant {
+            inference_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+            ..valid
+        };
+        assert!(validate_model_asset(&model_dir, &drifted)
+            .unwrap_err()
+            .contains("SHA-256 mismatch"));
+    }
+
+    #[test]
+    fn release_bundle_validation_rejects_an_omitted_basicvsr_model() {
+        let temp = tempfile::tempdir().unwrap();
+        let models = temp.path().join("models");
+        std::fs::create_dir_all(&models).unwrap();
+        for relative_path in [
+            REAL_RAWVSR_BASICVSR_LICENSE_PATH,
+            REAL_RAWVSR_BASICVSR_NOTICE_PATH,
+        ] {
+            let path = temp.path().join(relative_path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"license").unwrap();
+        }
+
+        let error = validate_real_rawvsr_bundle(Some(&models), temp.path()).unwrap_err();
+        assert!(error.contains("BasicVSR x2 model is missing"));
     }
 }

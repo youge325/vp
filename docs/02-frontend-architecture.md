@@ -323,7 +323,7 @@ graph LR
 | `InputModuleView` | 批量导入素材，拖放支持，素材列表管理 |
 | `DecodeModuleView` | 解码器配置（硬件加速、解码模式等） |
 | `StageModuleView` (`stage=preprocess`) | 预处理滤镜链配置 |
-| `EnhanceModuleView` | 超分辨率、补帧算法配置 |
+| `EnhanceModuleView` | 超分辨率、补帧算法配置；按 `scaleFactors` 投影倍率并显示模型许可 |
 | `StageModuleView` (`stage=postprocess`) | 后处理滤镜链配置 |
 | `EncodeModuleView` | 编码器、码率控制、输出格式配置 |
 | `RenderModuleView` | 批量渲染控制，输出目录，任务执行 |
@@ -340,6 +340,10 @@ IPC 命令与事件适配器。独立的应用默认契约还生成 `APPLICATION
 fallback、分段归一化、指标投影和滤镜 catalog 共同消费它；Filter Step schema 同时投影为
 `FILTER_FIELD_CONSTRAINTS`，UI 只保留标签、布局列数和输入步长。`python scripts/generate_contracts.py --check` 对所有
 跟踪生成物执行逐字节 freshness 检查。
+
+环境算法元数据只暴露唯一 `scaleFactors`：多元素渲染倍率选择器、单元素锁定、空数组沿用通用
+倍率。Real-RawVSR BasicVSR 的 x2/x3/x4 指标按当前倍率选择；`modelLicense.usage` 为
+`non_commercial` 时，增强页显示不可隐藏的许可提示和上游来源链接。
 
 ### 类型扩展层
 

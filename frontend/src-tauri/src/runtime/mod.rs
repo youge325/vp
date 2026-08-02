@@ -20,7 +20,7 @@ use crate::error::ShellError;
 use crate::generated::DEFAULT_RIFE_MODEL_VERSION;
 pub(crate) use env_map::build_env_map;
 use helpers::{directory_if_contains, first_existing_dir};
-use model::{has_rife_model, rife_model_filename};
+use model::{has_rife_model, rife_model_filename, validate_real_rawvsr_bundle};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedRuntimePaths {
@@ -67,7 +67,14 @@ pub(crate) fn resolve_runtime_paths<R: Runtime>(
         .filter(|version| !version.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_RIFE_MODEL_VERSION.to_string());
 
-    require_release_bundle_artifacts(&ffmpeg_path, &ffprobe_path, &model_dir, &rife_model_version)?;
+    let model_license_root = runtime_root.as_deref().unwrap_or(workspace_root.as_path());
+    require_release_bundle_artifacts(
+        &ffmpeg_path,
+        &ffprobe_path,
+        &model_dir,
+        &rife_model_version,
+        model_license_root,
+    )?;
 
     // ``app_local_data_dir()`` 失败时按 build 模式分流:
     // - debug:走 ``<workspace>/.tmp/app-data``,保持开发便利(本地测试
@@ -167,6 +174,7 @@ fn require_release_bundle_artifacts(
     ffprobe_path: &Option<PathBuf>,
     model_dir: &Option<PathBuf>,
     rife_model_version: &str,
+    model_license_root: &Path,
 ) -> Result<(), ShellError> {
     if cfg!(debug_assertions) {
         return Ok(());
@@ -189,6 +197,8 @@ fn require_release_bundle_artifacts(
             "Bundled RIFE model is missing. Set VP_RIFE_MODEL_DIR or include resources/runtime/models/{filename}.",
         )));
     }
+    validate_real_rawvsr_bundle(model_dir.as_ref(), model_license_root)
+        .map_err(ShellError::RuntimeResolution)?;
     Ok(())
 }
 

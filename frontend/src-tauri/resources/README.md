@@ -6,6 +6,7 @@ Required Windows structure:
 
 - `resources/runtime/ffmpeg/bin/`
 - `resources/runtime/models/`
+- `resources/runtime/licenses/real-rawvsr-basicvsr/`
 - `resources/config/`
 
 Optional (for bundled Python):
@@ -30,6 +31,12 @@ weights in one of the default local locations:
 
 - `D:\Lenovo\vp\backend\models`
 - `D:\actions-runner-vp\_assets\models`
+
+The release workflow also runs `scripts/prepare_real_rawvsr_basicvsr.py` with explicit
+noncommercial acceptance. It verifies the official x2/x3/x4 checkpoints, converts them
+deterministically to inference-only SafeTensors, and packages only those converted files.
+`contracts/model-assets.json` owns every source/runtime size and SHA-256. Missing weights,
+license files, CUDA PyTorch, or `safetensors` fail release preparation.
 
 At runtime the app resolves dependencies in this priority order:
 

@@ -97,6 +97,7 @@ function Resolve-ModelDir {
         }
 
         if (Test-VpDefaultRifeModels -ModelDir $path) {
+            Assert-VpRealRawVsrBundle -ModelDir $path -RepositoryRoot $RepoRoot | Out-Null
             return (Resolve-Path -LiteralPath $path).Path
         }
 
@@ -178,6 +179,7 @@ function Resolve-FfmpegSource {
 $pythonSource = Resolve-PythonSource
 $modelDir = Resolve-ModelDir
 $defaultModels = Assert-VpDefaultRifeModels -ModelDir $modelDir
+$realRawVsrModels = Assert-VpRealRawVsrBundle -ModelDir $modelDir -RepositoryRoot $RepoRoot
 $ffmpegSource = Resolve-FfmpegSource
 
 Add-GitHubEnv -Name "VP_RELEASE_PYTHON_ROOT" -Value $pythonSource.Root
@@ -195,6 +197,9 @@ Write-Host "  python exe:    $($pythonSource.Exe)"
 Write-Host "  model dir:     $modelDir"
 Write-Host "  pytorch model: $($defaultModels.PytorchPath)"
 Write-Host "  onnx model:    $($defaultModels.OnnxPath)"
+foreach ($model in $realRawVsrModels.Models) {
+    Write-Host "  BasicVSR x$($model.ScaleFactor): $($model.Path)"
+}
 Write-Host "  ffmpeg dir:    $($ffmpegSource.Dir)"
 Write-Host "  ffmpeg:        $($ffmpegSource.Ffmpeg)"
 Write-Host "  ffprobe:       $($ffmpegSource.Ffprobe)"
