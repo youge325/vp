@@ -21,6 +21,7 @@ from architecture_contracts.application_defaults import (  # noqa: E402
     check_application_default_consumers,
 )
 from architecture_contracts.checks import collect_architecture_issues  # noqa: E402
+from architecture_contracts.filter_contracts import check_filter_contract_consumers  # noqa: E402
 from architecture_contracts.ipc_checks import (  # noqa: E402
     _collect_manifest_commands,
     diff_command_surface,
@@ -58,21 +59,19 @@ from architecture_contracts.typescript_checks import (  # noqa: E402
 )
 
 
-def test_application_default_gate_rejects_a_reintroduced_product_literal(tmp_path: Path) -> None:
-    defaults = {
-        "$schema": "./application-defaults.schema.json",
-        "interpolation": {"model": "4.25", "targetFps": 60},
-        "superResolution": {"numFrames": 10},
-        "workflow": {"processOrder": "super_resolution_then_interpolation"},
-        "output": {"segmentFrames": 1000},
-    }
-    contract = tmp_path / "contracts/application-defaults.json"
+def _write_application_default_fixture(root: Path) -> None:
+    defaults = json.loads((REPO_ROOT / "contracts/application-defaults.json").read_text(encoding="utf-8"))
+    contract = root / "contracts/application-defaults.json"
     contract.parent.mkdir(parents=True)
     contract.write_text(json.dumps(defaults), encoding="utf-8")
     for path_name, marker in _REQUIRED_CONSUMERS.items():
-        path = tmp_path / path_name
+        path = root / path_name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(marker, encoding="utf-8")
+
+
+def test_application_default_gate_rejects_a_reintroduced_product_literal(tmp_path: Path) -> None:
+    _write_application_default_fixture(tmp_path)
 
     assert check_application_default_consumers(tmp_path) == []
 
@@ -81,6 +80,41 @@ def test_application_default_gate_rejects_a_reintroduced_product_literal(tmp_pat
     issues = check_application_default_consumers(tmp_path)
     assert len(issues) == 1
     assert "hard-coded instead of generated" in issues[0]
+
+
+def test_application_default_gate_scans_semantic_filter_fallbacks_outside_known_consumers(tmp_path: Path) -> None:
+    _write_application_default_fixture(tmp_path)
+
+    backend = tmp_path / "backend/app/processing/rogue.py"
+    backend.parent.mkdir(parents=True, exist_ok=True)
+    backend.write_text('value = params.get("amount", 0.5)\n', encoding="utf-8")
+    frontend = tmp_path / "frontend/src/components/Rogue.vue"
+    frontend.parent.mkdir(parents=True, exist_ok=True)
+    frontend.write_text('<script setup lang="ts">const value = params.factor ?? 0.5</script>\n', encoding="utf-8")
+
+    issues = check_application_default_consumers(tmp_path)
+    assert any("semantic filter default fallback" in issue and "rogue.py" in issue for issue in issues)
+    assert any("semantic filter default fallback" in issue and "Rogue.vue" in issue for issue in issues)
+
+
+def test_filter_constraint_gate_rejects_hardcoded_bounds(tmp_path: Path) -> None:
+    consumers = {
+        "frontend/src/services/filters/filter-catalog.ts": "FILTER_FIELD_CONSTRAINTS",
+        "frontend/src/services/filters/anime-cleanup.ts": "FILTER_FIELD_CONSTRAINTS",
+        "frontend/src/components/filter-steps/FilterScale.vue": "FILTER_FIELD_CONSTRAINTS",
+    }
+    for path_name, source in consumers.items():
+        path = tmp_path / path_name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
+
+    assert check_filter_contract_consumers(tmp_path) == []
+
+    scale = tmp_path / "frontend/src/components/filter-steps/FilterScale.vue"
+    scale.write_text('FILTER_FIELD_CONSTRAINTS\n<input :min="1" />\n', encoding="utf-8")
+    assert check_filter_contract_consumers(tmp_path) == [
+        "filter constraint is hard-coded instead of generated: frontend/src/components/filter-steps/FilterScale.vue:2"
+    ]
 
 
 def test_script_reachability_follows_python_imports_and_powershell_dot_sources(tmp_path: Path) -> None:
@@ -114,8 +148,38 @@ def test_restricted_rust_visibility_requires_a_non_test_consumer(tmp_path: Path)
     )
 
     assert check_rust_restricted_visibility(tmp_path) == [
-        "restricted Rust symbol has no production consumer: frontend/src-tauri/src/worker.rs:2 `orphan`",
-        "restricted Rust symbol has no production consumer: frontend/src-tauri/src/worker.rs:3 `caller`",
+        "restricted Rust symbol has no cross-module production consumer: frontend/src-tauri/src/worker.rs:1 `used`",
+        "restricted Rust symbol has no cross-module production consumer: frontend/src-tauri/src/worker.rs:2 `orphan`",
+        "restricted Rust symbol has no cross-module production consumer: frontend/src-tauri/src/worker.rs:3 `caller`",
+    ]
+
+
+def test_rust_visibility_resolves_qualified_paths_and_use_aliases(tmp_path: Path) -> None:
+    rust = tmp_path / "frontend/src-tauri/src"
+    rust.mkdir(parents=True)
+    (rust / "worker.rs").write_text(
+        "pub(crate) fn imported() {}\npub(crate) fn qualified() {}\n",
+        encoding="utf-8",
+    )
+    (rust / "consumer.rs").write_text(
+        "use crate::worker::imported as run;\nfn consume() { run(); crate::worker::qualified(); }\n",
+        encoding="utf-8",
+    )
+
+    assert check_rust_restricted_visibility(tmp_path) == []
+
+
+def test_rust_visibility_ignores_unrelated_same_names_and_test_only_uses(tmp_path: Path) -> None:
+    rust = tmp_path / "frontend/src-tauri/src"
+    rust.mkdir(parents=True)
+    (rust / "worker.rs").write_text("pub(crate) fn orphan() {}\n", encoding="utf-8")
+    (rust / "consumer.rs").write_text(
+        "fn orphan() {}\n#[cfg(test)]\nuse crate::worker::orphan;\n",
+        encoding="utf-8",
+    )
+
+    assert check_rust_restricted_visibility(tmp_path) == [
+        "restricted Rust symbol has no cross-module production consumer: frontend/src-tauri/src/worker.rs:1 `orphan`"
     ]
 
 
@@ -154,7 +218,7 @@ def test_rust_visibility_scans_production_after_test_only_import(tmp_path: Path)
     )
 
     assert check_rust_restricted_visibility(tmp_path) == [
-        "restricted Rust symbol has no production consumer: "
+        "restricted Rust symbol has no cross-module production consumer: "
         "frontend/src-tauri/src/worker.rs:3 `orphan_after_test_import`"
     ]
 

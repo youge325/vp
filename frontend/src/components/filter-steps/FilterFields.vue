@@ -65,7 +65,12 @@ function updateText(field: FilterFieldDefinition, event: Event): void {
       />
       <label v-else class="field">
         <span>{{ field.label }}</span>
-        <input :value="String(fieldValue(field))" type="text" @input="updateText(field, $event)" />
+        <input
+          :value="String(fieldValue(field))"
+          type="text"
+          :pattern="field.pattern"
+          @input="updateText(field, $event)"
+        />
       </label>
     </template>
   </div>

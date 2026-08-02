@@ -46,7 +46,7 @@ def _ensure_cv2() -> None:
 def _parse_hex_color(color_str: str) -> tuple[int, int, int]:
     match = re.fullmatch(r"#?([0-9a-fA-F]{6})", str(color_str))
     if not match:
-        return (0, 0, 0)
+        raise ValueError("Filter color must be a six-digit hexadecimal RGB value.")
     hex_value = match.group(1)
     return (
         int(hex_value[0:2], 16),
@@ -58,7 +58,7 @@ def _parse_hex_color(color_str: str) -> tuple[int, int, int]:
 def _apply_numpy_scale(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
     _ensure_cv2()
     cv2 = import_cv2()
-    interpolation = _INTERP_MAP.get(params.get("interpolation", "lanczos4"), cv2.INTER_LANCZOS4)
+    interpolation = _INTERP_MAP[str(params["interpolation"])]
     width, height = scale_output_dimensions(
         params,
         input_width=frame.shape[1],
@@ -87,13 +87,13 @@ def _apply_numpy_pad(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
         left,
         right,
         cv2.BORDER_CONSTANT,
-        value=_parse_hex_color(params.get("color", "#000000")),
+        value=_parse_hex_color(str(params["color"])),
     )
 
 
 def _apply_numpy_sharpen(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
     cv2 = import_cv2()
-    amount = float(params.get("amount", 0.5))
+    amount = float(params["amount"])
     if amount <= 0:
         return frame
     blurred = cv2.GaussianBlur(frame, (0, 0), sigmaX=3)
@@ -102,8 +102,8 @@ def _apply_numpy_sharpen(frame: np.ndarray, params: _FilterParams) -> np.ndarray
 
 def _apply_numpy_denoise(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
     cv2 = import_cv2()
-    strength = float(params.get("strength", 10))
-    color_strength = float(params.get("colorStrength", 10))
+    strength = float(params["strength"])
+    color_strength = float(params["colorStrength"])
     if strength <= 0 and color_strength <= 0:
         return frame
     return cv2.fastNlMeansDenoisingColored(
@@ -118,9 +118,9 @@ def _apply_numpy_denoise(frame: np.ndarray, params: _FilterParams) -> np.ndarray
 
 def _apply_numpy_color(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
     cv2 = import_cv2()
-    brightness = float(params.get("brightness", 0.0))
-    contrast = float(params.get("contrast", 1.0))
-    saturation = float(params.get("saturation", 1.0))
+    brightness = float(params["brightness"])
+    contrast = float(params["contrast"])
+    saturation = float(params["saturation"])
     if brightness != 0.0 or contrast != 1.0:
         frame = cv2.convertScaleAbs(frame, alpha=contrast, beta=brightness * 127.5)
     if saturation != 1.0:
@@ -133,9 +133,9 @@ def _apply_numpy_color(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
 def _apply_numpy_anime_cleanup(frame: np.ndarray, params: _FilterParams) -> np.ndarray:
     return apply_anime_cleanup(
         frame,
-        profile=str(params.get("profile", "clean-lines")),
-        denoise=params.get("denoise"),
-        edge_boost=params.get("edgeBoost"),
+        profile=str(params["profile"]),
+        denoise=float(params["denoise"]),
+        edge_boost=float(params["edgeBoost"]),
     )
 
 

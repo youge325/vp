@@ -2,21 +2,34 @@
 import BaseSelect from '@/components/forms/BaseSelect.vue'
 import FilterNumberField from './FilterNumberField.vue'
 import { createFilterModelParamsPatch } from '@/services/filters/filter-params'
+import { APPLICATION_DEFAULTS, FILTER_FIELD_CONSTRAINTS } from '@/types/protocol'
 import type { FilterStep } from '@/types/protocol'
 
 type ScaleFilterStep = Extract<FilterStep, { kind: 'scale' }>
 
-const MODE_OPTIONS = [
-  { value: 'factor', label: '缩放系数' },
-  { value: 'resolution', label: '目标分辨率' },
-] as const
+const MODE_LABELS = {
+  factor: '缩放系数',
+  resolution: '目标分辨率',
+} as const
+const MODE_OPTIONS = FILTER_FIELD_CONSTRAINTS.scale.mode.enum.map((value) => ({
+  value,
+  label: MODE_LABELS[value],
+}))
 
-const INTERP_OPTIONS = [
-  { value: 'lanczos4', label: 'Lanczos4' },
-  { value: 'cubic', label: 'Cubic' },
-  { value: 'area', label: 'Area' },
-  { value: 'linear', label: 'Linear' },
-] as const
+const INTERPOLATION_LABELS = {
+  lanczos4: 'Lanczos4',
+  cubic: 'Cubic',
+  area: 'Area',
+  linear: 'Linear',
+} as const
+const INTERP_OPTIONS = FILTER_FIELD_CONSTRAINTS.scale.interpolation.enum.map((value) => ({
+  value,
+  label: INTERPOLATION_LABELS[value],
+}))
+
+const defaults = APPLICATION_DEFAULTS.filters.scale
+const constraints = FILTER_FIELD_CONSTRAINTS.scale
+const factorStep = 0.01
 
 const modelValue = defineModel<ScaleFilterStep>({ required: true })
 const patch = createFilterModelParamsPatch(modelValue)
@@ -25,38 +38,37 @@ const patch = createFilterModelParamsPatch(modelValue)
 <template>
   <div class="field-grid field-grid-2">
     <BaseSelect
-      :model-value="modelValue.params.mode ?? 'factor'"
+      :model-value="modelValue.params.mode ?? defaults.mode"
       label="模式"
       :options="MODE_OPTIONS"
       @update:model-value="patch((params) => (params.mode = $event))"
     />
     <BaseSelect
-      :model-value="modelValue.params.interpolation ?? 'lanczos4'"
+      :model-value="modelValue.params.interpolation ?? defaults.interpolation"
       label="插值算法"
       :options="INTERP_OPTIONS"
       @update:model-value="patch((params) => (params.interpolation = $event))"
     />
     <FilterNumberField
       v-if="modelValue.params.mode === 'resolution'"
-      :model-value="Number(modelValue.params.width ?? 1920)"
+      :model-value="Number(modelValue.params.width ?? defaults.width)"
       label="宽度"
-      :min="1"
+      :min="constraints.width.minimum"
       @update:model-value="patch((params) => (params.width = $event))"
     />
     <FilterNumberField
       v-if="modelValue.params.mode === 'resolution'"
-      :model-value="Number(modelValue.params.height ?? 1080)"
+      :model-value="Number(modelValue.params.height ?? defaults.height)"
       label="高度"
-      :min="1"
+      :min="constraints.height.minimum"
       @update:model-value="patch((params) => (params.height = $event))"
     />
     <FilterNumberField
       v-if="modelValue.params.mode !== 'resolution'"
-      :model-value="Number(modelValue.params.factor ?? 0.5)"
+      :model-value="Number(modelValue.params.factor ?? defaults.factor)"
       label="缩放系数"
-      :step="0.01"
-      :min="0.01"
-      :max="10"
+      :step="factorStep"
+      :min="constraints.factor.exclusiveMinimum + factorStep"
       @update:model-value="patch((params) => (params.factor = $event))"
     />
   </div>

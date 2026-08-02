@@ -57,6 +57,16 @@ def test_scale_factor_changes_resolution():
     assert out.shape == (540, 960, 3)
 
 
+def test_partial_scale_params_use_the_same_product_defaults_for_projection_and_execution():
+    from app.catalog.filter_geometry import project_filter_chain
+
+    filters = [{"kind": "scale", "enabled": True, "params": {}}]
+    frame = np.zeros((80, 100, 3), dtype=np.uint8)
+
+    assert project_filter_chain(100, 80, filters) == (50, 40)
+    assert _make_algorithm(filters).process_numpy(frame).shape == (40, 50, 3)
+
+
 def test_scale_resolution_target():
     frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
     algo = _make_algorithm(

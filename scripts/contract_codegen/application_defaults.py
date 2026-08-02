@@ -40,6 +40,46 @@ def _python_literal(value: object) -> str:
     return str(value)
 
 
+def _python_readonly_literal(value: object) -> str:
+    if isinstance(value, dict):
+        entries = ", ".join(f"{json.dumps(str(key))}: {_python_readonly_literal(item)}" for key, item in value.items())
+        return f"MappingProxyType({{{entries}}})"
+    if isinstance(value, list):
+        return f"({', '.join(_python_readonly_literal(item) for item in value)},)"
+    return _python_literal(value)
+
+
+_FILTER_PARAM_DEFINITIONS = {
+    "scale": "ScaleFilterParams",
+    "crop": "CropFilterParams",
+    "pad": "PadFilterParams",
+    "sharpen": "SharpenFilterParams",
+    "denoise": "DenoiseFilterParams",
+    "color": "ColorFilterParams",
+    "anime_cleanup": "AnimeCleanupFilterParams",
+}
+_CONSTRAINT_KEYS = ("minimum", "exclusiveMinimum", "maximum", "exclusiveMaximum", "enum", "pattern")
+
+
+def render_filter_constraints_typescript(contracts_dir: Path) -> str:
+    """Render UI-usable field constraints from the canonical FilterStep schema."""
+
+    schema = json.loads((contracts_dir / "filter-step.schema.json").read_text(encoding="utf-8"))
+    definitions = schema["$defs"]
+    constraints = {
+        kind: {
+            name: {key: property_schema[key] for key in _CONSTRAINT_KEYS if key in property_schema}
+            for name, property_schema in definitions[definition]["properties"].items()
+        }
+        for kind, definition in _FILTER_PARAM_DEFINITIONS.items()
+    }
+    serialized = json.dumps(constraints, ensure_ascii=False, separators=(", ", ": "))
+    return (
+        "// Generated from contracts/filter-step.schema.json. Do not edit.\n"
+        f"export const FILTER_FIELD_CONSTRAINTS = {serialized} as const\n"
+    )
+
+
 def render_python_application_defaults(defaults: dict[str, Any]) -> str:
     interpolation = defaults["interpolation"]
     super_resolution = defaults["superResolution"]
@@ -68,9 +108,13 @@ def render_python_application_defaults(defaults: dict[str, Any]) -> str:
     lines = [
         '"""Generated from contracts/application-defaults.json. Do not edit."""',
         "",
+        "from types import MappingProxyType",
         "from typing import Final",
         "",
         *(f"{name}: Final = {_python_literal(value)}" for name, value in constants),
+        "# fmt: off",
+        f"FILTER_DEFAULTS: Final = {_python_readonly_literal(defaults['filters'])}",
+        "# fmt: on",
         "",
     ]
     return "\n".join(lines)

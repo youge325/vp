@@ -206,8 +206,6 @@ _PRODUCTION_REVIEWED_SYMBOLS = (
             evidence_marker="def test_missing_strengths_use_profile_defaults",
         )
         for symbol in (
-            "default_denoise",
-            "default_edge_boost",
             "median_size",
             "denoise_gain",
             "edge_radius",

@@ -26,5 +26,56 @@ export const APPLICATION_DEFAULTS = {
   },
   "output": {
     "segmentFrames": 1000
+  },
+  "filters": {
+    "scale": {
+      "mode": "factor",
+      "factor": 0.5,
+      "width": 1920,
+      "height": 1080,
+      "interpolation": "lanczos4"
+    },
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080
+    },
+    "pad": {
+      "top": 0,
+      "bottom": 0,
+      "left": 0,
+      "right": 0,
+      "color": "#000000"
+    },
+    "sharpen": {
+      "amount": 0.5
+    },
+    "denoise": {
+      "strength": 10,
+      "colorStrength": 10
+    },
+    "color": {
+      "brightness": 0,
+      "contrast": 1,
+      "saturation": 1
+    },
+    "animeCleanup": {
+      "defaultProfile": "clean-lines",
+      "profiles": {
+        "clean-lines": {
+          "denoise": 15,
+          "edgeBoost": 30
+        },
+        "thin-outline": {
+          "denoise": 8,
+          "edgeBoost": 45
+        },
+        "balanced-cel": {
+          "denoise": 25,
+          "edgeBoost": 20
+        }
+      }
+    }
   }
 } as const

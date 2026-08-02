@@ -38,7 +38,7 @@ repos:
         entry: python scripts/generate_contracts.py --check
         language: system
         pass_filenames: false
-        files: '^(contracts/.*\.json|backend/app/generated/(?:application_defaults|bootstrap_constants|contracts|protocol_constants|stage_worker_contracts)\.py|frontend/src/types/generated/(?:application-defaults|contracts)\.ts|frontend/src/types/protocol/events\.ts|frontend/src/lib/ipc/contract\.ts|frontend/src-tauri/src/generated/(?:application_defaults|backend_oneshot|backend_task_envelope|ipc_manifest|mod|task_events|persistence_versions)\.rs|frontend/src-tauri/src/models/generated_error_codes\.rs|scripts/(?:contract_codegen/.+\.py|generate_contracts\.py|requirements-quality\.txt))$'
+        files: '^(contracts/.*\.json|backend/app/generated/(?:application_defaults|bootstrap_constants|contracts|protocol_constants|stage_worker_contracts)\.py|frontend/src/types/generated/(?:application-defaults|contracts|filter-constraints)\.ts|frontend/src/types/protocol/events\.ts|frontend/src/lib/ipc/contract\.ts|frontend/src-tauri/src/generated/(?:application_defaults|backend_oneshot|backend_task_envelope|ipc_manifest|mod|task_events|persistence_versions)\.rs|frontend/src-tauri/src/models/generated_error_codes\.rs|scripts/(?:contract_codegen/.+\.py|generate_contracts\.py|requirements-quality\.txt))$'
       - id: check-architecture-contracts
         name: 前后端架构边界与命令面一致性
         entry: python scripts/check_architecture_contracts.py
