@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from app.errors.codes import TaskErrorCode
 from app.errors.process import ProcessError
+from tests.support.fake_torch import make_oom_torch
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-import prepare_real_rawvsr_basicvsr as preparation  # noqa: E402
+import prepare_real_rawvsr_models as preparation  # noqa: E402
 
 pytestmark = pytest.mark.pytorch
 
@@ -41,10 +41,9 @@ def test_basicvsr_network_preserves_official_checkpoint_shape(
 
 def test_basicvsr_rgb_and_boundary_padding_preserve_logical_frames() -> None:
     from app.algorithms.pytorch.real_rawvsr_basicvsr.runner import (
-        _pad_spatial,
         _pad_temporal_sequence,
-        _validate_rgb_frame,
     )
+    from app.algorithms.pytorch.real_rawvsr.rgb_frames import prepare_rgb_frames
 
     frames = [np.full((2, 3, 3), value, dtype=np.uint8) for value in (10, 20, 30)]
     padded, offset = _pad_temporal_sequence(frames)
@@ -53,67 +52,52 @@ def test_basicvsr_rgb_and_boundary_padding_preserve_logical_frames() -> None:
     assert offset == 1
     assert padded[0] is frames[0]
     assert padded[-1] is frames[-1]
-    assert _validate_rgb_frame(frames[0]) is frames[0]
-    spatial = _pad_spatial(frames[0], 64, 64)
+    prepared = prepare_rgb_frames(frames[:1], "Real-RawVSR BasicVSR", minimum_size=64)
+    assert prepared is not None
+    spatial = prepared.frames[0]
     assert spatial.shape == (64, 64, 3)
     assert np.array_equal(spatial[-1, -1], frames[0][-1, -1])
 
     with pytest.raises(ValueError, match="RGB uint8"):
-        _validate_rgb_frame(np.zeros((2, 3, 3), dtype=np.float32))
+        prepare_rgb_frames(
+            [np.zeros((2, 3, 3), dtype=np.float32)],
+            "Real-RawVSR BasicVSR",
+            minimum_size=64,
+        )
 
 
 def test_basicvsr_rejects_unsupported_scale_and_engine() -> None:
     from app.algorithms.pytorch.real_rawvsr_basicvsr.runner import RealRawVsrBasicVsr
 
     with pytest.raises(ValueError, match="only 2x, 3x, and 4x"):
-        RealRawVsrBasicVsr(scale_factor=5, num_frames=10, engine="cuda", model_root="models")
+        RealRawVsrBasicVsr(
+            algorithm_id="real-rawvsr-basicvsr",
+            scale_factor=5,
+            num_frames=10,
+            engine="cuda",
+            model_root="models",
+        )
     with pytest.raises(ValueError, match="only CUDA"):
-        RealRawVsrBasicVsr(scale_factor=2, num_frames=10, engine="tensorrt", model_root="models")
+        RealRawVsrBasicVsr(
+            algorithm_id="real-rawvsr-basicvsr",
+            scale_factor=2,
+            num_frames=10,
+            engine="tensorrt",
+            model_root="models",
+        )
 
 
 def test_basicvsr_maps_cuda_oom_to_actionable_process_error() -> None:
     from app.algorithms.pytorch.real_rawvsr_basicvsr.runner import RealRawVsrBasicVsr
 
-    class _FakeTensor:
-        def permute(self, *_args):
-            return self
-
-        def unsqueeze(self, _dimension):
-            return self
-
-        def to(self, **_kwargs):
-            return self
-
-        def __truediv__(self, _divisor):
-            return self
-
-    class _FakeCuda:
-        class OutOfMemoryError(RuntimeError):
-            pass
-
-        cleared = False
-
-        @classmethod
-        def empty_cache(cls) -> None:
-            cls.cleared = True
-
-    class _InferenceMode:
-        def __enter__(self):
-            return None
-
-        def __exit__(self, *_args):
-            return False
-
-    def fail_oom(_tensor):
-        raise _FakeCuda.OutOfMemoryError("out of memory")
-
-    fake_torch = SimpleNamespace(
-        cuda=_FakeCuda,
-        float32=object(),
-        from_numpy=lambda _array: _FakeTensor(),
-        inference_mode=lambda: _InferenceMode(),
+    fake_torch, fail_oom, fake_cuda = make_oom_torch()
+    algorithm = RealRawVsrBasicVsr(
+        algorithm_id="real-rawvsr-basicvsr",
+        scale_factor=2,
+        num_frames=10,
+        engine="cuda",
+        model_root="models",
     )
-    algorithm = RealRawVsrBasicVsr(scale_factor=2, num_frames=10, engine="cuda", model_root="models")
     algorithm._torch = fake_torch
     algorithm._model = fail_oom
 
@@ -123,7 +107,7 @@ def test_basicvsr_maps_cuda_oom_to_actionable_process_error() -> None:
     assert exc_info.value.code == TaskErrorCode.PROCESS_FAILED
     assert "lower the super-resolution frame chunk size" in exc_info.value.message
     assert exc_info.value.details == {"numFrames": 10, "scaleFactor": 2}
-    assert _FakeCuda.cleared
+    assert fake_cuda.cleared
 
 
 def test_safetensors_conversion_is_deterministic_and_omits_training_state(tmp_path: Path) -> None:
@@ -140,10 +124,11 @@ def test_safetensors_conversion_is_deterministic_and_omits_training_state(tmp_pa
         checkpoint,
     )
 
-    first = preparation._serialize_state_dict(checkpoint)
-    second = preparation._serialize_state_dict(checkpoint)
+    first, first_parameters = preparation._serialize_state_dict(checkpoint)
+    second, second_parameters = preparation._serialize_state_dict(checkpoint)
 
     assert first == second
+    assert first_parameters == second_parameters == 4
     assert set(load(first)) == {"weight"}
 
 

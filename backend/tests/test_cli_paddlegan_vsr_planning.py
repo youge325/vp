@@ -165,9 +165,9 @@ def test_paddlegan_vsr_missing_auxiliary_weight_is_rejected_before_stage_worker(
     ],
 )
 def test_real_rawvsr_missing_or_corrupt_weight_is_a_typed_model_error(monkeypatch, failure, message):
-    from app.algorithms.pytorch.real_rawvsr_basicvsr import assets
+    from app.algorithms.pytorch.real_rawvsr import assets
 
-    def fail_model_probe(_model_root, _scale_factor):
+    def fail_model_probe(_model_root, _algorithm, _scale_factor):
         raise failure
 
     monkeypatch.setattr(assets, "ensure_model_asset", fail_model_probe)
@@ -182,11 +182,11 @@ def test_real_rawvsr_missing_or_corrupt_weight_is_a_typed_model_error(monkeypatc
 
 
 def test_real_rawvsr_requires_available_cuda_after_model_validation(tmp_path, monkeypatch):
-    from app.algorithms.pytorch.real_rawvsr_basicvsr import assets
+    from app.algorithms.pytorch.real_rawvsr import assets
 
     model_path = tmp_path / "model.safetensors"
     model_path.write_bytes(b"safe")
-    monkeypatch.setattr(assets, "ensure_model_asset", lambda _root, _scale: model_path)
+    monkeypatch.setattr(assets, "ensure_model_asset", lambda _root, _algorithm, _scale: model_path)
     monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: False)))
     step = _super_resolution_step(backend="pytorch", scale_factor=2.0, algorithm="real-rawvsr-basicvsr")
 
@@ -195,6 +195,30 @@ def test_real_rawvsr_requires_available_cuda_after_model_validation(tmp_path, mo
 
     assert exc_info.value.code == TaskErrorCode.MISSING_TENSOR_BACKEND
     assert "NVIDIA CUDA" in exc_info.value.message
+
+
+def test_real_rawvsr_edvr_requires_torchvision_deform_conv_after_cuda_validation(tmp_path, monkeypatch):
+    from app.algorithms.pytorch.real_rawvsr import assets
+
+    model_path = tmp_path / "model.safetensors"
+    model_path.write_bytes(b"safe")
+    monkeypatch.setattr(assets, "ensure_model_asset", lambda _root, _algorithm, _scale: model_path)
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: True)))
+    monkeypatch.setitem(sys.modules, "torchvision", None)
+    monkeypatch.setitem(sys.modules, "torchvision.ops", None)
+    step = _super_resolution_step(backend="pytorch", scale_factor=2.0, algorithm="real-rawvsr-edvr")
+    step = ProcessingStep(
+        algorithm_type=step.algorithm_type,
+        algorithm_kwargs={**step.algorithm_kwargs, "num_frames": 5},
+        stage_name=step.stage_name,
+    )
+
+    with pytest.raises(ProcessError) as exc_info:
+        _validate([step])
+
+    assert exc_info.value.code == TaskErrorCode.MISSING_TENSOR_BACKEND
+    assert "torchvision CUDA deform_conv2d" in exc_info.value.message
+    assert exc_info.value.details["algorithm"] == "real-rawvsr-edvr"
 
 
 def test_onnx_super_resolution_model_is_checked_from_its_stage_backend(tmp_path, monkeypatch):

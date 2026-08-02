@@ -1,3 +1,5 @@
+import pytest
+
 from app.planning.processing_steps import ProcessingStep
 from app.planning.stage_plan import build_stage_plan
 from app.planning.stage_projection import StageProjection
@@ -147,15 +149,27 @@ def test_super_resolution_chunk_plans_keep_input_frame_counts_bounded() -> None:
     ]
 
 
-def test_real_rawvsr_chunk_plans_share_context_and_advance_logical_frames() -> None:
+@pytest.mark.parametrize(
+    ("algorithm", "num_frames"),
+    [
+        ("real-rawvsr-basicvsr", 10),
+        ("real-rawvsr-edvr", 5),
+        ("real-rawvsr-tdan", 5),
+        ("real-rawvsr-toflow", 5),
+    ],
+)
+def test_real_rawvsr_chunk_plans_share_context_and_advance_logical_frames(
+    algorithm: str,
+    num_frames: int,
+) -> None:
     step = ProcessingStep(
         algorithm_type="super_resolution",
         algorithm_kwargs={
             "scale_factor": 2.0,
-            "sr_algorithm": "real-rawvsr-basicvsr",
+            "sr_algorithm": algorithm,
             "tensor_backend": "pytorch",
             "engine": "cuda",
-            "num_frames": 10,
+            "num_frames": num_frames,
         },
         stage_name="01_super_resolution",
     )

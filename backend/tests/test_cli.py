@@ -603,16 +603,33 @@ def test_check_reports_consumed_capabilities_and_model_lists(tmp_path, monkeypat
     assert "weightPath" not in ppmsvsr_alg
     assert "weightAvailable" not in ppmsvsr_alg
 
-    real_rawvsr_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "real-rawvsr-basicvsr")
-    assert real_rawvsr_alg["family"] == "pytorch_vsr"
-    assert real_rawvsr_alg["tensorBackends"] == ["pytorch"]
-    assert real_rawvsr_alg["scaleFactors"] == [2, 3, 4]
-    assert [detail["name"] for detail in real_rawvsr_alg["modelDetails"]] == ["x2", "x3", "x4"]
-    assert real_rawvsr_alg["modelLicense"] == {
-        "spdxId": "CC-BY-NC-SA-4.0",
-        "usage": "non_commercial",
-        "sourceUrl": "https://github.com/zmzhang1998/Real-RawVSR",
+    real_rawvsr = {
+        algorithm["name"]: algorithm
+        for algorithm in payload["superResolutionAlgorithms"]
+        if algorithm["family"] == "pytorch_vsr"
     }
+    assert set(real_rawvsr) == {
+        "real-rawvsr-basicvsr",
+        "real-rawvsr-edvr",
+        "real-rawvsr-tdan",
+        "real-rawvsr-toflow",
+    }
+    for name, algorithm in real_rawvsr.items():
+        assert algorithm["tensorBackends"] == ["pytorch"]
+        assert algorithm["scaleFactors"] == [2, 3, 4]
+        assert [detail["name"] for detail in algorithm["modelDetails"]] == ["x2", "x3", "x4"]
+        assert algorithm["modelLicense"] == {
+            "spdxId": "CC-BY-NC-SA-4.0",
+            "usage": "non_commercial",
+            "sourceUrl": "https://github.com/zmzhang1998/Real-RawVSR",
+        }
+        if name == "real-rawvsr-basicvsr":
+            assert algorithm["inputFrameMode"] == "editable_chunk"
+            assert algorithm["defaultNumFrames"] == 10
+        else:
+            assert algorithm["inputFrameMode"] == "fixed_window"
+            assert algorithm["defaultNumFrames"] == 5
+            assert all(detail["metrics"]["inputModulo"] == 16 for detail in algorithm["modelDetails"])
 
     edvr_alg = next(a for a in payload["superResolutionAlgorithms"] if a["name"] == "edvr")
     assert "sequenceMode" not in edvr_alg
