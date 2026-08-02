@@ -389,7 +389,7 @@ fn backend_error_subset_rejects_shell_only_codes() {
 #[test]
 fn generated_persistence_entries_reject_missing_and_extra_fields() {
     let missing_fingerprint = json!({
-        "schemaVersion": 15,
+        "schemaVersion": 16,
         "checkedAt": "2026-07-28T12:34:56Z",
         "result": minimal_environment_result()
     });

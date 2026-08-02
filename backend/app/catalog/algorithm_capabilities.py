@@ -12,17 +12,15 @@ from app.catalog.stage_descriptors import (
     FILTER_CHAIN_DESCRIPTOR,
     ONNX_SUPER_RESOLUTION_DESCRIPTOR,
     PADDLEGAN_STAGE_DESCRIPTOR,
-    REAL_RAWVSR_BASICVSR_STAGE_DESCRIPTOR,
+    REAL_RAWVSR_RGB_STAGE_DESCRIPTOR,
     RIFE_STAGE_DESCRIPTOR,
     StageDescriptor,
 )
 from app.generated.model_assets import (
-    REAL_RAWVSR_BASICVSR_ALGORITHM,
-    REAL_RAWVSR_BASICVSR_DEFAULT_NUM_FRAMES,
-    REAL_RAWVSR_BASICVSR_LICENSE_SPDX,
-    REAL_RAWVSR_BASICVSR_LICENSE_USAGE,
-    REAL_RAWVSR_BASICVSR_SOURCE_URL,
-    REAL_RAWVSR_BASICVSR_VARIANTS,
+    REAL_RAWVSR_LICENSE_SPDX,
+    REAL_RAWVSR_LICENSE_USAGE,
+    REAL_RAWVSR_MODEL_FAMILIES,
+    REAL_RAWVSR_SOURCE_URL,
 )
 
 InputFrameModeName = Literal["none", "editable_chunk", "fixed_window"]
@@ -74,24 +72,27 @@ _PADDLEGAN_CAPABILITIES = tuple(
     for model_id, spec in PADDLEGAN_VSR_SPECS.items()
 )
 
-_REAL_RAWVSR_BASICVSR_CAPABILITY = AlgorithmCapability(
-    name=REAL_RAWVSR_BASICVSR_ALGORITHM,
-    descriptor=REAL_RAWVSR_BASICVSR_STAGE_DESCRIPTOR,
-    models=tuple(f"x{variant.scale_factor}" for variant in REAL_RAWVSR_BASICVSR_VARIANTS),
-    input_frame_mode="editable_chunk",
-    default_num_frames=REAL_RAWVSR_BASICVSR_DEFAULT_NUM_FRAMES,
-    scale_factors=tuple(variant.scale_factor for variant in REAL_RAWVSR_BASICVSR_VARIANTS),
-    model_license=_ModelLicenseCapability(
-        spdx_id=REAL_RAWVSR_BASICVSR_LICENSE_SPDX,
-        usage=REAL_RAWVSR_BASICVSR_LICENSE_USAGE,
-        source_url=REAL_RAWVSR_BASICVSR_SOURCE_URL,
-    ),
+_REAL_RAWVSR_CAPABILITIES = tuple(
+    AlgorithmCapability(
+        name=family.algorithm_id,
+        descriptor=REAL_RAWVSR_RGB_STAGE_DESCRIPTOR,
+        models=tuple(f"x{variant.scale_factor}" for variant in family.variants),
+        input_frame_mode=family.input_frame_mode,
+        default_num_frames=family.default_num_frames,
+        scale_factors=tuple(variant.scale_factor for variant in family.variants),
+        model_license=_ModelLicenseCapability(
+            spdx_id=REAL_RAWVSR_LICENSE_SPDX,
+            usage=REAL_RAWVSR_LICENSE_USAGE,
+            source_url=REAL_RAWVSR_SOURCE_URL,
+        ),
+    )
+    for family in REAL_RAWVSR_MODEL_FAMILIES
 )
 
 INTERPOLATION_CAPABILITIES = (RIFE_CAPABILITY,)
 SUPER_RESOLUTION_CAPABILITIES = (
     ONNX_SUPER_RESOLUTION_CAPABILITY,
-    _REAL_RAWVSR_BASICVSR_CAPABILITY,
+    *_REAL_RAWVSR_CAPABILITIES,
     *_PADDLEGAN_CAPABILITIES,
 )
 _CAPABILITIES_BY_TYPE = {

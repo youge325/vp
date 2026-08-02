@@ -46,4 +46,4 @@ ehthumbs.db
 /backend/models/**/*.onnx
 /backend/models/**/*.pkl
 /backend/models/**/*.pdparams
-/backend/models/super_resolution/pytorch/real-rawvsr-basicvsr/**/model.safetensors
+/backend/models/**/*.safetensors

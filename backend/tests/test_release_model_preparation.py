@@ -15,32 +15,38 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-import prepare_real_rawvsr_basicvsr as preparation  # noqa: E402
+import prepare_real_rawvsr_models as preparation  # noqa: E402
 
 
 def _write_manifest(root: Path, *, source_bytes: int, source_sha256: str) -> Path:
-    license_dir = root / "licenses/real-rawvsr-basicvsr"
+    license_dir = root / "licenses/real-rawvsr"
     license_dir.mkdir(parents=True)
     (license_dir / "CC-BY-NC-SA-4.0.txt").write_text("license", encoding="utf-8")
     (license_dir / "NOTICE.md").write_text("notice", encoding="utf-8")
+    (license_dir / "THIRD-PARTY-NOTICES.md").write_text("third party", encoding="utf-8")
     manifest = {
-        "realRawVsrBasicVsr": {
-            "license": {
-                "licenseRelativePath": "licenses/real-rawvsr-basicvsr/CC-BY-NC-SA-4.0.txt",
-                "noticeRelativePath": "licenses/real-rawvsr-basicvsr/NOTICE.md",
-            },
-            "variants": [
-                {
-                    "scaleFactor": 2,
-                    "googleDriveFileId": "official-x2",
-                    "sourceBytes": source_bytes,
-                    "sourceSha256": source_sha256,
-                    "inferenceBytes": 1,
-                    "inferenceSha256": "0" * 64,
-                    "relativePath": "models/super_resolution/pytorch/real-rawvsr-basicvsr/x2/model.safetensors",
-                }
-            ],
-        }
+        "license": {
+            "licenseRelativePath": "licenses/real-rawvsr/CC-BY-NC-SA-4.0.txt",
+            "noticeRelativePath": "licenses/real-rawvsr/NOTICE.md",
+            "thirdPartyNoticeRelativePath": "licenses/real-rawvsr/THIRD-PARTY-NOTICES.md",
+        },
+        "families": [
+            {
+                "algorithmId": "real-rawvsr-basicvsr",
+                "variants": [
+                    {
+                        "scaleFactor": 2,
+                        "googleDriveFileId": "official-x2",
+                        "sourceBytes": source_bytes,
+                        "sourceSha256": source_sha256,
+                        "inferenceBytes": 1,
+                        "inferenceSha256": "0" * 64,
+                        "parameterCount": 1,
+                        "relativePath": "models/super_resolution/pytorch/real-rawvsr-basicvsr/x2/model.safetensors",
+                    }
+                ],
+            }
+        ],
     }
     path = root / "contracts/model-assets.json"
     path.parent.mkdir()
@@ -54,7 +60,7 @@ def test_model_preparation_requires_explicit_noncommercial_acceptance() -> None:
 
 
 def test_model_preparation_rejects_source_hash_drift_before_loading_pickle(tmp_path: Path, monkeypatch) -> None:
-    source = tmp_path / "source/x2/best.pth"
+    source = tmp_path / "source/real-rawvsr-basicvsr/x2/best.pth"
     source.parent.mkdir(parents=True)
     source.write_bytes(b"not-an-official-checkpoint")
     manifest_path = _write_manifest(
@@ -68,7 +74,7 @@ def test_model_preparation_rejects_source_hash_drift_before_loading_pickle(tmp_p
     with pytest.raises(RuntimeError, match="official checkpoint SHA-256 mismatch"):
         preparation.prepare_models(
             acceptance="CC-BY-NC-SA-4.0-NONCOMMERCIAL",
-            source_dir=source.parents[1],
+            source_dir=source.parents[2],
         )
 
     assert not any((tmp_path / "backend").rglob("*.safetensors"))
@@ -92,7 +98,7 @@ def test_model_preparation_propagates_download_failure_without_partial_output(tm
 
 def test_model_preparation_requires_packaged_license_files(tmp_path: Path, monkeypatch) -> None:
     manifest_path = _write_manifest(tmp_path, source_bytes=1, source_sha256="0" * 64)
-    (tmp_path / "licenses/real-rawvsr-basicvsr/NOTICE.md").unlink()
+    (tmp_path / "licenses/real-rawvsr/NOTICE.md").unlink()
     monkeypatch.setattr(preparation, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(preparation, "ASSET_MANIFEST", manifest_path)
 

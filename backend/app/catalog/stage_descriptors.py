@@ -51,6 +51,7 @@ class StageDescriptor:
     supported_backends: frozenset[str]
     factory_key: str
     model_kind: StageModelKind
+    temporal_context_frames: int = 0
 
     @property
     def fixed_scale_factor(self) -> float | None:
@@ -94,13 +95,14 @@ PADDLEGAN_STAGE_DESCRIPTOR = StageDescriptor(
     model_kind="paddlegan_vsr",
 )
 
-REAL_RAWVSR_BASICVSR_STAGE_DESCRIPTOR = StageDescriptor(
+REAL_RAWVSR_RGB_STAGE_DESCRIPTOR = StageDescriptor(
     execution_mode="sequence",
     requires_file_pipeline=True,
     geometry=_GeometryPolicy("configured_scale"),
     supported_backends=frozenset({"pytorch"}),
-    factory_key="real_rawvsr_basicvsr",
+    factory_key="real_rawvsr_rgb",
     model_kind="pytorch_vsr",
+    temporal_context_frames=2,
 )
 
 
@@ -109,7 +111,7 @@ __all__ = [
     "FILTER_CHAIN_DESCRIPTOR",
     "ONNX_SUPER_RESOLUTION_DESCRIPTOR",
     "PADDLEGAN_STAGE_DESCRIPTOR",
-    "REAL_RAWVSR_BASICVSR_STAGE_DESCRIPTOR",
+    "REAL_RAWVSR_RGB_STAGE_DESCRIPTOR",
     "RIFE_STAGE_DESCRIPTOR",
     "StageDescriptor",
     "StageExecutionMode",

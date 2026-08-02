@@ -117,14 +117,14 @@ def _validate_structure(step: ProcessingStep) -> None:
     if descriptor.model_kind == "pytorch_vsr" and engine != "cuda":
         raise_error(
             TaskErrorCode.INVALID_CONFIG,
-            f"Real-RawVSR BasicVSR supports only the CUDA engine; got '{engine}'.",
+            f"{algorithm} supports only the CUDA engine; got '{engine}'.",
             details={"stage": step.stage_name, "algorithm": algorithm, "engine": engine},
         )
     if backend_name not in descriptor.supported_backends:
         if descriptor.model_kind == "paddlegan_vsr":
             message = f"PaddleGAN VSR requires the Paddle tensor backend; got '{backend_name}'."
         elif descriptor.model_kind == "pytorch_vsr":
-            message = f"Real-RawVSR BasicVSR requires the PyTorch tensor backend; got '{backend_name}'."
+            message = f"{algorithm} requires the PyTorch tensor backend; got '{backend_name}'."
         else:
             message = f"ONNX super-resolution does not support the '{backend_name}' tensor backend."
         raise_error(

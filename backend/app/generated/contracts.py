@@ -787,7 +787,7 @@ class EnvironmentCacheEntry(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    schema_version: Literal[15] = Field(..., alias="schemaVersion")
+    schema_version: Literal[16] = Field(..., alias="schemaVersion")
     checked_at: AwareDatetime = Field(..., alias="checkedAt")
     fingerprint: constr(min_length=1, strict=True)
     result: EnvironmentCheckResult

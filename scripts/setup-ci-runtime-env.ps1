@@ -198,7 +198,7 @@ Write-Host "  model dir:     $modelDir"
 Write-Host "  pytorch model: $($defaultModels.PytorchPath)"
 Write-Host "  onnx model:    $($defaultModels.OnnxPath)"
 foreach ($model in $realRawVsrModels.Models) {
-    Write-Host "  BasicVSR x$($model.ScaleFactor): $($model.Path)"
+    Write-Host "  $($model.DisplayName) x$($model.ScaleFactor): $($model.Path)"
 }
 Write-Host "  ffmpeg dir:    $($ffmpegSource.Dir)"
 Write-Host "  ffmpeg:        $($ffmpegSource.Ffmpeg)"

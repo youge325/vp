@@ -52,7 +52,7 @@ def build_stage_worker_step(
         kwargs.pop("scale_factor", None)
         kwargs.pop("onnx_model", None)
         return StageWorkerPaddleSuperResolutionStep.model_validate(payload)
-    if factory_key == "real_rawvsr_basicvsr":
+    if factory_key == "real_rawvsr_rgb":
         kwargs.pop("onnx_model", None)
         return StageWorkerPytorchVsrStep.model_validate(payload)
     if factory_key == "filter_chain":
@@ -70,7 +70,7 @@ def processing_step_from_config(config: StageWorkerConfig) -> ProcessingStep:
         raise ValueError(f"Stage worker {stage.algorithm_type.value!r} requires a tensor backend.")
     # Generated stage-worker models use Python field names internally, but
     # ProcessingStep and filter handlers consume the canonical wire keys.
-    algorithm_kwargs = stage.algorithm_kwargs.model_dump(by_alias=True, exclude_unset=True)
+    algorithm_kwargs = stage.algorithm_kwargs.model_dump(mode="json", by_alias=True, exclude_unset=True)
     if config.tensor_backend_name is not None:
         algorithm_kwargs["tensor_backend"] = config.tensor_backend_name
     step = ProcessingStep(

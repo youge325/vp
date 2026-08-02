@@ -78,15 +78,16 @@ def _create_paddlegan(stage: ProcessingStep, _backend: ITensorBackend | None, _m
     )
 
 
-def _create_real_rawvsr_basicvsr(
+def _create_real_rawvsr_rgb(
     stage: ProcessingStep,
     _backend: ITensorBackend | None,
     model_root: str,
 ) -> Algorithm:
-    from app.algorithms.pytorch.real_rawvsr_basicvsr.runner import RealRawVsrBasicVsr
+    from app.algorithms.pytorch.real_rawvsr.factory import create_real_rawvsr_algorithm
 
     kwargs = stage.algorithm_kwargs
-    return RealRawVsrBasicVsr(
+    return create_real_rawvsr_algorithm(
+        algorithm_id=str(kwargs["sr_algorithm"]),
         scale_factor=int(kwargs["scale_factor"]),
         num_frames=int(kwargs["num_frames"]),
         engine=str(kwargs["engine"]),
@@ -98,7 +99,7 @@ _ALGORITHM_FACTORIES: dict[str, _AlgorithmFactory] = {
     "rife": _create_rife,
     "onnx_super_resolution": _create_onnx_super_resolution,
     "paddlegan_vsr": _create_paddlegan,
-    "real_rawvsr_basicvsr": _create_real_rawvsr_basicvsr,
+    "real_rawvsr_rgb": _create_real_rawvsr_rgb,
 }
 
 
