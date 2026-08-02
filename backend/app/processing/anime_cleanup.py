@@ -9,8 +9,6 @@ from PIL import Image, ImageFilter
 
 
 class _AnimeProfileSpec(TypedDict):
-    default_denoise: int
-    default_edge_boost: int
     median_size: int
     denoise_gain: float
     edge_radius: float
@@ -20,8 +18,6 @@ class _AnimeProfileSpec(TypedDict):
 
 _PROFILE_SPECS: Final[dict[str, _AnimeProfileSpec]] = {
     "clean-lines": {
-        "default_denoise": 15,
-        "default_edge_boost": 30,
         "median_size": 3,
         "denoise_gain": 1.0,
         "edge_radius": 1.0,
@@ -29,8 +25,6 @@ _PROFILE_SPECS: Final[dict[str, _AnimeProfileSpec]] = {
         "edge_threshold": 2,
     },
     "thin-outline": {
-        "default_denoise": 8,
-        "default_edge_boost": 45,
         "median_size": 3,
         "denoise_gain": 0.6,
         "edge_radius": 0.6,
@@ -38,8 +32,6 @@ _PROFILE_SPECS: Final[dict[str, _AnimeProfileSpec]] = {
         "edge_threshold": 1,
     },
     "balanced-cel": {
-        "default_denoise": 25,
-        "default_edge_boost": 20,
         "median_size": 5,
         "denoise_gain": 0.85,
         "edge_radius": 1.4,
@@ -62,8 +54,8 @@ def apply_anime_cleanup(
     frame: np.ndarray,
     *,
     profile: str,
-    denoise: int | float | None = None,
-    edge_boost: int | float | None = None,
+    denoise: int | float,
+    edge_boost: int | float,
 ) -> np.ndarray:
     """Apply profile-guided denoising and edge enhancement to one RGB frame."""
     spec = _PROFILE_SPECS.get(profile)
@@ -72,14 +64,8 @@ def apply_anime_cleanup(
     if frame.ndim != 3 or frame.shape[2] != 3 or frame.dtype != np.uint8:
         raise ValueError("Anime cleanup expects an HWC RGB uint8 frame")
 
-    denoise_strength = _validate_strength(
-        "denoise",
-        spec["default_denoise"] if denoise is None else denoise,
-    )
-    edge_strength = _validate_strength(
-        "edge_boost",
-        spec["default_edge_boost"] if edge_boost is None else edge_boost,
-    )
+    denoise_strength = _validate_strength("denoise", denoise)
+    edge_strength = _validate_strength("edge_boost", edge_boost)
     if denoise_strength == 0 and edge_strength == 0:
         return frame
 

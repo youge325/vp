@@ -6,6 +6,7 @@
 export * from './events'
 export * from './errors'
 export { APPLICATION_DEFAULTS } from '../generated/application-defaults'
+export { FILTER_FIELD_CONSTRAINTS } from '../generated/filter-constraints'
 
 export type {
   AlgorithmInfo,

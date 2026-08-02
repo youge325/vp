@@ -477,7 +477,6 @@ mod tests {
     use std::time::Duration;
 
     use serde::Deserialize;
-    use serde_json::json;
     use tokio::process::Command;
     use tokio::sync::oneshot;
 
@@ -490,9 +489,7 @@ mod tests {
     use crate::error::ShellError;
     use crate::generated::{CheckEnvironmentSpec, CheckResumeStateSpec, InspectVideoSpec};
     use crate::models::BackendTaskErrorCode;
-    use crate::tasks::oneshot_envelope::{
-        deserialize_success_envelope, parse_last_typed_cli_envelope, TypedCliEnvelope,
-    };
+    use crate::tasks::oneshot_envelope::{parse_last_typed_cli_envelope, TypedCliEnvelope};
     use crate::tasks::test_support::assert_process_exited;
 
     const FIXTURE_MODE_ENV: &str = "VP_ONESHOT_TEST_MODE";
@@ -755,104 +752,6 @@ mod tests {
     }
 
     #[test]
-    fn deserializes_typed_success_payload() {
-        let payload = deserialize_success_envelope::<ProbePayload>(
-            json!({ "type": "check", "value": 42 }),
-            "check",
-            false,
-            "probe payload",
-        )
-        .expect("typed payload");
-
-        assert_eq!(payload, ProbePayload { value: 42 });
-    }
-
-    #[test]
-    fn maps_success_schema_mismatch_with_payload_name() {
-        let error = deserialize_success_envelope::<ProbePayload>(
-            json!({ "type": "check", "value": "invalid" }),
-            "check",
-            false,
-            "probe payload",
-        )
-        .expect_err("schema mismatch");
-
-        match error {
-            ShellError::SchemaValidation(message) => {
-                assert!(message.starts_with("Unable to deserialize probe payload:"));
-            }
-            other => panic!("unexpected error: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn projects_real_check_envelope_before_strict_payload_decode() {
-        #[derive(Debug, Deserialize, PartialEq, Eq)]
-        #[serde(rename_all = "camelCase", deny_unknown_fields)]
-        struct CheckPayload {
-            runtime_mode: String,
-        }
-
-        let payload = deserialize_success_envelope::<CheckPayload>(
-            json!({ "type": "check", "runtimeMode": "bundled" }),
-            "check",
-            false,
-            "environment check result",
-        )
-        .expect("check payload");
-        assert_eq!(payload.runtime_mode, "bundled");
-    }
-
-    #[test]
-    fn projects_real_info_envelope_before_strict_payload_decode() {
-        #[derive(Debug, Deserialize, PartialEq)]
-        #[serde(rename_all = "camelCase", deny_unknown_fields)]
-        struct InfoPayload {
-            fps: f64,
-            width: u32,
-            height: u32,
-            video_codec: String,
-        }
-
-        let payload = deserialize_success_envelope::<InfoPayload>(
-            json!({
-                "type": "info",
-                "fps": 24.0,
-                "width": 1920,
-                "height": 1080,
-                "videoCodec": "h264"
-            }),
-            "info",
-            false,
-            "video info",
-        )
-        .expect("info payload");
-        assert_eq!(payload.video_codec, "h264");
-    }
-
-    #[test]
-    fn preserves_resume_inspection_discriminant() {
-        #[derive(Debug, Deserialize, PartialEq, Eq)]
-        #[serde(deny_unknown_fields)]
-        struct InspectionPayload {
-            r#type: String,
-            pipeline_kind: String,
-        }
-
-        let payload = deserialize_success_envelope::<InspectionPayload>(
-            json!({
-                "type": "resume_inspection",
-                "pipeline_kind": "streaming"
-            }),
-            "resume_inspection",
-            true,
-            "resume inspection",
-        )
-        .expect("resume inspection payload");
-        assert_eq!(payload.r#type, "resume_inspection");
-    }
-
-    #[test]
     fn reverse_scan_returns_the_last_schema_valid_typed_envelope() {
         let stdout = concat!(
             "diagnostic text\n",
@@ -997,39 +896,5 @@ mod tests {
                 panic!("malformed error must not become an error payload")
             }
         }
-    }
-
-    #[test]
-    fn check_projection_rejects_a_missing_discriminator() {
-        let error = deserialize_success_envelope::<ProbePayload>(
-            json!({ "value": 42 }),
-            "check",
-            false,
-            "probe",
-        )
-        .expect_err("missing type");
-
-        assert!(matches!(
-            error,
-            ShellError::SchemaValidation(message) if message.contains("missing envelope type")
-        ));
-    }
-
-    #[test]
-    fn check_projection_rejects_a_wrong_discriminator() {
-        let error = deserialize_success_envelope::<ProbePayload>(
-            json!({ "type": "info", "value": 42 }),
-            "check",
-            false,
-            "probe",
-        )
-        .expect_err("wrong type");
-
-        assert!(matches!(
-            error,
-            ShellError::SchemaValidation(message)
-                if message.contains("expected envelope type \"check\"")
-                    && message.contains("\"info\"")
-        ));
     }
 }

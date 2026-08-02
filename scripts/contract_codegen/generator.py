@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .application_defaults import (
     load_application_defaults,
+    render_filter_constraints_typescript,
     render_python_application_defaults,
     render_rust_application_defaults,
     render_typescript_application_defaults,
@@ -100,6 +101,10 @@ def main() -> int:
             (
                 ROOT / "frontend/src/types/generated/application-defaults.ts",
                 render_typescript_application_defaults(application_defaults),
+            ),
+            (
+                ROOT / "frontend/src/types/generated/filter-constraints.ts",
+                render_filter_constraints_typescript(CONTRACTS),
             ),
             (ROOT / "frontend/src/lib/ipc/contract.ts", _render_ipc_contract(manifest)),
             (

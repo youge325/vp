@@ -1,4 +1,5 @@
 import { animeCleanupParamsForProfile } from './anime-cleanup'
+import { APPLICATION_DEFAULTS, FILTER_FIELD_CONSTRAINTS } from '@/types/protocol'
 import type { FilterStep, FilterStepKind } from '@/types/protocol'
 
 type FilterStepFor<Kind extends FilterStepKind> = Extract<FilterStep, { kind: Kind }>
@@ -13,6 +14,37 @@ export interface FilterFieldDefinition<Kind extends FilterStepKind = FilterStepK
   min?: number
   max?: number
   step?: number
+  pattern?: string
+}
+
+interface FilterFieldConstraint {
+  readonly minimum?: number
+  readonly exclusiveMinimum?: number
+  readonly maximum?: number
+  readonly enum?: readonly string[]
+  readonly pattern?: string
+}
+
+const FILTER_CONSTRAINTS: Readonly<Record<FilterStepKind, Readonly<Record<string, FilterFieldConstraint>>>>
+  = FILTER_FIELD_CONSTRAINTS
+
+function field<Kind extends FilterStepKind>(
+  kind: Kind,
+  key: FilterParamKey<Kind>,
+  label: string,
+  type: 'number' | 'text',
+  step?: number,
+): FilterFieldDefinition<Kind> {
+  const constraint = FILTER_CONSTRAINTS[kind][key]
+  return {
+    key,
+    label,
+    type,
+    ...(constraint?.minimum === undefined ? {} : { min: constraint.minimum }),
+    ...(constraint?.maximum === undefined ? {} : { max: constraint.maximum }),
+    ...(constraint?.pattern === undefined ? {} : { pattern: constraint.pattern }),
+    ...(step === undefined ? {} : { step }),
+  }
 }
 
 interface FilterEditorDefinition<Kind extends FilterStepKind> {
@@ -42,20 +74,20 @@ const CATALOG_BY_KIND: FilterCatalogByKind = {
     defaultStep: {
       kind: 'scale',
       enabled: true,
-      params: { mode: 'factor', factor: 0.5, width: 1920, height: 1080, interpolation: 'lanczos4' },
+      params: { ...APPLICATION_DEFAULTS.filters.scale },
     },
   },
   crop: {
     kind: 'crop',
     label: '裁剪',
-    defaultStep: { kind: 'crop', enabled: true, params: { x: 0, y: 0, width: 1920, height: 1080 } },
+    defaultStep: { kind: 'crop', enabled: true, params: { ...APPLICATION_DEFAULTS.filters.crop } },
     editor: {
       columns: 4,
       fields: [
-        { key: 'x', label: 'X', type: 'number', min: 0 },
-        { key: 'y', label: 'Y', type: 'number', min: 0 },
-        { key: 'width', label: '宽度', type: 'number', min: 1 },
-        { key: 'height', label: '高度', type: 'number', min: 1 },
+        field('crop', 'x', 'X', 'number'),
+        field('crop', 'y', 'Y', 'number'),
+        field('crop', 'width', '宽度', 'number'),
+        field('crop', 'height', '高度', 'number'),
       ],
     },
   },
@@ -65,50 +97,50 @@ const CATALOG_BY_KIND: FilterCatalogByKind = {
     defaultStep: {
       kind: 'pad',
       enabled: true,
-      params: { top: 0, bottom: 0, left: 0, right: 0, color: '#000000' },
+      params: { ...APPLICATION_DEFAULTS.filters.pad },
     },
     editor: {
       columns: 3,
       fields: [
-        { key: 'top', label: '上', type: 'number', min: 0 },
-        { key: 'bottom', label: '下', type: 'number', min: 0 },
-        { key: 'left', label: '左', type: 'number', min: 0 },
-        { key: 'right', label: '右', type: 'number', min: 0 },
-        { key: 'color', label: '颜色 (hex)', type: 'text' },
+        field('pad', 'top', '上', 'number'),
+        field('pad', 'bottom', '下', 'number'),
+        field('pad', 'left', '左', 'number'),
+        field('pad', 'right', '右', 'number'),
+        field('pad', 'color', '颜色 (hex)', 'text'),
       ],
     },
   },
   sharpen: {
     kind: 'sharpen',
     label: '锐化',
-    defaultStep: { kind: 'sharpen', enabled: true, params: { amount: 0.5 } },
+    defaultStep: { kind: 'sharpen', enabled: true, params: { ...APPLICATION_DEFAULTS.filters.sharpen } },
     editor: {
       columns: 2,
-      fields: [{ key: 'amount', label: '强度 (0~1)', type: 'number', min: 0, max: 1, step: 0.05 }],
+      fields: [field('sharpen', 'amount', '强度 (0~1)', 'number', 0.05)],
     },
   },
   denoise: {
     kind: 'denoise',
     label: '降噪',
-    defaultStep: { kind: 'denoise', enabled: true, params: { strength: 10, colorStrength: 10 } },
+    defaultStep: { kind: 'denoise', enabled: true, params: { ...APPLICATION_DEFAULTS.filters.denoise } },
     editor: {
       columns: 2,
       fields: [
-        { key: 'strength', label: '强度 (1~20)', type: 'number', min: 1, max: 20 },
-        { key: 'colorStrength', label: '色彩强度 (1~20)', type: 'number', min: 1, max: 20 },
+        field('denoise', 'strength', '强度 (0~20)', 'number'),
+        field('denoise', 'colorStrength', '色彩强度 (0~20)', 'number'),
       ],
     },
   },
   color: {
     kind: 'color',
     label: '色彩调整',
-    defaultStep: { kind: 'color', enabled: true, params: { brightness: 0, contrast: 1, saturation: 1 } },
+    defaultStep: { kind: 'color', enabled: true, params: { ...APPLICATION_DEFAULTS.filters.color } },
     editor: {
       columns: 3,
       fields: [
-        { key: 'brightness', label: '亮度 (-1~1)', type: 'number', min: -1, max: 1, step: 0.05 },
-        { key: 'contrast', label: '对比度 (0~3)', type: 'number', min: 0, max: 3, step: 0.05 },
-        { key: 'saturation', label: '饱和度 (0~3)', type: 'number', min: 0, max: 3, step: 0.05 },
+        field('color', 'brightness', '亮度 (-1~1)', 'number', 0.05),
+        field('color', 'contrast', '对比度 (0~3)', 'number', 0.05),
+        field('color', 'saturation', '饱和度 (0~3)', 'number', 0.05),
       ],
     },
   },
@@ -118,7 +150,7 @@ const CATALOG_BY_KIND: FilterCatalogByKind = {
     defaultStep: {
       kind: 'anime_cleanup',
       enabled: true,
-      params: animeCleanupParamsForProfile('clean-lines'),
+      params: animeCleanupParamsForProfile(APPLICATION_DEFAULTS.filters.animeCleanup.defaultProfile),
     },
   },
 }

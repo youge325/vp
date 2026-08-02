@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .application_defaults import check_application_default_consumers
+from .filter_contracts import check_filter_contract_consumers
 from .catalog import RULES
 from .ipc_checks import _check_command_surface
 from .protocol_markers import check_protocol_marker_literals
@@ -70,6 +71,7 @@ def collect_architecture_issues(root: Path) -> list[str]:
     issues.extend(_check_rust_unused_dependencies(root))
     issues.extend(_check_rust_public_surface(root))
     issues.extend(check_application_default_consumers(root))
+    issues.extend(check_filter_contract_consumers(root))
     issues.extend(check_script_reachability(root))
     issues.extend(check_rust_restricted_visibility(root))
     return issues

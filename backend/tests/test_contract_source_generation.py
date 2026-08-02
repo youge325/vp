@@ -28,6 +28,7 @@ if str(SCRIPTS) not in sys.path:
 
 from contract_codegen.application_defaults import (  # noqa: E402
     load_application_defaults,
+    render_filter_constraints_typescript,
     render_python_application_defaults,
     render_rust_application_defaults,
     render_typescript_application_defaults,
@@ -93,11 +94,43 @@ def test_application_defaults_are_strict_validated_product_defaults() -> None:
         "processOrder": "super_resolution_then_interpolation",
     }
     assert defaults["output"]["segmentFrames"] == 1000
+    assert defaults["filters"] == {
+        "scale": {
+            "mode": "factor",
+            "factor": 0.5,
+            "width": 1920,
+            "height": 1080,
+            "interpolation": "lanczos4",
+        },
+        "crop": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+        "pad": {"top": 0, "bottom": 0, "left": 0, "right": 0, "color": "#000000"},
+        "sharpen": {"amount": 0.5},
+        "denoise": {"strength": 10, "colorStrength": 10},
+        "color": {"brightness": 0, "contrast": 1, "saturation": 1},
+        "animeCleanup": {
+            "defaultProfile": "clean-lines",
+            "profiles": {
+                "clean-lines": {"denoise": 15, "edgeBoost": 30},
+                "thin-outline": {"denoise": 8, "edgeBoost": 45},
+                "balanced-cel": {"denoise": 25, "edgeBoost": 20},
+            },
+        },
+    }
 
     invalid = copy.deepcopy(defaults)
     invalid["output"]["segmentFrames"] = -1
     with pytest.raises(ValidationError):
         validator.validate(invalid)
+
+    missing_filter_default = copy.deepcopy(defaults)
+    del missing_filter_default["filters"]["scale"]["factor"]
+    with pytest.raises(ValidationError):
+        validator.validate(missing_filter_default)
+
+    invalid_profile_strength = copy.deepcopy(defaults)
+    invalid_profile_strength["filters"]["animeCleanup"]["profiles"]["clean-lines"]["denoise"] = 101
+    with pytest.raises(ValidationError):
+        validator.validate(invalid_profile_strength)
 
     extra = copy.deepcopy(defaults)
     extra["legacyDefault"] = True
@@ -111,12 +144,18 @@ def test_application_defaults_generate_language_native_read_only_constants() -> 
     python_output = render_python_application_defaults(defaults)
     typescript_output = render_typescript_application_defaults(defaults)
     rust_output = render_rust_application_defaults(defaults)
+    filter_constraints = render_filter_constraints_typescript(CONTRACTS)
 
     assert 'DEFAULT_RIFE_MODEL_VERSION: Final = "4.25"' in python_output
     assert "DEFAULT_SEGMENT_FRAMES: Final = 1000" in python_output
+    assert "FILTER_DEFAULTS: Final = MappingProxyType" in python_output
+    assert '"clean-lines": MappingProxyType({"denoise": 15, "edgeBoost": 30})' in python_output
     assert "export const APPLICATION_DEFAULTS =" in typescript_output
     assert '"segmentFrames": 1000' in typescript_output
     assert 'DEFAULT_RIFE_MODEL_VERSION: &str = "4.25"' in rust_output
+    assert "export const FILTER_FIELD_CONSTRAINTS =" in filter_constraints
+    assert '"amount": {"minimum": 0, "maximum": 1}' in filter_constraints
+    assert '"profile": {"enum": ["clean-lines", "thin-outline", "balanced-cel"]}' in filter_constraints
 
 
 def test_python_generated_package_contains_only_declared_contract_outputs() -> None:

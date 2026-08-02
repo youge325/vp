@@ -18,6 +18,9 @@
     },
     "output": {
       "$ref": "#/$defs/OutputDefaults"
+    },
+    "filters": {
+      "$ref": "#/$defs/FilterDefaults"
     }
   },
   "required": [
@@ -25,7 +28,8 @@
     "interpolation",
     "superResolution",
     "workflow",
-    "output"
+    "output",
+    "filters"
   ],
   "additionalProperties": false,
   "$defs": {
@@ -147,6 +151,85 @@
       "required": [
         "segmentFrames"
       ],
+      "additionalProperties": false
+    },
+    "FilterDefaults": {
+      "type": "object",
+      "properties": {
+        "scale": { "$ref": "#/$defs/ScaleFilterDefaults" },
+        "crop": { "$ref": "#/$defs/CropFilterDefaults" },
+        "pad": { "$ref": "#/$defs/PadFilterDefaults" },
+        "sharpen": { "$ref": "#/$defs/SharpenFilterDefaults" },
+        "denoise": { "$ref": "#/$defs/DenoiseFilterDefaults" },
+        "color": { "$ref": "#/$defs/ColorFilterDefaults" },
+        "animeCleanup": { "$ref": "#/$defs/AnimeCleanupDefaults" }
+      },
+      "required": ["scale", "crop", "pad", "sharpen", "denoise", "color", "animeCleanup"],
+      "additionalProperties": false
+    },
+    "ScaleFilterDefaults": {
+      "allOf": [
+        { "$ref": "./filter-step.schema.json#/$defs/ScaleFilterParams" },
+        { "required": ["mode", "factor", "width", "height", "interpolation"] }
+      ]
+    },
+    "CropFilterDefaults": {
+      "allOf": [
+        { "$ref": "./filter-step.schema.json#/$defs/CropFilterParams" },
+        { "required": ["x", "y", "width", "height"] }
+      ]
+    },
+    "PadFilterDefaults": {
+      "allOf": [
+        { "$ref": "./filter-step.schema.json#/$defs/PadFilterParams" },
+        { "required": ["top", "bottom", "left", "right", "color"] }
+      ]
+    },
+    "SharpenFilterDefaults": {
+      "allOf": [
+        { "$ref": "./filter-step.schema.json#/$defs/SharpenFilterParams" },
+        { "required": ["amount"] }
+      ]
+    },
+    "DenoiseFilterDefaults": {
+      "allOf": [
+        { "$ref": "./filter-step.schema.json#/$defs/DenoiseFilterParams" },
+        { "required": ["strength", "colorStrength"] }
+      ]
+    },
+    "ColorFilterDefaults": {
+      "allOf": [
+        { "$ref": "./filter-step.schema.json#/$defs/ColorFilterParams" },
+        { "required": ["brightness", "contrast", "saturation"] }
+      ]
+    },
+    "AnimeCleanupStrengthDefaults": {
+      "type": "object",
+      "properties": {
+        "denoise": { "$ref": "./filter-step.schema.json#/$defs/AnimeCleanupFilterParams/properties/denoise" },
+        "edgeBoost": { "$ref": "./filter-step.schema.json#/$defs/AnimeCleanupFilterParams/properties/edgeBoost" }
+      },
+      "required": ["denoise", "edgeBoost"],
+      "additionalProperties": false
+    },
+    "AnimeCleanupDefaults": {
+      "type": "object",
+      "properties": {
+        "defaultProfile": {
+          "$ref": "./filter-step.schema.json#/$defs/AnimeCleanupFilterParams/properties/profile"
+        },
+        "profiles": {
+          "type": "object",
+          "properties": {
+            "clean-lines": { "$ref": "#/$defs/AnimeCleanupStrengthDefaults" },
+            "thin-outline": { "$ref": "#/$defs/AnimeCleanupStrengthDefaults" },
+            "balanced-cel": { "$ref": "#/$defs/AnimeCleanupStrengthDefaults" }
+          },
+          "required": ["clean-lines", "thin-outline", "balanced-cel"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["defaultProfile", "profiles"],
       "additionalProperties": false
     }
   }

@@ -15,11 +15,18 @@ import pytest
     ],
 )
 def test_missing_strengths_use_profile_defaults(profile: str, denoise: int, edge_boost: int) -> None:
+    from app.catalog.filter_parameters import normalize_filter_params
     from app.processing.anime_cleanup import apply_anime_cleanup
 
     frame = np.arange(12 * 12 * 3, dtype=np.uint8).reshape(12, 12, 3)
 
-    implicit = apply_anime_cleanup(frame, profile=profile, denoise=None, edge_boost=None)
+    normalized = normalize_filter_params("anime_cleanup", {"profile": profile})
+    implicit = apply_anime_cleanup(
+        frame,
+        profile=str(normalized["profile"]),
+        denoise=float(normalized["denoise"]),
+        edge_boost=float(normalized["edgeBoost"]),
+    )
     explicit = apply_anime_cleanup(frame, profile=profile, denoise=denoise, edge_boost=edge_boost)
 
     np.testing.assert_array_equal(implicit, explicit)
