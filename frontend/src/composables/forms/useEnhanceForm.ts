@@ -14,6 +14,7 @@ import { useEnvStore } from '@/stores/env'
 import type {
   FpsMode,
   InferenceEngine,
+  ModelLicenseInfo,
   ProcessOrder,
   TensorBackend,
 } from '@/types/protocol'
@@ -45,7 +46,8 @@ interface EnhanceFormFields {
   processOrder: ProcessOrder
   readonly isInterpolationOnnxBackend: boolean
   readonly isSuperResolutionOnnxBackend: boolean
-  readonly isPaddleGanSuperResolution: boolean
+  readonly isSuperResolutionScaleLocked: boolean
+  readonly superResolutionModelLicense: ModelLicenseInfo | null
   readonly isSuperResolutionInputFramesEditable: boolean
   readonly superResolutionInputFramesLabel: string
   readonly superResolutionInputFramesHint: string
@@ -132,8 +134,11 @@ export function useEnhanceForm(): EnhanceFormModel {
     processOrder: scalars.processOrder,
     isInterpolationOnnxBackend: algorithms.isInterpolationOnnxBackend,
     isSuperResolutionOnnxBackend: algorithms.isSuperResolutionOnnxBackend,
-    isPaddleGanSuperResolution: computed(
-      () => readModel.value.isPaddleGanSuperResolution,
+    isSuperResolutionScaleLocked: computed(
+      () => readModel.value.isSuperResolutionScaleLocked,
+    ),
+    superResolutionModelLicense: computed(
+      () => readModel.value.superResolutionModelLicense,
     ),
     isSuperResolutionInputFramesEditable: computed(
       () => readModel.value.isSuperResolutionInputFramesEditable,
@@ -155,6 +160,8 @@ export function useEnhanceForm(): EnhanceFormModel {
       interpolationModelDetails: readModel.value.interpolationModelDetails,
       interpolationOnnxModelDetails: readModel.value.interpolationOnnxModelDetails,
       superResolutionAlgorithms: algorithms.superResolutionAlgorithms.value,
+      currentSuperResolutionAlgorithm: algorithms.currentSuperResolutionAlgorithm.value,
+      superResolutionScaleFactor: fields.superResolutionScale,
       superResolutionOnnxModels: algorithms.superResolutionOnnxModels.value,
       superResolutionOnnxModelDetails: readModel.value.superResolutionOnnxModelDetails,
     }),

@@ -2,6 +2,7 @@
 
 import type {
   AlgorithmInfo,
+  ModelLicenseInfo,
   ModelVariantInfo,
   WorkflowConfig,
 } from '@/types/protocol'
@@ -33,7 +34,8 @@ export interface EnhanceReadModel {
   interpolationModelDetails: ModelVariantInfo[]
   interpolationOnnxModelDetails: ModelVariantInfo[]
   superResolutionOnnxModelDetails: ModelVariantInfo[]
-  isPaddleGanSuperResolution: boolean
+  isSuperResolutionScaleLocked: boolean
+  superResolutionModelLicense: ModelLicenseInfo | null
   isSuperResolutionInputFramesEditable: boolean
   effectiveSuperResolutionNumFrames: number
   superResolutionFixedWindowRows: MetricRow[]
@@ -75,7 +77,10 @@ export function buildEnhanceReadModel({
     : selectedModelDetail(interpolationModelDetails, workflow.interpolation.model)
   const superResolutionDetail = workflow.superResolution.tensorBackend === 'onnx'
     ? selectedModelDetail(superResolutionOnnxModelDetails, workflow.superResolution.onnxModel)
-    : superResolutionModelDetails[0]
+    : selectedModelDetail(
+      superResolutionModelDetails,
+      `x${workflow.superResolution.scaleFactor}`,
+    ) ?? superResolutionModelDetails[0]
   const interpolationRuntimeDetail = resolveMetricsForEngine(
     interpolationDetail,
     workflow.interpolation.engine,
@@ -86,6 +91,7 @@ export function buildEnhanceReadModel({
   )
 
   const isPaddleGanSuperResolution = isPaddleGanVsrAlgorithm(currentSuperResolutionAlgorithm)
+  const isSuperResolutionScaleLocked = currentSuperResolutionAlgorithm?.scaleFactors.length === 1
   const isSuperResolutionInputFramesEditable =
     superResolutionInputFrameMode(currentSuperResolutionAlgorithm) === 'editable_chunk'
   const effectiveSuperResolutionNumFrames =
@@ -133,7 +139,8 @@ export function buildEnhanceReadModel({
     interpolationModelDetails,
     interpolationOnnxModelDetails,
     superResolutionOnnxModelDetails,
-    isPaddleGanSuperResolution,
+    isSuperResolutionScaleLocked,
+    superResolutionModelLicense: currentSuperResolutionAlgorithm?.modelLicense ?? null,
     isSuperResolutionInputFramesEditable,
     effectiveSuperResolutionNumFrames,
     superResolutionFixedWindowRows,

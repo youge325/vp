@@ -32,6 +32,6 @@ describe('enhance algorithm defaults', () => {
 
   it('uses bootstrap algorithm defaults when environment metadata is missing', () => {
     expect(pickDefaultInterpolationAlgorithm(null, 'onnx')).toBe('rife')
-    expect(pickDefaultSuperResolutionAlgorithm(null, 'onnx')).toBe('placeholder')
+    expect(pickDefaultSuperResolutionAlgorithm(null, 'pytorch')).toBe('real-rawvsr-basicvsr')
   })
 })

@@ -141,8 +141,8 @@ const { targetLabel } = useEditingScope()
         <BaseSelect
           label="倍率"
           :model-value="String(fields.superResolutionScale)"
-          :options="options.multiOptions"
-          :disabled="fields.isPaddleGanSuperResolution"
+          :options="options.superResolutionScaleOptions"
+          :disabled="fields.isSuperResolutionScaleLocked"
           @update:model-value="actions.setSuperResolutionScale"
         />
 
@@ -171,6 +171,20 @@ const { targetLabel } = useEditingScope()
           span-two
           :options="options.processOrderOptions"
         />
+      </div>
+
+      <div
+        v-if="fields.superResolutionModelLicense?.usage === 'non_commercial'"
+        class="model-license-banner"
+        role="note"
+      >
+        <strong>非商业模型</strong>
+        <span>Real-RawVSR BasicVSR 仅限非商业研究与个人使用（{{ fields.superResolutionModelLicense.spdxId }}）。</span>
+        <a
+          :href="fields.superResolutionModelLicense.sourceUrl"
+          target="_blank"
+          rel="noreferrer"
+        >查看上游说明</a>
       </div>
 
       <ModelMetricGrid

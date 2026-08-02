@@ -24,9 +24,12 @@ describe('enhance algorithm bindings', () => {
     expect(bindings.interpolationAlgorithms.value.map((algorithm) => algorithm.name)).toEqual(['rife', 'rife-lite'])
     expect(bindings.interpolationModels.value).toEqual(['4.25'])
     expect(bindings.interpolationOnnxModels.value).toEqual(['rife_v4.25.onnx'])
-    expect(bindings.superResolutionAlgorithms.value.map((algorithm) => algorithm.name)).toEqual(['placeholder'])
-    expect(bindings.superResolutionOnnxModels.value).toEqual(['sr_x2.onnx'])
+    expect(bindings.superResolutionAlgorithms.value.map((algorithm) => algorithm.name)).toEqual([
+      'real-rawvsr-basicvsr',
+    ])
+    expect(bindings.superResolutionOnnxModels.value).toEqual([])
     expect(bindings.currentInterpolationAlgorithm.value?.name).toBe('rife')
+    expect(bindings.currentSuperResolutionAlgorithm.value?.scaleFactors).toEqual([2, 3, 4])
   })
 
   it('tracks backend-derived state without workflow mutation rules', () => {

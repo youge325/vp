@@ -652,6 +652,30 @@ a:focus-visible {
   line-height: 1.2;
 }
 
+.model-license-banner {
+  margin-top: 16px;
+  padding: 12px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  border: 1px solid rgba(240, 184, 82, 0.38);
+  border-radius: 14px;
+  background: rgba(97, 65, 18, 0.28);
+  color: #f7dfad;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.model-license-banner strong {
+  color: #ffd581;
+}
+
+.model-license-banner a {
+  color: #9bd4ff;
+  font-weight: 600;
+}
+
 .tag,
 .inline-status {
   min-height: 32px;

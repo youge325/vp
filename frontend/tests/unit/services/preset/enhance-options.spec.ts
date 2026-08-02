@@ -61,7 +61,7 @@ describe('enhance option rules', () => {
         name: 'ppmsvsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
-        modelDetails: [detail('x4')],
+        modelDetails: [detail('x2', 2_000_000), detail('x4')],
       }),
     ]
 
@@ -70,6 +70,10 @@ describe('enhance option rules', () => {
       { value: 'ppmsvsr', label: 'ppmsvsr' },
     ])
     expect(buildAlgorithmOptions(algorithms, 'modelMetrics')).toEqual([
+      { value: 'rife', label: 'rife' },
+      { value: 'ppmsvsr', label: 'ppmsvsr · 2.00M' },
+    ])
+    expect(buildAlgorithmOptions(algorithms, 'modelMetrics', 'x4')).toEqual([
       { value: 'rife', label: 'rife' },
       { value: 'ppmsvsr', label: 'ppmsvsr · 5.67M' },
     ])
@@ -100,6 +104,7 @@ describe('enhance option rules', () => {
       name: 'placeholder',
       tensorBackends: ['onnx'],
       models: [],
+      scaleFactors: [2, 3, 4],
       modelDetails: [detail('placeholder')],
     })
     const options = buildEnhanceOptions({
@@ -118,6 +123,8 @@ describe('enhance option rules', () => {
       interpolationModelDetails: [detail('4.25')],
       interpolationOnnxModelDetails: [],
       superResolutionAlgorithms: [superResolutionAlgorithm],
+      currentSuperResolutionAlgorithm: superResolutionAlgorithm,
+      superResolutionScaleFactor: 3,
       superResolutionOnnxModels: ['sr.onnx'],
       superResolutionOnnxModelDetails: [detail('sr.onnx')],
     })
@@ -138,6 +145,11 @@ describe('enhance option rules', () => {
     expect(options.superResolutionOnnxOptions).toEqual([
       { value: '', label: '未选择' },
       { value: 'sr.onnx', label: 'sr.onnx · 5.67M' },
+    ])
+    expect(options.superResolutionScaleOptions).toEqual([
+      { value: '2', label: '2x' },
+      { value: '3', label: '3x' },
+      { value: '4', label: '4x' },
     ])
   })
 })

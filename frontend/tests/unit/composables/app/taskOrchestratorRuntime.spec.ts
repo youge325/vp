@@ -75,6 +75,10 @@ describe('taskOrchestratorRuntime', () => {
   it('projects the edited media item into the actual start request at the composition root', async () => {
     const presetStore = usePresetStore()
     presetStore.patchWorkflow((workflow) => {
+      workflow.superResolution.algorithm = 'real-rawvsr-basicvsr'
+      workflow.superResolution.tensorBackend = 'pytorch'
+      workflow.superResolution.engine = 'cuda'
+      workflow.superResolution.scaleFactor = 3
       workflow.superResolution.numFrames = 7
     })
     const item = createMediaItem('/video/request.mp4', presetStore.draftPreset)
@@ -91,6 +95,13 @@ describe('taskOrchestratorRuntime', () => {
     }
     expect(taskIpc.checkResume).toHaveBeenCalledWith(expected)
     expect(taskIpc.start).toHaveBeenCalledWith(expected)
+    expect(expected.workflowConfig.superResolution).toMatchObject({
+      algorithm: 'real-rawvsr-basicvsr',
+      tensorBackend: 'pytorch',
+      engine: 'cuda',
+      scaleFactor: 3,
+      numFrames: 7,
+    })
   })
 
   it('adds the chosen resume mode only when resolving a real conflict', async () => {

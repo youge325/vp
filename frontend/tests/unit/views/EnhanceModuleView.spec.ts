@@ -43,4 +43,25 @@ describe('EnhanceModuleView super-resolution frame wording', () => {
     expect(wrapper.text()).toContain('5 帧（固定）')
   })
 
+  it('shows three BasicVSR scales and the non-commercial license notice', () => {
+    const presetStore = usePresetStore()
+    presetStore.patchWorkflow((workflow) => {
+      workflow.superResolution.enabled = true
+      workflow.superResolution.tensorBackend = 'pytorch'
+      workflow.superResolution.algorithm = 'real-rawvsr-basicvsr'
+      workflow.superResolution.scaleFactor = 3
+    })
+
+    const wrapper = mount(EnhanceModuleView)
+
+    expect(wrapper.text()).toContain('2x')
+    expect(wrapper.text()).toContain('3x')
+    expect(wrapper.text()).toContain('4x')
+    expect(wrapper.text()).toContain('非商业模型')
+    expect(wrapper.text()).toContain('仅限非商业研究与个人使用')
+    expect(wrapper.get('.model-license-banner a').attributes('href')).toBe(
+      'https://github.com/zmzhang1998/Real-RawVSR',
+    )
+  })
+
 })

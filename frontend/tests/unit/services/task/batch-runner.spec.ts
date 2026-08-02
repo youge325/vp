@@ -365,6 +365,23 @@ describe('batch-runner', () => {
     expect(harness.deps.setTaskIssue).toHaveBeenCalledWith(error)
   })
 
+  it('preserves the typed missing-model error for the global task banner', async () => {
+    const harness = makeHarness()
+    harness.items.set('a', makeItem('a'))
+    const runner = createBatchRunner(harness.deps)
+    await runner.start(['a'])
+    const error = {
+      code: 'missing_model' as const,
+      message: 'Real-RawVSR BasicVSR x3 model weight is missing',
+      details: { algorithm: 'real-rawvsr-basicvsr', scale_factor: 3 },
+    }
+
+    await runner.onError(error)
+
+    expect(harness.deps.setTaskIssue).toHaveBeenCalledWith(error)
+    expect(harness.runStates.get('a')?.taskState.status).toBe('error')
+  })
+
   it('keeps user cancellation silent and surfaces watchdog stalls', async () => {
     const userHarness = makeHarness()
     userHarness.items.set('a', makeItem('a'))

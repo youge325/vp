@@ -21,7 +21,8 @@ describe('super-resolution algorithm defaults', () => {
         family: 'paddlegan_vsr',
         tensorBackends: ['paddle'],
         models: ['x4'],
-        fixedScaleFactor: 4,
+        scaleFactors: [4],
+        modelLicense: null,
         defaultNumFrames: 8,
         inputFrameMode: 'editable_chunk',
       }),
@@ -55,5 +56,30 @@ describe('super-resolution algorithm defaults', () => {
 
     expect(workflow.superResolution.scaleFactor).toBe(2)
     expect(workflow.superResolution.onnxModel).toBe('sr-x4.onnx')
+  })
+
+  it('applies PyTorch CUDA defaults while preserving a supported BasicVSR scale', () => {
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
+    workflow.superResolution.tensorBackend = 'onnx'
+    workflow.superResolution.engine = 'tensorrt'
+    workflow.superResolution.scaleFactor = 3
+
+    applySuperResolutionAlgorithmDefaults(
+      workflow,
+      createAlgorithmInfo({
+        name: 'real-rawvsr-basicvsr',
+        family: 'pytorch_vsr',
+        tensorBackends: ['pytorch'],
+        scaleFactors: [2, 3, 4],
+        defaultNumFrames: 10,
+        inputFrameMode: 'editable_chunk',
+      }),
+      null,
+    )
+
+    expect(workflow.superResolution.tensorBackend).toBe('pytorch')
+    expect(workflow.superResolution.engine).toBe('cuda')
+    expect(workflow.superResolution.scaleFactor).toBe(3)
+    expect(workflow.superResolution.onnxModel).toBe('')
   })
 })

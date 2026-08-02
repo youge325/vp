@@ -102,7 +102,8 @@ export async function setDeterministicEnhanceMetricState(): Promise<boolean> {
           metrics: metric(1_250_000, 10, 120_000_000),
         }],
         onnxModelDetails: [],
-        fixedScaleFactor: null,
+        scaleFactors: [],
+        modelLicense: null,
         defaultNumFrames: null,
         inputFrameMode: 'none',
       }],
@@ -118,7 +119,8 @@ export async function setDeterministicEnhanceMetricState(): Promise<boolean> {
           label: 'Metric Super Resolution',
           metrics: metric(7_500_000, 20, 240_000_000),
         }],
-        fixedScaleFactor: 2,
+        scaleFactors: [2],
+        modelLicense: null,
         defaultNumFrames: null,
         inputFrameMode: 'none',
       }],
@@ -166,4 +168,87 @@ export async function setDeterministicEnhanceMetricState(): Promise<boolean> {
     mediaStore.activeItemId = itemId
     return true
   })
+}
+
+export async function setDeterministicRealRawVsrState(scaleFactor: 2 | 3 | 4 = 2): Promise<boolean> {
+  return await withPiniaState((state, _win, selectedScale: 2 | 3 | 4) => {
+    const envStore = state.env as {
+      env?: { checkResult?: unknown; isChecking?: boolean }
+    } | undefined
+    const presetStore = state.preset as {
+      draftPreset?: {
+        workflowConfig: {
+          interpolation: Record<string, unknown>
+          superResolution: Record<string, unknown>
+        }
+      }
+    } | undefined
+    const mediaStore = state.media as {
+      mediaItems?: unknown[]
+      activeItemId?: string | null
+    } | undefined
+    const draft = presetStore?.draftPreset
+    if (!envStore?.env || !draft || !mediaStore) {
+      return false
+    }
+
+    const metric = (name: string, scale: number, parameters: number) => ({
+      name,
+      label: `Real-RawVSR BasicVSR ${scale}x`,
+      metrics: {
+        parameterCount: parameters,
+        parameterBytes: parameters * 4,
+        gflopsPerMegapixel: null,
+        activationBytesPerMegapixel: null,
+        runtimeOverheadBytes: null,
+        runtimeFrameCount: null,
+        inputModulo: 1,
+        analysisStatus: 'partial',
+        analysisNotes: ['PyTorch CUDA sequence inference; actual memory depends on the logical frame chunk.'],
+        engineMetrics: {},
+      },
+    })
+    envStore.env.checkResult = {
+      ffmpeg: { available: true, hwaccels: [], encoderProfiles: [], decoderProfiles: [] },
+      gpu: { adapters: [{ name: 'NVIDIA GeForce RTX', vendor: 'nvidia' }] },
+      tensorEngines: { pytorch: ['cuda'], paddle: [], onnx: [] },
+      interpolationAlgorithms: [],
+      superResolutionAlgorithms: [{
+        name: 'real-rawvsr-basicvsr',
+        family: 'pytorch_vsr',
+        tensorBackends: ['pytorch'],
+        models: ['x2', 'x3', 'x4'],
+        onnxModels: [],
+        modelDetails: [
+          metric('x2', 2, 6_143_599),
+          metric('x3', 3, 6_328_239),
+          metric('x4', 4, 6_291_311),
+        ],
+        onnxModelDetails: [],
+        scaleFactors: [2, 3, 4],
+        modelLicense: {
+          spdxId: 'CC-BY-NC-SA-4.0',
+          usage: 'non_commercial',
+          sourceUrl: 'https://github.com/zmzhang1998/Real-RawVSR',
+        },
+        defaultNumFrames: 10,
+        inputFrameMode: 'editable_chunk',
+      }],
+      runtimeMode: 'bundled',
+    }
+    envStore.env.isChecking = false
+    Object.assign(draft.workflowConfig.interpolation, { enabled: false })
+    Object.assign(draft.workflowConfig.superResolution, {
+      enabled: true,
+      algorithm: 'real-rawvsr-basicvsr',
+      tensorBackend: 'pytorch',
+      engine: 'cuda',
+      scaleFactor: selectedScale,
+      numFrames: 10,
+      onnxModel: '',
+    })
+    mediaStore.mediaItems = []
+    mediaStore.activeItemId = null
+    return true
+  }, scaleFactor)
 }
