@@ -10,6 +10,7 @@ from app.generated.stage_worker_contracts import (
     StageWorkerInterpolationStep,
     StageWorkerOnnxSuperResolutionStep,
     StageWorkerPaddleSuperResolutionStep,
+    StageWorkerPytorchVsrStep,
 )
 from app.catalog.tensor_capabilities import supports_backend_engine
 from app.planning.processing_steps import ProcessingStep
@@ -31,6 +32,7 @@ def build_stage_worker_step(
     StageWorkerInterpolationStep
     | StageWorkerOnnxSuperResolutionStep
     | StageWorkerPaddleSuperResolutionStep
+    | StageWorkerPytorchVsrStep
     | StageWorkerFilterChainStep
 ):
     """Project a domain step without duplicating the top-level backend field."""
@@ -50,6 +52,9 @@ def build_stage_worker_step(
         kwargs.pop("scale_factor", None)
         kwargs.pop("onnx_model", None)
         return StageWorkerPaddleSuperResolutionStep.model_validate(payload)
+    if factory_key == "real_rawvsr_basicvsr":
+        kwargs.pop("onnx_model", None)
+        return StageWorkerPytorchVsrStep.model_validate(payload)
     if factory_key == "filter_chain":
         return StageWorkerFilterChainStep.model_validate(payload)
     raise ValueError(f"Stage worker protocol has no payload for factory {factory_key!r}.")

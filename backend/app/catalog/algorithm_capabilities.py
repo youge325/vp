@@ -12,11 +12,27 @@ from app.catalog.stage_descriptors import (
     FILTER_CHAIN_DESCRIPTOR,
     ONNX_SUPER_RESOLUTION_DESCRIPTOR,
     PADDLEGAN_STAGE_DESCRIPTOR,
+    REAL_RAWVSR_BASICVSR_STAGE_DESCRIPTOR,
     RIFE_STAGE_DESCRIPTOR,
     StageDescriptor,
 )
+from app.generated.model_assets import (
+    REAL_RAWVSR_BASICVSR_ALGORITHM,
+    REAL_RAWVSR_BASICVSR_DEFAULT_NUM_FRAMES,
+    REAL_RAWVSR_BASICVSR_LICENSE_SPDX,
+    REAL_RAWVSR_BASICVSR_LICENSE_USAGE,
+    REAL_RAWVSR_BASICVSR_SOURCE_URL,
+    REAL_RAWVSR_BASICVSR_VARIANTS,
+)
 
 InputFrameModeName = Literal["none", "editable_chunk", "fixed_window"]
+
+
+@dataclass(frozen=True, slots=True)
+class _ModelLicenseCapability:
+    spdx_id: str
+    usage: Literal["non_commercial"]
+    source_url: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +44,8 @@ class AlgorithmCapability:
     models: tuple[str, ...]
     input_frame_mode: InputFrameModeName
     default_num_frames: int | None = None
+    scale_factors: tuple[int, ...] = ()
+    model_license: _ModelLicenseCapability | None = None
 
 
 RIFE_CAPABILITY = AlgorithmCapability(
@@ -51,12 +69,31 @@ _PADDLEGAN_CAPABILITIES = tuple(
         models=("x4",),
         input_frame_mode="fixed_window" if spec.sequence_mode == "window" else "editable_chunk",
         default_num_frames=spec.default_num_frames,
+        scale_factors=(4,),
     )
     for model_id, spec in PADDLEGAN_VSR_SPECS.items()
 )
 
+_REAL_RAWVSR_BASICVSR_CAPABILITY = AlgorithmCapability(
+    name=REAL_RAWVSR_BASICVSR_ALGORITHM,
+    descriptor=REAL_RAWVSR_BASICVSR_STAGE_DESCRIPTOR,
+    models=tuple(f"x{variant.scale_factor}" for variant in REAL_RAWVSR_BASICVSR_VARIANTS),
+    input_frame_mode="editable_chunk",
+    default_num_frames=REAL_RAWVSR_BASICVSR_DEFAULT_NUM_FRAMES,
+    scale_factors=tuple(variant.scale_factor for variant in REAL_RAWVSR_BASICVSR_VARIANTS),
+    model_license=_ModelLicenseCapability(
+        spdx_id=REAL_RAWVSR_BASICVSR_LICENSE_SPDX,
+        usage=REAL_RAWVSR_BASICVSR_LICENSE_USAGE,
+        source_url=REAL_RAWVSR_BASICVSR_SOURCE_URL,
+    ),
+)
+
 INTERPOLATION_CAPABILITIES = (RIFE_CAPABILITY,)
-SUPER_RESOLUTION_CAPABILITIES = (ONNX_SUPER_RESOLUTION_CAPABILITY, *_PADDLEGAN_CAPABILITIES)
+SUPER_RESOLUTION_CAPABILITIES = (
+    ONNX_SUPER_RESOLUTION_CAPABILITY,
+    _REAL_RAWVSR_BASICVSR_CAPABILITY,
+    *_PADDLEGAN_CAPABILITIES,
+)
 _CAPABILITIES_BY_TYPE = {
     "frame_interpolation": {capability.name: capability for capability in INTERPOLATION_CAPABILITIES},
     "super_resolution": {capability.name: capability for capability in SUPER_RESOLUTION_CAPABILITIES},

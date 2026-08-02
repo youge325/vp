@@ -151,6 +151,31 @@ def test_sequence_stage_buffers_all_input_frames_before_writing_output() -> None
     assert [int(frame[0, 0, 0]) for frame in frames] == [11, 12, 13]
 
 
+def test_sequence_stage_applies_typed_output_offset_before_writing() -> None:
+    output = io.BytesIO()
+    events: list[dict] = []
+    config = _config(
+        ProcessingStep(
+            algorithm_type="super_resolution",
+            algorithm_kwargs={"sr_algorithm": "ppmsvsr"},
+            stage_name="01_super_resolution",
+        ),
+        input_frame_count=5,
+    ).model_copy(update={"output_frame_offset": 2, "output_frame_count": 2})
+
+    _run_worker(
+        config,
+        _stream_of([_frame(value) for value in range(5)]),
+        output,
+        _SequenceAlgorithm(),
+        events.append,
+    )
+
+    frames = _frames_from_bytes(output.getvalue(), count=2)
+    assert [int(frame[0, 0, 0]) for frame in frames] == [12, 13]
+    assert events[-1]["current"] == events[-1]["total"] == 2
+
+
 def test_sequence_stage_emits_start_and_heartbeat_during_blocking_process(monkeypatch) -> None:
     monkeypatch.setattr(stage_worker_progress, "SEQUENCE_STAGE_HEARTBEAT_SECONDS", 0.01)
     _output, events = _run_sequence_algorithm(_SlowSequenceAlgorithm())

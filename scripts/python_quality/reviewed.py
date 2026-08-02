@@ -121,13 +121,6 @@ _REVIEWED_EXCLUSIONS = (*_STATIC_REVIEWED_EXCLUSIONS, *_RIFE_REVIEWED_EXCLUSIONS
 
 _PRODUCTION_REVIEWED_SYMBOLS = (
     ReviewedSymbol(
-        path="backend/app/algorithms/pytorch/rife/onnx_export.py",
-        symbol="forward",
-        reason="PyTorch invokes the module forward method while tracing the ONNX export wrapper.",
-        evidence_file="backend/tests/test_algorithms/test_rife_onnx.py",
-        evidence_marker="class TestRIFEONNXExport",
-    ),
-    ReviewedSymbol(
         path="backend/app/algorithms/pytorch/rife/warplayer.py",
         symbol="warp",
         reason="The protected catalog-selected RIFE modules import and call this shared warp function.",
@@ -236,6 +229,7 @@ _FULL_SCAN_ONLY_REVIEWED_SYMBOLS = (
             "backend/tests/test_algorithms/test_rife_all_models.py",
             "backend/tests/test_algorithms/test_rife_onnx.py",
             "backend/tests/test_algorithms/test_rife_tensorrt.py",
+            "backend/tests/test_algorithms/test_real_rawvsr_basicvsr.py",
             "backend/tests/test_algorithms/test_tensor_backend_pytorch.py",
             "backend/tests/test_weight_loading.py",
         )

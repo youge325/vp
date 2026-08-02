@@ -38,6 +38,7 @@ def test_supported_super_resolution_algorithms_include_all_paddlegan_vsr_models(
         assert algorithms[name].descriptor.supported_backends == frozenset({"paddle"})
         assert algorithms[name].models == ("x4",)
         assert algorithms[name].descriptor.fixed_scale_factor == 4
+        assert algorithms[name].scale_factors == (4,)
 
 
 @pytest.mark.parametrize(

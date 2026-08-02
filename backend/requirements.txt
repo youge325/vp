@@ -2,6 +2,7 @@ pydantic==2.9.2
 pydantic-settings==2.5.2
 numpy>=1.24.0
 Pillow>=10.0.0
+safetensors>=0.4.5
 # onnxruntime 与 onnxruntime-gpu 互斥；GPU 版同时启用 CUDA 与 TensorRT EP
 # 若需仅 CPU 推理，把下行换成 `onnxruntime>=1.18.0` 并先 `pip uninstall onnxruntime-gpu`
 onnxruntime-gpu>=1.18.0

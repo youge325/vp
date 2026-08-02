@@ -23,6 +23,37 @@ class LocalModelAvailability:
 
             ensure_paddlegan_vsr_weights(str(step.algorithm_kwargs["sr_algorithm"]))
             return
+        if descriptor.model_kind == "pytorch_vsr":
+            from app.algorithms.pytorch.real_rawvsr_basicvsr.assets import ensure_model_asset
+
+            scale_factor = int(step.algorithm_kwargs["scale_factor"])
+            try:
+                model_path = ensure_model_asset(self.model_root, scale_factor)
+            except (FileNotFoundError, RuntimeError, ValueError) as exc:
+                raise_error(
+                    TaskErrorCode.MISSING_MODEL,
+                    str(exc),
+                    details={
+                        "stage": step.stage_name,
+                        "algorithm": str(step.algorithm_kwargs["sr_algorithm"]),
+                        "scale_factor": scale_factor,
+                    },
+                )
+            try:
+                import torch
+            except ImportError:
+                raise_error(
+                    TaskErrorCode.MISSING_TENSOR_BACKEND,
+                    "Real-RawVSR BasicVSR requires PyTorch with NVIDIA CUDA support.",
+                    details={"stage": step.stage_name, "model_path": str(model_path)},
+                )
+            if not torch.cuda.is_available():
+                raise_error(
+                    TaskErrorCode.MISSING_TENSOR_BACKEND,
+                    "Real-RawVSR BasicVSR requires an available NVIDIA CUDA device.",
+                    details={"stage": step.stage_name, "model_path": str(model_path)},
+                )
+            return
         if descriptor.model_kind == "rife" and backend_name == "pytorch":
             model_version = str(step.algorithm_kwargs["model_version"])
             model_path = Path(self.model_root) / f"flownet_v{model_version}.pkl"

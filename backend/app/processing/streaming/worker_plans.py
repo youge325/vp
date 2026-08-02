@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.generated.stage_worker_contracts import StageWorkerConfig
+from app.generated.model_assets import REAL_RAWVSR_BASICVSR_CONTEXT_FRAMES
 from app.planning.processing_steps import ProcessingStep
 from app.planning.stage_plan import StagePlan
 from app.planning.stage_projection import StageProjection
+from app.planning.temporal_slicing import plan_temporal_slices
 from app.processing.streaming.stage_rules import stage_tensor_backend_name
 from app.processing.streaming.stage_worker_config import build_stage_worker_step
 
@@ -22,6 +24,8 @@ class StageChunkPlan:
     raw_output_frame_count: int
     written_output_frame_count: int
     skip_output_frames: int = 0
+    output_frame_offset: int = 0
+    logical_start_frame: int | None = None
 
 
 def build_stage_worker_plans(
@@ -62,6 +66,7 @@ def build_stage_worker_plans(
                 input_frame_count=input_frame_count,
                 tensor_backend_name=stage_tensor_backend_name(step),
                 output_frame_count=output_frame_count,
+                output_frame_offset=0,
             )
         )
     return configs
@@ -85,6 +90,25 @@ def build_stage_chunk_plans(
         return []
 
     chunks: list[StageChunkPlan] = []
+    if step.descriptor.model_kind == "pytorch_vsr":
+        for temporal_slice in plan_temporal_slices(
+            total_frames,
+            logical_chunk_frames=chunk_size,
+            context_frames=REAL_RAWVSR_BASICVSR_CONTEXT_FRAMES,
+        ):
+            chunks.append(
+                StageChunkPlan(
+                    input_start_frame=temporal_slice.read_start,
+                    input_frame_count=temporal_slice.read_count,
+                    logical_input_frame_count=temporal_slice.logical_count,
+                    raw_output_frame_count=temporal_slice.logical_count,
+                    written_output_frame_count=temporal_slice.logical_count,
+                    output_frame_offset=temporal_slice.output_offset,
+                    logical_start_frame=temporal_slice.logical_start,
+                )
+            )
+        return chunks
+
     if step.algorithm_type != "frame_interpolation":
         for start in range(0, total_frames, chunk_size):
             count = min(chunk_size, total_frames - start)
@@ -95,6 +119,7 @@ def build_stage_chunk_plans(
                     logical_input_frame_count=count,
                     raw_output_frame_count=count,
                     written_output_frame_count=count,
+                    logical_start_frame=start,
                 )
             )
         return chunks
@@ -113,6 +138,7 @@ def build_stage_chunk_plans(
                 raw_output_frame_count=raw_output_count,
                 written_output_frame_count=max(raw_output_count - skip_output_frames, 0),
                 skip_output_frames=skip_output_frames,
+                logical_start_frame=start,
             )
         )
     return chunks

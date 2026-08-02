@@ -44,25 +44,28 @@ def generate_input_video(
     num_frames: int,
     rate: int,
     duration: float,
+    with_audio: bool = False,
 ) -> None:
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        f"testsrc=duration={duration}:size={width}x{height}:rate={rate}",
+    ]
+    if with_audio:
+        command.extend(["-f", "lavfi", "-i", f"sine=frequency=1000:duration={duration}"])
+    command.extend(["-frames:v", str(num_frames), "-pix_fmt", "yuv420p"])
+    if with_audio:
+        command.extend(["-map", "0:v:0", "-map", "1:a:0", "-c:a", "aac", "-shortest"])
+    else:
+        command.append("-an")
+    command.extend([str(path), "-y"])
     result = subprocess.run(
-        [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-f",
-            "lavfi",
-            "-i",
-            f"testsrc=duration={duration}:size={width}x{height}:rate={rate}",
-            "-frames:v",
-            str(num_frames),
-            "-pix_fmt",
-            "yuv420p",
-            "-an",
-            str(path),
-            "-y",
-        ],
+        command,
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,

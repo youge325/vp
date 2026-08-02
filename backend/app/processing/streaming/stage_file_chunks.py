@@ -33,7 +33,7 @@ def run_single_stage_file_chunks(
             input_frame_count=input_frame_count,
             segment_frames=segment_frames,
         )
-        if chunk.input_start_frame >= start_frame
+        if int(chunk.logical_start_frame or 0) >= start_frame
     ]
     if not chunks:
         return int(resume_state.completed_output_frames)
@@ -61,7 +61,7 @@ def run_single_stage_file_chunks(
             index=chunk_index,
             start_output_frame=completed_output_frames,
             end_output_frame=completed_output_frames + actual_written - 1,
-            next_source_frame=chunk.input_start_frame + chunk.logical_input_frame_count,
+            next_source_frame=int(chunk.logical_start_frame or 0) + chunk.logical_input_frame_count,
         )
         completed_output_frames += actual_written
         chunk_index += 1
