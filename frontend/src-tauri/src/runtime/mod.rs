@@ -20,7 +20,10 @@ use crate::error::ShellError;
 use crate::generated::DEFAULT_RIFE_MODEL_VERSION;
 pub(crate) use env_map::build_env_map;
 use helpers::{directory_if_contains, first_existing_dir};
-use model::{has_rife_model, rife_model_filename, validate_real_rawvsr_bundle};
+use model::{
+    has_rife_model, resolve_real_rawvsr_license_root, rife_model_filename,
+    validate_real_rawvsr_bundle,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedRuntimePaths {
@@ -67,7 +70,11 @@ pub(crate) fn resolve_runtime_paths<R: Runtime>(
         .filter(|version| !version.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_RIFE_MODEL_VERSION.to_string());
 
-    let model_license_root = runtime_root.as_deref().unwrap_or(workspace_root.as_path());
+    let model_license_root = resolve_real_rawvsr_license_root(
+        runtime_root.as_deref(),
+        workspace_root.as_path(),
+        model_dir.as_deref(),
+    );
     require_release_bundle_artifacts(
         &ffmpeg_path,
         &ffprobe_path,
