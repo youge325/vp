@@ -909,7 +909,7 @@
       ],
       "properties": {
         "schemaVersion": {
-          "const": 15
+          "const": 16
         },
         "checkedAt": {
           "type": "string",

@@ -8,7 +8,7 @@
       "additionalProperties": false,
       "required": ["schemaVersion", "checkedAt", "fingerprint", "result"],
       "properties": {
-        "schemaVersion": { "const": 15 },
+        "schemaVersion": { "const": 16 },
         "checkedAt": { "type": "string", "format": "date-time" },
         "fingerprint": { "type": "string", "minLength": 1 },
         "result": {

@@ -8,12 +8,12 @@ from pathlib import Path
 from .rules import read_source, relative_path
 
 _REQUIRED_MODEL_ASSET_CONSUMERS = {
-    "backend/app/algorithms/pytorch/real_rawvsr_basicvsr/assets.py": "app.generated.model_assets",
+    "backend/app/algorithms/pytorch/real_rawvsr/assets.py": "app.generated.model_assets",
     "backend/app/catalog/algorithm_capabilities.py": "app.generated.model_assets",
-    "frontend/src-tauri/src/runtime/model.rs": "REAL_RAWVSR_BASICVSR_VARIANTS",
+    "frontend/src-tauri/src/runtime/model.rs": "REAL_RAWVSR_MODEL_FAMILIES",
     "scripts/runtime-tools.ps1": "contracts\\model-assets.json",
-    "scripts/prepare_real_rawvsr_basicvsr.py": "contracts/model-assets.json",
-    ".github/workflows/release.yml": "prepare_real_rawvsr_basicvsr.py",
+    "scripts/prepare_real_rawvsr_models.py": "contracts/model-assets.json",
+    ".github/workflows/release.yml": "prepare_real_rawvsr_models.py",
 }
 
 _SCAN_ROOTS = ("backend/app", "frontend/src", "frontend/src-tauri/src", "scripts", ".github/workflows")
@@ -28,7 +28,7 @@ def check_model_asset_consumers(root: Path) -> list[str]:
     contract_path = root / "contracts/model-assets.json"
     if not contract_path.is_file():
         return ["missing model asset contract: contracts/model-assets.json"]
-    assets = json.loads(read_source(contract_path, root))["realRawVsrBasicVsr"]
+    assets = json.loads(read_source(contract_path, root))
     issues: list[str] = []
     for path_name, marker in _REQUIRED_MODEL_ASSET_CONSUMERS.items():
         path = root / path_name
@@ -39,7 +39,8 @@ def check_model_asset_consumers(root: Path) -> list[str]:
 
     protected_literals = {
         str(variant[field])
-        for variant in assets["variants"]
+        for family in assets["families"]
+        for variant in family["variants"]
         for field in ("googleDriveFileId", "sourceSha256", "inferenceSha256")
     }
     for scan_root_name in _SCAN_ROOTS:

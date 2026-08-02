@@ -51,27 +51,33 @@ function Get-VpRealRawVsrBundlePaths {
         throw "Repository root was not provided."
     }
 
-    $bundle = (Get-VpModelAssets).realRawVsrBasicVsr
-    $models = foreach ($variant in $bundle.variants) {
-        $relativePath = ([string]$variant.relativePath).Replace('/', '\')
-        $modelsPrefix = "models\"
-        if (-not $relativePath.StartsWith($modelsPrefix, [System.StringComparison]::Ordinal)) {
-            throw "Real-RawVSR model path must be rooted under models/: $relativePath"
-        }
-        [pscustomobject]@{
-            ScaleFactor = [int]$variant.scaleFactor
-            RelativePath = $relativePath.Substring($modelsPrefix.Length)
-            Path = Join-Path $ModelDir $relativePath.Substring($modelsPrefix.Length)
-            Bytes = [int64]$variant.inferenceBytes
-            Sha256 = [string]$variant.inferenceSha256
+    $assets = Get-VpModelAssets
+    $models = foreach ($family in $assets.families) {
+        foreach ($variant in $family.variants) {
+            $relativePath = ([string]$variant.relativePath).Replace('/', '\')
+            $modelsPrefix = "models\"
+            if (-not $relativePath.StartsWith($modelsPrefix, [System.StringComparison]::Ordinal)) {
+                throw "Real-RawVSR model path must be rooted under models/: $relativePath"
+            }
+            [pscustomobject]@{
+                AlgorithmId = [string]$family.algorithmId
+                DisplayName = [string]$family.displayName
+                ScaleFactor = [int]$variant.scaleFactor
+                RelativePath = $relativePath.Substring($modelsPrefix.Length)
+                Path = Join-Path $ModelDir $relativePath.Substring($modelsPrefix.Length)
+                Bytes = [int64]$variant.inferenceBytes
+                Sha256 = [string]$variant.inferenceSha256
+            }
         }
     }
     return [pscustomobject]@{
         Models = @($models)
-        LicenseRelativePath = ([string]$bundle.license.licenseRelativePath).Replace('/', '\')
-        NoticeRelativePath = ([string]$bundle.license.noticeRelativePath).Replace('/', '\')
-        LicensePath = Join-Path $RepositoryRoot ([string]$bundle.license.licenseRelativePath)
-        NoticePath = Join-Path $RepositoryRoot ([string]$bundle.license.noticeRelativePath)
+        LicenseRelativePath = ([string]$assets.license.licenseRelativePath).Replace('/', '\')
+        NoticeRelativePath = ([string]$assets.license.noticeRelativePath).Replace('/', '\')
+        ThirdPartyNoticeRelativePath = ([string]$assets.license.thirdPartyNoticeRelativePath).Replace('/', '\')
+        LicensePath = Join-Path $RepositoryRoot ([string]$assets.license.licenseRelativePath)
+        NoticePath = Join-Path $RepositoryRoot ([string]$assets.license.noticeRelativePath)
+        ThirdPartyNoticePath = Join-Path $RepositoryRoot ([string]$assets.license.thirdPartyNoticeRelativePath)
     }
 }
 
@@ -132,9 +138,9 @@ function Assert-VpRealRawVsrBundle {
 
     $paths = Get-VpRealRawVsrBundlePaths -ModelDir $ModelDir -RepositoryRoot $RepositoryRoot
     foreach ($model in $paths.Models) {
-        Assert-VpFileIntegrity -Path $model.Path -ExpectedBytes $model.Bytes -ExpectedSha256 $model.Sha256 -Label "Real-RawVSR BasicVSR x$($model.ScaleFactor) model" | Out-Null
+        Assert-VpFileIntegrity -Path $model.Path -ExpectedBytes $model.Bytes -ExpectedSha256 $model.Sha256 -Label "$($model.DisplayName) x$($model.ScaleFactor) model" | Out-Null
     }
-    foreach ($licenseFile in @($paths.LicensePath, $paths.NoticePath)) {
+    foreach ($licenseFile in @($paths.LicensePath, $paths.NoticePath, $paths.ThirdPartyNoticePath)) {
         if (-not (Test-VpNonEmptyFile -Path $licenseFile)) {
             throw "Required Real-RawVSR license file is missing or empty: $licenseFile"
         }

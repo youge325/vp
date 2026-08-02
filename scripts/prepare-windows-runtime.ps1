@@ -541,7 +541,7 @@ function Copy-ModelFiles {
         } else {
             $copied += 1
         }
-        Write-Step "model BasicVSR x$($model.ScaleFactor) complete: $(Format-ByteSize $model.Bytes), $result"
+        Write-Step "model $($model.DisplayName) x$($model.ScaleFactor) complete: $(Format-ByteSize $model.Bytes), $result"
     }
 
     Write-Step "Model files complete: hardlinks=$linked, copies=$copied, total=$(Format-ByteSize $bytes)"
@@ -693,8 +693,10 @@ Copy-ModelFiles -SourceDir $modelSourceDir -DestinationDir $modelsOut -Repositor
 $sourceBundle = Get-VpRealRawVsrBundlePaths -ModelDir $modelSourceDir -RepositoryRoot $repoRoot
 $licenseOut = Join-Path $outputRootFull $sourceBundle.LicenseRelativePath
 $noticeOut = Join-Path $outputRootFull $sourceBundle.NoticeRelativePath
+$thirdPartyNoticeOut = Join-Path $outputRootFull $sourceBundle.ThirdPartyNoticeRelativePath
 Copy-FileFast -Source $sourceBundle.LicensePath -Destination $licenseOut | Out-Null
 Copy-FileFast -Source $sourceBundle.NoticePath -Destination $noticeOut | Out-Null
+Copy-FileFast -Source $sourceBundle.ThirdPartyNoticePath -Destination $thirdPartyNoticeOut | Out-Null
 
 $destFfmpeg = Join-Path $ffmpegOut "ffmpeg.exe"
 $destFfprobe = Join-Path $ffmpegOut "ffprobe.exe"
@@ -702,7 +704,15 @@ $destDefaultModels = Get-VpDefaultRifeModelPaths -ModelDir $modelsOut
 $destDefaultPytorchModel = $destDefaultModels.PytorchPath
 $destDefaultOnnxModel = $destDefaultModels.OnnxPath
 $destRealRawVsrBundle = Assert-VpRealRawVsrBundle -ModelDir $modelsOut -RepositoryRoot $outputRootFull
-$requiredFiles = @($destFfmpeg, $destFfprobe, $destDefaultPytorchModel, $destDefaultOnnxModel, $licenseOut, $noticeOut)
+$requiredFiles = @(
+    $destFfmpeg,
+    $destFfprobe,
+    $destDefaultPytorchModel,
+    $destDefaultOnnxModel,
+    $licenseOut,
+    $noticeOut,
+    $thirdPartyNoticeOut
+)
 $requiredFiles += $destRealRawVsrBundle.Models | ForEach-Object { $_.Path }
 if (-not $SkipPython) {
     $destPythonExe = Join-Path $pythonOut "python.exe"
@@ -724,7 +734,7 @@ if (-not $SkipPython) {
     $env:PYTHONNOUSERSITE = "1"
     Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
 
-    $importSmokeScript = "import importlib, torch; [importlib.import_module(name) for name in ['pydantic','pydantic_settings','numpy','PIL','onnxruntime','safetensors']]; assert torch.cuda.is_available(), 'CUDA is required for Real-RawVSR BasicVSR'; print('python runtime imports and CUDA ok', flush=True)"
+    $importSmokeScript = "import importlib, torch; [importlib.import_module(name) for name in ['pydantic','pydantic_settings','numpy','PIL','onnxruntime','safetensors','torchvision']]; from torchvision.ops import deform_conv2d; assert torch.cuda.is_available(), 'CUDA is required for Real-RawVSR RGB models'; x=torch.zeros((1,1,4,4),device='cuda'); o=torch.zeros((1,18,4,4),device='cuda'); w=torch.zeros((1,1,3,3),device='cuda'); assert deform_conv2d(x,o,w,padding=(1,1)).is_cuda; print('python runtime imports, torchvision DCNv2, and CUDA ok', flush=True)"
     Invoke-CheckedProcess -Label "Python runtime import smoke" -FilePath $destPythonExe -Arguments @("-s", "-c", $importSmokeScript) -TimeoutSeconds 180
     Invoke-CheckedProcess -Label "Bundled backend check" -FilePath $destPythonExe -Arguments @("-s", "-m", "app", "check") -WorkingDirectory (Join-Path $repoRoot "backend") -TimeoutSeconds 180
 } else {
@@ -732,7 +742,7 @@ if (-not $SkipPython) {
     if (-not [string]::IsNullOrWhiteSpace($systemPython)) {
         Write-Step "Running backend check with system Python: $systemPython"
         $env:VP_PYTHON_EXECUTABLE = $systemPython
-        $cudaSmokeScript = "import safetensors, torch; assert torch.cuda.is_available(), 'CUDA is required for Real-RawVSR BasicVSR'; print('system Python PyTorch CUDA ok', flush=True)"
+        $cudaSmokeScript = "import safetensors, torch; from torchvision.ops import deform_conv2d; assert torch.cuda.is_available(), 'CUDA is required for Real-RawVSR RGB models'; x=torch.zeros((1,1,4,4),device='cuda'); o=torch.zeros((1,18,4,4),device='cuda'); w=torch.zeros((1,1,3,3),device='cuda'); assert deform_conv2d(x,o,w,padding=(1,1)).is_cuda; print('system Python PyTorch CUDA and torchvision DCNv2 ok', flush=True)"
         Invoke-CheckedProcess -Label "System Python PyTorch CUDA smoke" -FilePath $systemPython -Arguments @("-s", "-c", $cudaSmokeScript) -TimeoutSeconds 180
         Invoke-CheckedProcess -Label "System Python backend check" -FilePath $systemPython -Arguments @("-s", "-m", "app", "check") -WorkingDirectory (Join-Path $repoRoot "backend") -TimeoutSeconds 180
     } else {

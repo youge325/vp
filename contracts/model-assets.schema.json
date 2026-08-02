@@ -4,22 +4,36 @@
   "title": "VP Workbench model assets",
   "type": "object",
   "additionalProperties": false,
-  "required": ["$schema", "realRawVsrBasicVsr"],
+  "required": ["$schema", "license", "families"],
   "properties": {
     "$schema": { "const": "./model-assets.schema.json" },
-    "realRawVsrBasicVsr": { "$ref": "#/$defs/ModelAssetFamily" }
+    "license": { "$ref": "#/$defs/ModelLicense" },
+    "families": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/ModelAssetFamily" }
+    }
   },
   "$defs": {
     "ModelLicense": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["spdxId", "usage", "sourceUrl", "licenseRelativePath", "noticeRelativePath"],
+      "required": [
+        "spdxId",
+        "usage",
+        "sourceUrl",
+        "licenseRelativePath",
+        "noticeRelativePath",
+        "thirdPartyNoticeRelativePath"
+      ],
       "properties": {
         "spdxId": { "const": "CC-BY-NC-SA-4.0" },
         "usage": { "const": "non_commercial" },
         "sourceUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
-        "licenseRelativePath": { "const": "licenses/real-rawvsr-basicvsr/CC-BY-NC-SA-4.0.txt" },
-        "noticeRelativePath": { "type": "string", "pattern": "^licenses/[^/]+/NOTICE\\.md$" }
+        "licenseRelativePath": { "const": "licenses/real-rawvsr/CC-BY-NC-SA-4.0.txt" },
+        "noticeRelativePath": { "const": "licenses/real-rawvsr/NOTICE.md" },
+        "thirdPartyNoticeRelativePath": { "const": "licenses/real-rawvsr/THIRD-PARTY-NOTICES.md" }
       }
     },
     "ModelAssetVariant": {
@@ -32,6 +46,7 @@
         "sourceSha256",
         "inferenceBytes",
         "inferenceSha256",
+        "parameterCount",
         "relativePath"
       ],
       "properties": {
@@ -41,9 +56,10 @@
         "sourceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "inferenceBytes": { "type": "integer", "minimum": 1 },
         "inferenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "parameterCount": { "type": "integer", "minimum": 1 },
         "relativePath": {
           "type": "string",
-          "pattern": "^models/super_resolution/pytorch/real-rawvsr-basicvsr/x[234]/model\\.safetensors$"
+          "pattern": "^models/super_resolution/pytorch/real-rawvsr-(basicvsr|edvr|tdan|toflow)/x[234]/model\\.safetensors$"
         }
       }
     },
@@ -54,18 +70,25 @@
         "algorithmId",
         "family",
         "displayName",
+        "inputFrameMode",
         "defaultNumFrames",
         "temporalContextFrames",
-        "license",
         "variants"
       ],
       "properties": {
-        "algorithmId": { "const": "real-rawvsr-basicvsr" },
+        "algorithmId": {
+          "enum": [
+            "real-rawvsr-basicvsr",
+            "real-rawvsr-edvr",
+            "real-rawvsr-tdan",
+            "real-rawvsr-toflow"
+          ]
+        },
         "family": { "const": "pytorch_vsr" },
         "displayName": { "type": "string", "minLength": 1 },
-        "defaultNumFrames": { "const": 10 },
+        "inputFrameMode": { "enum": ["editable_chunk", "fixed_window"] },
+        "defaultNumFrames": { "type": "integer", "minimum": 1 },
         "temporalContextFrames": { "const": 2 },
-        "license": { "$ref": "#/$defs/ModelLicense" },
         "variants": {
           "type": "array",
           "minItems": 3,

@@ -303,7 +303,7 @@ export interface RateControlConfig {
   value: string | number;
 }
 export interface EnvironmentCacheEntry {
-  schemaVersion: 15;
+  schemaVersion: 16;
   checkedAt: string;
   fingerprint: string;
   result: EnvironmentCheckResult;

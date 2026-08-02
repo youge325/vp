@@ -8,8 +8,8 @@ use sha2::{Digest, Sha256};
 
 use super::helpers::{env_path, first_existing_dir};
 use crate::generated::{
-    ModelAssetVariant, REAL_RAWVSR_BASICVSR_LICENSE_PATH, REAL_RAWVSR_BASICVSR_NOTICE_PATH,
-    REAL_RAWVSR_BASICVSR_VARIANTS,
+    ModelAssetFamily, ModelAssetVariant, REAL_RAWVSR_LICENSE_PATH, REAL_RAWVSR_MODEL_FAMILIES,
+    REAL_RAWVSR_NOTICE_PATH, REAL_RAWVSR_THIRD_PARTY_NOTICE_PATH,
 };
 
 pub(super) fn rife_model_filename(version: &str) -> String {
@@ -78,8 +78,9 @@ pub(super) fn validate_real_rawvsr_bundle(
 ) -> Result<(), String> {
     let model_dir = model_dir.ok_or_else(|| "Bundled model directory is missing.".to_string())?;
     for relative_path in [
-        REAL_RAWVSR_BASICVSR_LICENSE_PATH,
-        REAL_RAWVSR_BASICVSR_NOTICE_PATH,
+        REAL_RAWVSR_LICENSE_PATH,
+        REAL_RAWVSR_NOTICE_PATH,
+        REAL_RAWVSR_THIRD_PARTY_NOTICE_PATH,
     ] {
         let path = license_root.join(relative_path);
         let metadata = path.metadata().map_err(|error| {
@@ -95,8 +96,10 @@ pub(super) fn validate_real_rawvsr_bundle(
             ));
         }
     }
-    for variant in REAL_RAWVSR_BASICVSR_VARIANTS {
-        validate_model_asset(model_dir, variant)?;
+    for family in REAL_RAWVSR_MODEL_FAMILIES {
+        for variant in family.variants {
+            validate_model_asset(model_dir, family, variant)?;
+        }
     }
     Ok(())
 }
@@ -123,8 +126,9 @@ pub(super) fn resolve_real_rawvsr_license_root<'a>(
 
 fn has_real_rawvsr_license_files(root: &Path) -> bool {
     [
-        REAL_RAWVSR_BASICVSR_LICENSE_PATH,
-        REAL_RAWVSR_BASICVSR_NOTICE_PATH,
+        REAL_RAWVSR_LICENSE_PATH,
+        REAL_RAWVSR_NOTICE_PATH,
+        REAL_RAWVSR_THIRD_PARTY_NOTICE_PATH,
     ]
     .into_iter()
     .all(|relative_path| {
@@ -135,7 +139,11 @@ fn has_real_rawvsr_license_files(root: &Path) -> bool {
     })
 }
 
-fn validate_model_asset(model_dir: &Path, variant: &ModelAssetVariant) -> Result<(), String> {
+fn validate_model_asset(
+    model_dir: &Path,
+    family: &ModelAssetFamily,
+    variant: &ModelAssetVariant,
+) -> Result<(), String> {
     let relative_path = Path::new(variant.relative_path)
         .strip_prefix("models")
         .map_err(|_| {
@@ -147,14 +155,18 @@ fn validate_model_asset(model_dir: &Path, variant: &ModelAssetVariant) -> Result
     let path = model_dir.join(relative_path);
     let metadata = path.metadata().map_err(|error| {
         format!(
-            "Real-RawVSR BasicVSR x{} model is missing ({}): {error}",
+            "{} ({}) x{} model is missing ({}): {error}",
+            family.display_name,
+            family.algorithm_id,
             variant.scale_factor,
             path.display()
         )
     })?;
     if !metadata.is_file() || metadata.len() != variant.inference_bytes {
         return Err(format!(
-            "Real-RawVSR BasicVSR x{} model size mismatch: expected {}, got {} ({}).",
+            "{} ({}) x{} model size mismatch: expected {}, got {} ({}).",
+            family.display_name,
+            family.algorithm_id,
             variant.scale_factor,
             variant.inference_bytes,
             metadata.len(),
@@ -175,7 +187,9 @@ fn validate_model_asset(model_dir: &Path, variant: &ModelAssetVariant) -> Result
     })?;
     if actual != variant.inference_sha256 {
         return Err(format!(
-            "Real-RawVSR BasicVSR x{} model SHA-256 mismatch: expected {}, got {} ({}).",
+            "{} ({}) x{} model SHA-256 mismatch: expected {}, got {} ({}).",
+            family.display_name,
+            family.algorithm_id,
             variant.scale_factor,
             variant.inference_sha256,
             actual,
@@ -364,26 +378,32 @@ mod tests {
             inference_sha256: "8b3369944dd2a3fab39e32d1aeb1f763946a458ae3e6368a46432adc8f3a0860",
             relative_path,
         };
+        let family = ModelAssetFamily {
+            algorithm_id: "test-model",
+            display_name: "Test model",
+            variants: &[],
+        };
         let model_dir = temp.path().join("models");
-        assert!(validate_model_asset(&model_dir, &valid).is_ok());
+        assert!(validate_model_asset(&model_dir, &family, &valid).is_ok());
 
         let drifted = ModelAssetVariant {
             inference_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
             ..valid
         };
-        assert!(validate_model_asset(&model_dir, &drifted)
+        assert!(validate_model_asset(&model_dir, &family, &drifted)
             .unwrap_err()
             .contains("SHA-256 mismatch"));
     }
 
     #[test]
-    fn release_bundle_validation_rejects_an_omitted_basicvsr_model() {
+    fn release_bundle_validation_rejects_an_omitted_real_rawvsr_model() {
         let temp = tempfile::tempdir().unwrap();
         let models = temp.path().join("models");
         std::fs::create_dir_all(&models).unwrap();
         for relative_path in [
-            REAL_RAWVSR_BASICVSR_LICENSE_PATH,
-            REAL_RAWVSR_BASICVSR_NOTICE_PATH,
+            REAL_RAWVSR_LICENSE_PATH,
+            REAL_RAWVSR_NOTICE_PATH,
+            REAL_RAWVSR_THIRD_PARTY_NOTICE_PATH,
         ] {
             let path = temp.path().join(relative_path);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -391,7 +411,7 @@ mod tests {
         }
 
         let error = validate_real_rawvsr_bundle(Some(&models), temp.path()).unwrap_err();
-        assert!(error.contains("BasicVSR x2 model is missing"));
+        assert!(error.contains("Real-RawVSR BasicVSR") && error.contains("x2 model is missing"));
     }
 
     #[test]
@@ -403,8 +423,9 @@ mod tests {
         std::fs::create_dir_all(&runtime_root).unwrap();
         std::fs::create_dir_all(&model_dir).unwrap();
         for relative_path in [
-            REAL_RAWVSR_BASICVSR_LICENSE_PATH,
-            REAL_RAWVSR_BASICVSR_NOTICE_PATH,
+            REAL_RAWVSR_LICENSE_PATH,
+            REAL_RAWVSR_NOTICE_PATH,
+            REAL_RAWVSR_THIRD_PARTY_NOTICE_PATH,
         ] {
             let path = workspace_root.join(relative_path);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();

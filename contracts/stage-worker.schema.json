@@ -45,7 +45,14 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "sr_algorithm": { "const": "real-rawvsr-basicvsr" },
+        "sr_algorithm": {
+          "enum": [
+            "real-rawvsr-basicvsr",
+            "real-rawvsr-edvr",
+            "real-rawvsr-tdan",
+            "real-rawvsr-toflow"
+          ]
+        },
         "scale_factor": { "type": "integer", "enum": [2, 3, 4] },
         "engine": { "const": "cuda" },
         "num_frames": { "type": "integer", "minimum": 1 }

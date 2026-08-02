@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.generated.stage_worker_contracts import StageWorkerConfig
-from app.generated.model_assets import REAL_RAWVSR_BASICVSR_CONTEXT_FRAMES
 from app.planning.processing_steps import ProcessingStep
 from app.planning.stage_plan import StagePlan
 from app.planning.stage_projection import StageProjection
@@ -90,11 +89,12 @@ def build_stage_chunk_plans(
         return []
 
     chunks: list[StageChunkPlan] = []
-    if step.descriptor.model_kind == "pytorch_vsr":
+    context_frames = step.descriptor.temporal_context_frames
+    if context_frames > 0:
         for temporal_slice in plan_temporal_slices(
             total_frames,
             logical_chunk_frames=chunk_size,
-            context_frames=REAL_RAWVSR_BASICVSR_CONTEXT_FRAMES,
+            context_frames=context_frames,
         ):
             chunks.append(
                 StageChunkPlan(

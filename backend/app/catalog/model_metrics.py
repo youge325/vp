@@ -7,6 +7,7 @@ from types import MappingProxyType
 from typing import Iterable, Literal, Mapping
 
 from app.catalog.rife_models import MODEL_SPECS, SUPPORTED_MODELS
+from app.generated.model_assets import REAL_RAWVSR_MODEL_FAMILIES, ModelAssetFamily, ModelAssetVariant
 
 AnalysisStatus = Literal["ok", "partial", "unknown"]
 
@@ -288,33 +289,32 @@ PADDLEGAN_MODEL_METRIC_SPECS: Mapping[str, ModelMetricSpec] = MappingProxyType(
 )
 
 _REAL_RAWVSR_METRIC_NOTE = (
-    "Parameter counts come from the official Real-RawVSR BasicVSR checkpoints; CUDA memory is device-dependent.",
+    "Parameter counts come from the official Real-RawVSR RGB checkpoints; CUDA memory is device-dependent.",
 )
 
 
-def _real_rawvsr_metric(scale_factor: int, parameter_count: int) -> ModelMetricSpec:
+def _real_rawvsr_metric(family: ModelAssetFamily, variant: ModelAssetVariant) -> ModelMetricSpec:
     return ModelMetricSpec(
-        name=f"x{scale_factor}",
-        label=f"Real-RawVSR BasicVSR {scale_factor}x",
-        parameter_count=parameter_count,
-        parameter_bytes=parameter_count * 4,
+        name=f"x{variant.scale_factor}",
+        label=f"{family.display_name} {variant.scale_factor}x",
+        parameter_count=variant.parameter_count,
+        parameter_bytes=variant.parameter_count * 4,
         runtime=RuntimeMetricSpec(
             gflops_per_megapixel=None,
             activation_bytes_per_megapixel=None,
             runtime_overhead_bytes=None,
-            runtime_frame_count=10,
-            input_modulo=None,
+            runtime_frame_count=family.default_num_frames,
+            input_modulo=16 if family.input_frame_mode == "fixed_window" else None,
             analysis_status="partial",
             analysis_notes=_REAL_RAWVSR_METRIC_NOTE,
         ),
     )
 
 
-REAL_RAWVSR_BASICVSR_MODEL_METRIC_SPECS: Mapping[str, ModelMetricSpec] = MappingProxyType(
+REAL_RAWVSR_MODEL_METRIC_SPECS_BY_ALGORITHM: Mapping[str, tuple[ModelMetricSpec, ...]] = MappingProxyType(
     {
-        "x2": _real_rawvsr_metric(2, 6_143_599),
-        "x3": _real_rawvsr_metric(3, 6_328_239),
-        "x4": _real_rawvsr_metric(4, 6_291_311),
+        family.algorithm_id: tuple(_real_rawvsr_metric(family, variant) for variant in family.variants)
+        for family in REAL_RAWVSR_MODEL_FAMILIES
     }
 )
 
@@ -386,7 +386,7 @@ RIFE_MODEL_METRIC_SPECS: Mapping[str, ModelMetricSpec] = MappingProxyType(
 MODEL_METRIC_SPECS_BY_ALGORITHM: Mapping[str, tuple[ModelMetricSpec, ...]] = MappingProxyType(
     {
         "rife": tuple(RIFE_MODEL_METRIC_SPECS[version] for version in SUPPORTED_MODELS),
-        "real-rawvsr-basicvsr": tuple(REAL_RAWVSR_BASICVSR_MODEL_METRIC_SPECS.values()),
+        **REAL_RAWVSR_MODEL_METRIC_SPECS_BY_ALGORITHM,
         **{model_id: (spec,) for model_id, spec in PADDLEGAN_MODEL_METRIC_SPECS.items()},
     }
 )

@@ -271,13 +271,13 @@ def test_rust_dev_dependency_usage_in_compile_fail_fixtures_is_counted(tmp_path:
     ]
 
 
-def test_manifest_command_reader_accepts_schema_version_five(tmp_path: Path) -> None:
+def test_manifest_command_reader_accepts_schema_version_six(tmp_path: Path) -> None:
     contracts = tmp_path / "contracts"
     contracts.mkdir()
     (contracts / "ipc-manifest.json").write_text(
         json.dumps(
             {
-                "schemaVersion": 5,
+                "schemaVersion": 6,
                 "commands": [
                     {"name": "start_task", "args": {"request": "TaskRequest"}, "result": "void"},
                 ],

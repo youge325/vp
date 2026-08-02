@@ -230,6 +230,7 @@ _FULL_SCAN_ONLY_REVIEWED_SYMBOLS = (
             "backend/tests/test_algorithms/test_rife_onnx.py",
             "backend/tests/test_algorithms/test_rife_tensorrt.py",
             "backend/tests/test_algorithms/test_real_rawvsr_basicvsr.py",
+            "backend/tests/test_algorithms/test_real_rawvsr_fixed_window.py",
             "backend/tests/test_algorithms/test_tensor_backend_pytorch.py",
             "backend/tests/test_weight_loading.py",
         )

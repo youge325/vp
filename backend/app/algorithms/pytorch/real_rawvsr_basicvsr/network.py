@@ -14,33 +14,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-
-def _flow_warp(
-    value: torch.Tensor,
-    flow: torch.Tensor,
-    *,
-    padding_mode: str = "zeros",
-) -> torch.Tensor:
-    if value.shape[-2:] != flow.shape[1:3]:
-        raise ValueError("BasicVSR flow and feature spatial dimensions do not match.")
-    height, width = value.shape[-2:]
-    grid_y, grid_x = torch.meshgrid(
-        torch.arange(height, device=value.device),
-        torch.arange(width, device=value.device),
-        indexing="ij",
-    )
-    grid = torch.stack((grid_x, grid_y), dim=2).to(dtype=value.dtype)
-    grid_flow = grid + flow
-    grid_x_normalized = 2.0 * grid_flow[..., 0] / max(width - 1, 1) - 1.0
-    grid_y_normalized = 2.0 * grid_flow[..., 1] / max(height - 1, 1) - 1.0
-    normalized = torch.stack((grid_x_normalized, grid_y_normalized), dim=3)
-    return F.grid_sample(
-        value,
-        normalized,
-        mode="bilinear",
-        padding_mode=padding_mode,
-        align_corners=True,
-    )
+from app.algorithms.pytorch.real_rawvsr.tensor_ops import flow_warp
 
 
 class _ConvModule(nn.Module):
@@ -136,7 +110,7 @@ class _SPyNet(nn.Module):
                 )
                 * 2.0
             )
-            warped = _flow_warp(
+            warped = flow_warp(
                 support_pyramid[level],
                 flow_up.permute(0, 2, 3, 1),
                 padding_mode="border",
@@ -216,7 +190,7 @@ class _BasicVSRNet(nn.Module):
         outputs: list[torch.Tensor] = []
         for index in range(count - 1, -1, -1):
             if index < count - 1:
-                propagated = _flow_warp(propagated, backward_flow[:, index].permute(0, 2, 3, 1))
+                propagated = flow_warp(propagated, backward_flow[:, index].permute(0, 2, 3, 1))
             propagated = self.backward_resblocks(torch.cat((frames[:, index], propagated), dim=1))
             outputs.append(propagated)
         outputs.reverse()
@@ -225,7 +199,7 @@ class _BasicVSRNet(nn.Module):
             current = frames[:, index]
             if index > 0:
                 flow = forward_flow[:, index - 1] if forward_flow is not None else backward_flow[:, -index]
-                propagated = _flow_warp(propagated, flow.permute(0, 2, 3, 1))
+                propagated = flow_warp(propagated, flow.permute(0, 2, 3, 1))
             propagated = self.forward_resblocks(torch.cat((current, propagated), dim=1))
             output = self.lrelu(self.fusion(torch.cat((outputs[index], propagated), dim=1)))
             if self.scale == 4:
