@@ -18,6 +18,7 @@ import type {
   MediaRunStatePort,
   QueueOperations,
   TaskCommandPort,
+  TaskIssuePort,
   TaskRequestFactory,
 } from './types'
 
@@ -26,6 +27,7 @@ type QueueDeps =
   & Pick<MediaItemPort, 'getMediaItem' | 'setActiveItem'>
   & Pick<MediaRunStatePort, 'setItemTaskState' | 'resetItemRunState'>
   & Pick<TaskCommandPort, 'startTask' | 'checkResume'>
+  & TaskIssuePort
   & TaskRequestFactory
 
 export function createQueueOps(
@@ -90,6 +92,7 @@ export function createQueueOps(
     if (ids.length === 0 || deps.getBatch().phase !== 'idle') {
       return
     }
+    deps.setTaskIssue(null)
     resetBatchRunState(ids)
     await runNextQueuedItem()
   }

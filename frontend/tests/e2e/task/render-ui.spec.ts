@@ -1,8 +1,13 @@
 import { expect, test } from '../fixtures'
+import { join, parse } from 'node:path'
+import { setOperationIssue } from '../utils/pinia'
 import { seedMediaItems, seedTaskConsoleState } from '../utils/media'
 import { openModule } from '../utils/navigation'
 import { saveE2EScreenshot } from '../utils/screenshots'
+import { waitForNonEmptyFile } from '../utils/files'
+import { buildSoftwareTaskRequest } from '../utils/task-runtime'
 import type { TauriPage } from '../utils/wdio-tauri'
+import { createTaskOutputDir, taskInputPath } from './helpers'
 
 const renderControls = (tauriPage: TauriPage) => ({
   start: tauriPage.locator('.render-stack .panel-actions .primary-button'),
@@ -72,6 +77,50 @@ test.describe('Render module', () => {
       })
       await saveE2EScreenshot(state.screenshot)
     }
+  })
+
+  test('clears a stale task failure when a corrected batch starts', async ({ tauriPage }) => {
+    const idleReady = await seedTaskConsoleState({
+      completedCount: 0,
+      totalCount: 0,
+      phase: 'idle',
+    })
+    expect(idleReady).toBe(true)
+    const inputPath = taskInputPath()
+    const outputDir = createTaskOutputDir('task-retry-cleared')
+    const request = buildSoftwareTaskRequest(inputPath, outputDir)
+    const mediaReady = await seedMediaItems([{
+      id: 'corrected-cuda-retry',
+      displayName: parse(inputPath).base,
+      selected: true,
+      taskRequest: request,
+    }])
+    expect(mediaReady).toBe(true)
+    await openModule(tauriPage, '渲染', '批处理队列')
+
+    const issueReady = await setOperationIssue('task', {
+      code: 'invalid_config',
+      message: "real-rawvsr-basicvsr supports only the CUDA engine; got 'tensorrt'.",
+    })
+    test.skip(!issueReady, 'Cannot seed stale task issue')
+
+    const banner = tauriPage.locator('.render-stack .info-banner-danger')
+    const controls = renderControls(tauriPage)
+    await expect(banner).toContainText("got 'tensorrt'")
+    const blockedHint = tauriPage.locator('.start-blocked-hint')
+    if (await blockedHint.isVisible()) {
+      throw new Error(`Corrected retry is not runnable: ${await blockedHint.textContent()}`)
+    }
+    await expect(controls.start).toBeEnabled()
+
+    await controls.start.click()
+
+    await expect(banner).not.toBeVisible({ timeout: 5000 })
+    await saveE2EScreenshot('task-retry-cleared')
+    const outputPath = join(outputDir, `${parse(inputPath).name}_processed.mp4`)
+    expect(await waitForNonEmptyFile(outputPath)).toBe(true)
+    await expect(controls.start).toBeEnabled({ timeout: 60000 })
+    await expect(banner).not.toBeVisible()
   })
 
   test('renders logs, resume progress and a stable completed 100% state', async ({ tauriPage }) => {
