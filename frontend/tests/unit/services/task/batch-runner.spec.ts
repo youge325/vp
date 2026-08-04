@@ -134,6 +134,44 @@ describe('batch-runner', () => {
     expect(harness.deps.startTask).toHaveBeenCalledOnce()
   })
 
+  it('clears a stale task issue before an accepted manual batch start', async () => {
+    const harness = makeHarness()
+    harness.items.set('a', makeItem('a'))
+    const runner = createBatchRunner(harness.deps)
+
+    await runner.start(['a'])
+
+    const setTaskIssue = vi.mocked(harness.deps.setTaskIssue)
+    const setRuntimeIds = vi.mocked(harness.deps.setRuntimeIds)
+    const checkResume = vi.mocked(harness.deps.checkResume)
+    const startTask = vi.mocked(harness.deps.startTask)
+    expect(setTaskIssue).toHaveBeenCalledExactlyOnceWith(null)
+    expect(setTaskIssue.mock.invocationCallOrder[0])
+      .toBeLessThan(setRuntimeIds.mock.invocationCallOrder[0] ?? 0)
+    expect(setTaskIssue.mock.invocationCallOrder[0])
+      .toBeLessThan(checkResume.mock.invocationCallOrder[0] ?? 0)
+    expect(setTaskIssue.mock.invocationCallOrder[0])
+      .toBeLessThan(startTask.mock.invocationCallOrder[0] ?? 0)
+  })
+
+  it('replaces the cleared issue when the accepted retry fails again', async () => {
+    const retryError = new Error('CUDA retry failed')
+    const harness = makeHarness({
+      checkResume: vi.fn().mockRejectedValue(retryError),
+    })
+    harness.items.set('a', makeItem('a'))
+    const runner = createBatchRunner(harness.deps)
+
+    await runner.start(['a'])
+
+    expect(harness.deps.setTaskIssue).toHaveBeenNthCalledWith(1, null)
+    expect(harness.deps.setTaskIssue).toHaveBeenNthCalledWith(2, {
+      code: 'process_failed',
+      message: 'CUDA retry failed',
+      details: null,
+    })
+  })
+
   it('does nothing for an empty or already active batch', async () => {
     const harness = makeHarness()
     const runner = createBatchRunner(harness.deps)
@@ -144,6 +182,7 @@ describe('batch-runner', () => {
 
     expect(harness.batch()).toMatchObject({ phase: 'running', currentId: 'a' })
     expect(harness.deps.startTask).not.toHaveBeenCalled()
+    expect(harness.deps.setTaskIssue).not.toHaveBeenCalled()
   })
 
   it('pauses and resumes only the batch phase, not item execution history', async () => {
@@ -362,7 +401,9 @@ describe('batch-runner', () => {
 
     expect(harness.runStates.get('a')?.taskState.status).toBe('error')
     expect(harness.batch().currentId).toBe('b')
-    expect(harness.deps.setTaskIssue).toHaveBeenCalledWith(error)
+    expect(harness.deps.setTaskIssue).toHaveBeenNthCalledWith(1, null)
+    expect(harness.deps.setTaskIssue).toHaveBeenNthCalledWith(2, error)
+    expect(harness.deps.setTaskIssue).toHaveBeenCalledTimes(2)
   })
 
   it('preserves the typed missing-model error for the global task banner', async () => {

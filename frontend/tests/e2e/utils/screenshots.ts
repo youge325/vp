@@ -11,6 +11,7 @@ type E2EScreenshotName =
   | 'task-running'
   | 'task-paused'
   | 'task-cancelling'
+  | 'task-retry-cleared'
   | 'real-rawvsr-default'
   | 'real-rawvsr-x2'
   | 'real-rawvsr-x3'

@@ -1,4 +1,5 @@
 import { withPiniaState } from './wdio-tauri'
+import type { TaskRequest } from '@/types/protocol'
 
 interface MediaSeed {
   id: string
@@ -11,6 +12,7 @@ interface MediaSeed {
   codec?: string
   interpolation?: boolean
   superResolution?: boolean
+  taskRequest?: TaskRequest
 }
 
 interface MediaSeedPayload {
@@ -44,13 +46,20 @@ export async function seedMediaItems(
     }
 
     media.mediaItems = payload.items.map((item) => {
-      const workflow = clone(draft.workflowConfig)
-      workflow.interpolation.enabled = item.interpolation ?? false
-      workflow.superResolution.enabled = item.superResolution ?? false
+      const request = item.taskRequest
+      const workflow = clone(request?.workflowConfig ?? draft.workflowConfig)
+      if (!request || item.interpolation !== undefined) {
+        workflow.interpolation.enabled = item.interpolation ?? false
+      }
+      if (!request || item.superResolution !== undefined) {
+        workflow.superResolution.enabled = item.superResolution ?? false
+      }
+      const outputConfig = clone(request?.outputConfig ?? draft.outputConfig)
+      outputConfig.outputDir = item.outputDir ?? request?.outputConfig.outputDir ?? 'C:/tmp/output'
       return {
         id: item.id,
         displayName: item.displayName,
-        inputPath: `C:/tmp/${item.displayName}`,
+        inputPath: request?.inputPath ?? `C:/tmp/${item.displayName}`,
         selected: item.selected ?? false,
         inspecting: false,
         info: {
@@ -59,13 +68,10 @@ export async function seedMediaItems(
           fps: item.fps ?? 30,
           videoCodec: item.codec ?? 'h264',
         },
-        decodeConfig: clone(draft.decodeConfig),
+        decodeConfig: clone(request?.decodeConfig ?? draft.decodeConfig),
         workflowConfig: workflow,
-        encodeConfig: clone(draft.encodeConfig),
-        outputConfig: {
-          ...clone(draft.outputConfig),
-          outputDir: item.outputDir ?? 'C:/tmp/output',
-        },
+        encodeConfig: clone(request?.encodeConfig ?? draft.encodeConfig),
+        outputConfig,
       }
     })
     media.activeItemId = payload.activeId ?? null
