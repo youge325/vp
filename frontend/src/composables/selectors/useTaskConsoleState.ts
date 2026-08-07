@@ -27,11 +27,11 @@ export function useTaskConsoleState() {
     () => consoleTaskContext.value.runState?.taskState.resumeStatus ?? null,
   )
   const showResumeBanner = computed(() => Boolean(resumeStatus.value?.resumed))
-  const done = computed(() => taskStore.batchRuntimeIds.filter(
+  const done = computed(() => taskStore.batch.runtimeIds.filter(
     (id) => mediaRunState.getByItemId(id)?.taskState.status === 'completed',
   ).length)
   const total = computed(
-    () => taskStore.batchRuntimeIds.length || mediaStore.selectedItems.length,
+    () => taskStore.batch.runtimeIds.length || mediaStore.selectedItems.length,
   )
   const progressPercent = computed(() => {
     if (total.value === 0) {

@@ -23,7 +23,7 @@ import type {
 } from './types'
 
 type QueueDeps =
-  & Pick<BatchStatePort, 'getBatch' | 'dispatchBatch' | 'setRuntimeIds' | 'setPendingConflict'>
+  & Pick<BatchStatePort, 'getBatch' | 'dispatchBatch' | 'setPendingConflict'>
   & Pick<MediaItemPort, 'getMediaItem' | 'setActiveItem'>
   & Pick<MediaRunStatePort, 'setItemTaskState' | 'resetItemRunState'>
   & Pick<TaskCommandPort, 'startTask' | 'checkResume'>
@@ -35,7 +35,6 @@ export function createQueueOps(
   internal: ErrorFinalizationCapability,
 ): QueueOperations {
   function resetBatchRunState(ids: string[]): void {
-    deps.setRuntimeIds([...ids])
     deps.dispatchBatch({ type: 'started', ids })
 
     for (const id of ids) {

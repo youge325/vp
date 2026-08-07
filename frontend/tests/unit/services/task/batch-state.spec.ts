@@ -1,12 +1,34 @@
 import { describe, expect, it } from 'vitest'
 
 import { createInitialBatchState, reduceBatchState } from '@/services/task/batch/state'
-import type { BatchState } from '@/types/domain/batch'
+import type { BatchPhase, BatchState } from '@/types/domain/batch'
 
-const runningState = (): BatchState => reduceBatchState(
-  createInitialBatchState(),
-  { type: 'started', ids: ['a', 'b'] },
-)
+function runningState(): BatchState {
+  const started = reduceBatchState(
+    createInitialBatchState(),
+    { type: 'started', ids: ['a', 'b'] },
+  )
+  return reduceBatchState(started, {
+    type: 'queue-advanced',
+    currentId: 'a',
+    remaining: ['b'],
+  })
+}
+
+function stateForPhase(phase: BatchPhase): BatchState {
+  const running = runningState()
+  if (phase === 'idle') {
+    return createInitialBatchState()
+  }
+  if (phase === 'running') {
+    return running
+  }
+  if (phase === 'paused') {
+    const pending = reduceBatchState(running, { type: 'control-requested', kind: 'pause' })
+    return reduceBatchState(pending, { type: 'control-succeeded', kind: 'pause' })
+  }
+  return reduceBatchState(running, { type: 'control-requested', kind: 'cancel' })
+}
 
 describe('batch state reducer', () => {
   it.each([
@@ -19,20 +41,13 @@ describe('batch state reducer', () => {
     ['paused', 'pause', 'paused', null],
     ['paused', 'resume', 'paused', 'resume'],
     ['paused', 'cancel', 'cancelling', 'cancel'],
-    ['cancelling', 'pause', 'cancelling', null],
-    ['cancelling', 'resume', 'cancelling', null],
-    ['cancelling', 'cancel', 'cancelling', null],
+    ['cancelling', 'pause', 'cancelling', 'cancel'],
+    ['cancelling', 'resume', 'cancelling', 'cancel'],
+    ['cancelling', 'cancel', 'cancelling', 'cancel'],
   ] as const)(
     'transitions %s + %s to %s with pending %s',
     (phase, kind, expectedPhase, expectedPending) => {
-      const base: BatchState = {
-        phase,
-        queue: ['b'],
-        currentId: 'a',
-        controlPending: null,
-      }
-
-      const next = reduceBatchState(base, { type: 'control-requested', kind })
+      const next = reduceBatchState(stateForPhase(phase), { type: 'control-requested', kind })
 
       expect(next.phase).toBe(expectedPhase)
       expect(next.controlPending).toBe(expectedPending)
@@ -65,6 +80,7 @@ describe('batch state reducer', () => {
     expect(restored).toEqual(running)
     expect(restored).not.toBe(running)
     expect(restored.queue).not.toBe(running.queue)
+    expect(restored.runtimeIds).toBe(running.runtimeIds)
   })
 
   it('ignores mismatched stale control results', () => {
@@ -73,24 +89,41 @@ describe('batch state reducer', () => {
     expect(reduceBatchState(pausing, { type: 'control-succeeded', kind: 'resume' })).toBe(pausing)
   })
 
-  it('finishes to idle only after the queue is drained', () => {
-    const current = reduceBatchState(runningState(), {
-      type: 'queue-advanced',
-      currentId: 'a',
-      remaining: ['b'],
-    })
+  it('preserves completed runtime ids after the queue drains and replaces them on the next start', () => {
+    const current = runningState()
     const continuing = reduceBatchState(current, { type: 'item-finalized' })
     const last = reduceBatchState(continuing, {
       type: 'queue-advanced',
       currentId: 'b',
       remaining: [],
     })
+    const completed = reduceBatchState(last, { type: 'item-finalized' })
 
     expect(continuing).toMatchObject({ phase: 'running', currentId: null, queue: ['b'] })
-    expect(reduceBatchState(last, { type: 'item-finalized' })).toEqual(createInitialBatchState())
+    expect(completed).toMatchObject({
+      phase: 'idle',
+      currentId: null,
+      runtimeIds: ['a', 'b'],
+    })
+    expect(reduceBatchState(completed, { type: 'started', ids: ['next'] }).runtimeIds)
+      .toEqual(['next'])
   })
 
-  // @ts-expect-error Boolean mirrors cannot be represented in BatchState.
-  const invalidBooleanState: BatchState = { phase: 'idle', queue: [], currentId: null, controlPending: null, isRunning: true }
-  expect(invalidBooleanState.phase).toBe('idle')
+  it('rejects illegal phase and control combinations at compile time', () => {
+    // @ts-expect-error Idle batches cannot retain a current task.
+    const invalidIdle: BatchState = { phase: 'idle', queue: [], currentId: 'a', controlPending: null, runtimeIds: ['a'] }
+    // @ts-expect-error Running batches cannot have a resume request pending.
+    const invalidRunning: BatchState = { phase: 'running', queue: [], currentId: 'a', controlPending: 'resume', runtimeIds: ['a'] }
+    // @ts-expect-error Paused batches cannot have a pause request pending.
+    const invalidPaused: BatchState = { phase: 'paused', queue: [], currentId: 'a', controlPending: 'pause', runtimeIds: ['a'] }
+    // @ts-expect-error Cancelling batches cannot retain queued work.
+    const invalidCancelling: BatchState = { phase: 'cancelling', queue: ['b'], currentId: 'a', controlPending: 'cancel', runtimeIds: ['a', 'b'] }
+
+    expect([
+      invalidIdle.phase,
+      invalidRunning.phase,
+      invalidPaused.phase,
+      invalidCancelling.phase,
+    ]).toEqual(['idle', 'running', 'paused', 'cancelling'])
+  })
 })

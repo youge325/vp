@@ -20,12 +20,12 @@ describe('useTaskStore', () => {
     expect(store.batch.queue).toEqual(['b'])
   })
 
-  it('setRuntimeIds clones the input array', () => {
+  it('started is the only transition that replaces cloned runtime ids', () => {
     const store = useTaskStore()
     const source = ['x', 'y']
-    store.setRuntimeIds(source)
+    store.dispatchBatch({ type: 'started', ids: source })
     source.push('z')
-    expect(store.batchRuntimeIds).toEqual(['x', 'y'])
+    expect(store.batch.runtimeIds).toEqual(['x', 'y'])
   })
 
   it('setPendingConflict accepts a descriptor and null', () => {

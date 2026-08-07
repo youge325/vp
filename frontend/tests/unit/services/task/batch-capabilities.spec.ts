@@ -16,6 +16,7 @@ const deps: ConflictDeps = {
     queue: [],
     currentId: null,
     controlPending: null,
+    runtimeIds: [],
   }),
   dispatchBatch: vi.fn(),
   setPendingConflict: vi.fn(),

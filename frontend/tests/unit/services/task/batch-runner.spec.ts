@@ -62,7 +62,6 @@ function makeHarness(overrides: Partial<BatchRunnerDeps> = {}): BatchHarness {
     dispatchBatch: (event) => {
       batchState = reduceBatchState(batchState, event)
     },
-    setRuntimeIds: vi.fn(),
     setPendingConflict: vi.fn(),
     buildRequest: (item) => ({
       inputPath: item.inputPath,
@@ -142,16 +141,14 @@ describe('batch-runner', () => {
     await runner.start(['a'])
 
     const setTaskIssue = vi.mocked(harness.deps.setTaskIssue)
-    const setRuntimeIds = vi.mocked(harness.deps.setRuntimeIds)
     const checkResume = vi.mocked(harness.deps.checkResume)
     const startTask = vi.mocked(harness.deps.startTask)
     expect(setTaskIssue).toHaveBeenCalledExactlyOnceWith(null)
     expect(setTaskIssue.mock.invocationCallOrder[0])
-      .toBeLessThan(setRuntimeIds.mock.invocationCallOrder[0] ?? 0)
-    expect(setTaskIssue.mock.invocationCallOrder[0])
       .toBeLessThan(checkResume.mock.invocationCallOrder[0] ?? 0)
     expect(setTaskIssue.mock.invocationCallOrder[0])
       .toBeLessThan(startTask.mock.invocationCallOrder[0] ?? 0)
+    expect(harness.batch().runtimeIds).toEqual(['a'])
   })
 
   it('replaces the cleared issue when the accepted retry fails again', async () => {
@@ -241,14 +238,18 @@ describe('batch-runner', () => {
   })
 
   it('does not apply a stale pause result after terminal finalization', async () => {
-    expect(await runPauseTerminalRace(100, 10)).toEqual(createInitialBatchState())
+    expect(await runPauseTerminalRace(100, 10)).toMatchObject({
+      phase: 'idle',
+      runtimeIds: ['a'],
+    })
   })
 
   it('rejects stale control tokens across 100 terminal races', async () => {
     for (let iteration = 0; iteration < 100; iteration += 1) {
-      expect(await runPauseTerminalRace(1, 0.1), `iteration ${iteration}`).toEqual(
-        createInitialBatchState(),
-      )
+      expect(await runPauseTerminalRace(1, 0.1), `iteration ${iteration}`).toMatchObject({
+        phase: 'idle',
+        runtimeIds: ['a'],
+      })
     }
   })
 
@@ -294,7 +295,7 @@ describe('batch-runner', () => {
     cancelCall.reject(new Error('late cancellation reply'))
     await expect(cancelling).resolves.toBeUndefined()
 
-    expect(harness.batch()).toEqual(createInitialBatchState())
+    expect(harness.batch()).toMatchObject({ phase: 'idle', runtimeIds: ['a'] })
     expect(harness.deps.setTaskIssue).toHaveBeenLastCalledWith(null)
   })
 
@@ -385,8 +386,22 @@ describe('batch-runner', () => {
     await runner.start(['a'])
     await runner.onCompleted({ outputPath: '/out/a.mp4', processedFrames: 100, timeSeconds: 10 })
 
-    expect(harness.batch()).toEqual(createInitialBatchState())
+    expect(harness.batch()).toMatchObject({ phase: 'idle', runtimeIds: ['a'] })
     expect(harness.runStates.get('a')?.taskState.status).toBe('completed')
+  })
+
+  it('replaces the completed runtime ids only when the next valid batch starts', async () => {
+    const harness = makeHarness()
+    harness.items.set('a', makeItem('a'))
+    harness.items.set('b', makeItem('b'))
+    const runner = createBatchRunner(harness.deps)
+
+    await runner.start(['a'])
+    await runner.onCompleted({ outputPath: '/out/a.mp4', processedFrames: 100, timeSeconds: 10 })
+    expect(harness.batch()).toMatchObject({ phase: 'idle', runtimeIds: ['a'] })
+
+    await runner.start(['b'])
+    expect(harness.batch()).toMatchObject({ phase: 'running', runtimeIds: ['b'] })
   })
 
   it('records errors and continues with the next item', async () => {

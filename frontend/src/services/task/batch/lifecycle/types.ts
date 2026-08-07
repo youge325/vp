@@ -50,7 +50,6 @@ export interface TaskIssuePort {
 export interface BatchStatePort {
   getBatch: () => BatchState
   dispatchBatch: (event: BatchEvent) => void
-  setRuntimeIds: (ids: string[]) => void
   setPendingConflict: (descriptor: ResumeConflictDescriptor | null) => void
 }
 

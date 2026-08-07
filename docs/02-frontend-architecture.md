@@ -196,10 +196,12 @@ stateDiagram-v2
 - `appendTaskLog` — 追加日志并折叠连续阶段进度行（保留最近 300 条）
 - `applyTaskResumeStatus` — 保存续传进度元数据
 
-暂停与取消中不是素材执行历史，而是批次控制状态。`services/task/batch/state.ts` 定义只含
-`phase: idle | running | paused | cancelling`、队列、当前 ID 和正交 `controlPending` 的不可变
-判别联合；所有变化只能经纯 `BatchEvent → BatchState` reducer 提交，不存在 `isRunning`、
-`isPaused`、`isCancelling` 或可变完成计数。
+暂停与取消中不是素材执行历史，而是批次控制状态。`services/task/batch/state.ts` 定义包含
+`phase: idle | running | paused | cancelling`、队列、当前 ID、`runtimeIds` 和 `controlPending` 的
+不可变判别联合。idle 固定没有当前任务或控制请求，running 只允许待处理 pause，paused 只允许
+待处理 resume，cancelling 固定清空队列且只允许待处理 cancel；非法组合无法通过类型检查。
+所有变化只能经纯 `BatchEvent → BatchState` reducer 提交，不存在 `isRunning`、`isPaused`、
+`isCancelling` 或可变完成计数。
 
 ## 批处理编排
 
@@ -209,14 +211,14 @@ stateDiagram-v2
 
 ```mermaid
 graph LR
-    A[BatchRunner composition root] --> B1[common.ts 状态查询]
+    A[BatchRunner composition root] --> B1[current / console 窄上下文]
     A --> B2[control.ts 暂停/恢复/取消]
     A --> B3[finalize.ts 终态清理]
     A --> B4[queue.ts 任务队列]
     A --> C[conflict.ts 续传冲突]
     A --> D[events.ts NDJSON 适配]
     B1 --> E[task-context.ts 纯解析规则]
-    F[useTaskContext Vue selector] --> E
+    F[useTaskConsoleState Vue selector] --> E
     G[TaskConsole] --> F
     H[状态标签 / 导航 / 渲染按钮] --> I[BatchState phase]
     B3 -. lazy callback .-> B4
@@ -224,14 +226,16 @@ graph LR
 ```
 
 `task-context.ts` 是纯任务上下文 SSOT：先确认媒体项存在，再用该媒体项的 ID 读取
-`MediaRunState`。batch lifecycle 的 `common.ts` 与 Vue 的 `useTaskContext` selector 共同调用它；
+`MediaRunState`。BatchRunner composition root 内联 current / console 两种窄 capability，Vue 的
+`useTaskConsoleState` selector 也直接调用同一纯解析规则；
 当 `currentId` 已失效时，current context 不携带孤立 run-state，console context 会整体回退到
 active item。conflict、events 和 finalize 每次操作只读取一次 context；control 只依赖批次 reducer，
 不再改写素材状态。
 
-批次开始时 `resetItemRunState()` 为每个 runtime ID 建立新的空闲历史；完成、错误或取消后保留
-对应素材的终态、日志与恢复元数据。TaskConsole 的完成数按 `batchRuntimeIds` 中素材的
-`completed` 状态实时派生，不在批次状态中维护第二份计数。
+批次开始时，`started` 是 `runtimeIds` 的唯一写入事件，并由 `resetItemRunState()` 为每个 ID 建立
+新的空闲历史；完成、错误或取消后，idle 状态继续保留最近批次的 ID 和对应素材的终态、日志与
+恢复元数据，下一次有效 start 才整体替换。TaskConsole 直接按 `batch.runtimeIds` 中素材的
+`completed` 状态实时派生 `N/N`，不在 Pinia 或批次状态旁边维护第二份 ID/计数。
 
 `conflict.ts`、`events.ts`、`queue.ts` 与 `finalize.ts` 只接收消费方拥有的
 `TaskContextCapability`、`QueueContinuation`、`FinalizationCapability` 和

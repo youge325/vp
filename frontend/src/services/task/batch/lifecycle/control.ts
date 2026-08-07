@@ -6,6 +6,7 @@ import {
   type TaskControlKind,
 } from '@/types/protocol'
 import type { BatchState } from '@/types/domain/batch'
+import { cloneBatchState } from '../state'
 
 import type {
   BatchStatePort,
@@ -40,10 +41,7 @@ export function createControlOps(deps: ControlDeps): ControlOperations {
       kind,
       taskId: batch.currentId,
       token: ++nextControlToken,
-      snapshot: {
-        ...batch,
-        queue: [...batch.queue],
-      },
+      snapshot: cloneBatchState(batch),
     }
     deps.dispatchBatch({ type: 'control-requested', kind })
     if (deps.getBatch().controlPending !== kind) {

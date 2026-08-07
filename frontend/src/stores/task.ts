@@ -6,15 +6,10 @@ import { createInitialBatchState, reduceBatchState } from '@/services/task/batch
 export const useTaskStore = defineStore('task', () => {
   const mutableBatch = reactive(createInitialBatchState())
   const batch = readonly(mutableBatch)
-  const batchRuntimeIds = ref<string[]>([])
   const pendingConflict = ref<ResumeConflictDescriptor | null>(null)
 
   function dispatchBatch(event: BatchEvent): void {
     Object.assign(mutableBatch, reduceBatchState(mutableBatch, event))
-  }
-
-  function setRuntimeIds(ids: string[]): void {
-    batchRuntimeIds.value = [...ids]
   }
 
   function setPendingConflict(descriptor: ResumeConflictDescriptor | null): void {
@@ -23,10 +18,8 @@ export const useTaskStore = defineStore('task', () => {
 
   return {
     batch,
-    batchRuntimeIds,
     pendingConflict,
     dispatchBatch,
-    setRuntimeIds,
     setPendingConflict,
   }
 })

@@ -221,6 +221,10 @@ supervisor 在一个 `tokio::select!` 循环中并发处理 reader 消息、进�
   轮询并通过 `ReapTicket` 发布 `Reaped/Failed`；monitor 按同一 lease 只提交一个 `process_failed`
   终态。
 
+普通 one-shot 退出统一等待 `OwnedProcessGroup::wait_for_exit()`；轮询间隔与 reap outcome 发布只在
+`subprocess.rs` 实现。one-shot 不再维护自己的 `try_wait + sleep` 循环。长任务 supervisor 因为必须
+把进程退出与 reader、控制、watchdog 放在同一个 `select!` 中，保留事件循环级退出轮询策略。
+
 ### NDJSON 信封解析
 
 [`frontend/src-tauri/src/tasks/envelope.rs`](../frontend/src-tauri/src/tasks/envelope.rs) 复用

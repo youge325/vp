@@ -22,16 +22,43 @@ export type ResumeConflictAction = 'resume' | 'fresh' | 'skip' | 'cancel'
 
 export type BatchPhase = 'idle' | 'running' | 'paused' | 'cancelling'
 
-type BatchStateFor<Phase extends BatchPhase> = Readonly<{
-  phase: Phase
-  queue: readonly string[]
-  currentId: string | null
-  controlPending: TaskControlKind | null
+type BatchRuntime = Readonly<{
+  runtimeIds: readonly string[]
 }>
 
-export type BatchState = {
-  [Phase in BatchPhase]: BatchStateFor<Phase>
-}[BatchPhase]
+type IdleBatchState = BatchRuntime & Readonly<{
+  phase: 'idle'
+  queue: readonly []
+  currentId: null
+  controlPending: null
+}>
+
+type RunningBatchState = BatchRuntime & Readonly<{
+  phase: 'running'
+  queue: readonly string[]
+  currentId: string | null
+  controlPending: Extract<TaskControlKind, 'pause'> | null
+}>
+
+type PausedBatchState = BatchRuntime & Readonly<{
+  phase: 'paused'
+  queue: readonly string[]
+  currentId: string | null
+  controlPending: Extract<TaskControlKind, 'resume'> | null
+}>
+
+type CancellingBatchState = BatchRuntime & Readonly<{
+  phase: 'cancelling'
+  queue: readonly []
+  currentId: string | null
+  controlPending: Extract<TaskControlKind, 'cancel'> | null
+}>
+
+export type BatchState =
+  | IdleBatchState
+  | RunningBatchState
+  | PausedBatchState
+  | CancellingBatchState
 
 export type BatchEvent =
   | { readonly type: 'started'; readonly ids: readonly string[] }

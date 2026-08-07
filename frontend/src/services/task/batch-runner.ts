@@ -2,7 +2,10 @@
 // Batch state-machine composition root. Queue and finalization reference each
 // other lazily; only the public BatchRunner operations leave this module.
 
-import { createCommonHelpers } from './batch/lifecycle/common'
+import {
+  resolveConsoleTaskContext,
+  resolveTaskContext,
+} from './task-context'
 import { createControlOps } from './batch/lifecycle/control'
 import { createFinalizeOps } from './batch/lifecycle/finalize'
 import { createQueueOps } from './batch/lifecycle/queue'
@@ -11,8 +14,21 @@ import { createConflictResolver } from './batch/conflict'
 import { createEventHandlers } from './batch/events'
 
 export function createBatchRunner(deps: BatchRunnerDeps): BatchRunner {
-  const helpers = createCommonHelpers(deps)
-  const finalizeOps = createFinalizeOps(deps, helpers, {
+  const lookup = {
+    getMediaItem: deps.getMediaItem,
+    getItemRunState: deps.getItemRunState,
+  }
+  const currentContext = {
+    getCurrentTaskContext: () => resolveTaskContext(lookup, deps.getBatch().currentId),
+  }
+  const consoleContext = {
+    getConsoleTaskContext: () => resolveConsoleTaskContext(
+      lookup,
+      deps.getBatch().currentId,
+      deps.getActiveItemId(),
+    ),
+  }
+  const finalizeOps = createFinalizeOps(deps, currentContext, {
     runNextQueuedItem: () => queueOps.runNextQueuedItem(),
   })
   const queueOps = createQueueOps(deps, {
@@ -20,8 +36,8 @@ export function createBatchRunner(deps: BatchRunnerDeps): BatchRunner {
   })
   const controlOps = createControlOps(deps)
   const lifecycle = {
-    getCurrentTaskContext: helpers.getCurrentTaskContext,
-    getConsoleTaskContext: helpers.getConsoleTaskContext,
+    ...currentContext,
+    ...consoleContext,
     launchCurrentItem: queueOps.launchCurrentItem,
     finalizeCurrent: finalizeOps.finalizeCurrent,
     handleErrored: finalizeOps.handleErrored,

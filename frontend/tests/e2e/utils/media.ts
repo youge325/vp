@@ -106,9 +106,7 @@ export async function seedTaskConsoleState(options: {
   return await withPiniaState((_state, _win, payload) => {
     type TaskSeedStore = {
       batch?: Record<string, unknown>
-      batchRuntimeIds?: string[]
       dispatchBatch?: (event: unknown) => void
-      setRuntimeIds?: (ids: string[]) => void
     }
     type RunStateSeedStore = {
       setTaskState?: (id: string, taskState: unknown) => void
@@ -151,12 +149,14 @@ export async function seedTaskConsoleState(options: {
       resumeStatus: payload.resumeStatus,
     })
     runStateStore.setLastOutputPath?.(payload.itemId, '')
-    task.setRuntimeIds?.(runtimeIds)
     task.dispatchBatch({ type: 'queue-cleared' })
     task.dispatchBatch({ type: 'item-finalized' })
-    if (payload.phase !== 'idle') {
-      task.dispatchBatch({ type: 'started', ids: [payload.itemId] })
+    if (runtimeIds.length > 0) {
+      task.dispatchBatch({ type: 'started', ids: runtimeIds })
       task.dispatchBatch({ type: 'queue-advanced', currentId: payload.itemId, remaining: [] })
+      if (payload.phase === 'idle') {
+        task.dispatchBatch({ type: 'item-finalized' })
+      }
     }
     if (payload.phase === 'paused') {
       task.dispatchBatch({ type: 'control-requested', kind: 'pause' })

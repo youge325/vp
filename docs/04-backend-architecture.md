@@ -52,8 +52,9 @@ CLI composition root 将职责拆成以下边界：
 4. `_process_execution.py` — 执行与完成事件
 
 `process` 与 `inspect-output` 都调用 `prepare_pipeline_preflight()`，因此视频探测、工作流解析、
-步骤顺序、输出 FPS、签名和 stage plan 只有一套实现。`PreparedRun` 只保存输出路径、类型化配置、
-冻结步骤 tuple 和 preflight；reporter、callback、metrics 放在单独的 `RunObservers`，不进入静态计划。
+步骤顺序、输出 FPS、签名和 stage plan 只有一套实现。完整 `RuntimeConfigBundle` 在 composition root
+只序列化一次；`PreparedRun` 只保存输出路径、执行所需的 decode/encode 投影和 preflight，步骤与
+FPS 继续从 `StagePlan` 派生。reporter、callback、metrics 放在单独的 `RunObservers`，不进入静态计划。
 
 ## 配置体系
 
@@ -76,8 +77,9 @@ re-export 层；`OutputConfig.outputDir` 的非空白约束也由 schema 生成�
 [`backend/app/generated/contracts.py`](../backend/app/generated/contracts.py) 是
 `datamodel-code-generator` 产出的唯一公共边界字段定义。调用方直接导入所需的 generated 模型；
 `OutputConfig` 的非空白路径和正整数分段约束来自 schema，删除手写继承模型后不会形成双重校验。
-`RuntimeConfigs` 保存校验后的 Pydantic 模型，并按需
-生成 camelCase JSON 投影供签名、adapter 和 worker 使用，不维护展开缓存或冗余深拷贝。
+`RuntimeConfigBundle` 保存校验后的 Pydantic 模型，并在预检 composition root 一次生成 camelCase
+JSON 投影供签名、adapter 和 worker 使用；不保留 `runtime_configs.py` 转发 façade、展开缓存或
+重复 `model_dump()`。
 
 ## 处理步骤规划
 
@@ -93,8 +95,9 @@ class StagePlan:
     encoder_fps_override: float | None
 ```
 
-preflight 调用 `StageProjection.stages()` 恰好一次，把步骤顺序、每阶段几何、帧数与 FPS 完整
-物化进冻结 tuple。`StagePlan` 从该 tuple 派生最终尺寸、流 FPS、编码帧数、插值步骤、文件流水线
+preflight 将完整 `VideoMetadata` 传给 `StageProjection.stages()` 恰好一次，把步骤顺序、每阶段
+非可选的输入/输出几何、帧数与 FPS 完整物化进冻结 tuple。`StagePlan` 从该 tuple 派生最终尺寸、
+流 FPS、编码 FPS override、编码帧数、插值步骤、文件流水线
 选择和恢复源帧数；resume/chunk 只对局部帧数调用 `slice_stages()`，不重算顺序、几何或 FPS。
 
 [`backend/app/catalog/stage_descriptors.py`](../backend/app/catalog/stage_descriptors.py) 是 stage
@@ -269,8 +272,9 @@ trace observer；`paddle_video_super_resolution.py` 只组合这些能力。ONNX
 ### Real-RawVSR RGB 模型家族
 
 [`backend/app/algorithms/pytorch/real_rawvsr/`](../backend/app/algorithms/pytorch/real_rawvsr/) 提供共享资产、
-冻结的模型加载规格、序列生命周期、固定窗口和统一 `RgbTensorCodec`；codec 唯一负责 RGB uint8 输入、
-CUDA tensor、空间填充/裁剪与 uint8 输出。BasicVSR 的循环网络继续位于独立目录。EDVR、TDAN、
+冻结的模型加载规格、序列生命周期、固定窗口和统一 `RgbTensorCodec`；序列适配器只暴露
+`process_frame_sequence`，并用冻结的 loaded runtime 原子持有 Torch 与模型，无法表示半加载状态。
+codec 唯一负责 RGB uint8 输入、CUDA tensor、空间填充/裁剪与 uint8 输出。BasicVSR 的循环网络继续位于独立目录。EDVR、TDAN、
 TOFlow 是从上游提取的最小推理网络，保留 checkpoint 键结构并移除 MMCV、训练器、Registry、日志与
 自定义 CUDA 扩展。EDVR 和 TDAN 共用基于 `torchvision.ops.deform_conv2d` 的 checkpoint 兼容 DCNv2，
 TOFlow 只依赖原生 PyTorch。所有实现只在选中算法后惰性导入框架，使用 `eval()`、
@@ -283,6 +287,9 @@ TOFlow 只依赖原生 PyTorch。所有实现只在选中算法后惰性导入�
 下侧复制填充到 16 的倍数，BasicVSR 小尺寸输入填充到至少 64 像素，推理后均按倍率裁回。实际视频没有
 HR ground truth，因此不执行上游评测的 GT 色彩校正。缺失/损坏权重、非法倍率、无 CUDA/torchvision
 和 CUDA OOM 分别映射为包含算法与倍率的明确错误。
+
+格式转换与流式收尾共同调用 `resolve_final_output_frame_count()`：每个最终输出最多探测一次，正数探测
+优先；零值或探测异常回退到已知完成帧数，不重复 ffprobe，也不会把已成功输出改判为失败。
 
 factory、stage runtime 和 execution loop 共享 `Algorithm` union、`ITensorBackend` 与
 `StageWorkerConfig` 类型契约，并按 descriptor 的模式做一次结构化 Protocol 校验。

@@ -130,13 +130,14 @@ const taskRequestFactory: TaskRequestFactory = (item, resumeMode) => {
 
 1. 从 stdin 读取 JSON payload
 2. 使用 `datamodel-code-generator` 生成的 Pydantic 模型严格反序列化
-3. `RuntimeConfigs` 保存类型化配置，只在 adapter/signature/worker 边界投影 camelCase JSON
+3. `RuntimeConfigBundle` 保存类型化配置，并在共享预检入口一次投影 camelCase JSON
 
 ### 处理步骤规划
 
 `StageProjection.resolve_workflow()` 先统一计算 target FPS 对应的插帧倍数，再以唯一顺序构造不可变
-步骤描述，并同时返回已解析 workflow、projection 与可选编码 FPS。preflight 对源媒体调用
-`projection.stages()` 恰好一次，直接物化 `StagePlan`，执行路径不再从 workflow 或 steps 重建投影。
+步骤描述，并返回已解析 workflow、projection 与可选目标 FPS。preflight 将完整 `VideoMetadata` 传给
+`projection.stages()` 恰好一次，直接物化所有非可选几何/FPS 的 `StagePlan`；编码 FPS override 再由
+最终物化阶段与目标 FPS 派生，执行路径不从 workflow 或 steps 重建投影。
 步骤包含：
 
 - 可选预处理滤镜链
@@ -161,8 +162,9 @@ class StagePlan:
     encoder_fps_override: float | None
 ```
 
-`prepare_pipeline_preflight()` 将它与输出路径、签名和恢复预检一起封装为不可变 `PreparedRun`；
-`PreparedRun.processing_steps` 和 `final_output_fps` 只投影 `StagePlan` 中的事实，不重复存储。
+`prepare_pipeline_preflight()` 将它与输出路径、一次序列化得到的 decode/encode 投影、签名和恢复预检
+一起封装为不可变 `PreparedRun`；`PreparedRun.processing_steps` 和 `final_output_fps` 只投影
+`StagePlan` 中的事实，不重复存储完整运行配置或再次 `model_dump()`。
 `process` 和 `inspect-output` 共享这份准备结果。reporter、callback 和 metrics 属于运行期 observers，
 不进入静态计划。文件流水线选择和恢复帧数也只在 `StagePlan` 派生一次，dispatch、raw 与
 stage-file 执行路径不再各自维护判断函数；resume/chunk 只投影局部帧数，不重算顺序、尺寸或 FPS。

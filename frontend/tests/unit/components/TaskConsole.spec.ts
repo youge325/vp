@@ -100,7 +100,9 @@ describe('TaskConsole TensorRT logs', () => {
   it('keeps a completed batch visible as N/N at 100 percent', () => {
     const taskStore = useTaskStore()
     const runStateStore = useMediaRunState()
-    taskStore.setRuntimeIds(['a', 'b'])
+    taskStore.dispatchBatch({ type: 'started', ids: ['a', 'b'] })
+    taskStore.dispatchBatch({ type: 'queue-cleared' })
+    taskStore.dispatchBatch({ type: 'item-finalized' })
     runStateStore.setTaskState('a', { status: 'completed', logs: [], resumeStatus: null })
     runStateStore.setTaskState('b', { status: 'completed', logs: [], resumeStatus: null })
 
@@ -108,5 +110,18 @@ describe('TaskConsole TensorRT logs', () => {
 
     expect(wrapper.get('.progress-label').text()).toBe('2 / 2')
     expect(wrapper.get('.progress-fill').attributes('style')).toContain('width: 100%')
+  })
+
+  it('keeps the selected-item total before the first batch starts', () => {
+    const presetStore = usePresetStore()
+    const mediaStore = useMediaStore()
+    mediaStore.appendItems([
+      createMediaItem('/video/first.mp4', presetStore.draftPreset),
+      createMediaItem('/video/second.mp4', presetStore.draftPreset),
+    ])
+
+    const wrapper = mount(TaskConsole)
+
+    expect(wrapper.get('.progress-label').text()).toBe('0 / 2')
   })
 })

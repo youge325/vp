@@ -202,8 +202,10 @@ stdout reader 只在收到合法 `progress` envelope 时更新共享 `Instant`�
 
 ## 前端控制请求生命周期
 
-前端 `BatchState` 是以 `phase: idle | running | paused | cancelling` 判别的不可变联合，
-`controlPending` 正交保存未决的 `pause | resume | cancel`。每个控制 attempt 记录单调 token、
+前端 `BatchState` 是以 `phase: idle | running | paused | cancelling` 判别的不可变联合。idle 不含
+current/control，running 只允许 pause pending，paused 只允许 resume pending，cancelling 队列固定为空
+且只允许 cancel pending。`started` 是 `runtimeIds` 的唯一写入点；终态回到 idle 后保留最近批次，
+TaskConsole 因而继续显示完成的 `N/N`，下一批有效启动再整体替换。每个控制 attempt 记录单调 token、
 开始时的 `currentId` 和完整快照；异步回复只有在 token、任务 ID 和 pending kind 仍匹配时才能
 提交或回滚。过期回复不会覆盖新任务，也不会清空更新的控制状态；终态事件通过同一 reducer
 清理 current/pending。素材状态不再写入 paused/cancelling。
