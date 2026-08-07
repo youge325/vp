@@ -18,7 +18,7 @@ from .model_loader import (
 )
 from app.utils.logger import get_logger
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 
 class RIFESolver:
@@ -70,7 +70,7 @@ class RIFESolver:
         self._backwarp_grid = None
         self._flow_div = None
 
-        logger.info(
+        _logger.info(
             f"RIFESolver 初始化完成: v{model_version}, "
             f"device={self._device}, dtype={self._dtype}, scale={scale}, "
             f"has_head={self._has_head}"

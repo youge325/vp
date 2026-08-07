@@ -8,14 +8,28 @@
     "noticeRelativePath": "licenses/real-rawvsr/NOTICE.md",
     "thirdPartyNoticeRelativePath": "licenses/real-rawvsr/THIRD-PARTY-NOTICES.md"
   },
+  "runtime": {
+    "algorithmFamily": "pytorch_vsr",
+    "tensorBackend": "pytorch",
+    "engines": ["cuda"]
+  },
   "families": [
     {
       "algorithmId": "real-rawvsr-basicvsr",
-      "family": "pytorch_vsr",
       "displayName": "Real-RawVSR BasicVSR",
+      "implementationKey": "basicvsr",
       "inputFrameMode": "editable_chunk",
       "defaultNumFrames": 10,
       "temporalContextFrames": 2,
+      "spatialPolicy": {
+        "minimumSize": 64,
+        "sizeMultiple": 1
+      },
+      "runtimeRequirements": [],
+      "upstreamCheckpoint": {
+        "folder": "model_BasicVSR",
+        "sourceStem": "basicvsr"
+      },
       "variants": [
         {
           "scaleFactor": 2,
@@ -51,11 +65,20 @@
     },
     {
       "algorithmId": "real-rawvsr-edvr",
-      "family": "pytorch_vsr",
       "displayName": "Real-RawVSR EDVR",
+      "implementationKey": "edvr",
       "inputFrameMode": "fixed_window",
       "defaultNumFrames": 5,
       "temporalContextFrames": 2,
+      "spatialPolicy": {
+        "minimumSize": 1,
+        "sizeMultiple": 16
+      },
+      "runtimeRequirements": ["torchvision_deform_conv"],
+      "upstreamCheckpoint": {
+        "folder": "model_EDVR",
+        "sourceStem": "edvr"
+      },
       "variants": [
         {
           "scaleFactor": 2,
@@ -91,11 +114,20 @@
     },
     {
       "algorithmId": "real-rawvsr-tdan",
-      "family": "pytorch_vsr",
       "displayName": "Real-RawVSR TDAN",
+      "implementationKey": "tdan",
       "inputFrameMode": "fixed_window",
       "defaultNumFrames": 5,
       "temporalContextFrames": 2,
+      "spatialPolicy": {
+        "minimumSize": 1,
+        "sizeMultiple": 16
+      },
+      "runtimeRequirements": ["torchvision_deform_conv"],
+      "upstreamCheckpoint": {
+        "folder": "model_TDAN",
+        "sourceStem": "tdan"
+      },
       "variants": [
         {
           "scaleFactor": 2,
@@ -131,11 +163,20 @@
     },
     {
       "algorithmId": "real-rawvsr-toflow",
-      "family": "pytorch_vsr",
       "displayName": "Real-RawVSR TOFlow",
+      "implementationKey": "toflow",
       "inputFrameMode": "fixed_window",
       "defaultNumFrames": 5,
       "temporalContextFrames": 2,
+      "spatialPolicy": {
+        "minimumSize": 1,
+        "sizeMultiple": 16
+      },
+      "runtimeRequirements": [],
+      "upstreamCheckpoint": {
+        "folder": "model_TOF",
+        "sourceStem": "tof"
+      },
       "variants": [
         {
           "scaleFactor": 2,

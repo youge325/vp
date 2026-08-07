@@ -2,7 +2,7 @@
 #   filename:  stage-worker.schema.json
 
 from __future__ import annotations
-from enum import Enum, IntEnum, StrEnum
+from enum import Enum, StrEnum
 from typing import Any, Literal
 from pydantic import (
     BaseModel as _BaseModel,
@@ -31,10 +31,10 @@ class SrAlgorithm(Enum):
     REAL_RAWVSR_TOFLOW = "real-rawvsr-toflow"
 
 
-class ScaleFactor(IntEnum):
-    INTEGER_2 = 2
-    INTEGER_3 = 3
-    INTEGER_4 = 4
+class ScaleFactor(Enum):
+    INT_2 = 2
+    INT_3 = 3
+    INT_4 = 4
 
 
 class StageWorkerPytorchVsrKwargs(BaseModel):

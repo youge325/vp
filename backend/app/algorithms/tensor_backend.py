@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 from app.utils.logger import get_logger
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 
 class ITensorBackend(ABC):
@@ -28,7 +28,7 @@ class ITensorBackend(ABC):
         pass
 
 
-class PyTorchBackend(ITensorBackend):
+class _PyTorchBackend(ITensorBackend):
     """PyTorch Tensor 后端。"""
 
     def __init__(self):
@@ -38,7 +38,7 @@ class PyTorchBackend(ITensorBackend):
 
             self._torch = torch
         except ImportError:
-            logger.warning("PyTorch 未安装")
+            _logger.warning("PyTorch 未安装")
 
     def numpy_to_tensor(self, frame: np.ndarray) -> Any:
         """将 numpy (HWC, uint8) 转换为 PyTorch Tensor (1CHW, float32 [0,1])。"""
@@ -61,7 +61,7 @@ class PyTorchBackend(ITensorBackend):
         return self._torch is not None
 
 
-class OnnxBackend(ITensorBackend):
+class _OnnxBackend(ITensorBackend):
     """ONNX Runtime Tensor 后端。
 
     ONNX Runtime 直接接受 numpy ndarray 作为输入,因此本后端的 "tensor"
@@ -92,8 +92,8 @@ class OnnxBackend(ITensorBackend):
 def get_tensor_backend(name: str) -> ITensorBackend:
     """根据名称获取 Tensor 后端的工厂函数。"""
     backends = {
-        "pytorch": PyTorchBackend,
-        "onnx": OnnxBackend,
+        "pytorch": _PyTorchBackend,
+        "onnx": _OnnxBackend,
     }
     if name not in backends:
         raise ValueError(f"未知 Tensor 后端: {name}. 可用后端: {list(backends.keys())}")

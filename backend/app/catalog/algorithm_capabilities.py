@@ -12,9 +12,9 @@ from app.catalog.stage_descriptors import (
     FILTER_CHAIN_DESCRIPTOR,
     ONNX_SUPER_RESOLUTION_DESCRIPTOR,
     PADDLEGAN_STAGE_DESCRIPTOR,
-    REAL_RAWVSR_RGB_STAGE_DESCRIPTOR,
     RIFE_STAGE_DESCRIPTOR,
     StageDescriptor,
+    real_rawvsr_stage_descriptor,
 )
 from app.generated.model_assets import (
     REAL_RAWVSR_LICENSE_SPDX,
@@ -75,7 +75,7 @@ _PADDLEGAN_CAPABILITIES = tuple(
 _REAL_RAWVSR_CAPABILITIES = tuple(
     AlgorithmCapability(
         name=family.algorithm_id,
-        descriptor=REAL_RAWVSR_RGB_STAGE_DESCRIPTOR,
+        descriptor=real_rawvsr_stage_descriptor(family),
         models=tuple(f"x{variant.scale_factor}" for variant in family.variants),
         input_frame_mode=family.input_frame_mode,
         default_num_frames=family.default_num_frames,

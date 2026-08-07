@@ -9,7 +9,7 @@ from typing import Any, Literal
 from app.catalog.model_metrics import ModelMetricSpec
 from app.utils.logger import get_logger
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 _OnnxModelKind = Literal["interpolation", "super_resolution"]
 
@@ -25,7 +25,7 @@ _ENGINE_PROVIDER_PRIORITY: dict[str, list[str]] = {
 
 
 @dataclass(frozen=True, slots=True)
-class OnnxModelCatalog:
+class _OnnxModelCatalog:
     names: dict[str, dict[str, list[str]]]
     details: dict[str, dict[str, list[ModelMetricSpec]]]
 
@@ -38,7 +38,7 @@ def _get_onnx_model_dir(kind: _OnnxModelKind, model_root: str | Path | None = No
     return root / _ONNX_MODEL_SUBDIRS[kind]
 
 
-def scan_onnx_catalog(model_root: str | Path | None = None) -> OnnxModelCatalog:
+def scan_onnx_catalog(model_root: str | Path | None = None) -> _OnnxModelCatalog:
     """Discover names and analyze details from one directory traversal."""
     from app.utils.onnx_metric_analyzer import analyze_onnx_model
 
@@ -51,7 +51,7 @@ def scan_onnx_catalog(model_root: str | Path | None = None) -> OnnxModelCatalog:
             algorithm: [analyze_onnx_model(path, name=path.name, label=path.name) for path in paths]
             for algorithm, paths in grouped_paths.items()
         }
-    return OnnxModelCatalog(names=names, details=details)
+    return _OnnxModelCatalog(names=names, details=details)
 
 
 def resolve_onnx_model_path(
@@ -154,7 +154,7 @@ def _select_onnx_providers(engine: str, ort_module: Any) -> list[str]:
     selected = [provider for provider in desired if provider in available]
     if selected != desired:
         missing = [provider for provider in desired if provider not in available]
-        logger.warning(
+        _logger.warning(
             "ONNX engine=%s requested providers %s but %s are unavailable; using %s.",
             engine,
             desired,
@@ -162,7 +162,7 @@ def _select_onnx_providers(engine: str, ort_module: Any) -> list[str]:
             selected,
         )
     else:
-        logger.info("ONNX engine=%s, providers=%s", engine, selected)
+        _logger.info("ONNX engine=%s, providers=%s", engine, selected)
     return selected
 
 
@@ -195,7 +195,7 @@ def create_onnx_session(
     bound = list(session.get_providers())
     primary_request = providers[0] if providers else None
     if primary_request and primary_request != "CPUExecutionProvider" and primary_request not in bound:
-        logger.warning(
+        _logger.warning(
             "ONNX session for %s fell back to %s despite requesting %s. Check the "
             "matching CUDA / cuDNN / TensorRT runtime is installed and reachable.",
             onnx_path,

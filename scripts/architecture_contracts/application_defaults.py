@@ -8,6 +8,8 @@ import re
 import warnings
 from pathlib import Path
 
+from contract_codegen.application_defaults import synthesize_application_defaults
+
 from .rules import read_source, relative_path
 
 _REQUIRED_CONSUMERS = {
@@ -167,7 +169,13 @@ def check_application_default_consumers(root: Path) -> list[str]:
     contract_path = root / "contracts/application-defaults.json"
     if not contract_path.is_file():
         return ["missing application defaults contract: contracts/application-defaults.json"]
-    defaults = json.loads(read_source(contract_path, root))
+    model_assets_path = root / "contracts/model-assets.json"
+    if not model_assets_path.is_file():
+        return ["missing model asset contract: contracts/model-assets.json"]
+    defaults = synthesize_application_defaults(
+        json.loads(read_source(contract_path, root)),
+        json.loads(read_source(model_assets_path, root)),
+    )
     patterns = _hardcoded_default_patterns(defaults)
     issues: list[str] = []
     for path_name, marker in _REQUIRED_CONSUMERS.items():

@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from app.algorithms.tensor_backend import OnnxBackend, get_tensor_backend
+from app.algorithms.tensor_backend import ITensorBackend, get_tensor_backend
 from tests.support.tensor_backends import assert_backend_contract, module_available, require_module
 
 
@@ -13,7 +13,7 @@ class TestOnnxBackend:
     @pytest.fixture
     def backend(self):
         require_module("onnxruntime", "onnxruntime")
-        return OnnxBackend()
+        return get_tensor_backend("onnx")
 
     def test_contract(self, backend):
         assert_backend_contract(
@@ -29,8 +29,8 @@ class TestOnnxBackendUnavailable:
     def test_not_available(self):
         if module_available("onnxruntime"):
             pytest.skip("onnxruntime 已安装，跳过不可用场景测试")
-        backend = OnnxBackend()
-        assert backend.is_available() is False
+        with pytest.raises(RuntimeError, match="不可用"):
+            get_tensor_backend("onnx")
 
 
 class TestGetTensorBackendOnnx:
@@ -39,4 +39,4 @@ class TestGetTensorBackendOnnx:
     def test_get_onnx(self):
         require_module("onnxruntime", "onnxruntime")
         backend = get_tensor_backend("onnx")
-        assert isinstance(backend, OnnxBackend)
+        assert isinstance(backend, ITensorBackend)

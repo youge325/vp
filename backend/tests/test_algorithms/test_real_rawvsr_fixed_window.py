@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from app.algorithms.pytorch.real_rawvsr.fixed_window import _centered_window_indices
-from app.algorithms.pytorch.real_rawvsr.rgb_frames import prepare_rgb_frames
+from app.algorithms.pytorch.real_rawvsr.rgb_frames import RgbTensorCodec
 from app.errors.codes import TaskErrorCode
 from app.errors.process import ProcessError
 from tests.support.fake_torch import make_oom_torch
@@ -36,7 +36,7 @@ def test_fixed_window_networks_preserve_all_official_checkpoint_keys_and_paramet
     model_class = getattr(importlib.import_module(module_name), class_name)
     family = REAL_RAWVSR_MODEL_FAMILIES_BY_ALGORITHM[algorithm_id]
     for index, variant in enumerate(family.variants):
-        state = model_class(scale=variant.scale_factor).state_dict()
+        state = model_class(scale=variant.scale_factor, frames=family.default_num_frames).state_dict()
         assert len(state) == state_entries[index]
         assert sum(tensor.numel() for tensor in state.values()) == variant.parameter_count
 
@@ -83,12 +83,8 @@ def test_fixed_window_replicates_boundaries_for_one_to_five_frames(
 
 def test_fixed_window_pads_odd_dimensions_to_sixteen_and_crops_by_declared_scale() -> None:
     frame = np.arange(17 * 31 * 3, dtype=np.uint8).reshape(17, 31, 3)
-    prepared = prepare_rgb_frames(
-        [frame],
-        "Real-RawVSR EDVR",
-        minimum_size=16,
-        spatial_modulo=16,
-    )
+    codec = RgbTensorCodec("Real-RawVSR EDVR", minimum_size=1, size_multiple=16, scale_factor=2)
+    prepared = codec.prepare([frame])
     assert prepared is not None
     padded = prepared.frames[0]
 
@@ -112,7 +108,7 @@ def test_fixed_window_model_sources_are_repository_owned() -> None:
 
 
 def test_fixed_window_rejects_editable_frame_count_non_cuda_and_unknown_scale() -> None:
-    from app.algorithms.pytorch.real_rawvsr.fixed_window import RealRawVsrFixedWindow
+    from app.algorithms.pytorch.real_rawvsr.sequence_adapter import build_model_load_spec
 
     arguments = {
         "algorithm_id": "real-rawvsr-edvr",
@@ -120,28 +116,28 @@ def test_fixed_window_rejects_editable_frame_count_non_cuda_and_unknown_scale() 
         "num_frames": 5,
         "engine": "cuda",
         "model_root": "models",
-        "model_loader": lambda _scale, _path: (None, None),
     }
     with pytest.raises(ValueError, match="exactly 5 frames"):
-        RealRawVsrFixedWindow(**{**arguments, "num_frames": 4})
+        build_model_load_spec(**{**arguments, "num_frames": 4})
     with pytest.raises(ValueError, match="only CUDA"):
-        RealRawVsrFixedWindow(**{**arguments, "engine": "tensorrt"})
-    with pytest.raises(ValueError, match="only 2x, 3x, and 4x"):
-        RealRawVsrFixedWindow(**{**arguments, "scale_factor": 5})
+        build_model_load_spec(**{**arguments, "engine": "tensorrt"})
+    with pytest.raises(ValueError, match="only 2x, 3x, 4x"):
+        build_model_load_spec(**{**arguments, "scale_factor": 5})
 
 
 def test_fixed_window_maps_cuda_oom_to_algorithm_specific_process_error() -> None:
     from app.algorithms.pytorch.real_rawvsr.fixed_window import RealRawVsrFixedWindow
+    from app.algorithms.pytorch.real_rawvsr.sequence_adapter import build_model_load_spec
 
     fake_torch, fail_oom, fake_cuda = make_oom_torch()
-    algorithm = RealRawVsrFixedWindow(
+    spec = build_model_load_spec(
         algorithm_id="real-rawvsr-edvr",
         scale_factor=4,
         num_frames=5,
         engine="cuda",
         model_root="models",
-        model_loader=lambda _scale, _path: (fake_torch, fail_oom),
     )
+    algorithm = RealRawVsrFixedWindow(spec=spec, model_loader=lambda _spec, _path: (fake_torch, fail_oom))
     algorithm._torch = fake_torch
     algorithm._model = fail_oom
 

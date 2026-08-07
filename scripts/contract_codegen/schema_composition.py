@@ -7,6 +7,7 @@ import json
 from typing import Any
 
 from .context import CONTRACTS, _resolve_manifest_schema_ref
+from .model_assets import model_asset_protocol_values
 from .schema_tools import load_json as _load
 
 
@@ -235,7 +236,7 @@ def _render_ndjson_schema(manifest: dict[str, Any]) -> str:
     return json.dumps(schema, ensure_ascii=False, indent=2) + "\n"
 
 
-def _render_stage_worker_schema() -> str:
+def _render_stage_worker_schema(model_assets: dict[str, Any]) -> str:
     """Compose the Python-only worker contract without remote references."""
     schema = copy.deepcopy(_load(CONTRACTS / "stage-worker.schema.json"))
     backend_codes = copy.deepcopy(_load(CONTRACTS / "backend-error-codes.schema.json"))
@@ -264,8 +265,14 @@ def _render_stage_worker_schema() -> str:
         "./tensor-backend.schema.json": "TensorBackend",
     }
 
+    protocol_values = model_asset_protocol_values(model_assets)
+
     def rewrite(value: Any) -> None:
         if isinstance(value, dict):
+            asset_field = value.pop("x-vp-model-assets", None)
+            if asset_field is not None:
+                values = protocol_values[asset_field]
+                value.update({"const": values[0]} if len(values) == 1 else {"enum": list(values)})
             ref = value.get("$ref")
             if ref in external_refs:
                 value["$ref"] = f"#/$defs/{external_refs[ref]}"

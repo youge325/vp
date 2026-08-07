@@ -21,7 +21,7 @@ from app.errors.codes import TaskErrorCode, error_code_to_wire
 from app.errors.process import ProcessError, raise_error
 from app.utils.logger import get_logger, setup_logging
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 _HANDLERS: dict[str, tuple[str, str]] = {
     "benchmark": ("app.cli.commands.benchmark", "cmd_benchmark"),
@@ -55,7 +55,7 @@ def main() -> None:
     except SystemExit:
         raise
     except Exception as exc:  # pragma: no cover - defensive CLI boundary
-        logger.exception("Unhandled backend CLI failure")
+        _logger.exception("Unhandled backend CLI failure")
         pe = ProcessError.from_exception(exc)
         raise_error(
             error_code_to_wire(pe.code),

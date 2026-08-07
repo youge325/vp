@@ -1,60 +1,92 @@
-"""Validate and render the neutral model-asset manifest."""
+"""Validate, normalize, and render the neutral model-asset manifest."""
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
 
-_ALGORITHM_ORDER = (
-    "real-rawvsr-basicvsr",
-    "real-rawvsr-edvr",
-    "real-rawvsr-tdan",
-    "real-rawvsr-toflow",
-)
+
+def _schema_registry(contracts_dir: Path) -> Registry:
+    base_uri = "https://vp-workbench.local/contracts/"
+    return Registry().with_resources(
+        (
+            f"{base_uri}{path.name}",
+            Resource.from_contents(json.loads(path.read_text(encoding="utf-8"))),
+        )
+        for path in contracts_dir.glob("*.schema.json")
+    )
 
 
 def load_model_assets(contracts_dir: Path) -> dict[str, Any]:
-    """Load model assets and enforce cross-field invariants not expressible in JSON Schema."""
+    """Load model assets, enforce semantic invariants, and return stable ordering."""
 
     schema = json.loads((contracts_dir / "model-assets.schema.json").read_text(encoding="utf-8"))
     assets = json.loads((contracts_dir / "model-assets.json").read_text(encoding="utf-8"))
     Draft202012Validator.check_schema(schema)
-    Draft202012Validator(schema).validate(assets)
+    Draft202012Validator(schema, registry=_schema_registry(contracts_dir)).validate(assets)
 
-    families = assets["families"]
-    algorithms = tuple(family["algorithmId"] for family in families)
-    if algorithms != _ALGORITHM_ORDER:
-        raise RuntimeError(f"Real-RawVSR model families must be ordered exactly as {_ALGORITHM_ORDER!r}")
+    normalized = copy.deepcopy(assets)
+    families = normalized["families"]
+    algorithm_ids = [family["algorithmId"] for family in families]
+    implementation_keys = [family["implementationKey"] for family in families]
+    if len(algorithm_ids) != len(set(algorithm_ids)):
+        raise RuntimeError("model asset algorithm IDs must be unique")
+    if len(implementation_keys) != len(set(implementation_keys)):
+        raise RuntimeError("model asset implementation keys must be unique")
 
     all_paths: list[str] = []
     all_file_ids: list[str] = []
     for family in families:
         algorithm = family["algorithmId"]
+        context_frames = family["temporalContextFrames"]
+        if family["inputFrameMode"] == "fixed_window" and family["defaultNumFrames"] != context_frames * 2 + 1:
+            raise RuntimeError(f"{algorithm} fixed window must contain one center frame and symmetric context")
         variants = family["variants"]
-        if [variant["scaleFactor"] for variant in variants] != [2, 3, 4]:
-            raise RuntimeError(f"{algorithm} variants must be ordered exactly as scales 2, 3, and 4")
-        expected_mode = "editable_chunk" if algorithm == "real-rawvsr-basicvsr" else "fixed_window"
-        expected_frames = 10 if algorithm == "real-rawvsr-basicvsr" else 5
-        if family["inputFrameMode"] != expected_mode or family["defaultNumFrames"] != expected_frames:
-            raise RuntimeError(f"{algorithm} temporal policy does not match its supported inference mode")
+        scales = [variant["scaleFactor"] for variant in variants]
+        if len(scales) != len(set(scales)):
+            raise RuntimeError(f"{algorithm} scale factors must be unique")
+        variants.sort(key=lambda variant: variant["scaleFactor"])
         for variant in variants:
-            expected_fragment = f"/{algorithm}/x{variant['scaleFactor']}/"
-            if expected_fragment not in f"/{variant['relativePath']}":
-                raise RuntimeError("model asset algorithm and scale factor must match its runtime path")
+            scale = variant["scaleFactor"]
+            expected_path = f"models/super_resolution/pytorch/{algorithm}/x{scale}/model.safetensors"
+            if variant["relativePath"] != expected_path:
+                raise RuntimeError(f"{algorithm} x{scale} runtime path must be {expected_path}")
             all_paths.append(variant["relativePath"])
             all_file_ids.append(variant["googleDriveFileId"])
     if len(all_paths) != len(set(all_paths)):
         raise RuntimeError("model asset runtime paths must be unique")
     if len(all_file_ids) != len(set(all_file_ids)):
         raise RuntimeError("model asset Google Drive file IDs must be unique")
-    return assets
+    families.sort(key=lambda family: family["algorithmId"])
+    normalized["runtime"]["engines"].sort()
+    return normalized
+
+
+def model_asset_protocol_values(assets: dict[str, Any]) -> dict[str, tuple[object, ...]]:
+    """Project strict stage-worker values from the normalized asset inventory."""
+
+    return {
+        "algorithmIds": tuple(family["algorithmId"] for family in assets["families"]),
+        "scaleFactors": tuple(
+            sorted({variant["scaleFactor"] for family in assets["families"] for variant in family["variants"]})
+        ),
+        "engines": tuple(assets["runtime"]["engines"]),
+    }
+
+
+def _python_string_tuple(values: list[str]) -> str:
+    body = ", ".join(json.dumps(value) for value in values)
+    return f"({body}{',' if len(values) == 1 else ''})"
 
 
 def render_python_model_assets(assets: dict[str, Any]) -> str:
     license_info = assets["license"]
+    runtime = assets["runtime"]
     lines = [
         '"""Generated from contracts/model-assets.json. Do not edit."""',
         "",
@@ -73,29 +105,49 @@ def render_python_model_assets(assets: dict[str, Any]) -> str:
         "",
         "",
         "@dataclass(frozen=True, slots=True)",
+        "class ModelSpatialPolicy:",
+        "    minimum_size: int",
+        "    size_multiple: int",
+        "",
+        "",
+        "@dataclass(frozen=True, slots=True)",
         "class ModelAssetFamily:",
         "    algorithm_id: str",
         "    display_name: str",
+        "    implementation_key: str",
         '    input_frame_mode: Literal["editable_chunk", "fixed_window"]',
         "    default_num_frames: int",
         "    temporal_context_frames: int",
+        "    spatial_policy: ModelSpatialPolicy",
+        "    runtime_requirements: tuple[str, ...]",
         "    variants: tuple[ModelAssetVariant, ...]",
         "",
         "",
+        f"REAL_RAWVSR_ALGORITHM_FAMILY: Final = {json.dumps(runtime['algorithmFamily'])}",
+        f"REAL_RAWVSR_TENSOR_BACKEND: Final = {json.dumps(runtime['tensorBackend'])}",
+        f"REAL_RAWVSR_ENGINES: Final = {_python_string_tuple(runtime['engines'])}",
         f"REAL_RAWVSR_LICENSE_SPDX: Final = {json.dumps(license_info['spdxId'])}",
         f"REAL_RAWVSR_LICENSE_USAGE: Final = {json.dumps(license_info['usage'])}",
         f"REAL_RAWVSR_SOURCE_URL: Final = {json.dumps(license_info['sourceUrl'])}",
         "REAL_RAWVSR_MODEL_FAMILIES: Final = (",
     ]
     for family in assets["families"]:
+        spatial = family["spatialPolicy"]
+        requirements = family["runtimeRequirements"]
         lines.extend(
             [
                 "    ModelAssetFamily(",
                 f"        algorithm_id={json.dumps(family['algorithmId'])},",
                 f"        display_name={json.dumps(family['displayName'])},",
+                f"        implementation_key={json.dumps(family['implementationKey'])},",
                 f"        input_frame_mode={json.dumps(family['inputFrameMode'])},",
                 f"        default_num_frames={family['defaultNumFrames']},",
                 f"        temporal_context_frames={family['temporalContextFrames']},",
+                "        spatial_policy=ModelSpatialPolicy(",
+                f"            minimum_size={spatial['minimumSize']},",
+                f"            size_multiple={spatial['sizeMultiple']},",
+                "        ),",
+                f"        runtime_requirements={_python_string_tuple(requirements)},",
                 "        variants=(",
             ]
         )

@@ -15,15 +15,27 @@ class ModelAssetVariant:
 
 
 @dataclass(frozen=True, slots=True)
+class ModelSpatialPolicy:
+    minimum_size: int
+    size_multiple: int
+
+
+@dataclass(frozen=True, slots=True)
 class ModelAssetFamily:
     algorithm_id: str
     display_name: str
+    implementation_key: str
     input_frame_mode: Literal["editable_chunk", "fixed_window"]
     default_num_frames: int
     temporal_context_frames: int
+    spatial_policy: ModelSpatialPolicy
+    runtime_requirements: tuple[str, ...]
     variants: tuple[ModelAssetVariant, ...]
 
 
+REAL_RAWVSR_ALGORITHM_FAMILY: Final = "pytorch_vsr"
+REAL_RAWVSR_TENSOR_BACKEND: Final = "pytorch"
+REAL_RAWVSR_ENGINES: Final = ("cuda",)
 REAL_RAWVSR_LICENSE_SPDX: Final = "CC-BY-NC-SA-4.0"
 REAL_RAWVSR_LICENSE_USAGE: Final = "non_commercial"
 REAL_RAWVSR_SOURCE_URL: Final = "https://github.com/zmzhang1998/Real-RawVSR"
@@ -31,9 +43,15 @@ REAL_RAWVSR_MODEL_FAMILIES: Final = (
     ModelAssetFamily(
         algorithm_id="real-rawvsr-basicvsr",
         display_name="Real-RawVSR BasicVSR",
+        implementation_key="basicvsr",
         input_frame_mode="editable_chunk",
         default_num_frames=10,
         temporal_context_frames=2,
+        spatial_policy=ModelSpatialPolicy(
+            minimum_size=64,
+            size_multiple=1,
+        ),
+        runtime_requirements=(),
         variants=(
             ModelAssetVariant(
                 scale_factor=2,
@@ -61,9 +79,15 @@ REAL_RAWVSR_MODEL_FAMILIES: Final = (
     ModelAssetFamily(
         algorithm_id="real-rawvsr-edvr",
         display_name="Real-RawVSR EDVR",
+        implementation_key="edvr",
         input_frame_mode="fixed_window",
         default_num_frames=5,
         temporal_context_frames=2,
+        spatial_policy=ModelSpatialPolicy(
+            minimum_size=1,
+            size_multiple=16,
+        ),
+        runtime_requirements=("torchvision_deform_conv",),
         variants=(
             ModelAssetVariant(
                 scale_factor=2,
@@ -91,9 +115,15 @@ REAL_RAWVSR_MODEL_FAMILIES: Final = (
     ModelAssetFamily(
         algorithm_id="real-rawvsr-tdan",
         display_name="Real-RawVSR TDAN",
+        implementation_key="tdan",
         input_frame_mode="fixed_window",
         default_num_frames=5,
         temporal_context_frames=2,
+        spatial_policy=ModelSpatialPolicy(
+            minimum_size=1,
+            size_multiple=16,
+        ),
+        runtime_requirements=("torchvision_deform_conv",),
         variants=(
             ModelAssetVariant(
                 scale_factor=2,
@@ -121,9 +151,15 @@ REAL_RAWVSR_MODEL_FAMILIES: Final = (
     ModelAssetFamily(
         algorithm_id="real-rawvsr-toflow",
         display_name="Real-RawVSR TOFlow",
+        implementation_key="toflow",
         input_frame_mode="fixed_window",
         default_num_frames=5,
         temporal_context_frames=2,
+        spatial_policy=ModelSpatialPolicy(
+            minimum_size=1,
+            size_multiple=16,
+        ),
+        runtime_requirements=(),
         variants=(
             ModelAssetVariant(
                 scale_factor=2,

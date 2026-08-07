@@ -262,7 +262,7 @@ def validate_contracts() -> dict[str, Any]:
             source_schema=schema,
             schemas=loaded_schemas,
         )
-    load_model_assets(CONTRACTS)
+    model_assets = load_model_assets(CONTRACTS)
 
     manifest_schema = _load(CONTRACTS / "ipc-manifest.schema.json")
     manifest = _load(CONTRACTS / "ipc-manifest.json")
@@ -304,7 +304,7 @@ def validate_contracts() -> dict[str, Any]:
     stage_worker = manifest["stageWorkerCommand"]
     if stage_worker["subcommand"] in {process_command["subcommand"], *one_shot_subcommands}:
         raise RuntimeError("stage-worker subcommand must be distinct from desktop backend commands")
-    stage_worker_definitions = json.loads(_render_stage_worker_schema())["$defs"]
+    stage_worker_definitions = json.loads(_render_stage_worker_schema(model_assets))["$defs"]
     config_payload = stage_worker["input"]["configPayload"]
     if config_payload not in stage_worker_definitions:
         raise RuntimeError(f"stage-worker config payload is missing from its schema: {config_payload}")

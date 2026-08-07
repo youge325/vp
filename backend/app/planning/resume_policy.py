@@ -6,7 +6,7 @@ from typing import Literal
 
 from app.generated.contracts import ResumeMode
 
-OutputAction = Literal["conflict", "fresh", "resume"]
+_OutputAction = Literal["conflict", "fresh", "resume"]
 
 
 def decide_output_action(
@@ -16,7 +16,7 @@ def decide_output_action(
     signature_match: bool,
     has_progress: bool,
     mode: ResumeMode,
-) -> OutputAction:
+) -> _OutputAction:
     if final_exists and mode == ResumeMode.AUTO:
         return "conflict"
     if mode == ResumeMode.FORCE_FRESH:

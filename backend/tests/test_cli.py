@@ -27,7 +27,6 @@ from app.planning.run_identity import build_run_identity
 from app.planning.stage_plan import build_stage_plan
 from app.planning.stage_projection import StageProjection
 from app.ports.media import VideoMetadata
-from app.utils.onnx_models import OnnxModelCatalog
 from tests.support.workflow_configs import make_workflow_config as _make_workflow_config
 from tests.support.video_metadata import make_video_metadata
 
@@ -663,7 +662,7 @@ def test_check_bounds_large_discovered_model_diagnostics(monkeypatch, capsys):
         len(note.encode("utf-8")) for detail in details for note in detail.runtime.analysis_notes
     )
     assert raw_diagnostic_bytes > NDJSON_LINE_LIMIT_BYTES
-    catalog = OnnxModelCatalog(
+    catalog = SimpleNamespace(
         names={"interpolation": {"rife": names}, "super_resolution": {}},
         details={"interpolation": {"rife": details}, "super_resolution": {}},
     )

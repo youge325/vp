@@ -6,10 +6,10 @@ from typing import Any, Literal
 
 from app.generated.contracts import RuntimeConfigBundle, WorkflowConfig
 
-ConfigSection = Literal["decode", "encode", "workflow", "output"]
+_ConfigSection = Literal["decode", "encode", "workflow", "output"]
 
 
-def runtime_config_section(bundle: RuntimeConfigBundle, section: ConfigSection) -> dict[str, Any]:
+def runtime_config_section(bundle: RuntimeConfigBundle, section: _ConfigSection) -> dict[str, Any]:
     return getattr(bundle, section).model_dump(by_alias=True, mode="json")
 
 

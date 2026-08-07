@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -10,8 +11,31 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
 
-def load_application_defaults(contracts_dir: Path) -> dict[str, Any]:
-    """Load application defaults after validating their strict data contract."""
+def synthesize_application_defaults(defaults: dict[str, Any], model_assets: dict[str, Any]) -> dict[str, Any]:
+    """Return complete defaults by projecting the selected model's runtime policy."""
+
+    synthesized = copy.deepcopy(defaults)
+    super_resolution = synthesized["superResolution"]
+    family = next(
+        (item for item in model_assets["families"] if item["algorithmId"] == super_resolution["algorithm"]),
+        None,
+    )
+    if family is None:
+        raise RuntimeError("default super-resolution algorithm is absent from model assets")
+    scales = {variant["scaleFactor"] for variant in family["variants"]}
+    if super_resolution["scaleFactor"] not in scales:
+        raise RuntimeError("default super-resolution scale is absent from its model assets")
+    engines = model_assets["runtime"]["engines"]
+    if len(engines) != 1:
+        raise RuntimeError("default super-resolution engine is ambiguous in model assets")
+    super_resolution["numFrames"] = family["defaultNumFrames"]
+    super_resolution["tensorBackend"] = model_assets["runtime"]["tensorBackend"]
+    super_resolution["engine"] = engines[0]
+    return synthesized
+
+
+def load_application_defaults(contracts_dir: Path, model_assets: dict[str, Any]) -> dict[str, Any]:
+    """Validate source defaults and synthesize model-owned runtime policy."""
 
     schema_path = contracts_dir / "application-defaults.schema.json"
     data_path = contracts_dir / "application-defaults.json"
@@ -27,7 +51,7 @@ def load_application_defaults(contracts_dir: Path) -> dict[str, Any]:
         for path in contracts_dir.glob("*.schema.json")
     )
     Draft202012Validator(schema, registry=registry).validate(defaults)
-    return defaults
+    return synthesize_application_defaults(defaults, model_assets)
 
 
 def _python_literal(value: object) -> str:

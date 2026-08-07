@@ -17,7 +17,7 @@ from ._constants import (
 from ._progress import _coerce_default_value, _coerce_number
 from ._run import run_ffmpeg_command
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 _RATE_CONTROL_PROBE_ORDER = ("crf", "cq", "qp")
 _RATE_CONTROL_LABELS = {
@@ -247,7 +247,7 @@ def _verify_rate_control_mode(
     try:
         run_ffmpeg_command(cmd, timeout=30)
     except Exception as exc:  # pragma: no cover - exact FFmpeg errors vary by build
-        logger.debug(
+        _logger.debug(
             "Rate control probe failed for encoder %s mode %s: %s",
             codec,
             mode["mode"],
@@ -268,7 +268,7 @@ def probe_rate_control_modes(
         if _verify_rate_control_mode(ffmpeg_path, codec, options, mode)
     ]
     if not modes:
-        logger.debug("No rate control modes passed FFmpeg verification for encoder %s", codec)
+        _logger.debug("No rate control modes passed FFmpeg verification for encoder %s", codec)
     return modes
 
 
@@ -309,7 +309,7 @@ def _ensure_decoder_probe_sample(
 
     encoders = _decoder_sample_encoder_candidates(cache_key, encoder_names)
     if not encoders:
-        logger.debug("No FFmpeg encoder is available to generate decoder probe sample for codec %s", codec)
+        _logger.debug("No FFmpeg encoder is available to generate decoder probe sample for codec %s", codec)
         sample_cache[cache_key] = None
         return None
 
@@ -339,7 +339,7 @@ def _ensure_decoder_probe_sample(
             sample_cache[cache_key] = sample_path
             return sample_path
         except Exception as exc:  # pragma: no cover - exact FFmpeg errors vary by build
-            logger.debug(
+            _logger.debug(
                 "Failed to generate decoder probe sample for codec %s with encoder %s: %s",
                 codec,
                 encoder,
@@ -385,14 +385,14 @@ def _verify_decoder_hardware(
         run_ffmpeg_command(cmd, timeout=30)
     except Exception as exc:  # pragma: no cover - exact FFmpeg errors vary by build
         if device_value is None:
-            logger.debug(
+            _logger.debug(
                 "Decoder hardware probe failed for decoder %s device %s: %s",
                 decoder,
                 device,
                 exc,
             )
         else:
-            logger.debug(
+            _logger.debug(
                 "Decoder hardware device option probe failed for decoder %s device %s value %s: %s",
                 decoder,
                 device,
@@ -433,14 +433,14 @@ def probe_decoder_hardware_capabilities(
     with _decoder_probe_workspace(probe_dir, sample_cache) as (resolved_probe_dir, cache):
         sample_path = _ensure_decoder_probe_sample(ffmpeg_path, codec, encoder_names, resolved_probe_dir, cache)
         if sample_path is None:
-            logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
+            _logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
             return [], {}
 
         devices = [
             device for device in candidates if _verify_decoder_hardware(ffmpeg_path, decoder, device, sample_path)
         ]
         if not devices:
-            logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
+            _logger.debug("No decoder hardware devices passed FFmpeg verification for decoder %s", decoder)
 
         options_by_device: dict[str, list[dict[str, str]]] = {}
         for device in devices:
@@ -456,7 +456,7 @@ def probe_decoder_hardware_capabilities(
                 )
             ]
             if not options:
-                logger.debug(
+                _logger.debug(
                     "No decoder hardware device options passed FFmpeg verification for decoder %s device %s",
                     decoder,
                     device,

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 from app.algorithms.pytorch.real_rawvsr.dcn import ModulatedDeformConvPack
+
+if TYPE_CHECKING:
+    from app.algorithms.pytorch.real_rawvsr.sequence_adapter import ModelLoadSpec
 
 
 class _ResidualBlockNoBatchNorm(nn.Module):
@@ -105,7 +108,7 @@ class _PyramidCascadingAlignment(nn.Module):
 
 
 class _TemporalSpatialAttentionFusion(nn.Module):
-    def __init__(self, channels: int = 64, frames: int = 5, center: int = 2) -> None:
+    def __init__(self, channels: int, frames: int, center: int) -> None:
         super().__init__()
         self.center = center
         self.tAtt_1 = nn.Conv2d(channels, channels, 3, 1, 1)
@@ -154,7 +157,7 @@ class _TemporalSpatialAttentionFusion(nn.Module):
 
 
 class _EdvrNet(nn.Module):
-    def __init__(self, *, scale: int, channels: int = 64, frames: int = 5) -> None:
+    def __init__(self, *, scale: int, frames: int, channels: int = 64) -> None:
         super().__init__()
         if scale not in {2, 3, 4}:
             raise ValueError(f"EDVR scale must be 2, 3, or 4; got {scale}.")
@@ -203,12 +206,12 @@ class _EdvrNet(nn.Module):
         return output + F.interpolate(center, scale_factor=self.scale, mode="bilinear", align_corners=False)
 
 
-def load_edvr_model(scale: int, weight_path: str) -> tuple[Any, nn.Module]:
+def load_edvr_model(spec: ModelLoadSpec, weight_path: str) -> tuple[Any, nn.Module]:
     from safetensors.torch import load_file
 
     if not torch.cuda.is_available():
         raise RuntimeError("Real-RawVSR EDVR requires an available NVIDIA CUDA device.")
-    model = _EdvrNet(scale=scale)
+    model = _EdvrNet(scale=spec.scale_factor, frames=spec.num_frames)
     model.load_state_dict(load_file(weight_path, device="cpu"), strict=True)
     model.eval().to(torch.device("cuda"))
     return torch, model

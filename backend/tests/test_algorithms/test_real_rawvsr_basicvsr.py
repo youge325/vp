@@ -43,34 +43,31 @@ def test_basicvsr_rgb_and_boundary_padding_preserve_logical_frames() -> None:
     from app.algorithms.pytorch.real_rawvsr_basicvsr.runner import (
         _pad_temporal_sequence,
     )
-    from app.algorithms.pytorch.real_rawvsr.rgb_frames import prepare_rgb_frames
+    from app.algorithms.pytorch.real_rawvsr.rgb_frames import RgbTensorCodec
 
     frames = [np.full((2, 3, 3), value, dtype=np.uint8) for value in (10, 20, 30)]
-    padded, offset = _pad_temporal_sequence(frames)
+    padded, offset = _pad_temporal_sequence(frames, minimum_frames=5)
 
     assert len(padded) == 5
     assert offset == 1
     assert padded[0] is frames[0]
     assert padded[-1] is frames[-1]
-    prepared = prepare_rgb_frames(frames[:1], "Real-RawVSR BasicVSR", minimum_size=64)
+    codec = RgbTensorCodec("Real-RawVSR BasicVSR", minimum_size=64, size_multiple=1, scale_factor=2)
+    prepared = codec.prepare(frames[:1])
     assert prepared is not None
     spatial = prepared.frames[0]
     assert spatial.shape == (64, 64, 3)
     assert np.array_equal(spatial[-1, -1], frames[0][-1, -1])
 
     with pytest.raises(ValueError, match="RGB uint8"):
-        prepare_rgb_frames(
-            [np.zeros((2, 3, 3), dtype=np.float32)],
-            "Real-RawVSR BasicVSR",
-            minimum_size=64,
-        )
+        codec.prepare([np.zeros((2, 3, 3), dtype=np.float32)])
 
 
 def test_basicvsr_rejects_unsupported_scale_and_engine() -> None:
-    from app.algorithms.pytorch.real_rawvsr_basicvsr.runner import RealRawVsrBasicVsr
+    from app.algorithms.pytorch.real_rawvsr.sequence_adapter import build_model_load_spec
 
-    with pytest.raises(ValueError, match="only 2x, 3x, and 4x"):
-        RealRawVsrBasicVsr(
+    with pytest.raises(ValueError, match="only 2x, 3x, 4x"):
+        build_model_load_spec(
             algorithm_id="real-rawvsr-basicvsr",
             scale_factor=5,
             num_frames=10,
@@ -78,7 +75,7 @@ def test_basicvsr_rejects_unsupported_scale_and_engine() -> None:
             model_root="models",
         )
     with pytest.raises(ValueError, match="only CUDA"):
-        RealRawVsrBasicVsr(
+        build_model_load_spec(
             algorithm_id="real-rawvsr-basicvsr",
             scale_factor=2,
             num_frames=10,
@@ -88,16 +85,18 @@ def test_basicvsr_rejects_unsupported_scale_and_engine() -> None:
 
 
 def test_basicvsr_maps_cuda_oom_to_actionable_process_error() -> None:
+    from app.algorithms.pytorch.real_rawvsr.sequence_adapter import build_model_load_spec
     from app.algorithms.pytorch.real_rawvsr_basicvsr.runner import RealRawVsrBasicVsr
 
     fake_torch, fail_oom, fake_cuda = make_oom_torch()
-    algorithm = RealRawVsrBasicVsr(
+    spec = build_model_load_spec(
         algorithm_id="real-rawvsr-basicvsr",
         scale_factor=2,
         num_frames=10,
         engine="cuda",
         model_root="models",
     )
+    algorithm = RealRawVsrBasicVsr(spec=spec, model_loader=lambda _spec, _path: (fake_torch, fail_oom))
     algorithm._torch = fake_torch
     algorithm._model = fail_oom
 

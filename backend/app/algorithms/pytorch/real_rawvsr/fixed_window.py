@@ -2,61 +2,36 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
+from typing import Any
 import numpy as np
 
-from app.algorithms.pytorch.real_rawvsr.rgb_frames import frames_to_cuda_tensor, prepare_rgb_frames
-from app.algorithms.pytorch.real_rawvsr.sequence_adapter import ModelLoader, RealRawVsrSequenceAdapter
-
-_SPATIAL_MODULO = 16
+from app.algorithms.pytorch.real_rawvsr.sequence_adapter import ModelLoadSpec, ModelLoader, RealRawVsrSequenceAdapter
 
 
 class RealRawVsrFixedWindow(RealRawVsrSequenceAdapter):
     def __init__(
         self,
         *,
-        algorithm_id: str,
-        scale_factor: int,
-        num_frames: int,
-        engine: str,
-        model_root: str,
+        spec: ModelLoadSpec,
         model_loader: ModelLoader,
     ) -> None:
-        super().__init__(
-            algorithm_id=algorithm_id,
-            scale_factor=scale_factor,
-            engine=engine,
-            model_root=model_root,
-        )
+        super().__init__(spec, model_loader)
         family = self._family
         if family.input_frame_mode != "fixed_window":
             raise ValueError(f"{family.display_name} is not a fixed-window model.")
-        if num_frames != family.default_num_frames:
-            raise ValueError(f"{family.display_name} requires exactly {family.default_num_frames} frames per window.")
         if family.default_num_frames != family.temporal_context_frames * 2 + 1:
             raise ValueError(f"{family.display_name} has an invalid temporal asset contract.")
         self._window_frames = family.default_num_frames
         self._context_frames = family.temporal_context_frames
-        self._model_loader = model_loader
 
-    def _ensure_model(self) -> tuple[object, object]:
-        return self._load_model(self._model_loader)
-
-    def process_frames(
+    def _process_prepared(
         self,
-        frames: Sequence[np.ndarray],
+        prepared: Any,
+        torch: Any,
         *,
-        progress_callback: Callable[[int, int], None] | None = None,
+        progress_callback: Callable[[int, int], None] | None,
     ) -> list[np.ndarray]:
-        prepared = prepare_rgb_frames(
-            frames,
-            self._family.display_name,
-            minimum_size=_SPATIAL_MODULO,
-            spatial_modulo=_SPATIAL_MODULO,
-        )
-        if prepared is None:
-            return []
-        torch, _model = self._ensure_model()
         results: list[np.ndarray] = []
         total = len(prepared.frames)
         for index in range(total):
@@ -65,7 +40,7 @@ class RealRawVsrFixedWindow(RealRawVsrSequenceAdapter):
             ]
             if len(window) != self._window_frames:
                 raise RuntimeError("Real-RawVSR fixed-window projection produced an invalid window.")
-            tensor = frames_to_cuda_tensor(torch, window)
+            tensor = self._codec.to_cuda(torch, window)
             prediction = self._run_model(
                 tensor,
                 oom_message=f"{self._family.display_name} x{self._scale_factor} exhausted CUDA memory; "
@@ -74,14 +49,7 @@ class RealRawVsrFixedWindow(RealRawVsrSequenceAdapter):
             )
             if isinstance(prediction, tuple):
                 prediction = prediction[0]
-            output = prediction[
-                0,
-                :,
-                : prepared.height * self._scale_factor,
-                : prepared.width * self._scale_factor,
-            ]
-            array = output.clamp(0, 1).mul(255.0).round().to(dtype=torch.uint8).permute(1, 2, 0).cpu().numpy()
-            results.append(np.ascontiguousarray(array))
+            results.extend(self._codec.to_frames(torch, prediction, prepared))
             if progress_callback is not None:
                 progress_callback(index + 1, total)
         return results

@@ -8,8 +8,6 @@ from onnx import TensorProto, helper
 
 from app.catalog.model_metrics import (
     MODEL_METRIC_SPECS_BY_ALGORITHM,
-    PADDLEGAN_MODEL_METRIC_SPECS,
-    RIFE_MODEL_METRIC_SPECS,
     ModelMetricSpec,
     RuntimeMetricSpec,
 )
@@ -21,6 +19,14 @@ from app.utils.onnx_metric_analyzer import analyze_onnx_model
 
 def _wire(spec):
     return project_model_metrics((spec,))[0].model_dump(by_alias=True, mode="json")
+
+
+def _builtin_metric(algorithm: str, name: str | None = None) -> ModelMetricSpec:
+    specs = MODEL_METRIC_SPECS_BY_ALGORITHM[algorithm]
+    if name is None:
+        assert len(specs) == 1
+        return specs[0]
+    return next(spec for spec in specs if spec.name == name)
 
 
 def _save_conv_model(path: Path, *, dynamic: bool = False) -> None:
@@ -155,7 +161,7 @@ def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
     assert rife_425_trt["activationBytesPerMegapixel"] is not None
     assert rife_425_trt["gflopsPerMegapixel"] == rife_425["metrics"]["gflopsPerMegapixel"]
 
-    ppmsvsr = _wire(PADDLEGAN_MODEL_METRIC_SPECS["ppmsvsr"])
+    ppmsvsr = _wire(_builtin_metric("ppmsvsr"))
     assert ppmsvsr["name"] == "x4"
     assert ppmsvsr["label"] == "PP-MSVSR"
     assert ppmsvsr["metrics"]["parameterCount"] == 1_453_607
@@ -170,7 +176,7 @@ def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
     assert ppmsvsr_trt["activationBytesPerMegapixel"] is not None
     assert ppmsvsr_trt["gflopsPerMegapixel"] == ppmsvsr["metrics"]["gflopsPerMegapixel"]
 
-    edvr = _wire(PADDLEGAN_MODEL_METRIC_SPECS["edvr"])
+    edvr = _wire(_builtin_metric("edvr"))
     assert edvr["metrics"]["parameterCount"] == 20_633_827
     assert edvr["metrics"]["runtimeOverheadBytes"] is not None
     assert edvr["metrics"]["runtimeFrameCount"] == 5
@@ -184,7 +190,7 @@ def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
         "iconvsr": 8_694_991,
         "basicvsr-plus-plus": 7_322_927,
     }.items():
-        detail = _wire(PADDLEGAN_MODEL_METRIC_SPECS[model_id])
+        detail = _wire(_builtin_metric(model_id))
         assert detail["metrics"]["parameterCount"] == parameter_count
         assert detail["metrics"]["runtimeOverheadBytes"]
         assert detail["metrics"]["activationBytesPerMegapixel"]
@@ -194,17 +200,17 @@ def test_builtin_rife_and_paddlegan_models_have_metric_details() -> None:
 
 
 def test_builtin_metric_catalogs_are_immutable_and_match_model_catalogs() -> None:
-    assert set(RIFE_MODEL_METRIC_SPECS) == set(SUPPORTED_MODELS)
-    assert set(PADDLEGAN_MODEL_METRIC_SPECS) == set(PADDLEGAN_VSR_SPECS)
+    assert {spec.name for spec in MODEL_METRIC_SPECS_BY_ALGORITHM["rife"]} == set(SUPPORTED_MODELS)
+    assert set(PADDLEGAN_VSR_SPECS) <= set(MODEL_METRIC_SPECS_BY_ALGORITHM)
 
     with pytest.raises(TypeError):
-        operator.setitem(RIFE_MODEL_METRIC_SPECS, "extra", RIFE_MODEL_METRIC_SPECS[SUPPORTED_MODELS[0]])
+        operator.setitem(MODEL_METRIC_SPECS_BY_ALGORITHM, "extra", MODEL_METRIC_SPECS_BY_ALGORITHM["rife"])
     with pytest.raises(FrozenInstanceError):
-        setattr(PADDLEGAN_MODEL_METRIC_SPECS["edvr"], "label", "mutable")
+        setattr(_builtin_metric("edvr"), "label", "mutable")
 
 
 def test_model_and_engine_metrics_share_one_runtime_metric_shape() -> None:
-    spec = PADDLEGAN_MODEL_METRIC_SPECS["ppmsvsr"]
+    spec = _builtin_metric("ppmsvsr")
 
     assert isinstance(spec.runtime, RuntimeMetricSpec)
     assert all(isinstance(engine, RuntimeMetricSpec) for _, engine in spec.engine_metrics)

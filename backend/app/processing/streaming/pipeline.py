@@ -17,10 +17,11 @@ from app.processing.streaming.pipeline_lifecycle import (
 )
 from app.processing.streaming.metrics import PipelineMetrics
 from app.processing.streaming.pipeline_context import StreamingPipelineContext
-from app.processing.streaming.pipeline_dispatch import run_streaming_pipeline
 from app.processing.streaming.pipeline_context import StreamingPipelinePreflight
+from app.processing.streaming.pipeline_raw import run_raw_streaming_pipeline
 from app.processing.streaming.stage_worker_progress import StageProgressCallback
 from app.processing.streaming.runtime_ports import ManifestFactoryPort, ResumeStatusSink, WorkerLogSink
+from app.processing.streaming.stage_file_pipeline import run_stage_file_pipeline
 from app.processing.execution_result import ExecutionResult
 
 
@@ -67,7 +68,11 @@ def process_video_streaming(
     if resume_state.start_source_frame >= preflight.stage_plan.resume_source_frames:
         completed_output_frames = resume_state.completed_output_frames
     else:
-        completed_output_frames = run_streaming_pipeline(context=context)
+        resume_status_sink(resume_state, preflight.stage_plan.total_encoded_frames)
+        if preflight.stage_plan.requires_file_pipeline:
+            completed_output_frames = run_stage_file_pipeline(context=context)
+        else:
+            completed_output_frames = run_raw_streaming_pipeline(context=context)
 
     return finalize_streaming_output(
         context=context,

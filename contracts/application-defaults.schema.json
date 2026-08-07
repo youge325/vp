@@ -98,25 +98,12 @@
         "scaleFactor": {
           "type": "number",
           "exclusiveMinimum": 0
-        },
-        "numFrames": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "tensorBackend": {
-          "$ref": "./tensor-backend.schema.json"
-        },
-        "engine": {
-          "$ref": "./inference-engine.schema.json"
         }
       },
       "required": [
         "algorithm",
         "onnxModel",
-        "scaleFactor",
-        "numFrames",
-        "tensorBackend",
-        "engine"
+        "scaleFactor"
       ],
       "additionalProperties": false
     },

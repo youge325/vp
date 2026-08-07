@@ -136,7 +136,7 @@ class _FFmpegPipeBase:
         return self.terminate_and_reap(deadline=deadline)
 
 
-class RawVideoReader(_FFmpegPipeBase):
+class _RawVideoReader(_FFmpegPipeBase):
     """Read `rgb24` rawvideo frames from an FFmpeg stdout pipe."""
 
     def __init__(self, *, process: subprocess.Popen[bytes], width: int, height: int):
@@ -173,7 +173,7 @@ class RawVideoReader(_FFmpegPipeBase):
         self._wait_for_process(deadline=time.monotonic() + TERMINATION_REAP_TIMEOUT_MS / 1000)
 
 
-class RawVideoWriter(_FFmpegPipeBase):
+class _RawVideoWriter(_FFmpegPipeBase):
     """Write `rgb24` rawvideo frames into an FFmpeg stdin pipe."""
 
     def __init__(
@@ -273,7 +273,7 @@ def open_rawvideo_decoder(
     decode_input_args: list[str],
     start_frame: int = 0,
     frame_count: int | None = None,
-) -> RawVideoReader:
+) -> _RawVideoReader:
     """Open a rawvideo decoder pipe."""
     cmd = _build_rawvideo_decode_command(
         ffmpeg_path,
@@ -291,7 +291,7 @@ def open_rawvideo_decoder(
         bufsize=0,
         **hidden_subprocess_kwargs(),
     )
-    return RawVideoReader(process=process, width=width, height=height)
+    return _RawVideoReader(process=process, width=width, height=height)
 
 
 def open_rawvideo_encoder(
@@ -303,7 +303,7 @@ def open_rawvideo_encoder(
     output_fps: float | None = None,
     encode_output_args: list[str],
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
-) -> RawVideoWriter:
+) -> _RawVideoWriter:
     """Open a rawvideo encoder pipe."""
     cmd = _build_rawvideo_encode_command(
         ffmpeg_path,
@@ -321,7 +321,7 @@ def open_rawvideo_encoder(
         bufsize=0,
         **hidden_subprocess_kwargs(),
     )
-    return RawVideoWriter(
+    return _RawVideoWriter(
         process=process,
         width=width,
         height=height,

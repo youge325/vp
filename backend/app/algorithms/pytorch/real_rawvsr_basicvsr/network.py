@@ -8,13 +8,16 @@ registry, logging, MMCV, and checkpoint-loading facades are intentionally absent
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 from app.algorithms.pytorch.real_rawvsr.tensor_ops import flow_warp
+
+if TYPE_CHECKING:
+    from app.algorithms.pytorch.real_rawvsr.sequence_adapter import ModelLoadSpec
 
 
 class _ConvModule(nn.Module):
@@ -212,13 +215,13 @@ class _BasicVSRNet(nn.Module):
         return torch.stack(outputs, dim=1)
 
 
-def load_basicvsr_model(*, scale: int, weight_path: str) -> tuple[Any, nn.Module]:
+def load_basicvsr_model(spec: ModelLoadSpec, weight_path: str) -> tuple[Any, nn.Module]:
     """Strictly load a SafeTensors inference checkpoint onto CUDA."""
     from safetensors.torch import load_file
 
     if not torch.cuda.is_available():
         raise RuntimeError("Real-RawVSR BasicVSR requires an available NVIDIA CUDA device.")
-    model = _BasicVSRNet(scale=scale)
+    model = _BasicVSRNet(scale=spec.scale_factor)
     state = load_file(weight_path, device="cpu")
     model.load_state_dict(state, strict=True)
     model.eval().to(torch.device("cuda"))

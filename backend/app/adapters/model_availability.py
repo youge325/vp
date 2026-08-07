@@ -55,7 +55,9 @@ class LocalModelAvailability:
                     f"{family.display_name} x{scale_factor} requires an available NVIDIA CUDA device.",
                     details={"stage": step.stage_name, "algorithm": algorithm, "model_path": str(model_path)},
                 )
-            if algorithm in {"real-rawvsr-edvr", "real-rawvsr-tdan"}:
+            for requirement in family.runtime_requirements:
+                if requirement != "torchvision_deform_conv":
+                    raise RuntimeError(f"Unknown model runtime requirement: {requirement!r}.")
                 try:
                     from torchvision.ops import deform_conv2d
                 except (ImportError, RuntimeError) as exc:

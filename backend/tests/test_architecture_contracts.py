@@ -68,6 +68,10 @@ def _write_application_default_fixture(root: Path) -> None:
     contract = root / "contracts/application-defaults.json"
     contract.parent.mkdir(parents=True)
     contract.write_text(json.dumps(defaults), encoding="utf-8")
+    (root / "contracts/model-assets.json").write_text(
+        (REPO_ROOT / "contracts/model-assets.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     for path_name, marker in _REQUIRED_CONSUMERS.items():
         path = root / path_name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -122,6 +126,18 @@ def test_model_asset_gate_rejects_a_mirrored_hash(tmp_path: Path) -> None:
     )
     assert check_model_asset_consumers(tmp_path) == [
         "model asset literal is mirrored outside generated bindings: backend/app/rogue.py"
+    ]
+
+
+def test_model_asset_gate_rejects_a_mirrored_complete_algorithm_inventory(tmp_path: Path) -> None:
+    _write_model_asset_fixture(tmp_path)
+    assets = json.loads((REPO_ROOT / "contracts/model-assets.json").read_text(encoding="utf-8"))
+    algorithms = [family["algorithmId"] for family in assets["families"]]
+    rogue = tmp_path / "backend/app/rogue.py"
+    rogue.write_text(f"MODELS = {algorithms!r}\n", encoding="utf-8")
+
+    assert check_model_asset_consumers(tmp_path) == [
+        "complete model algorithm inventory is mirrored outside generated bindings: backend/app/rogue.py"
     ]
 
 
@@ -526,6 +542,14 @@ def test_python_module_export_check_ignores_self_all_and_test_only_consumers() -
 
     assert _find_unconsumed_python_module_exports(module, source, [*production, *tests]) == set()
     assert _find_unconsumed_python_module_exports(module, source, production) == {"test_only"}
+
+
+def test_python_module_export_check_covers_implicit_public_declarations() -> None:
+    module = "app.example.owner"
+    source = "PUBLIC_VALUE = 1\ndef used():\n    return PUBLIC_VALUE\ndef test_only():\n    return 2\n"
+    production = [("app.consumer", False, "from app.example.owner import used\nused()\n")]
+
+    assert _find_unconsumed_python_module_exports(module, source, production) == {"PUBLIC_VALUE", "test_only"}
 
 
 def test_python_command_and_side_effect_checks_cover_current_repository() -> None:

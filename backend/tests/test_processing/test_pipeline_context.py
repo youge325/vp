@@ -88,7 +88,7 @@ def test_process_video_streaming_reuses_one_context_for_dispatch_and_finalizatio
         lambda **_kwargs: (manifest, resume_state),
     )
 
-    def run_streaming_pipeline(*, context: StreamingPipelineContext) -> int:
+    def run_raw_streaming_pipeline(*, context: StreamingPipelineContext) -> int:
         observed_contexts.append(context)
         return 4
 
@@ -100,7 +100,7 @@ def test_process_video_streaming_reuses_one_context_for_dispatch_and_finalizatio
         observed_contexts.append(context)
         return {"processed_frames": completed_output_frames}
 
-    monkeypatch.setattr(pipeline_module, "run_streaming_pipeline", run_streaming_pipeline)
+    monkeypatch.setattr(pipeline_module, "run_raw_streaming_pipeline", run_raw_streaming_pipeline)
     monkeypatch.setattr(pipeline_module, "finalize_streaming_output", finalize_streaming_output)
 
     decode_config = {"mode": "software"}

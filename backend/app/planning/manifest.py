@@ -14,10 +14,10 @@ from app.planning.resume_policy import ResumeMode, decide_output_action
 from app.planning.segment_workspace import SegmentWorkspace
 from app.utils.logger import get_logger
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 
-class ManifestRepositoryPort(Protocol):
+class _ManifestRepositoryPort(Protocol):
     """Consumer-owned persistence boundary for the resume lifecycle."""
 
     def load(self) -> SegmentManifestContract | None: ...
@@ -64,7 +64,7 @@ _ResumeKind = Literal["fresh", "resume", "conflict_final_exists"]
 
 
 @dataclass(frozen=True, slots=True)
-class ResumeDecision:
+class _ResumeDecision:
     """Outcome of preparing a sidecar for a run."""
 
     kind: _ResumeKind
@@ -89,7 +89,7 @@ class SegmentManifest:
         self,
         *,
         workspace: SegmentWorkspace,
-        repository: ManifestRepositoryPort,
+        repository: _ManifestRepositoryPort,
     ) -> None:
         self.workspace = workspace
         self.repository = repository
@@ -101,7 +101,7 @@ class SegmentManifest:
         config_snapshot: dict[str, Any] | None = None,
         *,
         mode: ResumeMode = ResumeMode.AUTO,
-    ) -> ResumeDecision:
+    ) -> _ResumeDecision:
         """Resolve the sidecar state and return an internal decision.
 
         ``mode`` controls how conflicts with an already-existing final output
@@ -132,7 +132,7 @@ class SegmentManifest:
             mode=mode,
         )
         if action == "conflict":
-            return ResumeDecision(
+            return _ResumeDecision(
                 kind="conflict_final_exists",
                 state=state,
                 sidecar_signature_match=signature_match,
@@ -152,9 +152,9 @@ class SegmentManifest:
             delete_final=delete_final,
         )
 
-    def _resume_decision(self, state: ResumeState | None = None) -> ResumeDecision:
+    def _resume_decision(self, state: ResumeState | None = None) -> _ResumeDecision:
         state = state or self._prepare_resume_state()
-        return ResumeDecision(
+        return _ResumeDecision(
             kind="resume" if state.completed_output_frames > 0 else "fresh",
             state=state,
             sidecar_signature_match=True,
@@ -166,14 +166,14 @@ class SegmentManifest:
         config_snapshot: dict[str, Any],
         *,
         delete_final: bool,
-    ) -> ResumeDecision:
+    ) -> _ResumeDecision:
         self._quarantine_sidecar()
         decision = self._prepare_fresh(
             signature,
             config_snapshot,
             delete_final=delete_final,
         )
-        logger.info("Configuration changed; previous progress invalidated.")
+        _logger.info("Configuration changed; previous progress invalidated.")
         return decision
 
     # -------------------------------------------------------------- inspection
@@ -271,13 +271,13 @@ class SegmentManifest:
                 continue
             if self.workspace.CHUNK_PATTERN.match(entry.name):
                 entry.unlink()
-                logger.info("Discarded non-contiguous chunk %s", entry.name)
+                _logger.info("Discarded non-contiguous chunk %s", entry.name)
 
     def _quarantine_sidecar(self) -> None:
         """Move incompatible progress aside without keeping a read fallback."""
         destination = self.workspace.quarantine()
         if destination is not None:
-            logger.info("Quarantined incompatible progress at %s", destination)
+            _logger.info("Quarantined incompatible progress at %s", destination)
 
     # ------------------------------------------------------------- internals
     def _prepare_resume_state(self) -> ResumeState:
@@ -313,7 +313,7 @@ class SegmentManifest:
         config_snapshot: dict[str, Any],
         *,
         delete_final: bool = False,
-    ) -> ResumeDecision:
+    ) -> _ResumeDecision:
         self.workspace.cleanup()
         if delete_final:
             self.workspace.delete_final_output()
@@ -321,4 +321,4 @@ class SegmentManifest:
             signature=signature,
             config_snapshot=config_snapshot,
         )
-        return ResumeDecision(kind="fresh", state=self._empty_state())
+        return _ResumeDecision(kind="fresh", state=self._empty_state())

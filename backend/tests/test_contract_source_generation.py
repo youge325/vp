@@ -92,14 +92,10 @@ def test_application_defaults_are_strict_validated_product_defaults() -> None:
         "tensorBackend": "pytorch",
         "engine": "cuda",
     }
-    assert defaults["superResolution"]["numFrames"] == 10
     assert defaults["superResolution"] == {
         "algorithm": "real-rawvsr-basicvsr",
         "onnxModel": "",
         "scaleFactor": 2,
-        "numFrames": 10,
-        "tensorBackend": "pytorch",
-        "engine": "cuda",
     }
     assert defaults["workflow"] == {
         "desktopFpsMode": "target",
@@ -151,7 +147,13 @@ def test_application_defaults_are_strict_validated_product_defaults() -> None:
         validator.validate(extra)
 
 
-def test_model_asset_manifest_is_strict_complete_and_scale_ordered(tmp_path: Path) -> None:
+def _write_model_asset_fixture(directory: Path, assets: dict[str, object]) -> None:
+    for name in ("model-assets.schema.json", "tensor-backend.schema.json", "inference-engine.schema.json"):
+        (directory / name).write_text((CONTRACTS / name).read_text(encoding="utf-8"), encoding="utf-8")
+    (directory / "model-assets.json").write_text(json.dumps(assets), encoding="utf-8")
+
+
+def test_model_asset_manifest_is_strict_and_normalized(tmp_path: Path) -> None:
     assets = load_model_assets(CONTRACTS)
     families = assets["families"]
 
@@ -162,20 +164,54 @@ def test_model_asset_manifest_is_strict_complete_and_scale_ordered(tmp_path: Pat
         "real-rawvsr-toflow",
     ]
     assert assets["license"]["usage"] == "non_commercial"
+    assert assets["runtime"] == {
+        "algorithmFamily": "pytorch_vsr",
+        "tensorBackend": "pytorch",
+        "engines": ["cuda"],
+    }
     for family in families:
         assert [variant["scaleFactor"] for variant in family["variants"]] == [2, 3, 4]
         assert all(len(variant["sourceSha256"]) == 64 for variant in family["variants"])
         assert all(len(variant["inferenceSha256"]) == 64 for variant in family["variants"])
         assert all(variant["parameterCount"] > 0 for variant in family["variants"])
 
-    (tmp_path / "model-assets.schema.json").write_text(
-        (CONTRACTS / "model-assets.schema.json").read_text(encoding="utf-8"),
-        encoding="utf-8",
-    )
     invalid = copy.deepcopy(assets)
     del invalid["families"][0]["variants"][0]["sourceSha256"]
-    (tmp_path / "model-assets.json").write_text(json.dumps(invalid), encoding="utf-8")
+    _write_model_asset_fixture(tmp_path, invalid)
     with pytest.raises(ValidationError):
+        load_model_assets(tmp_path)
+
+
+def test_model_asset_generation_is_order_independent_and_rejects_duplicates(tmp_path: Path) -> None:
+    canonical = load_model_assets(CONTRACTS)
+    unordered = copy.deepcopy(canonical)
+    unordered["families"].reverse()
+    for family in unordered["families"]:
+        family["variants"].reverse()
+    _write_model_asset_fixture(tmp_path, unordered)
+    normalized = load_model_assets(tmp_path)
+    assert normalized == canonical
+    assert render_python_model_assets(normalized) == render_python_model_assets(canonical)
+    assert render_rust_model_assets(normalized) == render_rust_model_assets(canonical)
+
+    duplicate_algorithm = copy.deepcopy(canonical)
+    duplicate_algorithm["families"][1]["algorithmId"] = duplicate_algorithm["families"][0]["algorithmId"]
+    _write_model_asset_fixture(tmp_path, duplicate_algorithm)
+    with pytest.raises(RuntimeError, match="algorithm IDs must be unique"):
+        load_model_assets(tmp_path)
+
+    duplicate_scale = copy.deepcopy(canonical)
+    duplicate_scale["families"][0]["variants"][1]["scaleFactor"] = 2
+    _write_model_asset_fixture(tmp_path, duplicate_scale)
+    with pytest.raises(RuntimeError, match="scale factors must be unique"):
+        load_model_assets(tmp_path)
+
+    duplicate_path = copy.deepcopy(canonical)
+    duplicate_path["families"][1]["variants"][0]["relativePath"] = canonical["families"][0]["variants"][0][
+        "relativePath"
+    ]
+    _write_model_asset_fixture(tmp_path, duplicate_path)
+    with pytest.raises(RuntimeError, match="runtime path must be"):
         load_model_assets(tmp_path)
 
 
@@ -192,7 +228,16 @@ def test_model_asset_bindings_include_runtime_integrity_data() -> None:
 
 
 def test_application_defaults_generate_language_native_read_only_constants() -> None:
-    defaults = load_application_defaults(CONTRACTS)
+    defaults = load_application_defaults(CONTRACTS, load_model_assets(CONTRACTS))
+
+    assert defaults["superResolution"] == {
+        "algorithm": "real-rawvsr-basicvsr",
+        "onnxModel": "",
+        "scaleFactor": 2,
+        "numFrames": 10,
+        "tensorBackend": "pytorch",
+        "engine": "cuda",
+    }
 
     python_output = render_python_application_defaults(defaults)
     typescript_output = render_typescript_application_defaults(defaults)
@@ -415,12 +460,21 @@ def test_runtime_and_stage_worker_contracts_are_strict_generated_boundaries() ->
     assert runtime["additionalProperties"] is False
     assert boundary["$defs"]["OutputConfig"]["properties"]["outputDir"]["pattern"] == r"\S"
 
-    worker = json.loads(_render_stage_worker_schema())
+    worker = json.loads(_render_stage_worker_schema(load_model_assets(CONTRACTS)))
     definitions = worker["$defs"]
     assert definitions["StageWorkerConfig"]["additionalProperties"] is False
     assert definitions["StageWorkerConfig"]["properties"]["stageIndex"]["minimum"] == 1
     assert definitions["StageWorkerProgressEvent"]["properties"]["type"] == {"const": "progress"}
     assert definitions["StageWorkerErrorEvent"]["properties"]["type"] == {"const": "error"}
+    vsr_properties = definitions["StageWorkerPytorchVsrKwargs"]["properties"]
+    assert vsr_properties["sr_algorithm"]["enum"] == [
+        "real-rawvsr-basicvsr",
+        "real-rawvsr-edvr",
+        "real-rawvsr-tdan",
+        "real-rawvsr-toflow",
+    ]
+    assert vsr_properties["scale_factor"]["enum"] == [2, 3, 4]
+    assert vsr_properties["engine"] == {"const": "cuda"}
 
 
 def test_optional_filter_parameters_allow_missing_but_reject_explicit_null() -> None:

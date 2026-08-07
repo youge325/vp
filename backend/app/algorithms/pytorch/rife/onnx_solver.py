@@ -19,7 +19,7 @@ from .model_loader import get_model_dir
 # ONNX 模型文件名中常见的版本标记，如 rife_v4.26.onnx -> 4.26
 _MODEL_VERSION_RE = re.compile(r"[vV](\d+\.\d+)")
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 
 def _np_pad_frame(img: np.ndarray, modulo: int) -> tuple[np.ndarray, tuple]:
@@ -103,7 +103,7 @@ class RIFEONNXSolver:
             inferred = _infer_model_version_from_path(onnx_path)
             if inferred:
                 model_version = inferred
-                logger.debug("从 ONNX 文件名推断模型版本: %s", model_version)
+                _logger.debug("从 ONNX 文件名推断模型版本: %s", model_version)
         else:
             onnx_path = os.path.join(model_dir, "interpolation", "rife", f"rife_v{model_version}.onnx")
             if not os.path.isfile(onnx_path):
@@ -126,7 +126,7 @@ class RIFEONNXSolver:
         self._backwarp_grid: Optional[np.ndarray] = None
         self._flow_div: Optional[np.ndarray] = None
 
-        logger.info(
+        _logger.info(
             f"RIFEONNXSolver 初始化完成: v{model_version}, "
             f"model={onnx_path}, providers={self._session.get_providers()}, modulo={self._modulo}"
         )

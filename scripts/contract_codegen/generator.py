@@ -65,8 +65,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="fail instead of updating stale generated files")
     args = parser.parse_args()
     manifest = validate_contracts()
-    application_defaults = load_application_defaults(CONTRACTS)
     model_assets = load_model_assets(CONTRACTS)
+    application_defaults = load_application_defaults(CONTRACTS, model_assets)
 
     with tempfile.TemporaryDirectory(prefix="vp-contracts-") as temp:
         temp_dir = Path(temp)
@@ -74,7 +74,7 @@ def main() -> int:
         boundary_output.write_text(_render_boundary_schema(), encoding="utf-8", newline="\n")
         python_output = temp_dir / "contracts.py"
         stage_worker_schema = temp_dir / "stage-worker.schema.json"
-        stage_worker_schema.write_text(_render_stage_worker_schema(), encoding="utf-8", newline="\n")
+        stage_worker_schema.write_text(_render_stage_worker_schema(model_assets), encoding="utf-8", newline="\n")
         stage_worker_output = temp_dir / "stage_worker_contracts.py"
         typescript_schema_dir = temp_dir / "typescript"
         typescript_schema_dir.mkdir()

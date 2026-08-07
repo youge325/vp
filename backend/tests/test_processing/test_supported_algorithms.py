@@ -138,20 +138,21 @@ def test_paddlegan_window_models_expose_fixed_runtime_frame_count():
 
 
 def test_real_rawvsr_catalog_assets_metrics_factory_and_license_are_exactly_aligned() -> None:
-    from app.algorithms.pytorch.real_rawvsr.factory import _FIXED_WINDOW_LOADERS
+    from app.algorithms.pytorch.real_rawvsr.factory import _IMPLEMENTATION_FACTORIES
 
     family_ids = {family.algorithm_id for family in REAL_RAWVSR_MODEL_FAMILIES}
     capabilities = {
         entry.name: entry for entry in SUPER_RESOLUTION_CAPABILITIES if entry.descriptor.model_kind == "pytorch_vsr"
     }
 
-    assert family_ids == set(capabilities) == {"real-rawvsr-basicvsr", *_FIXED_WINDOW_LOADERS}
+    assert family_ids == set(capabilities)
+    assert {family.implementation_key for family in REAL_RAWVSR_MODEL_FAMILIES} == set(_IMPLEMENTATION_FACTORIES)
     for family in REAL_RAWVSR_MODEL_FAMILIES:
         capability = capabilities[family.algorithm_id]
         scales = tuple(variant.scale_factor for variant in family.variants)
         assert capability.descriptor.factory_key == "real_rawvsr_rgb"
         assert capability.descriptor.supported_backends == frozenset({"pytorch"})
-        assert capability.descriptor.temporal_context_frames == 2
+        assert capability.descriptor.temporal_context_frames == family.temporal_context_frames
         assert capability.scale_factors == scales == (2, 3, 4)
         assert capability.models == tuple(f"x{scale}" for scale in scales)
         assert tuple(metric.name for metric in MODEL_METRIC_SPECS_BY_ALGORITHM[capability.name]) == capability.models

@@ -14,10 +14,10 @@ from app.utils.logger import get_logger
 from app.catalog.rife_models import HEAD_NONE, get_spec
 from .model_loader import get_model_dir, load_rife_model
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 
-class RIFEExportWrapper(nn.Module):
+class _RIFEExportWrapper(nn.Module):
     """包装 IFNet，将 encode + forward 合并为单一前向图。
 
     根据模型是否有 Head 编码器自动选择推理路径：
@@ -75,7 +75,7 @@ def export_rife_to_onnx(
     has_head = spec.head_type != HEAD_NONE
 
     # 加载 PyTorch 模型（CPU, float32）
-    logger.info(f"加载 RIFE v{model_version} 用于 ONNX 导出 ...")
+    _logger.info(f"加载 RIFE v{model_version} 用于 ONNX 导出 ...")
     flownet, _, _ = load_rife_model(
         model_version=model_version,
         model_dir=model_dir,
@@ -84,7 +84,7 @@ def export_rife_to_onnx(
     )
     flownet.eval()
 
-    wrapper = RIFEExportWrapper(flownet, has_head).eval()
+    wrapper = _RIFEExportWrapper(flownet, has_head).eval()
 
     dummy_h, dummy_w = dummy_size
     dummy_img0 = torch.randn(1, 3, dummy_h, dummy_w)
@@ -107,7 +107,7 @@ def export_rife_to_onnx(
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
 
-    logger.info(f"导出 ONNX: {output_path} (opset={opset_version}, dummy={dummy_size}, dynamo={dynamo})")
+    _logger.info(f"导出 ONNX: {output_path} (opset={opset_version}, dummy={dummy_size}, dynamo={dynamo})")
 
     export_kwargs = {
         "input_names": ["img0", "img1", "timestep", "tenFlow_div", "backwarp_tenGrid"],
@@ -131,5 +131,5 @@ def export_rife_to_onnx(
             **export_kwargs,
         )
 
-    logger.info(f"ONNX 导出完成: {output_path}")
+    _logger.info(f"ONNX 导出完成: {output_path}")
     return output_path

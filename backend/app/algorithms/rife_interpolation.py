@@ -10,7 +10,7 @@ from app.utils.logger import get_logger
 if TYPE_CHECKING:
     from app.algorithms.pytorch.rife.solver import RIFESolver
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 
 class FrameInterpolationAlgorithm:
@@ -42,7 +42,7 @@ class FrameInterpolationAlgorithm:
         if self._solver is not None:
             return self._solver
         if self._backend_name == "onnx":
-            logger.info(f"初始化 RIFE ONNX 推理器: v{self._model_version}, engine={self._engine}")
+            _logger.info(f"初始化 RIFE ONNX 推理器: v{self._model_version}, engine={self._engine}")
             self._solver = RIFEONNXSolver(
                 model_version=self._model_version,
                 model_dir=self._model_dir,
@@ -50,7 +50,7 @@ class FrameInterpolationAlgorithm:
                 engine=self._engine,
             )
         else:
-            logger.info(
+            _logger.info(
                 f"初始化 RIFE PyTorch 推理器: v{self._model_version}, "
                 f"scale={self._scale}, fp16={self._fp16}, engine={self._engine}"
             )

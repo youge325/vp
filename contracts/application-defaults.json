@@ -14,10 +14,7 @@
   "superResolution": {
     "algorithm": "real-rawvsr-basicvsr",
     "onnxModel": "",
-    "scaleFactor": 2,
-    "numFrames": 10,
-    "tensorBackend": "pytorch",
-    "engine": "cuda"
+    "scaleFactor": 2
   },
   "workflow": {
     "desktopFpsMode": "target",

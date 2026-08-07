@@ -13,18 +13,6 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ASSET_MANIFEST = REPO_ROOT / "contracts/model-assets.json"
 _LICENSE_ACCEPTANCE = "CC-BY-NC-SA-4.0-NONCOMMERCIAL"
-_UPSTREAM_FOLDERS = {
-    "real-rawvsr-basicvsr": "model_BasicVSR",
-    "real-rawvsr-edvr": "model_EDVR",
-    "real-rawvsr-tdan": "model_TDAN",
-    "real-rawvsr-toflow": "model_TOF",
-}
-_SOURCE_STEMS = {
-    "real-rawvsr-basicvsr": "basicvsr",
-    "real-rawvsr-edvr": "edvr",
-    "real-rawvsr-tdan": "tdan",
-    "real-rawvsr-toflow": "tof",
-}
 
 
 def _sha256(path: Path) -> str:
@@ -58,12 +46,12 @@ def _source_checkpoint(
     source_dir: Path | None,
     algorithm_id: str,
     scale_factor: int,
+    upstream_folder: str,
+    source_stem: str,
     temporary_dir: Path,
 ) -> Path:
-    source_stem = _SOURCE_STEMS[algorithm_id]
     if source_dir is None:
         return temporary_dir / f"{source_stem}-x{scale_factor}-best.pth"
-    upstream_folder = _UPSTREAM_FOLDERS[algorithm_id]
     candidates = (
         source_dir / algorithm_id / f"x{scale_factor}" / "best.pth",
         source_dir / f"{upstream_folder}_{scale_factor}X" / "best.pth",
@@ -115,6 +103,7 @@ def prepare_models(*, acceptance: str, source_dir: Path | None = None) -> None:
         temporary_dir = Path(temporary)
         for family in manifest["families"]:
             algorithm_id = str(family["algorithmId"])
+            upstream = family["upstreamCheckpoint"]
             for variant in family["variants"]:
                 scale_factor = int(variant["scaleFactor"])
                 label = f"{algorithm_id} x{scale_factor}"
@@ -131,6 +120,8 @@ def prepare_models(*, acceptance: str, source_dir: Path | None = None) -> None:
                     source_dir,
                     algorithm_id,
                     scale_factor,
+                    str(upstream["folder"]),
+                    str(upstream["sourceStem"]),
                     temporary_dir,
                 )
                 if source_dir is None:

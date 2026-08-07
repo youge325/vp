@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
 
 from app.algorithms.pytorch.real_rawvsr.dcn import ModulatedDeformConvPack
+
+if TYPE_CHECKING:
+    from app.algorithms.pytorch.real_rawvsr.sequence_adapter import ModelLoadSpec
 
 
 class _ResidualBlock(nn.Module):
@@ -36,7 +39,7 @@ class _Upsampler(nn.Sequential):
 
 
 class _TdanNet(nn.Module):
-    def __init__(self, *, scale: int) -> None:
+    def __init__(self, *, scale: int, frames: int) -> None:
         super().__init__()
         self.conv_first = nn.Conv2d(3, 64, 3, padding=1)
         self.residual_layer = nn.Sequential(*(_ResidualBlock() for _ in range(5)))
@@ -51,7 +54,7 @@ class _TdanNet(nn.Module):
         self.off2d = nn.Conv2d(64, 64, 3, padding=1)
         self.dconv = self._dcn()
         self.recon_lr = nn.Conv2d(64, 3, 3, padding=1)
-        self.fea_ex = nn.Sequential(nn.Conv2d(15, 64, 3, padding=1), nn.ReLU())
+        self.fea_ex = nn.Sequential(nn.Conv2d(3 * frames, 64, 3, padding=1), nn.ReLU())
         self.recon_layer = nn.Sequential(*(_ResidualBlock() for _ in range(10)))
         self.up = nn.Sequential(_Upsampler(scale), nn.Conv2d(64, 3, 3, padding=1, bias=False))
 
@@ -94,12 +97,12 @@ class _TdanNet(nn.Module):
         return self.up(self.recon_layer(reconstruction)), aligned
 
 
-def load_tdan_model(scale: int, weight_path: str) -> tuple[Any, nn.Module]:
+def load_tdan_model(spec: ModelLoadSpec, weight_path: str) -> tuple[Any, nn.Module]:
     from safetensors.torch import load_file
 
     if not torch.cuda.is_available():
         raise RuntimeError("Real-RawVSR TDAN requires an available NVIDIA CUDA device.")
-    model = _TdanNet(scale=scale)
+    model = _TdanNet(scale=spec.scale_factor, frames=spec.num_frames)
     model.load_state_dict(load_file(weight_path, device="cpu"), strict=True)
     model.eval().to(torch.device("cuda"))
     return torch, model

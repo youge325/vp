@@ -210,7 +210,7 @@ class TestFrameInterpolationAlgorithmONNX:
         """导出 ONNX 并创建算法实例。"""
         from app.algorithms.pytorch.rife.onnx_export import export_rife_to_onnx
         from app.algorithms.pytorch.rife.model_loader import get_model_dir
-        from app.algorithms.tensor_backend import OnnxBackend
+        from app.algorithms.tensor_backend import get_tensor_backend
         from app.algorithms.rife_interpolation import FrameInterpolationAlgorithm
 
         model_dir = get_model_dir()
@@ -222,7 +222,7 @@ class TestFrameInterpolationAlgorithmONNX:
                 dummy_size=(256, 256),
             )
 
-        backend = OnnxBackend()
+        backend = get_tensor_backend("onnx")
         algo = FrameInterpolationAlgorithm(
             backend_name="onnx",
             model_version="4.25",

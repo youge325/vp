@@ -129,8 +129,7 @@ def _check_python_algorithm_factory_registry(root: Path) -> list[str]:
     descriptor_path = root / "backend/app/catalog/stage_descriptors.py"
     descriptor_tree = _parse_python(descriptor_path, root)
     expected_keys: set[str] = set()
-    for statement in descriptor_tree.body:
-        value = statement.value if isinstance(statement, (ast.Assign, ast.AnnAssign)) else None
+    for value in ast.walk(descriptor_tree):
         if (
             not isinstance(value, ast.Call)
             or not isinstance(value.func, ast.Name)
@@ -489,6 +488,33 @@ def _literal_all_names(tree: ast.Module) -> set[str]:
     return set()
 
 
+def _module_export_names(tree: ast.Module) -> set[str]:
+    """Return explicit ``__all__`` or Python's implicit public declarations."""
+
+    for statement in tree.body:
+        target = statement.targets[0] if isinstance(statement, ast.Assign) and len(statement.targets) == 1 else None
+        if isinstance(statement, ast.AnnAssign):
+            target = statement.target
+        if isinstance(target, ast.Name) and target.id == "__all__":
+            return _literal_all_names(tree)
+
+    names: set[str] = set()
+    for statement in tree.body:
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            name = statement.name
+        elif isinstance(statement, ast.Assign):
+            targets = [target.id for target in statement.targets if isinstance(target, ast.Name)]
+            names.update(name for name in targets if not name.startswith("_"))
+            continue
+        elif isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+            name = statement.target.id
+        else:
+            continue
+        if not name.startswith("_"):
+            names.add(name)
+    return names
+
+
 @cache
 def _parse_python_text(text: str) -> ast.Module:
     return ast.parse(text)
@@ -550,7 +576,7 @@ def _find_unconsumed_python_module_exports(
 ) -> set[str]:
     """Find ordinary-module exports with no external production consumer."""
     tree = _parse_python_text(module_text)
-    exported = _literal_all_names(tree)
+    exported = _module_export_names(tree)
     if not exported:
         return set()
 
@@ -644,6 +670,22 @@ def _check_python_module_exports(root: Path) -> list[str]:
         )
         for path in production_paths
     ]
+    dynamic_sources = [
+        (
+            python_module_name(app_root, path),
+            False,
+            read_source(path, root),
+        )
+        for path in sorted((app_root / "algorithms/pytorch/rife").glob("ifnet_v4_*.py"))
+    ]
+    export_script = root / "backend/export_all_rife_onnx.py"
+    if export_script.is_file():
+        dynamic_sources.append(("export_all_rife_onnx", False, read_source(export_script, root)))
+    cli_registry = _literal_handler_registry(_parse_python(root / "backend/app/cli/main.py", root))
+    dynamic_sources.extend(
+        (f"cli_handler_{name}", False, f"from {module_name} import {symbol_name}\n")
+        for name, (module_name, symbol_name) in cli_registry.items()
+    )
     issues: list[str] = []
     for module_name, is_package, source, path in module_sources:
         if is_package:
@@ -652,7 +694,7 @@ def _check_python_module_exports(root: Path) -> list[str]:
             (consumer_module, consumer_is_package, consumer_source)
             for consumer_module, consumer_is_package, consumer_source, consumer_path in module_sources
             if consumer_path != path
-        ]
+        ] + dynamic_sources
         issues.extend(
             f"Python module export has no production consumer: {relative_path(path, root)} -> {name}"
             for name in sorted(_find_unconsumed_python_module_exports(module_name, source, consumers))

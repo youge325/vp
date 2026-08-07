@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-EncodeProgressCallback = Callable[[int, float | None, float | None, float | None, str], None]
+from app.ports.media import EncodeProgressCallback
 
 
 def make_encode_progress_callback(

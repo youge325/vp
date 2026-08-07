@@ -9,7 +9,7 @@ import time
 import pytest
 
 from app.utils.ffmpeg.io import (
-    RawVideoReader,
+    _RawVideoReader,
     _build_rawvideo_decode_command,
     _build_rawvideo_encode_command,
     open_rawvideo_decoder,
@@ -79,7 +79,7 @@ def test_rawvideo_pipe_terminate_wait_kill_reap_uses_one_deadline() -> None:
                 raise subprocess.TimeoutExpired("ffmpeg", timeout)
             return -9
 
-    reader = RawVideoReader(process=Process(), width=1, height=1)  # type: ignore[arg-type]
+    reader = _RawVideoReader(process=Process(), width=1, height=1)  # type: ignore[arg-type]
 
     assert reader.terminate_and_reap(deadline=time.monotonic() + 1) is True
     assert lifecycle == ["terminate", "reap", "kill", "reap"]
@@ -173,9 +173,9 @@ def test_rawvideo_writer_surfaces_progress_callback_failure_after_draining_stder
         def wait(self, **_kwargs) -> int:
             return 0
 
-    from app.utils.ffmpeg.io import RawVideoWriter
+    from app.utils.ffmpeg.io import _RawVideoWriter
 
-    writer = RawVideoWriter(
+    writer = _RawVideoWriter(
         process=Process(),  # type: ignore[arg-type]
         width=1,
         height=1,
@@ -204,9 +204,9 @@ def test_rawvideo_writer_surfaces_stderr_pipe_read_failure() -> None:
         def wait(self, **_kwargs) -> int:
             return 0
 
-    from app.utils.ffmpeg.io import RawVideoWriter
+    from app.utils.ffmpeg.io import _RawVideoWriter
 
-    writer = RawVideoWriter(process=Process(), width=1, height=1)  # type: ignore[arg-type]
+    writer = _RawVideoWriter(process=Process(), width=1, height=1)  # type: ignore[arg-type]
 
     with pytest.raises(RuntimeError, match="stderr collection failed") as exc_info:
         writer.close()
@@ -232,7 +232,7 @@ def test_stderr_thread_start_preserves_original_error_when_cleanup_throws_and_re
     monkeypatch.setattr("app.utils.ffmpeg.io.late_cleanup_coordinator.submit", submitted.append)
 
     with pytest.raises(OSError, match="thread start failed") as exc_info:
-        RawVideoReader(process=Process(), width=1, height=1)  # type: ignore[arg-type]
+        _RawVideoReader(process=Process(), width=1, height=1)  # type: ignore[arg-type]
 
     assert submitted
     assert any("cleanup failed" in note for note in exc_info.value.__notes__)
@@ -240,7 +240,7 @@ def test_stderr_thread_start_preserves_original_error_when_cleanup_throws_and_re
 
 def test_partial_rawvideo_frame_wait_uses_finite_cleanup_deadline() -> None:
     process = type("Process", (), {"stdout": io.BytesIO(b"x"), "stderr": io.BytesIO()})()
-    reader = RawVideoReader(process=process, width=1, height=1)  # type: ignore[arg-type]
+    reader = _RawVideoReader(process=process, width=1, height=1)  # type: ignore[arg-type]
     deadlines: list[float] = []
     reader._wait_for_process = lambda *, deadline: deadlines.append(deadline)  # type: ignore[method-assign]
 

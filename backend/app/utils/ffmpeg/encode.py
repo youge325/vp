@@ -14,7 +14,7 @@ from ._progress import _format_bitrate
 from ._run import run_ffmpeg_command
 from .io import _FFmpegPipeBase
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 
 def _build_option_args(options: dict[str, Any]) -> list[str]:
@@ -108,7 +108,7 @@ def extract_audio(ffmpeg_path: str, input_path: str, output_path: str) -> bool:
     try:
         run_ffmpeg_command(cmd)
     except Exception as exc:  # pragma: no cover - defensive boundary
-        logger.warning("Audio extraction failed: %s", exc)
+        _logger.warning("Audio extraction failed: %s", exc)
         return False
     return os.path.isfile(output_path) and os.path.getsize(output_path) > 0
 

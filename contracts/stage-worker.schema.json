@@ -46,15 +46,10 @@
       "additionalProperties": false,
       "properties": {
         "sr_algorithm": {
-          "enum": [
-            "real-rawvsr-basicvsr",
-            "real-rawvsr-edvr",
-            "real-rawvsr-tdan",
-            "real-rawvsr-toflow"
-          ]
+          "x-vp-model-assets": "algorithmIds"
         },
-        "scale_factor": { "type": "integer", "enum": [2, 3, 4] },
-        "engine": { "const": "cuda" },
+        "scale_factor": { "x-vp-model-assets": "scaleFactors" },
+        "engine": { "x-vp-model-assets": "engines" },
         "num_frames": { "type": "integer", "minimum": 1 }
       },
       "required": ["sr_algorithm", "scale_factor", "engine", "num_frames"]

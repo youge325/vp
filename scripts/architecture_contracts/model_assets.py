@@ -20,6 +20,7 @@ _SCAN_ROOTS = ("backend/app", "frontend/src", "frontend/src-tauri/src", "scripts
 _SCAN_SUFFIXES = {".py", ".rs", ".ts", ".vue", ".ps1", ".yml", ".yaml"}
 _LITERAL_ALLOWLIST = {
     "backend/app/generated/model_assets.py",
+    "backend/app/generated/stage_worker_contracts.py",
     "frontend/src-tauri/src/generated/model_assets.rs",
 }
 
@@ -43,6 +44,7 @@ def check_model_asset_consumers(root: Path) -> list[str]:
         for variant in family["variants"]
         for field in ("googleDriveFileId", "sourceSha256", "inferenceSha256")
     }
+    algorithm_ids = {str(family["algorithmId"]) for family in assets["families"]}
     for scan_root_name in _SCAN_ROOTS:
         scan_root = root / scan_root_name
         if not scan_root.exists():
@@ -54,6 +56,9 @@ def check_model_asset_consumers(root: Path) -> list[str]:
             if path_name in _LITERAL_ALLOWLIST:
                 continue
             source = read_source(path, root)
+            if algorithm_ids and all(algorithm_id in source for algorithm_id in algorithm_ids):
+                issues.append(f"complete model algorithm inventory is mirrored outside generated bindings: {path_name}")
+                continue
             for literal in protected_literals:
                 if literal in source:
                     issues.append(f"model asset literal is mirrored outside generated bindings: {path_name}")

@@ -33,6 +33,10 @@ def _write_manifest(root: Path, *, source_bytes: int, source_sha256: str) -> Pat
         "families": [
             {
                 "algorithmId": "real-rawvsr-basicvsr",
+                "upstreamCheckpoint": {
+                    "folder": "model_BasicVSR",
+                    "sourceStem": "basicvsr",
+                },
                 "variants": [
                     {
                         "scaleFactor": 2,

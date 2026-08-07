@@ -26,7 +26,8 @@ def variant_for_algorithm_scale(algorithm_id: str, scale_factor: int) -> ModelAs
     try:
         return REAL_RAWVSR_MODEL_VARIANTS_BY_KEY[(algorithm_id, scale_factor)]
     except KeyError as exc:
-        raise ValueError(f"{family.display_name} supports only 2x, 3x, and 4x; got {scale_factor}x.") from exc
+        supported = ", ".join(f"{variant.scale_factor}x" for variant in family.variants)
+        raise ValueError(f"{family.display_name} supports only {supported}; got {scale_factor}x.") from exc
 
 
 @lru_cache(maxsize=32)

@@ -21,7 +21,7 @@ from pathlib import Path
 
 from app.utils.logger import get_logger
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 _registered: set[str] = set()
 # Module-level cache for auto-discovered TensorRT roots so repeated calls do
@@ -70,7 +70,7 @@ def _scan_common_tensorrt_roots() -> list[Path]:
     _scanned_tensorrt_roots = roots
     # 仅在首次扫描成功时记录日志，后续调用直接返回缓存避免刷屏。
     if roots:
-        logger.info("Auto-discovered TensorRT bin directories: %s", roots)
+        _logger.info("Auto-discovered TensorRT bin directories: %s", roots)
     return roots
 
 
@@ -85,7 +85,7 @@ def _candidate_dirs() -> list[Path]:
         if bin_dir.is_dir():
             candidates.append(bin_dir)
         else:
-            logger.warning(
+            _logger.warning(
                 "VP_TENSORRT_DIR=%s does not contain a 'bin' subdirectory; ignoring.",
                 tensorrt_dir,
             )
@@ -147,7 +147,7 @@ def _opencv_candidate_dirs() -> list[Path]:
     root_candidates.extend(sorted(root.glob("install/x64/vc*/bin")))
     candidates.extend(root_candidates)
     if not any(path.is_dir() for path in root_candidates):
-        logger.warning(
+        _logger.warning(
             "VP_OPENCV_DIR=%s does not contain a known OpenCV bin directory; "
             "set VP_OPENCV_BIN_DIR to the exact directory if cv2 still fails to import.",
             opencv_root,
@@ -185,17 +185,17 @@ def register_native_dll_paths() -> None:
         if key in _registered:
             continue
         if not resolved.is_dir():
-            logger.warning("Skipping non-existent DLL directory %s", resolved)
+            _logger.warning("Skipping non-existent DLL directory %s", resolved)
             continue
         if add_dll_directory is not None:
             try:
                 add_dll_directory(str(resolved))
             except OSError as exc:
-                logger.warning("os.add_dll_directory(%s) failed: %s", resolved, exc)
+                _logger.warning("os.add_dll_directory(%s) failed: %s", resolved, exc)
         # Always prepend to PATH so legacy LoadLibrary search picks it up.
         _prepend_to_path(str(resolved))
         _registered.add(key)
-        logger.info("Registered native DLL directory %s", resolved)
+        _logger.info("Registered native DLL directory %s", resolved)
 
 
 def _prepend_to_path(directory: str) -> None:

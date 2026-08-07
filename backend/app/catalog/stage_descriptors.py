@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping, assert_never
+from typing import Any, Literal, Mapping, assert_never, cast
 
 from app.catalog.filter_geometry import project_filter_chain
+from app.generated.model_assets import (
+    REAL_RAWVSR_ALGORITHM_FAMILY,
+    REAL_RAWVSR_TENSOR_BACKEND,
+    ModelAssetFamily,
+)
 
 AlgorithmType = Literal["frame_interpolation", "super_resolution", "frame_filter_chain"]
 StageExecutionMode = Literal["single", "pair", "sequence"]
@@ -95,15 +100,19 @@ PADDLEGAN_STAGE_DESCRIPTOR = StageDescriptor(
     model_kind="paddlegan_vsr",
 )
 
-REAL_RAWVSR_RGB_STAGE_DESCRIPTOR = StageDescriptor(
-    execution_mode="sequence",
-    requires_file_pipeline=True,
-    geometry=_GeometryPolicy("configured_scale"),
-    supported_backends=frozenset({"pytorch"}),
-    factory_key="real_rawvsr_rgb",
-    model_kind="pytorch_vsr",
-    temporal_context_frames=2,
-)
+
+def real_rawvsr_stage_descriptor(family: ModelAssetFamily) -> StageDescriptor:
+    """Project one immutable stage descriptor from its asset policy."""
+
+    return StageDescriptor(
+        execution_mode="sequence",
+        requires_file_pipeline=True,
+        geometry=_GeometryPolicy("configured_scale"),
+        supported_backends=frozenset({REAL_RAWVSR_TENSOR_BACKEND}),
+        factory_key="real_rawvsr_rgb",
+        model_kind=cast(StageModelKind, REAL_RAWVSR_ALGORITHM_FAMILY),
+        temporal_context_frames=family.temporal_context_frames,
+    )
 
 
 __all__ = [
@@ -111,8 +120,8 @@ __all__ = [
     "FILTER_CHAIN_DESCRIPTOR",
     "ONNX_SUPER_RESOLUTION_DESCRIPTOR",
     "PADDLEGAN_STAGE_DESCRIPTOR",
-    "REAL_RAWVSR_RGB_STAGE_DESCRIPTOR",
     "RIFE_STAGE_DESCRIPTOR",
     "StageDescriptor",
     "StageExecutionMode",
+    "real_rawvsr_stage_descriptor",
 ]
