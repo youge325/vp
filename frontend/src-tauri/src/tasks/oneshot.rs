@@ -24,7 +24,6 @@ use crate::tasks::builder::{backend_command, spawn_no_window_group};
 use crate::tasks::oneshot_envelope::{parse_last_typed_cli_envelope, TypedCliEnvelope};
 use crate::tasks::stderr::retain_tail;
 use crate::tasks::subprocess::{OwnedProcessGroup, ProcessGroupChild};
-const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[cfg(test)]
 const SPAWN_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -188,7 +187,13 @@ impl BoundedOneShotChild {
             let mut status = None;
             let mut stdout_bytes = None;
             let mut stderr_bytes = None;
-            let mut wait = Box::pin(wait_for_exit(&mut self.child));
+            let mut wait = Box::pin(async {
+                self.child.wait_for_exit().await.map_err(|error| {
+                    BoundedCommandError::lifecycle(format!(
+                        "unable to wait for backend one-shot process: {error}"
+                    ))
+                })
+            });
             let mut read_stdout = Box::pin(read_bounded_ndjson_output(
                 &mut stdout,
                 ONE_SHOT_STDOUT_LIMIT_BYTES,
@@ -239,22 +244,6 @@ impl BoundedOneShotChild {
         self.child
             .terminate_and_reap(self.termination_timeout)
             .await
-    }
-}
-
-async fn wait_for_exit(
-    child: &mut OwnedProcessGroup,
-) -> Result<std::process::ExitStatus, BoundedCommandError> {
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => return Ok(status),
-            Ok(None) => tokio::time::sleep(EXIT_POLL_INTERVAL).await,
-            Err(error) => {
-                return Err(BoundedCommandError::lifecycle(format!(
-                    "unable to wait for backend one-shot process: {error}"
-                )));
-            }
-        }
     }
 }
 
@@ -706,7 +695,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn transient_wait_error_does_not_seal_the_late_reap_ticket() {
+    async fn normal_exit_wait_error_does_not_seal_the_late_reap_ticket() {
         let mut command = fixture_command("sleep");
         command
             .stdin(std::process::Stdio::null())
@@ -718,10 +707,10 @@ mod tests {
         owner.inject_wait_error(std::io::Error::other("injected transient wait error"));
 
         let error = owner
-            .terminate_and_reap(Duration::from_secs(2))
+            .wait_for_exit()
             .await
             .expect_err("injected wait error must surface to the immediate caller");
-        assert!(error.contains("injected transient wait error"));
+        assert!(error.to_string().contains("injected transient wait error"));
         assert_eq!(ticket.current(), None);
 
         drop(owner);

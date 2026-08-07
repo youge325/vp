@@ -500,6 +500,16 @@ impl OwnedProcessGroup {
         self.owner.try_wait()
     }
 
+    /// Wait for an ordinary process-group exit and publish its reap outcome.
+    pub(super) async fn wait_for_exit(&mut self) -> io::Result<ExitStatus> {
+        loop {
+            match self.try_wait()? {
+                Some(status) => return Ok(status),
+                None => tokio::time::sleep(EXIT_POLL_INTERVAL).await,
+            }
+        }
+    }
+
     pub(super) fn start_kill(&mut self) -> io::Result<()> {
         self.owner.start_kill()
     }
@@ -816,6 +826,7 @@ mod tests {
             return;
         };
         match mode.as_str() {
+            "exit" => {}
             "leader" => {
                 let pid_file = std::env::var_os(FIXTURE_PID_FILE_ENV).expect("fixture pid file");
                 let mut descendant = std::process::Command::new(
@@ -843,6 +854,34 @@ mod tests {
             "descendant" => std::thread::sleep(Duration::from_secs(60)),
             other => panic!("unknown process group fixture mode: {other}"),
         }
+    }
+
+    #[tokio::test]
+    async fn normal_exit_waits_for_the_group_and_confirms_reaping() {
+        let mut command = Command::new(std::env::current_exe().expect("current test executable"));
+        command
+            .args([
+                "--exact",
+                FIXTURE_TEST_NAME,
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(FIXTURE_MODE_ENV, "exit")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        let child = ProcessGroupChild::spawn(&mut command).expect("spawn exiting process group");
+        let mut owner = OwnedProcessGroup::new(child, "normal-exit fixture");
+        let ticket = owner.reap_ticket();
+
+        let status = tokio::time::timeout(Duration::from_secs(5), owner.wait_for_exit())
+            .await
+            .expect("normal exit must be bounded by the test")
+            .expect("wait for normal process-group exit");
+
+        assert!(status.success());
+        assert_eq!(ticket.current(), Some(ReapOutcome::Reaped));
+        owner.confirm_reaped().expect("normal exit is confirmed");
     }
 
     #[tokio::test]
