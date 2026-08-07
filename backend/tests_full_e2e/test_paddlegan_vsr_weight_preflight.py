@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS, ensure_paddlegan_vsr_weights
+from app.algorithms.paddle.paddlegan_vsr.weights import ensure_paddlegan_vsr_weights
+from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
 
 
 @pytest.mark.full_e2e

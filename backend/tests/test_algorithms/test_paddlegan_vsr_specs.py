@@ -24,10 +24,8 @@ def test_paddlegan_factory_rejects_unknown_catalog_key():
 def test_paddlegan_weight_paths_are_fixed_under_backend_models(monkeypatch):
     monkeypatch.setenv("VP_RIFE_MODEL_DIR", "D:/should/not/be/used")
 
-    from app.algorithms.paddle.paddlegan_vsr.weights import (
-        PADDLEGAN_VSR_SPECS,
-        _resolve_weight_path,
-    )
+    from app.algorithms.paddle.paddlegan_vsr.weights import _resolve_weight_path
+    from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
 
     path = _resolve_weight_path("ppmsvsr")
 

@@ -36,6 +36,7 @@ from architecture_contracts.python_checks import (  # noqa: E402
     _check_python_boundary_field_consumers,
     _check_python_cli_commands,
     _check_python_package_reexports,
+    _check_python_test_import_ownership,
     _check_paddlegan_metadata,
     _check_side_effect_free_python_packages,
     _collect_python_name_registry,
@@ -46,6 +47,8 @@ from architecture_contracts.python_checks import (  # noqa: E402
 )
 from architecture_contracts.rules import ContractParseError  # noqa: E402
 from architecture_contracts.rust_checks import (  # noqa: E402
+    _check_rust_lifecycle_result_handling,
+    _check_rust_reaper_ownership,
     _check_rust_unused_dependencies,
     _find_unconsumed_rust_model_reexports,
 )
@@ -265,6 +268,59 @@ def test_rust_visibility_scans_production_after_test_only_import(tmp_path: Path)
         "restricted Rust symbol has no cross-module production consumer: "
         "frontend/src-tauri/src/worker.rs:3 `orphan_after_test_import`"
     ]
+
+
+def test_rust_lifecycle_and_reaper_rules_scan_after_test_only_items(tmp_path: Path) -> None:
+    tasks = tmp_path / "frontend/src-tauri/src/tasks"
+    tasks.mkdir(parents=True)
+    lifecycle = tasks / "lifecycle.rs"
+    lifecycle.write_text(
+        "#[cfg(test)]\nmod tests {}\nfn run(port: Port) { port.finish_once(); }\n",
+        encoding="utf-8",
+    )
+    reaper = tasks / "reaper.rs"
+    reaper.write_text(
+        "#[cfg(test)]\nconst FIXTURE: bool = true;\n"
+        "fn cleanup(mut process: Process) { tokio::spawn(async move { "
+        "process.terminate_and_reap().await; }); }\n",
+        encoding="utf-8",
+    )
+
+    assert _check_rust_lifecycle_result_handling(tmp_path) == [
+        "Rust lifecycle/process result is explicitly ignored (`finish_once`): "
+        "frontend/src-tauri/src/tasks/lifecycle.rs:3",
+        "Rust lifecycle/process result is explicitly ignored (`terminate_and_reap`): "
+        "frontend/src-tauri/src/tasks/reaper.rs:3",
+    ]
+    assert _check_rust_reaper_ownership(tmp_path) == [
+        "Rust process owner is reaped by a fire-and-forget task outside subprocess.rs: "
+        "frontend/src-tauri/src/tasks/reaper.rs:3"
+    ]
+
+
+def test_python_test_imports_require_the_symbol_owner_or_an_explicit_reexport(tmp_path: Path) -> None:
+    app = tmp_path / "backend/app"
+    tests = tmp_path / "backend/tests"
+    app.mkdir(parents=True)
+    tests.mkdir(parents=True)
+    (app / "source.py").write_text("class Shared:\n    pass\n", encoding="utf-8")
+    owner = app / "owner.py"
+    owner.write_text("from app.source import Shared\n", encoding="utf-8")
+    test = tests / "test_owner.py"
+    test.write_text(
+        "from app.owner import Missing, Shared\n",
+        encoding="utf-8",
+    )
+
+    assert _check_python_test_import_ownership(tmp_path) == [
+        "Python test imports missing production symbol: backend/tests/test_owner.py:1 -> backend/app/owner.py::Missing",
+        "Python test imports accidental production re-export: backend/tests/test_owner.py:1 -> "
+        "backend/app/owner.py::Shared",
+    ]
+
+    owner.write_text("from app.source import Shared as Shared\n", encoding="utf-8")
+    test.write_text("from app.owner import Shared\n", encoding="utf-8")
+    assert _check_python_test_import_ownership(tmp_path) == []
 
 
 def test_rust_dev_dependency_usage_in_compile_fail_fixtures_is_counted(tmp_path: Path) -> None:

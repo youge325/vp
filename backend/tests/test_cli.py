@@ -15,7 +15,7 @@ from app.generated.protocol_constants import NDJSON_LINE_LIMIT_BYTES
 from app.generated.contracts import FfmpegInfo, GpuAdapter, GpuVendor, TensorEngines, WorkflowConfig
 from app.cli.commands.check import cmd_check
 from app.cli.commands._process_execution import _run_format_conversion
-from app.cli.commands._process_planning import PreparedRun
+from app.cli.commands._pipeline_preparation import PreparedRun
 from app.cli.commands._process_validation import load_runtime_configs
 from app.cli.parser import build_parser
 from app.cli.runtime_configs import runtime_config_section, runtime_config_sections, with_workflow

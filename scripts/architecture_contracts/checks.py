@@ -18,6 +18,7 @@ from .python_checks import (
     _check_python_cli_commands,
     _check_python_module_exports,
     _check_python_package_reexports,
+    _check_python_test_import_ownership,
     _check_side_effect_free_python_packages,
     _check_typed_ndjson_error_emission,
 )
@@ -55,6 +56,7 @@ def collect_architecture_issues(root: Path) -> list[str]:
     issues.extend(_check_python_boundary_field_consumers(root))
     issues.extend(_check_python_package_reexports(root))
     issues.extend(_check_python_module_exports(root))
+    issues.extend(_check_python_test_import_ownership(root))
     issues.extend(_check_frontend_test_layout(root))
     issues.extend(_check_frontend_dependency_boundaries(root))
     issues.extend(_check_frontend_protocol_reexports(root))

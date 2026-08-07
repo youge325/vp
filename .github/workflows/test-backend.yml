@@ -44,6 +44,10 @@ jobs:
       - name: Setup CI runtime environment
         run: ./scripts/setup-ci-runtime-env.ps1
 
+      - name: Collect isolated backend E2E tests
+        run: python -m pytest tests_full_e2e --collect-only -q
+        working-directory: backend
+
       - name: Run PyTorch backend tests with coverage
         run: python -m pytest -q --cov=app --cov-report=term
         working-directory: backend

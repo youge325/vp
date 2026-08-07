@@ -175,16 +175,6 @@ _RUST_PUBLIC_MODEL_EXPORTS = {
 }
 
 
-def _rust_production_source(text: str) -> str:
-    """Drop the conventional trailing ``#[cfg(test)] mod tests`` block."""
-    return re.split(
-        r"^[ \t]*#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\][ \t]*\r?\n[ \t]*mod\s+tests\s*\{",
-        text,
-        maxsplit=1,
-        flags=re.MULTILINE,
-    )[0]
-
-
 def _ignored_rust_must_use_calls(text: str) -> list[tuple[int, str]]:
     """Find explicitly discarded lifecycle/process ownership outcomes."""
     issues: list[tuple[int, str]] = []
@@ -229,7 +219,7 @@ def _check_rust_lifecycle_result_handling(root: Path) -> list[str]:
     issues: list[str] = []
     for source_root in source_roots:
         for path in sorted(source_root.glob("*.rs")):
-            production = _rust_production_source(read_source(path, root))
+            production = production_rust_source(read_source(path, root))
             issues.extend(
                 "Rust lifecycle/process result is explicitly ignored "
                 f"(`{operation}`): {relative_path(path, root)}:{line}"
@@ -302,7 +292,7 @@ def _check_rust_reaper_ownership(root: Path) -> list[str]:
     task_root = root / "frontend/src-tauri/src/tasks"
     issues: list[str] = []
     production_sources = {
-        path: _rust_production_source(read_source(path, root))
+        path: production_rust_source(read_source(path, root))
         for path in sorted(task_root.glob("*.rs"))
         if path.name != "subprocess.rs"
     }
@@ -316,7 +306,7 @@ def _check_rust_reaper_ownership(root: Path) -> list[str]:
 
     adapter = task_root / "subprocess.rs"
     if adapter.is_file():
-        adapter_source = _rust_production_source(read_source(adapter, root))
+        adapter_source = production_rust_source(read_source(adapter, root))
         required_markers = (
             "impl Drop for ProcessGroupOwner",
             "submit_cleanup(CleanupRequest::new(",
@@ -463,12 +453,12 @@ def _check_rust_public_surface(root: Path) -> list[str]:
         relative = relative_path(path, root)
         if relative in api_paths:
             continue
-        if _rust_public_declarations(_rust_production_source(read_source(path, root))):
+        if _rust_public_declarations(production_rust_source(read_source(path, root))):
             issues.append(f"Rust crate-internal source exposes a public item: {relative}")
 
     lib_path = api_paths[_RUST_PUBLIC_API_FILES[0]]
     if lib_path.is_file():
-        declarations = _rust_public_declarations(_rust_production_source(read_source(lib_path, root)))
+        declarations = _rust_public_declarations(production_rust_source(read_source(lib_path, root)))
         expected = {"pub mod models;", "pub fn run() {"}
         actual = {declaration for _, declaration in declarations}
         missing = sorted(expected - actual)
@@ -478,7 +468,7 @@ def _check_rust_public_surface(root: Path) -> list[str]:
 
     models_path = api_paths[_RUST_PUBLIC_API_FILES[1]]
     if models_path.is_file():
-        source = _rust_production_source(read_source(models_path, root))
+        source = production_rust_source(read_source(models_path, root))
         module_pattern = re.compile(r"^pub mod ([A-Za-z_][A-Za-z0-9_]*)\s*\{", re.MULTILINE)
         modules: dict[str, str] = {}
         for match in module_pattern.finditer(source):

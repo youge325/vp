@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from app.algorithms.paddle.paddlegan_vsr.weights import PADDLEGAN_VSR_SPECS
+from app.catalog.paddlegan_models import PADDLEGAN_VSR_SPECS
 from tests_full_e2e.helpers import try_last_json_line
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]

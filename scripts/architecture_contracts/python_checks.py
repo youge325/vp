@@ -702,6 +702,83 @@ def _check_python_module_exports(root: Path) -> list[str]:
     return issues
 
 
+def _module_runtime_names(tree: ast.Module) -> tuple[set[str], set[str]]:
+    """Return names available at runtime and names intentionally exported.
+
+    A same-name import (``Thing as Thing``) is Python's explicit re-export
+    convention. Plain imports remain implementation details unless ``__all__``
+    declares them.
+    """
+    available: set[str] = set()
+    intentional: set[str] = set()
+    for statement in tree.body:
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            available.add(statement.name)
+            intentional.add(statement.name)
+        elif isinstance(statement, ast.Assign):
+            names = {target.id for target in statement.targets if isinstance(target, ast.Name)}
+            available.update(names)
+            intentional.update(names)
+        elif isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+            available.add(statement.target.id)
+            intentional.add(statement.target.id)
+    explicit = _literal_all_names(tree)
+    for statement in tree.body:
+        aliases: list[ast.alias]
+        if isinstance(statement, ast.ImportFrom):
+            aliases = statement.names
+        elif isinstance(statement, ast.Import):
+            aliases = statement.names
+        else:
+            continue
+        for alias in aliases:
+            local_name = alias.asname or alias.name.split(".")[0]
+            available.add(local_name)
+            if local_name in explicit or alias.asname is not None:
+                intentional.add(local_name)
+    return available, intentional
+
+
+def _check_python_test_import_ownership(root: Path) -> list[str]:
+    """Reject tests that keep accidental or missing production re-exports alive."""
+    app_root = root / "backend/app"
+    if not app_root.is_dir():
+        return []
+    owners: dict[str, tuple[Path, set[str], set[str]]] = {}
+    for path in sorted(app_root.rglob("*.py")):
+        if path.name == "__init__.py" or "generated" in path.parts or "vendor" in path.parts:
+            continue
+        tree = _parse_python(path, root)
+        available, intentional = _module_runtime_names(tree)
+        owners[python_module_name(app_root, path)] = (path, available, intentional)
+
+    issues: list[str] = []
+    test_roots = (root / "backend/tests", root / "backend/tests_full_e2e")
+    for test_root in test_roots:
+        if not test_root.is_dir():
+            continue
+        for test_path in sorted(test_root.rglob("*.py")):
+            tree = _parse_python(test_path, root)
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ImportFrom) or node.level != 0 or node.module not in owners:
+                    continue
+                owner_path, available, intentional = owners[node.module]
+                for alias in node.names:
+                    if alias.name == "*":
+                        continue
+                    location = f"{relative_path(test_path, root)}:{node.lineno}"
+                    owner = relative_path(owner_path, root)
+                    if alias.name not in available:
+                        issues.append(
+                            f"Python test imports missing production symbol: {location} -> {owner}::{alias.name}"
+                        )
+                    elif alias.name not in intentional:
+                        issues.append(
+                            f"Python test imports accidental production re-export: {location} -> {owner}::{alias.name}"
+                        )
+    return issues
+
+
 def _is_inert_package_statement(statement: ast.stmt, *, first: bool) -> bool:
     if first and isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant):
         return isinstance(statement.value.value, str)

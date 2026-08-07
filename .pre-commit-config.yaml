@@ -57,6 +57,12 @@ repos:
         language: system
         pass_filenames: false
         files: '^(?:backend/(?:app|tests|tests_full_e2e)/.*|backend/export_all_rife_onnx|scripts/.+)\.py$'
+      - id: check-backend-full-e2e-collection
+        name: 隔离后端 E2E 可收集性
+        entry: python -m pytest backend/tests_full_e2e --collect-only -q
+        language: system
+        pass_filenames: false
+        files: '^backend/(?:app|tests_full_e2e)/.*\.py$'
 
 # Tauri 自身生成的 ACL schema 不是应用层中立契约。
 exclude: ^frontend/src-tauri/gen/schemas/.*\.json$
