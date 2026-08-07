@@ -6,7 +6,12 @@ from collections.abc import Callable
 from typing import Any
 import numpy as np
 
-from app.algorithms.pytorch.real_rawvsr.sequence_adapter import ModelLoadSpec, ModelLoader, RealRawVsrSequenceAdapter
+from app.algorithms.pytorch.real_rawvsr.sequence_adapter import (
+    LoadedModelRuntime,
+    ModelLoadSpec,
+    ModelLoader,
+    RealRawVsrSequenceAdapter,
+)
 
 
 class RealRawVsrFixedWindow(RealRawVsrSequenceAdapter):
@@ -17,7 +22,7 @@ class RealRawVsrFixedWindow(RealRawVsrSequenceAdapter):
         model_loader: ModelLoader,
     ) -> None:
         super().__init__(spec, model_loader)
-        family = self._family
+        family = spec.asset.family
         if family.input_frame_mode != "fixed_window":
             raise ValueError(f"{family.display_name} is not a fixed-window model.")
         if family.default_num_frames != family.temporal_context_frames * 2 + 1:
@@ -28,7 +33,7 @@ class RealRawVsrFixedWindow(RealRawVsrSequenceAdapter):
     def _process_prepared(
         self,
         prepared: Any,
-        torch: Any,
+        runtime: LoadedModelRuntime,
         *,
         progress_callback: Callable[[int, int], None] | None,
     ) -> list[np.ndarray]:
@@ -40,16 +45,21 @@ class RealRawVsrFixedWindow(RealRawVsrSequenceAdapter):
             ]
             if len(window) != self._window_frames:
                 raise RuntimeError("Real-RawVSR fixed-window projection produced an invalid window.")
-            tensor = self._codec.to_cuda(torch, window)
+            tensor = self._codec.to_cuda(runtime.torch, window)
             prediction = self._run_model(
+                runtime,
                 tensor,
-                oom_message=f"{self._family.display_name} x{self._scale_factor} exhausted CUDA memory; "
+                oom_message=f"{self._spec.asset.family.display_name} x{self._spec.asset.variant.scale_factor} "
+                "exhausted CUDA memory; "
                 "lower the input resolution or select a lighter super-resolution algorithm.",
-                details={"algorithm": self._algorithm_id, "scaleFactor": self._scale_factor},
+                details={
+                    "algorithm": self._spec.asset.family.algorithm_id,
+                    "scaleFactor": self._spec.asset.variant.scale_factor,
+                },
             )
             if isinstance(prediction, tuple):
                 prediction = prediction[0]
-            results.extend(self._codec.to_frames(torch, prediction, prepared))
+            results.extend(self._codec.to_frames(runtime.torch, prediction, prepared))
             if progress_callback is not None:
                 progress_callback(index + 1, total)
         return results

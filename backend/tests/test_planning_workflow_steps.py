@@ -62,4 +62,4 @@ def test_stage_plan_projects_interpolation_or_target_timeline():
 
     source = make_video_metadata(12, duration=1.0)
     assert build_stage_plan(projection, source, output_fps=None).total_encoded_frames == 23
-    assert build_stage_plan(projection, source, output_fps=60.0).total_encoded_frames == 60
+    assert build_stage_plan(projection, source, output_fps=30.0).total_encoded_frames == 30

@@ -15,19 +15,11 @@ from app.generated.protocol_constants import BackendEnvelopeType
 from app.planning.resume_policy import decide_output_action
 from app.ports.media import MediaRuntimePort
 from app.processing.streaming.pipeline import process_video_streaming
-from app.processing.execution_result import ExecutionResult
+from app.processing.execution_result import ExecutionResult, resolve_final_output_frame_count
 from app.protocol.emitter import ndjson
 
 from app.cli.commands._pipeline_preparation import PreparedRun
 from app.cli.commands._process_planning import RunObservers
-from app.cli.runtime_configs import runtime_config_sections
-
-
-def _resolve_processed_frame_count(ffmpeg: MediaRuntimePort, output_path: str, fallback: int) -> int:
-    try:
-        return ffmpeg.get_frame_count(output_path) or fallback
-    except Exception:  # pragma: no cover - defensive CLI reporting
-        return fallback
 
 
 def _enforce_format_conversion_resume_mode(*, output_path: str, resume_mode: str) -> None:
@@ -66,13 +58,12 @@ def _run_streaming(
     observers: RunObservers,
     resume_mode: str,
 ) -> ExecutionResult:
-    sections = runtime_config_sections(prepared.runtime_configs)
     return process_video_streaming(
         ffmpeg=ffmpeg,
         input_path=input_path,
         output_path=prepared.output_path,
-        decode_config=sections["decode"],
-        encode_config=sections["encode"],
+        decode_config=prepared.decode_config,
+        encode_config=prepared.encode_config,
         preflight=prepared.preflight,
         progress_callbacks=list(observers.progress_callbacks),
         encode_progress_callback=observers.progress_reporter.update,
@@ -92,24 +83,21 @@ def _run_format_conversion(
     observers: RunObservers,
     resume_mode: str,
 ) -> ExecutionResult:
-    sections = runtime_config_sections(prepared.runtime_configs)
-    decode_config = sections["decode"]
-    encode_config = sections["encode"]
     _enforce_format_conversion_resume_mode(output_path=prepared.output_path, resume_mode=resume_mode)
     ffmpeg.transcode_video(
         input_path=input_path,
         output_path=prepared.output_path,
-        decode_config=decode_config,
-        encode_config=encode_config,
+        decode_config=prepared.decode_config,
+        encode_config=prepared.encode_config,
         output_fps=prepared.final_output_fps,
         progress_callback=observers.progress_reporter.update,
     )
     return ExecutionResult(
         output_path=prepared.output_path,
-        processed_frames=_resolve_processed_frame_count(
+        processed_frames=resolve_final_output_frame_count(
             ffmpeg,
             prepared.output_path,
-            prepared.expected_output_frames,
+            fallback=prepared.expected_output_frames,
         ),
     )
 

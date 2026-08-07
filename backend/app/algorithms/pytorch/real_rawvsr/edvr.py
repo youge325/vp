@@ -211,7 +211,7 @@ def load_edvr_model(spec: ModelLoadSpec, weight_path: str) -> tuple[Any, nn.Modu
 
     if not torch.cuda.is_available():
         raise RuntimeError("Real-RawVSR EDVR requires an available NVIDIA CUDA device.")
-    model = _EdvrNet(scale=spec.scale_factor, frames=spec.num_frames)
+    model = _EdvrNet(scale=spec.asset.variant.scale_factor, frames=spec.num_frames)
     model.load_state_dict(load_file(weight_path, device="cpu"), strict=True)
     model.eval().to(torch.device("cuda"))
     return torch, model

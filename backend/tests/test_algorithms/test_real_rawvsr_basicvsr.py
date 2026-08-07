@@ -64,7 +64,9 @@ def test_basicvsr_rgb_and_boundary_padding_preserve_logical_frames() -> None:
 
 
 def test_basicvsr_rejects_unsupported_scale_and_engine() -> None:
-    from app.algorithms.pytorch.real_rawvsr.sequence_adapter import build_model_load_spec
+    from app.algorithms.pytorch.real_rawvsr.sequence_adapter import ModelLoadSpec, build_model_load_spec
+
+    assert set(ModelLoadSpec.__dataclass_fields__) == {"asset", "num_frames", "model_root"}
 
     with pytest.raises(ValueError, match="only 2x, 3x, 4x"):
         build_model_load_spec(
@@ -84,7 +86,7 @@ def test_basicvsr_rejects_unsupported_scale_and_engine() -> None:
         )
 
 
-def test_basicvsr_maps_cuda_oom_to_actionable_process_error() -> None:
+def test_basicvsr_maps_cuda_oom_to_actionable_process_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.algorithms.pytorch.real_rawvsr.sequence_adapter import build_model_load_spec
     from app.algorithms.pytorch.real_rawvsr_basicvsr.runner import RealRawVsrBasicVsr
 
@@ -97,16 +99,49 @@ def test_basicvsr_maps_cuda_oom_to_actionable_process_error() -> None:
         model_root="models",
     )
     algorithm = RealRawVsrBasicVsr(spec=spec, model_loader=lambda _spec, _path: (fake_torch, fail_oom))
-    algorithm._torch = fake_torch
-    algorithm._model = fail_oom
+    monkeypatch.setattr(
+        "app.algorithms.pytorch.real_rawvsr.sequence_adapter.ensure_model_asset",
+        lambda *_args: Path("model.safetensors"),
+    )
 
     with pytest.raises(ProcessError) as exc_info:
-        algorithm.process_frames([np.zeros((64, 64, 3), dtype=np.uint8)])
+        algorithm.process_frame_sequence(
+            [np.zeros((64, 64, 3), dtype=np.uint8)],
+            progress_callback=None,
+        )
 
     assert exc_info.value.code == TaskErrorCode.PROCESS_FAILED
     assert "lower the super-resolution frame chunk size" in exc_info.value.message
     assert exc_info.value.details == {"numFrames": 10, "scaleFactor": 2}
     assert fake_cuda.cleared
+
+
+def test_basicvsr_does_not_load_runtime_for_an_empty_sequence(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.algorithms.pytorch.real_rawvsr.sequence_adapter import build_model_load_spec
+    from app.algorithms.pytorch.real_rawvsr_basicvsr.runner import RealRawVsrBasicVsr
+
+    loaded = False
+
+    def load_model(_spec, _path):
+        nonlocal loaded
+        loaded = True
+        raise AssertionError("empty sequences must not load PyTorch or model weights")
+
+    spec = build_model_load_spec(
+        algorithm_id="real-rawvsr-basicvsr",
+        scale_factor=2,
+        num_frames=10,
+        engine="cuda",
+        model_root="models",
+    )
+    algorithm = RealRawVsrBasicVsr(spec=spec, model_loader=load_model)
+    monkeypatch.setattr(
+        "app.algorithms.pytorch.real_rawvsr.sequence_adapter.ensure_model_asset",
+        lambda *_args: Path("model.safetensors"),
+    )
+
+    assert algorithm.process_frame_sequence([], progress_callback=None) == []
+    assert not loaded
 
 
 def test_safetensors_conversion_is_deterministic_and_omits_training_state(tmp_path: Path) -> None:

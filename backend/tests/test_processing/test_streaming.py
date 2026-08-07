@@ -344,7 +344,7 @@ def _preflight(
         workflow_config=workflow_config,
         output_config=output_config,
         projection=StageProjection(tuple(processing_steps)),
-        output_fps=output_fps,
+        target_fps=output_fps,
     )
 
 
@@ -494,10 +494,10 @@ def test_streaming_pipeline_keeps_sidecar_when_finalization_fails(monkeypatch):
 def test_streaming_pipeline_reports_final_encoded_frames_when_resampling(monkeypatch):
     case = _streaming_case(monkeypatch, "target_fps", [_frame(0), _frame(100), _frame(200)], source_fps=2.0)
 
-    result = _run_streaming_case(case, output_fps=3.0)
+    result = _run_streaming_case(case, output_fps=1.0)
 
     assert result.processed_frames == len(case.wrapper.video_frames[str(case.output_path)])
-    assert result.processed_frames == 5
+    assert result.processed_frames == 2
 
 
 def test_streaming_pipeline_uses_scaled_encoder_dimensions_for_onnx_super_resolution(monkeypatch):

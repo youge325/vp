@@ -28,7 +28,7 @@ def test_stage_projection_owns_order_frame_counts_and_fps() -> None:
     )
 
     projection = StageProjection(steps)
-    stages = projection.stages(source_frames=4, source_fps=24.0)
+    stages = projection.stages(make_video_metadata(4, duration=4 / 24))
 
     assert [stage.step.stage_name for stage in stages] == [
         "01_super_resolution",
@@ -106,7 +106,7 @@ def test_projection_applies_filter_geometry_and_super_resolution_in_execution_or
         )
     )
 
-    stages = projection.stages(source_frames=3, source_fps=24, source_width=320, source_height=180)
+    stages = projection.stages(make_video_metadata(3, duration=3 / 24))
 
     assert [(stage.input_width, stage.input_height, stage.output_width, stage.output_height) for stage in stages] == [
         (320, 180, 84, 46),
@@ -135,9 +135,4 @@ def test_projection_rejects_geometry_that_execution_cannot_apply(filter_step: di
     )
 
     with pytest.raises(ValueError):
-        projection.stages(
-            source_frames=1,
-            source_fps=24.0,
-            source_width=16,
-            source_height=12,
-        )
+        projection.stages(make_video_metadata(1, duration=1 / 24, width=16, height=12))

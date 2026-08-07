@@ -122,7 +122,7 @@ def load_toflow_model(spec: ModelLoadSpec, weight_path: str) -> tuple[Any, nn.Mo
 
     if not torch.cuda.is_available():
         raise RuntimeError("Real-RawVSR TOFlow requires an available NVIDIA CUDA device.")
-    model = _ToFlowNet(scale=spec.scale_factor, frames=spec.num_frames)
+    model = _ToFlowNet(scale=spec.asset.variant.scale_factor, frames=spec.num_frames)
     model.load_state_dict(load_file(weight_path, device="cpu"), strict=True)
     model.eval().to(torch.device("cuda"))
     return torch, model

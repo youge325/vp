@@ -9,7 +9,7 @@ from app.planning.manifest import ResumeState, SegmentManifest
 from app.planning.resume_policy import ResumeMode
 from app.processing.streaming.encoder_finalization import finalize_segmented_output
 from app.processing.streaming.pipeline_context import StreamingPipelineContext
-from app.processing.execution_result import ExecutionResult
+from app.processing.execution_result import ExecutionResult, resolve_final_output_frame_count
 
 
 def prepare_streaming_manifest(
@@ -48,8 +48,11 @@ def finalize_streaming_output(
     )
 
     context.manifest.workspace.cleanup()
-    processed_frames = context.ffmpeg.get_frame_count(context.output_path)
     return ExecutionResult(
         output_path=context.output_path,
-        processed_frames=processed_frames or completed_output_frames,
+        processed_frames=resolve_final_output_frame_count(
+            context.ffmpeg,
+            context.output_path,
+            fallback=completed_output_frames,
+        ),
     )

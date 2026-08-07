@@ -221,7 +221,7 @@ def load_basicvsr_model(spec: ModelLoadSpec, weight_path: str) -> tuple[Any, nn.
 
     if not torch.cuda.is_available():
         raise RuntimeError("Real-RawVSR BasicVSR requires an available NVIDIA CUDA device.")
-    model = _BasicVSRNet(scale=spec.scale_factor)
+    model = _BasicVSRNet(scale=spec.asset.variant.scale_factor)
     state = load_file(weight_path, device="cpu")
     model.load_state_dict(state, strict=True)
     model.eval().to(torch.device("cuda"))

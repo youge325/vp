@@ -83,7 +83,7 @@ def create_real_rawvsr_algorithm(
         engine=engine,
         model_root=model_root,
     )
-    return _IMPLEMENTATION_FACTORIES[spec.family.implementation_key](spec)
+    return _IMPLEMENTATION_FACTORIES[spec.asset.family.implementation_key](spec)
 
 
 __all__ = ["create_real_rawvsr_algorithm"]

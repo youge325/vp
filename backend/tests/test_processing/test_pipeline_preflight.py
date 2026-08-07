@@ -43,7 +43,7 @@ def test_build_streaming_pipeline_preflight_resolves_planning_context(tmp_path) 
         workflow_config={"fpsMode": "target"},
         output_config={"segmentFrames": 1000},
         projection=projection,
-        output_fps=None,
+        target_fps=None,
     )
 
     assert preflight.stage_plan.source is video_info
@@ -64,10 +64,10 @@ def test_preflight_materializes_the_complete_stage_projection_once(
     calls = 0
     original_stages = StageProjection.stages
 
-    def counted_stages(self, **kwargs):
+    def counted_stages(self, source):
         nonlocal calls
         calls += 1
-        return original_stages(self, **kwargs)
+        return original_stages(self, source)
 
     monkeypatch.setattr(StageProjection, "stages", counted_stages)
     video_info = VideoMetadata(
@@ -99,7 +99,7 @@ def test_preflight_materializes_the_complete_stage_projection_once(
         workflow_config={"fpsMode": "source"},
         output_config={"segmentFrames": 1000},
         projection=projection,
-        output_fps=None,
+        target_fps=None,
     )
 
     assert preflight.stage_plan.output_dimensions == (320, 180)

@@ -31,19 +31,12 @@ def run_stage_file_pipeline(
         step = projected_stage.step
         is_final_stage = stage_position == len(steps)
         current_frame_count = projected_stage.input_frames
-        if None in {
-            projected_stage.input_width,
-            projected_stage.input_height,
-            projected_stage.output_width,
-            projected_stage.output_height,
-        }:
-            raise RuntimeError("Stage geometry projection is incomplete.")
-        current_width = int(projected_stage.input_width)
-        current_height = int(projected_stage.input_height)
-        output_width = int(projected_stage.output_width)
-        output_height = int(projected_stage.output_height)
+        current_width = projected_stage.input_width
+        current_height = projected_stage.input_height
+        output_width = projected_stage.output_width
+        output_height = projected_stage.output_height
         stage_output_frames = projected_stage.output_frames
-        stage_fps = float(projected_stage.output_fps)
+        stage_fps = projected_stage.output_fps
 
         stage_context = build_stage_file_stage_context(
             is_final_stage=is_final_stage,

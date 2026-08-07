@@ -11,17 +11,23 @@ from types import SimpleNamespace
 import pytest
 
 from app.catalog.model_metrics import ModelMetricSpec, RuntimeMetricSpec
-from app.generated.protocol_constants import NDJSON_LINE_LIMIT_BYTES
-from app.generated.contracts import FfmpegInfo, GpuAdapter, GpuVendor, TensorEngines, WorkflowConfig
-from app.cli.commands.check import cmd_check
+from app.cli.commands._pipeline_preparation import PreparedRun, prepare_pipeline_preflight
 from app.cli.commands._process_execution import _run_format_conversion
-from app.cli.commands._pipeline_preparation import PreparedRun
 from app.cli.commands._process_validation import load_runtime_configs
+from app.cli.commands.check import cmd_check
 from app.cli.parser import build_parser
-from app.cli.runtime_configs import runtime_config_section, runtime_config_sections, with_workflow
 from app.config import settings
 from app.errors.codes import TaskErrorCode
 from app.errors.process import ProcessError
+from app.generated.contracts import (
+    FfmpegInfo,
+    GpuAdapter,
+    GpuVendor,
+    RuntimeConfigBundle,
+    TensorEngines,
+    WorkflowConfig,
+)
+from app.generated.protocol_constants import NDJSON_LINE_LIMIT_BYTES
 from app.planning.processing_steps import ProcessingStep
 from app.planning.run_identity import build_run_identity
 from app.planning.stage_plan import build_stage_plan
@@ -35,6 +41,44 @@ def test_prepared_run_does_not_duplicate_derived_pipeline_facts() -> None:
     assert "output_dir" not in PreparedRun.__dataclass_fields__
     assert "processing_steps" not in PreparedRun.__dataclass_fields__
     assert "final_output_fps" not in PreparedRun.__dataclass_fields__
+    assert "runtime_configs" not in PreparedRun.__dataclass_fields__
+
+
+def test_pipeline_preparation_serializes_runtime_bundle_once(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeFfmpeg:
+        @staticmethod
+        def probe_video(_input_path: str) -> VideoMetadata:
+            return make_video_metadata(24, duration=1.0)
+
+    class AvailableModels:
+        @staticmethod
+        def validate(_step: ProcessingStep) -> None:
+            return None
+
+    input_path = tmp_path / "input.mp4"
+    input_path.write_bytes(b"video")
+    configs = load_runtime_configs(_make_runtime_args(output_dir=str(tmp_path)))
+    original_model_dump = RuntimeConfigBundle.model_dump
+    dump_count = 0
+
+    def counting_model_dump(self, *args, **kwargs):
+        nonlocal dump_count
+        dump_count += 1
+        return original_model_dump(self, *args, **kwargs)
+
+    monkeypatch.setattr(RuntimeConfigBundle, "model_dump", counting_model_dump)
+
+    prepared = prepare_pipeline_preflight(
+        ffmpeg=FakeFfmpeg(),
+        input_path=str(input_path),
+        output_path=str(tmp_path / "output.mp4"),
+        configs=configs,
+        model_availability=AvailableModels(),
+    )
+
+    assert dump_count == 1
+    assert prepared.decode_config["mode"] == "software"
+    assert prepared.encode_config["codec"] == "libx264"
 
 
 def test_format_conversion_forwards_projected_target_fps_to_ffmpeg(tmp_path) -> None:
@@ -57,10 +101,10 @@ def test_format_conversion_forwards_projected_target_fps_to_ffmpeg(tmp_path) -> 
         )
     )
     resolved_workflow, projection, output_fps = StageProjection.resolve_workflow(
-        runtime_config_section(configs, "workflow"),
+        configs.workflow.model_dump(by_alias=True, mode="json"),
         source_fps=60.0,
     )
-    configs = with_workflow(configs, WorkflowConfig.model_validate(resolved_workflow))
+    configs = configs.model_copy(update={"workflow": WorkflowConfig.model_validate(resolved_workflow)})
     stage_plan = build_stage_plan(
         projection,
         make_video_metadata(60, duration=1.0, source_fps=60.0),
@@ -71,7 +115,8 @@ def test_format_conversion_forwards_projected_target_fps_to_ffmpeg(tmp_path) -> 
 
     prepared = PreparedRun(
         output_path=str(tmp_path / "target-fps.mp4"),
-        runtime_configs=configs,
+        decode_config=configs.decode.model_dump(by_alias=True, mode="json"),
+        encode_config=configs.encode.model_dump(by_alias=True, mode="json"),
         preflight=SimpleNamespace(stage_plan=stage_plan),
     )
     observers = SimpleNamespace(progress_reporter=SimpleNamespace(update=lambda *_args, **_kwargs: None))
@@ -217,7 +262,7 @@ def test_load_runtime_configs_returns_typed_models_and_wire_shape():
     assert configs.workflow.interpolation.tensor_backend == "pytorch"
     assert configs.output.output_dir == "D:/typed-output"
 
-    sections = runtime_config_sections(configs)
+    sections = configs.model_dump(by_alias=True, mode="json")
     assert sections["decode"]["mode"] == "software"
     assert sections["decode"]["hwaccelDevice"] is None
     assert sections["encode"]["keepAudio"] is True
@@ -227,7 +272,7 @@ def test_load_runtime_configs_returns_typed_models_and_wire_shape():
 
 def test_runtime_config_json_sections_are_defensive_copies():
     configs = load_runtime_configs(_make_runtime_args(output_dir="D:/wire-output"))
-    sections = runtime_config_sections(configs)
+    sections = configs.model_dump(by_alias=True, mode="json")
 
     assert sections["decode"]["decoder"] == "software"
     assert sections["encode"]["rateControl"] == {"mode": "crf", "value": 18}
@@ -235,7 +280,7 @@ def test_runtime_config_json_sections_are_defensive_copies():
     assert sections["output"]["outputDir"] == "D:/wire-output"
 
     sections["workflow"]["interpolation"]["multi"] = 99
-    assert runtime_config_section(configs, "workflow")["interpolation"]["multi"] == 2
+    assert configs.workflow.model_dump(by_alias=True, mode="json")["interpolation"]["multi"] == 2
 
 
 def test_load_runtime_configs_rejects_missing_output_dir():
@@ -286,7 +331,10 @@ def test_load_runtime_configs_rejects_unknown_top_level_section(monkeypatch: pyt
 
 
 def test_runtime_config_wire_rejects_python_field_names(monkeypatch: pytest.MonkeyPatch) -> None:
-    payload = runtime_config_sections(load_runtime_configs(_make_runtime_args(output_dir="D:/output")))
+    payload = load_runtime_configs(_make_runtime_args(output_dir="D:/output")).model_dump(
+        by_alias=True,
+        mode="json",
+    )
     payload["output"]["output_dir"] = payload["output"].pop("outputDir")
 
     with pytest.raises(ProcessError) as exc_info:
@@ -301,12 +349,12 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
     output_path = tmp_path / "out.mp4"
     input_path.write_bytes(b"video")
     configs = load_runtime_configs(_make_runtime_args(output_dir=str(tmp_path)))
-    workflow_section = runtime_config_section(configs, "workflow")
+    workflow_section = configs.workflow.model_dump(by_alias=True, mode="json")
     workflow_config = {
         **workflow_section,
         "interpolation": {**workflow_section["interpolation"], "multi": 3},
     }
-    updated = with_workflow(configs, WorkflowConfig.model_validate(workflow_config))
+    updated = configs.model_copy(update={"workflow": WorkflowConfig.model_validate(workflow_config)})
     processing_steps = [
         ProcessingStep(
             algorithm_type="frame_interpolation",
@@ -322,7 +370,7 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
         duration=2.0,
         has_audio=True,
     )
-    sections = runtime_config_sections(updated)
+    sections = updated.model_dump(by_alias=True, mode="json")
 
     section_signature = build_run_identity(
         input_path=str(input_path),
@@ -351,7 +399,7 @@ def test_runtime_config_workflow_update_keeps_signature_compatible(tmp_path):
 
 def test_runtime_output_config_includes_segment_frames_and_stdin_override(monkeypatch: pytest.MonkeyPatch):
     default_configs = load_runtime_configs(_make_runtime_args(output_dir="D:/output"))
-    payload = runtime_config_sections(default_configs)
+    payload = default_configs.model_dump(by_alias=True, mode="json")
     payload["output"]["segmentFrames"] = 240
     override_configs = _load_stdin_configs(
         monkeypatch,
@@ -359,8 +407,8 @@ def test_runtime_output_config_includes_segment_frames_and_stdin_override(monkey
         output_dir="D:/output",
     )
 
-    assert runtime_config_section(default_configs, "output")["segmentFrames"] == 1000
-    assert runtime_config_section(override_configs, "output")["segmentFrames"] == 240
+    assert default_configs.output.model_dump(by_alias=True, mode="json")["segmentFrames"] == 1000
+    assert override_configs.output.model_dump(by_alias=True, mode="json")["segmentFrames"] == 240
 
 
 def test_runtime_config_rejects_incomplete_explicit_wire_contract(monkeypatch: pytest.MonkeyPatch):
@@ -379,7 +427,7 @@ def test_runtime_config_accepts_full_bundle_and_rejects_partial_bundle(monkeypat
     default_configs = load_runtime_configs(_make_runtime_args(output_dir="D:/output"))
     full_configs = _load_stdin_configs(
         monkeypatch,
-        runtime_config_sections(default_configs),
+        default_configs.model_dump(by_alias=True, mode="json"),
         output_dir="D:/output",
     )
 
@@ -393,7 +441,10 @@ def test_runtime_config_accepts_full_bundle_and_rejects_partial_bundle(monkeypat
             output_dir="D:/output",
         )
 
-    assert runtime_config_sections(full_configs) == runtime_config_sections(default_configs)
+    assert full_configs.model_dump(by_alias=True, mode="json") == default_configs.model_dump(
+        by_alias=True,
+        mode="json",
+    )
 
 
 def test_stage_plan_uses_input_frames_for_format_conversion():
@@ -435,12 +486,12 @@ def test_stage_plan_uses_interpolated_output_frames_without_resample():
 
 def test_stage_plan_uses_target_timeline_when_resampling():
     workflow = _make_workflow_config()
-    projection = StageProjection.from_workflow(workflow)
+    _resolved, projection, target_fps = StageProjection.resolve_workflow(workflow, source_fps=24.0)
 
     plan = build_stage_plan(
         projection,
         make_video_metadata(240, duration=10.0),
-        output_fps=60.0,
+        output_fps=target_fps,
     )
 
     assert plan.total_encoded_frames == 600

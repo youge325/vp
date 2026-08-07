@@ -53,18 +53,13 @@ class StagePlan:
         if not self.stages:
             return self.source.width, self.source.height
         final = self.stages[-1]
-        if final.output_width is None or final.output_height is None:  # pragma: no cover - construction invariant
-            raise RuntimeError("Stage plan is missing final output dimensions.")
         return final.output_width, final.output_height
 
     @property
     def stream_fps(self) -> float:
         if not self.stages:
             return self.source.source_fps
-        output_fps = self.stages[-1].output_fps
-        if output_fps is None:  # pragma: no cover - construction invariant
-            raise RuntimeError("Stage plan is missing final output FPS.")
-        return float(output_fps)
+        return self.stages[-1].output_fps
 
     def slice_stages(self, source_frame_count: int) -> tuple[ProjectedStage, ...]:
         """Project only variable frame counts for a resumed source slice.
@@ -99,13 +94,10 @@ def build_stage_plan(
     output_fps: float | None,
 ) -> StagePlan:
     """Materialize the canonical projection exactly once for a probed video."""
-    stages = projection.stages(
-        source_frames=source.source_frames,
-        source_fps=source.source_fps,
-        source_width=source.width,
-        source_height=source.height,
-    )
-    return StagePlan(source=source, stages=stages, encoder_fps_override=output_fps)
+    stages = projection.stages(source)
+    projected_fps = stages[-1].output_fps if stages else source.source_fps
+    encoder_fps_override = output_fps if output_fps is not None and projected_fps > output_fps else None
+    return StagePlan(source=source, stages=stages, encoder_fps_override=encoder_fps_override)
 
 
 __all__ = ["StagePlan", "build_stage_plan", "resolve_video_info"]

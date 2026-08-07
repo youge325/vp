@@ -125,7 +125,7 @@ def test_fixed_window_rejects_editable_frame_count_non_cuda_and_unknown_scale() 
         build_model_load_spec(**{**arguments, "scale_factor": 5})
 
 
-def test_fixed_window_maps_cuda_oom_to_algorithm_specific_process_error() -> None:
+def test_fixed_window_maps_cuda_oom_to_algorithm_specific_process_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.algorithms.pytorch.real_rawvsr.fixed_window import RealRawVsrFixedWindow
     from app.algorithms.pytorch.real_rawvsr.sequence_adapter import build_model_load_spec
 
@@ -138,11 +138,16 @@ def test_fixed_window_maps_cuda_oom_to_algorithm_specific_process_error() -> Non
         model_root="models",
     )
     algorithm = RealRawVsrFixedWindow(spec=spec, model_loader=lambda _spec, _path: (fake_torch, fail_oom))
-    algorithm._torch = fake_torch
-    algorithm._model = fail_oom
+    monkeypatch.setattr(
+        "app.algorithms.pytorch.real_rawvsr.sequence_adapter.ensure_model_asset",
+        lambda *_args: Path("model.safetensors"),
+    )
 
     with pytest.raises(ProcessError) as exc_info:
-        algorithm.process_frames([np.zeros((17, 31, 3), dtype=np.uint8)])
+        algorithm.process_frame_sequence(
+            [np.zeros((17, 31, 3), dtype=np.uint8)],
+            progress_callback=None,
+        )
 
     assert exc_info.value.code == TaskErrorCode.PROCESS_FAILED
     assert "Real-RawVSR EDVR x4" in exc_info.value.message

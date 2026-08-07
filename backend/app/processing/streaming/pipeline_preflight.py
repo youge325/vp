@@ -21,12 +21,12 @@ def build_streaming_pipeline_preflight(
     workflow_config: dict[str, Any],
     output_config: dict[str, Any],
     projection: StageProjection,
-    output_fps: float | None,
+    target_fps: float | None,
 ) -> StreamingPipelinePreflight:
     stage_plan = build_stage_plan(
         projection,
         video_info,
-        output_fps=output_fps,
+        output_fps=target_fps,
     )
     identity = build_run_identity(
         input_path=input_path,

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
-from app.cli.runtime_configs import runtime_config_section, runtime_config_sections, with_workflow
 from app.generated.contracts import RuntimeConfigBundle, WorkflowConfig
 from app.planning.processing_steps import ProcessingStep
 from app.planning.stage_plan import resolve_video_info
@@ -21,7 +21,8 @@ class PreparedRun:
     """Immutable validated facts required to execute or inspect one run."""
 
     output_path: str
-    runtime_configs: RuntimeConfigBundle
+    decode_config: dict[str, Any]
+    encode_config: dict[str, Any]
     preflight: StreamingPipelinePreflight
 
     @property
@@ -47,13 +48,13 @@ def prepare_pipeline_preflight(
 ) -> PreparedRun:
     """Resolve workflow projection and construct the shared immutable preflight."""
     video_info = resolve_video_info(ffmpeg, input_path)
-    workflow_config, projection, final_output_fps = StageProjection.resolve_workflow(
-        runtime_config_section(configs, "workflow"),
+    sections = configs.model_dump(by_alias=True, mode="json")
+    workflow_config, projection, target_fps = StageProjection.resolve_workflow(
+        sections["workflow"],
         source_fps=video_info.source_fps,
     )
-    resolved_configs = with_workflow(configs, WorkflowConfig.model_validate(workflow_config))
+    sections["workflow"] = WorkflowConfig.model_validate(workflow_config).model_dump(by_alias=True, mode="json")
     validate_workflow_requirements(projection.steps, model_availability)
-    sections = runtime_config_sections(resolved_configs)
     preflight = build_streaming_pipeline_preflight(
         video_info=video_info,
         input_path=input_path,
@@ -63,11 +64,12 @@ def prepare_pipeline_preflight(
         workflow_config=sections["workflow"],
         output_config=sections["output"],
         projection=projection,
-        output_fps=final_output_fps,
+        target_fps=target_fps,
     )
     return PreparedRun(
         output_path=output_path,
-        runtime_configs=resolved_configs,
+        decode_config=sections["decode"],
+        encode_config=sections["encode"],
         preflight=preflight,
     )
 

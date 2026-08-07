@@ -102,7 +102,7 @@ def load_tdan_model(spec: ModelLoadSpec, weight_path: str) -> tuple[Any, nn.Modu
 
     if not torch.cuda.is_available():
         raise RuntimeError("Real-RawVSR TDAN requires an available NVIDIA CUDA device.")
-    model = _TdanNet(scale=spec.scale_factor, frames=spec.num_frames)
+    model = _TdanNet(scale=spec.asset.variant.scale_factor, frames=spec.num_frames)
     model.load_state_dict(load_file(weight_path, device="cpu"), strict=True)
     model.eval().to(torch.device("cuda"))
     return torch, model

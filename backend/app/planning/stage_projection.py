@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, assert_never
 
 from app.planning.processing_steps import ProcessingStep
+from app.ports.media import VideoMetadata
 
 type StageAlgorithmType = Literal["frame_interpolation", "super_resolution"]
 
@@ -30,11 +31,11 @@ class ProjectedStage:
     step: ProcessingStep
     input_frames: int
     output_frames: int
-    output_fps: float | None
-    input_width: int | None
-    input_height: int | None
-    output_width: int | None
-    output_height: int | None
+    output_fps: float
+    input_width: int
+    input_height: int
+    output_width: int
+    output_height: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,40 +92,27 @@ class StageProjection:
             "interpolation": {**interpolation, "multi": multi},
         }
         projection = cls.from_workflow(resolved_workflow)
-        projected_fps = source_fps
-        for step in projection.steps:
-            projected_fps = projection.project_fps(step, projected_fps)
-        target_fps = float(interpolation["targetFps"])
-        output_fps = target_fps if fps_mode == "target" and projected_fps > target_fps else None
-        return resolved_workflow, projection, output_fps
+        target_fps = float(interpolation["targetFps"]) if fps_mode == "target" else None
+        return resolved_workflow, projection, target_fps
 
     def stages(
         self,
-        *,
-        source_frames: int,
-        source_fps: float | None = None,
-        source_width: int | None = None,
-        source_height: int | None = None,
+        source: VideoMetadata,
     ) -> tuple[ProjectedStage, ...]:
         """Materialize every ordered stage for one canonical source."""
-        current_frames = int(source_frames)
-        current_fps = source_fps
-        current_width = source_width
-        current_height = source_height
+        current_frames = int(source.source_frames)
+        current_fps = float(source.source_fps)
+        current_width = int(source.width)
+        current_height = int(source.height)
         projected: list[ProjectedStage] = []
         for position, step in enumerate(self.steps, start=1):
             output_frames = self.project_frame_count(step, current_frames)
-            output_fps = self.project_fps(step, current_fps) if current_fps is not None else None
-            if (current_width is None) != (current_height is None):
-                raise ValueError("source_width and source_height must be provided together.")
-            if current_width is None:
-                output_width = output_height = None
-            else:
-                output_width, output_height = step.descriptor.geometry.project(
-                    input_width=current_width,
-                    input_height=current_height,
-                    algorithm_kwargs=step.algorithm_kwargs,
-                )
+            output_fps = self.project_fps(step, current_fps)
+            output_width, output_height = step.descriptor.geometry.project(
+                input_width=current_width,
+                input_height=current_height,
+                algorithm_kwargs=step.algorithm_kwargs,
+            )
             projected.append(
                 ProjectedStage(
                     position=position,

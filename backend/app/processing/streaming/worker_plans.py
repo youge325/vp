@@ -40,17 +40,10 @@ def build_stage_worker_plans(
         index = projected_stage.position
         step = projected_stage.step
         input_frame_count = projected_stage.input_frames
-        if None in {
-            projected_stage.input_width,
-            projected_stage.input_height,
-            projected_stage.output_width,
-            projected_stage.output_height,
-        }:
-            raise RuntimeError("Stage geometry projection is incomplete.")
-        input_width = int(projected_stage.input_width)
-        input_height = int(projected_stage.input_height)
-        output_width = int(projected_stage.output_width)
-        output_height = int(projected_stage.output_height)
+        input_width = projected_stage.input_width
+        input_height = projected_stage.input_height
+        output_width = projected_stage.output_width
+        output_height = projected_stage.output_height
         output_frame_count = projected_stage.output_frames
         configs.append(
             StageWorkerConfig(
