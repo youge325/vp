@@ -5,19 +5,17 @@ use std::future::pending;
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
-use std::process::ExitStatus;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
+#[cfg(test)]
+use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::generated::{BackendProcessSpec, StartTaskSpec};
-use crate::models::{
-    TaskCancelledPayload, TaskCancelledReason, TaskCompletedPayload, TaskErrorCode,
-    TaskErrorPayload, TaskLogPayload,
-};
+use crate::models::{TaskErrorCode, TaskErrorPayload, TaskLogPayload};
 use crate::process_control::{ProcessControl, ProcessControlError};
 use crate::tasks::cancellation::{CancelReason, CancellationToken};
 use crate::tasks::cleanup::{own_late_cleanup, PendingControlCleanup};
@@ -26,17 +24,24 @@ use crate::tasks::ports::{TaskDomainEvent, TaskEventSink, TaskLifecyclePort};
 use crate::tasks::readers::{pipe_failure_payload, ProgressBeat, ReaderMessage};
 use crate::tasks::state::StartLease;
 use crate::tasks::stderr::StderrCapture;
-use crate::tasks::subprocess::{ProcessGroupChild, ProcessGroupOwner, ReapOutcome, ReapTicket};
+use crate::tasks::subprocess::{OwnedProcessGroup, ProcessGroupChild, ReapOutcome, ReapTicket};
+#[cfg(test)]
+use crate::tasks::ProcessControlKind;
+use crate::tasks::TaskControlMessage;
 #[cfg(test)]
 use crate::tasks::TaskState;
-use crate::tasks::{ProcessControlKind, TaskControlMessage};
+
+mod control_coordination;
+mod terminal;
+
+use control_coordination::{
+    ControlPhase, ControlRestoration, PendingControl, PendingControlEvent, PROCESS_CONTROL_TIMEOUT,
+};
+use terminal::{backend_error_payload, emit_terminal_event, TerminalState};
 
 const DEFAULT_STALL_TIMEOUT_SECS: u64 = 600;
 const DEFAULT_WATCHDOG_POLL_INTERVAL_SECS: u64 = 5;
 const PIPE_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
-// Leave one second for the controller result to traverse the oneshot before
-// the IPC-side five-second response deadline expires.
-const PROCESS_CONTROL_TIMEOUT: Duration = Duration::from_secs(4);
 const TERMINAL_EXIT_GRACE: Duration = Duration::from_secs(5);
 const CHILD_EXIT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const STALL_TIMEOUT_ENV: &str = "VP_TASK_STALL_TIMEOUT_SECS";
@@ -90,14 +95,9 @@ impl SupervisorIo {
     }
 }
 
-struct SupervisedProcess {
-    child: ProcessGroupOwner,
-    reap_ticket: ReapTicket,
-}
-
 struct TaskSupervisorSession {
     dependencies: SupervisorDependencies,
-    process: SupervisedProcess,
+    process: OwnedProcessGroup,
     lease: StartLease,
     io: SupervisorIo,
     cancel_token: CancellationToken,
@@ -123,21 +123,20 @@ impl TaskSupervisorSession {
         progress_beat: ProgressBeat,
     ) -> (Self, SupervisorRecoveryContext) {
         let cancel_token = lease.cancellation_token();
-        let (child, reap_ticket) =
-            ProcessGroupOwner::new(child, "supervised backend process group");
+        let process = OwnedProcessGroup::new(child, "supervised backend process group");
         let control_cleanup = PendingControlCleanup::default();
         let recovery = SupervisorRecoveryContext {
             event_sink: Arc::clone(&dependencies.event_sink),
             lifecycle: Arc::clone(&dependencies.lifecycle),
             lease: lease.clone(),
             stderr_capture: io.stderr_capture.clone(),
-            reap_ticket: reap_ticket.clone(),
+            reap_ticket: process.reap_ticket(),
             control_cleanup: control_cleanup.clone(),
         };
         (
             Self {
                 dependencies,
-                process: SupervisedProcess { child, reap_ticket },
+                process,
                 lease,
                 io,
                 cancel_token,
@@ -146,53 +145,6 @@ impl TaskSupervisorSession {
             },
             recovery,
         )
-    }
-}
-
-enum TerminalEvent {
-    Completed(TaskCompletedPayload),
-    BackendError(TaskErrorPayload),
-    SupervisorError(TaskErrorPayload),
-}
-
-#[derive(Default)]
-struct TerminalState {
-    event: Option<TerminalEvent>,
-}
-
-impl TerminalState {
-    fn has_event(&self) -> bool {
-        self.event.is_some()
-    }
-
-    fn record_completed(&mut self, payload: TaskCompletedPayload) -> bool {
-        if self.event.is_none() {
-            self.event = Some(TerminalEvent::Completed(payload));
-            false
-        } else {
-            self.record_supervisor_error(duplicate_terminal_payload("completed"));
-            true
-        }
-    }
-
-    fn record_backend_error(&mut self, payload: TaskErrorPayload) -> bool {
-        if self.event.is_none() {
-            self.event = Some(TerminalEvent::BackendError(payload));
-            false
-        } else {
-            self.record_supervisor_error(duplicate_terminal_payload("error"));
-            true
-        }
-    }
-
-    fn record_supervisor_error(&mut self, payload: TaskErrorPayload) {
-        if !matches!(self.event, Some(TerminalEvent::SupervisorError(_))) {
-            self.event = Some(TerminalEvent::SupervisorError(payload));
-        }
-    }
-
-    fn take(self) -> Option<TerminalEvent> {
-        self.event
     }
 }
 
@@ -221,137 +173,6 @@ impl<T> Future for AbortOnDropTask<T> {
 impl<T> Drop for AbortOnDropTask<T> {
     fn drop(&mut self) {
         self.handle.abort();
-    }
-}
-
-struct PendingControl {
-    work: PendingControlCleanup,
-    deadline: Pin<Box<tokio::time::Sleep>>,
-    timeout: Duration,
-    response: Option<oneshot::Sender<Result<(), ProcessControlError>>>,
-    initial_paused: bool,
-    shutdown: ShutdownDirective,
-    phase: ControlPhase,
-}
-
-#[derive(Clone, Copy)]
-enum ControlRestoration {
-    Target(bool),
-    Abandon,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ShutdownDirective {
-    Undecided,
-    RestoreTo(bool),
-    Abandon,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ControlPhase {
-    Requested,
-    Compensation,
-}
-
-enum PendingControlEvent {
-    Finished(Result<(Result<(), ProcessControlError>, bool), tokio::task::JoinError>),
-    TimedOut,
-}
-
-impl PendingControl {
-    fn new(
-        controller: Arc<dyn ProcessControl>,
-        kind: ProcessControlKind,
-        is_paused: bool,
-        response: oneshot::Sender<Result<(), ProcessControlError>>,
-        timeout: Duration,
-        work: PendingControlCleanup,
-    ) -> Self {
-        work.start(|| spawn_process_control_work(controller, kind, is_paused));
-        Self {
-            work,
-            deadline: Box::pin(tokio::time::sleep(timeout)),
-            timeout,
-            response: Some(response),
-            initial_paused: is_paused,
-            shutdown: ShutdownDirective::Undecided,
-            phase: ControlPhase::Requested,
-        }
-    }
-
-    fn reject_response(&mut self, message: &str) {
-        if let Some(response) = self.response.take() {
-            let _ = response.send(Err(ProcessControlError::Worker(message.to_string())));
-        }
-    }
-
-    fn compensation(
-        controller: Arc<dyn ProcessControl>,
-        current_paused: bool,
-        target_paused: bool,
-        work: PendingControlCleanup,
-    ) -> Self {
-        let kind = if target_paused {
-            ProcessControlKind::Pause
-        } else {
-            ProcessControlKind::Resume
-        };
-        work.start(|| spawn_process_control_work(controller, kind, current_paused));
-        Self {
-            work,
-            deadline: Box::pin(tokio::time::sleep(PROCESS_CONTROL_TIMEOUT)),
-            timeout: PROCESS_CONTROL_TIMEOUT,
-            response: None,
-            initial_paused: target_paused,
-            shutdown: ShutdownDirective::Undecided,
-            phase: ControlPhase::Compensation,
-        }
-    }
-
-    fn apply_restoration(&mut self, restoration: ControlRestoration) {
-        if self.shutdown == ShutdownDirective::Abandon {
-            return;
-        }
-        self.shutdown = match restoration {
-            ControlRestoration::Target(target) => ShutdownDirective::RestoreTo(target),
-            ControlRestoration::Abandon => ShutdownDirective::Abandon,
-        };
-    }
-
-    fn compensation_target(&self, next_paused: bool) -> Option<bool> {
-        match self.shutdown {
-            ShutdownDirective::RestoreTo(target) if next_paused != target => Some(target),
-            _ => None,
-        }
-    }
-
-    fn into_abandoned_work(mut self, message: &str) -> PendingControlCleanup {
-        self.apply_restoration(ControlRestoration::Abandon);
-        self.reject_response(message);
-        self.work
-    }
-
-    fn into_timed_out_work(mut self) -> PendingControlCleanup {
-        self.apply_restoration(ControlRestoration::Abandon);
-        self.reject_response(&format!(
-            "operation timed out after {} seconds",
-            self.timeout.as_secs_f64()
-        ));
-        self.work
-    }
-
-    async fn wait(&mut self) -> PendingControlEvent {
-        tokio::select! {
-            result = self.work.wait() => PendingControlEvent::Finished(result.unwrap_or_else(|| {
-                Ok((
-                    Err(ProcessControlError::Worker(
-                        "process-control worker ownership was lost".to_string(),
-                    )),
-                    self.initial_paused,
-                ))
-            })),
-            _ = self.deadline.as_mut() => PendingControlEvent::TimedOut,
-        }
     }
 }
 
@@ -494,10 +315,7 @@ async fn run_task_supervisor(session: TaskSupervisorSession) {
                 lifecycle,
                 process_controller,
             },
-        process: SupervisedProcess {
-            mut child,
-            reap_ticket,
-        },
+        process: mut child,
         lease,
         io:
             SupervisorIo {
@@ -512,6 +330,7 @@ async fn run_task_supervisor(session: TaskSupervisorSession) {
         progress_beat,
         control_cleanup,
     } = session;
+    let reap_ticket = child.reap_ticket();
     let mut stdin_writer = AbortOnDropTask::new(stdin_writer);
     let mut stdout_reader = AbortOnDropTask::new(stdout_reader);
     let mut stderr_reader = AbortOnDropTask::new(stderr_reader);
@@ -882,7 +701,7 @@ async fn run_task_supervisor(session: TaskSupervisorSession) {
                     if let Err(error) = emit_terminal_event(
                         terminal_sink.as_ref(),
                         status,
-                        terminal.take(),
+                        terminal,
                         &cancel_token,
                         &stderr_capture,
                     ) {
@@ -949,7 +768,7 @@ async fn wait_for_pending_control(
 }
 
 fn request_kill(
-    child: &mut ProcessGroupOwner,
+    child: &mut OwnedProcessGroup,
     kill_deadline: &mut Option<Pin<Box<tokio::time::Sleep>>>,
     terminal: &mut TerminalState,
     pending_control: &mut Option<PendingControl>,
@@ -997,16 +816,6 @@ fn close_control_channel(
         let _ = queued
             .response
             .send(Err(ProcessControlError::Worker(message.to_string())));
-    }
-}
-
-fn duplicate_terminal_payload(kind: &str) -> TaskErrorPayload {
-    TaskErrorPayload {
-        code: TaskErrorCode::SchemaMismatch,
-        message: format!(
-            "Backend emitted more than one terminal NDJSON envelope; duplicate `{kind}`."
-        ),
-        details: None,
     }
 }
 
@@ -1066,146 +875,6 @@ fn emit_observation(
     } else {
         false
     }
-}
-
-fn spawn_process_control_work(
-    controller: Arc<dyn ProcessControl>,
-    kind: ProcessControlKind,
-    is_paused: bool,
-) -> JoinHandle<(Result<(), ProcessControlError>, bool)> {
-    tokio::task::spawn_blocking(move || {
-        let mut next_paused = is_paused;
-        let result = handle_pause_resume(controller.as_ref(), kind, &mut next_paused);
-        (result, next_paused)
-    })
-}
-
-fn backend_error_payload(
-    code: TaskErrorCode,
-    message: String,
-    stderr_capture: &StderrCapture,
-) -> TaskErrorPayload {
-    let details = stderr_capture.summary().map(|traceback| {
-        serde_json::Map::from_iter([(
-            "traceback".to_string(),
-            serde_json::Value::String(traceback),
-        )])
-    });
-    TaskErrorPayload {
-        code,
-        message,
-        details,
-    }
-}
-
-enum ExitDisposition {
-    Success,
-    Failed(String),
-    WaitFailed(String),
-}
-
-fn classify_exit(status: io::Result<ExitStatus>) -> ExitDisposition {
-    match status {
-        Ok(status) if status.success() => ExitDisposition::Success,
-        Ok(status) => ExitDisposition::Failed(status.to_string()),
-        Err(error) => ExitDisposition::WaitFailed(error.to_string()),
-    }
-}
-
-fn resolve_non_cancelled_terminal(
-    terminal: Option<TerminalEvent>,
-    exit: ExitDisposition,
-    stderr_capture: &StderrCapture,
-) -> TerminalEvent {
-    match terminal {
-        Some(TerminalEvent::SupervisorError(payload)) => TerminalEvent::SupervisorError(payload),
-        Some(TerminalEvent::BackendError(payload)) => TerminalEvent::BackendError(payload),
-        Some(TerminalEvent::Completed(payload)) if matches!(exit, ExitDisposition::Success) => {
-            TerminalEvent::Completed(payload)
-        }
-        Some(TerminalEvent::Completed(_)) | None => {
-            let payload = match exit {
-                ExitDisposition::Success => backend_error_payload(
-                    TaskErrorCode::SchemaMismatch,
-                    "Backend exited successfully without a terminal NDJSON envelope.".to_string(),
-                    stderr_capture,
-                ),
-                ExitDisposition::Failed(status) => backend_error_payload(
-                    TaskErrorCode::RuntimePanic,
-                    format!("Backend process exited with status {status}."),
-                    stderr_capture,
-                ),
-                ExitDisposition::WaitFailed(error) => backend_error_payload(
-                    TaskErrorCode::ProcessFailed,
-                    format!("Failed while waiting for backend process: {error}"),
-                    stderr_capture,
-                ),
-            };
-            TerminalEvent::SupervisorError(payload)
-        }
-    }
-}
-
-fn emit_terminal_event(
-    event_sink: &dyn TaskEventSink,
-    status: io::Result<ExitStatus>,
-    terminal: Option<TerminalEvent>,
-    cancel_token: &CancellationToken,
-    stderr_capture: &StderrCapture,
-) -> Result<(), String> {
-    if let Some(reason) = cancel_token.reason() {
-        let (reason, details) = match reason {
-            CancelReason::User => (TaskCancelledReason::User, None),
-            CancelReason::Stalled => (
-                TaskCancelledReason::Stalled,
-                stderr_capture.summary().map(|traceback| {
-                    serde_json::Map::from_iter([
-                        (
-                            "traceback".to_string(),
-                            serde_json::Value::String(traceback),
-                        ),
-                        (
-                            "message".to_string(),
-                            serde_json::Value::String(
-                                "Backend stalled — no progress within the configured timeout."
-                                    .to_string(),
-                            ),
-                        ),
-                    ])
-                }),
-            ),
-        };
-        return event_sink.emit(TaskDomainEvent::Cancelled(TaskCancelledPayload {
-            reason,
-            details,
-        }));
-    }
-
-    match resolve_non_cancelled_terminal(terminal, classify_exit(status), stderr_capture) {
-        TerminalEvent::Completed(payload) => event_sink.emit(TaskDomainEvent::Completed(payload)),
-        TerminalEvent::BackendError(payload) | TerminalEvent::SupervisorError(payload) => {
-            event_sink.emit(TaskDomainEvent::Error(payload))
-        }
-    }
-}
-
-fn handle_pause_resume(
-    controller: &dyn ProcessControl,
-    kind: ProcessControlKind,
-    is_paused: &mut bool,
-) -> Result<(), ProcessControlError> {
-    match kind {
-        ProcessControlKind::Pause if !*is_paused => {
-            controller.suspend()?;
-            *is_paused = true;
-        }
-        ProcessControlKind::Resume if *is_paused => {
-            controller.resume()?;
-            *is_paused = false;
-        }
-        ProcessControlKind::Pause | ProcessControlKind::Resume => {}
-    }
-    Ok(())
 }
 
 fn parse_stall_timeout() -> Option<Duration> {
@@ -1297,264 +966,6 @@ mod tests {
     }
 
     #[test]
-    fn pause_and_resume_are_idempotent() {
-        let mut paused = false;
-        handle_pause_resume(&NoopController, ProcessControlKind::Pause, &mut paused).unwrap();
-        handle_pause_resume(&NoopController, ProcessControlKind::Pause, &mut paused).unwrap();
-        assert!(paused);
-        handle_pause_resume(&NoopController, ProcessControlKind::Resume, &mut paused).unwrap();
-        assert!(!paused);
-    }
-
-    #[test]
-    fn process_control_failure_does_not_change_pause_state() {
-        struct FailingController;
-        impl ProcessControl for FailingController {
-            fn suspend(&self) -> Result<(), ProcessControlError> {
-                Err(ProcessControlError::NotFound)
-            }
-            fn resume(&self) -> Result<(), ProcessControlError> {
-                Ok(())
-            }
-        }
-
-        let mut paused = false;
-        let result =
-            handle_pause_resume(&FailingController, ProcessControlKind::Pause, &mut paused);
-        assert!(matches!(result, Err(ProcessControlError::NotFound)));
-        assert!(!paused);
-    }
-
-    fn completed_payload() -> TaskCompletedPayload {
-        TaskCompletedPayload {
-            output_path: "D:/out.mp4".to_string(),
-            processed_frames: 10,
-            time_seconds: 1.0,
-        }
-    }
-
-    fn task_error(code: TaskErrorCode, message: &str) -> TaskErrorPayload {
-        TaskErrorPayload {
-            code,
-            message: message.to_string(),
-            details: None,
-        }
-    }
-
-    #[test]
-    fn duplicate_terminal_overrides_an_earlier_completed_envelope() {
-        let mut terminal = TerminalState::default();
-        assert!(!terminal.record_completed(completed_payload()));
-        assert!(
-            terminal.record_completed(completed_payload()),
-            "a duplicate terminal envelope is a fatal protocol violation"
-        );
-
-        match terminal.take() {
-            Some(TerminalEvent::SupervisorError(payload)) => {
-                assert!(matches!(payload.code, TaskErrorCode::SchemaMismatch));
-            }
-            _ => panic!("protocol failure must override completed"),
-        }
-    }
-
-    #[test]
-    fn schema_mismatch_after_completed_overrides_the_completed_envelope() {
-        let mut terminal = TerminalState::default();
-        assert!(!terminal.record_completed(completed_payload()));
-        terminal.record_supervisor_error(task_error(
-            TaskErrorCode::SchemaMismatch,
-            "invalid NDJSON envelope",
-        ));
-
-        match terminal.take() {
-            Some(TerminalEvent::SupervisorError(payload)) => {
-                assert!(matches!(payload.code, TaskErrorCode::SchemaMismatch));
-                assert_eq!(payload.message, "invalid NDJSON envelope");
-            }
-            _ => panic!("schema mismatch must override completed"),
-        }
-    }
-
-    #[test]
-    fn reader_drain_failure_overrides_completed() {
-        let mut terminal = TerminalState::default();
-        assert!(!terminal.record_completed(completed_payload()));
-        terminal.record_supervisor_error(task_error(
-            TaskErrorCode::ProcessFailed,
-            "reader drain failed",
-        ));
-
-        match resolve_non_cancelled_terminal(
-            terminal.take(),
-            ExitDisposition::Success,
-            &StderrCapture::new(),
-        ) {
-            TerminalEvent::SupervisorError(payload) => {
-                assert!(matches!(payload.code, TaskErrorCode::ProcessFailed));
-                assert_eq!(payload.message, "reader drain failed");
-            }
-            _ => panic!("reader failure must override completed"),
-        }
-    }
-
-    #[test]
-    fn nonzero_exit_invalidates_a_completed_envelope() {
-        let mut terminal = TerminalState::default();
-        assert!(!terminal.record_completed(completed_payload()));
-
-        match resolve_non_cancelled_terminal(
-            terminal.take(),
-            ExitDisposition::Failed("exit code: 7".to_string()),
-            &StderrCapture::new(),
-        ) {
-            TerminalEvent::SupervisorError(payload) => {
-                assert!(matches!(payload.code, TaskErrorCode::RuntimePanic));
-                assert!(payload.message.contains("exit code: 7"));
-            }
-            _ => panic!("nonzero exit must invalidate completed"),
-        }
-    }
-
-    #[test]
-    fn successful_exit_without_terminal_envelope_is_schema_mismatch() {
-        match resolve_non_cancelled_terminal(None, ExitDisposition::Success, &StderrCapture::new())
-        {
-            TerminalEvent::SupervisorError(payload) => {
-                assert!(matches!(payload.code, TaskErrorCode::SchemaMismatch));
-                assert!(payload
-                    .message
-                    .contains("without a terminal NDJSON envelope"));
-            }
-            _ => panic!("missing terminal envelope must fail"),
-        }
-    }
-
-    #[test]
-    fn failed_exit_without_terminal_envelope_is_runtime_panic() {
-        let capture = StderrCapture::new();
-        capture.record("RuntimeError: decoder crashed");
-
-        match resolve_non_cancelled_terminal(
-            None,
-            ExitDisposition::Failed("exit code: 9".to_string()),
-            &capture,
-        ) {
-            TerminalEvent::SupervisorError(payload) => {
-                assert!(matches!(payload.code, TaskErrorCode::RuntimePanic));
-                assert!(payload.message.contains("exit code: 9"));
-                assert_eq!(
-                    payload.details.expect("stderr details")["traceback"],
-                    "RuntimeError: decoder crashed"
-                );
-            }
-            _ => panic!("failed process must surface as runtime panic"),
-        }
-    }
-
-    #[test]
-    fn wait_failure_without_terminal_envelope_is_process_failed() {
-        match resolve_non_cancelled_terminal(
-            None,
-            ExitDisposition::WaitFailed("wait handle closed".to_string()),
-            &StderrCapture::new(),
-        ) {
-            TerminalEvent::SupervisorError(payload) => {
-                assert!(matches!(payload.code, TaskErrorCode::ProcessFailed));
-                assert!(payload.message.contains("wait handle closed"));
-            }
-            _ => panic!("wait failure must surface as process failure"),
-        }
-    }
-
-    #[test]
-    fn successful_exit_preserves_a_completed_envelope() {
-        let completed = completed_payload();
-        match resolve_non_cancelled_terminal(
-            Some(TerminalEvent::Completed(completed)),
-            ExitDisposition::Success,
-            &StderrCapture::new(),
-        ) {
-            TerminalEvent::Completed(payload) => {
-                assert_eq!(payload.output_path, "D:/out.mp4");
-                assert_eq!(payload.processed_frames, 10);
-            }
-            _ => panic!("completed envelope should be committed"),
-        }
-    }
-
-    #[test]
-    fn wait_failure_invalidates_a_completed_envelope() {
-        match resolve_non_cancelled_terminal(
-            Some(TerminalEvent::Completed(completed_payload())),
-            ExitDisposition::WaitFailed("lost child handle".to_string()),
-            &StderrCapture::new(),
-        ) {
-            TerminalEvent::SupervisorError(payload) => {
-                assert!(matches!(payload.code, TaskErrorCode::ProcessFailed));
-                assert!(payload.message.contains("lost child handle"));
-            }
-            _ => panic!("wait failure must override completion"),
-        }
-    }
-
-    #[test]
-    fn backend_error_envelope_has_priority_over_exit_status() {
-        let backend = task_error(TaskErrorCode::MissingModel, "weights unavailable");
-        match resolve_non_cancelled_terminal(
-            Some(TerminalEvent::BackendError(backend)),
-            ExitDisposition::Failed("exit code: 2".to_string()),
-            &StderrCapture::new(),
-        ) {
-            TerminalEvent::BackendError(payload) => {
-                assert!(matches!(payload.code, TaskErrorCode::MissingModel));
-                assert_eq!(payload.message, "weights unavailable");
-            }
-            _ => panic!("typed backend error must retain precedence"),
-        }
-    }
-
-    #[test]
-    fn first_supervisor_error_is_sticky_during_shutdown() {
-        let mut terminal = TerminalState::default();
-        terminal.record_supervisor_error(task_error(
-            TaskErrorCode::SchemaMismatch,
-            "first protocol failure",
-        ));
-        terminal.record_supervisor_error(task_error(
-            TaskErrorCode::ProcessFailed,
-            "later pipe failure",
-        ));
-
-        match terminal.take() {
-            Some(TerminalEvent::SupervisorError(payload)) => {
-                assert!(matches!(payload.code, TaskErrorCode::SchemaMismatch));
-                assert_eq!(payload.message, "first protocol failure");
-            }
-            _ => panic!("first supervisor failure must remain authoritative"),
-        }
-    }
-
-    #[test]
-    fn duplicate_backend_error_becomes_a_protocol_failure() {
-        let mut terminal = TerminalState::default();
-        assert!(
-            !terminal.record_backend_error(task_error(TaskErrorCode::MissingModel, "first error",))
-        );
-        assert!(
-            terminal.record_backend_error(task_error(TaskErrorCode::RuntimePanic, "second error",))
-        );
-
-        match terminal.take() {
-            Some(TerminalEvent::SupervisorError(payload)) => {
-                assert!(matches!(payload.code, TaskErrorCode::SchemaMismatch));
-                assert!(payload.message.contains("duplicate `error`"));
-            }
-            _ => panic!("duplicate backend errors must be fatal"),
-        }
-    }
-
-    #[test]
     fn supervisor_join_failure_is_a_typed_process_error_with_stderr_context() {
         let stderr = StderrCapture::new();
         stderr.record("panic in supervisor worker");
@@ -1615,7 +1026,15 @@ mod tests {
             started: Arc::clone(&started),
         });
         let cancel_token = CancellationToken::new();
-        let mut control = spawn_process_control_work(controller, ProcessControlKind::Pause, false);
+        let (response, _response_rx) = oneshot::channel();
+        let mut control = PendingControl::new(
+            controller,
+            ProcessControlKind::Pause,
+            false,
+            response,
+            Duration::from_secs(1),
+            PendingControlCleanup::default(),
+        );
         wait_for_started(
             &started,
             "blocking worker must publish its started handshake",
@@ -1626,13 +1045,16 @@ mod tests {
         let cancellation_won = tokio::time::timeout(Duration::from_millis(100), async {
             tokio::select! {
                 _ = cancel_token.cancelled() => true,
-                _ = &mut control => false,
+                _ = control.wait() => false,
             }
         })
         .await
         .expect("supervisor select must remain responsive");
         assert!(cancellation_won);
-        let _ = control.await.expect("blocking control worker");
+        assert!(matches!(
+            control.wait().await,
+            PendingControlEvent::Finished(Ok((Ok(()), true)))
+        ));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1737,13 +1159,7 @@ mod tests {
         );
 
         assert!(fatal);
-        match terminal.take() {
-            Some(TerminalEvent::SupervisorError(payload)) => {
-                assert!(matches!(payload.code, TaskErrorCode::ProcessFailed));
-                assert!(payload.message.contains("synthetic event sink failure"));
-            }
-            _ => panic!("event sink failure must become the terminal supervisor error"),
-        }
+        assert!(terminal.has_event());
     }
 
     async fn finish_after_terminal_rejection<C: ProcessControl + 'static>(
@@ -2005,8 +1421,8 @@ mod tests {
             io,
             Arc::new(Mutex::new(std::time::Instant::now())),
         );
-        let pid = session.process.child.id().expect("owned process id");
-        assert_eq!(session.process.reap_ticket.current(), None);
+        let pid = session.process.id().expect("owned process id");
+        assert_eq!(session.process.reap_ticket().current(), None);
         assert_eq!(recovery.reap_ticket.current(), None);
 
         drop(session);
@@ -2054,7 +1470,7 @@ mod tests {
             io,
             progress_beat,
         );
-        let pid = session.process.child.id().expect("live test process");
+        let pid = session.process.id().expect("live test process");
         let supervisor = tokio::spawn(run_task_supervisor(session));
         let (response_tx, response_rx) = oneshot::channel();
         control_tx
@@ -2087,8 +1503,8 @@ mod tests {
 
     #[tokio::test]
     async fn dropping_a_live_supervised_child_kills_and_reaps_it() {
-        let (child, mut ticket) =
-            ProcessGroupOwner::new(sleeping_process_group(), "test process group");
+        let child = OwnedProcessGroup::new(sleeping_process_group(), "test process group");
+        let mut ticket = child.reap_ticket();
         let pid = child.id().expect("live supervised pid");
 
         drop(child);
@@ -2106,8 +1522,8 @@ mod tests {
     async fn panicking_supervisor_reaps_child_releases_slot_and_finishes_once() {
         let (state, lease, _control_rx) = active_task_fixture().await;
 
-        let (child, mut reap_ticket) =
-            ProcessGroupOwner::new(sleeping_process_group(), "panic test process group");
+        let child = OwnedProcessGroup::new(sleeping_process_group(), "panic test process group");
+        let mut reap_ticket = child.reap_ticket();
         let pid = child.id().expect("live supervised pid");
         let supervisor = tokio::spawn(async move {
             assert_eq!(child.id(), Some(pid));
@@ -2149,8 +1565,9 @@ mod tests {
     async fn panic_recovery_keeps_slot_closed_until_active_control_work_finishes() {
         let (state, lease, _control_rx) = active_task_fixture().await;
 
-        let (child, reap_ticket) =
-            ProcessGroupOwner::new(sleeping_process_group(), "panic control test process group");
+        let child =
+            OwnedProcessGroup::new(sleeping_process_group(), "panic control test process group");
+        let reap_ticket = child.reap_ticket();
         let pid = child.id().expect("live supervised pid");
         drop(child);
 
@@ -2160,8 +1577,13 @@ mod tests {
             controller,
         } = gated_control_harness();
         let control_cleanup = PendingControlCleanup::default();
-        control_cleanup
-            .start(|| spawn_process_control_work(controller, ProcessControlKind::Pause, false));
+        control_cleanup.start(|| {
+            tokio::task::spawn_blocking(move || {
+                let result = controller.suspend();
+                let paused = result.is_ok();
+                (result, paused)
+            })
+        });
         wait_for_started(&started, "control worker started handshake").await;
 
         let events = Arc::new(RecordingEventSink::default());
@@ -2205,8 +1627,7 @@ mod tests {
 
     #[tokio::test]
     async fn requested_process_group_kill_is_observed_and_reaped() {
-        let (mut child, _ticket) =
-            ProcessGroupOwner::new(sleeping_process_group(), "kill test process group");
+        let mut child = OwnedProcessGroup::new(sleeping_process_group(), "kill test process group");
         let mut kill_deadline = None;
         let mut terminal = TerminalState::default();
         let mut pending_control = None;

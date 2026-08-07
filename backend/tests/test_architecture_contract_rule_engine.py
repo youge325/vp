@@ -202,6 +202,7 @@ def test_rust_task_tauri_imports_are_limited_to_composition_adapters(tmp_path: P
     source.mkdir(parents=True)
     (source / "commands.rs").write_text("use tauri::State;\n", encoding="utf-8")
     (source / "spawn.rs").write_text("use tauri::AppHandle;\n", encoding="utf-8")
+    (source / "tauri_ports.rs").write_text("use tauri::Emitter;\n", encoding="utf-8")
     (source / "ports.rs").write_text("use tauri::Emitter;\n", encoding="utf-8")
     (source / "controller.rs").write_text(
         "#[cfg(test)]\nmod tests {}\nuse tauri::Manager;\n",
@@ -210,7 +211,8 @@ def test_rust_task_tauri_imports_are_limited_to_composition_adapters(tmp_path: P
     (source / "readers.rs").write_text("use tokio::io::AsyncRead;\n", encoding="utf-8")
 
     assert _check_rust_task_adapter_boundaries(tmp_path) == [
-        "Rust task core imports Tauri outside the composition adapters: frontend/src-tauri/src/tasks/controller.rs"
+        "Rust task core imports Tauri outside the composition adapters: frontend/src-tauri/src/tasks/controller.rs",
+        "Rust task core imports Tauri outside the composition adapters: frontend/src-tauri/src/tasks/ports.rs",
     ]
 
 

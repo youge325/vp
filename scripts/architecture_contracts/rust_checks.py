@@ -110,7 +110,7 @@ def _check_rust_submodule_cycles(root: Path, package: str) -> list[str]:
 def _check_rust_task_adapter_boundaries(root: Path) -> list[str]:
     task_root = root / "frontend/src-tauri/src/tasks"
     tauri_reference = re.compile(r"(?:\buse\s+tauri(?:::|\s*\{)|#\s*\[\s*tauri::|\btauri::)")
-    allowed = {"commands.rs", "ports.rs", "spawn.rs"}
+    allowed = {"commands.rs", "spawn.rs", "tauri_ports.rs"}
     issues: list[str] = []
     for path in sorted(task_root.glob("*.rs")):
         if path.name in allowed:

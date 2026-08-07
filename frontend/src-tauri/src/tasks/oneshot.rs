@@ -23,7 +23,7 @@ use crate::tasks::bounded_io::read_bounded_ndjson_output;
 use crate::tasks::builder::{backend_command, spawn_no_window_group};
 use crate::tasks::oneshot_envelope::{parse_last_typed_cli_envelope, TypedCliEnvelope};
 use crate::tasks::stderr::retain_tail;
-use crate::tasks::subprocess::{ProcessGroupChild, ProcessGroupOwner, ReapOutcome, ReapTicket};
+use crate::tasks::subprocess::{OwnedProcessGroup, ProcessGroupChild};
 const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[cfg(test)]
 const SPAWN_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -101,8 +101,7 @@ impl fmt::Display for BoundedCommandError {
 struct BoundedOneShotChild {
     stdout: Option<ChildStdout>,
     stderr: Option<ChildStderr>,
-    child: ProcessGroupOwner,
-    reap_ticket: Option<ReapTicket>,
+    child: OwnedProcessGroup,
     termination_timeout: Duration,
 }
 
@@ -110,12 +109,11 @@ impl BoundedOneShotChild {
     fn new(mut child: ProcessGroupChild, termination_timeout: Duration) -> Self {
         let stdout = child.inner().stdout.take();
         let stderr = child.inner().stderr.take();
-        let (child, reap_ticket) = ProcessGroupOwner::new(child, "backend one-shot process");
+        let child = OwnedProcessGroup::new(child, "backend one-shot process");
         Self {
             stdout,
             stderr,
             child,
-            reap_ticket: Some(reap_ticket),
             termination_timeout,
         }
     }
@@ -225,10 +223,9 @@ impl BoundedOneShotChild {
             }
         };
 
-        let reap_ticket = self.reap_ticket.take().ok_or_else(|| {
-            BoundedCommandError::lifecycle("backend one-shot reap ticket was not retained")
-        })?;
-        confirm_reaped(&reap_ticket)?;
+        self.child
+            .confirm_reaped()
+            .map_err(BoundedCommandError::lifecycle)?;
         Ok(BoundedOneShotOutput {
             status,
             stdout,
@@ -241,21 +238,12 @@ impl BoundedOneShotChild {
         self.stderr.take();
         self.child
             .terminate_and_reap(self.termination_timeout)
-            .await?;
-        let reap_ticket = self
-            .reap_ticket
-            .take()
-            .ok_or_else(|| "backend one-shot reap ticket was not retained".to_string())?;
-        match reap_ticket.current() {
-            Some(ReapOutcome::Reaped) => Ok(()),
-            Some(ReapOutcome::Failed(error)) => Err(error),
-            None => Err("process exited without publishing its reap outcome".to_string()),
-        }
+            .await
     }
 }
 
 async fn wait_for_exit(
-    child: &mut ProcessGroupOwner,
+    child: &mut OwnedProcessGroup,
 ) -> Result<std::process::ExitStatus, BoundedCommandError> {
     loop {
         match child.try_wait() {
@@ -267,16 +255,6 @@ async fn wait_for_exit(
                 )));
             }
         }
-    }
-}
-
-fn confirm_reaped(ticket: &ReapTicket) -> Result<(), BoundedCommandError> {
-    match ticket.current() {
-        Some(ReapOutcome::Reaped) => Ok(()),
-        Some(ReapOutcome::Failed(error)) => Err(BoundedCommandError::lifecycle(error)),
-        None => Err(BoundedCommandError::lifecycle(
-            "process exited without publishing its reap outcome",
-        )),
     }
 }
 
@@ -482,14 +460,15 @@ mod tests {
 
     use super::{
         deadlines_for_spec, read_retained_tail, retain_tail, run_bounded_command,
-        spawn_no_window_group, BoundedCommandError, OneShotDeadlines, ProcessGroupOwner,
-        ReapOutcome, SpawnHandshake, ERROR_SUMMARY_LIMIT_BYTES, ONE_SHOT_STDOUT_LIMIT_BYTES,
+        spawn_no_window_group, BoundedCommandError, OneShotDeadlines, OwnedProcessGroup,
+        SpawnHandshake, ERROR_SUMMARY_LIMIT_BYTES, ONE_SHOT_STDOUT_LIMIT_BYTES,
         SPAWN_HANDSHAKE_TIMEOUT,
     };
     use crate::error::ShellError;
     use crate::generated::{CheckEnvironmentSpec, CheckResumeStateSpec, InspectVideoSpec};
     use crate::models::BackendTaskErrorCode;
     use crate::tasks::oneshot_envelope::{parse_last_typed_cli_envelope, TypedCliEnvelope};
+    use crate::tasks::subprocess::ReapOutcome;
     use crate::tasks::test_support::assert_process_exited;
 
     const FIXTURE_MODE_ENV: &str = "VP_ONESHOT_TEST_MODE";
@@ -734,7 +713,8 @@ mod tests {
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null());
         let child = spawn_no_window_group(&mut command).expect("spawn transient-error fixture");
-        let (mut owner, mut ticket) = ProcessGroupOwner::new(child, "transient wait-error fixture");
+        let mut owner = OwnedProcessGroup::new(child, "transient wait-error fixture");
+        let mut ticket = owner.reap_ticket();
         owner.inject_wait_error(std::io::Error::other("injected transient wait error"));
 
         let error = owner

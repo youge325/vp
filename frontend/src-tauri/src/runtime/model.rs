@@ -12,6 +12,12 @@ use crate::generated::{
     REAL_RAWVSR_NOTICE_PATH, REAL_RAWVSR_THIRD_PARTY_NOTICE_PATH,
 };
 
+const REAL_RAWVSR_LICENSE_FILES: [&str; 3] = [
+    REAL_RAWVSR_LICENSE_PATH,
+    REAL_RAWVSR_NOTICE_PATH,
+    REAL_RAWVSR_THIRD_PARTY_NOTICE_PATH,
+];
+
 pub(super) fn rife_model_filename(version: &str) -> String {
     format!("flownet_v{version}.pkl")
 }
@@ -77,11 +83,7 @@ pub(super) fn validate_real_rawvsr_bundle(
     license_root: &Path,
 ) -> Result<(), String> {
     let model_dir = model_dir.ok_or_else(|| "Bundled model directory is missing.".to_string())?;
-    for relative_path in [
-        REAL_RAWVSR_LICENSE_PATH,
-        REAL_RAWVSR_NOTICE_PATH,
-        REAL_RAWVSR_THIRD_PARTY_NOTICE_PATH,
-    ] {
+    for relative_path in REAL_RAWVSR_LICENSE_FILES {
         let path = license_root.join(relative_path);
         let metadata = path.metadata().map_err(|error| {
             format!(
@@ -125,13 +127,7 @@ pub(super) fn resolve_real_rawvsr_license_root<'a>(
 }
 
 fn has_real_rawvsr_license_files(root: &Path) -> bool {
-    [
-        REAL_RAWVSR_LICENSE_PATH,
-        REAL_RAWVSR_NOTICE_PATH,
-        REAL_RAWVSR_THIRD_PARTY_NOTICE_PATH,
-    ]
-    .into_iter()
-    .all(|relative_path| {
+    REAL_RAWVSR_LICENSE_FILES.into_iter().all(|relative_path| {
         root.join(relative_path)
             .metadata()
             .map(|metadata| metadata.is_file() && metadata.len() > 0)
@@ -400,11 +396,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let models = temp.path().join("models");
         std::fs::create_dir_all(&models).unwrap();
-        for relative_path in [
-            REAL_RAWVSR_LICENSE_PATH,
-            REAL_RAWVSR_NOTICE_PATH,
-            REAL_RAWVSR_THIRD_PARTY_NOTICE_PATH,
-        ] {
+        for relative_path in REAL_RAWVSR_LICENSE_FILES {
             let path = temp.path().join(relative_path);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(path, b"license").unwrap();
@@ -422,11 +414,7 @@ mod tests {
         let model_dir = workspace_root.join("backend").join("models");
         std::fs::create_dir_all(&runtime_root).unwrap();
         std::fs::create_dir_all(&model_dir).unwrap();
-        for relative_path in [
-            REAL_RAWVSR_LICENSE_PATH,
-            REAL_RAWVSR_NOTICE_PATH,
-            REAL_RAWVSR_THIRD_PARTY_NOTICE_PATH,
-        ] {
+        for relative_path in REAL_RAWVSR_LICENSE_FILES {
             let path = workspace_root.join(relative_path);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(path, b"license").unwrap();

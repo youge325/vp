@@ -454,6 +454,74 @@ impl ReapTicket {
     pub(super) async fn wait_bounded(&mut self, timeout: Duration) -> Option<ReapOutcome> {
         tokio::time::timeout(timeout, self.wait()).await.ok()
     }
+
+    pub(super) fn confirm_reaped(&self) -> Result<(), String> {
+        match self.current() {
+            Some(ReapOutcome::Reaped) => Ok(()),
+            Some(ReapOutcome::Failed(error)) => Err(error),
+            None => Err("process exited without publishing its reap outcome".to_string()),
+        }
+    }
+}
+
+/// Inseparable ownership of a live process group and its reap observation.
+///
+/// Callers can clone an observation ticket for recovery monitors, but cannot
+/// construct a running process owner without retaining the canonical ticket.
+pub(super) struct OwnedProcessGroup {
+    owner: ProcessGroupOwner,
+    ticket: ReapTicket,
+}
+
+impl OwnedProcessGroup {
+    pub(super) fn new(child: ProcessGroupChild, label: &'static str) -> Self {
+        let (owner, ticket) = ProcessGroupOwner::new(child, label);
+        Self { owner, ticket }
+    }
+
+    pub(super) fn reap_ticket(&self) -> ReapTicket {
+        self.ticket.clone()
+    }
+
+    pub(super) fn confirm_reaped(&self) -> Result<(), String> {
+        self.ticket.confirm_reaped()
+    }
+
+    #[cfg(test)]
+    pub(super) fn id(&self) -> Option<u32> {
+        self.owner.id()
+    }
+
+    pub(super) fn inner_mut(&mut self) -> Option<&mut ProcessGroupChild> {
+        self.owner.inner_mut()
+    }
+
+    pub(super) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+        self.owner.try_wait()
+    }
+
+    pub(super) fn start_kill(&mut self) -> io::Result<()> {
+        self.owner.start_kill()
+    }
+
+    pub(super) async fn terminate_and_reap(&mut self, timeout: Duration) -> Result<(), String> {
+        self.owner.terminate_and_reap(timeout).await?;
+        self.confirm_reaped()
+    }
+
+    #[cfg(test)]
+    pub(super) fn inject_wait_error(&mut self, error: io::Error) {
+        self.owner.inject_wait_error(error);
+    }
+
+    #[cfg(test)]
+    fn leader_has_exited(&self) -> bool {
+        self.owner
+            .child
+            .as_ref()
+            .and_then(|child| child.leader_status)
+            .is_some()
+    }
 }
 
 /// Sole owner of a backend process-group/job handle.
@@ -462,7 +530,7 @@ impl ReapTicket {
 /// companion ticket is completed only after `try_wait` confirms exit. A drop
 /// path transfers the stable handle to the process cleanup coordinator and
 /// therefore cannot silently reopen the single-task slot.
-pub(super) struct ProcessGroupOwner {
+struct ProcessGroupOwner {
     child: Option<ProcessGroupChild>,
     outcome: watch::Sender<Option<ReapOutcome>>,
     label: &'static str,
@@ -471,7 +539,7 @@ pub(super) struct ProcessGroupOwner {
 }
 
 impl ProcessGroupOwner {
-    pub(super) fn new(child: ProcessGroupChild, label: &'static str) -> (Self, ReapTicket) {
+    fn new(child: ProcessGroupChild, label: &'static str) -> (Self, ReapTicket) {
         let (outcome, receiver) = watch::channel(None);
         (
             Self {
@@ -795,16 +863,13 @@ mod tests {
             .stdout(Stdio::null())
             .stderr(Stdio::null());
         let child = ProcessGroupChild::spawn(&mut command).expect("spawn group leader fixture");
-        let (mut owner, mut ticket) = ProcessGroupOwner::new(child, "descendant ownership fixture");
+        let mut owner = OwnedProcessGroup::new(child, "descendant ownership fixture");
+        let mut ticket = owner.reap_ticket();
 
         tokio::time::timeout(Duration::from_secs(5), async {
             loop {
                 let observed = owner.try_wait().expect("poll process group");
-                let leader_exited = owner
-                    .child
-                    .as_ref()
-                    .and_then(|child| child.leader_status)
-                    .is_some();
+                let leader_exited = owner.leader_has_exited();
                 if leader_exited {
                     assert!(
                         observed.is_none(),
@@ -863,8 +928,8 @@ mod tests {
                 .expect_err("the selected post-spawn setup step must fail");
             let (_source, child) = error.into_parts();
             let child = child.expect("post-spawn failure must return its stable child owner");
-            let (mut owner, mut ticket) =
-                ProcessGroupOwner::new(child, "post-spawn setup failure fixture");
+            let mut owner = OwnedProcessGroup::new(child, "post-spawn setup failure fixture");
+            let mut ticket = owner.reap_ticket();
 
             owner
                 .terminate_and_reap(Duration::from_secs(5))

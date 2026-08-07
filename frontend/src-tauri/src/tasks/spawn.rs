@@ -23,13 +23,14 @@ use crate::runtime::ResolvedRuntimePaths;
 use crate::tasks::builder::{build_process_command, spawn_no_window_group};
 use crate::tasks::cleanup::own_late_cleanup;
 use crate::tasks::controller::{spawn_task_supervisor, SupervisorDependencies, SupervisorIo};
-use crate::tasks::ports::{TaskEventSink, TaskLifecyclePort, TauriTaskPorts};
+use crate::tasks::ports::{TaskEventSink, TaskLifecyclePort};
 use crate::tasks::readers::{
     spawn_stderr_reader, spawn_stdin_writer, spawn_stdout_reader, ProgressBeat,
 };
 use crate::tasks::state::{StartLease, TaskState};
 use crate::tasks::stderr::StderrCapture;
-use crate::tasks::subprocess::{ProcessGroupChild, ProcessGroupOwner};
+use crate::tasks::subprocess::{OwnedProcessGroup, ProcessGroupChild};
+use crate::tasks::tauri_ports::TauriTaskPorts;
 use crate::tasks::TaskApplicationError;
 
 async fn terminate_failed_start<R: Runtime + 'static>(
@@ -39,11 +40,11 @@ async fn terminate_failed_start<R: Runtime + 'static>(
     child: ProcessGroupChild,
 ) -> Result<(), ShellError> {
     let owns_start = state.begin_start_cleanup(lease).await;
-    let (mut owner, ticket) = ProcessGroupOwner::new(child, "backend after task start failure");
+    let mut owner = OwnedProcessGroup::new(child, "backend after task start failure");
+    let ticket = owner.reap_ticket();
     let cleanup = owner
         .terminate_and_reap(StartTaskSpec::TERMINATION_TIMEOUT)
         .await;
-    drop(owner);
     match cleanup {
         Ok(()) => {
             if owns_start && !state.finish_once(lease, || {}).await {

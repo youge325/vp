@@ -14,6 +14,7 @@ mod spawn;
 mod state;
 mod stderr;
 mod subprocess;
+mod tauri_ports;
 #[cfg(test)]
 mod test_support;
 
