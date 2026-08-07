@@ -81,12 +81,15 @@ graph TB
     A --> F[state.rs 任务状态机]
     A --> G[control.rs control adapter]
     A --> H[controller.rs TaskSupervisor + Watchdog]
+    H --> H1[controller/control_coordination.rs]
+    H --> H2[controller/terminal.rs]
     A --> I[cancellation.rs CancellationToken]
     A --> J[readers.rs pipe readers]
     A --> K[envelope.rs NDJSON 信封解析]
     A --> L[stderr.rs stderr 兜底]
-    A --> M[ports.rs Tauri event/lifecycle adapter]
-    A --> N[subprocess.rs kill-and-reap owner]
+    A --> M[ports.rs pure task ports]
+    A --> M1[tauri_ports.rs Tauri adapter]
+    A --> N[subprocess.rs OwnedProcessGroup]
 
     B --> C
     B --> D
@@ -193,13 +196,15 @@ writer 前启动，避免三条 pipe 互相填满形成死锁；stdin 写入也�
 
 [`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 的
 私有 `TaskSupervisorSession` 是运行任务的唯一结构化 owner。构造器收到 `ProcessGroupChild` 后立即
-转换为 `ProcessGroupOwner + ReapTicket`，再把依赖、pipe I/O、lease、取消 token 和 progress beat
-组织成窄结构；调用方无法构造“已经运行但没有回收票据”的状态。panic monitor 只克隆 event sink、
+转换为不可分离的 `OwnedProcessGroup`，由它唯一持有 `ProcessGroupOwner + ReapTicket`，再把依赖、
+pipe I/O、lease、取消 token 和 progress beat 组织成窄结构；调用方无法构造“已经运行但没有回收
+票据”的状态。panic monitor 只克隆 event sink、
 lifecycle、lease、stderr、reap ticket 与控制清理句柄这组最小恢复上下文。只有 supervisor 能发送终态。
 
 `controller.rs` 与 `readers.rs` 只依赖 Tokio、领域 payload 和 `TaskEventSink` /
-`TaskLifecyclePort`；`ports.rs` 是任务域唯一 Tauri event/lifecycle adapter，`spawn.rs` 是装配它的
-composition root。架构门禁禁止 task core 重新导入 Tauri，并检查 tasks 子模块 DAG 无环。
+`TaskLifecyclePort`；`ports.rs` 只定义纯任务端口，`tauri_ports.rs` 是唯一 event/lifecycle Tauri
+adapter，`spawn.rs` 是装配它的 composition root。控制协调与终态仲裁分别位于 controller 私有
+子模块。架构门禁禁止 task core 重新导入 Tauri，并检查 tasks 子模块 DAG 无环。
 
 supervisor 在一个 `tokio::select!` 循环中并发处理 reader 消息、进程退出、取消、watchdog 和
 暂停/恢复结果。终态规则如下：

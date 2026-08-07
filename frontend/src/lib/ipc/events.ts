@@ -9,7 +9,7 @@ export type TaskEventListeners = {
   [Name in TaskEventName]: (payload: TaskEventPayloadMap[Name]) => void | Promise<void>
 }
 
-export type TaskEventListenerErrorHandler = (name: TaskEventName, error: unknown) => void
+type TaskEventListenerErrorHandler = (name: TaskEventName, error: unknown) => void
 
 function subscribeTaskEvent<Name extends TaskEventName>(
   name: Name,

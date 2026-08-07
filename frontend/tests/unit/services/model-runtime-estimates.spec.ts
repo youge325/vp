@@ -26,7 +26,7 @@ describe('model runtime estimates', () => {
         inputModulo: 4,
       }),
       { width: 640, height: 288 },
-      { scale: 1, precisionBytes: 4, temporalFrames: 10, runtimeFrameCount: 5 },
+      { scale: 1, precisionBytes: 4, temporalFrames: 5 },
     )
     if (!estimate || !windowEstimate) {
       throw new Error('expected runtime estimates for complete model metrics')

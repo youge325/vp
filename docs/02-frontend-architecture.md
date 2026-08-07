@@ -345,6 +345,8 @@ fallback、分段归一化、指标投影和滤镜 catalog 共同消费它；Fil
 倍率。Real-RawVSR BasicVSR、EDVR、TDAN、TOFlow 的 x2/x3/x4 指标均按当前算法和倍率选择；后三者
 从 `inputFrameMode=fixed_window` 统一显示固定 5 帧邻帧窗口。`modelLicense.usage` 为
 `non_commercial` 时，增强页使用当前模型标签显示不可隐藏的许可提示和上游来源链接。
+`buildEnhanceReadModel` 只派生一次 `effectiveSuperResolutionNumFrames`：BasicVSR 读取用户帧数，固定窗口
+读取模型策略；表单提示与显存估算共同消费该值，不再让模型指标覆盖用户输入。
 
 ### 类型扩展层
 
@@ -414,7 +416,7 @@ export const TASK_ERROR_CODES = {
 `@/types/protocol` 公共入口使用生成协议。前端架构脚本从 `src/main.ts` 和明确动态入口遍历生产
 import DAG，拒绝越层依赖、环和不可达生产文件；只有两个带 evidence 的 ambient declaration
 进入精确 allowlist。架构脚本还要求 Port/Capability/Continuation/Operations 的每个成员都存在
-生产属性读取，并拒绝 `type Alias = GeneratedType` 形式的镜像；fixture 明确证明测试引用不能让
-这些成员存活。production Knip 单独检查导出，因此测试引用不能让生产 API 存活。
+生产属性读取，要求每个非生成导出存在跨文件生产 import，并拒绝 `type Alias = GeneratedType` 形式
+的镜像；同文件引用、provider key 和测试引用均不能让生产 API 存活。fixture 对三类规则逐项回归。
 `npm run check` 顺序执行 ESLint、生产/测试 typecheck、依赖/可达性检查、Knip 未使用导出与
 依赖检查，以及零阈值 jscpd 克隆扫描。

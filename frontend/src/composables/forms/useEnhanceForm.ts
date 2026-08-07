@@ -66,7 +66,7 @@ interface EnhanceFormMetrics {
   combinedVramRows: MetricRow[]
 }
 
-export interface EnhanceFormModel {
+interface EnhanceFormModel {
   fields: EnhanceFormFields
   options: ComputedRef<EnhanceOptions>
   actions: EnhanceFormActions

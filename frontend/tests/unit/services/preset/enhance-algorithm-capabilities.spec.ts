@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   fixedRuntimeFrameCount,
-  lockedSuperResolutionScaleFactor,
   isPaddleGanVsrAlgorithm,
+  superResolutionScaleFactors,
   superResolutionInputFrameMode,
 } from '@/services/preset/enhance-algorithm-capabilities'
 import { createAlgorithmInfo } from '../../fixtures/environment'
@@ -56,6 +56,6 @@ describe('enhance algorithm capability rules', () => {
 
     expect(superResolutionInputFrameMode(algorithm)).toBe('fixed_window')
     expect(fixedRuntimeFrameCount(algorithm)).toBe(5)
-    expect(lockedSuperResolutionScaleFactor(algorithm)).toBe(4)
+    expect(superResolutionScaleFactors(algorithm)).toEqual([4])
   })
 })

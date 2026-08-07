@@ -451,6 +451,131 @@ function collectGeneratedMirrorAliases(program, productionPaths, ownerPaths = ne
   return mirrors
 }
 
+function exportedDeclarationNames(sourceFile) {
+  const names = []
+  for (const statement of sourceFile.statements) {
+    const exported = statement.modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+    )
+    if (!exported) {
+      continue
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) {
+          names.push(declaration.name.text)
+        }
+      }
+      continue
+    }
+    if (
+      (ts.isFunctionDeclaration(statement)
+        || ts.isClassDeclaration(statement)
+        || ts.isInterfaceDeclaration(statement)
+        || ts.isTypeAliasDeclaration(statement)
+        || ts.isEnumDeclaration(statement))
+      && statement.name
+    ) {
+      names.push(statement.name.text)
+    }
+  }
+  return names
+}
+
+function collectUnconsumedProductionExports(entries, resolveDependency) {
+  const exportsByOwner = new Map()
+  for (const entry of entries) {
+    if (isGeneratedTypeSource(entry.sourceFile) || entry.ownerPath.endsWith('.d.ts')) {
+      continue
+    }
+    const owner = normalizedPath(entry.ownerPath)
+    const declaration = exportsByOwner.get(owner) ?? {
+      ownerPath: entry.ownerPath,
+      names: new Set(),
+    }
+    for (const name of exportedDeclarationNames(entry.sourceFile)) {
+      declaration.names.add(name)
+    }
+    exportsByOwner.set(owner, declaration)
+  }
+
+  const consumers = new Map()
+  const reexports = []
+  for (const entry of entries) {
+    for (const statement of entry.sourceFile.statements) {
+      if (
+        (!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement))
+        || !statement.moduleSpecifier
+        || !ts.isStringLiteral(statement.moduleSpecifier)
+      ) {
+        continue
+      }
+      const dependency = resolveDependency(entry.ownerPath, statement.moduleSpecifier.text)
+      if (!dependency || normalizedPath(dependency) === normalizedPath(entry.ownerPath)) {
+        continue
+      }
+      if (ts.isExportDeclaration(statement)) {
+        const mappings = statement.exportClause && ts.isNamedExports(statement.exportClause)
+          ? statement.exportClause.elements.map((element) => ({
+              source: (element.propertyName ?? element.name).text,
+              exposed: element.name.text,
+            }))
+          : null
+        reexports.push({
+          owner: normalizedPath(entry.ownerPath),
+          dependency: normalizedPath(dependency),
+          mappings,
+        })
+        continue
+      }
+      const names = consumers.get(normalizedPath(dependency)) ?? new Set()
+      const clause = statement.importClause
+      if (clause?.name) {
+        names.add('default')
+      }
+      if (clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+        names.add('*')
+      } else if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+        for (const element of clause.namedBindings.elements) {
+          names.add((element.propertyName ?? element.name).text)
+        }
+      }
+      consumers.set(normalizedPath(dependency), names)
+    }
+  }
+
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const route of reexports) {
+      const barrelConsumers = consumers.get(route.owner)
+      if (!barrelConsumers) {
+        continue
+      }
+      const dependencyConsumers = consumers.get(route.dependency) ?? new Set()
+      const names = route.mappings
+        ? route.mappings
+            .filter(({ exposed }) => barrelConsumers.has(exposed) || barrelConsumers.has('*'))
+            .map(({ source }) => source)
+        : [...barrelConsumers].filter((name) => name !== 'default')
+      for (const name of names) {
+        if (!dependencyConsumers.has(name)) {
+          dependencyConsumers.add(name)
+          changed = true
+        }
+      }
+      consumers.set(route.dependency, dependencyConsumers)
+    }
+  }
+
+  return [...exportsByOwner.entries()].flatMap(([owner, declaration]) => {
+    const consumed = consumers.get(owner) ?? new Set()
+    return [...declaration.names]
+      .filter((name) => !consumed.has(name) && !consumed.has('*'))
+      .map((name) => ({ ownerPath: declaration.ownerPath, name }))
+  })
+}
+
 function runArchitectureRuleSelfTests() {
   const fixtureRoot = resolve(process.cwd(), 'scripts/fixtures/architecture')
   const fixture = (name, kind = 'ts') => {
@@ -596,6 +721,19 @@ function runArchitectureRuleSelfTests() {
   if (exportMirrors.length !== 3) {
     throw new Error('generated mirror alias self-test did not reject export aliases')
   }
+  const exportedFixture = fixture('unused-production-export.fixture')
+  const exportConsumerFixture = fixture('used-production-export.fixture')
+  const unconsumedExports = collectUnconsumedProductionExports(
+    [exportedFixture, exportConsumerFixture],
+    (_owner, dependency) => dependency === './unused-production-export.fixture'
+      ? exportedFixture.ownerPath
+      : null,
+  )
+  if (unconsumedExports.length !== 1 || unconsumedExports[0].name !== 'testOnly') {
+    throw new Error(
+      `production export self-test did not reject only the test-kept export: ${JSON.stringify(unconsumedExports)}`,
+    )
+  }
 }
 
 runArchitectureRuleSelfTests()
@@ -702,6 +840,17 @@ for (const { path, alias, generated } of collectGeneratedMirrorAliases(
   violations.push(
     `frontend type alias mirrors generated contract type: ${owner} -> ${alias} = ${generated}`,
   )
+}
+
+for (const { ownerPath, name } of collectUnconsumedProductionExports(
+  typeScriptSources,
+  (ownerPath, dependency) => {
+    const resolved = resolveInternalImport(ownerPath, dependency)
+    return resolved ? resolve(sourceRoot, resolved) : null
+  },
+)) {
+  const owner = relative(process.cwd(), ownerPath).replaceAll('\\', '/')
+  violations.push(`frontend export has no external production consumer: ${owner} -> ${name}`)
 }
 
 const states = new Map()

@@ -131,6 +131,38 @@ describe('enhance view-model rules', () => {
     expect(model.superResolutionModelLabel).toBe('Real-RawVSR BasicVSR')
   })
 
+  it('uses the editable BasicVSR frame count once for both the field and VRAM estimate', () => {
+    const workflow = createDefaultWorkflowConfigForEnvironment(null)
+    workflow.superResolution.enabled = true
+    workflow.superResolution.scaleFactor = 2
+    workflow.superResolution.numFrames = 6
+    const algorithm = createRealRawVsrBasicVsrAlgorithm()
+    for (const detail of algorithm.modelDetails) {
+      detail.metrics.activationBytesPerMegapixel = 1_000_000_000
+      detail.metrics.runtimeOverheadBytes = 64_000_000
+    }
+    const sixFrames = buildEnhanceReadModel({
+      workflow,
+      activeVideoDimensions: { width: 320, height: 180 },
+      currentInterpolationAlgorithm: rife,
+      currentSuperResolutionAlgorithm: algorithm,
+    })
+    const twelveFrames = buildEnhanceReadModel({
+      workflow: {
+        ...workflow,
+        superResolution: { ...workflow.superResolution, numFrames: 12 },
+      },
+      activeVideoDimensions: { width: 320, height: 180 },
+      currentInterpolationAlgorithm: rife,
+      currentSuperResolutionAlgorithm: algorithm,
+    })
+
+    expect(sixFrames.effectiveSuperResolutionNumFrames).toBe(6)
+    expect(twelveFrames.effectiveSuperResolutionNumFrames).toBe(12)
+    expect(sixFrames.superResolutionMetricRows[2]?.value)
+      .not.toBe(twelveFrames.superResolutionMetricRows[2]?.value)
+  })
+
   it('uses selected TensorRT engine metrics for super-resolution estimates', () => {
     const workflow = createDefaultWorkflowConfigForEnvironment(null)
     workflow.superResolution.enabled = true

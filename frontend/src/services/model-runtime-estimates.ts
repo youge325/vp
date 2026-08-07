@@ -6,7 +6,6 @@ interface RuntimeMetricOptions {
   scale?: number
   precisionBytes?: number
   temporalFrames?: number
-  runtimeFrameCount?: number | null
 }
 
 function padToModulo(value: number, modulo: number | null | undefined): number {
@@ -30,7 +29,7 @@ export function estimateModelRuntimeMetrics(
   const precisionBytes = finiteNumberOrNull(options.precisionBytes) ?? 4
   const temporalFrames = Math.max(
     1,
-    Math.round(finiteNumberOrNull(options.runtimeFrameCount) ?? finiteNumberOrNull(options.temporalFrames) ?? 1),
+    Math.round(finiteNumberOrNull(options.temporalFrames) ?? 1),
   )
   const scaledWidth = Math.max(1, Math.round(video.width * scale))
   const scaledHeight = Math.max(1, Math.round(video.height * scale))

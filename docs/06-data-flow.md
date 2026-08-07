@@ -30,7 +30,7 @@ graph TD
 
     subgraph EX["流式执行器"]
         E1["pipeline_preflight.py"]
-        E2["pipeline_dispatch.py"]
+        E2["pipeline.py composition root"]
         E3["worker_pipeline.py / stage_file_pipeline.py"]
         E4["stage-worker subprocess"]
         E5["encoder_worker"]
@@ -202,9 +202,10 @@ stage-file 执行路径不再各自维护判断函数；resume/chunk 只投影�
 | `superResolution.enabled` | `super_resolution.enabled` | `super_resolution.enabled` | 启用超分辨率 |
 | `superResolution.scaleFactor` | `super_resolution.scale_factor` | `super_resolution.scale_factor` | 放大倍数 |
 | `superResolution.onnxModel` | `super_resolution.onnx_model` | `super_resolution.onnx_model` | ONNX 模型路径 |
-| `superResolution.numFrames` | `super_resolution.num_frames` | `super_resolution.num_frames` | BasicVSR 逻辑帧块默认 10；EDVR/TDAN/TOFlow 固定窗口为 5 |
+| `superResolution.numFrames` | `super_resolution.num_frames` | `super_resolution.num_frames` | BasicVSR 使用用户逻辑块；EDVR/TDAN/TOFlow 使用模型资产中的固定窗口 |
 
-四种 Real-RawVSR RGB 算法的 2×/3×/4×都从算法元数据 `scaleFactors` 选择。StagePlan 只保存逻辑阶段，
+Real-RawVSR 算法、倍率和时间/空间策略都由 `model-assets.json` 投影；前端只计算一次有效输入帧数，
+同时用于窗口提示和显存估算。StagePlan 只保存逻辑阶段，
 stage-file chunk 在分段边界读取前后各 2 帧上下文，并通过生成的 `outputFrameOffset` 告知 worker只写
 逻辑帧。BasicVSR 内部 10 帧切片复用同一纯规划器；固定窗口模型直接从收到的帧序列投影中心窗口，
 分段、恢复与正常路径不重复推算上下文或裁剪规则。

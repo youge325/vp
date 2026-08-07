@@ -30,10 +30,3 @@ export function superResolutionScaleFactors(
     (value) => typeof value === 'number' && Number.isFinite(value) && value > 0,
   ) ?? []
 }
-
-export function lockedSuperResolutionScaleFactor(
-  algorithm: AlgorithmInfo | null | undefined,
-): number | null {
-  const factors = superResolutionScaleFactors(algorithm)
-  return factors.length === 1 ? factors[0] ?? null : null
-}

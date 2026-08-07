@@ -203,7 +203,7 @@ python -m pytest tests_full_e2e/test_real_rawvsr_basicvsr_e2e.py -m full_e2e -q
   检查未使用 Cargo 依赖、Rust public surface、生成协议深导入、命令面、未消费协议 re-export、
   Python 中立 dataclass 字段/包级 re-export/CLI handler、无副作用 package、CSS/test-id/test-support
   export 和算法 catalog↔factory 一致性；同时建立 Rust tasks 子模块 DAG，并只允许
-  `tasks/commands.rs`、`tasks/spawn.rs`、`tasks/ports.rs` 依赖 Tauri。任务门禁还拒绝忽略
+  `tasks/commands.rs`、`tasks/spawn.rs`、`tasks/tauri_ports.rs` 依赖 Tauri。任务门禁还拒绝忽略
   emit/lifecycle/reap/rollback 结果或在 `subprocess.rs` 外 fire-and-forget 地持有进程 owner，并验证
   cleanup coordinator 始终保留 join handle、稳定进程句柄和 `ReapTicket` outcome。Cargo 扫描只在
   Typify 宏确实导入 `contracts/` 内含 `pattern` 的 schema 时，把 `regress` 认作生成代码依赖。
@@ -231,7 +231,9 @@ Rust 代码使用 `eprintln!` 输出诊断信息，在 Tauri 开发模式下可�
 关键日志点：
 - `lib.rs::setup` — 运行时路径解析结果
 - `tasks/spawn.rs` — 子进程启动参数
-- `tasks/controller.rs` — TaskSupervisor 控制、reader 排空与终态仲裁
+- `tasks/controller.rs` — TaskSupervisor 事件循环、reader 排空与 watchdog
+- `tasks/controller/control_coordination.rs` — 有界 pause/resume 协调
+- `tasks/controller/terminal.rs` — 终态状态表与退出仲裁
 
 ### Python stdout/stderr 查看
 

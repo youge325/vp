@@ -69,6 +69,34 @@ describe('TaskConsole TensorRT logs', () => {
     expect(wrapper.text()).not.toContain('stale log')
   })
 
+  it('projects the running batch item ahead of the active editor item', () => {
+    const presetStore = usePresetStore()
+    const mediaStore = useMediaStore()
+    const runStateStore = useMediaRunState()
+    const activeItem = createMediaItem('/video/active.mp4', presetStore.draftPreset)
+    const runningItem = createMediaItem('/video/running.mp4', presetStore.draftPreset)
+    mediaStore.appendItems([activeItem, runningItem])
+    mediaStore.setActive(activeItem.id)
+    runStateStore.setTaskState(activeItem.id, {
+      status: 'idle',
+      resumeStatus: null,
+      logs: ['active log'],
+    })
+    runStateStore.setTaskState(runningItem.id, {
+      status: 'running',
+      resumeStatus: null,
+      logs: ['running log'],
+    })
+    const taskStore = useTaskStore()
+    taskStore.dispatchBatch({ type: 'started', ids: [runningItem.id] })
+    taskStore.dispatchBatch({ type: 'queue-advanced', currentId: runningItem.id, remaining: [] })
+
+    const wrapper = mount(TaskConsole)
+
+    expect(wrapper.text()).toContain('running log')
+    expect(wrapper.text()).not.toContain('active log')
+  })
+
   it('keeps a completed batch visible as N/N at 100 percent', () => {
     const taskStore = useTaskStore()
     const runStateStore = useMediaRunState()

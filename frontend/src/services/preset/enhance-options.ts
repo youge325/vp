@@ -30,17 +30,17 @@ const ENGINE_LABELS: Record<InferenceEngine, string> = {
   dcu: 'DCU',
 }
 
-export const FPS_MODE_OPTIONS: readonly SelectOption<FpsMode>[] = [
+const FPS_MODE_OPTIONS: readonly SelectOption<FpsMode>[] = [
   { value: 'target', label: '目标 FPS' },
   { value: 'multi', label: '倍率' },
 ] as const
 
-export const MULTI_OPTIONS: readonly SelectOption[] = [
+const MULTI_OPTIONS: readonly SelectOption[] = [
   { value: '2', label: '2x' },
   { value: '4', label: '4x' },
 ] as const
 
-export const PROCESS_ORDER_OPTIONS: readonly SelectOption<ProcessOrder>[] = [
+const PROCESS_ORDER_OPTIONS: readonly SelectOption<ProcessOrder>[] = [
   { value: 'super_resolution_then_interpolation', label: '先超分后补帧' },
   { value: 'frame_interpolation_then_super_resolution', label: '先补帧后超分' },
 ] as const
@@ -89,15 +89,15 @@ function findDetail(details: readonly ModelVariantInfo[], name: string): ModelVa
   return details.find((detail) => detail.name === name)
 }
 
-export function buildBackendOptions(backends: readonly TensorBackend[]): SelectOption<TensorBackend>[] {
+function buildBackendOptions(backends: readonly TensorBackend[]): SelectOption<TensorBackend>[] {
   return backends.map((value) => ({ value, label: BACKEND_LABELS[value] }))
 }
 
-export function buildEngineOptions(engines: readonly InferenceEngine[]): SelectOption<InferenceEngine>[] {
+function buildEngineOptions(engines: readonly InferenceEngine[]): SelectOption<InferenceEngine>[] {
   return engines.map((value) => ({ value, label: ENGINE_LABELS[value] }))
 }
 
-export function buildModelOptions(
+function buildModelOptions(
   models: readonly string[],
   details: readonly ModelVariantInfo[],
 ): SelectOption[] {
@@ -107,7 +107,7 @@ export function buildModelOptions(
   }))
 }
 
-export function buildOnnxModelOptions(
+function buildOnnxModelOptions(
   models: readonly string[],
   details: readonly ModelVariantInfo[],
 ): SelectOption[] {
@@ -117,7 +117,7 @@ export function buildOnnxModelOptions(
   ]
 }
 
-export function buildAlgorithmOptions(
+function buildAlgorithmOptions(
   algorithms: readonly AlgorithmInfo[],
   labelMode: 'name' | 'modelMetrics',
   selectedModelName?: string,

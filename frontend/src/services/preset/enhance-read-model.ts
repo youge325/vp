@@ -22,14 +22,14 @@ import {
   superResolutionInputFrameMode,
 } from './enhance-algorithm-capabilities'
 
-export interface EnhanceReadModelInput {
+interface EnhanceReadModelInput {
   workflow: WorkflowConfig
   activeVideoDimensions: VideoDimensions | null
   currentInterpolationAlgorithm: AlgorithmInfo | undefined
   currentSuperResolutionAlgorithm: AlgorithmInfo | undefined
 }
 
-export interface EnhanceReadModel {
+interface EnhanceReadModel {
   interpolationModelDetails: ModelVariantInfo[]
   interpolationOnnxModelDetails: ModelVariantInfo[]
   superResolutionOnnxModelDetails: ModelVariantInfo[]
@@ -128,10 +128,7 @@ export function buildEnhanceReadModel({
     {
       scale: 1,
       precisionBytes: 4,
-      temporalFrames: isSuperResolutionInputFramesEditable
-        ? workflow.superResolution.numFrames ?? APPLICATION_DEFAULTS.superResolution.numFrames
-        : 1,
-      runtimeFrameCount: superResolutionRuntimeDetail?.metrics.runtimeFrameCount ?? null,
+      temporalFrames: effectiveSuperResolutionNumFrames,
     },
   )
   const combinedPeakVramBytes =

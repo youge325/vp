@@ -1,15 +1,24 @@
 import { computed } from 'vue'
 import { displayTaskLogLine } from '@/services/task/events'
+import {
+  resolveConsoleTaskContext,
+  type TaskContextPort,
+} from '@/services/task/task-context'
 import { useMediaStore } from '@/stores/media'
 import { useMediaRunState } from '@/stores/mediaRunState'
 import { useTaskStore } from '@/stores/task'
-import { useConsoleTaskContext } from './useTaskContext'
 
 export function useTaskConsoleState() {
   const mediaStore = useMediaStore()
   const mediaRunState = useMediaRunState()
   const taskStore = useTaskStore()
-  const consoleTaskContext = useConsoleTaskContext()
+  const lookup: TaskContextPort = {
+    getMediaItem: (id) => mediaStore.findItem(id),
+    getItemRunState: (id) => mediaRunState.getByItemId(id),
+  }
+  const consoleTaskContext = computed(() =>
+    resolveConsoleTaskContext(lookup, taskStore.batch.currentId, mediaStore.activeItemId),
+  )
 
   const logs = computed(() =>
     (consoleTaskContext.value.runState?.taskState.logs ?? []).map(displayTaskLogLine),

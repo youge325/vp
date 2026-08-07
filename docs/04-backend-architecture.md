@@ -197,7 +197,7 @@ stage-file 路径在每个 stage 规划完成后创建一次不可变的 `StageF
 |------|------|
 | [`pipeline_context.py`](../backend/app/processing/streaming/pipeline_context.py) | 定义不可变 preflight 与执行 context，保持运行时对象引用 |
 | [`pipeline_preflight.py`](../backend/app/processing/streaming/pipeline_preflight.py) | 解析视频信息、stage plan、signature、resume domain 和输出尺寸 |
-| [`pipeline_dispatch.py`](../backend/app/processing/streaming/pipeline_dispatch.py) | 消费共享 context，根据 preflight 分派 stage-file 或 rawvideo runtime |
+| [`pipeline.py`](../backend/app/processing/streaming/pipeline.py) | 流水线 composition root；消费共享 context 并直接分派 stage-file 或 rawvideo runtime |
 | [`worker_pipeline.py`](../backend/app/processing/streaming/worker_pipeline.py) | 构建 stage-worker chain 并把处理后帧写入 `encode_queue` |
 | [`worker_runtime_config.py`](../backend/app/processing/streaming/worker_runtime_config.py) | 保存 raw worker pipeline 与 chain runtime 共享的不可变静态配置 |
 | [`worker_chain_runtime.py`](../backend/app/processing/streaming/worker_chain_runtime.py) | 管理 worker session、decode writer 与最终 worker stdout drain |
@@ -247,8 +247,8 @@ stage descriptor 明确声明 single / pair / sequence 模式，执行器只接�
 
 `ProcessingStep` 是不可变 descriptor，`execution_mode` 在算法实例创建前就确定。ONNX 单帧超分由
 `OnnxSuperResolution` 实现，PaddleGAN 视频超分由 `PaddleGanVideoSuperResolution` 实现，
-Real-RawVSR RGB 模型由 BasicVSR 可编辑块适配器或共享固定窗口适配器实现；stage-worker factory 按
-descriptor 显式选择，不用同一类兼容多种消费模式。
+Real-RawVSR RGB 模型由 BasicVSR 可编辑块适配器或共享固定窗口适配器实现；每个 descriptor 从模型
+资产策略构造，stage-worker factory 按生成的实现键显式选择，不按算法名维护分支。
 
 ### Stage Worker 算法装配
 
@@ -269,14 +269,15 @@ trace observer；`paddle_video_super_resolution.py` 只组合这些能力。ONNX
 ### Real-RawVSR RGB 模型家族
 
 [`backend/app/algorithms/pytorch/real_rawvsr/`](../backend/app/algorithms/pytorch/real_rawvsr/) 提供共享资产、
-RGB 边界、序列生命周期、固定窗口和张量算子；BasicVSR 的循环网络继续位于独立目录。EDVR、TDAN、
+冻结的模型加载规格、序列生命周期、固定窗口和统一 `RgbTensorCodec`；codec 唯一负责 RGB uint8 输入、
+CUDA tensor、空间填充/裁剪与 uint8 输出。BasicVSR 的循环网络继续位于独立目录。EDVR、TDAN、
 TOFlow 是从上游提取的最小推理网络，保留 checkpoint 键结构并移除 MMCV、训练器、Registry、日志与
 自定义 CUDA 扩展。EDVR 和 TDAN 共用基于 `torchvision.ops.deform_conv2d` 的 checkpoint 兼容 DCNv2，
 TOFlow 只依赖原生 PyTorch。所有实现只在选中算法后惰性导入框架，使用 `eval()`、
 `torch.inference_mode()` 和严格 SafeTensors 权重加载；均支持 2×/3×/4×，仅接受 RGB uint8 普通视频帧
 与 NVIDIA CUDA，不支持 TensorRT、CPU、MPS 或 Bayer RAW 输入。
 
-共享 `temporal_slicing.py` 为外层分段、恢复和内部 BasicVSR 默认 10 帧逻辑块提供同一前后 2 帧上下文
+共享 `temporal_slicing.py` 为外层分段、恢复和 BasicVSR 资产策略给出的逻辑块提供同一前后 2 帧上下文
 规则。EDVR、TDAN、TOFlow 对每个逻辑帧使用固定 `[i-2, i-1, i, i+1, i+2]` 窗口并复制边界；worker
 统一通过 `outputFrameOffset` 裁掉外层上下文，进度与恢复游标只按逻辑帧推进。固定窗口输入在右侧和
 下侧复制填充到 16 的倍数，BasicVSR 小尺寸输入填充到至少 64 像素，推理后均按倍率裁回。实际视频没有

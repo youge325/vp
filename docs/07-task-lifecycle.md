@@ -87,7 +87,8 @@ reader 在写入潜在的大 stdin payload 前启动，避免三 pipe 死锁；s
 [`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) 的
 私有且唯一的 `TaskSupervisorSession` 构造器一次接管：
 
-- backend child，并立即建立 `ProcessGroupOwner + ReapTicket`；
+- backend child，并立即转换为不可分离的 `OwnedProcessGroup`；其内部唯一持有
+  `ProcessGroupOwner + ReapTicket`；
 - start lease；
 - control/output channel；
 - stdin writer、stdout reader、stderr reader；
@@ -97,13 +98,15 @@ reader 在写入潜在的大 stdin payload 前启动，避免三 pipe 死锁；s
 
 reader 只负责观察和分类，不直接发送终态。supervisor 在同一个 `tokio::select!` 循环中等待
 reader 消息、进程退出、取消、暂停/恢复结果、watchdog 和各类 deadline。`controller.rs` 与
-`readers.rs` 不导入 Tauri；它们只依赖 `TaskEventSink`、`TaskLifecyclePort` 和 Tokio，唯一 Tauri
-实现位于 `ports.rs` 并由 `spawn.rs` 注入。supervisor 被 abort 或
+`readers.rs` 不导入 Tauri；它们只依赖 `ports.rs` 中的 `TaskEventSink`、`TaskLifecyclePort` 和
+Tokio，唯一 Tauri 实现位于 `tauri_ports.rs` 并由 `spawn.rs` 注入。supervisor 被 abort 或
 panic 时，child 的 kill-on-drop owner 先请求终止，再把稳定 group/job handle 交给进程级 cleanup
 coordinator。协调器持有自己的线程 join handle，持续保有未退出的 child，并通过 `ReapTicket` 发布
 `Reaped/Failed`；join monitor 按原 lease 提交至多一个 `process_failed`，只有确认回收才释放任务槽。
 session 外只存在分组后的 dependency/I/O 输入与最小 panic recovery context，不再有第二个 owned
 session 镜像。
+`controller/control_coordination.rs` 独占有界 pause/resume 协调，`controller/terminal.rs` 独占终态
+状态表与退出分类；主 controller 只保留事件循环、watchdog 和资源编排。
 
 ## NDJSON 与终态仲裁
 

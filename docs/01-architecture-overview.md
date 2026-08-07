@@ -105,9 +105,10 @@ one-shot 的 stdin/期限策略、协议大小上限，以及终端、TensorRT �
 `scripts/generate_contracts.py` 是薄 CLI，schema 组合、验证和语言 renderer 位于
 `scripts/contract_codegen/`。它生成严格的聚合边界 schema、stage-worker 专用 Pydantic 边界、单一
 TypeScript 绑定、Rust 命令/事件/子进程 spec，以及三种语言的只读应用默认常量。独立的
-`model-assets.json` 以共享许可和模型家族列表唯一记录 Real-RawVSR RGB 四算法、12 个倍率权重的来源
-ID、源/推理哈希、参数量、时间策略与运行时路径；它生成 Python/Rust 只读绑定，PowerShell 发布工具
-直接读取同一数据文件。前端还生成滤镜
+`model-assets.json` 是 Real-RawVSR 算法库存的唯一来源：根级声明共享算法 family、tensor backend
+和 engine，每个模型只声明实现键、时间/空间策略、运行时依赖、上游 checkpoint 布局及倍率资产。
+算法与倍率按 ID 稳定排序后生成 Python/Rust 只读绑定；PowerShell 发布工具直接读取同一数据文件，
+不维护四算法清单或固定顺序。前端还生成滤镜
 字段约束元数据，catalog 与表单不再镜像 `minimum`、`maximum`、`enum` 或 `pattern`；one-shot 和长任务
 调用方只选择生成 spec，不维护平行的 subcommand、payload、期限或 discriminator 条件链。
 Rust 通过 Typify 直接消费同一聚合 schema。生成文件禁止
@@ -129,8 +130,9 @@ handler 和声明为无副作用却执行顶层代码的包。动态框架边界
 
 ### 3. stage-worker 流式处理
 
-Python 后端通过 `pipeline_preflight` 规划 stage plan，再由 `pipeline_dispatch` 选择 rawvideo
-stage-worker chain 或 stage-file pipeline。每个不可变 `StageDescriptor` 携带 `GeometryPolicy`，
+Python 后端通过 `pipeline_preflight` 规划 stage plan，`pipeline.py` composition root 直接依据该计划
+选择 rawvideo stage-worker chain 或 stage-file pipeline。每个不可变 `StageDescriptor` 由模型资产策略
+构造并携带 `GeometryPolicy`，
 输出尺寸只由该策略投影，不再维护 `changes_dimensions` 布尔镜像。rawvideo 路径中 stage-worker
 子进程负责解码与算法 stage 链，主进程只维护 `encode_queue` 和 `encoder_worker`；编码线程、
 worker 与 segment writer 共享单个不可变 runtime config。
@@ -271,7 +273,7 @@ graph LR
 | [`frontend/src-tauri/src/lib.rs`](../frontend/src-tauri/src/lib.rs) | Tauri Builder + 命令注册 + 集成测试 |
 | [`contracts/ipc-manifest.json`](../contracts/ipc-manifest.json) | 命令与事件清单单一真相源 |
 | [`frontend/src-tauri/src/tasks/state.rs`](../frontend/src-tauri/src/tasks/state.rs) | `Idle / Starting / Running / Cancelling / Finishing` 与 task-bound 启动租约 |
-| [`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) | `TaskSupervisor`、有界控制、Watchdog 与终态仲裁 |
+| [`frontend/src-tauri/src/tasks/controller.rs`](../frontend/src-tauri/src/tasks/controller.rs) | `TaskSupervisor` 事件循环与 Watchdog；控制协调和终态仲裁位于其私有子模块 |
 | [`frontend/src-tauri/src/runtime/mod.rs`](../frontend/src-tauri/src/runtime/mod.rs) | 运行时资源解析 |
 
 ### Python 关键文件
